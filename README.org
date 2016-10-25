@@ -1,0 +1,66 @@
+* design
+
+#+BEGIN_SRC rust
+struct Foo {
+    data: u32
+}
+
+impl Foo {
+    fn new(val: i32) -> Foo {
+        Foo{data: val}
+    }
+
+    fn f(&self, a: i32, b: i32) -> i32 {
+        self.data + a + b
+    }
+}
+
+foreigner_class!(class Foo {
+    constructor Foo::new(_: i32) -> Foo;
+    method Foo::f(&self, _: i32, _: i32) -> i32;
+});
+#+END_SRC
+
+generated
+
+** java
+
+#+BEGIN_SRC java
+public final class Foo {
+    private long m_nativeImpl;
+
+    public Foo() {
+       m_nativeImpl = init();
+    }
+    public int f(int a, int b) { return f(m_nativeImpl, a, b); }
+    private static native int f(long me, int a, int b);
+    private static native long init();
+}
+#+END_SRC
+
+** rust
+
+#+BEGIN_SRC rust
+
+#[cfg(target_pointer_width = "32")]
+unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+    mem::transmute::<u32, *mut T>(val as u32)
+}
+
+#[cfg(target_pointer_width = "64")]
+unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+    mem::transmute::<jlong, *mut T>(val)
+}
+
+#[no_mangle]
+pub fn Java_com_example_Foo_init(_: *mut JNIEnv, _: jclass) -> jlong {
+    Box::into_raw(Box::new(Foo::new())) as jlong
+}
+
+pub fn Java_com_example_Foo_f(_: *mut JNIEnv, _: jclass, this: jlong, a: jint, b: jint) -> jint {
+    let foo = unsafe {
+        jlong_to_pointer::<Foo>(this).as_mut().unwrap()
+    };
+    foo.f(a, b)
+}
+#+END_SRC
