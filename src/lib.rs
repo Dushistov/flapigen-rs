@@ -1,9 +1,10 @@
 extern crate syntex;
 extern crate syntex_syntax;
 extern crate syntex_pos;
+extern crate aster;
 
 use syntex::Registry;
-use syntex_syntax::ext::base::{ExtCtxt, MacResult, DummyResult};
+use syntex_syntax::ext::base::{ExtCtxt, MacResult, DummyResult, MacEager};
 use syntex_syntax::parse::{token, parser};
 use syntex_syntax::tokenstream::TokenTree;
 use syntex_syntax::codemap::Span;
@@ -14,6 +15,7 @@ use syntex_syntax::parse::common::SeqSep;
 use syntex_syntax::parse::token::keywords;
 use syntex_syntax::ast::{SelfKind, Mutability};
 use syntex_pos::mk_sp;
+use syntex_syntax::util::small_vector::SmallVector;
 
 enum FuncVariant {
     Constructor, Method, StaticMethod
@@ -184,9 +186,9 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     let class_name_indent = parser.parse_ident().unwrap();
     println!("CLASS NAME {:?}", class_name_indent);
     parser.expect(&token::Token::OpenDelim(token::DelimToken::Brace)).unwrap();
+    let mut methods = Vec::<(FuncVariant, ast::Path, P<ast::FnDecl>)>::new();
     loop {
-        let mut end_token = token::Token::CloseDelim(token::DelimToken::Brace);
-        if parser.eat(&end_token) {
+        if parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
             break;
         }
         let func_type_name = parser.parse_ident().unwrap();
@@ -202,21 +204,41 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
         println!("func_name {:?}", func_name);
 
         let func_decl = match func_type {
-            FuncVariant::Constructor | FuncVariant::StaticMethod => parser.parse_fn_decl(false),
-            FuncVariant::Method => parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()),
+            FuncVariant::Constructor | FuncVariant::StaticMethod => parser.parse_fn_decl(false).unwrap(),
+            FuncVariant::Method => parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).unwrap(),
         };
         println!("func_decl {:?}", func_decl);
         parser.expect(&token::Token::Semi).unwrap();
+
+        methods.push((func_type, func_name, func_decl));
     }
-    /*
-    let mut class_tok = token::Token::Ident(ast::Ident::with_empty_ctxt(token::intern("class")));
-    if !parser.eat(&class_tok) {
-        println!("class_tok {:?}", class_tok);
-        cx.span_err(sp, "expect class here");
-        return DummyResult::any(sp);
-    } else if let token::Token::Ident(ast_ident) = class_tok {
-        println!("ast_ident {:?}", ast_ident);
-}*/
-    println!("UNIPLEMENTED!!!!");
-    unimplemented!();
+    let package_name = "example_com";
+    let builder = ::aster::AstBuilder::new();
+    let mut jni_methods = Vec::new();
+    for it in methods.iter() {
+        match it.0 {
+            FuncVariant::Constructor | FuncVariant::StaticMethod => (),
+            FuncVariant::Method => {
+                let block = builder.block()
+                    .stmt().let_id("x").isize(1)
+                    .stmt().let_id("y").isize(2)
+                    .expr().add().id("x").id("y");
+                let func_name = match it.1.segments.len() {
+                    0 => token::InternedString::new(""),
+                    n => it.1.segments[n - 1].identifier.name.as_str(),
+                };
+                let mut fn_ = builder.item().fn_(format!("Java_{}_{}_{}", package_name,
+                                                     class_name_indent.name.as_str(),
+                                                     func_name
+                                                     ))
+                    .return_().isize()
+                    .build(block.clone());
+                let no_mangle_attr = builder.attr().word("no_mangle");
+                let fn_ = fn_.map(|mut p| {p.attrs.push(no_mangle_attr); p });
+                jni_methods.push(fn_);
+            }
+        }
+    }
+
+    MacEager::items(SmallVector::many(jni_methods))
 }
