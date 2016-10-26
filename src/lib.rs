@@ -99,10 +99,33 @@ impl ForeignerMethod {
         }
     }
 
+    fn rust_return_type(&self) -> String {
+        match &self.in_out_type.output {
+            &ast::FunctionRetTy::Default(_) => panic!("no return"),
+            &ast::FunctionRetTy::Ty(ref ret_type) => pprust::ty_to_string(&*ret_type),
+        }
+    }
+
     fn short_name(&self) -> token::InternedString {
         match self.path.segments.len() {
             0 => token::InternedString::new(""),
             n => self.path.segments[n - 1].identifier.name.as_str()
+        }
+    }
+
+    fn full_name(&self) -> String {
+        format!("{}", self.path)
+    }
+
+    fn method_rust_self_type(&self) -> String {
+        match self.path.segments.len() {
+            0 => String::new(),
+            n => {
+                let mut path = self.path.clone();
+                path.segments.truncate(n - 1);
+                format!("{}", path)
+//                pprust::to_string(|s| s.print_path(self.path, false, 1))
+            }
         }
     }
 }
@@ -243,8 +266,8 @@ fn parse_fn_decl_with_self<'a, F>(parser: &mut parser::Parser<'a>, parse_arg_fn:
     }))
 }
 
-fn add_args<'a, I>(builder: aster::expr::ExprCallArgsBuilder<aster::block::BlockBuilder>, mut iter: I, niter: usize) -> aster::expr::ExprCallArgsBuilder<aster::block::BlockBuilder>
-    where I: Iterator<Item=&'a Arg> {
+fn add_args<'a, I, BuilderType>(builder: aster::expr::ExprCallArgsBuilder<BuilderType>, mut iter: I, niter: usize) -> aster::expr::ExprCallArgsBuilder<BuilderType>
+    where I: Iterator<Item=&'a Arg>, BuilderType: aster::invoke::Invoke<syntex_syntax::ptr::P<syntex_syntax::ast::Expr>> {
     match iter.next() {
         Some(_) => { add_args(builder.arg().id(format!("a_{}", niter)), iter, niter + 1) }
         None => builder
@@ -266,14 +289,21 @@ fn generate_java_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
 "package {};
 public final class {} {{
     private long m_native;
-    public {}() {{
-        m_native = init();
-    }}
-    private static native long init();
-", package_name, class_name, class_name).unwrap();
+", package_name, class_name).unwrap();
+
     for method_it in methods.iter() {
         match method_it.func_type {
-            FuncVariant::Constructor | FuncVariant::StaticMethod => (),
+            FuncVariant::StaticMethod => (),
+            FuncVariant::Constructor => {
+                write!(file,
+"
+    public {}({}) {{
+        m_native = init({});
+    }}
+    private static native long init({});
+", class_name, method_it.args_with_java_types(rust_java_types_map),
+                       method_it.args(), method_it.args_with_java_types(rust_java_types_map)).unwrap();
+            }
             FuncVariant::Method => {
                 write!(file,
 "
@@ -290,6 +320,18 @@ public final class {} {{
     write!(file, "}}").unwrap();
 }
 
+fn add_args_and_types<'a, I>(rust_java_types_map: &RustToJavaTypes, builder: aster::fn_decl::FnDeclBuilder<aster::item::ItemFnDeclBuilder<aster::invoke::Identity>>, mut iter: I, niter: usize) -> aster::fn_decl::FnDeclBuilder<aster::item::ItemFnDeclBuilder<aster::invoke::Identity>>
+    where I: Iterator<Item=&'a Arg> {
+    match iter.next() {
+        Some(arg) => {
+            let type_name = pprust::ty_to_string(&*arg.ty);
+            let type_name = rust_java_types_map.get(type_name.as_str()).unwrap().jni_type_name;
+            add_args_and_types(rust_java_types_map, builder.arg_id(format!("a_{}", niter)).ty().id(type_name), iter, niter + 1)
+        }
+        None => builder
+    }
+}
+
 fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod]) -> Box<MacResult> {
     let package_name = package_name.replace(".", "_");
     let builder = ::aster::AstBuilder::new();
@@ -298,33 +340,42 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
         match it.func_type {
             FuncVariant::StaticMethod => (),
             FuncVariant::Constructor => {
+                let body_block = builder.block()
+                    .stmt().let_id("obj").call().id("Box::into_raw").arg().call().id("Box::new").arg().call().id(it.full_name());
+                let body_block = add_args(body_block, it.in_out_type.inputs.iter(), 0);
+                let body_block = body_block
+                    .build().build().build().stmt().expr().block().unsafe_().expr().call().id(
+                        format!("::std::mem::transmute::<*const {}, jlong>", it.rust_return_type())).arg().id("obj").build();
+
+                let fn_ = builder.item().fn_(format!("Java_{}_{}_init", package_name,
+                                                     class_name
+                ))
+                    .arg_id("_").ty().id("*mut JNIEnv")
+                    .arg_id("_").ty().id("jclass");
+                let fn_ = add_args_and_types(&rust_java_types_map, fn_, it.in_out_type.inputs.iter(), 0);
+                let fn_ = fn_.return_().id("jlong").build(body_block.build())
+                    .map(|mut p| {
+                        p.attrs.push(builder.attr().word("no_mangle"));
+                        p.vis = ast::Visibility::Public;
+                        p
+                    });
+                jni_methods.push(fn_);
             }
             FuncVariant::Method => {
                 let body_block = builder.block()
-                    .stmt().let_id("this").block().unsafe_().expr().call().id("jlong_to_pointer::<Foo>"/*TODO: calc Foo*/).arg().id("this").build()
+                    .stmt().let_id("this").block().unsafe_().expr().call().id(format!("jlong_to_pointer::<{}>", it.method_rust_self_type())).arg().id("this").build()
                     .stmt().let_id("this").block().unsafe_().expr().method_call("as_mut").id("this").build()
                     .stmt().let_id("this").block().expr().method_call("unwrap").id("this").build()
                     .expr().call().id(format!("{}", it.path)).arg().id("this");
                 let body_block = add_args(body_block, it.in_out_type.inputs.iter().skip(1), 0);
                 let func_name = it.short_name();
-                let fn_ = builder.item().fn_(format!("Java_{}_{}_{}", package_name,
+                let fn_ = builder.item().fn_(format!("Java_{}_{}_do_{}", package_name,
                                                      class_name,
                                                      func_name
                 ))
                     .arg_id("_").ty().id("*mut JNIEnv")
                     .arg_id("_").ty().id("jclass")
                     .arg_id("this").ty().id("jlong");
-                fn add_args_and_types<'a, I>(rust_java_types_map: &RustToJavaTypes, builder: aster::fn_decl::FnDeclBuilder<aster::item::ItemFnDeclBuilder<aster::invoke::Identity>>, mut iter: I, niter: usize) -> aster::fn_decl::FnDeclBuilder<aster::item::ItemFnDeclBuilder<aster::invoke::Identity>>
-                    where I: Iterator<Item=&'a Arg> {
-                    match iter.next() {
-                        Some(arg) => {
-                            let type_name = pprust::ty_to_string(&*arg.ty);
-                            let type_name = rust_java_types_map.get(type_name.as_str()).unwrap().jni_type_name;
-                            add_args_and_types(rust_java_types_map, builder.arg_id(format!("a_{}", niter)).ty().id(type_name), iter, niter + 1)
-                        }
-                        None => builder
-                    }
-                }
 
                 let fn_ = add_args_and_types(&rust_java_types_map, fn_, it.in_out_type.inputs.iter().skip(1), 0);
                 let fn_ = match &it.in_out_type.output {
@@ -334,8 +385,11 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
                     )
                 };
                 let fn_ = fn_.build(body_block.build());
-                let no_mangle_attr = builder.attr().word("no_mangle");
-                let fn_ = fn_.map(|mut p| {p.attrs.push(no_mangle_attr); p.vis = ast::Visibility::Public; p });
+                let fn_ = fn_.map(|mut p| {
+                    p.attrs.push(builder.attr().word("no_mangle"));
+                    p.vis = ast::Visibility::Public;
+                    p
+                });
                 jni_methods.push(fn_);
             }
         }

@@ -64,7 +64,7 @@ pub fn Java_com_example_Foo_f(_: *mut JNIEnv, _: jclass, this: jlong, a: jint, b
     foo.f(a, b)
 }
 #+END_SRC
-* TODO
-** generate java code
-** finilize
-** constructor
+* should be done before release
+** TODO generate java code
+** TODO finilize
+** TODO constructor
