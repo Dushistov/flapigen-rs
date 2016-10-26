@@ -91,8 +91,12 @@ impl ForeignerMethod {
         res
     }
 
-    fn java_return_type(&self) -> String {
-        "int".to_string()
+    fn java_return_type(&self, types_map: &RustToJavaTypes) -> &'static str {
+        match &self.in_out_type.output {
+            &ast::FunctionRetTy::Default(_) => "void",
+            &ast::FunctionRetTy::Ty(ref ret_type) =>
+                types_map.get(pprust::ty_to_string(&*ret_type).as_str()).unwrap().java_type_name
+        }
     }
 
     fn short_name(&self) -> token::InternedString {
@@ -276,9 +280,9 @@ public final class {} {{
     public {} {} ({}) {{ return do_{}(m_native, {}); }}
     private static native {} do_{} (long me, {});
 ",
-                       method_it.java_return_type(), method_it.short_name(), method_it.args_with_java_types(rust_java_types_map),
+                       method_it.java_return_type(rust_java_types_map), method_it.short_name(), method_it.args_with_java_types(rust_java_types_map),
                        method_it.short_name(), method_it.args(),
-                       method_it.java_return_type(), method_it.short_name(), method_it.args_with_java_types(rust_java_types_map)
+                       method_it.java_return_type(rust_java_types_map), method_it.short_name(), method_it.args_with_java_types(rust_java_types_map)
                 ).unwrap();
             }
         }
@@ -292,7 +296,9 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
     let mut jni_methods = Vec::new();
     for it in methods.iter() {
         match it.func_type {
-            FuncVariant::Constructor | FuncVariant::StaticMethod => (),
+            FuncVariant::StaticMethod => (),
+            FuncVariant::Constructor => {
+            }
             FuncVariant::Method => {
                 let body_block = builder.block()
                     .stmt().let_id("this").block().unsafe_().expr().call().id("jlong_to_pointer::<Foo>"/*TODO: calc Foo*/).arg().id("this").build()
@@ -384,9 +390,9 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
 
     let java_output_dir = env::var("RUST_SWIG_JNI_JAVA_OUTPUT_DIR").unwrap();
     let package_name = env::var("RUST_SWIG_JNI_JAVA_PACKAGE").unwrap();
-    
+
     generate_java_code(&rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(), &methods,
                        &java_output_dir);
-    
+
     generate_rust_code(&rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(), &methods)
 }
