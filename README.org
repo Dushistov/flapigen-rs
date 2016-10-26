@@ -67,4 +67,5 @@ pub fn Java_com_example_Foo_f(_: *mut JNIEnv, _: jclass, this: jlong, a: jint, b
 * should be done before release
 ** TODO generate java code
 ** TODO finilize
-** TODO constructor
+** DONE constructor
+** TODO jni naming conversation

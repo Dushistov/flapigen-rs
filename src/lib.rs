@@ -369,7 +369,7 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
                     .expr().call().id(format!("{}", it.path)).arg().id("this");
                 let body_block = add_args(body_block, it.in_out_type.inputs.iter().skip(1), 0);
                 let func_name = it.short_name();
-                let fn_ = builder.item().fn_(format!("Java_{}_{}_do_{}", package_name,
+                let fn_ = builder.item().fn_(format!("Java_{}_{}_do_1{}", package_name,
                                                      class_name,
                                                      func_name
                 ))
