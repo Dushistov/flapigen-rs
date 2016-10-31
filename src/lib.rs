@@ -99,13 +99,6 @@ impl ForeignerMethod {
         }
     }
 
-    fn rust_return_type(&self) -> String {
-        match &self.in_out_type.output {
-            &ast::FunctionRetTy::Default(_) => panic!("no return"),
-            &ast::FunctionRetTy::Ty(ref ret_type) => pprust::ty_to_string(&*ret_type),
-        }
-    }
-
     fn short_name(&self) -> token::InternedString {
         match self.path.segments.len() {
             0 => token::InternedString::new(""),
@@ -138,7 +131,7 @@ pub fn register(registry: &mut Registry) {
 fn parse_self_arg<'a>(parser: &mut parser::Parser<'a>) -> parse::PResult<'a, Option<ast::Arg>> {
     let expect_ident = |this: &mut parser::Parser<'a>| match this.token {
         // Preserve hygienic context.
-        token::Ident(ident) => { this.bump(); codemap::respan(this.last_span, ident) }
+        token::Ident(ident) => { this.bump(); codemap::respan(this.prev_span, ident) }
         _ => unreachable!()
     };
 
@@ -227,7 +220,7 @@ fn parse_self_arg<'a>(parser: &mut parser::Parser<'a>) -> parse::PResult<'a, Opt
         _ => return Ok(None),
     };
 
-    let eself = codemap::respan(mk_sp(eself_lo, parser.last_span.hi), eself);
+    let eself = codemap::respan(mk_sp(eself_lo, parser.prev_span.hi), eself);
     Ok(Some(ast::Arg::from_self(eself, eself_ident)))
 }
 
@@ -341,11 +334,12 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
             FuncVariant::StaticMethod => (),
             FuncVariant::Constructor => {
                 let body_block = builder.block()
-                    .stmt().let_id("obj").call().id("Box::into_raw").arg().call().id("Box::new").arg().call().id(it.full_name());
+                    .stmt().let_id("obj").expr().call().id("Box::into_raw").arg().call().id("Box::new").arg().call().id(it.full_name());
                 let body_block = add_args(body_block, it.in_out_type.inputs.iter(), 0);
                 let body_block = body_block
-                    .build().build().build().stmt().expr().block().unsafe_().expr().call().id(
-                        format!("::std::mem::transmute::<*const {}, jlong>", it.rust_return_type())).arg().id("obj").build();
+                    .build().build().build().stmt().expr().block().unsafe_().expr()
+                    .call().id("ptr_to_jlong").arg().id("obj")
+                    .build();
 
                 let fn_ = builder.item().fn_(format!("Java_{}_{}_init", package_name,
                                                      class_name
@@ -363,9 +357,9 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
             }
             FuncVariant::Method => {
                 let body_block = builder.block()
-                    .stmt().let_id("this").block().unsafe_().expr().call().id(format!("jlong_to_pointer::<{}>", it.method_rust_self_type())).arg().id("this").build()
-                    .stmt().let_id("this").block().unsafe_().expr().method_call("as_mut").id("this").build()
-                    .stmt().let_id("this").block().expr().method_call("unwrap").id("this").build()
+                    .stmt().let_id("this").expr().block().unsafe_().expr().call().id(format!("jlong_to_pointer::<{}>", it.method_rust_self_type())).arg().id("this").build()
+                    .stmt().let_id("this").expr().block().unsafe_().expr().method_call("as_mut").id("this").build()
+                    .stmt().let_id("this").expr().block().expr().method_call("unwrap").id("this").build()
                     .expr().call().id(format!("{}", it.path)).arg().id("this");
                 let body_block = add_args(body_block, it.in_out_type.inputs.iter().skip(1), 0);
                 let func_name = it.short_name();
