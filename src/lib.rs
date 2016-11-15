@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::error::Error;
 use std::io::prelude::*;
+use std::fmt;
 //use std::fmt::Write;
 
 #[derive(PartialEq)]
@@ -325,14 +326,41 @@ fn add_args_and_types<'a, I>(rust_java_types_map: &RustToJavaTypes, builder: ast
     }
 }
 
+fn jni_func_name(package_name: &str, class_name: &str, func_name: &str, add_do: bool) -> String {
+    let mut output = String::new();
+    output.push_str("Java_");
+    let mut underscore_count = 1_usize;
+    fn escape_underscore(input: &str, underscore_count: &mut usize, mut output: &mut String) {
+        for c in input.chars() {
+            if c == '_' {
+                fmt::write(&mut output, format_args!("_{}", *underscore_count)).unwrap();
+                *underscore_count = *underscore_count + 1;
+            } else {
+                fmt::write(&mut output, format_args!("{}", c)).unwrap();
+            }
+        }
+    }
+    output.push_str(package_name);
+    output.push_str("_");
+    escape_underscore(class_name, &mut underscore_count, &mut output);
+    output.push_str("_");
+    if add_do {
+        escape_underscore("do_", &mut underscore_count, &mut output);
+    }
+    escape_underscore(func_name, &mut underscore_count, &mut output);
+    output
+}
+
 fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod]) -> Box<MacResult> {
     let package_name = package_name.replace(".", "_");
     let builder = ::aster::AstBuilder::new();
     let mut jni_methods = Vec::new();
+
     for it in methods.iter() {
         match it.func_type {
             FuncVariant::StaticMethod => (),
             FuncVariant::Constructor => {
+
                 let body_block = builder.block()
                     .stmt().let_id("obj").expr().call().id("Box::into_raw").arg().call().id("Box::new").arg().call().id(it.full_name());
                 let body_block = add_args(body_block, it.in_out_type.inputs.iter(), 0);
@@ -341,9 +369,8 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
                     .call().id("ptr_to_jlong").arg().id("obj")
                     .build();
 
-                let fn_ = builder.item().fn_(format!("Java_{}_{}_init", package_name,
-                                                     class_name
-                ))
+                let fn_ = builder.item().fn_(jni_func_name(&package_name, &class_name, "init", false)
+                )
                     .arg_id("_").ty().id("*mut JNIEnv")
                     .arg_id("_").ty().id("jclass");
                 let fn_ = add_args_and_types(&rust_java_types_map, fn_, it.in_out_type.inputs.iter(), 0);
@@ -356,6 +383,7 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
                 jni_methods.push(fn_);
             }
             FuncVariant::Method => {
+
                 let body_block = builder.block()
                     .stmt().let_id("this").expr().block().unsafe_().expr().call().id(format!("jlong_to_pointer::<{}>", it.method_rust_self_type())).arg().id("this").build()
                     .stmt().let_id("this").expr().block().unsafe_().expr().method_call("as_mut").id("this").build()
@@ -363,10 +391,7 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
                     .expr().call().id(format!("{}", it.path)).arg().id("this");
                 let body_block = add_args(body_block, it.in_out_type.inputs.iter().skip(1), 0);
                 let func_name = it.short_name();
-                let fn_ = builder.item().fn_(format!("Java_{}_{}_do_1{}", package_name,
-                                                     class_name,
-                                                     func_name
-                ))
+                let fn_ = builder.item().fn_(jni_func_name(&package_name, &class_name, &func_name, true))
                     .arg_id("_").ty().id("*mut JNIEnv")
                     .arg_id("_").ty().id("jclass")
                     .arg_id("this").ty().id("jlong");

@@ -68,4 +68,5 @@ pub fn Java_com_example_Foo_f(_: *mut JNIEnv, _: jclass, this: jlong, a: jint, b
 ** TODO generate java code
 ** TODO finilize
 ** DONE constructor
-** TODO jni naming conversation
+** TODO jni function naming conversation
+at least _ -> _{1-9}
