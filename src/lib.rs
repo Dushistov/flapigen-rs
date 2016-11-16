@@ -285,10 +285,13 @@ public final class {} {{
     private long m_native;
 ", package_name, class_name).unwrap();
 
+    let mut have_constructor = false;
+    let mut have_methods = false;
     for method_it in methods.iter() {
         match method_it.func_type {
             FuncVariant::StaticMethod => (),
             FuncVariant::Constructor => {
+                have_constructor = true;
                 write!(file,
 "
     public {}({}) {{
@@ -299,6 +302,7 @@ public final class {} {{
                        method_it.args(), method_it.args_with_java_types(rust_java_types_map)).unwrap();
             }
             FuncVariant::Method => {
+                have_methods = true;
                 write!(file,
 "
     public {} {} ({}) {{ return do_{}(m_native, {}); }}
@@ -310,6 +314,24 @@ public final class {} {{
                 ).unwrap();
             }
         }
+    }
+    if have_methods && !have_constructor {
+        panic!("package_name {}, class_name {}, have methods, but no constructor",
+               package_name, class_name);
+    }
+    if have_constructor {
+        write!(file,
+"
+    public synchronized void delete() {{
+        if (m_native != 0) {{
+            do_delete(m_native);
+            m_native = 0;
+       }}
+    }}
+    @Override
+    protected void finalize() {{ delete(); }}
+    private static native void do_delete(long me);
+").unwrap();
     }
     write!(file, "}}").unwrap();
 }
@@ -351,16 +373,17 @@ fn jni_func_name(package_name: &str, class_name: &str, func_name: &str, add_do: 
     output
 }
 
-fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod]) -> Box<MacResult> {
+fn generate_rust_code(rust_self_type: &ast::Path, rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod]) -> Box<MacResult> {
     let package_name = package_name.replace(".", "_");
     let builder = ::aster::AstBuilder::new();
     let mut jni_methods = Vec::new();
-
+    let mut have_constructor = false;
+    let mut have_methods = false;
     for it in methods.iter() {
         match it.func_type {
             FuncVariant::StaticMethod => (),
             FuncVariant::Constructor => {
-
+                have_constructor = true;
                 let body_block = builder.block()
                     .stmt().let_id("obj").expr().call().id("Box::into_raw").arg().call().id("Box::new").arg().call().id(it.full_name());
                 let body_block = add_args(body_block, it.in_out_type.inputs.iter(), 0);
@@ -383,7 +406,7 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
                 jni_methods.push(fn_);
             }
             FuncVariant::Method => {
-
+                have_methods = true;
                 let body_block = builder.block()
                     .stmt().let_id("this").expr().block().unsafe_().expr().call().id(format!("jlong_to_pointer::<{}>", it.method_rust_self_type())).arg().id("this").build()
                     .stmt().let_id("this").expr().block().unsafe_().expr().method_call("as_mut").id("this").build()
@@ -398,7 +421,7 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
 
                 let fn_ = add_args_and_types(&rust_java_types_map, fn_, it.in_out_type.inputs.iter().skip(1), 0);
                 let fn_ = match &it.in_out_type.output {
-                    &ast::FunctionRetTy::Default(_) => fn_.return_().id("c_void"),
+                    &ast::FunctionRetTy::Default(_) => fn_.default_return(),
                     &ast::FunctionRetTy::Ty(ref ret_type) => fn_.return_().id(
                         rust_java_types_map.get(pprust::ty_to_string(&*ret_type).as_str()).unwrap().jni_type_name
                     )
@@ -413,7 +436,33 @@ fn generate_rust_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
             }
         }
     }
-
+    if have_methods && !have_constructor {
+        panic!("package_name {}, class_name {}, have methods, but no constructor",
+               package_name, class_name);
+    }
+    if have_constructor && rust_self_type.segments.is_empty() {
+        panic!("package_name {}, class_name {} have constructor, but self_type not defined",
+               package_name, class_name);
+    }
+    if have_constructor {
+        let body_block = builder.block()
+            .stmt().let_id("this").expr().block().unsafe_().expr().call().id(format!("jlong_to_pointer::<{}>", rust_self_type)).arg().id("this").build()
+            .stmt().let_id("this").expr().block().unsafe_().expr().method_call("as_mut").id("this").build()
+            .stmt().let_id("this").expr().method_call("unwrap").id("this").build()
+            .stmt().let_id("this").expr().block().unsafe_().expr().call().id("Box::from_raw").arg().id("this").build()
+            .expr().call().id("drop").arg().id("this");
+        let fn_ = builder.item().fn_(jni_func_name(&package_name, &class_name, "delete", true))
+            .arg_id("_").ty().id("*mut JNIEnv")
+            .arg_id("_").ty().id("jclass")
+            .arg_id("this").ty().id("jlong").default_return();
+        let fn_ = fn_.build(body_block.build());
+        let fn_ = fn_.map(|mut p| {
+            p.attrs.push(builder.attr().word("no_mangle"));
+            p.vis = ast::Visibility::Public;
+            p
+        });
+        jni_methods.push(fn_);
+    }
     MacEager::items(SmallVector::many(jni_methods))
 }
 
@@ -432,12 +481,19 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     println!("CLASS NAME {:?}", class_name_indent);
     parser.expect(&token::Token::OpenDelim(token::DelimToken::Brace)).unwrap();
     let mut methods = Vec::new();
+    let mut rust_self_type = ast::Path{span: parser.span, global: false, segments: Vec::new()};
     loop {
         if parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
             break;
         }
         let func_type_name = parser.parse_ident().unwrap();
         println!("func_type {:?}", func_type_name);
+        if func_type_name.name.as_str() == "self_type" {
+            rust_self_type = parser.parse_path(parser::PathStyle::Type).unwrap();
+            println!("self_type: {:?}", rust_self_type);
+            parser.expect(&token::Token::Semi).unwrap();
+            continue;
+        }
         let func_type = FuncVariant::from_str(&func_type_name.name.as_str());
         if func_type.is_none() {
             println!("unknown func type: {:?}", func_type_name);
@@ -467,5 +523,5 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     generate_java_code(&rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(), &methods,
                        &java_output_dir);
 
-    generate_rust_code(&rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(), &methods)
+    generate_rust_code(&rust_self_type, &rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(), &methods)
 }

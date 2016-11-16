@@ -27,14 +27,22 @@ generated
 
 #+BEGIN_SRC java
 public final class Foo {
-    private long m_nativeImpl;
+    private long m_native = 0;
 
     public Foo() {
-       m_nativeImpl = init();
+       m_native = init();
     }
-    public int f(int a, int b) { return f(m_nativeImpl, a, b); }
+    public void finilize() { delete(); }
+    public synchronized void delete() {
+       if (m_native != 0) {
+           do_delete(m_native);
+           m_native = 0;
+       }
+    }
+    public int f(int a, int b) { return f(m_native, a, b); }
     private static native int f(long me, int a, int b);
     private static native long init();
+    private static native void do_delete(long me);
 }
 #+END_SRC
 
@@ -57,7 +65,8 @@ pub fn Java_com_example_Foo_init(_: *mut JNIEnv, _: jclass) -> jlong {
     Box::into_raw(Box::new(Foo::new())) as jlong
 }
 
-pub fn Java_com_example_Foo_f(_: *mut JNIEnv, _: jclass, this: jlong, a: jint, b: jint) -> jint {
+#[no_mangle]
+pub fn Java_com_example_Foo_do_1f(_: *mut JNIEnv, _: jclass, this: jlong, a: jint, b: jint) -> jint {
     let foo = unsafe {
         jlong_to_pointer::<Foo>(this).as_mut().unwrap()
     };
@@ -65,8 +74,8 @@ pub fn Java_com_example_Foo_f(_: *mut JNIEnv, _: jclass, this: jlong, a: jint, b
 }
 #+END_SRC
 * should be done before release
-** TODO generate java code
-** TODO finilize
+** DONE generate java code
+** DONE finilize
 ** DONE constructor
 ** TODO jni function naming conversation
 at least _ -> _{1-9}
