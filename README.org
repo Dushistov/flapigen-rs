@@ -1,8 +1,9 @@
-* design
+* Getting started
 
+Suppose you have the following Rust code:
 #+BEGIN_SRC rust
 struct Foo {
-    data: u32
+    data: i32
 }
 
 impl Foo {
@@ -14,68 +15,26 @@ impl Foo {
         self.data + a + b
     }
 }
+#+END_SRC
 
+and you want to write in Java something like this:
+
+#+BEGIN_SRC java
+Foo foo = new Foo(5);
+int res = foo.f(1, 2);
+assert res == 8;
+#+END_SRC
+
+In order to implement it rust_swig suggests the following functionality,
+in Rust project you write:
+
+#+BEGIN_SRC rust
 foreigner_class!(class Foo {
+    self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
     method Foo::f(&self, _: i32, _: i32) -> i32;
 });
 #+END_SRC
 
-generated
-
-** java
-
-#+BEGIN_SRC java
-public final class Foo {
-    private long m_native = 0;
-
-    public Foo() {
-       m_native = init();
-    }
-    public void finilize() { delete(); }
-    public synchronized void delete() {
-       if (m_native != 0) {
-           do_delete(m_native);
-           m_native = 0;
-       }
-    }
-    public int f(int a, int b) { return f(m_native, a, b); }
-    private static native int f(long me, int a, int b);
-    private static native long init();
-    private static native void do_delete(long me);
-}
-#+END_SRC
-
-** rust
-
-#+BEGIN_SRC rust
-
-#[cfg(target_pointer_width = "32")]
-unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    mem::transmute::<u32, *mut T>(val as u32)
-}
-
-#[cfg(target_pointer_width = "64")]
-unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    mem::transmute::<jlong, *mut T>(val)
-}
-
-#[no_mangle]
-pub fn Java_com_example_Foo_init(_: *mut JNIEnv, _: jclass) -> jlong {
-    Box::into_raw(Box::new(Foo::new())) as jlong
-}
-
-#[no_mangle]
-pub fn Java_com_example_Foo_do_1f(_: *mut JNIEnv, _: jclass, this: jlong, a: jint, b: jint) -> jint {
-    let foo = unsafe {
-        jlong_to_pointer::<Foo>(this).as_mut().unwrap()
-    };
-    foo.f(a, b)
-}
-#+END_SRC
-* should be done before release
-** DONE generate java code
-** DONE finilize
-** DONE constructor
-** TODO jni function naming conversation
-at least _ -> _{1-9}
+and that's all, as a result rust_swig generates JNI wrappers for Rust functions
+and Java code to call these JNI functions.
