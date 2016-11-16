@@ -26,7 +26,7 @@ assert res == 8;
 #+END_SRC
 
 In order to implement it rust_swig suggests the following functionality,
-in Rust project you write:
+in Rust project you write (in Rust language):
 
 #+BEGIN_SRC rust
 foreigner_class!(class Foo {
@@ -38,3 +38,5 @@ foreigner_class!(class Foo {
 
 and that's all, as a result rust_swig generates JNI wrappers for Rust functions
 and Java code to call these JNI functions.
+
+See [[https://github.com/Dushistov/rust_swig_test_jni][rust_swig test for jni]] for working example.
