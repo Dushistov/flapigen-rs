@@ -282,7 +282,7 @@ fn generate_java_code(rust_java_types_map: &RustToJavaTypes, package_name: &str,
     write!(file,
 "package {};
 public final class {} {{
-    private long m_native;
+    private long mNativeObj;
 ", package_name, class_name).unwrap();
 
     let mut have_constructor = false;
@@ -295,7 +295,7 @@ public final class {} {{
                 write!(file,
 "
     public {}({}) {{
-        m_native = init({});
+        mNativeObj = init({});
     }}
     private static native long init({});
 ", class_name, method_it.args_with_java_types(rust_java_types_map),
@@ -305,8 +305,8 @@ public final class {} {{
                 have_methods = true;
                 write!(file,
 "
-    public {} {} ({}) {{ return do_{}(m_native, {}); }}
-    private static native {} do_{} (long me, {});
+    public {} {}({}) {{ return do_{}(mNativeObj, {}); }}
+    private static native {} do_{}(long me, {});
 ",
                        method_it.java_return_type(rust_java_types_map), method_it.short_name(), method_it.args_with_java_types(rust_java_types_map),
                        method_it.short_name(), method_it.args(),
@@ -323,9 +323,9 @@ public final class {} {{
         write!(file,
 "
     public synchronized void delete() {{
-        if (m_native != 0) {{
-            do_delete(m_native);
-            m_native = 0;
+        if (mNativeObj != 0) {{
+            do_delete(mNativeObj);
+            mNativeObj = 0;
        }}
     }}
     @Override
