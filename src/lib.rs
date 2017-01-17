@@ -24,6 +24,7 @@ use std::fs::File;
 use std::error::Error;
 use std::io::prelude::*;
 use std::fmt;
+use aster::AstBuilder;
 //use std::fmt::Write;
 
 #[derive(PartialEq)]
@@ -51,12 +52,12 @@ struct ForeignerMethod {
     in_out_type: P<ast::FnDecl>
 }
 
-struct TypesNames {
+struct TypeHandler {
     jni_type_name: &'static str,
     java_type_name: &'static str
 }
 
-type RustToJavaTypes = HashMap<&'static str, TypesNames>;
+type RustToJavaTypes = HashMap<&'static str, TypeHandler>;
 
 impl ForeignerMethod {
     fn args(&self) -> String {
@@ -373,9 +374,27 @@ fn jni_func_name(package_name: &str, class_name: &str, func_name: &str, add_do: 
     output
 }
 
-fn generate_rust_code(rust_self_type: &ast::Path, rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod]) -> Box<MacResult> {
+
+fn convert_args<'a, I, BuilderType>(rust_java_types_map: &RustToJavaTypes, iter: I, builder: aster::block::BlockBuilder<BuilderType>) -> aster::block::BlockBuilder<BuilderType>
+    where I: Iterator<Item=&'a Arg>, BuilderType: aster::invoke::Invoke<syntex_syntax::ptr::P<syntex_syntax::ast::Block>> {
+    let mut block = builder;
+
+    for (i, arg) in iter.enumerate() {
+        let type_name = pprust::ty_to_string(&*arg.ty);
+        let th: &TypeHandler = rust_java_types_map.get(type_name.as_str()).unwrap();
+        if th.jni_type_name == "jstring" {
+            let arg_name = format!("a_{}", i);
+            block = block.stmt().let_id(&arg_name).expr().call().id("JavaString::new").arg().id("env").arg().id(&arg_name).build()
+                .stmt().let_id(&arg_name).expr().method_call("to_str").id(&arg_name).build();
+        }
+        println!("!!!arg {}, tn {}", i, type_name);
+    }
+    block
+}
+
+fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_self_type: &ast::Path, rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod]) -> Box<MacResult> {
     let package_name = package_name.replace(".", "_");
-    let builder = ::aster::AstBuilder::new();
+    let builder = AstBuilder::new();
     let mut jni_methods = Vec::new();
     let mut have_constructor = false;
     let mut have_methods = false;
@@ -384,7 +403,8 @@ fn generate_rust_code(rust_self_type: &ast::Path, rust_java_types_map: &RustToJa
             FuncVariant::StaticMethod => (),
             FuncVariant::Constructor => {
                 have_constructor = true;
-                let body_block = builder.block()
+                let body_block = convert_args(rust_java_types_map, it.in_out_type.inputs.iter(), builder.block());
+                let body_block = body_block
                     .stmt().let_id("obj").expr().call().id("Box::into_raw").arg().call().id("Box::new").arg().call().id(it.full_name());
                 let body_block = add_args(body_block, it.in_out_type.inputs.iter(), 0);
                 let body_block = body_block
@@ -392,9 +412,8 @@ fn generate_rust_code(rust_self_type: &ast::Path, rust_java_types_map: &RustToJa
                     .call().id("ptr_to_jlong").arg().id("obj")
                     .build();
 
-                let fn_ = builder.item().fn_(jni_func_name(&package_name, &class_name, "init", false)
-                )
-                    .arg_id("_").ty().id("*mut JNIEnv")
+                let fn_ = builder.item().fn_(jni_func_name(&package_name, &class_name, "init", false))
+                    .arg_id("env").ty().id("*mut JNIEnv")
                     .arg_id("_").ty().id("jclass");
                 let fn_ = add_args_and_types(&rust_java_types_map, fn_, it.in_out_type.inputs.iter(), 0);
                 let fn_ = fn_.return_().id("jlong").build(body_block.build())
@@ -463,6 +482,71 @@ fn generate_rust_code(rust_self_type: &ast::Path, rust_java_types_map: &RustToJa
         });
         jni_methods.push(fn_);
     }
+
+        jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
+                                                       r#"
+#[cfg(target_pointer_width = "32")]
+unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+    mem::transmute::<u32, *mut T>(val as u32)
+}
+"#.to_string(),
+                                                           cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+
+    jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
+                                                       r#"
+#[cfg(target_pointer_width = "64")]
+unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+    mem::transmute::<jlong, *mut T>(val)
+}
+"#.to_string(),
+                                                       cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+
+    jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
+                                                       r#"
+fn ptr_to_jlong<T>(val: *const T) -> jlong {
+    val as jlong
+}
+"#.to_string(),
+                                                       cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+
+       jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
+                                                       r#"
+struct JavaString {
+    string: jstring,
+    chars: *const ::std::os::raw::c_char,
+    env: *mut JNIEnv
+}
+"#.to_string(),
+                                                       cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+
+    jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
+                                                       r#"
+impl JavaString {
+    fn new(env: *mut JNIEnv, js: jstring) -> JavaString {
+        let chars = unsafe { (**env).GetStringUTFChars.unwrap()(env, js, ptr::null_mut()) };
+        JavaString{string: js, chars: chars, env: env}
+    }
+
+    fn to_str(&self) -> &str {
+        let s = unsafe { CStr::from_ptr(self.chars) };
+        s.to_str().unwrap()
+    }
+}
+"#.to_string(),
+                                                       cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+
+    jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
+                                                       r#"
+impl Drop for JavaString {
+    fn drop(&mut self) {
+        assert!(self.env != ptr::null_mut() && self.chars != ptr::null_mut());
+        unsafe { (**self.env).ReleaseStringUTFChars.unwrap()(self.env, self.string, self.chars) };
+        self.env = ptr::null_mut();
+        self.chars = ptr::null_mut();
+    }
+}
+"#.to_string(),
+                                                       cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
     MacEager::items(SmallVector::many(jni_methods))
 }
 
@@ -515,7 +599,8 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     }
 
     let mut rust_java_types_map = HashMap::new();
-    rust_java_types_map.insert("i32", TypesNames{jni_type_name: "jint", java_type_name: "int"});
+    rust_java_types_map.insert("i32", TypeHandler{jni_type_name: "jint", java_type_name: "int"});
+    rust_java_types_map.insert("&str", TypeHandler{jni_type_name: "jstring", java_type_name: "String"});
 
     let java_output_dir = env::var("RUST_SWIG_JNI_JAVA_OUTPUT_DIR").unwrap();
     let package_name = env::var("RUST_SWIG_JNI_JAVA_PACKAGE").unwrap();
@@ -523,5 +608,5 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     generate_java_code(&rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(), &methods,
                        &java_output_dir);
 
-    generate_rust_code(&rust_self_type, &rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(), &methods)
+    generate_rust_code(cx, &rust_self_type, &rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(), &methods)
 }
