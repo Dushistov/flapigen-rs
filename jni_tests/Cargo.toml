@@ -1,0 +1,18 @@
+[package]
+name = "rust_swig_test_jni"
+version = "0.0.1"
+authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
+build = "build.rs"
+
+[lib]
+name = "test"
+crate-type = ["cdylib"]
+
+[build-dependencies]
+syntex = "0.47.0"
+
+[build-dependencies.rust_swig]
+path = "../macroslib"
+
+[dependencies]
+libc = "0.2"

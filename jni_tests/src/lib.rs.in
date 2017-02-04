@@ -1,0 +1,30 @@
+use jni::{jint, JNIEnv, jclass, jlong, jstring};
+use std::mem;
+use std::ptr;
+use std::ffi::CStr;
+
+struct Foo {
+    data: i32,
+    name: String
+}
+
+impl Foo {
+    fn new(val: i32, name: &str) -> Foo {
+        println!("name: {}", name);
+        Foo{data: val, name: name.to_string()}
+    }
+
+    fn f(&self, a: i32, b: i32) -> i32 {
+        self.data + a + b
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32, _: &str) -> Foo;
+    method Foo::f(&self, _: i32, _: i32) -> i32;
+});

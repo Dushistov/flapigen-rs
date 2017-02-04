@@ -1,0 +1,10 @@
+* Building
+1. Edit generate_jni.sh to fix path to java jni include directory and run it.
+2. cargo build
+3.
+#+BEGIN_SRC sh
+cd target/debug
+export LD_LIBRARY_PATH=`pwd`
+cd ../..
+sh build_jar.sh
+#+END_SRC
