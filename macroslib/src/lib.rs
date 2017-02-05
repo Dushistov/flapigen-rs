@@ -349,45 +349,28 @@ fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_self_type: &ast::Path, rus
         });
         jni_methods.push(fn_);
     }
-
-        jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
-                                                       r#"
+    let mut parser = parse::new_parser_from_source_str(
+        cx.parse_sess, cx.cfg.clone(), "addon".to_string(),
+        r#"
 #[cfg(target_pointer_width = "32")]
 unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
     mem::transmute::<u32, *mut T>(val as u32)
 }
-"#.to_string(),
-                                                           cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
 
-    jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
-                                                       r#"
 #[cfg(target_pointer_width = "64")]
 unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
     mem::transmute::<jlong, *mut T>(val)
 }
-"#.to_string(),
-                                                       cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
 
-    jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
-                                                       r#"
 fn ptr_to_jlong<T>(val: *const T) -> jlong {
     val as jlong
 }
-"#.to_string(),
-                                                       cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
 
-       jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
-                                                       r#"
 struct JavaString {
     string: jstring,
     chars: *const ::std::os::raw::c_char,
     env: *mut JNIEnv
 }
-"#.to_string(),
-                                                       cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
-
-    jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
-                                                       r#"
 impl JavaString {
     fn new(env: *mut JNIEnv, js: jstring) -> JavaString {
         let chars = unsafe { (**env).GetStringUTFChars.unwrap()(env, js, ptr::null_mut()) };
@@ -399,11 +382,6 @@ impl JavaString {
         s.to_str().unwrap()
     }
 }
-"#.to_string(),
-                                                       cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
-
-    jni_methods.push(parse::parse_item_from_source_str("addon".to_string(),
-                                                       r#"
 impl Drop for JavaString {
     fn drop(&mut self) {
         assert!(self.env != ptr::null_mut() && self.chars != ptr::null_mut());
@@ -412,8 +390,10 @@ impl Drop for JavaString {
         self.chars = ptr::null_mut();
     }
 }
-"#.to_string(),
-                                                       cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+"#.to_string());
+    let mut my_crate = parser.parse_crate_mod().unwrap();
+    jni_methods.append(&mut my_crate.module.items);
+
     MacEager::items(SmallVector::many(jni_methods))
 }
 
