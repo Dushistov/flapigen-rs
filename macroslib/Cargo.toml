@@ -7,4 +7,3 @@ authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 syntex = "0.47.0"
 syntex_syntax = "0.47.0"
 syntex_pos = "0.47.0"
-aster = {version = "0.32.0", features=["with-syntex"]}
