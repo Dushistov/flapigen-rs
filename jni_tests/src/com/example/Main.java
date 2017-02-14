@@ -11,8 +11,11 @@ class Main {
 	    throw e;
 	}
 	Foo foo = new Foo(5, "Me is foo");
-	int res = foo.f(1, 2);
+	final int res = foo.f(1, 2);
 	assert res == 8;
         System.out.println("res: " + Integer.toString(res));
+        final double resf = foo.f_double(1.0, 1.0);
+        System.out.println("resf: " + Double.toString(resf));
+        System.out.println("name from java: " + foo.name()); 
     }
 }

@@ -49,18 +49,24 @@ struct ForeignerMethod {
 }
 
 struct TypeHandler {
+    rust_type_name: &'static str,
     jni_type_name: &'static str,
-    java_type_name: &'static str
+    java_type_name: &'static str,
+    from_jni_converter: Option<fn(&str)->String>,
+    to_jni_converter: Option<fn() -> String>,
 }
 
 type RustToJavaTypes = HashMap<&'static str, TypeHandler>;
 
 impl ForeignerMethod {
-    fn args(&self) -> String {
+    fn args(&self, use_comma_if_need: bool) -> String {
         use std::fmt::Write;
 
         let skip_n =  if self.func_type == FuncVariant::Method { 1 } else { 0 };
         let mut res = String::new();
+        if use_comma_if_need && skip_n < self.in_out_type.inputs.len() {
+            write!(&mut res, ", ").unwrap();
+        }
         for (i, _) in self.in_out_type.inputs.iter().skip(skip_n).enumerate() {
             if i == (self.in_out_type.inputs.len() - 1 - skip_n) {
                 write!(&mut res, "a_{}", i)
@@ -72,13 +78,16 @@ impl ForeignerMethod {
         res
     }
 
-    fn args_with_java_types(&self, types_map: &RustToJavaTypes) -> String {
+    fn args_with_java_types(&self, use_comma_if_need: bool, types_map: &RustToJavaTypes) -> String {
         use std::fmt::Write;
 
         let skip_n =  if self.func_type == FuncVariant::Method { 1 } else { 0 };
         let mut res = String::new();
+        if use_comma_if_need && skip_n < self.in_out_type.inputs.len() {
+            write!(&mut res, ", ").unwrap();
+        }
         for (i, item_arg) in self.in_out_type.inputs.iter().skip(skip_n).enumerate() {
-            let type_name = types_map.get(pprust::ty_to_string(&*item_arg.ty).as_str()).unwrap().java_type_name;
+            let type_name = types_map.get(pprust::ty_to_string(&*item_arg.ty).as_str()).expect("unknown type").java_type_name;
             if i == (self.in_out_type.inputs.len() - 1 - skip_n) {
                 write!(&mut res, "{} a_{}", type_name, i)
             } else {
@@ -93,7 +102,7 @@ impl ForeignerMethod {
         match &self.in_out_type.output {
             &ast::FunctionRetTy::Default(_) => "void",
             &ast::FunctionRetTy::Ty(ref ret_type) =>
-                types_map.get(pprust::ty_to_string(&*ret_type).as_str()).unwrap().java_type_name
+                types_map.get(pprust::ty_to_string(&*ret_type).as_str()).expect("unknown type").java_type_name
         }
     }
 
@@ -151,23 +160,27 @@ public final class {} {{
                 have_constructor = true;
                 write!(file,
 "
-    public {}({}) {{
-        mNativeObj = init({});
+    public {class_name}({args_with_types}) {{
+        mNativeObj = init({args});
     }}
-    private static native long init({});
-", class_name, method_it.args_with_java_types(rust_java_types_map),
-                       method_it.args(), method_it.args_with_java_types(rust_java_types_map)).unwrap();
+    private static native long init({args_with_types});
+",
+                       class_name = class_name,
+                       args_with_types = method_it.args_with_java_types(false, rust_java_types_map),
+                       args = method_it.args(false)).unwrap();
             }
             FuncVariant::Method => {
                 have_methods = true;
                 write!(file,
 "
-    public {} {}({}) {{ return do_{}(mNativeObj, {}); }}
-    private static native {} do_{}(long me, {});
+    public {return_type} {func_name}({single_args_with_types}) {{ return do_{func_name}(mNativeObj{args}); }}
+    private static native {return_type} do_{func_name}(long me{func_args_with_types});
 ",
-                       method_it.java_return_type(rust_java_types_map), method_it.short_name(), method_it.args_with_java_types(rust_java_types_map),
-                       method_it.short_name(), method_it.args(),
-                       method_it.java_return_type(rust_java_types_map), method_it.short_name(), method_it.args_with_java_types(rust_java_types_map)
+                       return_type = method_it.java_return_type(rust_java_types_map),
+                       func_name = method_it.short_name(),
+                       single_args_with_types = method_it.args_with_java_types(false, rust_java_types_map),
+                       func_args_with_types  = method_it.args_with_java_types(true, rust_java_types_map),
+                       args = method_it.args(true),
                 ).unwrap();
             }
         }
@@ -207,14 +220,9 @@ fn jni_convert_args(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMet
     let mut buf = Vec::new();
     for (i, it) in method.in_out_type.inputs.iter().skip(skip_args).enumerate() {
         let type_name = pprust::ty_to_string(&*it.ty);
-        let th: &TypeHandler = rust_java_types_map.get(type_name.as_str()).unwrap();
-        if th.jni_type_name == "jstring" {
-            let arg_name = format!("a_{}", i);
-            write!(&mut buf,
-                   r#"
-  let {arg_name} = JavaString::new(env, {arg_name});
-  let {arg_name} = {arg_name}.to_str();
-"#, arg_name = arg_name).unwrap();
+        let th: &TypeHandler = rust_java_types_map.get(type_name.as_str()).expect("unknown type");
+        if let Some(from_jni_converter) = th.from_jni_converter {
+            write!(&mut buf, "{}", from_jni_converter(&format!("a_{}", i))).unwrap();
         }
     }
     String::from_utf8(buf).unwrap()
@@ -228,7 +236,7 @@ fn jni_func_name(package_name: &str, class_name: &str, func_name: &str, add_do: 
         for c in input.chars() {
             if c == '_' {
                 fmt::write(&mut output, format_args!("_{}", *underscore_count)).unwrap();
-                *underscore_count = *underscore_count + 1;
+                //*underscore_count = *underscore_count + 1;
             } else {
                 fmt::write(&mut output, format_args!("{}", c)).unwrap();
             }
@@ -249,7 +257,22 @@ fn jni_result_type(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMeth
     match &method.in_out_type.output {
         &ast::FunctionRetTy::Default(_) => String::new(),
         &ast::FunctionRetTy::Ty(ref ret_type) =>
-            format!("-> {}", rust_java_types_map.get(pprust::ty_to_string(&*ret_type).as_str()).unwrap().jni_type_name),
+            format!("-> {}", rust_java_types_map.get(pprust::ty_to_string(&*ret_type).as_str()).expect("Unknown type in result type").jni_type_name),
+    }
+}
+
+fn jni_convert_output_type(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMethod) -> String {
+    match &method.in_out_type.output {
+        &ast::FunctionRetTy::Default(_) => String::new(),
+        &ast::FunctionRetTy::Ty(ref ret_type) => {
+            let type_name = pprust::ty_to_string(&*ret_type);
+            let th: &TypeHandler = rust_java_types_map.get(type_name.as_str()).expect("unknown type");
+            if let Some(to_jni_converter) = th.to_jni_converter {
+                to_jni_converter()
+            } else {
+                String::new()
+            }
+        }
     }
 }
 
@@ -294,7 +317,9 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {jni_result_type} {{
 {convert_jni_args}
     let this = unsafe {{ jlong_to_pointer::<{this_type}>(this).as_mut().unwrap() }};
-    {rust_func_name}(this, {jni_func_args})
+    let ret = {rust_func_name}(this, {jni_func_args});
+    {convert_output}
+    ret
 }}
 "#,
                        func_name = jni_func_name(&package_name, &class_name, &it.short_name(), true),
@@ -304,7 +329,8 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {
                        this_type = it.method_rust_self_type(),
                        rust_func_name = it.path,
                        jni_func_args = it.in_out_type.inputs.iter().skip(1).enumerate().map(|a| format!("a_{}, ", a.0))
-                       .fold(String::new(), |acc, x| acc + &x)
+                       .fold(String::new(), |acc, x| acc + &x),
+                       convert_output = jni_convert_output_type(rust_java_types_map, &*it),
                 ).unwrap();
                 let code = String::from_utf8(buf).unwrap();
                 println!("we generate and parse code: {}", code);
@@ -384,6 +410,23 @@ impl Drop for JavaString {
     MacEager::items(SmallVector::many(jni_methods))
 }
 
+fn jstring_to_str(arg_name: &str) -> String {
+    let mut buf = Vec::new();
+    write!(&mut buf,
+           r#"
+  let {arg_name} = JavaString::new(env, {arg_name});
+  let {arg_name} = {arg_name}.to_str();
+"#, arg_name = arg_name).unwrap();
+    String::from_utf8(buf).unwrap()
+}
+
+fn str_to_jstring() -> String {
+    r#"
+  let ret = ::std::ffi::CString::new(ret).unwrap();
+  let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
+"#.to_string()
+}
+
 fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
                                _: Span,
                                tokens: &[TokenTree])
@@ -433,8 +476,12 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     }
 
     let mut rust_java_types_map = HashMap::new();
-    rust_java_types_map.insert("i32", TypeHandler{jni_type_name: "jint", java_type_name: "int"});
-    rust_java_types_map.insert("&str", TypeHandler{jni_type_name: "jstring", java_type_name: "String"});
+    rust_java_types_map.insert("i32", TypeHandler{rust_type_name: "i32", jni_type_name: "jint", java_type_name: "int",
+                                                  from_jni_converter: None, to_jni_converter: None});
+    rust_java_types_map.insert("f64", TypeHandler{rust_type_name: "f64", jni_type_name: "jdouble", java_type_name: "double",
+                                                  from_jni_converter: None, to_jni_converter: None});
+    rust_java_types_map.insert("&str", TypeHandler{rust_type_name: "&str", jni_type_name: "jstring", java_type_name: "String",
+                                                   from_jni_converter: Some(jstring_to_str), to_jni_converter: Some(str_to_jstring)});
 
     let java_output_dir = env::var("RUST_SWIG_JNI_JAVA_OUTPUT_DIR").unwrap();
     let package_name = env::var("RUST_SWIG_JNI_JAVA_PACKAGE").unwrap();
