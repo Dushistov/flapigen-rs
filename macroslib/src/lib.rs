@@ -1,8 +1,19 @@
 extern crate syntex;
 extern crate syntex_syntax;
 extern crate syntex_pos;
+#[macro_use]
+extern crate lazy_static;
 
 mod parse_utils;
+
+use std::collections::HashMap;
+use std::env;
+use std::path::PathBuf;
+use std::fs::File;
+use std::error::Error;
+use std::io::prelude::*;
+use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use syntex::Registry;
 use syntex_syntax::ext::base::{ExtCtxt, MacResult, DummyResult, MacEager};
@@ -13,13 +24,7 @@ use syntex_syntax::{parse, ast};
 use syntex_syntax::ptr::P;
 use syntex_syntax::util::small_vector::SmallVector;
 use syntex_syntax::print::pprust;
-use std::collections::HashMap;
-use std::env;
-use std::path::PathBuf;
-use std::fs::File;
-use std::error::Error;
-use std::io::prelude::*;
-use std::fmt;
+
 use parse_utils::*;
 
 
@@ -276,6 +281,10 @@ fn jni_convert_output_type(rust_java_types_map: &RustToJavaTypes, method: &Forei
     }
 }
 
+lazy_static! {
+    static ref COMMON_CODE_GENERATED: AtomicBool = AtomicBool::new(false);
+}
+
 fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_self_type: &ast::Path, rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod]) -> Box<MacResult> {
     let package_name = package_name.replace(".", "_");
     let mut jni_methods = Vec::new();
@@ -366,9 +375,11 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
         jni_methods.push(parse::parse_item_from_source_str(
             "destructor".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
     }
-    let mut parser = parse::new_parser_from_source_str(
-        cx.parse_sess, cx.cfg.clone(), "addon".to_string(),
-        r#"
+
+    if !COMMON_CODE_GENERATED.swap(true, Ordering::SeqCst) {
+        let mut parser = parse::new_parser_from_source_str(
+            cx.parse_sess, cx.cfg.clone(), "addon".to_string(),
+            r#"
 #[cfg(target_pointer_width = "32")]
 unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
     mem::transmute::<u32, *mut T>(val as u32)
@@ -404,9 +415,9 @@ impl Drop for JavaString {
     }
 }
 "#.to_string());
-    let mut my_crate = parser.parse_crate_mod().unwrap();
-    jni_methods.append(&mut my_crate.module.items);
-
+        let mut my_crate = parser.parse_crate_mod().unwrap();
+        jni_methods.append(&mut my_crate.module.items);
+    }
     MacEager::items(SmallVector::many(jni_methods))
 }
 

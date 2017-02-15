@@ -34,3 +34,14 @@ foreigner_class!(class Foo {
     method Foo::f_double(&self, _: f64, _: f64) -> f64;
     method Foo::name(&self) -> &str;
 });
+
+struct Boo {}
+
+impl Boo {
+    fn new() -> Boo { Boo{} }
+}
+
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor Boo::new() -> Boo;
+});

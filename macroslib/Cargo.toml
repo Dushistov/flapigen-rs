@@ -7,3 +7,4 @@ authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 syntex = "0.47.0"
 syntex_syntax = "0.47.0"
 syntex_pos = "0.47.0"
+lazy_static = "0.2.2"
