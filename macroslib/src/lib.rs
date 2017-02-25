@@ -61,7 +61,7 @@ struct TypeHandler {
     to_jni_converter: Option<fn() -> String>,
 }
 
-type RustToJavaTypes = HashMap<&'static str, TypeHandler>;
+type RustToJavaTypes<'a> = HashMap<&'static str, &'a TypeHandler>;
 
 impl ForeignerMethod {
     fn args(&self, use_comma_if_need: bool) -> String {
@@ -120,18 +120,6 @@ impl ForeignerMethod {
 
     fn full_name(&self) -> String {
         format!("{}", self.path)
-    }
-
-    fn method_rust_self_type(&self) -> String {
-        match self.path.segments.len() {
-            0 => String::new(),
-            n => {
-                let mut path = self.path.clone();
-                path.segments.truncate(n - 1);
-                format!("{}", path)
-//                pprust::to_string(|s| s.print_path(self.path, false, 1))
-            }
-        }
     }
 }
 
@@ -212,13 +200,15 @@ public final class {} {{
 }
 
 fn jni_func_args_for_decl(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMethod, skip: usize) -> String {
-    let mut buf = Vec::new();
+    use std::fmt::Write;
+
+    let mut buf = String::new();
     for (i, it) in method.in_out_type.inputs.iter().skip(skip).enumerate() {
         let type_name = pprust::ty_to_string(&*it.ty);
         let type_name = rust_java_types_map.get(type_name.as_str()).unwrap().jni_type_name;
         write!(&mut buf, "a_{}: {}, ", i, type_name).unwrap();
     }
-    String::from_utf8(buf).unwrap()
+    buf
 }
 
 fn jni_convert_args(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMethod, skip_args: usize) -> String {
@@ -285,21 +275,40 @@ lazy_static! {
     static ref COMMON_CODE_GENERATED: AtomicBool = AtomicBool::new(false);
 }
 
+fn generate_rust_to_convert_this(constructor_ret_type: &str, rust_self_type: &str) -> String {
+    if constructor_ret_type == rust_self_type {
+        return String::new();
+    }
+    if format!("Arc<Mutex<{}>>", rust_self_type) == constructor_ret_type {
+        return format!("let mut this = this.lock().unwrap();\n");
+    } else if format!("Rc<RefCell<{}>>", rust_self_type) == constructor_ret_type {
+        return format!("let mut this = this.borrow_mut();\n");
+    } else {
+        unimplemented!();
+    }
+}
+
 fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_self_type: &ast::Path, rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod]) -> Box<MacResult> {
+    use std::fmt::Write;
+
     let package_name = package_name.replace(".", "_");
     let mut jni_methods = Vec::new();
-    let mut have_constructor = false;
-    let mut have_methods = false;
+    let constructor = methods.iter().find(|&x| if let FuncVariant::Constructor = x.func_type { true } else { false });
+    let constructor_ret_type: Option<_> = constructor.map(|v| match &v.in_out_type.output {
+        &ast::FunctionRetTy::Default(_) => panic!("{} {} constructor should return value",
+                                                  package_name, class_name),
+        &ast::FunctionRetTy::Ty(ref ret_type) => Some(ret_type.clone()),
+    }).unwrap_or(None);
 
     for it in methods.iter() {
         match it.func_type {
             FuncVariant::StaticMethod => (),
             FuncVariant::Constructor => {
-                have_constructor = true;
                 let mut buf = Vec::new();
                 write!(&mut buf, r#"
 #[allow(non_snake_case)]
 #[no_mangle]
+#[allow(unused_variables)]
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
 {convert_jni_args}
   Box::into_raw(Box::new({create_jni_obj}({jni_func_args}))) as jlong
@@ -318,15 +327,26 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
                     "constructor".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
             }
             FuncVariant::Method => {
-                have_methods = true;
-                let mut buf = Vec::new();
-                write!(&mut buf, r#"
+                if constructor.is_none() {
+                    panic!("package_name {}, class_name {}, have methods, but no constructor",
+                           package_name, class_name);
+                }
+                if rust_self_type.segments.is_empty() {
+                    panic!("package_name {}, class_name {} have constructor, but self_type not defined",
+                           package_name, class_name);
+                }
+                let constructor_ret_type = constructor_ret_type.as_ref().unwrap().clone();
+
+                let mut code = String::new();
+                write!(&mut code, r#"
 #[allow(non_snake_case)]
 #[no_mangle]
+#[allow(unused_variables)]
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {jni_result_type} {{
 {convert_jni_args}
-    let this = unsafe {{ jlong_to_pointer::<{this_type}>(this).as_mut().unwrap() }};
-    let ret = {rust_func_name}(this, {jni_func_args});
+    let this: &mut {this_type} = unsafe {{ jlong_to_pointer::<{this_type}>(this).as_mut().unwrap() }};
+{convert_this}
+    let ret = {rust_func_name}(&mut *this, {jni_func_args});
     {convert_output}
     ret
 }}
@@ -335,42 +355,35 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {
                        decl_func_args = jni_func_args_for_decl(rust_java_types_map, &*it, 1),
                        convert_jni_args = jni_convert_args(rust_java_types_map, &*it, 1),
                        jni_result_type = jni_result_type(rust_java_types_map, &*it),
-                       this_type = it.method_rust_self_type(),
+                       this_type = pprust::ty_to_string(&*constructor_ret_type),
+                       convert_this = generate_rust_to_convert_this(&pprust::ty_to_string(&*constructor_ret_type), &rust_self_type.to_string()),
                        rust_func_name = it.path,
                        jni_func_args = it.in_out_type.inputs.iter().skip(1).enumerate().map(|a| format!("a_{}, ", a.0))
                        .fold(String::new(), |acc, x| acc + &x),
                        convert_output = jni_convert_output_type(rust_java_types_map, &*it),
                 ).unwrap();
-                let code = String::from_utf8(buf).unwrap();
                 println!("we generate and parse code: {}", code);
                 jni_methods.push(parse::parse_item_from_source_str(
                     "method".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
             }
         }
     }
-    if have_methods && !have_constructor {
-        panic!("package_name {}, class_name {}, have methods, but no constructor",
-               package_name, class_name);
-    }
-    if have_constructor && rust_self_type.segments.is_empty() {
-        panic!("package_name {}, class_name {} have constructor, but self_type not defined",
-               package_name, class_name);
-    }
-    if have_constructor {
-        let mut buf = Vec::new();
-        write!(&mut buf, r#"
+
+    if constructor.is_some() {
+        let constructor_ret_type = constructor_ret_type.as_ref().unwrap().clone();
+        let mut code = String::new();
+        write!(&mut code, r#"
 #[allow(non_snake_case)]
 #[no_mangle]
 pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
-    let this = unsafe {{ jlong_to_pointer::<{type_name}>(this).as_mut().unwrap() }};
+    let this: &mut {type_name} = unsafe {{ jlong_to_pointer::<{type_name}>(this).as_mut().unwrap() }};
     let this = unsafe {{ Box::from_raw(this) }};
     drop(this)
 }}
 "#,
                jni_destructor_name = jni_func_name(&package_name, &class_name, "delete", true),
-               type_name = rust_self_type,
+               type_name = pprust::ty_to_string(&*constructor_ret_type),
         ).unwrap();
-        let code = String::from_utf8(buf).unwrap();
         println!("we generate and parse code: {}", code);
         jni_methods.push(parse::parse_item_from_source_str(
             "destructor".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
@@ -422,13 +435,10 @@ impl Drop for JavaString {
 }
 
 fn jstring_to_str(arg_name: &str) -> String {
-    let mut buf = Vec::new();
-    write!(&mut buf,
-           r#"
+    format!(r#"
   let {arg_name} = JavaString::new(env, {arg_name});
   let {arg_name} = {arg_name}.to_str();
-"#, arg_name = arg_name).unwrap();
-    String::from_utf8(buf).unwrap()
+"#, arg_name = arg_name)
 }
 
 fn str_to_jstring() -> String {
@@ -436,6 +446,16 @@ fn str_to_jstring() -> String {
   let ret = ::std::ffi::CString::new(ret).unwrap();
   let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
 "#.to_string()
+}
+
+fn jboolean_to_bool(arg_name: &str) -> String {
+    format!(r#"
+  let {arg_name} = {arg_name} != 0;
+"#, arg_name = arg_name)
+}
+
+fn bool_to_jboolean() -> String {
+    "let ret = if ret { 1 as jboolean } else { 0 as jboolean };".to_string()
 }
 
 fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
@@ -485,14 +505,22 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
 
         methods.push(ForeignerMethod{func_type: func_type, path: func_name, in_out_type: func_decl});
     }
-
+    let type_handlers = vec![
+        TypeHandler{rust_type_name: "bool", jni_type_name: "jboolean", java_type_name: "boolean",
+                    from_jni_converter: Some(jboolean_to_bool), to_jni_converter: Some(bool_to_jboolean)},
+        TypeHandler{rust_type_name: "i32", jni_type_name: "jint", java_type_name: "int",
+                    from_jni_converter: None, to_jni_converter: None},
+        TypeHandler{rust_type_name: "f32", jni_type_name: "jfloat", java_type_name: "float",
+                    from_jni_converter: None, to_jni_converter: None},
+        TypeHandler{rust_type_name: "f64", jni_type_name: "jdouble", java_type_name: "double",
+                    from_jni_converter: None, to_jni_converter: None},
+        TypeHandler{rust_type_name: "&str", jni_type_name: "jstring", java_type_name: "String",
+                    from_jni_converter: Some(jstring_to_str), to_jni_converter: Some(str_to_jstring)},
+    ];
     let mut rust_java_types_map = HashMap::new();
-    rust_java_types_map.insert("i32", TypeHandler{rust_type_name: "i32", jni_type_name: "jint", java_type_name: "int",
-                                                  from_jni_converter: None, to_jni_converter: None});
-    rust_java_types_map.insert("f64", TypeHandler{rust_type_name: "f64", jni_type_name: "jdouble", java_type_name: "double",
-                                                  from_jni_converter: None, to_jni_converter: None});
-    rust_java_types_map.insert("&str", TypeHandler{rust_type_name: "&str", jni_type_name: "jstring", java_type_name: "String",
-                                                   from_jni_converter: Some(jstring_to_str), to_jni_converter: Some(str_to_jstring)});
+    for it in type_handlers.iter() {
+        rust_java_types_map.insert(it.rust_type_name, &*it);
+    }
 
     let java_output_dir = env::var("RUST_SWIG_JNI_JAVA_OUTPUT_DIR").unwrap();
     let package_name = env::var("RUST_SWIG_JNI_JAVA_PACKAGE").unwrap();

@@ -11,7 +11,7 @@ cargo build
 cd src/com/example
 rm -f *.class
 rm -f *~
-javac Main.java Foo.java
+javac Main.java Foo.java Boo.java
 cd ../..
 rm -f *.jar
 jar cfv Test.jar com

@@ -1,6 +1,7 @@
 package com.example;
 
 import com.example.Foo;
+import com.example.Boo;
 
 class Main {
     public static void main(String[] args) {
@@ -20,5 +21,13 @@ class Main {
         System.out.println("resf: " + Double.toString(resf));
         assert foo.name().equals(FOO_NAME);
         System.out.println("name from java: " + foo.name());
+        foo = null;
+        System.gc();
+        Boo boo = new Boo();
+        System.out.println("E: " + Float.toString(boo.test(true)));
+        assert Math.abs((float )Math.E - boo.test(true)) < 1e-10;
+        assert Math.abs((float )Math.PI - boo.test(false)) < 1e-10;
+        boo = null;
+        System.gc();
     }
 }

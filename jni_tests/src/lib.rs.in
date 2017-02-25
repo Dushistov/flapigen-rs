@@ -1,7 +1,10 @@
-use jni::{jint, JNIEnv, jclass, jlong, jstring, jdouble};
 use std::mem;
 use std::ptr;
 use std::ffi::CStr;
+use std::rc::Rc;
+use std::cell::RefCell;
+
+use jni::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean};
 
 struct Foo {
     data: i32,
@@ -39,9 +42,17 @@ struct Boo {}
 
 impl Boo {
     fn new() -> Boo { Boo{} }
+    fn test(&self, a: bool) -> f32 {
+        if a { ::std::f32::consts::E } else { ::std::f32::consts::PI }
+    }
+}
+
+fn create_boo() -> Rc<RefCell<Boo>> {
+    Rc::new(RefCell::new(Boo::new()))
 }
 
 foreigner_class!(class Boo {
     self_type Boo;
-    constructor Boo::new() -> Boo;
+    constructor create_boo() -> Rc<RefCell<Boo>>;
+    method Boo::test(&self, _: bool) -> f32;
 });
