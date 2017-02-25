@@ -3,6 +3,8 @@ extern crate syntex_syntax;
 extern crate syntex_pos;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate log;
 
 mod parse_utils;
 
@@ -50,7 +52,8 @@ impl FuncVariant {
 struct ForeignerMethod {
     func_type: FuncVariant,
     path: ast::Path,
-    in_out_type: P<ast::FnDecl>
+    in_out_type: P<ast::FnDecl>,
+    name_alias: Option<token::InternedString>,
 }
 
 struct TypeHandler {
@@ -112,9 +115,13 @@ impl ForeignerMethod {
     }
 
     fn short_name(&self) -> token::InternedString {
-        match self.path.segments.len() {
-            0 => token::InternedString::new(""),
-            n => self.path.segments[n - 1].identifier.name.as_str()
+        if let Some(ref name) = self.name_alias {
+            name.clone()
+        } else {
+            match self.path.segments.len() {
+                0 => token::InternedString::new(""),
+                n => self.path.segments[n - 1].identifier.name.as_str()
+            }
         }
     }
 
@@ -322,7 +329,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
                        .fold(String::new(), |acc, x| acc + &x),
                 ).unwrap();
                 let code = String::from_utf8(buf).unwrap();
-                println!("we generate and parse code: {}", code);
+                debug!("we generate and parse code: {}", code);
                 jni_methods.push(parse::parse_item_from_source_str(
                     "constructor".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
             }
@@ -362,7 +369,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {
                        .fold(String::new(), |acc, x| acc + &x),
                        convert_output = jni_convert_output_type(rust_java_types_map, &*it),
                 ).unwrap();
-                println!("we generate and parse code: {}", code);
+                debug!("we generate and parse code: {}", code);
                 jni_methods.push(parse::parse_item_from_source_str(
                     "method".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
             }
@@ -384,7 +391,7 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
                jni_destructor_name = jni_func_name(&package_name, &class_name, "delete", true),
                type_name = pprust::ty_to_string(&*constructor_ret_type),
         ).unwrap();
-        println!("we generate and parse code: {}", code);
+        debug!("we generate and parse code: {}", code);
         jni_methods.push(parse::parse_item_from_source_str(
             "destructor".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
     }
@@ -465,24 +472,25 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     let mut parser = parse::new_parser_from_tts(cx.parse_sess, cx.cfg.clone(), tokens.to_vec());
     let class_ident = parser.parse_ident().unwrap();
     if class_ident.name.as_str() != "class" {
-        println!("class_indent {:?}", class_ident);
+        debug!("class_indent {:?}", class_ident);
         cx.span_err(parser.span, "expect class here");
         return DummyResult::any(parser.span);
     }
     let class_name_indent = parser.parse_ident().unwrap();
-    println!("CLASS NAME {:?}", class_name_indent);
+    debug!("CLASS NAME {:?}", class_name_indent);
     parser.expect(&token::Token::OpenDelim(token::DelimToken::Brace)).unwrap();
     let mut methods = Vec::new();
     let mut rust_self_type = ast::Path{span: parser.span, global: false, segments: Vec::new()};
+    let alias = ast::Ident::with_empty_ctxt(token::intern("alias"));
     loop {
         if parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
             break;
         }
         let func_type_name = parser.parse_ident().unwrap();
-        println!("func_type {:?}", func_type_name);
+        debug!("func_type {:?}", func_type_name);
         if func_type_name.name.as_str() == "self_type" {
             rust_self_type = parser.parse_path(parser::PathStyle::Type).unwrap();
-            println!("self_type: {:?}", rust_self_type);
+            debug!("self_type: {:?}", rust_self_type);
             parser.expect(&token::Token::Semi).unwrap();
             continue;
         }
@@ -494,16 +502,28 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
         }
         let func_type = func_type.unwrap();
         let func_name = parser.parse_path(parser::PathStyle::Mod).unwrap();
-        println!("func_name {:?}", func_name);
+        debug!("func_name {:?}", func_name);
 
         let func_decl = match func_type {
             FuncVariant::Constructor | FuncVariant::StaticMethod => parser.parse_fn_decl(false).unwrap(),
             FuncVariant::Method => parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).unwrap(),
         };
-        println!("func_decl {:?}", func_decl);
+        debug!("func_decl {:?}", func_decl);
         parser.expect(&token::Token::Semi).unwrap();
-
-        methods.push(ForeignerMethod{func_type: func_type, path: func_name, in_out_type: func_decl});
+        let mut func_name_alias = None;
+        if parser.eat_contextual_keyword(alias) {
+            if func_type == FuncVariant::Constructor {
+                cx.span_err(parser.span, "alias not supported for 'constructor'");
+                return DummyResult::any(parser.span);
+            }
+            func_name_alias = Some(parser.parse_ident().unwrap());
+            debug!("we have ALIAS `{:?}`", func_name_alias.unwrap());
+            parser.expect(&token::Token::Semi).expect("no ; at the end of alias");
+        }
+        methods.push(ForeignerMethod{
+            func_type: func_type, path: func_name, in_out_type: func_decl,
+            name_alias: func_name_alias.map(|v| v.name.as_str()),
+        });
     }
     let type_handlers = vec![
         TypeHandler{rust_type_name: "bool", jni_type_name: "jboolean", java_type_name: "boolean",

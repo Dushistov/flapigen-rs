@@ -33,9 +33,9 @@ impl Foo {
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32, _: &str) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;
+    method Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
     method Foo::f_double(&self, _: f64, _: f64) -> f64;
-    method Foo::name(&self) -> &str;
+    method Foo::name(&self) -> &str; alias getName;
 });
 
 struct Boo {}

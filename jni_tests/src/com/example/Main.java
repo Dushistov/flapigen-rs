@@ -13,14 +13,14 @@ class Main {
 	}
         final String FOO_NAME = "Me is foo";
 	Foo foo = new Foo(5, FOO_NAME);
-	final int res = foo.f(1, 2);
+	final int res = foo.calcF(1, 2);
 	assert res == 8;
         System.out.println("res: " + Integer.toString(res));
         final double resf = foo.f_double(1.0, 1.0);
         assert Math.abs(Math.hypot(1.0, 1.0) + 5.0 - resf) < 1e-10;
         System.out.println("resf: " + Double.toString(resf));
-        assert foo.name().equals(FOO_NAME);
-        System.out.println("name from java: " + foo.name());
+        assert foo.getName().equals(FOO_NAME);
+        System.out.println("name from java: " + foo.getName());
         foo = null;
         System.gc();
         Boo boo = new Boo();
