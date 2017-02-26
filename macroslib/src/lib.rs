@@ -269,7 +269,6 @@ fn generate_rust_to_convert_this(constructor_ret_type: &str, rust_self_type: &st
 }
 
 fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_self_type: &ast::Path, rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod]) -> Box<MacResult> {
-    let package_name = package_name.replace(".", "_");
     let mut jni_methods = Vec::new();
     let constructor = methods.iter().find(|&x| if let FuncVariant::Constructor = x.func_type { true } else { false });
     let constructor_ret_type: Option<_> = constructor.map(|v| match &v.in_out_type.output {

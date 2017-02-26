@@ -24,7 +24,7 @@ pub fn generate_func_name(package_name: &str, class_name: &str, func_name: &str,
             }
         }
     }
-    output.push_str(package_name);
+    escape_underscore(package_name, &mut output);
     output.push_str("_");
     escape_underscore(class_name, &mut output);
     output.push_str("_");
