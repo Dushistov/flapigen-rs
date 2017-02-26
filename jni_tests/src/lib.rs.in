@@ -3,6 +3,7 @@ use std::ptr;
 use std::ffi::CStr;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::path::{Path, PathBuf};
 
 use jni::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean};
 
@@ -55,4 +56,25 @@ foreigner_class!(class Boo {
     self_type Boo;
     constructor create_boo() -> Rc<RefCell<Boo>>;
     method Boo::test(&self, _: bool) -> f32;
+});
+
+struct TestPathAndResult {
+    path: PathBuf,
+}
+
+impl TestPathAndResult {
+    fn empty() -> Result<TestPathAndResult, String> {
+        println!("TestPathAndResult::empty");
+        Err("test error path".into())
+    }
+    fn new(path: &Path) -> Result<TestPathAndResult, String> {
+        println!("TestPathAndResult::new path: {:?}", path);
+        Ok(TestPathAndResult{path: path.into()})
+    }
+}
+
+foreigner_class!(class TestPathAndResult {
+    self_type TestPathAndResult;
+    constructor TestPathAndResult::empty() -> Result<TestPathAndResult, String>;
+    constructor TestPathAndResult::new(path: &Path) -> Result<TestPathAndResult, String>;
 });

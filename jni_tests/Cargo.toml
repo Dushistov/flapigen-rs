@@ -10,9 +10,8 @@ crate-type = ["cdylib"]
 
 [build-dependencies]
 syntex = "0.47.0"
+env_logger = "0.3"
 
 [build-dependencies.rust_swig]
 path = "../macroslib"
 
-[dependencies]
-libc = "0.2"

@@ -2,6 +2,7 @@ package com.example;
 
 import com.example.Foo;
 import com.example.Boo;
+import com.example.TestPathAndResult;
 
 class Main {
     public static void main(String[] args) {
@@ -29,5 +30,8 @@ class Main {
         assert Math.abs((float )Math.PI - boo.test(false)) < 1e-10;
         boo = null;
         System.gc();
+
+        TestPathAndResult tpr1 = new TestPathAndResult();
+        TestPathAndResult tpr2 = new TestPathAndResult("/tmp/a.txt");
     }
 }

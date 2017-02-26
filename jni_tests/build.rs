@@ -1,13 +1,14 @@
 extern crate syntex;
 extern crate rust_swig;
+extern crate env_logger;
 
 use std::env;
 use std::path::Path;
 
 fn main() {
+    env_logger::init().unwrap();
     let mut registry = syntex::Registry::new();
     rust_swig::register(&mut registry);
-
     let src = Path::new("src/lib.rs.in");
     let dst = Path::new(&env::var("OUT_DIR").unwrap()).join("lib.rs");
     env::set_var("RUST_SWIG_JNI_JAVA_PACKAGE", "com.example");
