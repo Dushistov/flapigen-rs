@@ -30,8 +30,29 @@ class Main {
         assert Math.abs((float )Math.PI - boo.test(false)) < 1e-10;
         boo = null;
         System.gc();
+        boolean haveException = false;
+        try {
+            TestPathAndResult tpr1 = new TestPathAndResult();
+        } catch (Exception ex) {
+            System.out.println("Have exception: " + ex);
+            haveException = true;
+        }
+        assert haveException;
+        System.gc();
 
-        TestPathAndResult tpr1 = new TestPathAndResult();
-        TestPathAndResult tpr2 = new TestPathAndResult("/tmp/a.txt");
+        haveException = false;
+        TestPathAndResult tpr2 = null;
+        try {
+            tpr2 = new TestPathAndResult("/tmp/a.txt");
+        } catch (Exception ex) {
+            System.out.println("Have exception: " + ex);
+            haveException = true;
+        }
+        assert !haveException;
+        assert tpr2.getPath().equals("/tmp/a.txt");
+        tpr2 = null;
+        System.gc();
+
+        System.out.println("ALL tests PASSED");
     }
 }

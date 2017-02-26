@@ -8,6 +8,9 @@ build = "build.rs"
 name = "test"
 crate-type = ["cdylib"]
 
+[dependencies]
+log = "0.3"
+
 [build-dependencies]
 syntex = "0.47.0"
 env_logger = "0.3"

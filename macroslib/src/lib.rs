@@ -16,6 +16,7 @@ use std::fs::File;
 use std::error::Error;
 use std::fmt::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::ops::Deref;
 
 use syntex::Registry;
 use syntex_syntax::ext::base::{ExtCtxt, MacResult, DummyResult, MacEager};
@@ -53,6 +54,7 @@ struct ForeignerMethod {
     path: ast::Path,
     in_out_type: P<ast::FnDecl>,
     name_alias: Option<token::InternedString>,
+    may_return_error: bool,
 }
 
 struct TypeHandler {
@@ -154,18 +156,20 @@ public final class {} {{
     let mut have_constructor = false;
     let mut have_methods = false;
     for method_it in methods.iter() {
+        let exception_spec = if method_it.may_return_error { "throws Exception" } else { "" };
         match method_it.func_type {
             FuncVariant::StaticMethod => (),
             FuncVariant::Constructor => {
                 have_constructor = true;
                 write!(file,
 "
-    public {class_name}({args_with_types}) {{
+    public {class_name}({args_with_types}) {exception_spec} {{
         mNativeObj = init({args});
     }}
-    private static native long init({args_with_types});
+    private static native long init({args_with_types}) {exception_spec};
 ",
                        class_name = class_name,
+                       exception_spec = exception_spec,
                        args_with_types = method_it.args_with_java_types(false, rust_java_types_map),
                        args = method_it.args(false)).unwrap();
             }
@@ -255,6 +259,22 @@ lazy_static! {
     static ref COMMON_CODE_GENERATED: AtomicBool = AtomicBool::new(false);
 }
 
+fn jni_convert_this_in_constructor(constructor_ret_type: &str, rust_self_type: &str) -> String {
+    if constructor_ret_type.starts_with(&format!("Result<{},", rust_self_type)) {
+        format!(r#"
+  let this = match this {{
+    Ok(val) => val,
+    Err(msg) => {{
+      jni_throw_exception(env, &msg);
+      return 0;
+    }}
+  }};
+"#)
+    } else {
+        String::new()
+    }
+}
+
 fn generate_rust_to_convert_this(constructor_ret_type: &str, rust_self_type: &str) -> String {
     if constructor_ret_type == rust_self_type {
         return String::new();
@@ -268,6 +288,30 @@ fn generate_rust_to_convert_this(constructor_ret_type: &str, rust_self_type: &st
     }
 }
 
+fn unpack_if_type_is_result(ty: ast::Ty) -> ast::Ty {
+    match ty.node {
+        ast::TyKind::Path(_/*self info*/, ref path) => {
+            debug!("unpack_if_type_is_result: path: {:?}, ident {:?}", path.segments, path.segments[0].identifier.name.as_str());
+            path.segments.first().map(|v|
+                                      if v.identifier.name.as_str() == "Result" {
+                                          match v.parameters {
+                                              ast::PathParameters::AngleBracketed(ref params) => {
+                                                  params.types.first().map(|v| {
+                                                      debug!("unpack_if_type_is_result: result param {:?}", *v);
+                                                      let v = v.deref();
+                                                      v.clone()
+                                                  }).unwrap_or(ty.clone())
+                                              }
+                                              _ => ty.clone(),
+                                          }
+                                      } else {
+                                          ty.clone()
+                                      }).unwrap_or(ty.clone())
+        }
+        _ => ty,
+    }
+}
+
 fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_self_type: &ast::Path, rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod]) -> Box<MacResult> {
     let mut jni_methods = Vec::new();
     let constructor = methods.iter().find(|&x| if let FuncVariant::Constructor = x.func_type { true } else { false });
@@ -276,6 +320,13 @@ fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_self_type: &ast::Path, rus
                                                   package_name, class_name),
         &ast::FunctionRetTy::Ty(ref ret_type) => Some(ret_type.clone()),
     }).unwrap_or(None);
+
+    let constructor_ret_type_for_method = constructor_ret_type.as_ref()
+        .map(|v: &syntex_syntax::ptr::P<syntex_syntax::ast::Ty>| {
+            let t: &ast::Ty = v.deref();
+            unpack_if_type_is_result(t.clone())
+        });
+
     let mut generated_func_names = HashMap::<String, usize>::new();
     for it in methods.iter() {
         let val_ref = generated_func_names.entry(match it.func_type {
@@ -298,6 +349,7 @@ fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_self_type: &ast::Path, rus
         match it.func_type {
             FuncVariant::StaticMethod => unimplemented!(),
             FuncVariant::Constructor => {
+                let constructor_ret_type = constructor_ret_type.as_ref().unwrap().clone();
                 let mut code = String::new();
                 write!(&mut code, r#"
 #[allow(non_snake_case)]
@@ -306,6 +358,7 @@ fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_self_type: &ast::Path, rus
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
 {convert_jni_args}
   let this = {create_jni_obj}({jni_func_args});
+{convert_this}
   Box::into_raw(Box::new(this)) as jlong
 }}
 "#,
@@ -314,6 +367,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
                            *generated_func_names.get("init").unwrap() > 1,
                            &java_input_args
                        ),
+                       convert_this = jni_convert_this_in_constructor(&pprust::ty_to_string(&*constructor_ret_type), &rust_self_type.to_string()),
                        decl_func_args = jni_func_args_for_decl(rust_java_types_map, &*it, 0),
                        convert_jni_args = jni_convert_args(rust_java_types_map, &*it, 0),
                        create_jni_obj = it.full_name(),
@@ -333,7 +387,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
                     panic!("package_name {}, class_name {} have constructor, but self_type not defined",
                            package_name, class_name);
                 }
-                let constructor_ret_type = constructor_ret_type.as_ref().unwrap().clone();
+                let constructor_ret_type = constructor_ret_type_for_method.as_ref().unwrap().clone();
 
                 let mut code = String::new();
                 let gen_func_name = format!("do_{}", &it.short_name());
@@ -356,8 +410,8 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {
                        decl_func_args = jni_func_args_for_decl(rust_java_types_map, &*it, 1),
                        convert_jni_args = jni_convert_args(rust_java_types_map, &*it, 1),
                        jni_result_type = jni_result_type(rust_java_types_map, &*it),
-                       this_type = pprust::ty_to_string(&*constructor_ret_type),
-                       convert_this = generate_rust_to_convert_this(&pprust::ty_to_string(&*constructor_ret_type), &rust_self_type.to_string()),
+                       this_type = pprust::ty_to_string(&constructor_ret_type),
+                       convert_this = generate_rust_to_convert_this(&pprust::ty_to_string(&constructor_ret_type), &rust_self_type.to_string()),
                        rust_func_name = it.path,
                        jni_func_args = it.in_out_type.inputs.iter().skip(1).enumerate().map(|a| format!("a_{}, ", a.0))
                        .fold(String::new(), |acc, x| acc + &x),
@@ -371,7 +425,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {
     }
 
     if constructor.is_some() {
-        let constructor_ret_type = constructor_ret_type.as_ref().unwrap().clone();
+        let constructor_ret_type = constructor_ret_type_for_method.as_ref().unwrap().clone();
         let mut code = String::new();
         write!(&mut code, r#"
 #[allow(non_snake_case)]
@@ -383,7 +437,7 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
 }}
 "#,
                jni_destructor_name = jni::generate_func_name(&package_name, &class_name, "do_delete", false, &[]),
-               type_name = pprust::ty_to_string(&*constructor_ret_type),
+               type_name = pprust::ty_to_string(&constructor_ret_type),
         ).unwrap();
         debug!("we generate and parse code: {}", code);
         jni_methods.push(parse::parse_item_from_source_str(
@@ -428,6 +482,31 @@ impl Drop for JavaString {
         self.chars = ptr::null_mut();
     }
 }
+
+#[allow(dead_code)]
+fn jni_throw(env: *mut JNIEnv, class_name: &'static str, message: &str) {
+    let class_name_c = ::std::ffi::CString::new(class_name).unwrap();
+
+    let ex_class = unsafe {
+        (**env).FindClass.unwrap()(env, class_name_c.as_ptr())
+    };
+    if ex_class.is_null() {
+        error!("throw_exception: can not find exp class {}, msg {}", class_name, message);
+        return;
+    }
+    let c_message = ::std::ffi::CString::new(message).unwrap();
+    let res = unsafe {
+        (**env).ThrowNew.unwrap()(env, ex_class, c_message.as_ptr())
+    };
+    if res != 0 {
+        error!("ThrowNew({}) for class {} failed", message, class_name);
+    }
+}
+
+#[allow(dead_code)]
+fn jni_throw_exception(env: *mut JNIEnv, message: &str) {
+    jni_throw(env, "java/lang/Exception", message)
+}
 "#.to_string());
         let mut my_crate = parser.parse_crate_mod().unwrap();
         jni_methods.append(&mut my_crate.module.items);
@@ -447,6 +526,14 @@ fn str_to_jstring() -> String {
   let ret = ::std::ffi::CString::new(ret).unwrap();
   let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
 "#.to_string()
+}
+
+fn ret_string_to_jstring() -> String {
+    r#"
+  let ret = ret.into_bytes();
+  let ret = unsafe { ::std::ffi::CString::from_vec_unchecked(ret) };
+  let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
+"#.into()
 }
 
 fn jstring_to_path(arg_name: &str) -> String {
@@ -521,9 +608,14 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
             debug!("we have ALIAS `{:?}`", func_name_alias.unwrap());
             parser.expect(&token::Token::Semi).expect("no ; at the end of alias");
         }
+        let may_return_error = match &func_decl.output {
+            &ast::FunctionRetTy::Default(_) => false,
+            &ast::FunctionRetTy::Ty(ref ret_type) => pprust::ty_to_string(&*ret_type).as_str().starts_with("Result<"),
+        };
         methods.push(ForeignerMethod{
             func_type: func_type, path: func_name, in_out_type: func_decl,
             name_alias: func_name_alias.map(|v| v.name.as_str()),
+            may_return_error: may_return_error,
         });
     }
     let type_handlers = vec![
@@ -539,6 +631,8 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
                     from_jni_converter: Some(jstring_to_str), to_jni_converter: Some(str_to_jstring)},
         TypeHandler{rust_type_name: "&Path", jni_type_name: "jstring", java_type_name: "String",
                     from_jni_converter: Some(jstring_to_path), to_jni_converter: None},
+        TypeHandler{rust_type_name: "String", jni_type_name: "jstring", java_type_name: "String",
+                    from_jni_converter: None, to_jni_converter: Some(ret_string_to_jstring)},
     ];
     let mut rust_java_types_map = HashMap::new();
     for it in type_handlers.iter() {

@@ -71,10 +71,15 @@ impl TestPathAndResult {
         println!("TestPathAndResult::new path: {:?}", path);
         Ok(TestPathAndResult{path: path.into()})
     }
+
+    fn get_path(&self) -> String {
+        self.path.to_str().unwrap().into()
+    }
 }
 
 foreigner_class!(class TestPathAndResult {
     self_type TestPathAndResult;
     constructor TestPathAndResult::empty() -> Result<TestPathAndResult, String>;
     constructor TestPathAndResult::new(path: &Path) -> Result<TestPathAndResult, String>;
+    method TestPathAndResult::get_path(&self) -> String; alias getPath;
 });
