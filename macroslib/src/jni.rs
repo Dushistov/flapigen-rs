@@ -1,4 +1,3 @@
-use std::fmt::Write;
 use std::collections::HashMap;
 
 lazy_static! {
@@ -16,11 +15,11 @@ pub fn generate_func_name(package_name: &str, class_name: &str, func_name: &str,
     fn escape_underscore(input: &str, mut output: &mut String) {
         for c in input.chars() {
             match c {
-                '.' => write!(&mut output, "_").unwrap(),
-                '[' => write!(&mut output, "_3").unwrap(),
-                '_' => write!(&mut output, "_1").unwrap(),
-                ';' => write!(&mut output, "_2").unwrap(),
-                _ => write!(&mut output, "{}", c).unwrap(),
+                '.' => output.push('_'),
+                '[' => output.push_str("_3"),
+                '_' => output.push_str("_1"),
+                ';' => output.push_str("_2"),
+                _ => output.push(c),
             }
         }
     }

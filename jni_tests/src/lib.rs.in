@@ -60,6 +60,7 @@ foreigner_class!(class Boo {
 
 struct TestPathAndResult {
     path: PathBuf,
+    boo: Rc<RefCell<Boo>>,
 }
 
 impl TestPathAndResult {
@@ -69,11 +70,15 @@ impl TestPathAndResult {
     }
     fn new(path: &Path) -> Result<TestPathAndResult, String> {
         println!("TestPathAndResult::new path: {:?}", path);
-        Ok(TestPathAndResult{path: path.into()})
+        Ok(TestPathAndResult{path: path.into(), boo: create_boo()})
     }
 
     fn get_path(&self) -> String {
         self.path.to_str().unwrap().into()
+    }
+
+    fn get_boo(&self) -> Rc<RefCell<Boo>> {
+        self.boo.clone()
     }
 }
 
@@ -82,4 +87,5 @@ foreigner_class!(class TestPathAndResult {
     constructor TestPathAndResult::empty() -> Result<TestPathAndResult, String>;
     constructor TestPathAndResult::new(path: &Path) -> Result<TestPathAndResult, String>;
     method TestPathAndResult::get_path(&self) -> String; alias getPath;
+//    method TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>;
 });
