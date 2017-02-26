@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::fmt::Write;
 
 use syntex_syntax::parse::{token};
@@ -14,7 +13,7 @@ pub enum FuncVariant {
 
 impl FuncVariant {
     pub fn from_str(ident: &token::InternedString) -> Option<FuncVariant> {
-        match ident.deref() {
+        match &**ident {
             "constructor" => Some(FuncVariant::Constructor),
             "method" => Some(FuncVariant::Method),
             "static_method" => Some(FuncVariant::StaticMethod),

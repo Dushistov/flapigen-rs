@@ -167,8 +167,9 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     let java_output_dir = env::var("RUST_SWIG_JNI_JAVA_OUTPUT_DIR").unwrap();
     let package_name = env::var("RUST_SWIG_JNI_JAVA_PACKAGE").unwrap();
 
-    generate_java_code(&rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(), &methods,
-                       &java_output_dir);
+    generate_java_code(&rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(),
+                       &methods, &java_output_dir);
 
-    generate_rust_code(cx, &rust_self_type, &rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(), &methods)
+    generate_rust_code(cx, &rust_self_type, &rust_java_types_map, package_name.as_str(),
+                       &class_name_indent.name.as_str(), &methods)
 }

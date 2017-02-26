@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::atomic::{Ordering};
-use std::ops::Deref;
 use std::fmt::Write;
 
 use syntex_syntax::util::small_vector::SmallVector;
@@ -22,10 +21,9 @@ fn unpack_if_type_is_result(ty: ast::Ty) -> ast::Ty {
                                       if v.identifier.name.as_str() == "Result" {
                                           match v.parameters {
                                               ast::PathParameters::AngleBracketed(ref params) => {
-                                                  params.types.first().map(|v| {
+                                                  params.types.first().map(|v: &P<ast::Ty>| {
                                                       debug!("unpack_if_type_is_result: result param {:?}", *v);
-                                                      let v = v.deref();
-                                                      v.clone()
+                                                      (**v).clone()
                                                   }).unwrap_or(ty.clone())
                                               }
                                               _ => ty.clone(),
@@ -123,8 +121,7 @@ pub fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_self_type: &ast::Path,
 
     let constructor_ret_type_for_method = constructor_ret_type.as_ref()
         .map(|v: &P<ast::Ty>| {
-            let t: &ast::Ty = v.deref();
-            unpack_if_type_is_result(t.clone())
+            unpack_if_type_is_result((**v).clone())
         });
 
     let mut generated_func_names = HashMap::<String, usize>::new();
