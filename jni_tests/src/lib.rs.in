@@ -5,7 +5,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
-use jni::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean};
+use jni::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean,
+          jobject, jfieldID};
 
 struct Foo {
     data: i32,
@@ -39,12 +40,20 @@ foreigner_class!(class Foo {
     method Foo::name(&self) -> &str; alias getName;
 });
 
-struct Boo {}
+struct Boo {
+    a: i32,
+}
 
 impl Boo {
-    fn new() -> Boo { Boo{} }
+    fn new() -> Boo { Boo{a: 17} }
     fn test(&self, a: bool) -> f32 {
         if a { ::std::f32::consts::E } else { ::std::f32::consts::PI }
+    }
+    fn set_a(&mut self, val: i32) {
+        self.a = val;
+    }
+    fn get_a(&self) -> i32 {
+        self.a
     }
 }
 
@@ -56,6 +65,8 @@ foreigner_class!(class Boo {
     self_type Boo;
     constructor create_boo() -> Rc<RefCell<Boo>>;
     method Boo::test(&self, _: bool) -> f32;
+    method Boo::set_a(&mut self, _: i32); alias setA;
+    method Boo::get_a(&self) -> i32; alias getA;
 });
 
 struct TestPathAndResult {
@@ -87,5 +98,5 @@ foreigner_class!(class TestPathAndResult {
     constructor TestPathAndResult::empty() -> Result<TestPathAndResult, String>;
     constructor TestPathAndResult::new(path: &Path) -> Result<TestPathAndResult, String>;
     method TestPathAndResult::get_path(&self) -> String; alias getPath;
-//    method TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>;
+    method TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
 });

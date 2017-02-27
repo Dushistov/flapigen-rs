@@ -50,6 +50,10 @@ class Main {
         }
         assert !haveException;
         assert tpr2.getPath().equals("/tmp/a.txt");
+        Boo booMember = tpr2.getBoo();
+        assert booMember.getA() == 17;
+        booMember.setA(18);
+        assert booMember.getA() == 18;
         tpr2 = null;
         System.gc();
 

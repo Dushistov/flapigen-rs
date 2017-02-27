@@ -44,12 +44,14 @@ public final class {class_name} {{
             }
             FuncVariant::Method => {
                 have_methods = true;
+                let return_type = method_it.java_return_type(rust_java_types_map);
                 write!(file,
 "
-    public {return_type} {func_name}({single_args_with_types}) {{ return do_{func_name}(mNativeObj{args}); }}
+    public {return_type} {func_name}({single_args_with_types}) {{ {return_code} do_{func_name}(mNativeObj{args}); }}
     private static native {return_type} do_{func_name}(long me{func_args_with_types});
 ",
-                       return_type = method_it.java_return_type(rust_java_types_map),
+                       return_type = return_type,
+                       return_code = if return_type != "void" { "return" } else { "" },
                        func_name = method_it.short_name(),
                        single_args_with_types = method_it.args_with_java_types(false, rust_java_types_map),
                        func_args_with_types  = method_it.args_with_java_types(true, rust_java_types_map),

@@ -28,72 +28,54 @@ use syntex_syntax::print::pprust;
 
 use parse_utils::*;
 use core::*;
-use rust_generator::generate_rust_code;
+use rust_generator::{generate_rust_code, RUST_OBJECT_TO_JOBJECT};
 use java_generator::generate_java_code;
 
 lazy_static! {
     pub static ref COMMON_CODE_GENERATED: AtomicBool = AtomicBool::new(false);
     static ref TYPE_HANDLERS: Mutex<Vec<TypeHandler>> = {
         Mutex::new(vec![
-            TypeHandler{rust_type_name: "bool", jni_type_name: "jboolean", java_type_name: "boolean",
-                        from_jni_converter: Some(jboolean_to_bool), to_jni_converter: Some(bool_to_jboolean)},
-            TypeHandler{rust_type_name: "i32", jni_type_name: "jint", java_type_name: "int",
+            TypeHandler{rust_type_name: "bool".into(), jni_type_name: "jboolean", java_type_name: "boolean".into(),
+                        from_jni_converter: Some(FromForeignArgConverter("let {arg_name} = {arg_name} != 0;".into())),
+                        to_jni_converter: Some(ToForeignRetConverter("let ret = if ret { 1 as jboolean } else { 0 as jboolean };".into()))},
+            TypeHandler{rust_type_name: "i32".into(), jni_type_name: "jint", java_type_name: "int".into(),
                         from_jni_converter: None, to_jni_converter: None},
-            TypeHandler{rust_type_name: "f32", jni_type_name: "jfloat", java_type_name: "float",
+            TypeHandler{rust_type_name: "f32".into(), jni_type_name: "jfloat", java_type_name: "float".into(),
                         from_jni_converter: None, to_jni_converter: None},
-            TypeHandler{rust_type_name: "f64", jni_type_name: "jdouble", java_type_name: "double",
+            TypeHandler{rust_type_name: "f64".into(), jni_type_name: "jdouble", java_type_name: "double".into(),
                         from_jni_converter: None, to_jni_converter: None},
-            TypeHandler{rust_type_name: "&str", jni_type_name: "jstring", java_type_name: "String",
-                        from_jni_converter: Some(jstring_to_str), to_jni_converter: Some(str_to_jstring)},
-            TypeHandler{rust_type_name: "&Path", jni_type_name: "jstring", java_type_name: "String",
-                        from_jni_converter: Some(jstring_to_path), to_jni_converter: None},
-            TypeHandler{rust_type_name: "String", jni_type_name: "jstring", java_type_name: "String",
-                        from_jni_converter: None, to_jni_converter: Some(ret_string_to_jstring)},
+            TypeHandler{rust_type_name: "&str".into(), jni_type_name: "jstring", java_type_name: "String".into(),
+                        from_jni_converter: Some(FromForeignArgConverter(r#"
+  let {arg_name} = JavaString::new(env, {arg_name});
+  let {arg_name} = {arg_name}.to_str();
+"#.into())),
+                        to_jni_converter: Some(ToForeignRetConverter(r#"
+  let ret = ::std::ffi::CString::new(ret).unwrap();
+  let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
+"#.into()))},
+            TypeHandler{rust_type_name: "&Path".into(), jni_type_name: "jstring", java_type_name: "String".into(),
+                        from_jni_converter: Some(FromForeignArgConverter(
+                            r#"
+  let {arg_name} = JavaString::new(env, {arg_name});
+  let {arg_name} = Path::new({arg_name}.to_str());
+"#.into()
+                        )),
+                        to_jni_converter: None},
+            TypeHandler{rust_type_name: "String".into(), jni_type_name: "jstring", java_type_name: "String".into(),
+                        from_jni_converter: None,
+                        to_jni_converter: Some(ToForeignRetConverter(
+                            r#"
+  let ret = ret.into_bytes();
+  let ret = unsafe { ::std::ffi::CString::from_vec_unchecked(ret) };
+  let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
+"#.into()
+                        ))},
             ])
     };
 }
 
 pub fn register(registry: &mut Registry) {
     registry.add_macro("foreigner_class", expand_foreigner_class);
-}
-
-fn jstring_to_str(arg_name: &str) -> String {
-    format!(r#"
-  let {arg_name} = JavaString::new(env, {arg_name});
-  let {arg_name} = {arg_name}.to_str();
-"#, arg_name = arg_name)
-}
-
-fn str_to_jstring() -> String {
-    r#"
-  let ret = ::std::ffi::CString::new(ret).unwrap();
-  let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
-"#.to_string()
-}
-
-fn ret_string_to_jstring() -> String {
-    r#"
-  let ret = ret.into_bytes();
-  let ret = unsafe { ::std::ffi::CString::from_vec_unchecked(ret) };
-  let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
-"#.into()
-}
-
-fn jstring_to_path(arg_name: &str) -> String {
-    format!(r#"
-  let {arg_name} = JavaString::new(env, {arg_name});
-  let {arg_name} = Path::new({arg_name}.to_str());
-"#, arg_name = arg_name)
-}
-
-fn jboolean_to_bool(arg_name: &str) -> String {
-    format!(r#"
-  let {arg_name} = {arg_name} != 0;
-"#, arg_name = arg_name)
-}
-
-fn bool_to_jboolean() -> String {
-    "let ret = if ret { 1 as jboolean } else { 0 as jboolean };".to_string()
 }
 
 fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
@@ -176,13 +158,8 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
             may_return_error: may_return_error,
         });
     }
-    let type_handlers = TYPE_HANDLERS.lock().unwrap();
-    let mut rust_java_types_map = HashMap::new();
-    for it in type_handlers.iter() {
-        rust_java_types_map.insert(it.rust_type_name, &*it);
-    }
+    let mut type_handlers = TYPE_HANDLERS.lock().unwrap();
 
-    let java_output_dir = env::var("RUST_SWIG_JNI_JAVA_OUTPUT_DIR").unwrap();
     let package_name = env::var("RUST_SWIG_JNI_JAVA_PACKAGE").unwrap();
 
     let class_info = ForeignerClassInfo {
@@ -194,6 +171,21 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
         this_type_for_method: this_type_for_method,
     };
 
+    if class_info.this_type_for_method.is_some() {
+        let mut class_th: TypeHandler = (&class_info).into();        
+        class_th.to_jni_converter = Some(ToForeignRetConverter(
+            RUST_OBJECT_TO_JOBJECT.replace(
+                "{full_class_name}", &class_info.full_java_class_name())));
+        type_handlers.push(class_th);
+    }
+
+    let mut rust_java_types_map = HashMap::new();
+    for it in type_handlers.iter() {
+        rust_java_types_map.insert(it.rust_type_name.as_str(), &*it);
+    }
+
+    let java_output_dir = env::var("RUST_SWIG_JNI_JAVA_OUTPUT_DIR").unwrap();
+    
     generate_java_code(&rust_java_types_map, &class_info, &java_output_dir);
     generate_rust_code(cx, &rust_java_types_map, &class_info)
 }
@@ -236,7 +228,7 @@ fn unpack_if_type_is_result(ty: &ast::Ty) -> ast::Ty {
 mod tests {
     use super::*;
     use syntex_syntax::{parse, ast};
-    
+
     #[test]
     fn test_is_type_std_result() {
         let session = parse::ParseSess::new();

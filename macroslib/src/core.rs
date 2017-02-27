@@ -30,12 +30,28 @@ pub struct ForeignerMethod {
     pub may_return_error: bool,
 }
 
+pub struct FromForeignArgConverter(pub String);
+
+impl FromForeignArgConverter {
+    pub fn apply(&self, arg_name: &str) -> String {
+        self.0.replace("{arg_name}", arg_name)
+    }
+}
+
+pub struct ToForeignRetConverter(pub String);
+
+impl ToForeignRetConverter {
+    pub fn apply(&self) -> &str {
+        &self.0
+    }
+}
+
 pub struct TypeHandler {
-    pub rust_type_name: &'static str,
+    pub rust_type_name: String,
     pub jni_type_name: &'static str,
-    pub java_type_name: &'static str,
-    pub from_jni_converter: Option<fn(&str)->String>,
-    pub to_jni_converter: Option<fn() -> String>,
+    pub java_type_name: String,
+    pub from_jni_converter: Option<FromForeignArgConverter>,
+    pub to_jni_converter: Option<ToForeignRetConverter>,
 }
 
 pub struct ForeignerClassInfo<'a> {
@@ -47,7 +63,29 @@ pub struct ForeignerClassInfo<'a> {
     pub this_type_for_method: Option<ast::Ty>,
 }
 
-pub type RustToJavaTypes<'a> = HashMap<&'static str, &'a TypeHandler>;
+impl <'a> ForeignerClassInfo<'a> {
+    pub fn full_java_class_name(&self) -> String {
+        let mut ret = self.package_name.clone();
+        ret.push('.');
+        ret.push_str(self.class_name);
+        ret.replace(".", "/")
+    }
+}
+
+
+impl <'a, 'b> Into<TypeHandler> for &'a ForeignerClassInfo<'b> {
+    fn into(self) -> TypeHandler {
+        TypeHandler {
+            rust_type_name: pprust::ty_to_string(self.this_type_for_method.as_ref().unwrap()),
+            jni_type_name: "jobject",
+            java_type_name: self.class_name.into(),
+            from_jni_converter: None,
+            to_jni_converter: None,
+        }
+    }
+}
+
+pub type RustToJavaTypes<'a> = HashMap<&'a str, &'a TypeHandler>;
 
 pub fn get_type_handler<'a, 'b>(types_map: &RustToJavaTypes<'a>, name: &'b str) -> &'a TypeHandler {
     types_map.get(name).expect(&format!("Unknown type `{}`", name))
@@ -78,7 +116,7 @@ impl ForeignerMethod {
             write!(&mut res, ", ").unwrap();
         }
         for (i, item_arg) in self.in_out_type.inputs.iter().skip(skip_n).enumerate() {
-            let type_name = get_type_handler(types_map, pprust::ty_to_string(&*item_arg.ty).as_str()).java_type_name;
+            let type_name = &get_type_handler(types_map, pprust::ty_to_string(&*item_arg.ty).as_str()).java_type_name;
             if i == (self.in_out_type.inputs.len() - 1 - skip_n) {
                 write!(&mut res, "{} a_{}", type_name, i)
             } else {
@@ -89,11 +127,11 @@ impl ForeignerMethod {
         res
     }
 
-    pub fn java_return_type(&self, types_map: &RustToJavaTypes) -> &'static str {
+    pub fn java_return_type<'a>(&self, types_map: &'a RustToJavaTypes) -> &'a str {
         match &self.in_out_type.output {
             &ast::FunctionRetTy::Default(_) => "void",
             &ast::FunctionRetTy::Ty(ref ret_type) =>
-                get_type_handler(types_map, pprust::ty_to_string(&*ret_type).as_str()).java_type_name
+                get_type_handler(types_map, pprust::ty_to_string(&*ret_type).as_str()).java_type_name.as_str()
         }
     }
 
