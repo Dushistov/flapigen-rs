@@ -38,6 +38,15 @@ pub struct TypeHandler {
     pub to_jni_converter: Option<fn() -> String>,
 }
 
+pub struct ForeignerClassInfo<'a> {
+    pub package_name: String,
+    pub class_name: &'a str,
+    pub methods: Vec<ForeignerMethod>,
+    pub self_rust_type: ast::Path,
+    pub constructor_ret_type: Option<ast::Ty>,
+    pub this_type_for_method: Option<ast::Ty>,
+}
+
 pub type RustToJavaTypes<'a> = HashMap<&'static str, &'a TypeHandler>;
 
 pub fn get_type_handler<'a, 'b>(types_map: &RustToJavaTypes<'a>, name: &'b str) -> &'a TypeHandler {

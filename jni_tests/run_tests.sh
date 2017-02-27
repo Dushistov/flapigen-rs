@@ -16,4 +16,4 @@ cd ../..
 rm -f *.jar
 jar cfv Test.jar com
 
-java -ea -Djava.library.path=`pwd`/../target/debug -cp Test.jar com.example.Main
+java -verbose:jni  -ea -Djava.library.path=`pwd`/../target/debug -cp Test.jar com.example.Main

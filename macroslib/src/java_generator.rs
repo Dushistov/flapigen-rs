@@ -3,13 +3,11 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::error::Error;
 
-use syntex_syntax::parse::{token};
-
 use core::*;
 
-pub fn generate_java_code(rust_java_types_map: &RustToJavaTypes, package_name: &str, class_name: &token::InternedString, methods: &[ForeignerMethod], output_dir: &str) {
+pub fn generate_java_code(rust_java_types_map: &RustToJavaTypes, class_info: &ForeignerClassInfo, output_dir: &str) {
     let mut path = PathBuf::from(output_dir);
-    path.push(format!("{}.java", class_name));
+    path.push(format!("{}.java", class_info.class_name));
     let display = path.display();
 
     let mut file = match File::create(&path) {
@@ -19,14 +17,14 @@ pub fn generate_java_code(rust_java_types_map: &RustToJavaTypes, package_name: &
         Ok(file) => file,
     };
     write!(file,
-"package {};
-public final class {} {{
+"package {package_name};
+public final class {class_name} {{
     private long mNativeObj;
-", package_name, class_name).unwrap();
+", package_name = class_info.package_name, class_name = class_info.class_name).unwrap();
 
     let mut have_constructor = false;
     let mut have_methods = false;
-    for method_it in methods.iter() {
+    for method_it in class_info.methods.iter() {
         let exception_spec = if method_it.may_return_error { "throws Exception" } else { "" };
         match method_it.func_type {
             FuncVariant::StaticMethod => (),
@@ -39,7 +37,7 @@ public final class {} {{
     }}
     private static native long init({args_with_types}) {exception_spec};
 ",
-                       class_name = class_name,
+                       class_name = class_info.class_name,
                        exception_spec = exception_spec,
                        args_with_types = method_it.args_with_java_types(false, rust_java_types_map),
                        args = method_it.args(false)).unwrap();
@@ -62,7 +60,7 @@ public final class {} {{
     }
     if have_methods && !have_constructor {
         panic!("package_name {}, class_name {}, have methods, but no constructor",
-               package_name, class_name);
+               class_info.package_name, class_info.class_name);
     }
     if have_constructor {
         write!(file,

@@ -14,7 +14,8 @@ mod java_generator;
 
 use std::collections::HashMap;
 use std::env;
-use std::sync::atomic::{AtomicBool};
+use std::sync::atomic::AtomicBool;
+use std::sync::Mutex;
 
 use syntex::Registry;
 use syntex_syntax::ext::base::{ExtCtxt, MacResult, DummyResult};
@@ -22,6 +23,7 @@ use syntex_syntax::parse::{token, parser};
 use syntex_syntax::tokenstream::TokenTree;
 use syntex_syntax::codemap::Span;
 use syntex_syntax::{parse, ast};
+use syntex_syntax::ptr::P;
 use syntex_syntax::print::pprust;
 
 use parse_utils::*;
@@ -29,14 +31,30 @@ use core::*;
 use rust_generator::generate_rust_code;
 use java_generator::generate_java_code;
 
-pub fn register(registry: &mut Registry) {
-    registry.add_macro("foreigner_class", expand_foreigner_class);
-}
-
-
-
 lazy_static! {
     pub static ref COMMON_CODE_GENERATED: AtomicBool = AtomicBool::new(false);
+    static ref TYPE_HANDLERS: Mutex<Vec<TypeHandler>> = {
+        Mutex::new(vec![
+            TypeHandler{rust_type_name: "bool", jni_type_name: "jboolean", java_type_name: "boolean",
+                        from_jni_converter: Some(jboolean_to_bool), to_jni_converter: Some(bool_to_jboolean)},
+            TypeHandler{rust_type_name: "i32", jni_type_name: "jint", java_type_name: "int",
+                        from_jni_converter: None, to_jni_converter: None},
+            TypeHandler{rust_type_name: "f32", jni_type_name: "jfloat", java_type_name: "float",
+                        from_jni_converter: None, to_jni_converter: None},
+            TypeHandler{rust_type_name: "f64", jni_type_name: "jdouble", java_type_name: "double",
+                        from_jni_converter: None, to_jni_converter: None},
+            TypeHandler{rust_type_name: "&str", jni_type_name: "jstring", java_type_name: "String",
+                        from_jni_converter: Some(jstring_to_str), to_jni_converter: Some(str_to_jstring)},
+            TypeHandler{rust_type_name: "&Path", jni_type_name: "jstring", java_type_name: "String",
+                        from_jni_converter: Some(jstring_to_path), to_jni_converter: None},
+            TypeHandler{rust_type_name: "String", jni_type_name: "jstring", java_type_name: "String",
+                        from_jni_converter: None, to_jni_converter: Some(ret_string_to_jstring)},
+            ])
+    };
+}
+
+pub fn register(registry: &mut Registry) {
+    registry.add_macro("foreigner_class", expand_foreigner_class);
 }
 
 fn jstring_to_str(arg_name: &str) -> String {
@@ -95,6 +113,9 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     let mut methods = Vec::new();
     let mut rust_self_type = ast::Path{span: parser.span, global: false, segments: Vec::new()};
     let alias = ast::Ident::with_empty_ctxt(token::intern("alias"));
+    let mut constructor_ret_type: Option<ast::Ty> = None;
+    let mut this_type_for_method: Option<ast::Ty> = None;
+
     loop {
         if parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
             break;
@@ -102,7 +123,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
         let func_type_name = parser.parse_ident().unwrap();
         debug!("func_type {:?}", func_type_name);
         if func_type_name.name.as_str() == "self_type" {
-            rust_self_type = parser.parse_path(parser::PathStyle::Type).unwrap();
+            rust_self_type = parser.parse_path(parser::PathStyle::Type).expect("Can not parse self_type");
             debug!("self_type: {:?}", rust_self_type);
             parser.expect(&token::Token::Semi).unwrap();
             continue;
@@ -133,32 +154,29 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
             debug!("we have ALIAS `{:?}`", func_name_alias.unwrap());
             parser.expect(&token::Token::Semi).expect("no ; at the end of alias");
         }
-        let may_return_error = match &func_decl.output {
-            &ast::FunctionRetTy::Default(_) => false,
-            &ast::FunctionRetTy::Ty(ref ret_type) => pprust::ty_to_string(&*ret_type).as_str().starts_with("Result<"),
+        let (may_return_error, ret_type) = match &func_decl.output {
+            &ast::FunctionRetTy::Default(_) => (false, None),
+            &ast::FunctionRetTy::Ty(ref ret_type) => (is_type_std_result(ret_type), Some(ret_type.clone())),
         };
+        if let FuncVariant::Constructor = func_type {
+            let ret_type = ret_type.expect(&format!("{}: constructor should return value", class_name_indent));
+            if let Some(ref constructor_ret_type) = constructor_ret_type {
+                if pprust::ty_to_string(constructor_ret_type) != pprust::ty_to_string(&*ret_type) {
+                    cx.span_err(parser.span, &format!("mismatched types of construtors: {:?} {:?}", constructor_ret_type, ret_type));
+                    return DummyResult::any(parser.span);
+                }
+            } else {
+                constructor_ret_type = Some(ret_type.unwrap());
+                this_type_for_method = Some(unpack_if_type_is_result(constructor_ret_type.as_ref().unwrap()));
+            }
+        }
         methods.push(ForeignerMethod{
             func_type: func_type, path: func_name, in_out_type: func_decl,
             name_alias: func_name_alias.map(|v| v.name.as_str()),
             may_return_error: may_return_error,
         });
     }
-    let type_handlers = vec![
-        TypeHandler{rust_type_name: "bool", jni_type_name: "jboolean", java_type_name: "boolean",
-                    from_jni_converter: Some(jboolean_to_bool), to_jni_converter: Some(bool_to_jboolean)},
-        TypeHandler{rust_type_name: "i32", jni_type_name: "jint", java_type_name: "int",
-                    from_jni_converter: None, to_jni_converter: None},
-        TypeHandler{rust_type_name: "f32", jni_type_name: "jfloat", java_type_name: "float",
-                    from_jni_converter: None, to_jni_converter: None},
-        TypeHandler{rust_type_name: "f64", jni_type_name: "jdouble", java_type_name: "double",
-                    from_jni_converter: None, to_jni_converter: None},
-        TypeHandler{rust_type_name: "&str", jni_type_name: "jstring", java_type_name: "String",
-                    from_jni_converter: Some(jstring_to_str), to_jni_converter: Some(str_to_jstring)},
-        TypeHandler{rust_type_name: "&Path", jni_type_name: "jstring", java_type_name: "String",
-                    from_jni_converter: Some(jstring_to_path), to_jni_converter: None},
-        TypeHandler{rust_type_name: "String", jni_type_name: "jstring", java_type_name: "String",
-                    from_jni_converter: None, to_jni_converter: Some(ret_string_to_jstring)},
-    ];
+    let type_handlers = TYPE_HANDLERS.lock().unwrap();
     let mut rust_java_types_map = HashMap::new();
     for it in type_handlers.iter() {
         rust_java_types_map.insert(it.rust_type_name, &*it);
@@ -167,9 +185,80 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     let java_output_dir = env::var("RUST_SWIG_JNI_JAVA_OUTPUT_DIR").unwrap();
     let package_name = env::var("RUST_SWIG_JNI_JAVA_PACKAGE").unwrap();
 
-    generate_java_code(&rust_java_types_map, package_name.as_str(), &class_name_indent.name.as_str(),
-                       &methods, &java_output_dir);
+    let class_info = ForeignerClassInfo {
+        package_name: package_name,
+        class_name: &class_name_indent.name.as_str(),
+        methods: methods,
+        self_rust_type: rust_self_type,
+        constructor_ret_type: constructor_ret_type,
+        this_type_for_method: this_type_for_method,
+    };
 
-    generate_rust_code(cx, &rust_self_type, &rust_java_types_map, package_name.as_str(),
-                       &class_name_indent.name.as_str(), &methods)
+    generate_java_code(&rust_java_types_map, &class_info, &java_output_dir);
+    generate_rust_code(cx, &rust_java_types_map, &class_info)
+}
+
+fn is_type_std_result(ty: &ast::Ty) -> bool {
+    match ty.node {
+        ast::TyKind::Path(_/*self info*/, ref path) => {
+            debug!("is_type_std_result_result: path: {:?}, ident {:?}", path.segments, path.segments[0].identifier.name.as_str());
+            path.segments.first().map(|v| v.identifier.name.as_str() == "Result").unwrap_or(false)
+        }
+        _ => false,
+    }
+}
+
+fn unpack_if_type_is_result(ty: &ast::Ty) -> ast::Ty {
+    match ty.node {
+        ast::TyKind::Path(_/*self info*/, ref path) => {
+            debug!("unpack_if_type_is_result: path: {:?}, ident {:?}", path.segments, path.segments[0].identifier.name.as_str());
+            path.segments.first().map(|v|
+                                      if v.identifier.name.as_str() == "Result" {
+                                          match v.parameters {
+                                              ast::PathParameters::AngleBracketed(ref params) => {
+                                                  params.types.first().map(|v: &P<ast::Ty>| {
+                                                      debug!("unpack_if_type_is_result: result param {:?}", *v);
+                                                      (**v).clone()
+                                                  }).unwrap_or(ty.clone())
+                                              }
+                                              _ => ty.clone(),
+                                          }
+                                      } else {
+                                          ty.clone()
+                                      }).unwrap_or(ty.clone())
+        }
+        _ => ty.clone(),
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syntex_syntax::{parse, ast};
+    
+    #[test]
+    fn test_is_type_std_result() {
+        let session = parse::ParseSess::new();
+        let mut parser = parse::new_parser_from_source_str(
+            &session, ast::CrateConfig::new(), "test".into(),
+            "Result<Foo, String>".into());
+        let ty = parser.parse_ty().unwrap();
+        assert!(is_type_std_result(&*ty));
+    }
+
+    #[test]
+    fn test_unpack_if_type_is_result() {
+        let session = parse::ParseSess::new();
+        let mut parser = parse::new_parser_from_source_str(
+            &session, ast::CrateConfig::new(), "test".into(),
+            "Result<Foo, String>".into());
+        let ty = parser.parse_ty().unwrap();
+        assert!(is_type_std_result(&*ty));
+
+        let ok_ty = unpack_if_type_is_result(&*ty);
+        assert!(!is_type_std_result(&ok_ty));
+
+        assert_eq!(pprust::ty_to_string(&ok_ty), "Foo");
+    }
 }
