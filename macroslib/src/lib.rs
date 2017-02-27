@@ -40,6 +40,15 @@ lazy_static! {
                         to_jni_converter: Some(ToForeignRetConverter("let ret = if ret { 1 as jboolean } else { 0 as jboolean };".into()))},
             TypeHandler{rust_type_name: "i32".into(), jni_type_name: "jint", java_type_name: "int".into(),
                         from_jni_converter: None, to_jni_converter: None},
+            TypeHandler{rust_type_name: "u64".into(), jni_type_name: "jlong", java_type_name: "long".into(),
+                        from_jni_converter: None,
+                        to_jni_converter: Some(ToForeignRetConverter(r#"
+  let ret: i64 = if (::std::i64::MAX as u64) < ret {
+                    error!("u64->jlong type overflow: {}", ret);
+                    ::std::i64::MAX
+                 } else { ret as i64 };
+"#.into())),
+            },
             TypeHandler{rust_type_name: "f32".into(), jni_type_name: "jfloat", java_type_name: "float".into(),
                         from_jni_converter: None, to_jni_converter: None},
             TypeHandler{rust_type_name: "f64".into(), jni_type_name: "jdouble", java_type_name: "double".into(),
