@@ -234,12 +234,12 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
             r#"
 #[cfg(target_pointer_width = "32")]
 unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    mem::transmute::<u32, *mut T>(val as u32)
+    ::std::mem::transmute::<u32, *mut T>(val as u32)
 }
 
 #[cfg(target_pointer_width = "64")]
 unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    mem::transmute::<jlong, *mut T>(val)
+    ::std::mem::transmute::<jlong, *mut T>(val)
 }
 
 struct JavaString {
@@ -249,21 +249,21 @@ struct JavaString {
 }
 impl JavaString {
     fn new(env: *mut JNIEnv, js: jstring) -> JavaString {
-        let chars = unsafe { (**env).GetStringUTFChars.unwrap()(env, js, ptr::null_mut()) };
+        let chars = unsafe { (**env).GetStringUTFChars.unwrap()(env, js, ::std::ptr::null_mut()) };
         JavaString{string: js, chars: chars, env: env}
     }
 
     fn to_str(&self) -> &str {
-        let s = unsafe { CStr::from_ptr(self.chars) };
+        let s = unsafe { ::std::ffi::CStr::from_ptr(self.chars) };
         s.to_str().unwrap()
     }
 }
 impl Drop for JavaString {
     fn drop(&mut self) {
-        assert!(self.env != ptr::null_mut() && self.chars != ptr::null_mut());
+        assert!(self.env != ::std::ptr::null_mut() && self.chars != ::std::ptr::null_mut());
         unsafe { (**self.env).ReleaseStringUTFChars.unwrap()(self.env, self.string, self.chars) };
-        self.env = ptr::null_mut();
-        self.chars = ptr::null_mut();
+        self.env = ::std::ptr::null_mut();
+        self.chars = ::std::ptr::null_mut();
     }
 }
 
