@@ -114,7 +114,10 @@ pub fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_java_types_map: &RustT
     let mut generated_func_names = HashMap::<String, usize>::new();
     for it in class_info.methods.iter() {
         let val_ref = generated_func_names.entry(match it.func_type {
-            FuncVariant::StaticMethod => unimplemented!(),
+            FuncVariant::StaticMethod => {
+                let func_name: &str = &*(it.short_name());
+                func_name.into()
+            }
             FuncVariant::Constructor => {
                 "init".to_string()
             }
@@ -130,7 +133,35 @@ pub fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_java_types_map: &RustT
             .skip(if it.func_type == FuncVariant::Method { 1 } else { 0 })
             .map(|v| &get_type_handler(rust_java_types_map, &pprust::ty_to_string(&*v.ty).as_str()).java_type_name);
         match it.func_type {
-            FuncVariant::StaticMethod => unimplemented!(),
+            FuncVariant::StaticMethod => {
+                let gen_func_name: &str = &*(it.short_name());
+                let mut code = String::new();
+                                write!(&mut code, r#"
+#[allow(non_snake_case)]
+#[no_mangle]
+#[allow(unused_variables)]
+pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) {jni_result_type} {{
+{convert_jni_args}
+    let ret = {rust_func_name}({jni_func_args});
+    {convert_output}
+    ret
+}}
+"#,
+                       func_name = jni_generate_func_name(&class_info.package_name, &class_info.class_name, &gen_func_name,
+                                                           *generated_func_names.get(gen_func_name).unwrap() > 1,
+                                                           java_input_args_iter),
+                       decl_func_args = jni_func_args_for_decl(rust_java_types_map, &*it, 0),
+                       convert_jni_args = jni_convert_args(rust_java_types_map, &*it, 0),
+                       jni_result_type = jni_result_type(rust_java_types_map, &*it),
+                       rust_func_name = it.path,
+                       jni_func_args = it.in_out_type.inputs.iter().enumerate().map(|a| format!("a_{}, ", a.0))
+                       .fold(String::new(), |acc, x| acc + &x),
+                       convert_output = jni_convert_output_type(rust_java_types_map, &*it),
+                ).unwrap();
+                debug!("we generate and parse code: {}", code);
+                jni_methods.push(parse::parse_item_from_source_str(
+                    "method".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+            }
             FuncVariant::Constructor => {
                 let constructor_ret_type = constructor_ret_type.as_ref().unwrap().clone();
                 let mut code = String::new();

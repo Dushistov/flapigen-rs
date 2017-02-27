@@ -27,7 +27,17 @@ public final class {class_name} {{
     for method_it in class_info.methods.iter() {
         let exception_spec = if method_it.may_return_error { "throws Exception" } else { "" };
         match method_it.func_type {
-            FuncVariant::StaticMethod => (),
+            FuncVariant::StaticMethod => {
+                let return_type = method_it.java_return_type(rust_java_types_map);
+                write!(file,
+"
+    public static native {return_type} {func_name}({func_args_with_types});
+",
+                       return_type = return_type,
+                       func_name = method_it.short_name(),
+                       func_args_with_types  = method_it.args_with_java_types(false, rust_java_types_map),
+                ).unwrap();
+            }
             FuncVariant::Constructor => {
                 have_constructor = true;
                 write!(file,

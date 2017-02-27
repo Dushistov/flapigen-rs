@@ -32,12 +32,17 @@ impl Foo {
     }
 }
 
+fn f_hypot(a: f64, b: f64) -> f64 {
+    a.hypot(b)
+}
+
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32, _: &str) -> Foo;
     method Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
     method Foo::f_double(&self, _: f64, _: f64) -> f64;
     method Foo::name(&self) -> &str; alias getName;
+    static_method f_hypot(_: f64, _: f64) -> f64; alias fHypot;
 });
 
 struct Boo {
