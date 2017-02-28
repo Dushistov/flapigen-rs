@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
 use jni_c_header::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean,
-          jobject, jfieldID};
+          jobject, jfieldID, jobjectArray};
 
 struct Foo {
     data: i32,
@@ -101,5 +101,42 @@ foreigner_class!(class TestPathAndResult {
     constructor TestPathAndResult::new(path: &Path) -> Result<TestPathAndResult, String>;
     method TestPathAndResult::get_path(&self) -> String; alias getPath;
     method TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
-    foreigner_code "public int javaFunc() { return 17; }";
+    foreigner_code "    public int javaFunc() { return 17; }\n";
+    foreigner_code r#"
+    public Boo[] testHandArrayReturn() { return do_testHandArrayReturn(this.mNativeObj); }
+    private static native Boo[] do_testHandArrayReturn(long me);
+"#;
 });
+
+#[allow(non_snake_case)]
+#[no_mangle]
+pub fn Java_com_example_TestPathAndResult_do_1testHandArrayReturn(
+    env: *mut JNIEnv, _: jclass, _: jlong) -> jobjectArray {
+    let class_id = ::std::ffi::CString::new("com/example/Boo").unwrap();
+    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
+    if jcls.is_null() {
+        panic!("Can not find class_id {:?}", class_id);
+    }
+    let n = 10;
+    let ret: jobjectArray = unsafe { (**env).NewObjectArray.unwrap()(env, n, jcls, ::std::ptr::null_mut()) };
+    if ret.is_null() {
+        panic!("Can not create object array");
+    }
+
+    let field_id = ::std::ffi::CString::new("mNativeObj").unwrap();
+    let type_id = ::std::ffi::CString::new("J").unwrap();
+    let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
+    assert!(!field_id.is_null());
+
+    for i in 0..n {
+        let elem: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
+        let boo = create_boo();
+        boo.borrow_mut().set_a(i);
+        unsafe {
+            (**env).SetLongField.unwrap()(env, elem, field_id, Box::into_raw(Box::new(boo)) as jlong);
+            (**env).SetObjectArrayElement.unwrap()(env, ret, i, elem);
+            (**env).DeleteLocalRef.unwrap()(env, elem);
+        }
+    }
+    ret
+}

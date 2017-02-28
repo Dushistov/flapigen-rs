@@ -56,6 +56,14 @@ class Main {
         booMember.setA(18);
         assert booMember.getA() == 18;
         assert tpr2.javaFunc() == 17;
+        {
+            Boo []arrByHands = tpr2.testHandArrayReturn();
+            assert arrByHands.length == 10;
+            for (int i = 0; i < arrByHands.length; ++i) {
+                System.out.println(String.format("getA(%d) == %d", i, arrByHands[i].getA()));
+                assert arrByHands[i].getA() == i;
+            }
+        }
         tpr2 = null;
         System.gc();
 
