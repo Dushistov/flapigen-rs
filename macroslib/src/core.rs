@@ -61,6 +61,7 @@ pub struct ForeignerClassInfo<'a> {
     pub self_rust_type: ast::Path,
     pub constructor_ret_type: Option<ast::Ty>,
     pub this_type_for_method: Option<ast::Ty>,
+    pub foreigner_code: String,
 }
 
 impl <'a> ForeignerClassInfo<'a> {

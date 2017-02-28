@@ -106,7 +106,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     let alias = ast::Ident::with_empty_ctxt(token::intern("alias"));
     let mut constructor_ret_type: Option<ast::Ty> = None;
     let mut this_type_for_method: Option<ast::Ty> = None;
-
+    let mut foreigner_code = String::new();
     loop {
         if parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
             break;
@@ -119,6 +119,23 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
             parser.expect(&token::Token::Semi).unwrap();
             continue;
         }
+
+        if func_type_name.name.as_str() == "foreigner_code" {
+            let lit = parser.parse_lit().expect("expect literal after foreigner_code");
+            match lit.node {
+                ast::LitKind::Str(s, _) => {
+                    debug!("foreigner_code s: {:?}", s);
+                    foreigner_code.push_str(&s);
+                }
+                _ => {
+                    cx.span_err(parser.span, "expect string literal after foreigner_code");
+                    return DummyResult::any(parser.span);
+                }
+            }
+            parser.expect(&token::Token::Semi).unwrap();
+            continue;
+        }
+        
         let func_type = FuncVariant::from_str(&func_type_name.name.as_str());
         if func_type.is_none() {
             println!("unknown func type: {:?}", func_type_name);
@@ -178,6 +195,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
         self_rust_type: rust_self_type,
         constructor_ret_type: constructor_ret_type,
         this_type_for_method: this_type_for_method,
+        foreigner_code: foreigner_code,
     };
 
     if class_info.this_type_for_method.is_some() {

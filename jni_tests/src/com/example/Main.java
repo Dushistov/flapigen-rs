@@ -55,6 +55,7 @@ class Main {
         assert booMember.getA() == 17;
         booMember.setA(18);
         assert booMember.getA() == 18;
+        assert tpr2.javaFunc() == 17;
         tpr2 = null;
         System.gc();
 

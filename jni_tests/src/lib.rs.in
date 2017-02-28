@@ -101,4 +101,5 @@ foreigner_class!(class TestPathAndResult {
     constructor TestPathAndResult::new(path: &Path) -> Result<TestPathAndResult, String>;
     method TestPathAndResult::get_path(&self) -> String; alias getPath;
     method TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
+    foreigner_code "public int javaFunc() { return 17; }";
 });

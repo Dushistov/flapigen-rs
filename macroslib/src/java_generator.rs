@@ -88,5 +88,6 @@ public final class {class_name} {{
     private static native void do_delete(long me);
 ").unwrap();
     }
+    file.write_all(class_info.foreigner_code.as_bytes()).unwrap();
     write!(file, "}}").unwrap();
 }
