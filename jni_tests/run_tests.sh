@@ -2,10 +2,6 @@
 
 set -e
 
-if [[ ! -f "src/jni.rs" ]]; then
-    ./generate_jni.sh
-fi
-
 cargo build
 
 cd src/com/example

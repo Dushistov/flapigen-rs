@@ -1,11 +1,8 @@
-use std::mem;
-use std::ptr;
-use std::ffi::CStr;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
-use jni::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean,
+use jni_c_header::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean,
           jobject, jfieldID};
 
 struct Foo {
