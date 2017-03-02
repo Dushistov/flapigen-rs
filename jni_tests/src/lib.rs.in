@@ -1,9 +1,10 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use jni_c_header::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean,
-          jobject, jfieldID, jobjectArray};
+          jobject, jfieldID, jobjectArray, jmethodID};
 
 struct Foo {
     data: i32,
@@ -33,6 +34,10 @@ fn f_hypot(a: f64, b: f64) -> f64 {
     a.hypot(b)
 }
 
+fn now() -> SystemTime {
+    return SystemTime::now()
+}
+
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32, _: &str) -> Foo;
@@ -40,6 +45,7 @@ foreigner_class!(class Foo {
     method Foo::f_double(&self, _: f64, _: f64) -> f64;
     method Foo::name(&self) -> &str; alias getName;
     static_method f_hypot(_: f64, _: f64) -> f64; alias fHypot;
+    static_method now() -> SystemTime;
 });
 
 struct Boo {

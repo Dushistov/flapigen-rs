@@ -1,5 +1,9 @@
 package com.example;
 
+import java.util.Date;
+import java.util.Calendar;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import com.example.Foo;
 import com.example.Boo;
 import com.example.TestPathAndResult;
@@ -66,6 +70,13 @@ class Main {
         }
         tpr2 = null;
         System.gc();
+
+        final Date now = Foo.now();
+        final DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+        System.out.println("now: " + df.format(now));
+        final Date today = Calendar.getInstance().getTime();
+
+        assert (today.getTime() - now.getTime()) < 1000;
 
         System.out.println("ALL tests PASSED");
     }

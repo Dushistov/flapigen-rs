@@ -40,6 +40,12 @@ lazy_static! {
                         to_jni_converter: Some(ToForeignRetConverter("let ret = if ret { 1 as jboolean } else { 0 as jboolean };".into()))},
             TypeHandler{rust_type_name: "i32".into(), jni_type_name: "jint", java_type_name: "int".into(),
                         from_jni_converter: None, to_jni_converter: None},
+            TypeHandler{
+                rust_type_name: "u32".into(), jni_type_name: "jlong", java_type_name: "long".into(),
+                from_jni_converter: None, to_jni_converter: Some(ToForeignRetConverter(r#"
+  let ret = ret as jlong;
+"#.into())),
+            },
             TypeHandler{rust_type_name: "u64".into(), jni_type_name: "jlong", java_type_name: "long".into(),
                         from_jni_converter: None,
                         to_jni_converter: Some(ToForeignRetConverter(r#"
@@ -72,13 +78,29 @@ lazy_static! {
                         to_jni_converter: None},
             TypeHandler{rust_type_name: "String".into(), jni_type_name: "jstring", java_type_name: "String".into(),
                         from_jni_converter: None,
-                        to_jni_converter: Some(ToForeignRetConverter(
-                            r#"
+                        to_jni_converter: Some(ToForeignRetConverter(r#"
   let ret = ret.into_bytes();
   let ret = unsafe { ::std::ffi::CString::from_vec_unchecked(ret) };
   let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
 "#.into()
                         ))},
+            TypeHandler {
+                rust_type_name: "SystemTime".into(), jni_type_name: "jobject", java_type_name: "java.util.Date".into(),
+                from_jni_converter: None,
+                to_jni_converter: Some(ToForeignRetConverter(r#"
+  let since_unix_epoch = ret.duration_since(::std::time::UNIX_EPOCH).unwrap();
+  let mills: jlong = (since_unix_epoch.as_secs() * 1_000 + (since_unix_epoch.subsec_nanos() / 1_000_000) as u64) as jlong;
+  let class_name_c = ::std::ffi::CString::new("java/util/Date").unwrap();
+  let date_class: jclass = unsafe { (**env).FindClass.unwrap()(env, class_name_c.as_ptr()) };
+  assert!(!date_class.is_null());
+  let init_name_c = ::std::ffi::CString::new("<init>").unwrap();
+  let method_args_c = ::std::ffi::CString::new("(J)V").unwrap();
+  let init: jmethodID = unsafe { (**env).GetMethodID.unwrap()(env, date_class, init_name_c.as_ptr(), method_args_c.as_ptr()) };
+  assert!(!init.is_null());
+  let ret = unsafe { (**env).NewObject.unwrap()(env, date_class, init, mills) };
+  assert!(!ret.is_null());
+"#.into())),
+            },
             ])
     };
 }
@@ -137,7 +159,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
             parser.expect(&token::Token::Semi).unwrap();
             continue;
         }
-        
+
         let func_type = FuncVariant::from_str(&func_type_name.name.as_str());
         if func_type.is_none() {
             println!("unknown func type: {:?}", func_type_name);
@@ -202,7 +224,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     };
 
     if class_info.this_type_for_method.is_some() {
-        let mut class_th: TypeHandler = (&class_info).into();        
+        let mut class_th: TypeHandler = (&class_info).into();
         class_th.to_jni_converter = Some(ToForeignRetConverter(
             RUST_OBJECT_TO_JOBJECT.replace(
                 "{full_class_name}", &class_info.full_java_class_name())));
@@ -215,7 +237,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     }
 
     let java_output_dir = env::var("RUST_SWIG_JNI_JAVA_OUTPUT_DIR").unwrap();
-    
+
     generate_java_code(&rust_java_types_map, &class_info, &java_output_dir);
     generate_rust_code(cx, &rust_java_types_map, &class_info)
 }
