@@ -28,6 +28,7 @@ pub struct ForeignerMethod {
     pub in_out_type: P<ast::FnDecl>,
     pub name_alias: Option<token::InternedString>,
     pub may_return_error: bool,
+    pub private: bool,
 }
 
 pub struct FromForeignArgConverter(pub String);

@@ -26,13 +26,15 @@ public final class {class_name} {{
     let mut have_methods = false;
     for method_it in class_info.methods.iter() {
         let exception_spec = if method_it.may_return_error { "throws Exception" } else { "" };
+        let method_access = if method_it.private { "private" } else { "public" };
         match method_it.func_type {
             FuncVariant::StaticMethod => {
                 let return_type = method_it.java_return_type(rust_java_types_map);
                 write!(file,
 "
-    public static native {return_type} {func_name}({func_args_with_types});
+    {method_access} static native {return_type} {func_name}({func_args_with_types});
 ",
+                       method_access = method_access,
                        return_type = return_type,
                        func_name = method_it.short_name(),
                        func_args_with_types  = method_it.args_with_java_types(false, rust_java_types_map),
@@ -42,11 +44,12 @@ public final class {class_name} {{
                 have_constructor = true;
                 write!(file,
 "
-    public {class_name}({args_with_types}) {exception_spec} {{
+    {method_access} {class_name}({args_with_types}) {exception_spec} {{
         mNativeObj = init({args});
     }}
     private static native long init({args_with_types}) {exception_spec};
 ",
+                       method_access = method_access,
                        class_name = class_info.class_name,
                        exception_spec = exception_spec,
                        args_with_types = method_it.args_with_java_types(false, rust_java_types_map),
@@ -57,9 +60,10 @@ public final class {class_name} {{
                 let return_type = method_it.java_return_type(rust_java_types_map);
                 write!(file,
 "
-    public {return_type} {func_name}({single_args_with_types}) {{ {return_code} do_{func_name}(mNativeObj{args}); }}
+    {method_access} {return_type} {func_name}({single_args_with_types}) {{ {return_code} do_{func_name}(mNativeObj{args}); }}
     private static native {return_type} do_{func_name}(long me{func_args_with_types});
 ",
+                       method_access = method_access,
                        return_type = return_type,
                        return_code = if return_type != "void" { "return" } else { "" },
                        func_name = method_it.short_name(),

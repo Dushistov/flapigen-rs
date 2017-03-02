@@ -103,7 +103,8 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     parser.expect(&token::Token::OpenDelim(token::DelimToken::Brace)).unwrap();
     let mut methods = Vec::new();
     let mut rust_self_type = ast::Path{span: parser.span, global: false, segments: Vec::new()};
-    let alias = ast::Ident::with_empty_ctxt(token::intern("alias"));
+    let alias_keyword = ast::Ident::with_empty_ctxt(token::intern("alias"));
+    let private_keyword = ast::Ident::with_empty_ctxt(token::intern("private"));
     let mut constructor_ret_type: Option<ast::Ty> = None;
     let mut this_type_for_method: Option<ast::Ty> = None;
     let mut foreigner_code = String::new();
@@ -111,6 +112,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
         if parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
             break;
         }
+        let private_func = parser.eat_contextual_keyword(private_keyword);
         let func_type_name = parser.parse_ident().unwrap();
         debug!("func_type {:?}", func_type_name);
         if func_type_name.name.as_str() == "self_type" {
@@ -153,7 +155,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
         debug!("func_decl {:?}", func_decl);
         parser.expect(&token::Token::Semi).unwrap();
         let mut func_name_alias = None;
-        if parser.eat_contextual_keyword(alias) {
+        if parser.eat_contextual_keyword(alias_keyword) {
             if func_type == FuncVariant::Constructor {
                 cx.span_err(parser.span, "alias not supported for 'constructor'");
                 return DummyResult::any(parser.span);
@@ -182,6 +184,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
             func_type: func_type, path: func_name, in_out_type: func_decl,
             name_alias: func_name_alias.map(|v| v.name.as_str()),
             may_return_error: may_return_error,
+            private: private_func,
         });
     }
     let mut type_handlers = TYPE_HANDLERS.lock().unwrap();
