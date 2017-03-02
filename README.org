@@ -44,4 +44,37 @@ foreigner_class!(class Foo {
 and that's all, as a result rust_swig generates JNI wrappers for Rust functions
 and Java code to call these JNI functions.
 
-See [[https://github.com/Dushistov/rust_swig_test_jni][rust_swig test for jni]] for working example.
+See [[https://github.com/Dushistov/rust_swig/tree/master/jni_tests][rust_swig test for jni]] for working example.
+* Advanced
+Also rust_swig support bypassing of code generation:
+
+#+BEGIN_SRC rust
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -> Foo;
+    method Foo::f(&self, _: i32, _: i32) -> i32;
+    static_method f2(_: i32) -> i32;
+    foreigner_code "    public int javaFunc() { return 17; }\n";
+    foreigner_code r#"
+    public Foo[] testHandArrayReturn() { return do_testHandArrayReturn(this.mNativeObj); }
+    private static native Boo[] do_testHandArrayReturn(long me);
+"#;
+});
+#+END_SRC
+
+after that you can implement Java_com_example_TestPathAndResult_do_1testHandArrayReturn
+function by your self, usefull when rust_swig can not handle something automaticaly,
+or you want something special.
+
+Also you can create alias for function name:
+
+#+BEGIN_SRC rust
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -> Foo;
+    method Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
+});
+#+END_SRC
+
+may be usefull if you want name functions in Java in camel case style,
+while want in Rust you want use snake case style.
