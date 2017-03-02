@@ -14,17 +14,26 @@ use COMMON_CODE_GENERATED;
 pub static RUST_OBJECT_TO_JOBJECT: &'static str = r#"
   let class_id = ::std::ffi::CString::new("{full_class_name}").unwrap();
   let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
+  assert!(!jcls.is_null());
   //TODO: check exception and return values
   let jobj: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
+  assert!(!jobj.is_null());
   //TODO: check exception and return values
   let field_id = ::std::ffi::CString::new("mNativeObj").unwrap();
   //TODO: check exception and return values
   let type_id = ::std::ffi::CString::new("J").unwrap();
 //TODO: check exception and return values
   let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
+  assert!(!field_id.is_null());
 //TODO: check exception and return values
   let ret = Box::into_raw(Box::new(ret)) as jlong;
-  unsafe { (**env).SetLongField.unwrap()(env, jobj, field_id, ret) };
+  unsafe {
+    (**env).SetLongField.unwrap()(env, jobj, field_id, ret);
+    if (**env).ExceptionCheck.unwrap()(env) != 0 {
+      panic!("Can not mNativeObj field: catch exception");
+    }
+  }
+
   //TODO: check exception and return values
   let ret = jobj;
 "#;
