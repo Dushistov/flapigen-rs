@@ -28,7 +28,7 @@ use syntex_syntax::print::pprust;
 
 use parse_utils::*;
 use core::*;
-use rust_generator::{generate_rust_code, RUST_OBJECT_TO_JOBJECT};
+use rust_generator::{generate_rust_code, RUST_OBJECT_TO_JOBJECT, RUST_VEC_TO_JAVA_ARRAY};
 use java_generator::generate_java_code;
 
 lazy_static! {
@@ -188,7 +188,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
         }
         let (may_return_error, ret_type) = match &func_decl.output {
             &ast::FunctionRetTy::Default(_) => (false, None),
-            &ast::FunctionRetTy::Ty(ref ret_type) => (is_type_std_result(ret_type), Some(ret_type.clone())),
+            &ast::FunctionRetTy::Ty(ref ret_type) => (is_type_name(ret_type, "Result"), Some(ret_type.clone())),
         };
         if let FuncVariant::Constructor = func_type {
             let ret_type = ret_type.expect(&format!("{}: constructor should return value", class_name_indent));
@@ -199,7 +199,7 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
                 }
             } else {
                 constructor_ret_type = Some(ret_type.unwrap());
-                this_type_for_method = Some(unpack_if_type_is_result(constructor_ret_type.as_ref().unwrap()));
+                this_type_for_method = Some(unpack_generic_first_paramter(constructor_ret_type.as_ref().unwrap(), "Result"));
             }
         }
         methods.push(ForeignerMethod{
@@ -231,6 +231,8 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
         type_handlers.push(class_th);
     }
 
+    generate_type_info_for_generics(&mut type_handlers, &class_info, &class_info.package_name);
+
     let mut rust_java_types_map = HashMap::new();
     for it in type_handlers.iter() {
         rust_java_types_map.insert(it.rust_type_name.as_str(), &*it);
@@ -242,26 +244,26 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     generate_rust_code(cx, &rust_java_types_map, &class_info)
 }
 
-fn is_type_std_result(ty: &ast::Ty) -> bool {
+fn is_type_name(ty: &ast::Ty, type_name: &str) -> bool {
     match ty.node {
         ast::TyKind::Path(_/*self info*/, ref path) => {
-            debug!("is_type_std_result_result: path: {:?}, ident {:?}", path.segments, path.segments[0].identifier.name.as_str());
-            path.segments.first().map(|v| v.identifier.name.as_str() == "Result").unwrap_or(false)
+            debug!("is_type_name_result: path: {:?}, ident {:?}", path.segments, path.segments[0].identifier.name.as_str());
+            path.segments.first().map(|v| v.identifier.name.as_str() == type_name).unwrap_or(false)
         }
         _ => false,
     }
 }
 
-fn unpack_if_type_is_result(ty: &ast::Ty) -> ast::Ty {
+fn unpack_generic_first_paramter(ty: &ast::Ty, generic_name: &str) -> ast::Ty {
     match ty.node {
         ast::TyKind::Path(_/*self info*/, ref path) => {
-            debug!("unpack_if_type_is_result: path: {:?}, ident {:?}", path.segments, path.segments[0].identifier.name.as_str());
+            debug!("unpack_generic_first_paramter: path: {:?}, ident {:?}", path.segments, path.segments[0].identifier.name.as_str());
             path.segments.first().map(|v|
-                                      if v.identifier.name.as_str() == "Result" {
+                                      if v.identifier.name.as_str() == generic_name {
                                           match v.parameters {
                                               ast::PathParameters::AngleBracketed(ref params) => {
                                                   params.types.first().map(|v: &P<ast::Ty>| {
-                                                      debug!("unpack_if_type_is_result: result param {:?}", *v);
+                                                      debug!("unpack_generic_first_paramter: result param {:?}", *v);
                                                       (**v).clone()
                                                   }).unwrap_or(ty.clone())
                                               }
@@ -275,6 +277,44 @@ fn unpack_if_type_is_result(ty: &ast::Ty) -> ast::Ty {
     }
 }
 
+fn generate_type_info_for_type(type_handlers: &mut Vec<TypeHandler>, ty: &ast::Ty, package_name: &str) {
+    let rust_type_name = pprust::ty_to_string(ty);
+    if type_handlers.iter().position(|ref r| r.rust_type_name == rust_type_name).is_some() {
+        return;
+    }
+
+    if is_type_name(ty, "Vec") {
+        let in_type = unpack_generic_first_paramter(ty, "Vec");
+        let in_type_name = pprust::ty_to_string(&in_type);
+        let index = type_handlers.iter().position(|ref r| r.rust_type_name == in_type_name).expect(&format!("Type {} not found", in_type_name));
+        let elem_java_type_name = type_handlers[index].java_type_name.clone();
+        let java_type_name = format!("{} []", elem_java_type_name);
+        type_handlers.push(TypeHandler {
+            rust_type_name: rust_type_name,
+            jni_type_name: "jobjectArray",
+            java_type_name: java_type_name,
+            from_jni_converter: None,
+            to_jni_converter: Some(ToForeignRetConverter(
+                RUST_VEC_TO_JAVA_ARRAY.to_string()
+                    .replace("{full_class_name}", &full_java_class_name(package_name, &elem_java_type_name))
+                    .replace("{vec_name}", "ret"))),
+        });
+    }
+}
+
+fn generate_type_info_for_generics(type_handlers: &mut Vec<TypeHandler>, class_info: &ForeignerClassInfo, package_name: &str) {
+    for method in class_info.methods.iter() {
+        for v in method.in_out_type.inputs
+            .iter()
+            .skip(if method.func_type == FuncVariant::Method { 1 } else { 0 }) {
+                generate_type_info_for_type(type_handlers, &*v.ty, package_name);
+            }
+        match &method.in_out_type.output {
+            &ast::FunctionRetTy::Ty(ref ret_type) => { generate_type_info_for_type(type_handlers, &*ret_type, package_name); }
+            &ast::FunctionRetTy::Default(_) => {}
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -282,27 +322,33 @@ mod tests {
     use syntex_syntax::{parse, ast};
 
     #[test]
-    fn test_is_type_std_result() {
+    fn test_is_type_name() {
         let session = parse::ParseSess::new();
         let mut parser = parse::new_parser_from_source_str(
             &session, ast::CrateConfig::new(), "test".into(),
             "Result<Foo, String>".into());
         let ty = parser.parse_ty().unwrap();
-        assert!(is_type_std_result(&*ty));
+        assert!(is_type_name(&*ty, "Result"));
     }
 
     #[test]
-    fn test_unpack_if_type_is_result() {
+    fn test_unpack_generic_first_paramter() {
         let session = parse::ParseSess::new();
         let mut parser = parse::new_parser_from_source_str(
             &session, ast::CrateConfig::new(), "test".into(),
             "Result<Foo, String>".into());
         let ty = parser.parse_ty().unwrap();
-        assert!(is_type_std_result(&*ty));
+        assert!(is_type_name(&*ty, "Result"));
 
-        let ok_ty = unpack_if_type_is_result(&*ty);
-        assert!(!is_type_std_result(&ok_ty));
-
+        let ok_ty = unpack_generic_first_paramter(&*ty, "Result");
+        assert!(!is_type_name(&ok_ty, "Result"));
         assert_eq!(pprust::ty_to_string(&ok_ty), "Foo");
+
+        let ty = parse::new_parser_from_source_str(
+            &session, ast::CrateConfig::new(), "test".into(),
+            "Vec<Foo>".into()).parse_ty().unwrap();
+        assert!(is_type_name(&ty, "Vec"));
+        let in_ty = unpack_generic_first_paramter(&*ty, "Vec");
+        assert_eq!(pprust::ty_to_string(&in_ty), "Foo");
     }
 }

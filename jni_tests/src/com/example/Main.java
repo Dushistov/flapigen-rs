@@ -68,6 +68,14 @@ class Main {
                 assert arrByHands[i].getA() == i;
             }
         }
+        {
+            Foo []arr = tpr2.get_foo_list();
+            assert arr.length == 10;
+            for (int i = 0; i < arr.length; ++i) {
+                assert arr[i].calcF(0, 0) == i;
+                assert arr[i].getName().equals(String.format("foo arr: %d", i));
+            }
+        }
         tpr2 = null;
         System.gc();
 

@@ -65,12 +65,16 @@ pub struct ForeignerClassInfo<'a> {
     pub foreigner_code: String,
 }
 
+pub fn full_java_class_name(package_name: &str, class_name: &str) -> String {
+    let mut ret: String = package_name.into();
+    ret.push('.');
+    ret.push_str(class_name);
+    ret.replace(".", "/")
+}
+
 impl <'a> ForeignerClassInfo<'a> {
     pub fn full_java_class_name(&self) -> String {
-        let mut ret = self.package_name.clone();
-        ret.push('.');
-        ret.push_str(self.class_name);
-        ret.replace(".", "/")
+        full_java_class_name(&self.package_name, self.class_name)
     }
 }
 

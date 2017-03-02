@@ -15,17 +15,12 @@ pub static RUST_OBJECT_TO_JOBJECT: &'static str = r#"
   let class_id = ::std::ffi::CString::new("{full_class_name}").unwrap();
   let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
   assert!(!jcls.is_null());
-  //TODO: check exception and return values
   let jobj: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
   assert!(!jobj.is_null());
-  //TODO: check exception and return values
   let field_id = ::std::ffi::CString::new("mNativeObj").unwrap();
-  //TODO: check exception and return values
   let type_id = ::std::ffi::CString::new("J").unwrap();
-//TODO: check exception and return values
   let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
   assert!(!field_id.is_null());
-//TODO: check exception and return values
   let ret = Box::into_raw(Box::new(ret)) as jlong;
   unsafe {
     (**env).SetLongField.unwrap()(env, jobj, field_id, ret);
@@ -33,11 +28,40 @@ pub static RUST_OBJECT_TO_JOBJECT: &'static str = r#"
       panic!("Can not mNativeObj field: catch exception");
     }
   }
-
-  //TODO: check exception and return values
   let ret = jobj;
 "#;
 
+pub static RUST_VEC_TO_JAVA_ARRAY: &'static str = r#"
+    let class_id = ::std::ffi::CString::new("{full_class_name}").unwrap();
+    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
+    assert!(!jcls.is_null());
+    let obj_arr: jobjectArray = unsafe { (**env).NewObjectArray.unwrap()(env, {vec_name}.len() as jsize, jcls, ::std::ptr::null_mut()) };
+    assert!(!obj_arr.is_null());
+
+    let field_id = ::std::ffi::CString::new("mNativeObj").unwrap();
+    let type_id = ::std::ffi::CString::new("J").unwrap();
+    let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
+    assert!(!field_id.is_null());
+
+    for (i, r_obj) in {vec_name}.drain(..).enumerate() {
+        let jobj: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
+        assert!(!jobj.is_null());
+
+        let r_obj = Box::into_raw(Box::new(r_obj)) as jlong;
+        unsafe {
+            (**env).SetLongField.unwrap()(env, jobj, field_id, r_obj);
+            if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                panic!("Can not mNativeObj field: catch exception");
+            }
+            (**env).SetObjectArrayElement.unwrap()(env, obj_arr, i as jsize, jobj);
+            if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                panic!("SetObjectArrayElement({}) failed", i);
+            }
+            (**env).DeleteLocalRef.unwrap()(env, jobj);
+        }
+    }
+    let ret = obj_arr;
+"#;
 
 fn jni_func_args_for_decl(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMethod, skip: usize) -> String {
     let mut buf = String::new();
@@ -146,12 +170,11 @@ pub fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt, rust_java_types_map: &RustT
                 let gen_func_name: &str = &*(it.short_name());
                 let mut code = String::new();
                                 write!(&mut code, r#"
-#[allow(non_snake_case)]
+#[allow(non_snake_case, unused_variables, unused_mut)]
 #[no_mangle]
-#[allow(unused_variables)]
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) {jni_result_type} {{
 {convert_jni_args}
-    let ret = {rust_func_name}({jni_func_args});
+    let mut ret = {rust_func_name}({jni_func_args});
     {convert_output}
     ret
 }}
@@ -215,14 +238,13 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
                 let mut code = String::new();
                 let gen_func_name = format!("do_{}", &it.short_name());
                 write!(&mut code, r#"
-#[allow(non_snake_case)]
+#[allow(non_snake_case, unused_variables, unused_mut)]
 #[no_mangle]
-#[allow(unused_variables)]
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {jni_result_type} {{
 {convert_jni_args}
     let this: &mut {this_type} = unsafe {{ jlong_to_pointer::<{this_type}>(this).as_mut().unwrap() }};
 {convert_this}
-    let ret = {rust_func_name}(&mut *this, {jni_func_args});
+    let mut ret = {rust_func_name}(&mut *this, {jni_func_args});
     {convert_output}
     ret
 }}

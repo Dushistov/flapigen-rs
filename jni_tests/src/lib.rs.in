@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use jni_c_header::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean,
-          jobject, jfieldID, jobjectArray, jmethodID};
+          jobject, jfieldID, jobjectArray, jmethodID, jsize};
 
 struct Foo {
     data: i32,
@@ -99,6 +99,14 @@ impl TestPathAndResult {
     fn get_boo(&self) -> Rc<RefCell<Boo>> {
         self.boo.clone()
     }
+
+    fn get_foo_list(&self) -> Vec<Foo> {
+        let mut ret = Vec::new();
+        for i in 0..10 {
+            ret.push(Foo::new(i, &format!("foo arr: {}", i)));
+        }
+        ret
+    }
 }
 
 foreigner_class!(class TestPathAndResult {
@@ -112,6 +120,7 @@ foreigner_class!(class TestPathAndResult {
     public Boo[] testHandArrayReturn() { return do_testHandArrayReturn(this.mNativeObj); }
     private static native Boo[] do_testHandArrayReturn(long me);
 "#;
+    method TestPathAndResult::get_foo_list(&self) -> Vec<Foo>;
 });
 
 #[allow(non_snake_case)]
