@@ -132,8 +132,10 @@ fn generate_rust_to_convert_this(constructor_ret_type: &str, rust_self_type: &st
         return format!("let mut this = this.lock().unwrap();\n");
     } else if format!("Rc<RefCell<{}>>", rust_self_type) == constructor_ret_type {
         return format!("let mut this = this.borrow_mut();\n");
+    } else if format!("Arc<{}>", rust_self_type) == constructor_ret_type {
+        return String::new();
     } else {
-        unimplemented!();
+        panic!("Not implemented conversation from '{}' to '{}'", constructor_ret_type, rust_self_type);
     }
 }
 
