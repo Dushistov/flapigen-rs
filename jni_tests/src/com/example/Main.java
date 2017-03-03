@@ -7,6 +7,7 @@ import java.text.SimpleDateFormat;
 import com.example.Foo;
 import com.example.Boo;
 import com.example.TestPathAndResult;
+import com.example.TestInner;
 
 class Main {
     public static void main(String[] args) {
@@ -83,8 +84,10 @@ class Main {
         final DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
         System.out.println("now: " + df.format(now));
         final Date today = Calendar.getInstance().getTime();
-
         assert (today.getTime() - now.getTime()) < 1000;
+
+        TestInner.Inner testInner = TestInner.getInner();
+        assert testInner.name.equals("Boo Boo");
 
         System.out.println("ALL tests PASSED");
     }

@@ -155,3 +155,40 @@ pub fn Java_com_example_TestPathAndResult_do_1testHandArrayReturn(
     }
     ret
 }
+
+foreigner_class!(class TestInner {
+    foreigner_code r#"
+    public static final class Inner {
+        public final String name;
+
+        Inner(String name) {
+            this.name = name;
+        }
+    }
+    public static native Inner getInner();
+"#;
+});
+
+#[allow(non_snake_case)]
+#[no_mangle]
+pub fn Java_com_example_TestInner_getInner(env: *mut JNIEnv, _: jclass) -> jobject {
+    let class_id = ::std::ffi::CString::new("com/example/TestInner$Inner").unwrap();
+    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
+    assert!(!jcls.is_null());
+    let ret: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
+    assert!(!ret.is_null());
+    let str_type_id = ::std::ffi::CString::new("Ljava/lang/String;").unwrap();
+    let field_id = ::std::ffi::CString::new("name").unwrap();
+    let name_field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), str_type_id.as_ptr()) };
+    assert!(!name_field_id.is_null());
+    let name = ::std::ffi::CString::new("Boo Boo").unwrap();
+    let name = unsafe { (**env).NewStringUTF.unwrap()(env, name.as_ptr()) };
+    assert!(!name.is_null());
+    unsafe {
+        (**env).SetObjectField.unwrap()(env, ret, name_field_id, name);
+        if (**env).ExceptionCheck.unwrap()(env) != 0 {
+            panic!("Failed to SetObjectField");
+        }
+    }
+    ret
+}

@@ -30,7 +30,7 @@ subprocess.check_call(["cargo", "build"], shell=False)
 
 java_dir = str(Path.cwd().joinpath("src/com/example"))
 purge(java_dir, ".*\.class$")
-subprocess.check_call(["javac", "Main.java", "Foo.java", "Boo.java", "TestPathAndResult.java"],
+subprocess.check_call(["javac", "Main.java", "Foo.java", "Boo.java", "TestPathAndResult.java", "TestInner.java"],
                       cwd=java_dir, shell=False)
 
 jar_dir = str(Path.cwd().joinpath("src"))
