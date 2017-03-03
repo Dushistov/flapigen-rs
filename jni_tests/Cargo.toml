@@ -14,7 +14,7 @@ log = "0.3"
 [build-dependencies]
 syntex = "0.47.0"
 env_logger = "0.3"
-bindgen = {git = "https://github.com/Dushistov/rust-bindgen", rev = "af3e0e8ad60aa7297d16d1cc75667bcb15fc6217"}
+bindgen = {git = "https://github.com/servo/rust-bindgen", rev = "d57616cab66e6bfa6ddf745e57644c671bf57cd4"}
 log = "0.3"
 
 [build-dependencies.rust_swig]
