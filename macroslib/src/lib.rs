@@ -38,6 +38,12 @@ lazy_static! {
             TypeHandler{rust_type_name: "bool".into(), jni_type_name: "jboolean", java_type_name: "boolean".into(),
                         from_jni_converter: Some(FromForeignArgConverter("let {arg_name} = {arg_name} != 0;".into())),
                         to_jni_converter: Some(ToForeignRetConverter("let ret = if ret { 1 as jboolean } else { 0 as jboolean };".into()))},
+            TypeHandler {
+                rust_type_name: "u16".into(), jni_type_name: "jint", java_type_name: "int".into(),
+                from_jni_converter: None, to_jni_converter: Some(ToForeignRetConverter(r#"
+  let ret = ret as jint;
+"#.into())),
+            },
             TypeHandler{rust_type_name: "i32".into(), jni_type_name: "jint", java_type_name: "int".into(),
                         from_jni_converter: None, to_jni_converter: None},
             TypeHandler{
