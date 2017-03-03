@@ -32,12 +32,13 @@ public final class {class_name} {{
                 let return_type = method_it.java_return_type(rust_java_types_map);
                 write!(file,
 "
-    {method_access} static native {return_type} {func_name}({func_args_with_types});
+    {method_access} static native {return_type} {func_name}({func_args_with_types}) {exception_spec};
 ",
                        method_access = method_access,
                        return_type = return_type,
                        func_name = method_it.short_name(),
                        func_args_with_types  = method_it.args_with_java_types(false, rust_java_types_map),
+                       exception_spec = exception_spec,
                 ).unwrap();
             }
             FuncVariant::Constructor => {
@@ -60,11 +61,12 @@ public final class {class_name} {{
                 let return_type = method_it.java_return_type(rust_java_types_map);
                 write!(file,
 "
-    {method_access} {return_type} {func_name}({single_args_with_types}) {{ {return_code} do_{func_name}(mNativeObj{args}); }}
-    private static native {return_type} do_{func_name}(long me{func_args_with_types});
+    {method_access} {return_type} {func_name}({single_args_with_types}) {exception_spec} {{ {return_code} do_{func_name}(mNativeObj{args}); }}
+    private static native {return_type} do_{func_name}(long me{func_args_with_types}) {exception_spec};
 ",
                        method_access = method_access,
                        return_type = return_type,
+                       exception_spec = exception_spec,
                        return_code = if return_type != "void" { "return" } else { "" },
                        func_name = method_it.short_name(),
                        single_args_with_types = method_it.args_with_java_types(false, rust_java_types_map),

@@ -31,6 +31,7 @@ pub struct ForeignerMethod {
     pub private: bool,
 }
 
+#[derive(Clone)]
 pub struct FromForeignArgConverter(pub String);
 
 impl FromForeignArgConverter {
@@ -39,6 +40,7 @@ impl FromForeignArgConverter {
     }
 }
 
+#[derive(Clone)]
 pub struct ToForeignRetConverter(pub String);
 
 impl ToForeignRetConverter {
@@ -47,6 +49,7 @@ impl ToForeignRetConverter {
     }
 }
 
+#[derive(Clone)]
 pub struct TypeHandler {
     pub rust_type_name: String,
     pub jni_type_name: &'static str,

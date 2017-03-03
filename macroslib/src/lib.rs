@@ -28,13 +28,17 @@ use syntex_syntax::print::pprust;
 
 use parse_utils::*;
 use core::*;
-use rust_generator::{generate_rust_code, RUST_OBJECT_TO_JOBJECT, RUST_VEC_TO_JAVA_ARRAY};
+use rust_generator::{generate_rust_code, RUST_OBJECT_TO_JOBJECT, RUST_VEC_TO_JAVA_ARRAY, RUST_RESULT_TO_JAVA_OBJECT};
 use java_generator::generate_java_code;
 
 lazy_static! {
     pub static ref COMMON_CODE_GENERATED: AtomicBool = AtomicBool::new(false);
     static ref TYPE_HANDLERS: Mutex<Vec<TypeHandler>> = {
         Mutex::new(vec![
+            TypeHandler {
+                rust_type_name: "()".into(), jni_type_name: "", java_type_name: "void".into(),
+                from_jni_converter: None, to_jni_converter: None,
+            },
             TypeHandler{rust_type_name: "bool".into(), jni_type_name: "jboolean", java_type_name: "boolean".into(),
                         from_jni_converter: Some(FromForeignArgConverter("let {arg_name} = {arg_name} != 0;".into())),
                         to_jni_converter: Some(ToForeignRetConverter("let ret = if ret { 1 as jboolean } else { 0 as jboolean };".into()))},
@@ -283,6 +287,21 @@ fn unpack_generic_first_paramter(ty: &ast::Ty, generic_name: &str) -> ast::Ty {
     }
 }
 
+fn in_type_info(type_handlers: &Vec<TypeHandler>, ty: &ast::Ty, generic_name: &str) -> usize {
+    let in_type = unpack_generic_first_paramter(ty, generic_name);
+    let in_type_name = pprust::ty_to_string(&in_type);
+    let index = type_handlers.iter().position(|ref r| r.rust_type_name == in_type_name)
+        .expect(&format!("Type {} not found", in_type_name));
+    index
+}
+
+fn get_default_value_for_rust_type(rust_type_name: &str) -> &'static str {
+    match rust_type_name {
+        "()" => "()",
+        _ => panic!("not know default value for {}", rust_type_name),
+    }
+}
+
 fn generate_type_info_for_type(type_handlers: &mut Vec<TypeHandler>, ty: &ast::Ty, package_name: &str) {
     let rust_type_name = pprust::ty_to_string(ty);
     if type_handlers.iter().position(|ref r| r.rust_type_name == rust_type_name).is_some() {
@@ -290,11 +309,9 @@ fn generate_type_info_for_type(type_handlers: &mut Vec<TypeHandler>, ty: &ast::T
     }
 
     if is_type_name(ty, "Vec") {
-        let in_type = unpack_generic_first_paramter(ty, "Vec");
-        let in_type_name = pprust::ty_to_string(&in_type);
-        let index = type_handlers.iter().position(|ref r| r.rust_type_name == in_type_name).expect(&format!("Type {} not found", in_type_name));
-        let elem_java_type_name = type_handlers[index].java_type_name.clone();
-        let java_type_name = format!("{} []", elem_java_type_name);
+        let elem_type_index = in_type_info(type_handlers, ty, "Vec");
+        let java_type_name = format!("{} []", type_handlers[elem_type_index].java_type_name);
+        let elem_java_type_name = type_handlers[elem_type_index].java_type_name.clone();
         type_handlers.push(TypeHandler {
             rust_type_name: rust_type_name,
             jni_type_name: "jobjectArray",
@@ -304,6 +321,21 @@ fn generate_type_info_for_type(type_handlers: &mut Vec<TypeHandler>, ty: &ast::T
                 RUST_VEC_TO_JAVA_ARRAY.to_string()
                     .replace("{full_class_name}", &full_java_class_name(package_name, &elem_java_type_name))
                     .replace("{vec_name}", "ret"))),
+        });
+    } else if is_type_name(ty, "Result") {
+        let in_type_index = in_type_info(type_handlers, ty, "Result");
+        let in_th = type_handlers[in_type_index].clone();
+        type_handlers.push(TypeHandler {
+            rust_type_name: rust_type_name,
+            jni_type_name: in_th.jni_type_name,
+            java_type_name: in_th.java_type_name,
+            from_jni_converter: None,
+            to_jni_converter: Some(ToForeignRetConverter(
+                RUST_RESULT_TO_JAVA_OBJECT.to_string()
+                    .replace("{default_value}", get_default_value_for_rust_type(&in_th.rust_type_name))
+                    +
+                    in_th.to_jni_converter.as_ref().map_or("", |v| v.0.as_str())
+            )),
         });
     }
 }
@@ -316,7 +348,11 @@ fn generate_type_info_for_generics(type_handlers: &mut Vec<TypeHandler>, class_i
                 generate_type_info_for_type(type_handlers, &*v.ty, package_name);
             }
         match &method.in_out_type.output {
-            &ast::FunctionRetTy::Ty(ref ret_type) => { generate_type_info_for_type(type_handlers, &*ret_type, package_name); }
+            &ast::FunctionRetTy::Ty(ref ret_type) => {
+                if method.func_type != FuncVariant::Constructor {//we unpack Result for constructor in other place
+                    generate_type_info_for_type(type_handlers, &*ret_type, package_name);
+                }
+            }
             &ast::FunctionRetTy::Default(_) => {}
         }
     }

@@ -63,6 +63,16 @@ pub static RUST_VEC_TO_JAVA_ARRAY: &'static str = r#"
     let ret = obj_arr;
 "#;
 
+pub static RUST_RESULT_TO_JAVA_OBJECT: &'static str = r#"
+  let ret = match ret {
+    Ok(val) => val,
+    Err(msg) => {
+      jni_throw_exception(env, &msg);
+      {default_value}
+    }
+  };
+"#;
+
 fn jni_func_args_for_decl(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMethod, skip: usize) -> String {
     let mut buf = String::new();
     for (i, it) in method.in_out_type.inputs.iter().skip(skip).enumerate() {
@@ -88,8 +98,14 @@ fn jni_convert_args(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMet
 fn jni_result_type(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMethod) -> String {
     match &method.in_out_type.output {
         &ast::FunctionRetTy::Default(_) => String::new(),
-        &ast::FunctionRetTy::Ty(ref ret_type) =>
-            format!("-> {}", get_type_handler(rust_java_types_map, pprust::ty_to_string(&*ret_type).as_str()).jni_type_name),
+        &ast::FunctionRetTy::Ty(ref ret_type) => {
+            let jni_type_name = get_type_handler(rust_java_types_map, pprust::ty_to_string(&*ret_type).as_str()).jni_type_name;
+            if jni_type_name.is_empty() {
+                String::new()
+            } else {
+                format!("-> {}", jni_type_name)
+            }
+        }
     }
 }
 
@@ -110,15 +126,15 @@ fn jni_convert_output_type<'a> (rust_java_types_map: &'a RustToJavaTypes, method
 
 fn jni_convert_this_in_constructor(constructor_ret_type: &str, rust_self_type: &str) -> String {
     if constructor_ret_type.starts_with(&format!("Result<{},", rust_self_type)) {
-        format!(r#"
-  let this = match this {{
+        r#"
+  let this = match this {
     Ok(val) => val,
-    Err(msg) => {{
+    Err(msg) => {
       jni_throw_exception(env, &msg);
       return 0;
-    }}
-  }};
-"#)
+    }
+  };
+"#.into()
     } else {
         String::new()
     }
