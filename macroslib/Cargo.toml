@@ -1,7 +1,10 @@
 [package]
 name = "rust_swig"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
+description = "Tool for simplification of Rust usage from other languages"
+license = "BSD-3-Clause"
+keywords = ["swig", "java", "jni", "ffi", "wrapper"]
 
 [dependencies]
 syntex = "0.47.0"
