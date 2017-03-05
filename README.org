@@ -77,4 +77,4 @@ foreigner_class!(class Foo {
 #+END_SRC
 
 may be usefull if you want name functions in Java in camel case style,
-while want in Rust you want use snake case style.
+while want in Rust use snake case style.
