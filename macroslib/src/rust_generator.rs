@@ -322,22 +322,25 @@ unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
     ::std::mem::transmute::<jlong, *mut T>(val)
 }
 
+#[allow(dead_code)]
 struct JavaString {
     string: jstring,
     chars: *const ::std::os::raw::c_char,
     env: *mut JNIEnv
 }
+#[allow(dead_code)]
 impl JavaString {
     fn new(env: *mut JNIEnv, js: jstring) -> JavaString {
         let chars = unsafe { (**env).GetStringUTFChars.unwrap()(env, js, ::std::ptr::null_mut()) };
         JavaString{string: js, chars: chars, env: env}
     }
-
     fn to_str(&self) -> &str {
         let s = unsafe { ::std::ffi::CStr::from_ptr(self.chars) };
         s.to_str().unwrap()
     }
 }
+
+#[allow(dead_code)]
 impl Drop for JavaString {
     fn drop(&mut self) {
         assert!(self.env != ::std::ptr::null_mut() && self.chars != ::std::ptr::null_mut());
