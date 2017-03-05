@@ -43,14 +43,7 @@ fn gen_binding(include_dirs: &[&Path], c_headers: &[&str], output_rust: &Path) -
         .no_unstable_rust()
         .raw_line(r#"
 #![allow(non_upper_case_globals, dead_code, non_camel_case_types, improper_ctypes, non_snake_case)]
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct jvalue {
-    _data: [u8; 8],
-}
 "#)
-        .hide_type("jvalue")
         ;
     bindings = try!(c_headers[1..].iter().fold(Ok(bindings), |acc: Result<::bindgen::Builder, String>, header| {
         let c_file_path = try!(search_file_in_directory(include_dirs, header)
