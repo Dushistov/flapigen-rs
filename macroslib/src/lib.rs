@@ -43,27 +43,67 @@ lazy_static! {
                         from_jni_converter: Some(FromForeignArgConverter("let {arg_name} = {arg_name} != 0;".into())),
                         to_jni_converter: Some(ToForeignRetConverter("let ret = if ret { 1 as jboolean } else { 0 as jboolean };".into()))},
             TypeHandler {
-                rust_type_name: "u16".into(), jni_type_name: "jint", java_type_name: "int".into(),
-                from_jni_converter: None, to_jni_converter: Some(ToForeignRetConverter(r#"
+                rust_type_name: "u8".into(), jni_type_name: "jshort", java_type_name: "short/*should be from 0 to 2^8-1*/".into(),
+                from_jni_converter: Some(FromForeignArgConverter(r#"
+   if {arg_name} < 0 || {arg_name} > (::std::u8::MAX as jshort) {
+       panic!("Expect {arg_name} from 0 to {}, got {}", ::std::u8::MAX, {arg_name});
+   }
+   let {arg_name} = {arg_name} as u8;
+"#.into())),
+                to_jni_converter: Some(ToForeignRetConverter("let ret = ret as jshort;".into())),
+            },
+            TypeHandler {
+                rust_type_name: "i8".into(), jni_type_name: "jbyte", java_type_name: "byte".into(),
+                from_jni_converter: None, to_jni_converter: None,
+            },
+            TypeHandler {
+                rust_type_name: "u16".into(), jni_type_name: "jint", java_type_name: "int/*should be from 0 to 2^16-1*/".into(),
+                from_jni_converter: Some(FromForeignArgConverter(r#"
+   if {arg_name} < 0 || {arg_name} > (::std::u16::MAX as jint) {
+       panic!("Expect {arg_name} from 0 to {}, got {}", ::std::u16::MAX, {arg_name});
+   }
+   let {arg_name} = {arg_name} as u16;
+"#.into())),
+                to_jni_converter: Some(ToForeignRetConverter(r#"
   let ret = ret as jint;
 "#.into())),
             },
+            TypeHandler {
+                rust_type_name: "i16".into(), jni_type_name: "jshort", java_type_name: "short".into(),
+                from_jni_converter: None, to_jni_converter: None,
+            },
             TypeHandler{rust_type_name: "i32".into(), jni_type_name: "jint", java_type_name: "int".into(),
                         from_jni_converter: None, to_jni_converter: None},
-            TypeHandler{
-                rust_type_name: "u32".into(), jni_type_name: "jlong", java_type_name: "long".into(),
-                from_jni_converter: None, to_jni_converter: Some(ToForeignRetConverter(r#"
+            TypeHandler {
+                rust_type_name: "u32".into(), jni_type_name: "jlong", java_type_name: "long/*should be from 0 to 2^32-1*/".into(),
+                from_jni_converter: Some(FromForeignArgConverter(r#"
+   if {arg_name} < 0 || {arg_name} > (::std::u32::MAX as jlong) {
+       panic!("Expect {arg_name} from 0 to {}, got {}", ::std::u32::MAX, {arg_name});
+   }
+   let {arg_name} = {arg_name} as u32;
+"#.into())),
+                to_jni_converter: Some(ToForeignRetConverter(r#"
   let ret = ret as jlong;
 "#.into())),
-            },
-            TypeHandler{rust_type_name: "u64".into(), jni_type_name: "jlong", java_type_name: "long".into(),
-                        from_jni_converter: None,
-                        to_jni_converter: Some(ToForeignRetConverter(r#"
+               },
+                TypeHandler {
+                    rust_type_name: "u64".into(), jni_type_name: "jlong", java_type_name: "long/*should be >= 0*/".into(),
+                    from_jni_converter: Some(FromForeignArgConverter(r#"
+   if {arg_name} < 0 {
+       panic!("Expect {arg_name} to be positive, got {}", {arg_name});
+   }
+   let {arg_name} = {arg_name} as u64;
+"#.into())),
+                    to_jni_converter: Some(ToForeignRetConverter(r#"
   let ret: i64 = if (::std::i64::MAX as u64) < ret {
                     error!("u64->jlong type overflow: {}", ret);
                     ::std::i64::MAX
                  } else { ret as i64 };
 "#.into())),
+            },
+            TypeHandler {
+                rust_type_name: "i64".into(), jni_type_name: "jlong", java_type_name: "long".into(),
+                from_jni_converter: None, to_jni_converter: None,
             },
             TypeHandler{rust_type_name: "f32".into(), jni_type_name: "jfloat", java_type_name: "float".into(),
                         from_jni_converter: None, to_jni_converter: None},
