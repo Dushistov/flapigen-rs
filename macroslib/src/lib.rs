@@ -335,10 +335,10 @@ fn in_type_info(type_handlers: &Vec<TypeHandler>, ty: &ast::Ty, generic_name: &s
     index
 }
 
-fn get_default_value_for_rust_type(rust_type_name: &str) -> &'static str {
+fn get_default_value_for_rust_type(rust_type_name: &str) -> String {
     match rust_type_name {
-        "()" => "()",
-        _ => panic!("not know default value for {}", rust_type_name),
+        "()" => "()".into(),
+        tn => format!("{}::default()", tn),
     }
 }
 
@@ -372,7 +372,7 @@ fn generate_type_info_for_type(type_handlers: &mut Vec<TypeHandler>, ty: &ast::T
             from_jni_converter: None,
             to_jni_converter: Some(ToForeignRetConverter(
                 RUST_RESULT_TO_JAVA_OBJECT.to_string()
-                    .replace("{default_value}", get_default_value_for_rust_type(&in_th.rust_type_name))
+                    .replace("{default_value}", &get_default_value_for_rust_type(&in_th.rust_type_name))
                     +
                     in_th.to_jni_converter.as_ref().map_or("", |v| v.0.as_str())
             )),
