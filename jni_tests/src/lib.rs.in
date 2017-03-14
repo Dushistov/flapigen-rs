@@ -108,6 +108,46 @@ fn test_f64(v: f64) -> f64 {
     v + 1.
 }
 
+fn r_test_u8(v: u8) -> Result<u8, &'static str> {
+    Ok(v + 1)
+}
+
+fn r_test_i8(v: i8) -> Result<i8, &'static str> {
+    Ok(v + 1)
+}
+
+fn r_test_u16(v: u16) -> Result<u16, &'static str> {
+    Ok(v + 1)
+}
+
+fn r_test_i16(v: i16) -> Result<i16, &'static str> {
+    Ok(v + 1)
+}
+
+fn r_test_i32(v: i32) -> Result<i32, &'static str> {
+    Ok(v + 1)
+}
+
+fn r_test_u32(v: u32) -> Result<u32, &'static str> {
+    Ok(v + 1)
+}
+
+fn r_test_u64(v: u64) -> Result<u64, &'static str> {
+    Ok(v + 1)
+}
+
+fn r_test_i64(v: i64) -> Result<i64, &'static str> {
+    Ok(v + 1)
+}
+
+fn r_test_f32(v: f32) -> Result<f32, &'static str> {
+    Ok(v + 1.)
+}
+fn r_test_f64(v: f64) -> Result<f64, &'static str> {
+    Ok(v + 1.)
+}
+
+
 foreigner_class!(class Boo {
     self_type Boo;
     constructor create_boo() -> Rc<RefCell<Boo>>;
@@ -124,6 +164,18 @@ foreigner_class!(class Boo {
     static_method test_i64(v: i64) -> i64;
     static_method test_f32(v: f32) -> f32;
     static_method test_f64(v: f64) -> f64;
+
+
+    static_method r_test_u8(v: u8) -> Result<u8, &'static str>;
+    static_method r_test_i8(v: i8) -> Result<i8, &'static str>;
+    static_method r_test_u16(v: u16) -> Result<u16, &'static str>;
+    static_method r_test_i16(v: i16) -> Result<i16, &'static str>;
+    static_method r_test_i32(v: i32) -> Result<i32, &'static str>;
+    static_method r_test_u32(v: u32) -> Result<u32, &'static str>;
+    static_method r_test_u64(v: u64) -> Result<u64, &'static str>;
+    static_method r_test_i64(v: i64) -> Result<i64, &'static str>;
+    static_method r_test_f32(v: f32) -> Result<f32, &'static str>;
+    static_method r_test_f64(v: f64) -> Result<f64, &'static str>;
 });
 
 struct TestPathAndResult {

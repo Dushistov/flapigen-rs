@@ -68,7 +68,7 @@ pub static RUST_RESULT_TO_JAVA_OBJECT: &'static str = r#"
     Ok(val) => val,
     Err(msg) => {
       jni_throw_exception(env, &msg);
-      {default_value}
+      return {default_value};
     }
   };
 "#;
