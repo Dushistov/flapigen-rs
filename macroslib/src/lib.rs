@@ -275,9 +275,16 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
 
     if class_info.this_type_for_method.is_some() {
         let mut class_th: TypeHandler = (&class_info).into();
-        class_th.to_jni_converter = Some(ToForeignRetConverter(
-            RUST_OBJECT_TO_JOBJECT.replace(
-                "{full_class_name}", &class_info.full_java_class_name())));
+        let to_foreign = RUST_OBJECT_TO_JOBJECT
+                .replace("{full_class_name}", &class_info.full_java_class_name())
+                .replace("{rust_type_name}", &class_th.rust_type_name);
+        class_th.to_jni_converter = Some(ToForeignRetConverter(to_foreign.clone()));
+        type_handlers.push(class_th);
+
+        let mut class_th: TypeHandler = (&class_info).into();
+        class_th.rust_type_name = format!("&{}", class_th.rust_type_name);
+        let to_foreign = format!("let ret = ret.clone();\n{}", to_foreign);
+        class_th.to_jni_converter = Some(ToForeignRetConverter(to_foreign));
         type_handlers.push(class_th);
     }
 

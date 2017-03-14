@@ -21,7 +21,8 @@ pub static RUST_OBJECT_TO_JOBJECT: &'static str = r#"
   let type_id = ::std::ffi::CString::new("J").unwrap();
   let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
   assert!(!field_id.is_null());
-  let ret = Box::into_raw(Box::new(ret)) as jlong;
+  let b: Box<{rust_type_name}> = Box::new(ret);
+  let ret = Box::into_raw(b) as jlong;
   unsafe {
     (**env).SetLongField.unwrap()(env, jobj, field_id, ret);
     if (**env).ExceptionCheck.unwrap()(env) != 0 {
