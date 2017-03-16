@@ -1,0 +1,8 @@
+use android_c_headers::{JNIEnv, jstring, jlong, jclass, jint};
+use Session;
+
+foreigner_class!(class Session {
+    self_type Session;
+    constructor Session::new() -> Session;
+    method Session::test(&self, val: i32) -> i32;
+});

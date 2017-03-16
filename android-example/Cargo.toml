@@ -1,0 +1,22 @@
+[package]
+name = "android"
+version = "0.0.1"
+authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
+build = "build.rs"
+
+[lib]
+name = "mobcore"
+crate-type = ["cdylib"]
+
+[dependencies]
+log = "0.3.6"
+log-panics = "1.1.0"
+android_logger = {git = "https://github.com/Dushistov/android_logger-rs", rev = "d59a22ae3a33a4a0c11098fa6d1f317c734c110b"}
+
+[build-dependencies]
+bindgen = "0.22.0"
+syntex = "0.47.0"
+
+
+[build-dependencies.rust_swig]
+path = "../macroslib/"
