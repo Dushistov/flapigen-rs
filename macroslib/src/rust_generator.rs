@@ -211,7 +211,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) {jni_result_ty
                 ).unwrap();
                 debug!("we generate and parse code: {}", code);
                 jni_methods.push(parse::parse_item_from_source_str(
-                    "method".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+                    "method".to_string(), code, cx.parse_sess).unwrap().unwrap());
             }
             FuncVariant::Constructor => {
                 let constructor_ret_type = constructor_ret_type.as_ref().unwrap().clone();
@@ -241,7 +241,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
                 ).unwrap();
                 debug!("we generate and parse code: {}", code);
                 jni_methods.push(parse::parse_item_from_source_str(
-                    "constructor".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+                    "constructor".to_string(), code, cx.parse_sess).unwrap().unwrap());
             }
             FuncVariant::Method => {
                 if constructor.is_none() {
@@ -283,7 +283,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {
                 ).unwrap();
                 debug!("we generate and parse code: {}", code);
                 jni_methods.push(parse::parse_item_from_source_str(
-                    "method".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+                    "method".to_string(), code, cx.parse_sess).unwrap().unwrap());
             }
         }
     }
@@ -306,12 +306,12 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
         ).unwrap();
         debug!("we generate and parse code: {}", code);
         jni_methods.push(parse::parse_item_from_source_str(
-            "destructor".to_string(), code, cx.cfg.clone(), cx.parse_sess).unwrap().unwrap());
+            "destructor".to_string(), code, cx.parse_sess).unwrap().unwrap());
     }
 
     if !COMMON_CODE_GENERATED.swap(true, Ordering::SeqCst) {
         let mut parser = parse::new_parser_from_source_str(
-            cx.parse_sess, cx.cfg.clone(), "addon".to_string(),
+            cx.parse_sess, "addon".to_string(),
             r#"
 #[cfg(target_pointer_width = "32")]
 unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {

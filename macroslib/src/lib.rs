@@ -23,8 +23,8 @@ use syntex_syntax::parse::{token, parser};
 use syntex_syntax::tokenstream::TokenTree;
 use syntex_syntax::codemap::Span;
 use syntex_syntax::{parse, ast};
-use syntex_syntax::ptr::P;
 use syntex_syntax::print::pprust;
+use syntex_syntax::ptr;
 
 use parse_utils::*;
 use core::*;
@@ -163,9 +163,9 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
                                _: Span,
                                tokens: &[TokenTree])
                                -> Box<MacResult + 'cx> {
-    let mut parser = parse::new_parser_from_tts(cx.parse_sess, cx.cfg.clone(), tokens.to_vec());
+    let mut parser = parse::new_parser_from_tts(cx.parse_sess, tokens.to_vec());
     let class_ident = parser.parse_ident().unwrap();
-    if class_ident.name.as_str() != "class" {
+    if &*class_ident.name.as_str() != "class" {
         debug!("class_indent {:?}", class_ident);
         cx.span_err(parser.span, "expect class here");
         return DummyResult::any(parser.span);
@@ -174,9 +174,9 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
     debug!("CLASS NAME {:?}", class_name_indent);
     parser.expect(&token::Token::OpenDelim(token::DelimToken::Brace)).unwrap();
     let mut methods = Vec::new();
-    let mut rust_self_type = ast::Path{span: parser.span, global: false, segments: Vec::new()};
-    let alias_keyword = ast::Ident::with_empty_ctxt(token::intern("alias"));
-    let private_keyword = ast::Ident::with_empty_ctxt(token::intern("private"));
+    let mut rust_self_type = ast::Path{span: parser.span, segments: Vec::new()};
+    let alias_keyword = ast::Ident::from_str("alias");
+    let private_keyword = ast::Ident::from_str("private");
     let mut constructor_ret_type: Option<ast::Ty> = None;
     let mut this_type_for_method: Option<ast::Ty> = None;
     let mut foreigner_code = String::new();
@@ -187,19 +187,19 @@ fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
         let private_func = parser.eat_contextual_keyword(private_keyword);
         let func_type_name = parser.parse_ident().unwrap();
         debug!("func_type {:?}", func_type_name);
-        if func_type_name.name.as_str() == "self_type" {
+        if &*func_type_name.name.as_str() == "self_type" {
             rust_self_type = parser.parse_path(parser::PathStyle::Type).expect("Can not parse self_type");
             debug!("self_type: {:?}", rust_self_type);
             parser.expect(&token::Token::Semi).unwrap();
             continue;
         }
 
-        if func_type_name.name.as_str() == "foreigner_code" {
+        if &*func_type_name.name.as_str() == "foreigner_code" {
             let lit = parser.parse_lit().expect("expect literal after foreigner_code");
             match lit.node {
                 ast::LitKind::Str(s, _) => {
                     debug!("foreigner_code s: {:?}", s);
-                    foreigner_code.push_str(&s);
+                    foreigner_code.push_str(&*s.as_str());
                 }
                 _ => {
                     cx.span_err(parser.span, "expect string literal after foreigner_code");
@@ -305,7 +305,7 @@ fn is_type_name(ty: &ast::Ty, type_name: &str) -> bool {
     match ty.node {
         ast::TyKind::Path(_/*self info*/, ref path) => {
             debug!("is_type_name_result: path: {:?}, ident {:?}", path.segments, path.segments[0].identifier.name.as_str());
-            path.segments.first().map(|v| v.identifier.name.as_str() == type_name).unwrap_or(false)
+            path.segments.first().map(|v| &*v.identifier.name.as_str() == type_name).unwrap_or(false)
         }
         _ => false,
     }
@@ -315,20 +315,22 @@ fn unpack_generic_first_paramter(ty: &ast::Ty, generic_name: &str) -> ast::Ty {
     match ty.node {
         ast::TyKind::Path(_/*self info*/, ref path) => {
             debug!("unpack_generic_first_paramter: path: {:?}, ident {:?}", path.segments, path.segments[0].identifier.name.as_str());
-            path.segments.first().map(|v|
-                                      if v.identifier.name.as_str() == generic_name {
-                                          match v.parameters {
-                                              ast::PathParameters::AngleBracketed(ref params) => {
-                                                  params.types.first().map(|v: &P<ast::Ty>| {
-                                                      debug!("unpack_generic_first_paramter: result param {:?}", *v);
-                                                      (**v).clone()
-                                                  }).unwrap_or(ty.clone())
-                                              }
-                                              _ => ty.clone(),
-                                          }
-                                      } else {
-                                          ty.clone()
-                                      }).unwrap_or(ty.clone())
+            path.segments.first()
+                .map(|ps: &ast::PathSegment|
+                     if &*ps.identifier.name.as_str() == generic_name {
+                         ps.parameters.as_ref().map(|p: &ptr::P<ast::PathParameters>|
+                                 if let ast::PathParameters::AngleBracketed(ref params) = **p {
+                                     params.types.first().map(|v: &ptr::P<ast::Ty>| {
+                                         debug!("unpack_generic_first_paramter: result param {:?}", *v);
+                                         (**v).clone()
+                                     }).unwrap_or(ty.clone())
+                                 } else {
+                                     ty.clone()
+                                 }).unwrap_or(ty.clone())
+                     } else {
+                         ty.clone()
+                     })
+                .unwrap_or(ty.clone())
         }
         _ => ty.clone(),
     }
@@ -411,13 +413,13 @@ fn generate_type_info_for_generics(type_handlers: &mut Vec<TypeHandler>, class_i
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syntex_syntax::{parse, ast};
+    use syntex_syntax::{parse};
 
     #[test]
     fn test_is_type_name() {
         let session = parse::ParseSess::new();
         let mut parser = parse::new_parser_from_source_str(
-            &session, ast::CrateConfig::new(), "test".into(),
+            &session, "test".into(),
             "Result<Foo, String>".into());
         let ty = parser.parse_ty().unwrap();
         assert!(is_type_name(&*ty, "Result"));
@@ -427,7 +429,7 @@ mod tests {
     fn test_unpack_generic_first_paramter() {
         let session = parse::ParseSess::new();
         let mut parser = parse::new_parser_from_source_str(
-            &session, ast::CrateConfig::new(), "test".into(),
+            &session, "test".into(),
             "Result<Foo, String>".into());
         let ty = parser.parse_ty().unwrap();
         assert!(is_type_name(&*ty, "Result"));
@@ -437,10 +439,20 @@ mod tests {
         assert_eq!(pprust::ty_to_string(&ok_ty), "Foo");
 
         let ty = parse::new_parser_from_source_str(
-            &session, ast::CrateConfig::new(), "test".into(),
+            &session, "test".into(),
             "Vec<Foo>".into()).parse_ty().unwrap();
         assert!(is_type_name(&ty, "Vec"));
         let in_ty = unpack_generic_first_paramter(&*ty, "Vec");
         assert_eq!(pprust::ty_to_string(&in_ty), "Foo");
+    }
+
+    #[test]
+    fn test_alias_as_keyword() {
+        let session = parse::ParseSess::new();
+        let mut parser = parse::new_parser_from_source_str(
+            &session, "test_alias".into(),
+            "alias Foo;".into());
+        let alias_keyword = ast::Ident::from_str("alias");
+        assert!(parser.eat_contextual_keyword(alias_keyword));
     }
 }

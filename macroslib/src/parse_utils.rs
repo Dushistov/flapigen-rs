@@ -4,7 +4,7 @@ use syntex_syntax::codemap;
 use syntex_syntax::{parse, ast};
 use syntex_syntax::ptr::P;
 use syntex_syntax::parse::common::SeqSep;
-use syntex_syntax::parse::token::keywords;
+use syntex_syntax::symbol::keywords;
 use syntex_syntax::ast::{SelfKind, Mutability};
 use syntex_pos::mk_sp;
 

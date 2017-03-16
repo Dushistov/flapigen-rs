@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use syntex_syntax::parse::{token};
 use syntex_syntax::{ast};
 use syntex_syntax::ptr::P;
 use syntex_syntax::print::pprust;
+use syntex_syntax::symbol::{InternedString, Symbol};
 
 #[derive(PartialEq)]
 pub enum FuncVariant {
@@ -12,7 +12,7 @@ pub enum FuncVariant {
 }
 
 impl FuncVariant {
-    pub fn from_str(ident: &token::InternedString) -> Option<FuncVariant> {
+    pub fn from_str(ident: &InternedString) -> Option<FuncVariant> {
         match &**ident {
             "constructor" => Some(FuncVariant::Constructor),
             "method" => Some(FuncVariant::Method),
@@ -26,7 +26,7 @@ pub struct ForeignerMethod {
     pub func_type: FuncVariant,
     pub path: ast::Path,
     pub in_out_type: P<ast::FnDecl>,
-    pub name_alias: Option<token::InternedString>,
+    pub name_alias: Option<InternedString>,
     pub may_return_error: bool,
     pub private: bool,
 }
@@ -144,12 +144,12 @@ impl ForeignerMethod {
         }
     }
 
-    pub fn short_name(&self) -> token::InternedString {
+    pub fn short_name(&self) -> InternedString {
         if let Some(ref name) = self.name_alias {
             name.clone()
         } else {
             match self.path.segments.len() {
-                0 => token::InternedString::new(""),
+                0 => Symbol::gensym("").as_str(),
                 n => self.path.segments[n - 1].identifier.name.as_str()
             }
         }
