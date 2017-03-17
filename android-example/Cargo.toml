@@ -15,7 +15,7 @@ android_logger = {git = "https://github.com/Dushistov/android_logger-rs", rev = 
 
 [build-dependencies]
 bindgen = "0.22.0"
-syntex = "0.47.0"
+syntex = "0.54.0"
 
 
 [build-dependencies.rust_swig]
