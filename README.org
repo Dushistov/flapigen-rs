@@ -1,7 +1,7 @@
 #+OPTIONS: ^:nil
 [[https://travis-ci.org/Dushistov/rust_swig][https://travis-ci.org/Dushistov/rust_swig.svg?branch=master]]
 [[https://github.com/Dushistov/rust_swig/blob/master/LICENSE][https://img.shields.io/badge/license-BSD-green.svg]]
-
+[[https://ci.appveyor.com/api/projects/status/db4rs7f96iba4bt8/branch/master?svg=true]]
 * Getting started
 
 Suppose you have the following Rust code:
