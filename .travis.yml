@@ -12,6 +12,8 @@ addons:
   apt:
     packages:
       - oracle-java8-set-default
+      - llvm-3.9-dev
+      - libclang-3.9-dev
 script:
   - cd macroslib
   - cargo build -v
