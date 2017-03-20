@@ -17,6 +17,8 @@ addons:
       - oracle-java8-set-default
       - llvm-3.9-dev
       - libclang-3.9-dev
+env: # specify the clang path for rust-bindgen
+  - LIBCLANG_PATH=/usr/lib/llvm-3.9/lib
 script:
   - cd macroslib
   - cargo build -v
