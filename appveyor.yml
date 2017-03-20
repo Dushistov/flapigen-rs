@@ -17,5 +17,4 @@ build_script:
   - cd macroslib
   - cargo build
 test_script:
-  - cd macroslib
   - cargo test
