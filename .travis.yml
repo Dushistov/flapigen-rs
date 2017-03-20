@@ -10,6 +10,9 @@ os:
   - linux
 addons:
   apt:
+    sources:
+      - llvm-toolchain-precise-3.9
+      - ubuntu-toolchain-r-test
     packages:
       - oracle-java8-set-default
       - llvm-3.9-dev
