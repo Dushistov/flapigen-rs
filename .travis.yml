@@ -8,8 +8,14 @@ matrix:
     - rust: nightly
 os:
   - linux
+addons:
+  apt:
+    packages:
+      - oracle-java8-set-default
 script:
   - cd macroslib
   - cargo build -v
   - cargo test -v
   - cargo doc
+  - cd ../jni_tests
+  - cargo build -v
