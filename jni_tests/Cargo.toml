@@ -5,7 +5,7 @@ authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 build = "build.rs"
 
 [lib]
-name = "test"
+name = "rust_swig_test_jni"
 crate-type = ["cdylib"]
 
 [dependencies]

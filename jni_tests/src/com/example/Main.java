@@ -12,7 +12,7 @@ import com.example.TestInner;
 class Main {
     public static void main(String[] args) {
         try {
-            System.loadLibrary("test");
+            System.loadLibrary("rust_swig_test_jni");
         } catch (UnsatisfiedLinkError e) {
             System.out.println("Can not load library");
             throw e;
