@@ -13,7 +13,7 @@ install:
   - ps: $env:PATH="C:\Program Files\Java\jdk1.8.0\bin;$env:PATH;C:\rust\bin"
   - rustc -vV
   - cargo -vV
-  - javac -v
+  - javac -version
 build_script:
   - cd macroslib
   - cargo build
