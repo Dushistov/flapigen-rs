@@ -1,14 +1,16 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use syntex_syntax::{ast};
+use syntex_syntax::ast;
 use syntex_syntax::ptr::P;
 use syntex_syntax::print::pprust;
 use syntex_syntax::symbol::{InternedString, Symbol};
 
 #[derive(PartialEq)]
 pub enum FuncVariant {
-    Constructor, Method, StaticMethod
+    Constructor,
+    Method,
+    StaticMethod,
 }
 
 impl FuncVariant {
@@ -75,14 +77,14 @@ pub fn full_java_class_name(package_name: &str, class_name: &str) -> String {
     ret.replace(".", "/")
 }
 
-impl <'a> ForeignerClassInfo<'a> {
+impl<'a> ForeignerClassInfo<'a> {
     pub fn full_java_class_name(&self) -> String {
         full_java_class_name(&self.package_name, self.class_name)
     }
 }
 
 
-impl <'a, 'b> Into<TypeHandler> for &'a ForeignerClassInfo<'b> {
+impl<'a, 'b> Into<TypeHandler> for &'a ForeignerClassInfo<'b> {
     fn into(self) -> TypeHandler {
         TypeHandler {
             rust_type_name: pprust::ty_to_string(self.this_type_for_method.as_ref().unwrap()),
@@ -102,36 +104,57 @@ pub fn get_type_handler<'a, 'b>(types_map: &RustToJavaTypes<'a>, name: &'b str) 
 
 impl ForeignerMethod {
     pub fn args(&self, use_comma_if_need: bool) -> String {
-        let skip_n =  if self.func_type == FuncVariant::Method { 1 } else { 0 };
+        let skip_n = if self.func_type == FuncVariant::Method {
+            1
+        } else {
+            0
+        };
         let mut res = String::new();
         if use_comma_if_need && skip_n < self.in_out_type.inputs.len() {
             res.push_str(", ");
         }
-        for (i, _) in self.in_out_type.inputs.iter().skip(skip_n).enumerate() {
+        for (i, _) in self.in_out_type
+                .inputs
+                .iter()
+                .skip(skip_n)
+                .enumerate() {
             if i == (self.in_out_type.inputs.len() - 1 - skip_n) {
-                write!(&mut res, "a_{}", i)
-            } else {
-                write!(&mut res, "a_{}, ", i)
-            }
-            .unwrap();
+                    write!(&mut res, "a_{}", i)
+                } else {
+                    write!(&mut res, "a_{}, ", i)
+                }
+                .unwrap();
         }
         res
     }
 
-    pub fn args_with_java_types(&self, use_comma_if_need: bool, types_map: &RustToJavaTypes) -> String {
-        let skip_n =  if self.func_type == FuncVariant::Method { 1 } else { 0 };
+    pub fn args_with_java_types(&self,
+                                use_comma_if_need: bool,
+                                types_map: &RustToJavaTypes)
+                                -> String {
+        let skip_n = if self.func_type == FuncVariant::Method {
+            1
+        } else {
+            0
+        };
         let mut res = String::new();
         if use_comma_if_need && skip_n < self.in_out_type.inputs.len() {
             write!(&mut res, ", ").unwrap();
         }
-        for (i, item_arg) in self.in_out_type.inputs.iter().skip(skip_n).enumerate() {
-            let type_name = &get_type_handler(types_map, pprust::ty_to_string(&*item_arg.ty).as_str()).java_type_name;
+        for (i, item_arg) in self.in_out_type
+                .inputs
+                .iter()
+                .skip(skip_n)
+                .enumerate() {
+            let type_name = &get_type_handler(types_map,
+                                              pprust::ty_to_string(&*item_arg.ty).as_str())
+                                     .java_type_name;
             if i == (self.in_out_type.inputs.len() - 1 - skip_n) {
-                write!(&mut res, "{} a_{}", type_name, i)
-            } else {
-                write!(&mut res, "{} a_{}, ", type_name, i)
-            }
-            .unwrap();
+                    write!(&mut res, "{} a_{}", type_name, i)
+                } else {
+                    write!(&mut res, "{} a_{}, ", type_name, i)
+                }
+                .unwrap();
         }
         res
     }
@@ -139,8 +162,11 @@ impl ForeignerMethod {
     pub fn java_return_type<'a>(&self, types_map: &'a RustToJavaTypes) -> &'a str {
         match &self.in_out_type.output {
             &ast::FunctionRetTy::Default(_) => "void",
-            &ast::FunctionRetTy::Ty(ref ret_type) =>
-                get_type_handler(types_map, pprust::ty_to_string(&*ret_type).as_str()).java_type_name.as_str()
+            &ast::FunctionRetTy::Ty(ref ret_type) => {
+                get_type_handler(types_map, pprust::ty_to_string(&*ret_type).as_str())
+                    .java_type_name
+                    .as_str()
+            }
         }
     }
 
@@ -150,7 +176,7 @@ impl ForeignerMethod {
         } else {
             match self.path.segments.len() {
                 0 => Symbol::gensym("").as_str(),
-                n => self.path.segments[n - 1].identifier.name.as_str()
+                n => self.path.segments[n - 1].identifier.name.as_str(),
             }
         }
     }

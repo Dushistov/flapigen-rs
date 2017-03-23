@@ -5,28 +5,39 @@ use std::error::Error;
 
 use core::*;
 
-pub fn generate_java_code(rust_java_types_map: &RustToJavaTypes, class_info: &ForeignerClassInfo, output_dir: &str) {
+pub fn generate_java_code(rust_java_types_map: &RustToJavaTypes,
+                          class_info: &ForeignerClassInfo,
+                          output_dir: &str) {
     let mut path = PathBuf::from(output_dir);
     path.push(format!("{}.java", class_info.class_name));
     let display = path.display();
 
     let mut file = match File::create(&path) {
-        Err(why) => panic!("couldn't create {}: {}",
-                           display,
-                           why.description()),
+        Err(why) => panic!("couldn't create {}: {}", display, why.description()),
         Ok(file) => file,
     };
     write!(file,
-"package {package_name};
+           "package {package_name};
 public final class {class_name} {{
     private long mNativeObj;
-", package_name = class_info.package_name, class_name = class_info.class_name).unwrap();
+",
+           package_name = class_info.package_name,
+           class_name = class_info.class_name)
+            .unwrap();
 
     let mut have_constructor = false;
     let mut have_methods = false;
     for method_it in class_info.methods.iter() {
-        let exception_spec = if method_it.may_return_error { "throws Exception" } else { "" };
-        let method_access = if method_it.private { "private" } else { "public" };
+        let exception_spec = if method_it.may_return_error {
+            "throws Exception"
+        } else {
+            ""
+        };
+        let method_access = if method_it.private {
+            "private"
+        } else {
+            "public"
+        };
         match method_it.func_type {
             FuncVariant::StaticMethod => {
                 let return_type = method_it.java_return_type(rust_java_types_map);
@@ -44,7 +55,7 @@ public final class {class_name} {{
             FuncVariant::Constructor => {
                 have_constructor = true;
                 write!(file,
-"
+                       "
     {method_access} {class_name}({args_with_types}) {exception_spec} {{
         mNativeObj = init({args});
     }}
@@ -53,8 +64,10 @@ public final class {class_name} {{
                        method_access = method_access,
                        class_name = class_info.class_name,
                        exception_spec = exception_spec,
-                       args_with_types = method_it.args_with_java_types(false, rust_java_types_map),
-                       args = method_it.args(false)).unwrap();
+                       args_with_types =
+                           method_it.args_with_java_types(false, rust_java_types_map),
+                       args = method_it.args(false))
+                        .unwrap();
             }
             FuncVariant::Method => {
                 have_methods = true;
@@ -78,11 +91,12 @@ public final class {class_name} {{
     }
     if have_methods && !have_constructor {
         panic!("package_name {}, class_name {}, have methods, but no constructor",
-               class_info.package_name, class_info.class_name);
+               class_info.package_name,
+               class_info.class_name);
     }
     if have_constructor {
         write!(file,
-"
+               "
     public synchronized void delete() {{
         if (mNativeObj != 0) {{
             do_delete(mNativeObj);
@@ -92,7 +106,8 @@ public final class {class_name} {{
     @Override
     protected void finalize() {{ delete(); }}
     private static native void do_delete(long me);
-").unwrap();
+")
+                .unwrap();
     }
     file.write_all(class_info.foreigner_code.as_bytes()).unwrap();
     write!(file, "}}").unwrap();
