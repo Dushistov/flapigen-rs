@@ -1,11 +1,12 @@
 [package]
 name = "rust_swig"
-version = "0.0.3"
+version = "0.0.4pre"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 description = "Tool for simplification of Rust usage from other languages"
 license = "BSD-3-Clause"
 keywords = ["swig", "java", "jni", "ffi", "wrapper"]
 repository = "https://github.com/Dushistov/rust_swig"
+documentation = "https://github.com/Dushistov/rust_swig/blob/master/README.md"
 
 [dependencies]
 syntex = "0.54.0"
@@ -13,3 +14,6 @@ syntex_syntax = "0.54.0"
 syntex_pos = "0.54.0"
 lazy_static = "0.2.2"
 log = "0.3"
+
+[badges]
+travis-ci = { repository = "Dushistov/rust_swig" }
