@@ -99,7 +99,9 @@ impl<'a, 'b> Into<TypeHandler> for &'a ForeignerClassInfo<'b> {
 pub type RustToJavaTypes<'a> = HashMap<&'a str, &'a TypeHandler>;
 
 pub fn get_type_handler<'a, 'b>(types_map: &RustToJavaTypes<'a>, name: &'b str) -> &'a TypeHandler {
-    types_map.get(name).expect(&format!("Unknown type `{}`", name))
+    types_map
+        .get(name)
+        .expect(&format!("Unknown type `{}`", name))
 }
 
 impl ForeignerMethod {

@@ -42,14 +42,16 @@ public final class {class_name} {{
                 let return_type = method_it.java_return_type(rust_java_types_map);
                 write!(file,
 "
-    {method_access} static native {return_type} {func_name}({func_args_with_types}) {exception_spec};
+    {access} static native {ret_type} {func_name}({args_with_types}) {exception_spec};
 ",
-                       method_access = method_access,
-                       return_type = return_type,
+                       access = method_access,
+                       ret_type = return_type,
                        func_name = method_it.short_name(),
-                       func_args_with_types  = method_it.args_with_java_types(false, rust_java_types_map),
+                       args_with_types  = method_it.args_with_java_types(false,
+                                                                         rust_java_types_map),
                        exception_spec = exception_spec,
-                ).unwrap();
+                )
+                        .unwrap();
             }
             FuncVariant::Constructor => {
                 have_constructor = true;
@@ -73,18 +75,22 @@ public final class {class_name} {{
                 let return_type = method_it.java_return_type(rust_java_types_map);
                 write!(file,
 "
-    {method_access} {return_type} {func_name}({single_args_with_types}) {exception_spec} {{ {return_code} do_{func_name}(mNativeObj{args}); }}
-    private static native {return_type} do_{func_name}(long me{func_args_with_types}) {exception_spec};
+    {access} {ret_type} {func_name}({single_args_with_types}) {exception_spec} {{
+         {return_code} do_{func_name}(mNativeObj{args});
+    }}
+    private static native {ret_type} do_{func_name}(long me{args_with_types}) {exception_spec};
 ",
-                       method_access = method_access,
-                       return_type = return_type,
+                       access = method_access,
+                       ret_type = return_type,
                        exception_spec = exception_spec,
                        return_code = if return_type != "void" { "return" } else { "" },
                        func_name = method_it.short_name(),
-                       single_args_with_types = method_it.args_with_java_types(false, rust_java_types_map),
-                       func_args_with_types  = method_it.args_with_java_types(true, rust_java_types_map),
+                       single_args_with_types = method_it.args_with_java_types(false,
+                                                                               rust_java_types_map),
+                       args_with_types  = method_it.args_with_java_types(true, rust_java_types_map),
                        args = method_it.args(true),
-                ).unwrap();
+                )
+                        .unwrap();
             }
         }
     }
@@ -108,6 +114,7 @@ public final class {class_name} {{
 ")
                 .unwrap();
     }
-    file.write_all(class_info.foreigner_code.as_bytes()).unwrap();
+    file.write_all(class_info.foreigner_code.as_bytes())
+        .unwrap();
     write!(file, "}}").unwrap();
 }

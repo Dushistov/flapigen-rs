@@ -126,9 +126,10 @@ pub fn parse_fn_decl_with_self<'a, F>(parser: &mut parser::Parser<'a>,
             vec![self_arg]
         } else if parser.eat(&token::Comma) {
             let mut fn_inputs = vec![self_arg];
-            fn_inputs.append(&mut parser.parse_seq_to_before_end(&token::CloseDelim(token::Paren),
-                                                                 sep,
-                                                                 parse_arg_fn));
+            fn_inputs
+                .append(&mut parser.parse_seq_to_before_end(&token::CloseDelim(token::Paren),
+                                                            sep,
+                                                            parse_arg_fn));
             fn_inputs
         } else {
             return parser.unexpected();

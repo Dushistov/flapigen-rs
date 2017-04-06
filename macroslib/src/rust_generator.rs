@@ -19,7 +19,9 @@ pub static RUST_OBJECT_TO_JOBJECT: &'static str = r#"
   assert!(!jobj.is_null());
   let field_id = ::std::ffi::CString::new("mNativeObj").unwrap();
   let type_id = ::std::ffi::CString::new("J").unwrap();
-  let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
+  let field_id: jfieldID = unsafe {
+      (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr())
+  };
   assert!(!field_id.is_null());
   let b: Box<{rust_type_name}> = Box::new(ret);
   let ret = Box::into_raw(b) as jlong;
@@ -36,12 +38,17 @@ pub static RUST_VEC_TO_JAVA_ARRAY: &'static str = r#"
     let class_id = ::std::ffi::CString::new("{full_class_name}").unwrap();
     let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
     assert!(!jcls.is_null());
-    let obj_arr: jobjectArray = unsafe { (**env).NewObjectArray.unwrap()(env, {vec_name}.len() as jsize, jcls, ::std::ptr::null_mut()) };
+    let obj_arr: jobjectArray = unsafe {
+        (**env).NewObjectArray.unwrap()(env, {vec_name}.len() as jsize,
+                                        jcls, ::std::ptr::null_mut())
+    };
     assert!(!obj_arr.is_null());
 
     let field_id = ::std::ffi::CString::new("mNativeObj").unwrap();
     let type_id = ::std::ffi::CString::new("J").unwrap();
-    let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
+    let field_id: jfieldID = unsafe {
+        (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr())
+    };
     assert!(!field_id.is_null());
 
     for (i, r_obj) in {vec_name}.drain(..).enumerate() {
@@ -79,13 +86,17 @@ fn jni_func_args_for_decl(rust_java_types_map: &RustToJavaTypes,
                           skip: usize)
                           -> String {
     let mut buf = String::new();
-    for (i, it) in method.in_out_type
+    for (i, it) in method
+            .in_out_type
             .inputs
             .iter()
             .skip(skip)
             .enumerate() {
         let type_name = pprust::ty_to_string(&*it.ty);
-        let type_name = rust_java_types_map.get(type_name.as_str()).unwrap().jni_type_name;
+        let type_name = rust_java_types_map
+            .get(type_name.as_str())
+            .unwrap()
+            .jni_type_name;
         write!(&mut buf, "a_{}: {}, ", i, type_name).unwrap();
     }
     buf
@@ -96,7 +107,8 @@ fn jni_convert_args(rust_java_types_map: &RustToJavaTypes,
                     skip_args: usize)
                     -> String {
     let mut buf = String::new();
-    for (i, it) in method.in_out_type
+    for (i, it) in method
+            .in_out_type
             .inputs
             .iter()
             .skip(skip_args)
@@ -185,12 +197,14 @@ pub fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt,
                                class_info: &ForeignerClassInfo)
                                -> Box<MacResult> {
     let mut jni_methods = Vec::new();
-    let constructor = class_info.methods.iter().find(|&x| if let FuncVariant::Constructor =
-        x.func_type {
-                                                         true
-                                                     } else {
-                                                         false
-                                                     });
+    let constructor = class_info
+        .methods
+        .iter()
+        .find(|&x| if let FuncVariant::Constructor = x.func_type {
+                  true
+              } else {
+                  false
+              });
     let constructor_ret_type = class_info.constructor_ret_type.as_ref();
 
     let constructor_ret_type_for_method = class_info.this_type_for_method.as_ref();
@@ -236,17 +250,23 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) {jni_result_ty
     ret
 }}
 "#,
-                       func_name = jni_generate_func_name(&class_info.package_name, &class_info.class_name, &gen_func_name,
-                                                           *generated_func_names.get(gen_func_name).unwrap() > 1,
-                                                           java_input_args_iter),
+                       func_name = jni_generate_func_name(
+                           &class_info.package_name, &class_info.class_name,
+                           &gen_func_name,
+                           *generated_func_names.get(gen_func_name).unwrap() > 1,
+                           java_input_args_iter),
                        decl_func_args = jni_func_args_for_decl(rust_java_types_map, &*it, 0),
                        convert_jni_args = jni_convert_args(rust_java_types_map, &*it, 0),
                        jni_result_type = jni_result_type(rust_java_types_map, &*it),
                        rust_func_name = it.path,
-                       jni_func_args = it.in_out_type.inputs.iter().enumerate().map(|a| format!("a_{}, ", a.0))
+                       jni_func_args = it.in_out_type.inputs
+                       .iter()
+                       .enumerate()
+                       .map(|a| format!("a_{}, ", a.0))
                        .fold(String::new(), |acc, x| acc + &x),
                        convert_output = jni_convert_output_type(rust_java_types_map, &*it),
-                ).unwrap();
+                )
+                        .unwrap();
                 debug!("we generate and parse code: {}", code);
                 jni_methods.push(parse::parse_item_from_source_str("method".to_string(),
                                                                    code,
@@ -273,13 +293,19 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
                            *generated_func_names.get("init").unwrap() > 1,
                            java_input_args_iter
                        ),
-                       convert_this = jni_convert_this_in_constructor(&pprust::ty_to_string(&constructor_ret_type), &class_info.self_rust_type.to_string()),
+                       convert_this = jni_convert_this_in_constructor(
+                           &pprust::ty_to_string(&constructor_ret_type),
+                           &class_info.self_rust_type.to_string()),
                        decl_func_args = jni_func_args_for_decl(rust_java_types_map, &*it, 0),
                        convert_jni_args = jni_convert_args(rust_java_types_map, &*it, 0),
                        create_jni_obj = it.full_name(),
-                       jni_func_args = it.in_out_type.inputs.iter().enumerate().map(|a| format!("a_{}, ", a.0))
+                       jni_func_args = it.in_out_type.inputs
+                       .iter()
+                       .enumerate()
+                       .map(|a| format!("a_{}, ", a.0))
                        .fold(String::new(), |acc, x| acc + &x),
-                ).unwrap();
+                )
+                        .unwrap();
                 debug!("we generate and parse code: {}", code);
                 jni_methods.push(parse::parse_item_from_source_str("constructor".to_string(),
                                                                    code,
@@ -294,12 +320,15 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
                            class_info.class_name);
                 }
                 if class_info.self_rust_type.segments.is_empty() {
-                    panic!("package_name {}, class_name {} have constructor, but self_type not defined",
+                    panic!("package_name {}, class_name {} have constructor, but self_type \
+                            not defined",
                            class_info.package_name,
                            class_info.class_name);
                 }
-                let constructor_ret_type =
-                    constructor_ret_type_for_method.as_ref().unwrap().clone();
+                let constructor_ret_type = constructor_ret_type_for_method
+                    .as_ref()
+                    .unwrap()
+                    .clone();
 
                 let mut code = String::new();
                 let gen_func_name = format!("do_{}", &it.short_name());
@@ -308,26 +337,33 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
 #[no_mangle]
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {jni_result_type} {{
 {convert_jni_args}
-    let this: &mut {this_type} = unsafe {{ jlong_to_pointer::<{this_type}>(this).as_mut().unwrap() }};
+    let this: &mut {this_type} = unsafe {{
+        jlong_to_pointer::<{this_type}>(this).as_mut().unwrap()
+    }};
 {convert_this}
     let mut ret = {rust_func_name}(&mut *this, {jni_func_args});
     {convert_output}
     ret
 }}
 "#,
-                       func_name = jni_generate_func_name(&class_info.package_name, &class_info.class_name, &gen_func_name,
-                                                           *generated_func_names.get(&gen_func_name).unwrap() > 1,
-                                                           java_input_args_iter),
+                       func_name = jni_generate_func_name(
+                           &class_info.package_name, &class_info.class_name, &gen_func_name,
+                           *generated_func_names.get(&gen_func_name).unwrap() > 1,
+                           java_input_args_iter),
                        decl_func_args = jni_func_args_for_decl(rust_java_types_map, &*it, 1),
                        convert_jni_args = jni_convert_args(rust_java_types_map, &*it, 1),
                        jni_result_type = jni_result_type(rust_java_types_map, &*it),
                        this_type = pprust::ty_to_string(&constructor_ret_type),
-                       convert_this = generate_rust_to_convert_this(&pprust::ty_to_string(&constructor_ret_type), &class_info.self_rust_type.to_string()),
+                       convert_this = generate_rust_to_convert_this(
+                           &pprust::ty_to_string(&constructor_ret_type),
+                           &class_info.self_rust_type.to_string()),
                        rust_func_name = it.path,
-                       jni_func_args = it.in_out_type.inputs.iter().skip(1).enumerate().map(|a| format!("a_{}, ", a.0))
+                       jni_func_args = it.in_out_type.inputs
+                       .iter().skip(1).enumerate().map(|a| format!("a_{}, ", a.0))
                        .fold(String::new(), |acc, x| acc + &x),
                        convert_output = jni_convert_output_type(rust_java_types_map, &*it),
-                ).unwrap();
+                )
+                        .unwrap();
                 debug!("we generate and parse code: {}", code);
                 jni_methods.push(parse::parse_item_from_source_str("method".to_string(),
                                                                    code,
@@ -339,21 +375,28 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) {
     }
 
     if constructor.is_some() {
-        let constructor_ret_type = constructor_ret_type_for_method.as_ref().unwrap().clone();
+        let constructor_ret_type = constructor_ret_type_for_method
+            .as_ref()
+            .unwrap()
+            .clone();
         let mut code = String::new();
         write!(&mut code, r#"
 #[allow(non_snake_case)]
 #[no_mangle]
 pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
-    let this: &mut {type_name} = unsafe {{ jlong_to_pointer::<{type_name}>(this).as_mut().unwrap() }};
+    let this: &mut {type_name} = unsafe {{
+        jlong_to_pointer::<{type_name}>(this).as_mut().unwrap()
+    }};
     let this = unsafe {{ Box::from_raw(this) }};
     drop(this)
 }}
 "#,
-               jni_destructor_name = jni_generate_func_name(&class_info.package_name, &class_info.class_name,
-                                                            "do_delete", false, ::std::iter::empty::<&String>()),
+               jni_destructor_name = jni_generate_func_name(
+                   &class_info.package_name, &class_info.class_name,
+                   "do_delete", false, ::std::iter::empty::<&String>()),
                type_name = pprust::ty_to_string(&constructor_ret_type),
-        ).unwrap();
+        )
+                .unwrap();
         debug!("we generate and parse code: {}", code);
         jni_methods.push(parse::parse_item_from_source_str("destructor".to_string(),
                                                            code,

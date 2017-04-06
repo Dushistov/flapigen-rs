@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::iter::Iterator;
 
 lazy_static! {
     static ref JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE: HashMap<String, &'static str> = {
@@ -9,7 +10,13 @@ lazy_static! {
     };
 }
 
-pub fn generate_func_name<'a, IterType: ::std::iter::Iterator<Item=&'a String>>(package_name: &str, class_name: &str, func_name: &str, overloaded: bool, args_types_iter: IterType) -> String
+pub fn generate_func_name<'a, IterType>(package_name: &str,
+                                        class_name: &str,
+                                        func_name: &str,
+                                        overloaded: bool,
+                                        args_types_iter: IterType)
+                                        -> String
+    where IterType: Iterator<Item = &'a String>
 {
     let mut output = String::new();
     output.push_str("Java_");
@@ -33,8 +40,10 @@ pub fn generate_func_name<'a, IterType: ::std::iter::Iterator<Item=&'a String>>(
     if overloaded {
         output.push_str("__");
         for it in args_types_iter {
-            escape_underscore(JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE.get(&*it)
-                              .expect(&format!("jni gen func name: Unknown Java type `{}`", *it)),
+            escape_underscore(JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
+                                  .get(&*it)
+                                  .expect(&format!("jni gen func name: Unknown Java type `{}`",
+                                                   *it)),
                               &mut output);
         }
     }
