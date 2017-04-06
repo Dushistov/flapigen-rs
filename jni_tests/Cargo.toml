@@ -13,10 +13,9 @@ log = "0.3"
 
 [build-dependencies]
 syntex = "0.54.0"
-env_logger = "0.3"
+env_logger = "0.4.2"
 bindgen = "0.22.1"
 log = "0.3"
+rust_swig = { path = "../macroslib" }
 
-[build-dependencies.rust_swig]
-path = "../macroslib"
 
