@@ -5,6 +5,8 @@ extern crate syntex_pos;
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate derive_builder;
 
 mod parse_utils;
 mod jni;
@@ -12,8 +14,8 @@ mod core;
 mod rust_generator;
 mod java_generator;
 
+use std::path::PathBuf;
 use std::collections::HashMap;
-use std::env;
 use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 
@@ -25,6 +27,7 @@ use syntex_syntax::codemap::Span;
 use syntex_syntax::{parse, ast};
 use syntex_syntax::print::pprust;
 use syntex_syntax::ptr;
+use syntex_syntax::ext::base::TTMacroExpander;
 
 use parse_utils::*;
 use core::*;
@@ -156,166 +159,173 @@ lazy_static! {
     };
 }
 
-pub fn register(registry: &mut Registry) {
-    registry.add_macro("foreigner_class", expand_foreigner_class);
+#[derive(Default, Builder)]
+pub struct Generator {
+    java_output_dir: PathBuf,
+    java_package_name: String,
 }
 
-fn expand_foreigner_class<'cx>(cx: &'cx mut ExtCtxt,
-                               _: Span,
-                               tokens: &[TokenTree])
-                               -> Box<MacResult + 'cx> {
-    let mut parser = parse::new_parser_from_tts(cx.parse_sess, tokens.to_vec());
-    let class_ident = parser.parse_ident().unwrap();
-    if &*class_ident.name.as_str() != "class" {
-        debug!("class_indent {:?}", class_ident);
-        cx.span_err(parser.span, "expect class here");
-        return DummyResult::any(parser.span);
+impl Generator {
+    pub fn register(self, registry: &mut Registry) {
+        registry.add_macro("foreigner_class", self);
     }
-    let class_name_indent = parser.parse_ident().unwrap();
-    debug!("CLASS NAME {:?}", class_name_indent);
-    parser.expect(&token::Token::OpenDelim(token::DelimToken::Brace)).unwrap();
-    let mut methods = Vec::new();
-    let mut rust_self_type = ast::Path {
-        span: parser.span,
-        segments: Vec::new(),
-    };
-    let alias_keyword = ast::Ident::from_str("alias");
-    let private_keyword = ast::Ident::from_str("private");
-    let mut constructor_ret_type: Option<ast::Ty> = None;
-    let mut this_type_for_method: Option<ast::Ty> = None;
-    let mut foreigner_code = String::new();
-    loop {
-        if parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
-            break;
-        }
-        let private_func = parser.eat_contextual_keyword(private_keyword);
-        let func_type_name = parser.parse_ident().unwrap();
-        debug!("func_type {:?}", func_type_name);
-        if &*func_type_name.name.as_str() == "self_type" {
-            rust_self_type =
-                parser.parse_path(parser::PathStyle::Type).expect("Can not parse self_type");
-            debug!("self_type: {:?}", rust_self_type);
-            parser.expect(&token::Token::Semi).unwrap();
-            continue;
-        }
+}
 
-        if &*func_type_name.name.as_str() == "foreigner_code" {
-            let lit = parser.parse_lit().expect("expect literal after foreigner_code");
-            match lit.node {
-                ast::LitKind::Str(s, _) => {
-                    debug!("foreigner_code s: {:?}", s);
-                    foreigner_code.push_str(&*s.as_str());
-                }
-                _ => {
-                    cx.span_err(parser.span, "expect string literal after foreigner_code");
-                    return DummyResult::any(parser.span);
-                }
-            }
-            parser.expect(&token::Token::Semi).unwrap();
-            continue;
-        }
-
-        let func_type = FuncVariant::from_str(&func_type_name.name.as_str());
-        if func_type.is_none() {
-            println!("unknown func type: {:?}", func_type_name);
-            cx.span_err(parser.span,
-                        "expect 'constructor' or 'method' or 'static_method' here");
+impl TTMacroExpander for Generator {
+    fn expand<'a>(&self,
+                   cx: &'a mut ExtCtxt,
+                   _: Span,
+                   tokens: &[TokenTree])
+                   -> Box<MacResult+'a> {
+        let mut parser = parse::new_parser_from_tts(cx.parse_sess, tokens.to_vec());
+        let class_ident = parser.parse_ident().unwrap();
+        if &*class_ident.name.as_str() != "class" {
+            debug!("class_indent {:?}", class_ident);
+            cx.span_err(parser.span, "expect class here");
             return DummyResult::any(parser.span);
         }
-        let func_type = func_type.unwrap();
-        let func_name = parser.parse_path(parser::PathStyle::Mod).unwrap();
-        debug!("func_name {:?}", func_name);
-
-        let func_decl = match func_type {
-            FuncVariant::Constructor |
-            FuncVariant::StaticMethod => parser.parse_fn_decl(false).unwrap(),
-            FuncVariant::Method => parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).unwrap(),
+        let class_name_indent = parser.parse_ident().unwrap();
+        debug!("CLASS NAME {:?}", class_name_indent);
+        parser.expect(&token::Token::OpenDelim(token::DelimToken::Brace)).unwrap();
+        let mut methods = Vec::new();
+        let mut rust_self_type = ast::Path {
+            span: parser.span,
+            segments: Vec::new(),
         };
-        debug!("func_decl {:?}", func_decl);
-        parser.expect(&token::Token::Semi).unwrap();
-        let mut func_name_alias = None;
-        if parser.eat_contextual_keyword(alias_keyword) {
-            if func_type == FuncVariant::Constructor {
-                cx.span_err(parser.span, "alias not supported for 'constructor'");
+        let alias_keyword = ast::Ident::from_str("alias");
+        let private_keyword = ast::Ident::from_str("private");
+        let mut constructor_ret_type: Option<ast::Ty> = None;
+        let mut this_type_for_method: Option<ast::Ty> = None;
+        let mut foreigner_code = String::new();
+        loop {
+            if parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
+                break;
+            }
+            let private_func = parser.eat_contextual_keyword(private_keyword);
+            let func_type_name = parser.parse_ident().unwrap();
+            debug!("func_type {:?}", func_type_name);
+            if &*func_type_name.name.as_str() == "self_type" {
+                rust_self_type =
+                    parser.parse_path(parser::PathStyle::Type).expect("Can not parse self_type");
+                debug!("self_type: {:?}", rust_self_type);
+                parser.expect(&token::Token::Semi).unwrap();
+                continue;
+            }
+
+            if &*func_type_name.name.as_str() == "foreigner_code" {
+                let lit = parser.parse_lit().expect("expect literal after foreigner_code");
+                match lit.node {
+                    ast::LitKind::Str(s, _) => {
+                        debug!("foreigner_code s: {:?}", s);
+                        foreigner_code.push_str(&*s.as_str());
+                    }
+                    _ => {
+                        cx.span_err(parser.span, "expect string literal after foreigner_code");
+                        return DummyResult::any(parser.span);
+                    }
+                }
+                parser.expect(&token::Token::Semi).unwrap();
+                continue;
+            }
+
+            let func_type = FuncVariant::from_str(&func_type_name.name.as_str());
+            if func_type.is_none() {
+                println!("unknown func type: {:?}", func_type_name);
+                cx.span_err(parser.span,
+                            "expect 'constructor' or 'method' or 'static_method' here");
                 return DummyResult::any(parser.span);
             }
-            func_name_alias = Some(parser.parse_ident().unwrap());
-            debug!("we have ALIAS `{:?}`", func_name_alias.unwrap());
-            parser.expect(&token::Token::Semi).expect("no ; at the end of alias");
-        }
-        let (may_return_error, ret_type) = match &func_decl.output {
-            &ast::FunctionRetTy::Default(_) => (false, None),
-            &ast::FunctionRetTy::Ty(ref ret_type) => {
-                (is_type_name(ret_type, "Result"), Some(ret_type.clone()))
-            }
-        };
-        if let FuncVariant::Constructor = func_type {
-            let ret_type = ret_type.expect(&format!("{}: constructor should return value",
-                                                    class_name_indent));
-            if let Some(ref constructor_ret_type) = constructor_ret_type {
-                if pprust::ty_to_string(constructor_ret_type) != pprust::ty_to_string(&*ret_type) {
-                    cx.span_err(parser.span,
-                                &format!("mismatched types of construtors: {:?} {:?}",
-                                         constructor_ret_type,
-                                         ret_type));
+            let func_type = func_type.unwrap();
+            let func_name = parser.parse_path(parser::PathStyle::Mod).unwrap();
+            debug!("func_name {:?}", func_name);
+
+            let func_decl = match func_type {
+                FuncVariant::Constructor |
+                FuncVariant::StaticMethod => parser.parse_fn_decl(false).unwrap(),
+                FuncVariant::Method => parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).unwrap(),
+            };
+            debug!("func_decl {:?}", func_decl);
+            parser.expect(&token::Token::Semi).unwrap();
+            let mut func_name_alias = None;
+            if parser.eat_contextual_keyword(alias_keyword) {
+                if func_type == FuncVariant::Constructor {
+                    cx.span_err(parser.span, "alias not supported for 'constructor'");
                     return DummyResult::any(parser.span);
                 }
-            } else {
-                constructor_ret_type = Some(ret_type.unwrap());
-                this_type_for_method =
-                    Some(unpack_generic_first_paramter(constructor_ret_type.as_ref().unwrap(),
-                                                       "Result"));
+                func_name_alias = Some(parser.parse_ident().unwrap());
+                debug!("we have ALIAS `{:?}`", func_name_alias.unwrap());
+                parser.expect(&token::Token::Semi).expect("no ; at the end of alias");
             }
+            let (may_return_error, ret_type) = match &func_decl.output {
+                &ast::FunctionRetTy::Default(_) => (false, None),
+                &ast::FunctionRetTy::Ty(ref ret_type) => {
+                    (is_type_name(ret_type, "Result"), Some(ret_type.clone()))
+                }
+            };
+            if let FuncVariant::Constructor = func_type {
+                let ret_type = ret_type.expect(&format!("{}: constructor should return value",
+                                                        class_name_indent));
+                if let Some(ref constructor_ret_type) = constructor_ret_type {
+                    if pprust::ty_to_string(constructor_ret_type) != pprust::ty_to_string(&*ret_type) {
+                        cx.span_err(parser.span,
+                                    &format!("mismatched types of construtors: {:?} {:?}",
+                                             constructor_ret_type,
+                                             ret_type));
+                        return DummyResult::any(parser.span);
+                    }
+                } else {
+                    constructor_ret_type = Some(ret_type.unwrap());
+                    this_type_for_method =
+                        Some(unpack_generic_first_paramter(constructor_ret_type.as_ref().unwrap(),
+                                                           "Result"));
+                }
+            }
+            methods.push(ForeignerMethod {
+                func_type: func_type,
+                path: func_name,
+                in_out_type: func_decl,
+                name_alias: func_name_alias.map(|v| v.name.as_str()),
+                may_return_error: may_return_error,
+                private: private_func,
+            });
         }
-        methods.push(ForeignerMethod {
-                         func_type: func_type,
-                         path: func_name,
-                         in_out_type: func_decl,
-                         name_alias: func_name_alias.map(|v| v.name.as_str()),
-                         may_return_error: may_return_error,
-                         private: private_func,
-                     });
+        let mut type_handlers = TYPE_HANDLERS.lock().unwrap();
+
+        let class_info = ForeignerClassInfo {
+            package_name: self.java_package_name.clone(),
+            class_name: &class_name_indent.name.as_str(),
+            methods: methods,
+            self_rust_type: rust_self_type,
+            constructor_ret_type: constructor_ret_type,
+            this_type_for_method: this_type_for_method,
+            foreigner_code: foreigner_code,
+        };
+
+        if class_info.this_type_for_method.is_some() {
+            let mut class_th: TypeHandler = (&class_info).into();
+            let to_foreign = RUST_OBJECT_TO_JOBJECT.replace("{full_class_name}",
+                                                            &class_info.full_java_class_name())
+                .replace("{rust_type_name}", &class_th.rust_type_name);
+            class_th.to_jni_converter = Some(ToForeignRetConverter(to_foreign.clone()));
+            type_handlers.push(class_th);
+
+            let mut class_th: TypeHandler = (&class_info).into();
+            class_th.rust_type_name = format!("&{}", class_th.rust_type_name);
+            let to_foreign = format!("let ret = ret.clone();\n{}", to_foreign);
+            class_th.to_jni_converter = Some(ToForeignRetConverter(to_foreign));
+            type_handlers.push(class_th);
+        }
+
+        generate_type_info_for_generics(&mut type_handlers, &class_info, &class_info.package_name);
+
+        let mut rust_java_types_map = HashMap::new();
+        for it in type_handlers.iter() {
+            rust_java_types_map.insert(it.rust_type_name.as_str(), &*it);
+        }
+
+        generate_java_code(&rust_java_types_map, &class_info, &self.java_output_dir);
+        generate_rust_code(cx, &rust_java_types_map, &class_info)
     }
-    let mut type_handlers = TYPE_HANDLERS.lock().unwrap();
-
-    let package_name = env::var("RUST_SWIG_JNI_JAVA_PACKAGE").unwrap();
-
-    let class_info = ForeignerClassInfo {
-        package_name: package_name,
-        class_name: &class_name_indent.name.as_str(),
-        methods: methods,
-        self_rust_type: rust_self_type,
-        constructor_ret_type: constructor_ret_type,
-        this_type_for_method: this_type_for_method,
-        foreigner_code: foreigner_code,
-    };
-
-    if class_info.this_type_for_method.is_some() {
-        let mut class_th: TypeHandler = (&class_info).into();
-        let to_foreign = RUST_OBJECT_TO_JOBJECT.replace("{full_class_name}",
-                                                        &class_info.full_java_class_name())
-            .replace("{rust_type_name}", &class_th.rust_type_name);
-        class_th.to_jni_converter = Some(ToForeignRetConverter(to_foreign.clone()));
-        type_handlers.push(class_th);
-
-        let mut class_th: TypeHandler = (&class_info).into();
-        class_th.rust_type_name = format!("&{}", class_th.rust_type_name);
-        let to_foreign = format!("let ret = ret.clone();\n{}", to_foreign);
-        class_th.to_jni_converter = Some(ToForeignRetConverter(to_foreign));
-        type_handlers.push(class_th);
-    }
-
-    generate_type_info_for_generics(&mut type_handlers, &class_info, &class_info.package_name);
-
-    let mut rust_java_types_map = HashMap::new();
-    for it in type_handlers.iter() {
-        rust_java_types_map.insert(it.rust_type_name.as_str(), &*it);
-    }
-
-    let java_output_dir = env::var("RUST_SWIG_JNI_JAVA_OUTPUT_DIR").unwrap();
-
-    generate_java_code(&rust_java_types_map, &class_info, &java_output_dir);
-    generate_rust_code(cx, &rust_java_types_map, &class_info)
 }
 
 fn is_type_name(ty: &ast::Ty, type_name: &str) -> bool {

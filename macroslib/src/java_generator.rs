@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::Path;
 use std::fs::File;
 use std::error::Error;
 
@@ -7,9 +7,8 @@ use core::*;
 
 pub fn generate_java_code(rust_java_types_map: &RustToJavaTypes,
                           class_info: &ForeignerClassInfo,
-                          output_dir: &str) {
-    let mut path = PathBuf::from(output_dir);
-    path.push(format!("{}.java", class_info.class_name));
+                          output_dir: &Path) {
+    let path = output_dir.join(format!("{}.java", class_info.class_name));
     let display = path.display();
 
     let mut file = match File::create(&path) {
