@@ -187,7 +187,7 @@ lazy_static! {
     };
 }
 
-#[derive(Default, Builder)]
+#[derive(Builder)]
 pub struct Generator {
     java_output_dir: PathBuf,
     java_package_name: String,
