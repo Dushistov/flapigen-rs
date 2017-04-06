@@ -21,7 +21,8 @@ fn gen_binding(include_dirs: &[&Path],
                output_rust: &Path)
                -> Result<(), String> {
     assert!(!c_headers.is_empty());
-    let c_file_path = try!(search_file_in_directory(include_dirs, c_headers[0]).map_err(|_| format!("Can not find {}", c_headers[0])));
+    let c_file_path = search_file_in_directory(include_dirs, c_headers[0])
+        .map_err(|_| format!("Can not find {}", c_headers[0]))?;
 
     if let Ok(out_meta) = output_rust.metadata() {
         let mut res_recent_enough = true;
@@ -46,11 +47,8 @@ fn gen_binding(include_dirs: &[&Path],
         .fold(bindings,
               |acc, x| acc.clang_arg("-I".to_string() + x.to_str().unwrap()));
 
-    bindings = bindings
-        .no_unstable_rust();
-    bindings =
-        c_headers[1..]
-        .iter()
+    bindings = bindings.no_unstable_rust();
+    bindings = c_headers[1..].iter()
         .fold(Ok(bindings),
               |acc: Result<::bindgen::Builder, String>, header| {
             let c_file_path = try!(search_file_in_directory(include_dirs, header)
