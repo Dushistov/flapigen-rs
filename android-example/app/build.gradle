@@ -39,7 +39,7 @@ dependencies {
 }
 
 def mobcoreLibPath = ".."
-def cargoOutputDir = "../target"
+def cargoOutputDir = "../../target"
 def archsInfo = ['armeabi': 'arm-linux-androideabi', 'x86': 'i686-linux-android']
 
 archsInfo.each { arch_name, target ->
