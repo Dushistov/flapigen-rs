@@ -14,18 +14,17 @@ mod java_generator;
 
 use std::path::PathBuf;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::Mutex;
+use std::cell::RefCell;
 
 use syntex::Registry;
-use syntex_syntax::ext::base::{ExtCtxt, MacResult, DummyResult};
+use syntex_syntax::ext::base::{ExtCtxt, MacResult, DummyResult, TTMacroExpander, MacEager};
 use syntex_syntax::parse::{token, parser};
 use syntex_syntax::tokenstream::TokenTree;
 use syntex_syntax::codemap::Span;
 use syntex_syntax::{parse, ast};
 use syntex_syntax::print::pprust;
 use syntex_syntax::ptr;
-use syntex_syntax::ext::base::TTMacroExpander;
+use syntex_syntax::util::small_vector::SmallVector;
 
 use parse_utils::*;
 use core::*;
@@ -33,10 +32,22 @@ use rust_generator::{generate_rust_code, RUST_OBJECT_TO_JOBJECT, RUST_VEC_TO_JAV
                      RUST_RESULT_TO_JAVA_OBJECT};
 use java_generator::generate_java_code;
 
-lazy_static! {
-    pub static ref COMMON_CODE_GENERATED: AtomicBool = AtomicBool::new(false);
-    static ref TYPE_HANDLERS: Mutex<Vec<TypeHandler>> = {
-        Mutex::new(vec![
+pub enum LanguageConfig {
+    Java {
+        output_dir: PathBuf,
+        package_name: String,
+    },
+}
+
+pub struct Generator {
+    config: LanguageConfig,
+    common_code_generated: RefCell<bool>,
+    type_handlers: RefCell<Vec<TypeHandler>>,
+}
+
+impl Generator {
+    pub fn new(cfg: LanguageConfig) -> Generator {
+        let type_handlers: Vec<TypeHandler> = vec![
             TypeHandler {
                 rust_type_name: "()".into(), jni_type_name: "", java_type_name: "void".into(),
                 from_jni_converter: None, to_jni_converter: None,
@@ -98,17 +109,17 @@ lazy_static! {
                 to_jni_converter: Some(ToForeignRetConverter(r#"
   let ret = ret as jlong;
 "#.into())),
-               },
-                TypeHandler {
-                    rust_type_name: "u64".into(), jni_type_name: "jlong",
-                    java_type_name: "long/*should be >= 0*/".into(),
-                    from_jni_converter: Some(FromForeignArgConverter(r#"
+            },
+            TypeHandler {
+                rust_type_name: "u64".into(), jni_type_name: "jlong",
+                java_type_name: "long/*should be >= 0*/".into(),
+                from_jni_converter: Some(FromForeignArgConverter(r#"
    if {arg_name} < 0 {
        panic!("Expect {arg_name} to be positive, got {}", {arg_name});
    }
    let {arg_name} = {arg_name} as u64;
 "#.into())),
-                    to_jni_converter: Some(ToForeignRetConverter(r#"
+                to_jni_converter: Some(ToForeignRetConverter(r#"
   let ret: i64 = if (::std::i64::MAX as u64) < ret {
                     error!("u64->jlong type overflow: {}", ret);
                     ::std::i64::MAX
@@ -135,7 +146,7 @@ lazy_static! {
   let {arg_name} = JavaString::new(env, {arg_name});
   let {arg_name} = {arg_name}.to_str();
 "#.into())),
-                        to_jni_converter: Some(ToForeignRetConverter(r#"
+                to_jni_converter: Some(ToForeignRetConverter(r#"
   let ret = ::std::ffi::CString::new(ret).unwrap();
   let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
 "#.into()))},
@@ -143,12 +154,12 @@ lazy_static! {
                 rust_type_name: "&Path".into(), jni_type_name: "jstring",
                 java_type_name: "String".into(),
                 from_jni_converter: Some(FromForeignArgConverter(
-                            r#"
+                    r#"
   let {arg_name} = JavaString::new(env, {arg_name});
   let {arg_name} = Path::new({arg_name}.to_str());
 "#.into()
-                        )),
-                        to_jni_converter: None},
+                )),
+                to_jni_converter: None},
             TypeHandler {
                 rust_type_name: "String".into(), jni_type_name: "jstring",
                 java_type_name: "String".into(),
@@ -158,7 +169,7 @@ lazy_static! {
   let ret = unsafe { ::std::ffi::CString::from_vec_unchecked(ret) };
   let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
 "#.into()
-                        ))},
+                ))},
             TypeHandler {
                 rust_type_name: "SystemTime".into(), jni_type_name: "jobject",
                 java_type_name: "java.util.Date".into(),
@@ -181,24 +192,13 @@ lazy_static! {
   assert!(!ret.is_null());
 "#.into())),
             },
-            ])
-    };
-}
+        ];
 
-pub enum LanguageConfig {
-    Java {
-        output_dir: PathBuf,
-        package_name: String,
-    },
-}
-
-pub struct Generator {
-    config: LanguageConfig,
-}
-
-impl Generator {
-    pub fn new(cfg: LanguageConfig) -> Generator {
-        Generator { config: cfg }
+        Generator {
+            config: cfg,
+            common_code_generated: RefCell::new(false),
+            type_handlers: RefCell::new(type_handlers),
+        }
     }
     pub fn register(self, registry: &mut Registry) {
         registry.add_macro("foreigner_class", self);
@@ -336,7 +336,7 @@ impl TTMacroExpander for Generator {
                              private: private_func,
                          });
         }
-        let mut type_handlers = TYPE_HANDLERS.lock().unwrap();
+        let mut type_handlers = self.type_handlers.borrow_mut();
 
         match &self.config {
             &LanguageConfig::Java {
@@ -378,7 +378,18 @@ impl TTMacroExpander for Generator {
                 }
 
                 generate_java_code(&rust_java_types_map, &class_info, &output_dir);
-                generate_rust_code(cx, &rust_java_types_map, &class_info)
+                let mut jni_methods = generate_rust_code(cx, &rust_java_types_map, &class_info);
+
+                if !*self.common_code_generated.borrow() {
+                    *self.common_code_generated.borrow_mut() = true;
+                    let jni_helpers = include_str!("jni_helpers.rs");
+                    let mut parser = parse::new_parser_from_source_str(cx.parse_sess,
+                                                                       "addon".to_string(),
+                                                                       jni_helpers.to_string());
+                    let mut my_crate = parser.parse_crate_mod().unwrap();
+                    jni_methods.append(&mut my_crate.module.items);
+                }
+                MacEager::items(SmallVector::many(jni_methods))
             }
         }
     }

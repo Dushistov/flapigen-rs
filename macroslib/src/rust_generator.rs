@@ -1,15 +1,12 @@
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
 use std::fmt::Write;
 
-use syntex_syntax::util::small_vector::SmallVector;
-use syntex_syntax::ext::base::{ExtCtxt, MacResult, MacEager};
-use syntex_syntax::{parse, ast};
+use syntex_syntax::ext::base::ExtCtxt;
+use syntex_syntax::{parse, ast, ptr};
 use syntex_syntax::print::pprust;
 
 use core::*;
 use jni::generate_func_name as jni_generate_func_name;
-use COMMON_CODE_GENERATED;
 
 pub static RUST_OBJECT_TO_JOBJECT: &'static str = r#"
   let class_id = ::std::ffi::CString::new("{full_class_name}").unwrap();
@@ -195,7 +192,7 @@ fn generate_rust_to_convert_this(constructor_ret_type: &str, rust_self_type: &st
 pub fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt,
                                rust_java_types_map: &RustToJavaTypes,
                                class_info: &ForeignerClassInfo)
-                               -> Box<MacResult> {
+                               -> Vec<ptr::P<ast::Item>> {
     let mut jni_methods = Vec::new();
     let constructor = class_info
         .methods
@@ -405,13 +402,5 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
                                  .unwrap());
     }
 
-    if !COMMON_CODE_GENERATED.swap(true, Ordering::SeqCst) {
-        let jni_helpers = include_str!("jni_helpers.rs");
-        let mut parser = parse::new_parser_from_source_str(cx.parse_sess,
-                                                           "addon".to_string(),
-                                                           jni_helpers.to_string());
-        let mut my_crate = parser.parse_crate_mod().unwrap();
-        jni_methods.append(&mut my_crate.module.items);
-    }
-    MacEager::items(SmallVector::many(jni_methods))
+    jni_methods
 }
