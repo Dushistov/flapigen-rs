@@ -134,17 +134,18 @@ fn main() {
                 &Path::new("src/android_c_headers.rs"))
             .unwrap();
     let mut registry = syntex::Registry::new();
-    let swig_gen = rust_swig::GeneratorBuilder::default()
-        .java_output_dir(Path::new("app")
-                             .join("src")
-                             .join("main")
-                             .join("java")
-                             .join("net")
-                             .join("akaame")
-                             .join("myapplication"))
-        .java_package_name("net.akaame.myapplication".into())
-        .build()
-        .unwrap();
+    let swig_gen =
+        rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
+            output_dir:
+            Path::new("app")
+                .join("src")
+                .join("main")
+                .join("java")
+                .join("net")
+                .join("akaame")
+                .join("myapplication"),
+            package_name: "net.akaame.myapplication".into(),
+        });
     swig_gen.register(&mut registry);
     let src = Path::new("src/java_glue.rs.in");
     let dst = Path::new(&env::var("OUT_DIR").unwrap()).join("java_glue.rs");

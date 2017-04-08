@@ -5,8 +5,6 @@ extern crate syntex_pos;
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate derive_builder;
 
 mod parse_utils;
 mod jni;
@@ -187,13 +185,21 @@ lazy_static! {
     };
 }
 
-#[derive(Builder)]
+pub enum LanguageConfig {
+    Java {
+        output_dir: PathBuf,
+        package_name: String,
+    },
+}
+
 pub struct Generator {
-    java_output_dir: PathBuf,
-    java_package_name: String,
+    config: LanguageConfig,
 }
 
 impl Generator {
+    pub fn new(cfg: LanguageConfig) -> Generator {
+        Generator { config: cfg }
+    }
     pub fn register(self, registry: &mut Registry) {
         registry.add_macro("foreigner_class", self);
     }
@@ -267,7 +273,8 @@ impl TTMacroExpander for Generator {
                 None => {
                     cx.span_err(parser.span,
                                 &format!("expect 'constructor' or 'method' or \
-                                          'static_method' here, got: {}", func_type_name));
+                                          'static_method' here, got: {}",
+                                         func_type_name));
                     return DummyResult::any(parser.span);
                 }
             };
@@ -331,40 +338,49 @@ impl TTMacroExpander for Generator {
         }
         let mut type_handlers = TYPE_HANDLERS.lock().unwrap();
 
-        let class_info = ForeignerClassInfo {
-            package_name: self.java_package_name.clone(),
-            class_name: &class_name_indent.name.as_str(),
-            methods: methods,
-            self_rust_type: rust_self_type,
-            constructor_ret_type: constructor_ret_type,
-            this_type_for_method: this_type_for_method,
-            foreigner_code: foreigner_code,
-        };
+        match &self.config {
+            &LanguageConfig::Java {
+                 ref output_dir,
+                 ref package_name,
+             } => {
+                let class_info = ForeignerClassInfo {
+                    package_name: package_name.clone(),
+                    class_name: &class_name_indent.name.as_str(),
+                    methods: methods,
+                    self_rust_type: rust_self_type,
+                    constructor_ret_type: constructor_ret_type,
+                    this_type_for_method: this_type_for_method,
+                    foreigner_code: foreigner_code,
+                };
 
-        if class_info.this_type_for_method.is_some() {
-            let mut class_th: TypeHandler = (&class_info).into();
-            let to_foreign = RUST_OBJECT_TO_JOBJECT
-                .replace("{full_class_name}", &class_info.full_java_class_name())
-                .replace("{rust_type_name}", &class_th.rust_type_name);
-            class_th.to_jni_converter = Some(ToForeignRetConverter(to_foreign.clone()));
-            type_handlers.push(class_th);
+                if class_info.this_type_for_method.is_some() {
+                    let mut class_th: TypeHandler = (&class_info).into();
+                    let to_foreign = RUST_OBJECT_TO_JOBJECT
+                        .replace("{full_class_name}", &class_info.full_java_class_name())
+                        .replace("{rust_type_name}", &class_th.rust_type_name);
+                    class_th.to_jni_converter = Some(ToForeignRetConverter(to_foreign.clone()));
+                    type_handlers.push(class_th);
 
-            let mut class_th: TypeHandler = (&class_info).into();
-            class_th.rust_type_name = format!("&{}", class_th.rust_type_name);
-            let to_foreign = format!("let ret = ret.clone();\n{}", to_foreign);
-            class_th.to_jni_converter = Some(ToForeignRetConverter(to_foreign));
-            type_handlers.push(class_th);
+                    let mut class_th: TypeHandler = (&class_info).into();
+                    class_th.rust_type_name = format!("&{}", class_th.rust_type_name);
+                    let to_foreign = format!("let ret = ret.clone();\n{}", to_foreign);
+                    class_th.to_jni_converter = Some(ToForeignRetConverter(to_foreign));
+                    type_handlers.push(class_th);
+                }
+
+                generate_type_info_for_generics(&mut type_handlers,
+                                                &class_info,
+                                                &class_info.package_name);
+
+                let mut rust_java_types_map = HashMap::new();
+                for it in type_handlers.iter() {
+                    rust_java_types_map.insert(it.rust_type_name.as_str(), &*it);
+                }
+
+                generate_java_code(&rust_java_types_map, &class_info, &output_dir);
+                generate_rust_code(cx, &rust_java_types_map, &class_info)
+            }
         }
-
-        generate_type_info_for_generics(&mut type_handlers, &class_info, &class_info.package_name);
-
-        let mut rust_java_types_map = HashMap::new();
-        for it in type_handlers.iter() {
-            rust_java_types_map.insert(it.rust_type_name.as_str(), &*it);
-        }
-
-        generate_java_code(&rust_java_types_map, &class_info, &self.java_output_dir);
-        generate_rust_code(cx, &rust_java_types_map, &class_info)
     }
 }
 
