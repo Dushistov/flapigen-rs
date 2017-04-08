@@ -205,13 +205,16 @@ impl TTMacroExpander for Generator {
                   _: Span,
                   tokens: &[TokenTree])
                   -> Box<MacResult + 'a> {
+        let class_keyword = ast::Ident::from_str("class");
+        let alias_keyword = ast::Ident::from_str("alias");
+        let private_keyword = ast::Ident::from_str("private");
+
         let mut parser = parse::new_parser_from_tts(cx.parse_sess, tokens.to_vec());
-        let class_ident = parser.parse_ident().unwrap();
-        if &*class_ident.name.as_str() != "class" {
-            debug!("class_indent {:?}", class_ident);
-            cx.span_err(parser.span, "expect class here");
+        if !parser.eat_contextual_keyword(class_keyword) {
+            cx.span_err(parser.span, "expect class keyword here");
             return DummyResult::any(parser.span);
         }
+
         let class_name_indent = parser.parse_ident().unwrap();
         debug!("CLASS NAME {:?}", class_name_indent);
         parser
@@ -222,8 +225,6 @@ impl TTMacroExpander for Generator {
             span: parser.span,
             segments: Vec::new(),
         };
-        let alias_keyword = ast::Ident::from_str("alias");
-        let private_keyword = ast::Ident::from_str("private");
         let mut constructor_ret_type: Option<ast::Ty> = None;
         let mut this_type_for_method: Option<ast::Ty> = None;
         let mut foreigner_code = String::new();
@@ -261,14 +262,15 @@ impl TTMacroExpander for Generator {
                 continue;
             }
 
-            let func_type = FuncVariant::from_str(&func_type_name.name.as_str());
-            if func_type.is_none() {
-                println!("unknown func type: {:?}", func_type_name);
-                cx.span_err(parser.span,
-                            "expect 'constructor' or 'method' or 'static_method' here");
-                return DummyResult::any(parser.span);
-            }
-            let func_type = func_type.unwrap();
+            let func_type = match FuncVariant::from_str(&func_type_name.name.as_str()) {
+                Some(x) => x,
+                None => {
+                    cx.span_err(parser.span,
+                                &format!("expect 'constructor' or 'method' or \
+                                          'static_method' here, got: {}", func_type_name));
+                    return DummyResult::any(parser.span);
+                }
+            };
             let func_name = parser.parse_path(parser::PathStyle::Mod).unwrap();
             debug!("func_name {:?}", func_name);
 
