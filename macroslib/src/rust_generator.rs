@@ -90,11 +90,9 @@ fn jni_func_args_for_decl(rust_java_types_map: &RustToJavaTypes,
             .skip(skip)
             .enumerate() {
         let type_name = pprust::ty_to_string(&*it.ty);
-        let type_name = rust_java_types_map
-            .get(type_name.as_str())
-            .unwrap()
-            .jni_type_name;
-        write!(&mut buf, "a_{}: {}, ", i, type_name).unwrap();
+        write!(&mut buf, "a_{}: {}, ", i, get_type_handler(rust_java_types_map,
+            type_name.as_str())
+            .jni_type_name).unwrap();
     }
     buf
 }
@@ -126,7 +124,7 @@ fn jni_result_type(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMeth
     match &method.in_out_type.output {
         &ast::FunctionRetTy::Default(_) => String::new(),
         &ast::FunctionRetTy::Ty(ref ret_type) => {
-            let jni_type_name = get_type_handler(rust_java_types_map,
+            let jni_type_name = &get_type_handler(rust_java_types_map,
                                                  pprust::ty_to_string(&*ret_type).as_str())
                     .jni_type_name;
             if jni_type_name.is_empty() {

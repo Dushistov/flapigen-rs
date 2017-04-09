@@ -12,6 +12,8 @@ mod core;
 mod rust_generator;
 mod java_generator;
 
+use std::mem;
+use std::rc::Rc;
 use std::path::PathBuf;
 use std::collections::HashMap;
 use std::cell::RefCell;
@@ -20,7 +22,7 @@ use syntex::Registry;
 use syntex_syntax::ext::base::{ExtCtxt, MacResult, DummyResult, TTMacroExpander, MacEager};
 use syntex_syntax::parse::{token, parser};
 use syntex_syntax::tokenstream::TokenTree;
-use syntex_syntax::codemap::Span;
+use syntex_syntax::codemap::{Span, Spanned};
 use syntex_syntax::{parse, ast};
 use syntex_syntax::print::pprust;
 use syntex_syntax::ptr;
@@ -49,109 +51,13 @@ impl Generator {
     pub fn new(cfg: LanguageConfig) -> Generator {
         let type_handlers: Vec<TypeHandler> = vec![
             TypeHandler {
-                rust_type_name: "()".into(), jni_type_name: "", java_type_name: "void".into(),
+                rust_type_name: "()".into(), jni_type_name: "".into(),
+                java_type_name: "void".into(),
                 from_jni_converter: None, to_jni_converter: None,
             },
+
             TypeHandler {
-                rust_type_name: "bool".into(), jni_type_name: "jboolean",
-                java_type_name: "boolean".into(),
-                from_jni_converter: Some(FromForeignArgConverter(
-                    "let {arg_name} = {arg_name} != 0;".into())),
-                to_jni_converter: Some(ToForeignRetConverter(
-                    "let ret = if ret { 1 as jboolean } else { 0 as jboolean };"
-                        .into()))
-            },
-            TypeHandler {
-                rust_type_name: "u8".into(), jni_type_name: "jshort",
-                java_type_name: "short/*should be from 0 to 2^8-1*/".into(),
-                from_jni_converter: Some(FromForeignArgConverter(r#"
-   if {arg_name} < 0 || {arg_name} > (::std::u8::MAX as jshort) {
-       panic!("Expect {arg_name} from 0 to {}, got {}", ::std::u8::MAX, {arg_name});
-   }
-   let {arg_name} = {arg_name} as u8;
-"#.into())),
-                to_jni_converter: Some(ToForeignRetConverter("let ret = ret as jshort;".into())),
-            },
-            TypeHandler {
-                rust_type_name: "i8".into(), jni_type_name: "jbyte", java_type_name: "byte".into(),
-                from_jni_converter: None, to_jni_converter: None,
-            },
-            TypeHandler {
-                rust_type_name: "u16".into(), jni_type_name: "jint",
-                java_type_name: "int/*should be from 0 to 2^16-1*/".into(),
-                from_jni_converter: Some(FromForeignArgConverter(r#"
-   if {arg_name} < 0 || {arg_name} > (::std::u16::MAX as jint) {
-       panic!("Expect {arg_name} from 0 to {}, got {}", ::std::u16::MAX, {arg_name});
-   }
-   let {arg_name} = {arg_name} as u16;
-"#.into())),
-                to_jni_converter: Some(ToForeignRetConverter(r#"
-  let ret = ret as jint;
-"#.into())),
-            },
-            TypeHandler {
-                rust_type_name: "i16".into(), jni_type_name: "jshort",
-                java_type_name: "short".into(),
-                from_jni_converter: None, to_jni_converter: None,
-            },
-            TypeHandler{rust_type_name: "i32".into(), jni_type_name: "jint",
-                        java_type_name: "int".into(),
-                        from_jni_converter: None, to_jni_converter: None},
-            TypeHandler {
-                rust_type_name: "u32".into(), jni_type_name: "jlong",
-                java_type_name: "long/*should be from 0 to 2^32-1*/".into(),
-                from_jni_converter: Some(FromForeignArgConverter(r#"
-   if {arg_name} < 0 || {arg_name} > (::std::u32::MAX as jlong) {
-       panic!("Expect {arg_name} from 0 to {}, got {}", ::std::u32::MAX, {arg_name});
-   }
-   let {arg_name} = {arg_name} as u32;
-"#.into())),
-                to_jni_converter: Some(ToForeignRetConverter(r#"
-  let ret = ret as jlong;
-"#.into())),
-            },
-            TypeHandler {
-                rust_type_name: "u64".into(), jni_type_name: "jlong",
-                java_type_name: "long/*should be >= 0*/".into(),
-                from_jni_converter: Some(FromForeignArgConverter(r#"
-   if {arg_name} < 0 {
-       panic!("Expect {arg_name} to be positive, got {}", {arg_name});
-   }
-   let {arg_name} = {arg_name} as u64;
-"#.into())),
-                to_jni_converter: Some(ToForeignRetConverter(r#"
-  let ret: i64 = if (::std::i64::MAX as u64) < ret {
-                    error!("u64->jlong type overflow: {}", ret);
-                    ::std::i64::MAX
-                 } else { ret as i64 };
-"#.into())),
-            },
-            TypeHandler {
-                rust_type_name: "i64".into(), jni_type_name: "jlong",
-                java_type_name: "long".into(),
-                from_jni_converter: None, to_jni_converter: None,
-            },
-            TypeHandler {
-                rust_type_name: "f32".into(), jni_type_name: "jfloat",
-                java_type_name: "float".into(),
-                from_jni_converter: None, to_jni_converter: None},
-            TypeHandler {
-                rust_type_name: "f64".into(), jni_type_name: "jdouble",
-                java_type_name: "double".into(),
-                from_jni_converter: None, to_jni_converter: None},
-            TypeHandler {
-                rust_type_name: "&str".into(), jni_type_name: "jstring",
-                java_type_name: "String".into(),
-                from_jni_converter: Some(FromForeignArgConverter(r#"
-  let {arg_name} = JavaString::new(env, {arg_name});
-  let {arg_name} = {arg_name}.to_str();
-"#.into())),
-                to_jni_converter: Some(ToForeignRetConverter(r#"
-  let ret = ::std::ffi::CString::new(ret).unwrap();
-  let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
-"#.into()))},
-            TypeHandler {
-                rust_type_name: "&Path".into(), jni_type_name: "jstring",
+                rust_type_name: "&Path".into(), jni_type_name: "jstring".into(),
                 java_type_name: "String".into(),
                 from_jni_converter: Some(FromForeignArgConverter(
                     r#"
@@ -159,38 +65,7 @@ impl Generator {
   let {arg_name} = Path::new({arg_name}.to_str());
 "#.into()
                 )),
-                to_jni_converter: None},
-            TypeHandler {
-                rust_type_name: "String".into(), jni_type_name: "jstring",
-                java_type_name: "String".into(),
-                from_jni_converter: None,
-                to_jni_converter: Some(ToForeignRetConverter(r#"
-  let ret = ret.into_bytes();
-  let ret = unsafe { ::std::ffi::CString::from_vec_unchecked(ret) };
-  let ret = unsafe { (**env).NewStringUTF.unwrap()(env, ret.as_ptr()) };
-"#.into()
-                ))},
-            TypeHandler {
-                rust_type_name: "SystemTime".into(), jni_type_name: "jobject",
-                java_type_name: "java.util.Date".into(),
-                from_jni_converter: None,
-                to_jni_converter: Some(ToForeignRetConverter(r#"
-  let since_unix_epoch = ret.duration_since(::std::time::UNIX_EPOCH).unwrap();
-  let mills: jlong = (since_unix_epoch.as_secs() * 1_000 +
-      (since_unix_epoch.subsec_nanos() / 1_000_000) as u64) as jlong;
-  let class_name_c = ::std::ffi::CString::new("java/util/Date").unwrap();
-  let date_class: jclass = unsafe { (**env).FindClass.unwrap()(env, class_name_c.as_ptr()) };
-  assert!(!date_class.is_null());
-  let init_name_c = ::std::ffi::CString::new("<init>").unwrap();
-  let method_args_c = ::std::ffi::CString::new("(J)V").unwrap();
-  let init: jmethodID = unsafe {
-      (**env).GetMethodID.unwrap()(env, date_class, init_name_c.as_ptr(),
-                                    method_args_c.as_ptr())
-  };
-  assert!(!init.is_null());
-  let ret = unsafe { (**env).NewObject.unwrap()(env, date_class, init, mills) };
-  assert!(!ret.is_null());
-"#.into())),
+                to_jni_converter: None,
             },
         ];
 
@@ -336,6 +211,21 @@ impl TTMacroExpander for Generator {
                              private: private_func,
                          });
         }
+
+        let mut gen_methods = Vec::new();
+        if !*self.common_code_generated.borrow() {
+            *self.common_code_generated.borrow_mut() = true;
+            let mut type_handlers = parse_types_map(cx);
+            self.type_handlers.borrow_mut().append(&mut type_handlers);
+            {
+                let jni_helpers = include_str!("jni_helpers.rs");
+                let mut parser = parse::new_parser_from_source_str(cx.parse_sess,
+                                                                   "jni_helpers".to_string(),
+                                                                   jni_helpers.to_string());
+                let mut my_crate = parser.parse_crate_mod().unwrap();
+                gen_methods.append(&mut my_crate.module.items);
+            }
+        }
         let mut type_handlers = self.type_handlers.borrow_mut();
 
         match &self.config {
@@ -372,27 +262,49 @@ impl TTMacroExpander for Generator {
                                                 &class_info,
                                                 &class_info.package_name);
 
-                let mut rust_java_types_map = HashMap::new();
-                for it in type_handlers.iter() {
-                    rust_java_types_map.insert(it.rust_type_name.as_str(), &*it);
+                let mut jni_methods = {
+                    let mut rust_java_types_map = HashMap::new();
+
+                    for it in type_handlers.iter() {
+                        rust_java_types_map.insert(it.rust_type_name.as_str(), &*it);
+                    }
+
+                    generate_java_code(&rust_java_types_map, &class_info, &output_dir);
+                    generate_rust_code(cx, &rust_java_types_map, &class_info)
+                };
+                gen_methods.append(&mut jni_methods);
+                for item in type_handlers.iter_mut() {
+                    if let Some(ref mut fromc) = item.from_jni_converter {
+                        for dep in &fromc.depends {
+                            if dep.borrow().used {
+                                dep.borrow_mut().item.take().map(|v| {
+                                    gen_methods.push(v);
+                                });
+                            }
+                        }
+                    }
+                    if let Some(ref mut toc) = item.to_jni_converter {
+                        for dep in &toc.depends {
+                            if dep.borrow().used {
+                                dep.borrow_mut().item.take().map(|v| {
+                                    gen_methods.push(v);
+                                });
+                            }
+                        }                        
+                    }
                 }
 
-                generate_java_code(&rust_java_types_map, &class_info, &output_dir);
-                let mut jni_methods = generate_rust_code(cx, &rust_java_types_map, &class_info);
-
-                if !*self.common_code_generated.borrow() {
-                    *self.common_code_generated.borrow_mut() = true;
-                    let jni_helpers = include_str!("jni_helpers.rs");
-                    let mut parser = parse::new_parser_from_source_str(cx.parse_sess,
-                                                                       "addon".to_string(),
-                                                                       jni_helpers.to_string());
-                    let mut my_crate = parser.parse_crate_mod().unwrap();
-                    jni_methods.append(&mut my_crate.module.items);
-                }
-                MacEager::items(SmallVector::many(jni_methods))
+                MacEager::items(SmallVector::many(gen_methods))
             }
         }
     }
+}
+
+fn path_match(path: &ast::Path, type_name: &str) -> bool {
+    path.segments
+        .last()
+        .map(|v| &*v.identifier.name.as_str() == type_name)
+        .unwrap_or(false)
 }
 
 fn is_type_name(ty: &ast::Ty, type_name: &str) -> bool {
@@ -401,13 +313,48 @@ fn is_type_name(ty: &ast::Ty, type_name: &str) -> bool {
             debug!("is_type_name_result: path: {:?}, ident {:?}",
                    path.segments,
                    path.segments[0].identifier.name.as_str());
-            path.segments
-                .first()
-                .map(|v| &*v.identifier.name.as_str() == type_name)
-                .unwrap_or(false)
+            path_match(path, type_name)
         }
         _ => false,
     }
+}
+
+fn unpack_first_associated_type(items: &[ast::ImplItem], type_name: &str) -> Option<ast::Ty> {
+    for item in items {
+        let name: &str = &(item.ident.name.as_str());
+        if name == type_name {
+            if let ast::ImplItemKind::Type(ref ty) = item.node {
+                return Some((**ty).clone());
+            }
+        }
+    }
+    None
+}
+
+fn path_unpack_genearic_first_parameter(path: &ast::Path, generic_name: &str) -> Option<ast::Ty> {
+    path.segments
+        .first()
+        .map(|ps: &ast::PathSegment| if &*ps.identifier.name.as_str() == generic_name {
+            ps.parameters
+                .as_ref()
+                .map(|p: &ptr::P<ast::PathParameters>| {
+                    if let ast::PathParameters::AngleBracketed(ref params) = **p {
+                        params
+                            .types
+                            .first()
+                            .map(|v: &ptr::P<ast::Ty>| {
+                                debug!("unpack_generic_first_paramter: result param {:?}",
+                                       *v);
+                                (**v).clone()
+                            })
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(None)
+        } else {
+            None
+        }).unwrap_or(None)
 }
 
 fn unpack_generic_first_paramter(ty: &ast::Ty, generic_name: &str) -> ast::Ty {
@@ -416,30 +363,7 @@ fn unpack_generic_first_paramter(ty: &ast::Ty, generic_name: &str) -> ast::Ty {
             debug!("unpack_generic_first_paramter: path: {:?}, ident {:?}",
                    path.segments,
                    path.segments[0].identifier.name.as_str());
-            path.segments
-                .first()
-                .map(|ps: &ast::PathSegment| if &*ps.identifier.name.as_str() == generic_name {
-                         ps.parameters
-                             .as_ref()
-                             .map(|p: &ptr::P<ast::PathParameters>| {
-                        if let ast::PathParameters::AngleBracketed(ref params) = **p {
-                            params
-                                .types
-                                .first()
-                                .map(|v: &ptr::P<ast::Ty>| {
-                                         debug!("unpack_generic_first_paramter: result param {:?}",
-                                                *v);
-                                         (**v).clone()
-                                     })
-                                .unwrap_or(ty.clone())
-                        } else {
-                            ty.clone()
-                        }
-                    })
-                             .unwrap_or(ty.clone())
-                     } else {
-                         ty.clone()
-                     })
+            path_unpack_genearic_first_parameter(path, generic_name)
                 .unwrap_or(ty.clone())
         }
         _ => ty.clone(),
@@ -483,7 +407,7 @@ fn generate_type_info_for_type(type_handlers: &mut Vec<TypeHandler>,
         let elem_java_type_name = type_handlers[elem_type_index].java_type_name.clone();
         type_handlers.push(TypeHandler {
             rust_type_name: rust_type_name,
-            jni_type_name: "jobjectArray",
+            jni_type_name: "jobjectArray".into(),
             java_type_name: java_type_name,
             from_jni_converter: None,
             to_jni_converter: Some(ToForeignRetConverter(
@@ -505,7 +429,7 @@ fn generate_type_info_for_type(type_handlers: &mut Vec<TypeHandler>,
                     .replace("{default_value}",
                              get_default_value_for_rust_type(&in_th.rust_type_name))
                     +
-                    in_th.to_jni_converter.as_ref().map_or("", |v| v.0.as_str())
+                    in_th.to_jni_converter.as_ref().map_or("", |v| v.apply())
             )),
         });
     }
@@ -536,6 +460,151 @@ fn generate_type_info_for_generics(type_handlers: &mut Vec<TypeHandler>,
             &ast::FunctionRetTy::Default(_) => {}
         }
     }
+}
+
+fn deref_type_name(type_name: &str) -> Option<&str> {
+    type_name.chars().rev().position(|x| x.is_whitespace() || x == '&')
+        .map(|pos| &type_name[type_name.len() - pos..])
+}
+
+fn type_name_is_deref_of(type_name: &str, basic_type: &str) -> bool {
+    deref_type_name(type_name) == Some(basic_type)
+}
+
+fn parse_types_map(cx: &mut ExtCtxt) -> Vec<TypeHandler> {
+    let jni_types_map = include_str!("jni_types_map.rs");
+    let mut parser = parse::new_parser_from_source_str(cx.parse_sess,
+                                                       "jni_types_map".into(),
+                                                       jni_types_map.into());
+    let mut my_crate = parser.parse_crate_mod().unwrap();
+    let mut type_handlers = Vec::new();
+
+    for mut item in my_crate.module.items.iter_mut() {
+
+        let mut foreigner_type = None;
+
+        for (idx, it) in item.attrs.iter().enumerate() {
+            let attr_name: &str = &it.value.name.as_str();
+            if attr_name != "foreigner_type" {
+                continue;
+            }
+            if let ast::MetaItemKind::NameValue(Spanned {
+                                                    node: ast::LitKind::Str(lit, _),
+                                                    span: _,
+                                                }) = it.value.node {
+                foreigner_type = Some((idx, lit.as_str().to_string()));
+                break;
+            }
+        }
+
+        let (foreigner_type_idx, foreigner_type) = match foreigner_type {
+            Some((x, y)) => (x, y),
+            None => {
+                debug!("{:?}", *item);
+                if let ast::ItemKind::Impl(ast::Unsafety::Normal,
+                                           ast::ImplPolarity::Positive,
+                                           _,
+                                           Some(ref trait_type),
+                                           ref for_type,
+                                           ref impl_items) = item.node {
+                    if path_match(&trait_type.path, "Deref") {
+                        let target = unpack_first_associated_type(impl_items, "Target")
+                            .expect("Can not get Target for Deref");
+                        debug!("target {:?}, for_type {:?}", target, for_type);
+                        let deref_target = pprust::ty_to_string(&target);
+                        let th_pos_main = type_handlers.iter().position(|v: &TypeHandler|
+                            type_name_is_deref_of(&v.rust_type_name, &deref_target)
+                        ).expect("Can not find Deref(main) match type in type map");
+                        let for_typename = pprust::ty_to_string(&for_type);
+                        let th_pos_inter = type_handlers.iter().position(|v: &TypeHandler| {
+                            v.rust_type_name == for_typename
+                        }).expect("Can not find Deref(inter) match type in type map");
+                        let mut depends = vec![Rc::new(RefCell::new(Converter::new(item.clone())))];
+                        type_handlers[th_pos_inter].from_jni_converter
+                            .as_ref()
+                            .map(|x| {
+                                for dep in &x.depends {
+                                    depends.push(dep.clone());
+                                }
+                            });
+                        type_handlers[th_pos_main].from_jni_converter =
+                            Some(FromForeignArgConverter {
+                                code: format!(r#"
+    let {{arg_name}}: {} = {{arg_name}}.swig_into(env);
+    let {{arg_name}} = &{{arg_name}};
+"#, for_typename),
+                                depends: depends,
+                            });
+                    } else {
+                        panic!("Internal Error: unknown trait in type maps {:?}, segs {:?}",
+                               trait_type.path, trait_type.path.segments);
+                    }
+                }
+                continue;
+            }
+        };
+
+        let mut new_item = item.clone()
+            .map(|mut v| {
+                     v.attrs.remove(foreigner_type_idx);
+                     v
+                 });
+        mem::swap(&mut *item, &mut new_item);
+
+        if let ast::ItemKind::Impl(ast::Unsafety::Normal,
+                                   ast::ImplPolarity::Positive,
+                                   _,
+                                   Some(ref trait_type),
+                                   ref for_type,
+                                   _) = item.node {
+            let is_into = path_match(&trait_type.path, "SwigInto");
+            let is_from = path_match(&trait_type.path, "SwigFrom");
+            if is_into || is_from {
+                let rust_type =
+                    path_unpack_genearic_first_parameter(&trait_type.path,
+                                                         if is_into { "SwigInto" }
+                                                         else { "SwigFrom" })
+                    .unwrap();
+                debug!("java type: {:?}, jni type: {:?}, rust_type {:?}",
+                         foreigner_type, for_type, rust_type);
+                let rust_type_name = pprust::ty_to_string(&rust_type);
+                let th_pos = type_handlers.iter().position(|v: &TypeHandler|
+                                                           v.rust_type_name == rust_type_name);
+                let th_pos = if let Some(th_pos) = th_pos {
+                    th_pos
+                } else {
+                    type_handlers.push(TypeHandler {
+                        rust_type_name: rust_type_name,
+                        jni_type_name: pprust::ty_to_string(for_type),
+                        java_type_name: foreigner_type,
+                        from_jni_converter: None,
+                        to_jni_converter: None,
+                    });
+                    type_handlers.len() - 1
+                };
+                if is_into {
+                    type_handlers[th_pos].from_jni_converter =
+                        Some(FromForeignArgConverter {
+                            code: "let {arg_name} = {arg_name}.swig_into(env);".into(),
+                            depends: vec![Rc::new(RefCell::new(Converter::new(item.clone())))],
+                        });
+                } else if is_from {
+                    type_handlers[th_pos].to_jni_converter =
+                        Some(ToForeignRetConverter {
+                            code: format!("let ret = {}::swig_from(ret, env);",
+                                          type_handlers[th_pos].jni_type_name),
+                            depends: vec![Rc::new(RefCell::new(Converter::new(item.clone())))],
+                        });
+                }
+            } else {
+                panic!("Internal Error: Unknown trait in types map");
+            }
+        } else {
+            panic!("Internal Error: Wrong trait in types map");
+        }
+    }
+
+    type_handlers
 }
 
 #[cfg(test)]
@@ -581,5 +650,14 @@ mod tests {
             parse::new_parser_from_source_str(&session, "test_alias".into(), "alias Foo;".into());
         let alias_keyword = ast::Ident::from_str("alias");
         assert!(parser.eat_contextual_keyword(alias_keyword));
+    }
+
+    #[test]
+    fn test_type_name_is_deref_of() {
+        assert!(type_name_is_deref_of("&str", "str"));
+        assert!(type_name_is_deref_of("&'a str", "str"));
+        assert!(!type_name_is_deref_of("String", "str"));
+        assert!(!type_name_is_deref_of("& i32", "str"));
+        assert!(!type_name_is_deref_of("&i32", "str"));
     }
 }

@@ -60,3 +60,13 @@ fn jni_throw(env: *mut JNIEnv, class_name: &'static str, message: &str) {
 fn jni_throw_exception(env: *mut JNIEnv, message: &str) {
     jni_throw(env, "java/lang/Exception", message)
 }
+
+#[allow(dead_code)]
+trait SwigInto<T> {
+    fn swig_into(self, env: *mut JNIEnv) -> T;
+}
+
+#[allow(dead_code)]
+trait SwigFrom<T> {
+    fn swig_from(T, env: *mut JNIEnv) -> Self;
+}
