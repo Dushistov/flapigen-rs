@@ -92,11 +92,11 @@ fn main() {
             .expect("generate binding for c failed");
 
     let mut registry = syntex::Registry::new();
-    let swig_gen = rust_swig::GeneratorBuilder::default()
-        .java_output_dir(Path::new("src").join("com").join("example"))
-        .java_package_name("com.example".into())
-        .build()
-        .unwrap();
+    let swig_gen = rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
+                                                 output_dir:
+                                                     Path::new("src").join("com").join("example"),
+                                                 package_name: "com.example".into(),
+                                             });
     swig_gen.register(&mut registry);
     let src = Path::new("src/lib.rs.in");
     let dst = Path::new(&env::var("OUT_DIR").unwrap()).join("lib.rs");

@@ -1,15 +1,12 @@
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
 use std::fmt::Write;
 
-use syntex_syntax::util::small_vector::SmallVector;
-use syntex_syntax::ext::base::{ExtCtxt, MacResult, MacEager};
-use syntex_syntax::{parse, ast};
+use syntex_syntax::ext::base::ExtCtxt;
+use syntex_syntax::{parse, ast, ptr};
 use syntex_syntax::print::pprust;
 
 use core::*;
 use jni::generate_func_name as jni_generate_func_name;
-use COMMON_CODE_GENERATED;
 
 pub static RUST_OBJECT_TO_JOBJECT: &'static str = r#"
   let class_id = ::std::ffi::CString::new("{full_class_name}").unwrap();
@@ -93,11 +90,9 @@ fn jni_func_args_for_decl(rust_java_types_map: &RustToJavaTypes,
             .skip(skip)
             .enumerate() {
         let type_name = pprust::ty_to_string(&*it.ty);
-        let type_name = rust_java_types_map
-            .get(type_name.as_str())
-            .unwrap()
-            .jni_type_name;
-        write!(&mut buf, "a_{}: {}, ", i, type_name).unwrap();
+        write!(&mut buf, "a_{}: {}, ", i, get_type_handler(rust_java_types_map,
+            type_name.as_str())
+            .jni_type_name).unwrap();
     }
     buf
 }
@@ -129,7 +124,7 @@ fn jni_result_type(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMeth
     match &method.in_out_type.output {
         &ast::FunctionRetTy::Default(_) => String::new(),
         &ast::FunctionRetTy::Ty(ref ret_type) => {
-            let jni_type_name = get_type_handler(rust_java_types_map,
+            let jni_type_name = &get_type_handler(rust_java_types_map,
                                                  pprust::ty_to_string(&*ret_type).as_str())
                     .jni_type_name;
             if jni_type_name.is_empty() {
@@ -195,7 +190,7 @@ fn generate_rust_to_convert_this(constructor_ret_type: &str, rust_self_type: &st
 pub fn generate_rust_code<'cx>(cx: &'cx mut ExtCtxt,
                                rust_java_types_map: &RustToJavaTypes,
                                class_info: &ForeignerClassInfo)
-                               -> Box<MacResult> {
+                               -> Vec<ptr::P<ast::Item>> {
     let mut jni_methods = Vec::new();
     let constructor = class_info
         .methods
@@ -405,76 +400,5 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
                                  .unwrap());
     }
 
-    if !COMMON_CODE_GENERATED.swap(true, Ordering::SeqCst) {
-        let mut parser = parse::new_parser_from_source_str(cx.parse_sess,
-                                                           "addon".to_string(),
-                                                           r#"
-#[cfg(target_pointer_width = "32")]
-unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    ::std::mem::transmute::<u32, *mut T>(val as u32)
-}
-
-#[cfg(target_pointer_width = "64")]
-unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    ::std::mem::transmute::<jlong, *mut T>(val)
-}
-
-#[allow(dead_code)]
-struct JavaString {
-    string: jstring,
-    chars: *const ::std::os::raw::c_char,
-    env: *mut JNIEnv
-}
-#[allow(dead_code)]
-impl JavaString {
-    fn new(env: *mut JNIEnv, js: jstring) -> JavaString {
-        let chars = unsafe { (**env).GetStringUTFChars.unwrap()(env, js, ::std::ptr::null_mut()) };
-        JavaString{string: js, chars: chars, env: env}
-    }
-    fn to_str(&self) -> &str {
-        let s = unsafe { ::std::ffi::CStr::from_ptr(self.chars) };
-        s.to_str().unwrap()
-    }
-}
-
-#[allow(dead_code)]
-impl Drop for JavaString {
-    fn drop(&mut self) {
-        assert!(self.env != ::std::ptr::null_mut() && self.chars != ::std::ptr::null_mut());
-        unsafe { (**self.env).ReleaseStringUTFChars.unwrap()(self.env, self.string, self.chars) };
-        self.env = ::std::ptr::null_mut();
-        self.chars = ::std::ptr::null_mut();
-    }
-}
-
-#[allow(dead_code)]
-fn jni_throw(env: *mut JNIEnv, class_name: &'static str, message: &str) {
-    let class_name_c = ::std::ffi::CString::new(class_name).unwrap();
-
-    let ex_class = unsafe {
-        (**env).FindClass.unwrap()(env, class_name_c.as_ptr())
-    };
-    if ex_class.is_null() {
-        error!("throw_exception: can not find exp class {}, msg {}", class_name, message);
-        return;
-    }
-    let c_message = ::std::ffi::CString::new(message).unwrap();
-    let res = unsafe {
-        (**env).ThrowNew.unwrap()(env, ex_class, c_message.as_ptr())
-    };
-    if res != 0 {
-        error!("ThrowNew({}) for class {} failed", message, class_name);
-    }
-}
-
-#[allow(dead_code)]
-fn jni_throw_exception(env: *mut JNIEnv, message: &str) {
-    jni_throw(env, "java/lang/Exception", message)
-}
-"#
-                                                                   .to_string());
-        let mut my_crate = parser.parse_crate_mod().unwrap();
-        jni_methods.append(&mut my_crate.module.items);
-    }
-    MacEager::items(SmallVector::many(jni_methods))
+    jni_methods
 }

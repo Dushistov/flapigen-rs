@@ -14,7 +14,6 @@ syntex_syntax = "0.54.0"
 syntex_pos = "0.54.0"
 lazy_static = "0.2.2"
 log = "0.3"
-derive_builder = "0.4.0"
 
 [badges]
 travis-ci = { repository = "Dushistov/rust_swig" }
