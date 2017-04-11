@@ -293,3 +293,20 @@ pub fn Java_com_example_TestInner_getInner(env: *mut JNIEnv, _: jclass) -> jobje
     }
     ret
 }
+
+struct Xyz;
+
+impl Xyz {
+    fn zero() -> Xyz {
+        Xyz
+    }
+    fn new(_: f64, _: f64, _: f64) -> Xyz {
+        Xyz
+    }
+}
+
+
+foreigner_class!(class Xyz {
+    constructor Xyz::zero() -> Xyz;
+    constructor Xyz::new(_: f64, _: f64, _: f64) -> Xyz;
+});

@@ -8,8 +8,14 @@ import com.example.Foo;
 import com.example.Boo;
 import com.example.TestPathAndResult;
 import com.example.TestInner;
+import com.example.Xyz;
 
 class Main {
+    private static void testDoubleOverload() {
+        new Xyz();
+        new Xyz(1., 2., 3.);
+    }
+
     public static void main(String[] args) {
         try {
             System.loadLibrary("rust_swig_test_jni");
@@ -99,6 +105,8 @@ class Main {
         assert Boo.test_i64((long) -1) == (long) 0;
         assert Math.abs(Boo.test_f32((float) 1.1) - (float) 2.1) < 1e-12;
         assert Math.abs(Boo.test_f64((double) -1.0)) < 1e-12;
+
+        testDoubleOverload();
 
         System.out.println("ALL tests PASSED");
     }
