@@ -187,49 +187,7 @@ impl ForeignerMethod {
         }
         res
     }
-
-    pub fn args_with_java_types(&self,
-                                use_comma_if_need: bool,
-                                types_map: &RustToJavaTypes)
-                                -> String {
-        let skip_n = if self.func_type == FuncVariant::Method {
-            1
-        } else {
-            0
-        };
-        let mut res = String::new();
-        if use_comma_if_need && skip_n < self.in_out_type.inputs.len() {
-            write!(&mut res, ", ").unwrap();
-        }
-        for (i, item_arg) in self.in_out_type
-                .inputs
-                .iter()
-                .skip(skip_n)
-                .enumerate() {
-            let type_name = &get_type_handler(types_map,
-                                              pprust::ty_to_string(&*item_arg.ty).as_str())
-                                     .java_type_name;
-            if i == (self.in_out_type.inputs.len() - 1 - skip_n) {
-                    write!(&mut res, "{} a_{}", type_name, i)
-                } else {
-                    write!(&mut res, "{} a_{}, ", type_name, i)
-                }
-                .unwrap();
-        }
-        res
-    }
-
-    pub fn java_return_type<'a>(&self, types_map: &'a RustToJavaTypes) -> &'a str {
-        match &self.in_out_type.output {
-            &ast::FunctionRetTy::Default(_) => "void",
-            &ast::FunctionRetTy::Ty(ref ret_type) => {
-                get_type_handler(types_map, pprust::ty_to_string(&*ret_type).as_str())
-                    .java_type_name
-                    .as_str()
-            }
-        }
-    }
-
+    
     pub fn short_name(&self) -> InternedString {
         if let Some(ref name) = self.name_alias {
             name.clone()

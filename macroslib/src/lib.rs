@@ -211,8 +211,9 @@ impl TTMacroExpander for Generator {
 
         let mut gen_methods = Vec::new();
         if !*self.common_code_generated.borrow() {
+            let jni_types_map_code = include_str!("jni_types_map.rs");
             *self.common_code_generated.borrow_mut() = true;
-            let mut type_handlers = parse_types_map(cx);
+            let mut type_handlers = parse_types_map(cx, jni_types_map_code);
             self.type_handlers.borrow_mut().append(&mut type_handlers);
             {
                 let jni_helpers = include_str!("jni_helpers.rs");

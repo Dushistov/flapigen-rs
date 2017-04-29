@@ -11,11 +11,10 @@ use core::{TypeHandler, FromForeignArgConverter, Converter, ToForeignRetConverte
 use {unpack_first_associated_type, path_match, type_name_is_deref_of,
      path_unpack_genearic_first_parameter};
 
-pub fn parse_types_map(cx: &mut ExtCtxt) -> Vec<TypeHandler> {
-    let jni_types_map = include_str!("jni_types_map.rs");
+pub fn parse_types_map(cx: &mut ExtCtxt, jni_types_map_code: &str) -> Vec<TypeHandler> {
     let mut parser = parse::new_parser_from_source_str(cx.parse_sess,
                                                        "jni_types_map".into(),
-                                                       jni_types_map.into());
+                                                       jni_types_map_code.into());
     let mut my_crate = parser.parse_crate_mod().unwrap();
     let mut type_handlers = Vec::new();
 

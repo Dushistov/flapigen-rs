@@ -153,9 +153,11 @@ fn jni_func_args_for_decl(rust_java_types_map: &RustToJavaTypes,
             .skip(skip)
             .enumerate() {
         let type_name = pprust::ty_to_string(&*it.ty);
-        write!(&mut buf, "a_{}: {}, ", i, get_type_handler(rust_java_types_map,
-            type_name.as_str())
-            .jni_type_name).unwrap();
+        write!(&mut buf,
+               "a_{}: {}, ",
+               i,
+               get_type_handler(rust_java_types_map, type_name.as_str()).jni_type_name)
+                .unwrap();
     }
     buf
 }
@@ -188,8 +190,8 @@ fn jni_result_type(rust_java_types_map: &RustToJavaTypes, method: &ForeignerMeth
         &ast::FunctionRetTy::Default(_) => String::new(),
         &ast::FunctionRetTy::Ty(ref ret_type) => {
             let jni_type_name = &get_type_handler(rust_java_types_map,
-                                                 pprust::ty_to_string(&*ret_type).as_str())
-                    .jni_type_name;
+                                                  pprust::ty_to_string(&*ret_type).as_str())
+                                         .jni_type_name;
             if jni_type_name.is_empty() {
                 String::new()
             } else {
@@ -466,11 +468,54 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
     jni_methods
 }
 
+fn args_with_java_types(method: &ForeignerMethod,
+                        use_comma_if_need: bool,
+                        types_map: &RustToJavaTypes)
+                        -> String {
+    let skip_n = if method.func_type == FuncVariant::Method {
+        1
+    } else {
+        0
+    };
+    let mut res = String::new();
+    if use_comma_if_need && skip_n < method.in_out_type.inputs.len() {
+        write!(&mut res, ", ").unwrap();
+    }
+    for (i, item_arg) in method
+            .in_out_type
+            .inputs
+            .iter()
+            .skip(skip_n)
+            .enumerate() {
+        let type_name = &get_type_handler(types_map,
+                                              pprust::ty_to_string(&*item_arg.ty).as_str())
+                .java_type_name;
+        if i == (method.in_out_type.inputs.len() - 1 - skip_n) {
+                write!(&mut res, "{} a_{}", type_name, i)
+            } else {
+                write!(&mut res, "{} a_{}, ", type_name, i)
+            }
+            .unwrap();
+    }
+    res
+}
+
+fn java_return_type<'a>(method: &ForeignerMethod, types_map: &'a RustToJavaTypes) -> &'a str {
+    match &method.in_out_type.output {
+        &ast::FunctionRetTy::Default(_) => "void",
+        &ast::FunctionRetTy::Ty(ref ret_type) => {
+            get_type_handler(types_map, pprust::ty_to_string(&*ret_type).as_str())
+                .java_type_name
+                .as_str()
+        }
+    }
+}
+
 pub fn generate_java_code(rust_java_types_map: &RustToJavaTypes,
                           class_info: &ForeignerClassInfo,
                           output_dir: &Path) {
     use std::io::Write;
-    
+
     let path = output_dir.join(format!("{}.java", class_info.class_name));
     let display = path.display();
 
@@ -502,7 +547,7 @@ public final class {class_name} {{
         };
         match method_it.func_type {
             FuncVariant::StaticMethod => {
-                let return_type = method_it.java_return_type(rust_java_types_map);
+                let return_type = java_return_type(&*method_it, rust_java_types_map);
                 write!(file,
 "
     {access} static native {ret_type} {func_name}({args_with_types}) {exception_spec};
@@ -510,7 +555,7 @@ public final class {class_name} {{
                        access = method_access,
                        ret_type = return_type,
                        func_name = method_it.short_name(),
-                       args_with_types  = method_it.args_with_java_types(false,
+                       args_with_types  = args_with_java_types(&*method_it, false,
                                                                          rust_java_types_map),
                        exception_spec = exception_spec,
                 )
@@ -529,13 +574,13 @@ public final class {class_name} {{
                        class_name = class_info.class_name,
                        exception_spec = exception_spec,
                        args_with_types =
-                           method_it.args_with_java_types(false, rust_java_types_map),
+                           args_with_java_types(&*method_it, false, rust_java_types_map),
                        args = method_it.args(false))
                         .unwrap();
             }
             FuncVariant::Method => {
                 have_methods = true;
-                let return_type = method_it.java_return_type(rust_java_types_map);
+                let return_type = java_return_type(&*method_it, rust_java_types_map);
                 write!(file,
 "
     {access} {ret_type} {func_name}({single_args_with_types}) {exception_spec} {{
@@ -548,9 +593,10 @@ public final class {class_name} {{
                        exception_spec = exception_spec,
                        return_code = if return_type != "void" { "return" } else { "" },
                        func_name = method_it.short_name(),
-                       single_args_with_types = method_it.args_with_java_types(false,
+                       single_args_with_types = args_with_java_types(&*method_it, false,
                                                                                rust_java_types_map),
-                       args_with_types  = method_it.args_with_java_types(true, rust_java_types_map),
+                       args_with_types =
+                       args_with_java_types(&*method_it, true, rust_java_types_map),
                        args = method_it.args(true),
                 )
                         .unwrap();
