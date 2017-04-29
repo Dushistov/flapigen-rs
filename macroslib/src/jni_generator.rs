@@ -1,12 +1,75 @@
 use std::collections::HashMap;
+use std::path::Path;
+use std::fs::File;
+use std::error::Error;
 use std::fmt::Write;
+use std::iter::Iterator;
 
 use syntex_syntax::ext::base::ExtCtxt;
 use syntex_syntax::{parse, ast, ptr};
 use syntex_syntax::print::pprust;
 
 use core::*;
-use jni::generate_func_name as jni_generate_func_name;
+
+lazy_static! {
+    static ref JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE: HashMap<&'static str, &'static str> = {
+        let mut m = HashMap::new();
+        m.insert("String", "Ljava.lang.String;");
+        m.insert("boolean", "Z");
+        m.insert("byte", "B");
+        m.insert("char", "C");
+        m.insert("double", "D");
+        m.insert("float", "F");
+        m.insert("int", "I");
+        m.insert("long", "J");
+        m.insert("object", "L");
+        m.insert("short", "S");
+        m.insert("void", "V");
+        m
+    };
+}
+
+fn jni_generate_func_name<'a, IterType>(package_name: &str,
+                                        class_name: &str,
+                                        func_name: &str,
+                                        overloaded: bool,
+                                        args_types_iter: IterType)
+                                        -> String
+    where IterType: Iterator<Item = &'a String>
+{
+    let mut output = String::new();
+    output.push_str("Java_");
+    fn escape_underscore(input: &str, mut output: &mut String) {
+        for c in input.chars() {
+            match c {
+                '.' => output.push('_'),
+                '[' => output.push_str("_3"),
+                '_' => output.push_str("_1"),
+                ';' => output.push_str("_2"),
+                _ => output.push(c),
+            }
+        }
+    }
+    escape_underscore(package_name, &mut output);
+    output.push_str("_");
+    escape_underscore(class_name, &mut output);
+    output.push_str("_");
+    escape_underscore(func_name, &mut output);
+
+    if overloaded {
+        output.push_str("__");
+        for it in args_types_iter {
+            escape_underscore(JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
+                                  .get(it.as_str())
+                                  .expect(&format!("jni gen func name: Unknown Java type `{}`",
+                                                   *it)),
+                              &mut output);
+        }
+    }
+
+    output
+}
+
 
 pub static RUST_OBJECT_TO_JOBJECT: &'static str = r#"
   let class_id = ::std::ffi::CString::new("{full_class_name}").unwrap();
@@ -401,4 +464,120 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
     }
 
     jni_methods
+}
+
+pub fn generate_java_code(rust_java_types_map: &RustToJavaTypes,
+                          class_info: &ForeignerClassInfo,
+                          output_dir: &Path) {
+    use std::io::Write;
+    
+    let path = output_dir.join(format!("{}.java", class_info.class_name));
+    let display = path.display();
+
+    let mut file = match File::create(&path) {
+        Err(why) => panic!("couldn't create {}: {}", display, why.description()),
+        Ok(file) => file,
+    };
+    write!(file,
+           "package {package_name};
+public final class {class_name} {{
+    private long mNativeObj;
+",
+           package_name = class_info.package_name,
+           class_name = class_info.class_name)
+            .unwrap();
+
+    let mut have_constructor = false;
+    let mut have_methods = false;
+    for method_it in class_info.methods.iter() {
+        let exception_spec = if method_it.may_return_error {
+            "throws Exception"
+        } else {
+            ""
+        };
+        let method_access = if method_it.private {
+            "private"
+        } else {
+            "public"
+        };
+        match method_it.func_type {
+            FuncVariant::StaticMethod => {
+                let return_type = method_it.java_return_type(rust_java_types_map);
+                write!(file,
+"
+    {access} static native {ret_type} {func_name}({args_with_types}) {exception_spec};
+",
+                       access = method_access,
+                       ret_type = return_type,
+                       func_name = method_it.short_name(),
+                       args_with_types  = method_it.args_with_java_types(false,
+                                                                         rust_java_types_map),
+                       exception_spec = exception_spec,
+                )
+                        .unwrap();
+            }
+            FuncVariant::Constructor => {
+                have_constructor = true;
+                write!(file,
+                       "
+    {method_access} {class_name}({args_with_types}) {exception_spec} {{
+        mNativeObj = init({args});
+    }}
+    private static native long init({args_with_types}) {exception_spec};
+",
+                       method_access = method_access,
+                       class_name = class_info.class_name,
+                       exception_spec = exception_spec,
+                       args_with_types =
+                           method_it.args_with_java_types(false, rust_java_types_map),
+                       args = method_it.args(false))
+                        .unwrap();
+            }
+            FuncVariant::Method => {
+                have_methods = true;
+                let return_type = method_it.java_return_type(rust_java_types_map);
+                write!(file,
+"
+    {access} {ret_type} {func_name}({single_args_with_types}) {exception_spec} {{
+         {return_code} do_{func_name}(mNativeObj{args});
+    }}
+    private static native {ret_type} do_{func_name}(long me{args_with_types}) {exception_spec};
+",
+                       access = method_access,
+                       ret_type = return_type,
+                       exception_spec = exception_spec,
+                       return_code = if return_type != "void" { "return" } else { "" },
+                       func_name = method_it.short_name(),
+                       single_args_with_types = method_it.args_with_java_types(false,
+                                                                               rust_java_types_map),
+                       args_with_types  = method_it.args_with_java_types(true, rust_java_types_map),
+                       args = method_it.args(true),
+                )
+                        .unwrap();
+            }
+        }
+    }
+    if have_methods && !have_constructor {
+        panic!("package_name {}, class_name {}, have methods, but no constructor",
+               class_info.package_name,
+               class_info.class_name);
+    }
+    if have_constructor {
+        write!(file,
+               "
+    public synchronized void delete() {{
+        if (mNativeObj != 0) {{
+            do_delete(mNativeObj);
+            mNativeObj = 0;
+       }}
+    }}
+    @Override
+    protected void finalize() {{ delete(); }}
+    private static native void do_delete(long me);
+")
+                .unwrap();
+    }
+    file.write_all(class_info.foreigner_code.as_bytes())
+        .unwrap();
+    write!(file, "}}").unwrap();
 }
