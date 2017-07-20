@@ -1,23 +1,30 @@
 ///missed stuff in syntex
-use syntex_syntax::parse::{token, parser};
+use syntex_syntax::parse::token;
 use syntex_syntax::codemap;
-use syntex_syntax::{parse, ast};
+use syntex_syntax::parse;
 use syntex_syntax::ptr::P;
 use syntex_syntax::parse::common::SeqSep;
 use syntex_syntax::symbol::keywords;
 use syntex_syntax::ast::{SelfKind, Mutability};
 use syntex_pos::mk_sp;
+use ast::{Arg, FnDecl};
+use parser::Parser;
+use parse::PResult;
 
 
 /// Returns the parsed optional self argument and whether a self shortcut was used.
-fn parse_self_arg<'a>(parser: &mut parser::Parser<'a>) -> parse::PResult<'a, Option<ast::Arg>> {
-    let expect_ident = |this: &mut parser::Parser<'a>| match this.token {
+fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>> {
+    let expect_ident = |this: &mut Parser<'a>| match this.token {
         // Preserve hygienic context.
         token::Ident(ident) => {
             this.bump();
             codemap::respan(this.prev_span, ident)
         }
         _ => unreachable!(),
+    };
+    let isolated_self = |this: &mut Parser<'a>, n| {
+        this.look_ahead(n, |t| t.is_keyword(keywords::SelfValue)) &&
+        this.look_ahead(n + 1, |t| t != &token::ModSep)
     };
 
     // Parse optional self parameter of a method.
@@ -31,22 +38,21 @@ fn parse_self_arg<'a>(parser: &mut parser::Parser<'a>) -> parse::PResult<'a, Opt
             // &'lt self
             // &'lt mut self
             // &not_self
-            if parser.look_ahead(1, |t| t.is_keyword(keywords::SelfValue)) {
+            if isolated_self(parser, 1) {
                 parser.bump();
                 (SelfKind::Region(None, Mutability::Immutable), expect_ident(parser))
             } else if parser.look_ahead(1, |t| t.is_keyword(keywords::Mut)) &&
-                      parser.look_ahead(2, |t| t.is_keyword(keywords::SelfValue)) {
+                      isolated_self(parser, 2) {
                 parser.bump();
                 parser.bump();
                 (SelfKind::Region(None, Mutability::Mutable), expect_ident(parser))
-            } else if parser.look_ahead(1, |t| t.is_lifetime()) &&
-                      parser.look_ahead(2, |t| t.is_keyword(keywords::SelfValue)) {
+            } else if parser.look_ahead(1, |t| t.is_lifetime()) && isolated_self(parser, 2) {
                 parser.bump();
                 let lt = try!(parser.parse_lifetime());
                 (SelfKind::Region(Some(lt), Mutability::Immutable), expect_ident(parser))
             } else if parser.look_ahead(1, |t| t.is_lifetime()) &&
                       parser.look_ahead(2, |t| t.is_keyword(keywords::Mut)) &&
-                      parser.look_ahead(3, |t| t.is_keyword(keywords::SelfValue)) {
+                      isolated_self(parser, 3) {
                 parser.bump();
                 let lt = try!(parser.parse_lifetime());
                 parser.bump();
@@ -61,12 +67,11 @@ fn parse_self_arg<'a>(parser: &mut parser::Parser<'a>) -> parse::PResult<'a, Opt
             // *mut self
             // *not_self
             // Emit special error for `self` cases.
-            if parser.look_ahead(1, |t| t.is_keyword(keywords::SelfValue)) {
+            if isolated_self(parser, 1) {
                 parser.bump();
                 parser.span_err(parser.span, "cannot pass `self` by raw pointer");
                 (SelfKind::Value(Mutability::Immutable), expect_ident(parser))
-            } else if parser.look_ahead(1, |t| t.is_mutability()) &&
-                      parser.look_ahead(2, |t| t.is_keyword(keywords::SelfValue)) {
+            } else if parser.look_ahead(1, |t| t.is_mutability()) && isolated_self(parser, 2) {
                 parser.bump();
                 parser.bump();
                 parser.span_err(parser.span, "cannot pass `self` by raw pointer");
@@ -76,24 +81,23 @@ fn parse_self_arg<'a>(parser: &mut parser::Parser<'a>) -> parse::PResult<'a, Opt
             }
         }
         token::Ident(..) => {
-            if parser.token.is_keyword(keywords::SelfValue) {
+            if isolated_self(parser, 0) {
                 // self
                 // self: TYPE
                 let eself_ident = expect_ident(parser);
                 if parser.eat(&token::Colon) {
-                    let ty = try!(parser.parse_ty_sum());
+                    let ty = try!(parser.parse_ty());
                     (SelfKind::Explicit(ty, Mutability::Immutable), eself_ident)
                 } else {
                     (SelfKind::Value(Mutability::Immutable), eself_ident)
                 }
-            } else if parser.token.is_keyword(keywords::Mut) &&
-                      parser.look_ahead(1, |t| t.is_keyword(keywords::SelfValue)) {
+            } else if parser.token.is_keyword(keywords::Mut) && isolated_self(parser, 1) {
                 // mut self
                 // mut self: TYPE
                 parser.bump();
                 let eself_ident = expect_ident(parser);
                 if parser.eat(&token::Colon) {
-                    let ty = try!(parser.parse_ty_sum());
+                    let ty = try!(parser.parse_ty());
                     (SelfKind::Explicit(ty, Mutability::Mutable), eself_ident)
                 } else {
                     (SelfKind::Value(Mutability::Mutable), eself_ident)
@@ -106,13 +110,14 @@ fn parse_self_arg<'a>(parser: &mut parser::Parser<'a>) -> parse::PResult<'a, Opt
     };
 
     let eself = codemap::respan(mk_sp(eself_lo, parser.prev_span.hi), eself);
-    Ok(Some(ast::Arg::from_self(eself, eself_ident)))
+    Ok(Some(Arg::from_self(eself, eself_ident)))
 }
 
-pub fn parse_fn_decl_with_self<'a, F>(parser: &mut parser::Parser<'a>,
+/// Parse the parameter list and result type of a function that may have a `self` parameter.
+pub fn parse_fn_decl_with_self<'a, F>(parser: &mut Parser<'a>,
                                       parse_arg_fn: F)
-                                      -> parse::PResult<'a, P<ast::FnDecl>>
-    where F: FnMut(&mut parser::Parser<'a>) -> parse::PResult<'a, ast::Arg>
+                                      -> PResult<'a, P<FnDecl>>
+    where F: FnMut(&mut Parser<'a>) -> PResult<'a, Arg>
 {
     try!(parser.expect(&token::OpenDelim(token::Paren)));
 
@@ -140,7 +145,7 @@ pub fn parse_fn_decl_with_self<'a, F>(parser: &mut parser::Parser<'a>,
 
     // Parse closing paren and return type.
     try!(parser.expect(&token::CloseDelim(token::Paren)));
-    Ok(P(ast::FnDecl {
+    Ok(P(FnDecl {
              inputs: fn_inputs,
              output: try!(parser.parse_ret_ty()),
              variadic: false,

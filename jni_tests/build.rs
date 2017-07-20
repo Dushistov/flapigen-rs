@@ -27,8 +27,7 @@ fn gen_binding(include_dirs: &[&Path],
     if let Ok(out_meta) = output_rust.metadata() {
         let mut res_recent_enough = true;
         for header in c_headers.iter() {
-            let c_file_path =
-                search_file_in_directory(include_dirs, header)
+            let c_file_path = search_file_in_directory(include_dirs, header)
                 .map_err(|_| format!("Can not find {}", header))?;
             let c_meta = c_file_path.metadata().map_err(|err| err.to_string())?;
             if !(c_meta.modified().unwrap() < out_meta.modified().unwrap()) {
@@ -47,12 +46,13 @@ fn gen_binding(include_dirs: &[&Path],
         .fold(bindings,
               |acc, x| acc.clang_arg("-I".to_string() + x.to_str().unwrap()));
 
-    bindings = bindings.no_unstable_rust();
-    bindings = c_headers[1..].iter()
+    bindings = bindings.unstable_rust(false);
+    bindings = c_headers[1..]
+        .iter()
         .fold(Ok(bindings),
               |acc: Result<::bindgen::Builder, String>, header| {
             let c_file_path = try!(search_file_in_directory(include_dirs, header)
-                               .map_err(|_| format!("Can not find {}", header)));
+                                       .map_err(|_| format!("Can not find {}", header)));
             let c_file_str =
                 try!(c_file_path
                          .to_str()
@@ -100,7 +100,5 @@ fn main() {
     swig_gen.register(&mut registry);
     let src = Path::new("src/lib.rs.in");
     let dst = Path::new(&env::var("OUT_DIR").unwrap()).join("lib.rs");
-    registry
-        .expand("rust_swig_test_jni", &src, &dst)
-        .unwrap();
+    registry.expand("rust_swig_test_jni", &src, &dst).unwrap();
 }

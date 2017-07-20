@@ -71,7 +71,7 @@ pub fn gen_binding<P>(target: &str,
 {
     assert!(!c_headers.is_empty());
     let c_file_path = search_file_in_directory(include_dirs, c_headers[0])
-                           .map_err(|_| format!("Can not find {}", c_headers[0]))?;
+        .map_err(|_| format!("Can not find {}", c_headers[0]))?;
 
     if let Ok(out_meta) = output_rust.metadata() {
         let mut res_recent_enough = true;
@@ -96,7 +96,7 @@ pub fn gen_binding<P>(target: &str,
               |acc, x| acc.clang_arg("-I".to_string() + x.as_ref().to_str().unwrap()));
 
     bindings = bindings
-        .no_unstable_rust()
+        .unstable_rust(false)
         .hide_type("max_align_t")//long double not supported yet, see https://github.com/servo/rust-bindgen/issues/550
         .raw_line("#![allow(non_upper_case_globals, dead_code, non_camel_case_types, improper_ctypes, non_snake_case)]")
         ;
@@ -106,20 +106,23 @@ pub fn gen_binding<P>(target: &str,
     } else {
         bindings
     };
-    bindings = c_headers[1..].iter()
+    bindings = c_headers[1..]
+        .iter()
         .fold(Ok(bindings),
               |acc: Result<bindgen::Builder, String>, header| {
-                  let c_file_path = search_file_in_directory(include_dirs, header)
-                               .map_err(|_| format!("Can not find {}", header))?;
-                  let c_file_str =
-                      c_file_path.to_str()
-                          .ok_or_else(|| format!("Invalid unicode in path to {}", header))?;
-                  Ok(acc.unwrap().clang_arg("-include").clang_arg(c_file_str))
-              })?;
+            let c_file_path = search_file_in_directory(include_dirs, header)
+                .map_err(|_| format!("Can not find {}", header))?;
+            let c_file_str = c_file_path
+                .to_str()
+                .ok_or_else(|| format!("Invalid unicode in path to {}", header))?;
+            Ok(acc.unwrap().clang_arg("-include").clang_arg(c_file_str))
+        })?;
 
-    let generated_bindings = bindings.generate()
+    let generated_bindings = bindings
+        .generate()
         .map_err(|_| "Failed to generate bindings".to_string())?;
-    generated_bindings.write_to_file(output_rust)
+    generated_bindings
+        .write_to_file(output_rust)
         .map_err(|err| err.to_string())?;
 
     Ok(())
@@ -134,24 +137,20 @@ fn main() {
                 &Path::new("src/android_c_headers.rs"))
             .unwrap();
     let mut registry = syntex::Registry::new();
-    let swig_gen =
-        rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
-            output_dir:
-            Path::new("app")
-                .join("src")
-                .join("main")
-                .join("java")
-                .join("net")
-                .join("akaame")
-                .join("myapplication"),
-            package_name: "net.akaame.myapplication".into(),
-        });
+    let swig_gen = rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
+                                                 output_dir: Path::new("app")
+                                                     .join("src")
+                                                     .join("main")
+                                                     .join("java")
+                                                     .join("net")
+                                                     .join("akaame")
+                                                     .join("myapplication"),
+                                                 package_name: "net.akaame.myapplication".into(),
+                                             });
     swig_gen.register(&mut registry);
     let src = Path::new("src/java_glue.rs.in");
     let dst = Path::new(&env::var("OUT_DIR").unwrap()).join("java_glue.rs");
-    registry
-        .expand("rust_swig_test_jni", &src, &dst)
-        .unwrap();
+    registry.expand("rust_swig_test_jni", &src, &dst).unwrap();
 
     let cur_dir = env::current_dir().unwrap();
     let arm_libs_path = cur_dir.join("src/obj/local/armeabi");

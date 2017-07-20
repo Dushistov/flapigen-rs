@@ -9,13 +9,13 @@ name = "mobcore"
 crate-type = ["cdylib"]
 
 [dependencies]
-log = "0.3.6"
+log = "0.3"
 log-panics = "1.1.0"
-android_logger = {git = "https://github.com/Dushistov/android_logger-rs", rev = "d59a22ae3a33a4a0c11098fa6d1f317c734c110b"}
+android_logger = "0.3.0"
 
 [build-dependencies]
-bindgen = "0.22.0"
-syntex = "0.54.0"
+bindgen = "0.26.3"
+syntex = "0.58.1"
 
 
 [build-dependencies.rust_swig]
