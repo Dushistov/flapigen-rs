@@ -1,4 +1,4 @@
-# rust-swig [![Build status](https://travis-ci.org/Dushistov/rust_swig.svg?branch=master)](https://travis-ci.org/Dushistov/rust_swig) [![Build status](https://ci.appveyor.com/api/projects/status/db4rs7f96iba4bt8/branch/master?svg=true)](https://ci.appveyor.com/project/Dushistov/rust-swig/branch/master) [![Coverage Status](https://coveralls.io/repos/github/Dushistov/rust_swig/badge.svg?branch=master)](https://coveralls.io/github/Dushistov/rust_swig?branch=master) [![License](https://img.shields.io/badge/license-BSD-green.svg)](https://github.com/Dushistov/rust_swig/blob/master/LICENSE)
+# rust-swig [![Build status](https://travis-ci.org/Dushistov/rust_swig.svg?branch=master)](https://travis-ci.org/Dushistov/rust_swig) [![Build status](https://ci.appveyor.com/api/projects/status/db4rs7f96iba4bt8/branch/master?svg=true)](https://ci.appveyor.com/project/Dushistov/rust-swig/branch/master) [![License](https://img.shields.io/badge/license-BSD-green.svg)](https://github.com/Dushistov/rust_swig/blob/master/LICENSE)
 
 
 ## Getting started
