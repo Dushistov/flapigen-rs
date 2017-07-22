@@ -20,15 +20,14 @@ use syntex_syntax::ext::base::{ExtCtxt, MacResult, DummyResult, TTMacroExpander,
 use syntex_syntax::parse::{token, parser};
 use syntex_syntax::tokenstream::TokenTree;
 use syntex_syntax::codemap::Span;
-use syntex_syntax::{parse, ast};
+use syntex_syntax::{parse, ast, ptr};
 use syntex_syntax::print::pprust;
-use syntex_syntax::ptr;
 use syntex_syntax::util::small_vector::SmallVector;
 
 use parse_utils::*;
 use core::*;
 use jni_generator::{generate_rust_code, RUST_OBJECT_TO_JOBJECT, RUST_VEC_TO_JAVA_ARRAY,
-                     RUST_RESULT_TO_JAVA_OBJECT, generate_java_code};
+                    RUST_RESULT_TO_JAVA_OBJECT, generate_java_code};
 use types_map::parse_types_map;
 
 pub enum LanguageConfig {
@@ -174,22 +173,23 @@ impl TTMacroExpander for Generator {
                     .expect(&token::Token::Semi)
                     .expect("no ; at the end of alias");
             }
-            let (may_return_error, ret_type) = match &func_decl.output {
-                &ast::FunctionRetTy::Default(_) => (false, None),
-                &ast::FunctionRetTy::Ty(ref ret_type) => {
+            let (may_return_error, ret_type) = match func_decl.output {
+                ast::FunctionRetTy::Default(_) => (false, None),
+                ast::FunctionRetTy::Ty(ref ret_type) => {
                     (is_type_name(ret_type, "Result"), Some(ret_type.clone()))
                 }
             };
             if let FuncVariant::Constructor = func_type {
-                let ret_type = ret_type.expect(&format!("{}: constructor should return value",
-                                                        class_name_indent));
+                let ret_type =
+                    ret_type
+                        .expect(&format!("{}: constructor should return value", class_name_indent));
                 if let Some(ref constructor_ret_type) = constructor_ret_type {
                     if pprust::ty_to_string(constructor_ret_type) !=
                        pprust::ty_to_string(&*ret_type) {
                         cx.span_err(parser.span,
                                     &format!("mismatched types of construtors: {:?} {:?}",
-                                             constructor_ret_type,
-                                             ret_type));
+                                            constructor_ret_type,
+                                            ret_type));
                         return DummyResult::any(parser.span);
                     }
                 } else {
@@ -226,11 +226,11 @@ impl TTMacroExpander for Generator {
         }
         let mut type_handlers = self.type_handlers.borrow_mut();
 
-        match &self.config {
-            &LanguageConfig::Java {
-                 ref output_dir,
-                 ref package_name,
-             } => {
+        match self.config {
+            LanguageConfig::Java {
+                ref output_dir,
+                ref package_name,
+            } => {
                 let class_info = ForeignerClassInfo {
                     package_name: package_name.clone(),
                     class_name: &class_name_indent.name.as_str(),
@@ -267,7 +267,7 @@ impl TTMacroExpander for Generator {
                         rust_java_types_map.insert(it.rust_type_name.as_str(), &*it);
                     }
 
-                    generate_java_code(&rust_java_types_map, &class_info, &output_dir);
+                    generate_java_code(&rust_java_types_map, &class_info, output_dir);
                     generate_rust_code(cx, &rust_java_types_map, &class_info)
                 };
                 gen_methods.append(&mut jni_methods);
@@ -275,20 +275,22 @@ impl TTMacroExpander for Generator {
                     if let Some(ref mut fromc) = item.from_jni_converter {
                         for dep in &fromc.depends {
                             if dep.borrow().used {
-                                dep.borrow_mut().item.take().map(|v| {
-                                    gen_methods.push(v);
-                                });
+                                dep.borrow_mut()
+                                    .item
+                                    .take()
+                                    .map(|v| { gen_methods.push(v); });
                             }
                         }
                     }
                     if let Some(ref mut toc) = item.to_jni_converter {
                         for dep in &toc.depends {
                             if dep.borrow().used {
-                                dep.borrow_mut().item.take().map(|v| {
-                                    gen_methods.push(v);
-                                });
+                                dep.borrow_mut()
+                                    .item
+                                    .take()
+                                    .map(|v| { gen_methods.push(v); });
                             }
-                        }                        
+                        }
                     }
                 }
 
@@ -333,26 +335,26 @@ fn path_unpack_genearic_first_parameter(path: &ast::Path, generic_name: &str) ->
     path.segments
         .first()
         .map(|ps: &ast::PathSegment| if &*ps.identifier.name.as_str() == generic_name {
-            ps.parameters
-                .as_ref()
-                .map(|p: &ptr::P<ast::PathParameters>| {
-                    if let ast::PathParameters::AngleBracketed(ref params) = **p {
-                        params
-                            .types
-                            .first()
-                            .map(|v: &ptr::P<ast::Ty>| {
-                                debug!("unpack_generic_first_paramter: result param {:?}",
-                                       *v);
-                                (**v).clone()
-                            })
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(None)
-        } else {
-            None
-        }).unwrap_or(None)
+                 ps.parameters
+                     .as_ref()
+                     .map(|p: &ptr::P<ast::PathParameters>| {
+                if let ast::PathParameters::AngleBracketed(ref params) = **p {
+                    params
+                        .types
+                        .first()
+                        .map(|v: &ptr::P<ast::Ty>| {
+                                 debug!("unpack_generic_first_paramter: result param {:?}", *v);
+                                 (**v).clone()
+                             })
+                } else {
+                    None
+                }
+            })
+                     .unwrap_or(None)
+             } else {
+                 None
+             })
+        .unwrap_or(None)
 }
 
 fn unpack_generic_first_paramter(ty: &ast::Ty, generic_name: &str) -> ast::Ty {
@@ -361,21 +363,19 @@ fn unpack_generic_first_paramter(ty: &ast::Ty, generic_name: &str) -> ast::Ty {
             debug!("unpack_generic_first_paramter: path: {:?}, ident {:?}",
                    path.segments,
                    path.segments[0].identifier.name.as_str());
-            path_unpack_genearic_first_parameter(path, generic_name)
-                .unwrap_or(ty.clone())
+            path_unpack_genearic_first_parameter(path, generic_name).unwrap_or_else(|| ty.clone())
         }
         _ => ty.clone(),
     }
 }
 
-fn in_type_info(type_handlers: &Vec<TypeHandler>, ty: &ast::Ty, generic_name: &str) -> usize {
+fn in_type_info(type_handlers: &[TypeHandler], ty: &ast::Ty, generic_name: &str) -> usize {
     let in_type = unpack_generic_first_paramter(ty, generic_name);
     let in_type_name = pprust::ty_to_string(&in_type);
-    let index = type_handlers
+    type_handlers
         .iter()
-        .position(|ref r| r.rust_type_name == in_type_name)
-        .expect(&format!("Type {} not found", in_type_name));
-    index
+        .position(|r| r.rust_type_name == in_type_name)
+        .expect(&format!("Type {} not found", in_type_name))
 }
 
 fn get_default_value_for_rust_type(rust_type_name: &str) -> &'static str {
@@ -394,8 +394,7 @@ fn generate_type_info_for_type(type_handlers: &mut Vec<TypeHandler>,
     let rust_type_name = pprust::ty_to_string(ty);
     if type_handlers
            .iter()
-           .position(|ref r| r.rust_type_name == rust_type_name)
-           .is_some() {
+           .any(|r| r.rust_type_name == rust_type_name) {
         return;
     }
 
@@ -436,7 +435,7 @@ fn generate_type_info_for_type(type_handlers: &mut Vec<TypeHandler>,
 fn generate_type_info_for_generics(type_handlers: &mut Vec<TypeHandler>,
                                    class_info: &ForeignerClassInfo,
                                    package_name: &str) {
-    for method in class_info.methods.iter() {
+    for method in &class_info.methods {
         for v in method
                 .in_out_type
                 .inputs
@@ -448,20 +447,23 @@ fn generate_type_info_for_generics(type_handlers: &mut Vec<TypeHandler>,
                       }) {
             generate_type_info_for_type(type_handlers, &*v.ty, package_name);
         }
-        match &method.in_out_type.output {
-            &ast::FunctionRetTy::Ty(ref ret_type) => {
+        match method.in_out_type.output {
+            ast::FunctionRetTy::Ty(ref ret_type) => {
                 if method.func_type != FuncVariant::Constructor {
                     //we unpack Result for constructor in other place
                     generate_type_info_for_type(type_handlers, &*ret_type, package_name);
                 }
             }
-            &ast::FunctionRetTy::Default(_) => {}
+            ast::FunctionRetTy::Default(_) => {}
         }
     }
 }
 
 fn deref_type_name(type_name: &str) -> Option<&str> {
-    type_name.chars().rev().position(|x| x.is_whitespace() || x == '&')
+    type_name
+        .chars()
+        .rev()
+        .position(|x| x.is_whitespace() || x == '&')
         .map(|pos| &type_name[type_name.len() - pos..])
 }
 

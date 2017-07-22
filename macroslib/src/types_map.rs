@@ -18,7 +18,7 @@ pub fn parse_types_map(cx: &mut ExtCtxt, jni_types_map_code: &str) -> Vec<TypeHa
     let mut my_crate = parser.parse_crate_mod().unwrap();
     let mut type_handlers = Vec::new();
 
-    for mut item in my_crate.module.items.iter_mut() {
+    for mut item in &mut my_crate.module.items {
 
         let mut foreigner_type = None;
 
@@ -28,8 +28,7 @@ pub fn parse_types_map(cx: &mut ExtCtxt, jni_types_map_code: &str) -> Vec<TypeHa
                 continue;
             }
             if let ast::MetaItemKind::NameValue(Spanned {
-                                                    node: ast::LitKind::Str(lit, _),
-                                                    span: _,
+                                                    node: ast::LitKind::Str(lit, _), ..
                                                 }) = it.value.node {
                 foreigner_type = Some((idx, lit.as_str().to_string()));
                 break;
@@ -51,32 +50,40 @@ pub fn parse_types_map(cx: &mut ExtCtxt, jni_types_map_code: &str) -> Vec<TypeHa
                             .expect("Can not get Target for Deref");
                         debug!("target {:?}, for_type {:?}", target, for_type);
                         let deref_target = pprust::ty_to_string(&target);
-                        let th_pos_main = type_handlers.iter().position(|v: &TypeHandler|
-                            type_name_is_deref_of(&v.rust_type_name, &deref_target)
-                        ).expect("Can not find Deref(main) match type in type map");
-                        let for_typename = pprust::ty_to_string(&for_type);
-                        let th_pos_inter = type_handlers.iter().position(|v: &TypeHandler| {
-                            v.rust_type_name == for_typename
-                        }).expect("Can not find Deref(inter) match type in type map");
+                        let th_pos_main =
+                            type_handlers
+                                .iter()
+                                .position(|v: &TypeHandler| {
+                                              type_name_is_deref_of(&v.rust_type_name,
+                                                                    &deref_target)
+                                          })
+                                .expect("Can not find Deref(main) match type in type map");
+                        let for_typename = pprust::ty_to_string(for_type);
+                        let th_pos_inter =
+                            type_handlers
+                                .iter()
+                                .position(|v: &TypeHandler| v.rust_type_name == for_typename)
+                                .expect("Can not find Deref(inter) match type in type map");
                         let mut depends = vec![Rc::new(RefCell::new(Converter::new(item.clone())))];
-                        type_handlers[th_pos_inter].from_jni_converter
+                        type_handlers[th_pos_inter]
+                            .from_jni_converter
                             .as_ref()
-                            .map(|x| {
-                                for dep in &x.depends {
-                                    depends.push(dep.clone());
-                                }
-                            });
+                            .map(|x| for dep in &x.depends {
+                                     depends.push(dep.clone());
+                                 });
                         type_handlers[th_pos_main].from_jni_converter =
                             Some(FromForeignArgConverter {
-                                code: format!(r#"
+                                     code: format!(r#"
     let {{arg_name}}: {} = {{arg_name}}.swig_into(env);
     let {{arg_name}} = &{{arg_name}};
-"#, for_typename),
-                                depends: depends,
-                            });
+"#,
+                                                   for_typename),
+                                     depends: depends,
+                                 });
                     } else {
                         panic!("Internal Error: unknown trait in type maps {:?}, segs {:?}",
-                               trait_type.path, trait_type.path.segments);
+                               trait_type.path,
+                               trait_type.path.segments);
                     }
                 }
                 continue;
@@ -99,41 +106,46 @@ pub fn parse_types_map(cx: &mut ExtCtxt, jni_types_map_code: &str) -> Vec<TypeHa
             let is_into = path_match(&trait_type.path, "SwigInto");
             let is_from = path_match(&trait_type.path, "SwigFrom");
             if is_into || is_from {
-                let rust_type =
-                    path_unpack_genearic_first_parameter(&trait_type.path,
-                                                         if is_into { "SwigInto" }
-                                                         else { "SwigFrom" })
-                    .unwrap();
+                let rust_type = path_unpack_genearic_first_parameter(&trait_type.path,
+                                                                     if is_into {
+                                                                         "SwigInto"
+                                                                     } else {
+                                                                         "SwigFrom"
+                                                                     })
+                        .unwrap();
                 debug!("java type: {:?}, jni type: {:?}, rust_type {:?}",
-                         foreigner_type, for_type, rust_type);
+                       foreigner_type,
+                       for_type,
+                       rust_type);
                 let rust_type_name = pprust::ty_to_string(&rust_type);
-                let th_pos = type_handlers.iter().position(|v: &TypeHandler|
-                                                           v.rust_type_name == rust_type_name);
+                let th_pos = type_handlers
+                    .iter()
+                    .position(|v: &TypeHandler| v.rust_type_name == rust_type_name);
                 let th_pos = if let Some(th_pos) = th_pos {
                     th_pos
                 } else {
                     type_handlers.push(TypeHandler {
-                        rust_type_name: rust_type_name,
-                        jni_type_name: pprust::ty_to_string(for_type),
-                        java_type_name: foreigner_type,
-                        from_jni_converter: None,
-                        to_jni_converter: None,
-                    });
+                                           rust_type_name: rust_type_name,
+                                           jni_type_name: pprust::ty_to_string(for_type),
+                                           java_type_name: foreigner_type,
+                                           from_jni_converter: None,
+                                           to_jni_converter: None,
+                                       });
                     type_handlers.len() - 1
                 };
                 if is_into {
                     type_handlers[th_pos].from_jni_converter =
                         Some(FromForeignArgConverter {
-                            code: "let {arg_name} = {arg_name}.swig_into(env);".into(),
-                            depends: vec![Rc::new(RefCell::new(Converter::new(item.clone())))],
-                        });
+                                 code: "let {arg_name} = {arg_name}.swig_into(env);".into(),
+                                 depends: vec![Rc::new(RefCell::new(Converter::new(item.clone())))],
+                             });
                 } else if is_from {
                     type_handlers[th_pos].to_jni_converter =
                         Some(ToForeignRetConverter {
-                            code: format!("let ret = {}::swig_from(ret, env);",
-                                          type_handlers[th_pos].jni_type_name),
-                            depends: vec![Rc::new(RefCell::new(Converter::new(item.clone())))],
-                        });
+                                 code: format!("let ret = {}::swig_from(ret, env);",
+                                               type_handlers[th_pos].jni_type_name),
+                                 depends: vec![Rc::new(RefCell::new(Converter::new(item.clone())))],
+                             });
                 }
             } else {
                 panic!("Internal Error: Unknown trait in types map");
