@@ -12,9 +12,14 @@ documentation = "https://github.com/Dushistov/rust_swig/blob/master/README.md"
 syntex = "0.58.1"
 syntex_syntax = "0.58.1"
 syntex_pos = "0.58.1"
-lazy_static = "0.2.8"
 log = "0.3"
+petgraph = "0.4.5"
+lazy_static = "0.2.8"
+
+[dev-dependencies]
+pulldown-cmark = "0.0.15"
+tempdir = "0.3.5"
 
 [badges]
 travis-ci = { repository = "Dushistov/rust_swig" }
-appveyor-ci = { repository = "Dushistov/rust_swig" }
+appveyor = { repository = "Dushistov/rust_swig" }

@@ -4,7 +4,7 @@
 ## Getting started
 
 Suppose you have the following Rust code:
-```Rust
+```rust
 struct Foo {
     data: i32
 }
@@ -35,7 +35,7 @@ assert res == 8;
 In order to implement it rust_swig suggests the following functionality,
 in Rust project you write (in Rust language):
 
-```Rust
+```rust
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
@@ -52,7 +52,7 @@ See [rust_swig tests for jni](https://github.com/Dushistov/rust_swig/tree/master
 ## Advanced
 Also rust_swig support bypassing of code generation:
 
-```Rust
+```rust
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
@@ -72,7 +72,7 @@ or you want something special.
 
 Also you can create alias for function name:
 
-```Rust
+```rust
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
