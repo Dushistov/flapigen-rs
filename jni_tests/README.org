@@ -1,10 +1,5 @@
 * Building
-1. Edit generate_jni.sh to fix path to java jni include directory and run it.
+1. You need environment variable JAVA_HOME in such way that
+   $JAVA_HOME/include/jni.h exists
 2. cargo build
-3.
-#+BEGIN_SRC sh
-cd target/debug
-export LD_LIBRARY_PATH=`pwd`
-cd ../..
-sh build_jar.sh
-#+END_SRC
+3. run tests via `python run_tests.py`
