@@ -1,3 +1,6 @@
+//! `rust_swig` is a Rust Simplified Wrapper and Interface Generator used
+//! to connect other programming languages to Rust. The idea of this softwared based on [swig](http://www.swig.org).
+//! For macros expansion it uses [syntex](https://crates.io/crates/syntex).
 extern crate syntex;
 extern crate syntex_syntax;
 extern crate syntex_pos;
@@ -32,9 +35,12 @@ use java_jni::{JniVecRetTypesFix, JniResultRetTypesFix};
 use parse::parse_foreigner_class;
 use types_map::ForeignTypesMap;
 
+/// `LanguageConfig` contains configuration for specific programming language
 pub enum LanguageConfig {
     Java {
+        /// directory where place generated java files
         output_dir: PathBuf,
+        /// package name for generated java files
         package_name: String,
     },
 }
@@ -48,6 +54,9 @@ pub(crate) trait TypesMapUpdater {
     fn update(&self, types_map: &mut ForeignTypesMap, class: &ForeignerClassInfo);
 }
 
+/// `Generator` is a main point of `rust_swig`.
+/// It expands rust macroses and generates not rust code.
+/// It designed to use inside `build.rs`.
 pub struct Generator {
     config: LanguageConfig,
     types_map: RefCell<ForeignTypesMap>,
@@ -64,7 +73,7 @@ impl Generator {
                 code_of_types_map.push(TypesMapCode {
                                            name: "jni-type-map-include.rs",
                                            code: include_str!("java_jni/jni-type-map-include.rs"),
-                });
+                                       });
                 types_map_updaters.push(Box::new(JniVecRetTypesFix));
                 types_map_updaters.push(Box::new(JniResultRetTypesFix));
             }

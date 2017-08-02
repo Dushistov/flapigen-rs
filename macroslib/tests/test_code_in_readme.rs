@@ -64,9 +64,9 @@ struct Test {
 
 fn parse_readme() -> Vec<Test> {
     let mut file = File::open(Path::new("../README.md")).expect("Can not open README");
-    let ref mut cnt = String::new();
-    file.read_to_string(cnt).unwrap();
-    let parser = Parser::new(cnt);
+    let mut cnt = String::new();
+    file.read_to_string(&mut cnt).unwrap();
+    let parser = Parser::new(&cnt);
 
     let mut test_number = 1;
     let mut code_buffer = None;
@@ -90,7 +90,7 @@ fn parse_readme() -> Vec<Test> {
                     tests.push(Test {
                                    name: format!("test_{}", test_number),
                                    text: buf.iter()
-                                       .fold(String::new(), |acc, ref x| acc + x.as_str()),
+                                       .fold(String::new(), |acc, x| acc + x.as_str()),
                                    ignore: code_block_info.ignore,
                                    no_run: code_block_info.no_run,
                                    should_panic: code_block_info.should_panic,

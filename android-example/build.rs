@@ -12,24 +12,29 @@ fn main() {
     let target = env::var("TARGET").unwrap();
     let include_dirs = get_gcc_system_include_dirs(&target)
         .expect("Can get gcc's system include dirs");
-    let jni_h = search_file_in_directory(&include_dirs, "jni.h")
-        .expect("Can not find jni.h");
+    let jni_h = search_file_in_directory(&include_dirs, "jni.h").expect("Can not find jni.h");
     let bitmap_h = search_file_in_directory(&include_dirs, "android/bitmap.h")
         .expect("Can not find android/bitmap.h");
 
     let build_graph = depgraph::DepGraphBuilder::new()
-        .add_rule(Path::new("src/android_c_headers.rs"),
-                  &[bitmap_h, jni_h],
-                  move |out, deps| {
-                      let deps: Vec<_> = deps.iter()
-                          .filter_map(|v| if *v != Path::new("build.rs") { Some(v) } else { None })
-                          .collect();
-                      gen_binding(&target, &include_dirs, &deps, out)
-                  })
+        .add_rule(
+            Path::new("src/android_c_headers.rs"),
+            &[bitmap_h, jni_h],
+            move |out, deps| {
+                let deps: Vec<_> = deps.iter()
+                    .filter_map(|v| if *v != Path::new("build.rs") {
+                                    Some(v)
+                                } else {
+                                    None
+                                })
+                    .collect();
+                gen_binding(&target, &include_dirs, &deps, out)
+            },
+        )
         .add_rule(Path::new(&env::var("OUT_DIR").unwrap()).join("java_glue.rs"),
                   &[Path::new("src/java_glue.rs.in")],
                   rust_swig_expand)
-                .add_dep_to_all("build.rs")
+        .add_dep_to_all("build.rs")
         .build()
         .expect("Can not create build dep graph");
 
@@ -108,17 +113,18 @@ fn search_file_in_directory<P>(dirs: &[P], file: &str) -> Result<PathBuf, ()>
 }
 
 fn gen_binding<P1, P2>(target: &str,
-                      include_dirs: &[P1],
-                      c_headers: &[P2],
-                      output_rust: &Path)
-                      -> Result<(), String>
-    where P1: AsRef<Path>, P2: AsRef<Path>
+                       include_dirs: &[P1],
+                       c_headers: &[P2],
+                       output_rust: &Path)
+                       -> Result<(), String>
+    where P1: AsRef<Path>,
+          P2: AsRef<Path>
 {
     assert!(!c_headers.is_empty());
     let c_file_path = &c_headers[0];
 
-    let mut bindings: bindgen::Builder = bindgen::builder().header(
-        c_file_path.as_ref().to_str().unwrap());
+    let mut bindings: bindgen::Builder = bindgen::builder()
+        .header(c_file_path.as_ref().to_str().unwrap());
     bindings = include_dirs.iter().fold(bindings, |acc, x| {
         acc.clang_arg("-I".to_string() + x.as_ref().to_str().unwrap())
     });
@@ -127,8 +133,8 @@ fn gen_binding<P1, P2>(target: &str,
         .unstable_rust(false)
         //long double not supported yet, see https://github.com/servo/rust-bindgen/issues/550
         .hide_type("max_align_t")
-        .raw_line("#![allow(non_upper_case_globals, dead_code, non_camel_case_types, improper_ctypes, non_snake_case)]")
-        ;
+        .raw_line("#![allow(non_upper_case_globals, dead_code, \
+                   non_camel_case_types, improper_ctypes, non_snake_case)]");
     bindings = if target.contains("windows") {
         //see https://github.com/servo/rust-bindgen/issues/578
         bindings.trust_clang_mangling(false)
@@ -140,7 +146,7 @@ fn gen_binding<P1, P2>(target: &str,
         .fold(Ok(bindings), |acc: Result<bindgen::Builder, String>,
          header| {
             let c_file_path = header;
-             let c_file_str = c_file_path
+            let c_file_str = c_file_path
                  .as_ref()
                 .to_str()
                 .ok_or_else(|| format!("Invalid unicode in path to {:?}", c_file_path.as_ref()))?;
@@ -171,8 +177,14 @@ fn rust_swig_expand(out: &Path, deps: &[&Path]) -> Result<(), String> {
                                              });
     swig_gen.register(&mut registry);
     let dep = deps.iter()
-        .filter_map(|v| if *v != Path::new("build.rs") { Some(v) } else { None })
-        .nth(0).unwrap();
-    registry.expand("rust_swig_test_jni", dep, out)
+        .filter_map(|v| if *v != Path::new("build.rs") {
+                        Some(v)
+                    } else {
+                        None
+                    })
+        .nth(0)
+        .unwrap();
+    registry
+        .expand("rust_swig_test_jni", dep, out)
         .map_err(|err| format!("rust swig expand failed: {}", err))
 }

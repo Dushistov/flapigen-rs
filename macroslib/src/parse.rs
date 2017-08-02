@@ -281,7 +281,7 @@ pub(crate) fn parse_foreigner_class(cx: &ExtCtxt,
                 constructor_ret_type = Some(ret_type.unwrap());
                 this_type_for_method =
                     Some(unpack_generic_first_parameter(constructor_ret_type.as_ref().unwrap(),
-                                                       "Result"));
+                                                        "Result"));
             }
         }
         methods.push(ForeignerMethod {

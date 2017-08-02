@@ -43,11 +43,11 @@ fn main() {
         .add_dep_to_all("build.rs")
         .build()
         .expect("Can not create build dep graph");
-    
+
     build_graph
         .make(depgraph::MakeParams::None)
         .expect("build.rs rules failed");
-    
+
 
 }
 
@@ -92,8 +92,14 @@ fn rust_swig_expand(out: &Path, deps: &[&Path]) -> Result<(), String> {
                                   });
     swig_gen.register(&mut registry);
     let dep = deps.iter()
-        .filter_map(|v| if *v != Path::new("build.rs") { Some(v) } else { None })
-        .nth(0).unwrap();
-    registry.expand("rust_swig_test_jni", dep, out)
+        .filter_map(|v| if *v != Path::new("build.rs") {
+                        Some(v)
+                    } else {
+                        None
+                    })
+        .nth(0)
+        .unwrap();
+    registry
+        .expand("rust_swig_test_jni", dep, out)
         .map_err(|err| format!("rust swig macros expand failed: {}", err))
 }

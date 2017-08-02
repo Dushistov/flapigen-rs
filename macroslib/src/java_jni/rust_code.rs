@@ -284,7 +284,10 @@ fn generate_jni_args_with_types(method: &MethodSignatureWithForeignTypes)
 
     let mut buf = String::new();
     for (i, rust_type_name) in method.rust_input.iter().enumerate() {
-        write!(&mut buf, "a_{}: {}, ", i, unpack_unique_typename(*rust_type_name))
+        write!(&mut buf,
+               "a_{}: {}, ",
+               i,
+               unpack_unique_typename(*rust_type_name))
             .map_err(fmt_write_err_map)?;
     }
     Ok(buf)

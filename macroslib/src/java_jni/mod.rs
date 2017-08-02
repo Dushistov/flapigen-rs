@@ -29,7 +29,7 @@ pub(crate) fn generate(parse_sess: &ParseSess,
     let ret =
         rust_code::generate_rust_code(parse_sess, types_map, package_name, class, &methods_sign);
     if let Some(ref this_type_for_method) = class.this_type_for_method {
-        let from_typename = Symbol::intern(&normalized_ty_string(&this_type_for_method));
+        let from_typename = Symbol::intern(&normalized_ty_string(this_type_for_method));
         let class_name_for_user = java_class_full_name(package_name, &class.name);
         let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
         let class_name_for_user = Symbol::intern(&class_name_for_user);
@@ -49,7 +49,7 @@ pub(crate) fn generate(parse_sess: &ParseSess,
 fn java_class_full_name(package_name: &str, class_name: &str) -> String {
     let mut ret: String = package_name.into();
     ret.push('.');
-    ret.push_str(&class_name);
+    ret.push_str(class_name);
     ret
 }
 
@@ -96,7 +96,10 @@ impl TypesMapUpdater for JniVecRetTypesFix {
                     let in_type = unpack_generic_first_parameter(ret_type, "Vec");
                     let in_type_name = Symbol::intern(&normalized_ty_string(&in_type));
 
-                    debug!("{}:{} we have vec with type {:?}", file!(), line!(), in_type);
+                    debug!("{}:{} we have vec with type {:?}",
+                           file!(),
+                           line!(),
+                           in_type);
                     if let Some((foreign_in_type, rust_in_type)) =
                         types_map.to_foreign_type_name(in_type_name) {
                         if rust_in_type.as_str().starts_with("jobject") {
@@ -126,22 +129,21 @@ impl TypesMapUpdater for JniResultRetTypesFix {
             }
         }
 
-        
+
         fn generate_conversation(types_map: &mut ForeignTypesMap,
                                  from_ty: &ast::Ty,
                                  rust_in_type: Symbol) {
             let from_typename = Symbol::intern(&normalized_ty_string(from_ty));
-            debug!("{}:{} gen conv for type {} ({})", file!(), line!(), rust_in_type,
+            debug!("{}:{} gen conv for type {} ({})",
+                   file!(),
+                   line!(),
+                   rust_in_type,
                    from_typename);
             let def_val = get_default_value_for_rust_type(&rust_in_type.as_str());
-            let code = format!(
-                "\nlet {{to_var}} = jni_unpack_return!({{from_var}}, {}, env);",
-                def_val);
+            let code = format!("\nlet {{to_var}} = jni_unpack_return!({{from_var}}, {}, env);",
+                               def_val);
             types_map
-                .add_conversation(from_typename,
-                                  rust_in_type,
-                                  None,
-                                  code)
+                .add_conversation(from_typename, rust_in_type, None, code)
                 .unwrap_or_else(|err| {
                                     panic!("Can not add conversation from {} to {}: {}",
                                            from_typename,
@@ -154,19 +156,16 @@ impl TypesMapUpdater for JniResultRetTypesFix {
 
                 if types_map
                        .foreign_return_type(&method.fn_decl.output)
-                    .is_none() && is_type_name(ret_type, "Result") {
-                    
-                        let in_type = unpack_generic_first_parameter(ret_type, "Result");
-                        let in_type_name = Symbol::intern(&normalized_ty_string(&in_type));
-                        debug!("{}:{} we have Result<{:?},...>", file!(), line!(), in_type);
-                    
-                        if let Some((_, _)) =
-                            types_map.to_foreign_type_name(in_type_name) {
-                                    generate_conversation(types_map,
-                                                          ret_type,
-                                                          in_type_name);
-                            }
+                       .is_none() && is_type_name(ret_type, "Result") {
+
+                    let in_type = unpack_generic_first_parameter(ret_type, "Result");
+                    let in_type_name = Symbol::intern(&normalized_ty_string(&in_type));
+                    debug!("{}:{} we have Result<{:?},...>", file!(), line!(), in_type);
+
+                    if let Some((_, _)) = types_map.to_foreign_type_name(in_type_name) {
+                        generate_conversation(types_map, ret_type, in_type_name);
                     }
+                }
             }
         }
     }

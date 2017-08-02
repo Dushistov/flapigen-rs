@@ -458,7 +458,7 @@ fn find_conversation_path(_: &ParseSess,
             .filter_map(|edge| paths_cost.get(&edge.source()).map(|v| (edge, v)))
             .min_by_key(|x| x.1)
             .unwrap_or_else(|| {
-                                eprintln!("Conversation graph: {}", DisplayConvGraph(&conv_graph));
+                                eprintln!("Conversation graph: {}", DisplayConvGraph(conv_graph));
                                 panic!("Can not find conversation from {} to {}",
                                        conv_graph[from],
                                        conv_graph[to])
