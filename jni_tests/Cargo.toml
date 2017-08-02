@@ -17,5 +17,5 @@ env_logger = "0.4.2"
 bindgen = "0.26.3"
 log = "0.3"
 rust_swig = { path = "../macroslib" }
-
+depgraph = "0.3.0"
 
