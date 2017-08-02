@@ -22,6 +22,6 @@ impl Session {
     }
 
     pub fn test(&self, val: i32) -> i32 {
-        self.a + val
+        self.a + val + 1
     }
 }

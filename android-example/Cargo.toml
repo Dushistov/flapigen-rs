@@ -16,7 +16,5 @@ android_logger = "0.3.0"
 [build-dependencies]
 bindgen = "0.26.3"
 syntex = "0.58.1"
-
-
-[build-dependencies.rust_swig]
-path = "../macroslib/"
+depgraph = "0.3.0"
+rust_swig = { path = "../macroslib" }
