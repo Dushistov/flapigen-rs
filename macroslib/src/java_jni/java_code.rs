@@ -124,6 +124,15 @@ public final class {class_name} {{
         ).map_err(&map_write_err)?;
     }
 
+    //utility class, so add private constructor
+    //to prevent object creation
+    if !have_constructor && !have_methods {
+        write!(file, r#"
+    private {class_name}() {{}}
+"#, class_name = class.name)
+            .map_err(&map_write_err)?;
+    }
+
     file.write_all(class.foreigner_code.as_bytes())
         .map_err(&map_write_err)?;
     write!(file, "}}").map_err(&map_write_err)?;

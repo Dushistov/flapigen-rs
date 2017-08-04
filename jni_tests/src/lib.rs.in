@@ -378,3 +378,7 @@ foreigner_class!(class TestContainers {
     method TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
     method TestContainers::get_string_vec(&self) -> Vec<String>;
 });
+
+foreigner_class!(class OneStaticFunctionTest {
+    static_method f_hypot(_ :f64, _: f64) -> f64;
+});
