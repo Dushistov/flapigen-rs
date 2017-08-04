@@ -56,28 +56,28 @@ pub(crate) fn generate_rust_code(parse_sess: &ParseSess,
 
     let mut have_constructor = false;
 
-    for (method_idx, method) in class.methods.iter().enumerate() {
+    for (method, method_sign) in class.methods.iter().zip(methods_sign.iter()) {
         let java_method_name = java_code::method_name(&*method);
         let method_overloading = gen_fnames[&java_method_name] > 1;
         let jni_func_name = generate_jni_func_name(package_name,
                                                    &class.name,
                                                    &java_method_name,
-                                                   &methods_sign[method_idx],
+                                                   &method_sign,
                                                    method_overloading);
-        let n_args = methods_sign[method_idx].rust_input.len();
+        let n_args = method_sign.rust_input.len();
         let (mut deps_code_in, convert_input_code) =
             types_map
                 .convert_foreign_input(parse_sess,
                                        &*method,
-                                       &methods_sign[method_idx],
+                                       &method_sign,
                                        (0..n_args).map(|v| format!("a_{}", v)))?;
-        let args_names = methods_sign[method_idx]
+        let args_names = method_sign
             .rust_input
             .iter()
             .enumerate()
             .map(|a| format!("a_{}, ", a.0))
             .fold(String::new(), |acc, x| acc + &x);
-        let decl_func_args = generate_jni_args_with_types(&methods_sign[method_idx])?;
+        let decl_func_args = generate_jni_args_with_types(&method_sign)?;
 
         let mut code = String::new();
         match method.variant {
@@ -86,7 +86,7 @@ pub(crate) fn generate_rust_code(parse_sess: &ParseSess,
                     types_map
                         .convert_output_to_foreign(parse_sess,
                                                    &*method,
-                                                   &methods_sign[method_idx],
+                                                   &method_sign,
                                                    "ret")?;
                 write!(&mut code, r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
@@ -100,7 +100,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_ty
 "#,
                        func_name = jni_func_name,
                        decl_func_args = decl_func_args,
-                       jni_ret_type = unpack_unique_typename(methods_sign[method_idx].rust_output),
+                       jni_ret_type = unpack_unique_typename(method_sign.rust_output),
                        convert_input_code = convert_input_code,
                        rust_func_name = method.rust_id,
                        args_names = args_names,
@@ -122,7 +122,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_ty
                     types_map
                         .convert_output_to_foreign(parse_sess,
                                                    &*method,
-                                                   &methods_sign[method_idx],
+                                                   &method_sign,
                                                    "ret")?;
                 write!(&mut code, r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
@@ -141,7 +141,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -
                        func_name = jni_func_name,
                        decl_func_args = decl_func_args,
                        convert_input_code = convert_input_code,
-                       jni_ret_type = unpack_unique_typename(methods_sign[method_idx].rust_output),
+                       jni_ret_type = unpack_unique_typename(method_sign.rust_output),
                        this_type = pprust::ty_to_string(&constructor_ret_type),
                        convert_this = generate_rust_to_convert_this(class, &constructor_ret_type)?,
                        rust_func_name = method.rust_id,
