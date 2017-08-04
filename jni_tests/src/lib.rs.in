@@ -3,18 +3,21 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use jni_c_header::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean,
-          jobject, jfieldID, jobjectArray, jmethodID, jsize, jshort, jbyte};
+use jni_c_header::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean, jobject,
+                   jfieldID, jobjectArray, jmethodID, jsize, jshort, jbyte};
 
 struct Foo {
     data: i32,
-    name: String
+    name: String,
 }
 
 impl Foo {
     fn new(val: i32, name: &str) -> Foo {
         println!("name: {}", name);
-        Foo{data: val, name: name.to_string()}
+        Foo {
+            data: val,
+            name: name.to_string(),
+        }
     }
 
     fn f(&self, a: i32, b: i32) -> i32 {
@@ -35,7 +38,7 @@ fn f_hypot(a: f64, b: f64) -> f64 {
 }
 
 fn now() -> SystemTime {
-    return SystemTime::now()
+    return SystemTime::now();
 }
 
 foreigner_class!(class Foo {
@@ -53,9 +56,15 @@ struct Boo {
 }
 
 impl Boo {
-    fn new() -> Boo { Boo{a: 17} }
+    fn new() -> Boo {
+        Boo { a: 17 }
+    }
     fn test(&self, a: bool) -> f32 {
-        if a { ::std::f32::consts::E } else { ::std::f32::consts::PI }
+        if a {
+            ::std::f32::consts::E
+        } else {
+            ::std::f32::consts::PI
+        }
     }
     fn set_a(&mut self, val: i32) {
         self.a = val;
@@ -190,7 +199,10 @@ impl TestPathAndResult {
     }
     fn new(path: &Path) -> Result<TestPathAndResult, String> {
         println!("TestPathAndResult::new path: {:?}", path);
-        Ok(TestPathAndResult{path: path.into(), boo: create_boo()})
+        Ok(TestPathAndResult {
+               path: path.into(),
+               boo: create_boo(),
+           })
     }
 
     fn get_path(&self) -> String {
@@ -226,22 +238,26 @@ foreigner_class!(class TestPathAndResult {
 
 #[allow(non_snake_case)]
 #[no_mangle]
-pub fn Java_com_example_TestPathAndResult_do_1testHandArrayReturn(
-    env: *mut JNIEnv, _: jclass, _: jlong) -> jobjectArray {
+pub fn Java_com_example_TestPathAndResult_do_1testHandArrayReturn(env: *mut JNIEnv,
+                                                                  _: jclass,
+                                                                  _: jlong)
+                                                                  -> jobjectArray {
     let class_id = ::std::ffi::CString::new("com/example/Boo").unwrap();
     let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
     if jcls.is_null() {
         panic!("Can not find class_id {:?}", class_id);
     }
     let n = 10;
-    let ret: jobjectArray = unsafe { (**env).NewObjectArray.unwrap()(env, n, jcls, ::std::ptr::null_mut()) };
+    let ret: jobjectArray =
+        unsafe { (**env).NewObjectArray.unwrap()(env, n, jcls, ::std::ptr::null_mut()) };
     if ret.is_null() {
         panic!("Can not create object array");
     }
 
     let field_id = ::std::ffi::CString::new("mNativeObj").unwrap();
     let type_id = ::std::ffi::CString::new("J").unwrap();
-    let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
+    let field_id: jfieldID =
+        unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
     assert!(!field_id.is_null());
 
     for i in 0..n {
@@ -249,7 +265,10 @@ pub fn Java_com_example_TestPathAndResult_do_1testHandArrayReturn(
         let boo = create_boo();
         boo.borrow_mut().set_a(i);
         unsafe {
-            (**env).SetLongField.unwrap()(env, elem, field_id, Box::into_raw(Box::new(boo)) as jlong);
+            (**env).SetLongField.unwrap()(env,
+                                          elem,
+                                          field_id,
+                                          Box::into_raw(Box::new(boo)) as jlong);
             (**env).SetObjectArrayElement.unwrap()(env, ret, i, elem);
             (**env).DeleteLocalRef.unwrap()(env, elem);
         }
@@ -280,7 +299,8 @@ pub fn Java_com_example_TestInner_getInner(env: *mut JNIEnv, _: jclass) -> jobje
     assert!(!ret.is_null());
     let str_type_id = ::std::ffi::CString::new("Ljava/lang/String;").unwrap();
     let field_id = ::std::ffi::CString::new("name").unwrap();
-    let name_field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), str_type_id.as_ptr()) };
+    let name_field_id: jfieldID =
+        unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), str_type_id.as_ptr()) };
     assert!(!name_field_id.is_null());
     let name = ::std::ffi::CString::new("Boo Boo").unwrap();
     let name = unsafe { (**env).NewStringUTF.unwrap()(env, name.as_ptr()) };
