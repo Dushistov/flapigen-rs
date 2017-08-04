@@ -157,7 +157,7 @@ fn vec_of_objects_to_jobject_array<T>(mut arr: Vec<T>,
     obj_arr
 }
 
-#[allow(dead_code)]
+#[allow(unused_macros)]
 macro_rules! jni_unpack_return {
     ($result_value:expr, $default_value:expr, $env:ident) => {
         {
