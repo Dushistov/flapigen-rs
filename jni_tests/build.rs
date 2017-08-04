@@ -27,6 +27,7 @@ fn main() {
     let jni_h_path = search_file_in_directory(&include_dirs[..], "jni.h")
         .expect("Can not find jni.h");
 
+    println!("We going to generate {:?}", Path::new(&env::var("OUT_DIR").unwrap()).join("lib.rs"));
 
     let build_graph = depgraph::DepGraphBuilder::new()
         .add_rule(Path::new(&env::var("OUT_DIR").unwrap()).join("jni_c_header.rs"),
@@ -47,8 +48,6 @@ fn main() {
     build_graph
         .make(depgraph::MakeParams::None)
         .expect("build.rs rules failed");
-
-
 }
 
 fn search_file_in_directory<P: AsRef<Path>>(dirs: &[P], file: &str) -> Result<PathBuf, ()> {
@@ -84,6 +83,7 @@ fn gen_binding<P: AsRef<Path>>(include_dirs: &[P],
 }
 
 fn rust_swig_expand(out: &Path, deps: &[&Path]) -> Result<(), String> {
+    println!("Run rust_swig_expand");
     let mut registry = syntex::Registry::new();
     let swig_gen =
         rust_swig::Generator::new(rust_swig::LanguageConfig::Java {

@@ -9,6 +9,7 @@ import com.example.Boo;
 import com.example.TestPathAndResult;
 import com.example.TestInner;
 import com.example.Xyz;
+import com.example.TestContainers;
 
 class Main {
     private static void testDoubleOverload() {
@@ -107,6 +108,26 @@ class Main {
         assert Math.abs(Boo.test_f64((double) -1.0)) < 1e-12;
 
         testDoubleOverload();
+
+	{
+	    TestContainers testContainers = new TestContainers();
+	    Foo[] sv = testContainers.get_struct_vec();
+	    assert sv.length == 2;
+	    assert sv[0].getName().equals("1");
+	    assert sv[0].calcF(0, 0) == 1;
+	    assert sv[1].getName().equals("2");
+	    assert sv[1].calcF(0, 0) == 2;
+	    assert testContainers.get_empty_struct_vec().length == 0;
+	    String[] strv = testContainers.get_string_vec();
+	    assert strv.length == 7;
+	    assert strv[0].equals("The");
+	    assert strv[1].equals("was");
+	    assert strv[2].equals("a");
+	    assert strv[3].equals("young");
+	    assert strv[4].equals("lady");
+	    assert strv[5].equals("whose");
+	    assert strv[6].equals("nose");
+	}
 
         System.out.println("ALL tests PASSED");
     }

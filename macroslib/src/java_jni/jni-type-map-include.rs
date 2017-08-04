@@ -21,6 +21,8 @@ mod foreign_types_map {
     #![rust_type_not_unique="jobject"]
     #![foreigner_type="java.util.Date"]
     #![rust_type_not_unique="jobject"]
+    #![foreigner_type="java.lang.String []"]
+    #![rust_type_not_unique="jobjectArray"]
 }
 
 #[cfg(target_pointer_width = "32")]
@@ -126,6 +128,7 @@ fn vec_of_objects_to_jobject_array<T>(mut arr: Vec<T>,
     let class_id = ::std::ffi::CString::new(full_class_name).unwrap();
     let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
     assert!(!jcls.is_null());
+    //TODO: check for arr.len() -> jsize overflow
     let obj_arr: jobjectArray = unsafe {
         (**env).NewObjectArray.unwrap()(env, arr.len() as jsize, jcls, ::std::ptr::null_mut())
     };
@@ -397,5 +400,35 @@ impl SwigInto<usize> for i64 {
 impl<'a> SwigInto<&'a Path> for &'a str {
     fn swig_into(self, _: *mut JNIEnv) -> &'a Path {
         Path::new(self)
+    }
+}
+
+// Vec<String> -> jobjectArray
+#[to_foreigner_hint = "java.lang.String []"]
+impl SwigInto<jobjectArray> for Vec<String> {
+    fn swig_into(mut self, env: *mut JNIEnv) -> jobjectArray {
+        let class_id = unsafe {
+            ::std::ffi::CStr::from_ptr(concat!("java/lang/String", "\0").as_ptr() as
+                                     *const ::std::os::raw::c_char)
+        };
+        let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
+        assert!(!jcls.is_null());
+        let obj_arr: jobjectArray = unsafe {
+            (**env).NewObjectArray.unwrap()(env, self.len() as jsize, jcls, ::std::ptr::null_mut())
+        };
+        assert!(!obj_arr.is_null());
+        for (i, r_str) in self.drain(..).enumerate() {
+            let jstr: jstring = jstring::swig_from(r_str, env);
+            assert!(!jstr.is_null());
+
+            unsafe {
+                (**env).SetObjectArrayElement.unwrap()(env, obj_arr, i as jsize, jstr);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("SetObjectArrayElement({}) failed", i);
+                }
+                (**env).DeleteLocalRef.unwrap()(env, jstr);
+            }
+        }
+        obj_arr
     }
 }

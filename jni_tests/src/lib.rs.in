@@ -6,6 +6,7 @@ use std::time::SystemTime;
 use jni_c_header::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean, jobject,
                    jfieldID, jobjectArray, jmethodID, jsize, jshort, jbyte};
 
+#[derive(Clone)]
 struct Foo {
     data: i32,
     name: String,
@@ -314,6 +315,7 @@ pub fn Java_com_example_TestInner_getInner(env: *mut JNIEnv, _: jclass) -> jobje
     ret
 }
 
+#[derive(Clone)]
 struct Xyz;
 
 impl Xyz {
@@ -329,4 +331,50 @@ impl Xyz {
 foreigner_class!(class Xyz {
     constructor Xyz::zero() -> Xyz;
     constructor Xyz::new(_: f64, _: f64, _: f64) -> Xyz;
+});
+
+
+struct TestContainers {
+    empty_struct_vec: Vec<Xyz>,
+    struct_vec: Vec<Foo>,
+    string_vec: Vec<String>,
+}
+
+impl Default for TestContainers {
+    fn default() -> Self {
+        let empty_struct_vec = vec![];
+        let struct_vec = vec![Foo::new(1, "1"), Foo::new(2, "2")];
+        let string_vec = vec!["The".into(),
+                              "was".into(),
+                              "a".into(),
+                              "young".into(),
+                              "lady".into(),
+                              "whose".into(),
+                              "nose".into()];
+        TestContainers {
+            empty_struct_vec,
+            struct_vec,
+            string_vec,
+        }
+    }
+}
+
+impl TestContainers {
+    fn get_struct_vec(&self) -> Vec<Foo> {
+        self.struct_vec.clone()
+    }
+    fn get_empty_struct_vec(&self) -> Vec<Xyz> {
+        self.empty_struct_vec.clone()
+    }
+    fn get_string_vec(&self) -> Vec<String> {
+        self.string_vec.clone()
+    }
+}
+
+foreigner_class!(class TestContainers {
+    self_type TestContainers;
+    constructor TestContainers::default() -> TestContainers;
+    method TestContainers::get_struct_vec(&self) -> Vec<Foo>;
+    method TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
+    method TestContainers::get_string_vec(&self) -> Vec<String>;
 });

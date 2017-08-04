@@ -38,7 +38,7 @@ use_shell = os.name == 'nt'
 java_dir = str(os.path.join(os.getcwd(), "src/com/example"))
 purge(java_dir, ".*\.class$")
 subprocess.check_call(["javac", "Main.java", "Foo.java", "Boo.java", "TestPathAndResult.java",
-                       "TestInner.java", "Xyz.java"],
+                       "TestInner.java", "Xyz.java", "TestContainers.java"],
                       cwd=java_dir, shell=use_shell)
 
 jar_dir = str(os.path.join(os.getcwd(), "src"))

@@ -51,6 +51,17 @@ foreigner_class!(class Boo {
     );
 }
 
+#[test]
+fn test_string_containers() {
+    parse_code("test_string_array",
+               r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::default() -> Foo;
+    method Foo::list(&self) -> Vec<String>;
+});"#);
+}
+
 fn parse_code(test_name: &str, code: &str) -> String {
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");
     println!("{}: test name {} tmp_dir {:?}",
