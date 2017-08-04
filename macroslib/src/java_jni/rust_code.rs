@@ -10,7 +10,7 @@ use syntex_syntax::parse::ParseSess;
 use ForeignerClassInfo;
 use ForeignTypesMap;
 use MethodVariant;
-use types_map::{MethodSignatureWithForeignTypes, unpack_unique_typename};
+use types_map::{MethodSignatureWithForeignTypes, unpack_unique_typename, fn_decl_output_typename};
 use java_jni::java_code;
 use utils::fmt_write_err_map;
 
@@ -78,22 +78,20 @@ pub(crate) fn generate_rust_code(parse_sess: &ParseSess,
             .map(|a| format!("a_{}, ", a.0))
             .fold(String::new(), |acc, x| acc + &x);
         let decl_func_args = generate_jni_args_with_types(&method_sign)?;
+        let real_output_typename = fn_decl_output_typename(&*method.fn_decl);
 
         let mut code = String::new();
         match method.variant {
             MethodVariant::StaticMethod => {
                 let (mut deps_code_out, convert_output_code) =
                     types_map
-                        .convert_output_to_foreign(parse_sess,
-                                                   &*method,
-                                                   &method_sign,
-                                                   "ret")?;
+                        .convert_output_to_foreign(parse_sess, &*method, &method_sign, "ret")?;
                 write!(&mut code, r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
 #[no_mangle]
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_type} {{
 {convert_input_code}
-    let mut ret = {rust_func_name}({args_names});
+    let mut ret: {real_output_typename} = {rust_func_name}({args_names});
 {convert_output_code}
     ret
 }}
@@ -105,7 +103,9 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_ty
                        rust_func_name = method.rust_id,
                        args_names = args_names,
                        convert_output_code = convert_output_code,
-                ).map_err(fmt_write_err_map)?;
+                       real_output_typename = real_output_typename,
+                )
+                        .map_err(fmt_write_err_map)?;
 
 
 
@@ -120,10 +120,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_ty
 
                 let (mut deps_code_out, convert_output_code) =
                     types_map
-                        .convert_output_to_foreign(parse_sess,
-                                                   &*method,
-                                                   &method_sign,
-                                                   "ret")?;
+                        .convert_output_to_foreign(parse_sess, &*method, &method_sign, "ret")?;
                 write!(&mut code, r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
 #[no_mangle]
@@ -133,7 +130,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -
         jlong_to_pointer::<{this_type}>(this).as_mut().unwrap()
     }};
 {convert_this}
-    let mut ret = {rust_func_name}(&mut *this, {args_names});
+    let mut ret: {real_output_typename} = {rust_func_name}(&mut *this, {args_names});
 {convert_output_code}
     ret
 }}
@@ -147,7 +144,9 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -
                        rust_func_name = method.rust_id,
                        args_names = args_names,
                        convert_output_code = convert_output_code,
-                ).map_err(fmt_write_err_map)?;
+                       real_output_typename = real_output_typename,
+                )
+                        .map_err(fmt_write_err_map)?;
                 for item in deps_code_in.drain(..).chain(deps_code_out.drain(..)) {
                     gen_code.push(P(item));
                 }
@@ -163,7 +162,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -
 #[allow(unused_variables)]
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
 {convert_input_code}
-  let this = {rust_func_name}({args_names});
+  let this: {real_output_typename} = {rust_func_name}({args_names});
 {convert_this}
   Box::into_raw(Box::new(this)) as jlong
 }}
@@ -175,7 +174,9 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
                        convert_input_code = convert_input_code,
                        rust_func_name = method.rust_id,
                        args_names = args_names,
-                ).map_err(fmt_write_err_map)?;
+                       real_output_typename = real_output_typename,
+                )
+                        .map_err(fmt_write_err_map)?;
                 for item in deps_code_in.drain(..) {
                     gen_code.push(P(item));
                 }
@@ -208,7 +209,8 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
                        rust_output: Symbol::intern(""),
                    }, false),
                type_name = pprust::ty_to_string(&constructor_ret_type),
-        ).map_err(fmt_write_err_map)?;
+        )
+                .map_err(fmt_write_err_map)?;
         debug!("we generate and parse code: {}", code);
         let mut jni_func_items = code_to_item(&code);
         gen_code.extend(jni_func_items.drain(..));
@@ -264,14 +266,12 @@ fn generate_jni_func_name(package_name: &str,
     if overloaded {
         output.push_str("__");
         for arg in &method.foreign_input {
-            escape_underscore(
-                JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-                    .get(&*arg)
-                    .unwrap_or_else(|| {
-                        panic!("generate_jni_func_name: Unknown Java type `{}`", *arg)
-                    }),
-                &mut output,
-            );
+            escape_underscore(JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
+                                  .get(&*arg)
+                                  .unwrap_or_else(|| {
+                panic!("generate_jni_func_name: Unknown Java type `{}`", *arg)
+            }),
+                              &mut output);
         }
     }
 
@@ -288,7 +288,7 @@ fn generate_jni_args_with_types(method: &MethodSignatureWithForeignTypes)
                "a_{}: {}, ",
                i,
                unpack_unique_typename(*rust_type_name))
-            .map_err(fmt_write_err_map)?;
+                .map_err(fmt_write_err_map)?;
     }
     Ok(buf)
 }
@@ -325,7 +325,7 @@ fn jni_handle_result_from_constructor(class: &ForeignerClassInfo,
     }
   };
 "#
-            .into()
+                .into()
     } else {
         String::new()
     }

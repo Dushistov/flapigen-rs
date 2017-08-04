@@ -358,11 +358,7 @@ impl ForeignTypesMap {
                                             method_sign: &MethodSignatureWithForeignTypes,
                                             ret_var_name: &str)
                                             -> Result<(Vec<ast::Item>, String), String> {
-        let from_typename =
-            Symbol::intern(&match method.fn_decl.output {
-                               FunctionRetTy::Default(_) => "()".to_string(),
-                               FunctionRetTy::Ty(ref t) => normalized_ty_string(&*t),
-                           });
+        let from_typename = fn_decl_output_typename(&*method.fn_decl);
         let from = self.rust_names_map
             .get(&from_typename)
             .ok_or_else(|| {
@@ -470,6 +466,13 @@ fn find_conversation_path(_: &ParseSess,
 
     path.reverse();
     path
+}
+
+pub(crate) fn fn_decl_output_typename(fn_decl: &ast::FnDecl) -> Symbol {
+    Symbol::intern(&match fn_decl.output {
+        FunctionRetTy::Default(_) => "()".to_string(),
+        FunctionRetTy::Ty(ref t) => normalized_ty_string(&*t),
+    })
 }
 
 #[cfg(test)]
