@@ -44,7 +44,11 @@ struct JavaString {
 #[allow(dead_code)]
 impl JavaString {
     fn new(env: *mut JNIEnv, js: jstring) -> JavaString {
-        let chars = unsafe { (**env).GetStringUTFChars.unwrap()(env, js, ::std::ptr::null_mut()) };
+        let chars = if !js.is_null() {
+            unsafe { (**env).GetStringUTFChars.unwrap()(env, js, ::std::ptr::null_mut()) }
+        } else {
+            ::std::ptr::null_mut()
+        };
         JavaString {
             string: js,
             chars: chars,
@@ -52,18 +56,27 @@ impl JavaString {
         }
     }
     fn to_str(&self) -> &str {
-        let s = unsafe { ::std::ffi::CStr::from_ptr(self.chars) };
-        s.to_str().unwrap()
+        if !self.chars.is_null() {
+            let s = unsafe { ::std::ffi::CStr::from_ptr(self.chars) };
+            s.to_str().unwrap()
+        } else {
+            ""
+        }
     }
 }
 
 #[allow(dead_code)]
 impl Drop for JavaString {
     fn drop(&mut self) {
-        assert!(self.env != ::std::ptr::null_mut() && self.chars != ::std::ptr::null_mut());
-        unsafe { (**self.env).ReleaseStringUTFChars.unwrap()(self.env, self.string, self.chars) };
-        self.env = ::std::ptr::null_mut();
-        self.chars = ::std::ptr::null_mut();
+        assert!(!self.env.is_null());
+        if !self.string.is_null() {
+            assert!(!self.chars.is_null());
+            unsafe {
+                (**self.env).ReleaseStringUTFChars.unwrap()(self.env, self.string, self.chars)
+            };
+            self.env = ::std::ptr::null_mut();
+            self.chars = ::std::ptr::null_mut();
+        }
     }
 }
 
@@ -409,7 +422,7 @@ impl SwigInto<jobjectArray> for Vec<String> {
     fn swig_into(mut self, env: *mut JNIEnv) -> jobjectArray {
         let class_id = unsafe {
             ::std::ffi::CStr::from_ptr(concat!("java/lang/String", "\0").as_ptr() as
-                                     *const ::std::os::raw::c_char)
+                                       *const ::std::os::raw::c_char)
         };
         let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
         assert!(!jcls.is_null());
