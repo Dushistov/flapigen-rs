@@ -1,6 +1,8 @@
 //! `rust_swig` is a Rust Simplified Wrapper and Interface Generator used
-//! to connect other programming languages to Rust. The idea of this softwared based on [swig](http://www.swig.org).
+//! to connect other programming languages to Rust.
+//! The idea of this softwared based on [swig](http://www.swig.org).
 //! For macros expansion it uses [syntex](https://crates.io/crates/syntex).
+//! More details can be found at [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
 extern crate syntex;
 extern crate syntex_syntax;
 extern crate syntex_pos;

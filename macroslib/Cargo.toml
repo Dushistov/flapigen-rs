@@ -6,7 +6,7 @@ description = "Tool for simplification of Rust usage from other languages"
 license = "BSD-3-Clause"
 keywords = ["swig", "java", "jni", "ffi", "wrapper"]
 repository = "https://github.com/Dushistov/rust_swig"
-documentation = "https://github.com/Dushistov/rust_swig/blob/master/README.md"
+documentation = "https://docs.rs/rust_swig"
 
 [dependencies]
 syntex = "0.58.1"
