@@ -27,7 +27,8 @@ fn main() {
     let jni_h_path = search_file_in_directory(&include_dirs[..], "jni.h")
         .expect("Can not find jni.h");
 
-    println!("We going to generate {:?}", Path::new(&env::var("OUT_DIR").unwrap()).join("lib.rs"));
+    let out_dir = env::var("OUT_DIR").unwrap();
+    println!("We going to generate {:?}", Path::new(&out_dir).join("lib.rs"));
 
     let build_graph = depgraph::DepGraphBuilder::new()
         .add_rule(Path::new(&env::var("OUT_DIR").unwrap()).join("jni_c_header.rs"),
@@ -48,6 +49,8 @@ fn main() {
     build_graph
         .make(depgraph::MakeParams::None)
         .expect("build.rs rules failed");
+    println!("cargo:rerun-if-changed=src");
+    println!("cargo:rerun-if-changed={}", out_dir);
 }
 
 fn search_file_in_directory<P: AsRef<Path>>(dirs: &[P], file: &str) -> Result<PathBuf, ()> {
