@@ -80,9 +80,9 @@ impl Drop for JavaString {
     }
 }
 
-impl ::std::ops::Deref for JavaString {
+impl SwigDeref for JavaString {
     type Target = str;
-    fn deref(&self) -> &Self::Target {
+    fn swig_deref(&self) -> &Self::Target {
         self.to_str()
     }
 }
@@ -198,6 +198,13 @@ trait SwigInto<T> {
 trait SwigFrom<T> {
     fn swig_from(T, env: *mut JNIEnv) -> Self;
 }
+
+#[allow(dead_code)]
+trait SwigDeref {
+    type Target: ?Sized;
+    fn swig_deref(&self) -> &Self::Target;
+}
+
 
 impl SwigInto<bool> for jboolean {
     fn swig_into(self, _: *mut JNIEnv) -> bool {

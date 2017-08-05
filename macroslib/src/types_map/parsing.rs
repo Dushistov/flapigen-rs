@@ -141,7 +141,7 @@ pub(in types_map) fn parse_types_map(session: &ParseSess,
                                     ref for_type,
                                     ref impl_items),
                 ..
-            } if path_match(&trait_type.path, "Deref") => {
+            } if path_match(&trait_type.path, "SwigDeref") => {
                 let target =
                     unpack_first_associated_type(impl_items, "Target").unwrap_or_else(|| {
                         fatal_error(session, &item.span, "no associated Target for Deref")
@@ -153,8 +153,9 @@ pub(in types_map) fn parse_types_map(session: &ParseSess,
                 //for_type -> &Target
                 add_conv_code(Symbol::intern(&for_typename),
                               Symbol::intern(&to_typename),
-                              Symbol::intern(&format!("let {{to_var}}: {} = &{{from_var}};",
-                                                      to_typename)),
+                              Symbol::intern(
+                                  &format!("let {{to_var}}: {} = {{from_var}}.swig_deref();",
+                                           to_typename)),
                               &mut rust_names_map,
                               &mut conv_graph,
                               (*item).clone());
