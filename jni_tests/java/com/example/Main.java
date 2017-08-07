@@ -4,12 +4,12 @@ import java.util.Date;
 import java.util.Calendar;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import com.example.Foo;
-import com.example.Boo;
-import com.example.TestPathAndResult;
-import com.example.TestInner;
-import com.example.Xyz;
-import com.example.TestContainers;
+import com.example.rust.Foo;
+import com.example.rust.Boo;
+import com.example.rust.TestPathAndResult;
+import com.example.rust.TestInner;
+import com.example.rust.Xyz;
+import com.example.rust.TestContainers;
 
 class Main {
     private static void testDoubleOverload() {
