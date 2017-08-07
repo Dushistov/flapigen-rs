@@ -12,10 +12,10 @@ use petgraph::graph::NodeIndex;
 
 use ForeignTypesMap;
 use utils::fatal_error;
-use types_map::{ForeignTypeConv, TypeGraphIdx, TypeConvNode, TypeConvEdge, FrontierTypeNode,
-                make_unique_rust_typename};
+use types_map::{make_unique_rust_typename, ForeignTypeConv, FrontierTypeNode, TypeConvEdge,
+                TypeConvNode, TypeGraphIdx};
 use types_map::norm_ty::normalized_ty_string;
-use my_ast::{path_match, unpack_first_associated_type, path_unpack_generic_first_parameter};
+use my_ast::{path_match, path_unpack_generic_first_parameter, unpack_first_associated_type};
 
 struct NamesPair {
     foreign_name: Symbol,
@@ -23,16 +23,19 @@ struct NamesPair {
 }
 
 /// may panics
-pub(in types_map) fn parse_types_map(session: &ParseSess,
-                                     name: &str,
-                                     code: &str)
-                                     -> ForeignTypesMap {
-    fn add_conv_code(from_type: Symbol,
-                     to_type: Symbol,
-                     code: Symbol,
-                     rust_names_map: &mut HashMap<Symbol, NodeIndex<TypeGraphIdx>>,
-                     conv_graph: &mut ForeignTypeConv,
-                     item: ast::Item) {
+pub(in types_map) fn parse_types_map(
+    session: &ParseSess,
+    name: &str,
+    code: &str,
+) -> ForeignTypesMap {
+    fn add_conv_code(
+        from_type: Symbol,
+        to_type: Symbol,
+        code: Symbol,
+        rust_names_map: &mut HashMap<Symbol, NodeIndex<TypeGraphIdx>>,
+        conv_graph: &mut ForeignTypeConv,
+        item: ast::Item,
+    ) {
         let from = *rust_names_map
             .entry(from_type)
             .or_insert_with(|| conv_graph.add_node(TypeConvNode::Internal(from_type)));
@@ -70,8 +73,10 @@ pub(in types_map) fn parse_types_map(session: &ParseSess,
                 let attr_name: Symbol = attr.value.name;
                 match attr.value.node {
                     ast::MetaItemKind::NameValue(Spanned {
-                                                     node: ast::LitKind::Str(lit, _), ..
-                                                 }) if attr_name == sym_to_foreigner_hint => {
+                        node: ast::LitKind::Str(lit, _),
+                        ..
+                    }) if attr_name == sym_to_foreigner_hint =>
+                    {
                         Some((idx, lit))
                     }
                     _ => None,
@@ -82,83 +87,97 @@ pub(in types_map) fn parse_types_map(session: &ParseSess,
         match *item {
             _ if is_foreign_types_map_module(&*item) => {
                 if let Some(span) = names_map_span {
-                    fatal_error(session,
-                                &item.span,
-                                &format!("Another foreign type map mod, previous defined here {:?}",
-                                         span));
+                    fatal_error(
+                        session,
+                        &item.span,
+                        &format!(
+                            "Another foreign type map mod, previous defined here {:?}",
+                            span
+                        ),
+                    );
                 }
                 names_map_span = Some(item.span);
                 let mut names_map = parse_foreign_types_map_module(session, &*item);
                 for it in names_map.drain(..) {
                     assert!(!foreign_names_map.contains_key(&it.foreign_name));
                     let node = conv_graph.add_node(TypeConvNode::Frontier(FrontierTypeNode {
-                                                                              foreign:
-                                                                                  it.foreign_name,
-                                                                              rust: it.rust_name,
-                                                                          }));
+                        foreign: it.foreign_name,
+                        rust: it.rust_name,
+                    }));
                     foreign_names_map.insert(it.foreign_name, node);
-                    rust_names_map.entry(it.rust_name).or_insert_with(|| {
-                        conv_graph.add_node(TypeConvNode::Internal(it.rust_name))
-                    });
+                    rust_names_map.entry(it.rust_name).or_insert_with(
+                        || conv_graph.add_node(TypeConvNode::Internal(it.rust_name)),
+                    );
                 }
             }
             ast::Item {
-                node: ast::ItemKind::Impl(ast::Unsafety::Normal,
-                                    ast::ImplPolarity::Positive,
-                                    _,
-                                    Some(ref trait_type),
-                                    ref for_type,
-                                    _),
+                node: ast::ItemKind::Impl(
+                    ast::Unsafety::Normal,
+                    ast::ImplPolarity::Positive,
+                    _,
+                    Some(ref trait_type),
+                    ref for_type,
+                    _,
+                ),
                 ..
             } if path_match(&trait_type.path, "SwigInto") ||
-                 path_match(&trait_type.path, "SwigFrom") => {
+                path_match(&trait_type.path, "SwigFrom") =>
+            {
                 let conv = match parse_type_converter(trait_type, for_type) {
                     Ok(x) => x,
                     Err(msg) => fatal_error(session, &item.span, msg),
                 };
-                let new_item = if let Some(foreigner_type_idx) =
-                    to_foreigner_hint.map(|(idx, _)| idx) {
-                    let mut x = (*item).clone();
-                    x.attrs.remove(foreigner_type_idx);
-                    x
-                } else {
-                    (*item).clone()
-                };
-                add_conv_code(conv.from_type,
-                              make_unique_rust_typename_if_need(conv.to_type,
-                                                                to_foreigner_hint.map(|(_,
-                                                                                        v)| v)),
-                              conv.code,
-                              &mut rust_names_map,
-                              &mut conv_graph,
-                              new_item);
+                let new_item =
+                    if let Some(foreigner_type_idx) = to_foreigner_hint.map(|(idx, _)| idx) {
+                        let mut x = (*item).clone();
+                        x.attrs.remove(foreigner_type_idx);
+                        x
+                    } else {
+                        (*item).clone()
+                    };
+                add_conv_code(
+                    conv.from_type,
+                    make_unique_rust_typename_if_need(
+                        conv.to_type,
+                        to_foreigner_hint.map(|(_, v)| v),
+                    ),
+                    conv.code,
+                    &mut rust_names_map,
+                    &mut conv_graph,
+                    new_item,
+                );
             }
             ast::Item {
-                node: ast::ItemKind::Impl(ast::Unsafety::Normal,
-                                    ast::ImplPolarity::Positive,
-                                    _,
-                                    Some(ref trait_type),
-                                    ref for_type,
-                                    ref impl_items),
+                node: ast::ItemKind::Impl(
+                    ast::Unsafety::Normal,
+                    ast::ImplPolarity::Positive,
+                    _,
+                    Some(ref trait_type),
+                    ref for_type,
+                    ref impl_items,
+                ),
                 ..
-            } if path_match(&trait_type.path, "SwigDeref") => {
-                let target =
-                    unpack_first_associated_type(impl_items, "Target").unwrap_or_else(|| {
-                        fatal_error(session, &item.span, "no associated Target for Deref")
-                    });
+            } if path_match(&trait_type.path, "SwigDeref") =>
+            {
+                let target = unpack_first_associated_type(impl_items, "Target").unwrap_or_else(
+                    || fatal_error(session, &item.span, "no associated Target for Deref"),
+                );
                 debug!("target {:?}, for_type {:?}", target, for_type);
                 let for_typename = normalized_ty_string(for_type);
                 let deref_target_name = normalized_ty_string(&target);
                 let to_typename = format!("&{}", deref_target_name.as_str());
                 //for_type -> &Target
-                add_conv_code(Symbol::intern(&for_typename),
-                              Symbol::intern(&to_typename),
-                              Symbol::intern(
-                                  &format!("let {{to_var}}: {} = {{from_var}}.swig_deref();",
-                                           to_typename)),
-                              &mut rust_names_map,
-                              &mut conv_graph,
-                              (*item).clone());
+                add_conv_code(
+                    Symbol::intern(&for_typename),
+                    Symbol::intern(&to_typename),
+                    Symbol::intern(&format!(
+                        "let {{to_var}}: {} = {{from_var}}.swig_deref();",
+                        to_typename
+                    )),
+                    &mut rust_names_map,
+                    &mut conv_graph,
+                    (*item).clone(),
+                );
             }
             _ => utils_code.push(P((*item).clone())),
         }
@@ -201,49 +220,48 @@ struct TypeConverter {
     code: Symbol,
 }
 
-fn parse_type_converter(trait_type: &TraitRef,
-                        for_type: &ast::Ty)
-                        -> Result<TypeConverter, &'static str> {
+fn parse_type_converter(
+    trait_type: &TraitRef,
+    for_type: &ast::Ty,
+) -> Result<TypeConverter, &'static str> {
     let is_into = path_match(&trait_type.path, "SwigInto");
     let is_from = path_match(&trait_type.path, "SwigFrom");
 
-    let rust_type =
-        path_unpack_generic_first_parameter(&trait_type.path,
-                                            if is_into { "SwigInto" } else { "SwigFrom" })
-            .ok_or("Expect only SwigFrom|SwigInto trait")?;
+    let rust_type = path_unpack_generic_first_parameter(
+        &trait_type.path,
+        if is_into { "SwigInto" } else { "SwigFrom" },
+    ).ok_or("Expect only SwigFrom|SwigInto trait")?;
     let rust_typename = Symbol::intern(&normalized_ty_string(&rust_type));
     let for_typename = Symbol::intern(&normalized_ty_string(for_type));
 
-    debug!("parse_type_converter is_into {}, rust_type {}, for_typename {}",
-           is_into,
-           rust_typename,
-           for_typename);
+    debug!(
+        "parse_type_converter is_into {}, rust_type {}, for_typename {}",
+        is_into,
+        rust_typename,
+        for_typename
+    );
     match (is_into, is_from) {
-        (true, false) => {
-            Ok(TypeConverter {
-                from_type: for_typename,
-                to_type: rust_typename,
-                code: Symbol::intern(&format!(
-                    r#"
+        (true, false) => Ok(TypeConverter {
+            from_type: for_typename,
+            to_type: rust_typename,
+            code: Symbol::intern(&format!(
+                r#"
 let {{to_var}}: {} = {{from_var}}.swig_into(env);
 "#,
-                    rust_typename
-                )),
-            })
-        }
-        (false, true) => {
-            Ok(TypeConverter {
-                from_type: rust_typename,
-                to_type: for_typename,
-                code: Symbol::intern(&format!(
-                    r#"
+                rust_typename
+            )),
+        }),
+        (false, true) => Ok(TypeConverter {
+            from_type: rust_typename,
+            to_type: for_typename,
+            code: Symbol::intern(&format!(
+                r#"
     let {{to_var}}: {} = {}::swig_from({{from_var}}, env);
 "#,
-                    for_typename,
-                    for_typename
-                )),
-            })
-        }
+                for_typename,
+                for_typename
+            )),
+        }),
         _ => Err("Unknown trait in types map"),
     }
 }
@@ -261,8 +279,9 @@ fn parse_foreign_types_map_module(sess: &ParseSess, item: &ast::Item) -> Vec<Nam
     for a in &item.attrs {
         let attr_value: Symbol = match a.value.node {
             ast::MetaItemKind::NameValue(codemap::Spanned {
-                                             node: ast::LitKind::Str(lit, _), ..
-                                         }) => lit,
+                node: ast::LitKind::Str(lit, _),
+                ..
+            }) => lit,
             _ => fatal_error(sess, &a.span, "Can not get attribute value"),
         };
 
@@ -272,36 +291,40 @@ fn parse_foreign_types_map_module(sess: &ParseSess, item: &ast::Item) -> Vec<Nam
                     fatal_error(sess, &a.span, "Two foreigner_type without rust_type");
                 }
                 if let Some(val) = names_map.get(&attr_value) {
-                    fatal_error(sess,
-                                &a.span,
-                                &format!("Such type({}) already defined here {:?}",
-                                         attr_value.as_str(),
-                                         val.1));
+                    fatal_error(
+                        sess,
+                        &a.span,
+                        &format!(
+                            "Such type({}) already defined here {:?}",
+                            attr_value.as_str(),
+                            val.1
+                        ),
+                    );
                 }
                 ftype = Some(attr_value);
             }
-            x if x == sym_rust_type => {
-                if let Some(ftype) = ftype.take() {
-                    names_map.insert(ftype, (attr_value, a.span));
-                } else {
-                    fatal_error(sess, &a.span, "No foreigner_type for rust_type");
-                }
-            }
-            x if x == sym_rust_type_not_unique => {
-                if let Some(ftype) = ftype.take() {
-                    let unique_name = make_unique_rust_typename(attr_value, ftype);
-                    names_map.insert(ftype, (unique_name, a.span));
-                } else {
-                    fatal_error(sess, &a.span, "No foreigner_type for rust_type");
-                }
-            }
+            x if x == sym_rust_type => if let Some(ftype) = ftype.take() {
+                names_map.insert(ftype, (attr_value, a.span));
+            } else {
+                fatal_error(sess, &a.span, "No foreigner_type for rust_type");
+            },
+            x if x == sym_rust_type_not_unique => if let Some(ftype) = ftype.take() {
+                let unique_name = make_unique_rust_typename(attr_value, ftype);
+                names_map.insert(ftype, (unique_name, a.span));
+            } else {
+                fatal_error(sess, &a.span, "No foreigner_type for rust_type");
+            },
             _ => {
-                fatal_error(sess,
-                            &a.span,
-                            &format!("{}:{} Unknown name of attribute: '{}'",
-                                     file!(),
-                                     line!(),
-                                     a.value.name));
+                fatal_error(
+                    sess,
+                    &a.span,
+                    &format!(
+                        "{}:{} Unknown name of attribute: '{}'",
+                        file!(),
+                        line!(),
+                        a.value.name
+                    ),
+                );
             }
         }
 
@@ -311,11 +334,11 @@ fn parse_foreign_types_map_module(sess: &ParseSess, item: &ast::Item) -> Vec<Nam
     names_map
         .iter()
         .map(|(k, v)| {
-                 NamesPair {
-                     foreign_name: *k,
-                     rust_name: v.0,
-                 }
-             })
+            NamesPair {
+                foreign_name: *k,
+                rust_name: v.0,
+            }
+        })
         .collect()
 }
 
@@ -349,18 +372,22 @@ mod foreign_types_map {
 }
 "#,
         );
-        assert_eq!(vec![(Symbol::intern("boolean"), Symbol::intern("jboolean")),
-                        (Symbol::intern("int"), Symbol::intern("jint")),
-                        (Symbol::intern("short"), Symbol::intern("jshort"))],
-                   {
-                       let mut ret = vec![];
-                       for (fsym, idx) in &types_map.foreign_names_map {
-                           let rust_sym = types_map.conv_graph[*idx].frontier_ref_unwrap().rust;
-                           ret.push((*fsym, rust_sym));
-                       }
-                       ret.sort_by(|a, b| a.0.as_str().cmp(&b.0.as_str()));
-                       ret
-                   });
+        assert_eq!(
+            vec![
+                (Symbol::intern("boolean"), Symbol::intern("jboolean")),
+                (Symbol::intern("int"), Symbol::intern("jint")),
+                (Symbol::intern("short"), Symbol::intern("jshort")),
+            ],
+            {
+                let mut ret = vec![];
+                for (fsym, idx) in &types_map.foreign_names_map {
+                    let rust_sym = types_map.conv_graph[*idx].frontier_ref_unwrap().rust;
+                    ret.push((*fsym, rust_sym));
+                }
+                ret.sort_by(|a, b| a.0.as_str().cmp(&b.0.as_str()));
+                ret
+            }
+        );
     }
 
     #[test]
@@ -396,16 +423,20 @@ impl SwigFrom<i32> for jint {
 }
 "#,
         );
-        assert_eq!(types_map
-                       .to_foreign_type_name(Symbol::intern("bool"))
-                       .unwrap()
-                       .0,
-                   Symbol::intern("boolean"));
+        assert_eq!(
+            types_map
+                .to_foreign_type_name(Symbol::intern("bool"))
+                .unwrap()
+                .0,
+            Symbol::intern("boolean")
+        );
 
-        assert_eq!(types_map
-                       .to_foreign_type_name(Symbol::intern("i32"))
-                       .unwrap()
-                       .0,
-                   Symbol::intern("int"));
+        assert_eq!(
+            types_map
+                .to_foreign_type_name(Symbol::intern("i32"))
+                .unwrap()
+                .0,
+            Symbol::intern("int")
+        );
     }
 }

@@ -11,55 +11,63 @@ pub(crate) fn path_match(path: &ast::Path, type_name: &str) -> bool {
 pub(crate) fn is_type_name(ty: &ast::Ty, type_name: &str) -> bool {
     match ty.node {
         ast::TyKind::Path(_ /*self info*/, ref path) => {
-            debug!("is_type_name_result: path: {:?}, ident {:?}",
-                   path.segments,
-                   path.segments[0].identifier.name.as_str());
+            debug!(
+                "is_type_name_result: path: {:?}, ident {:?}",
+                path.segments,
+                path.segments[0].identifier.name.as_str()
+            );
             path_match(path, type_name)
         }
         _ => false,
     }
 }
 
-pub(crate) fn path_unpack_generic_first_parameter(path: &ast::Path,
-                                                  generic_name: &str)
-                                                  -> Option<ast::Ty> {
+pub(crate) fn path_unpack_generic_first_parameter(
+    path: &ast::Path,
+    generic_name: &str,
+) -> Option<ast::Ty> {
     path.segments
         .first()
-        .map(|ps: &ast::PathSegment| if &*ps.identifier.name.as_str() == generic_name {
-                 ps.parameters
-                     .as_ref()
-                     .map(|p: &P<ast::PathParameters>| {
-                if let ast::PathParameters::AngleBracketed(ref params) = **p {
-                    params.types.first().map(|v: &P<ast::Ty>| {
-                        debug!("unpack_generic_first_paramter: result param {:?}", *v);
-                        (**v).clone()
+        .map(|ps: &ast::PathSegment| {
+            if &*ps.identifier.name.as_str() == generic_name {
+                ps.parameters
+                    .as_ref()
+                    .map(|p: &P<ast::PathParameters>| {
+                        if let ast::PathParameters::AngleBracketed(ref params) = **p {
+                            params.types.first().map(|v: &P<ast::Ty>| {
+                                debug!("unpack_generic_first_paramter: result param {:?}", *v);
+                                (**v).clone()
+                            })
+                        } else {
+                            None
+                        }
                     })
-                } else {
-                    None
-                }
-            })
-                     .unwrap_or(None)
-             } else {
-                 None
-             })
+                    .unwrap_or(None)
+            } else {
+                None
+            }
+        })
         .unwrap_or(None)
 }
 
 pub(crate) fn unpack_generic_first_parameter(ty: &ast::Ty, generic_name: &str) -> ast::Ty {
     match ty.node {
         ast::TyKind::Path(_ /*self info*/, ref path) => {
-            debug!("unpack_generic_first_paramter: path: {:?}, ident {:?}",
-                   path.segments,
-                   path.segments[0].identifier.name.as_str());
+            debug!(
+                "unpack_generic_first_paramter: path: {:?}, ident {:?}",
+                path.segments,
+                path.segments[0].identifier.name.as_str()
+            );
             path_unpack_generic_first_parameter(path, generic_name).unwrap_or_else(|| ty.clone())
         }
         _ => ty.clone(),
     }
 }
 
-pub(crate) fn unpack_first_associated_type(items: &[ast::ImplItem],
-                                           type_name: &str)
-                                           -> Option<ast::Ty> {
+pub(crate) fn unpack_first_associated_type(
+    items: &[ast::ImplItem],
+    type_name: &str,
+) -> Option<ast::Ty> {
     for item in items {
         let name: &str = &(item.ident.name.as_str());
         if name == type_name {
@@ -81,9 +89,11 @@ mod tests {
     #[test]
     fn test_is_type_name() {
         let session = parse::ParseSess::new();
-        let mut parser = parse::new_parser_from_source_str(&session,
-                                                           "test".into(),
-                                                           "Result<Foo, String>".into());
+        let mut parser = parse::new_parser_from_source_str(
+            &session,
+            "test".into(),
+            "Result<Foo, String>".into(),
+        );
         let ty = parser.parse_ty().unwrap();
         assert!(is_type_name(&*ty, "Result"));
     }
@@ -91,9 +101,11 @@ mod tests {
     #[test]
     fn test_unpack_generic_first_paramter() {
         let session = parse::ParseSess::new();
-        let mut parser = parse::new_parser_from_source_str(&session,
-                                                           "test".into(),
-                                                           "Result<Foo, String>".into());
+        let mut parser = parse::new_parser_from_source_str(
+            &session,
+            "test".into(),
+            "Result<Foo, String>".into(),
+        );
         let ty = parser.parse_ty().unwrap();
         assert!(is_type_name(&*ty, "Result"));
 

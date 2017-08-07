@@ -6,7 +6,7 @@ use syntex_syntax::ptr::P;
 use syntex_syntax::parse::common::SeqSep;
 use syntex_syntax::symbol::keywords;
 use syntex_syntax::ast;
-use syntex_syntax::ast::{SelfKind, Mutability, Arg, FnDecl};
+use syntex_syntax::ast::{Arg, FnDecl, Mutability, SelfKind};
 use syntex_pos::mk_sp;
 use syntex_syntax::parse::parser::Parser;
 use syntex_syntax::ext::base::ExtCtxt;
@@ -32,7 +32,7 @@ fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>
     };
     let isolated_self = |this: &mut Parser<'a>, n| {
         this.look_ahead(n, |t| t.is_keyword(keywords::SelfValue)) &&
-        this.look_ahead(n + 1, |t| t != &token::ModSep)
+            this.look_ahead(n + 1, |t| t != &token::ModSep)
     };
 
     // Parse optional self parameter of a method.
@@ -48,23 +48,37 @@ fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>
             // &not_self
             if isolated_self(parser, 1) {
                 parser.bump();
-                (SelfKind::Region(None, Mutability::Immutable), expect_ident(parser))
+                (
+                    SelfKind::Region(None, Mutability::Immutable),
+                    expect_ident(parser),
+                )
             } else if parser.look_ahead(1, |t| t.is_keyword(keywords::Mut)) &&
-                      isolated_self(parser, 2) {
+                isolated_self(parser, 2)
+            {
                 parser.bump();
                 parser.bump();
-                (SelfKind::Region(None, Mutability::Mutable), expect_ident(parser))
+                (
+                    SelfKind::Region(None, Mutability::Mutable),
+                    expect_ident(parser),
+                )
             } else if parser.look_ahead(1, |t| t.is_lifetime()) && isolated_self(parser, 2) {
                 parser.bump();
                 let lt = try!(parser.parse_lifetime());
-                (SelfKind::Region(Some(lt), Mutability::Immutable), expect_ident(parser))
+                (
+                    SelfKind::Region(Some(lt), Mutability::Immutable),
+                    expect_ident(parser),
+                )
             } else if parser.look_ahead(1, |t| t.is_lifetime()) &&
-                      parser.look_ahead(2, |t| t.is_keyword(keywords::Mut)) &&
-                      isolated_self(parser, 3) {
+                parser.look_ahead(2, |t| t.is_keyword(keywords::Mut)) &&
+                isolated_self(parser, 3)
+            {
                 parser.bump();
                 let lt = try!(parser.parse_lifetime());
                 parser.bump();
-                (SelfKind::Region(Some(lt), Mutability::Mutable), expect_ident(parser))
+                (
+                    SelfKind::Region(Some(lt), Mutability::Mutable),
+                    expect_ident(parser),
+                )
             } else {
                 return Ok(None);
             }
@@ -122,10 +136,12 @@ fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>
 }
 
 /// Parse the parameter list and result type of a function that may have a `self` parameter.
-fn parse_fn_decl_with_self<'a, F>(parser: &mut Parser<'a>,
-                                  parse_arg_fn: F)
-                                  -> PResult<'a, P<FnDecl>>
-    where F: FnMut(&mut Parser<'a>) -> PResult<'a, Arg>
+fn parse_fn_decl_with_self<'a, F>(
+    parser: &mut Parser<'a>,
+    parse_arg_fn: F,
+) -> PResult<'a, P<FnDecl>>
+where
+    F: FnMut(&mut Parser<'a>) -> PResult<'a, Arg>,
 {
     try!(parser.expect(&token::OpenDelim(token::Paren)));
 
@@ -139,9 +155,10 @@ fn parse_fn_decl_with_self<'a, F>(parser: &mut Parser<'a>,
             vec![self_arg]
         } else if parser.eat(&token::Comma) {
             let mut fn_inputs = vec![self_arg];
-            fn_inputs.append(&mut parser.parse_seq_to_before_end(&token::CloseDelim(token::Paren),
-                                                                 sep,
-                                                                 parse_arg_fn));
+            fn_inputs.append(
+                &mut parser
+                    .parse_seq_to_before_end(&token::CloseDelim(token::Paren), sep, parse_arg_fn),
+            );
             fn_inputs
         } else {
             return parser.unexpected();
@@ -153,15 +170,16 @@ fn parse_fn_decl_with_self<'a, F>(parser: &mut Parser<'a>,
     // Parse closing paren and return type.
     try!(parser.expect(&token::CloseDelim(token::Paren)));
     Ok(P(FnDecl {
-             inputs: fn_inputs,
-             output: try!(parser.parse_ret_ty()),
-             variadic: false,
-         }))
+        inputs: fn_inputs,
+        output: try!(parser.parse_ret_ty()),
+        variadic: false,
+    }))
 }
 
-pub(crate) fn parse_foreigner_class(cx: &ExtCtxt,
-                                    tokens: &[TokenTree])
-                                    -> Result<ForeignerClassInfo, Span> {
+pub(crate) fn parse_foreigner_class(
+    cx: &ExtCtxt,
+    tokens: &[TokenTree],
+) -> Result<ForeignerClassInfo, Span> {
     let class_keyword = ast::Ident::from_str("class");
     let alias_keyword = ast::Ident::from_str("alias");
     let private_keyword = ast::Ident::from_str("private");
@@ -223,10 +241,14 @@ pub(crate) fn parse_foreigner_class(cx: &ExtCtxt,
         let func_type = match MethodVariant::from_ident(&func_type_name.name.as_str()) {
             Some(x) => x,
             None => {
-                cx.span_err(parser.span,
-                            &format!("expect 'constructor' or 'method' or \
-                                      'static_method' here, got: {}",
-                                     func_type_name));
+                cx.span_err(
+                    parser.span,
+                    &format!(
+                        "expect 'constructor' or 'method' or \
+                         'static_method' here, got: {}",
+                        func_type_name
+                    ),
+                );
                 return Err(parser.span);
             }
         };
@@ -234,8 +256,9 @@ pub(crate) fn parse_foreigner_class(cx: &ExtCtxt,
         debug!("func_name {:?}", func_name);
 
         let func_decl = match func_type {
-            MethodVariant::Constructor |
-            MethodVariant::StaticMethod => parser.parse_fn_decl(false).unwrap(),
+            MethodVariant::Constructor | MethodVariant::StaticMethod => {
+                parser.parse_fn_decl(false).unwrap()
+            }
             MethodVariant::Method => {
                 parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).unwrap()
             }
@@ -264,43 +287,50 @@ pub(crate) fn parse_foreigner_class(cx: &ExtCtxt,
             let ret_type = match ret_type {
                 Some(x) => x,
                 None => {
-                    cx.span_err(parser.span,
-                                &format!("{}: constructor should return value", class_name_indent));
+                    cx.span_err(
+                        parser.span,
+                        &format!("{}: constructor should return value", class_name_indent),
+                    );
                     return Err(parser.span);
                 }
             };
             if let Some(ref constructor_ret_type) = constructor_ret_type {
                 if normalized_ty_string(constructor_ret_type) != normalized_ty_string(&*ret_type) {
-                    cx.span_err(parser.span,
-                                &format!("mismatched types of construtors: {:?} {:?}",
-                                         constructor_ret_type,
-                                         ret_type));
+                    cx.span_err(
+                        parser.span,
+                        &format!(
+                            "mismatched types of construtors: {:?} {:?}",
+                            constructor_ret_type,
+                            ret_type
+                        ),
+                    );
                     return Err(parser.span);
                 }
             } else {
                 constructor_ret_type = Some(ret_type.unwrap());
-                this_type_for_method =
-                    Some(unpack_generic_first_parameter(constructor_ret_type.as_ref().unwrap(),
-                                                        "Result"));
+                this_type_for_method = Some(unpack_generic_first_parameter(
+                    constructor_ret_type.as_ref().unwrap(),
+                    "Result",
+                ));
             }
         }
         methods.push(ForeignerMethod {
-                         variant: func_type,
-                         rust_id: func_name,
-                         fn_decl: func_decl,
-                         name_alias: func_name_alias.map(|v| v.name),
-                         may_return_error: may_return_error,
-                         foreigner_private: private_func,
-                     });
+            variant: func_type,
+            rust_id: func_name,
+            fn_decl: func_decl,
+            name_alias: func_name_alias.map(|v| v.name),
+            may_return_error: may_return_error,
+            foreigner_private: private_func,
+        });
     }
 
 
     Ok(ForeignerClassInfo {
-           name: class_name_indent.name.as_str(),
-           methods: methods,
-           self_type: rust_self_type,
-           this_type_for_method: this_type_for_method,
-           foreigner_code: foreigner_code,
-           constructor_ret_type: constructor_ret_type,
-       })
+        name: class_name_indent.name.as_str(),
+        methods: methods,
+        self_type: rust_self_type,
+        this_type_for_method: this_type_for_method,
+        foreigner_code: foreigner_code,
+        constructor_ret_type: constructor_ret_type,
+    })
 }

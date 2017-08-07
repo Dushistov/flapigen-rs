@@ -2,7 +2,8 @@
 //! to connect other programming languages to Rust.
 //! The idea of this softwared based on [swig](http://www.swig.org).
 //! For macros expansion it uses [syntex](https://crates.io/crates/syntex).
-//! More details can be found at [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
+//! More details can be found at
+//! [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
 extern crate syntex;
 extern crate syntex_syntax;
 extern crate syntex_pos;
@@ -24,7 +25,7 @@ use std::cell::RefCell;
 
 use syntex::Registry;
 use syntex_syntax::codemap::Span;
-use syntex_syntax::ext::base::{ExtCtxt, MacResult, DummyResult, TTMacroExpander, MacEager};
+use syntex_syntax::ext::base::{DummyResult, ExtCtxt, MacEager, MacResult, TTMacroExpander};
 use syntex_syntax::tokenstream::TokenTree;
 use syntex_syntax::ast;
 use syntex_syntax::ptr::P;
@@ -33,7 +34,7 @@ use syntex_syntax::util::small_vector::SmallVector;
 use syntex_syntax::symbol::Symbol;
 use syntex_syntax::parse::ParseSess;
 
-use java_jni::{JniVecRetTypesFix, JniResultRetTypesFix};
+use java_jni::{JniResultRetTypesFix, JniVecRetTypesFix};
 use parse::parse_foreigner_class;
 use types_map::ForeignTypesMap;
 
@@ -73,9 +74,9 @@ impl Generator {
         match config {
             LanguageConfig::Java { .. } => {
                 code_of_types_map.push(TypesMapCode {
-                                           name: "jni-type-map-include.rs",
-                                           code: include_str!("java_jni/jni-type-map-include.rs"),
-                                       });
+                    name: "jni-type-map-include.rs",
+                    code: include_str!("java_jni/jni-type-map-include.rs"),
+                });
                 types_map_updaters.push(Box::new(JniVecRetTypesFix));
                 types_map_updaters.push(Box::new(JniResultRetTypesFix));
             }
@@ -100,10 +101,12 @@ impl Generator {
                     .borrow_mut()
                     .merge(parse_session, code.name, code.code)
                     .unwrap_or_else(|err| {
-                                        panic!("Can not merge {} with previous types map: {}",
-                                               code.name,
-                                               err)
-                                    });
+                        panic!(
+                            "Can not merge {} with previous types map: {}",
+                            code.name,
+                            err
+                        )
+                    });
             }
         }
         let mut types_map = self.types_map.borrow_mut();
@@ -168,11 +171,12 @@ pub(crate) struct ForeignerClassInfo {
 }
 
 impl TTMacroExpander for Generator {
-    fn expand<'a>(&self,
-                  cx: &'a mut ExtCtxt,
-                  _: Span,
-                  tokens: &[TokenTree])
-                  -> Box<MacResult + 'a> {
+    fn expand<'a>(
+        &self,
+        cx: &'a mut ExtCtxt,
+        _: Span,
+        tokens: &[TokenTree],
+    ) -> Box<MacResult + 'a> {
         let mut utils_code = self.init_types_map(cx.parse_sess());
         let foreigner_class = match parse_foreigner_class(cx, tokens) {
             Ok(x) => x,
@@ -186,19 +190,19 @@ impl TTMacroExpander for Generator {
             LanguageConfig::Java {
                 ref output_dir,
                 ref package_name,
-            } => {
-                match java_jni::generate(cx.parse_sess(),
-                                         &mut *self.types_map.borrow_mut(),
-                                         output_dir,
-                                         package_name,
-                                         &foreigner_class) {
-                    Ok(mut items) => {
-                        items.extend(utils_code.drain(..));
-                        MacEager::items(SmallVector::many(items))
-                    }
-                    Err(msg) => panic!("java/jni code generation error: {}", msg),
+            } => match java_jni::generate(
+                cx.parse_sess(),
+                &mut *self.types_map.borrow_mut(),
+                output_dir,
+                package_name,
+                &foreigner_class,
+            ) {
+                Ok(mut items) => {
+                    items.extend(utils_code.drain(..));
+                    MacEager::items(SmallVector::many(items))
                 }
-            }
+                Err(msg) => panic!("java/jni code generation error: {}", msg),
+            },
         }
     }
 }

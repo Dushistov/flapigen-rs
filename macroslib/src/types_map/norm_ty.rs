@@ -4,12 +4,10 @@ use syntex_syntax::print::pprust;
 
 pub(crate) fn normalized_ty_string(ty: &Ty) -> String {
     match ty.node {
-        TyKind::Rptr(_, ref ity) => {
-            pprust::ty_to_string(&Ty {
-                                     node: TyKind::Rptr(None, ity.clone()),
-                                     ..ty.clone()
-                                 })
-        }
+        TyKind::Rptr(_, ref ity) => pprust::ty_to_string(&Ty {
+            node: TyKind::Rptr(None, ity.clone()),
+            ..ty.clone()
+        }),
         _ => pprust::ty_to_string(ty),
     }
 }

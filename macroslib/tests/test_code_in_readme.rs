@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::fs;
 use tempdir::TempDir;
-use cmark::{Parser, Event, Tag};
+use cmark::{Event, Parser, Tag};
 
 #[test]
 fn check_code_in_readme() {
@@ -23,8 +23,8 @@ fn check_code_in_readme() {
             let java_path = tmp_dir.path().join(&test.name).join("java");
 
             fs::create_dir_all(&java_path).unwrap_or_else(|why| {
-                                                              panic!("! {:?}", why.kind());
-                                                          });
+                panic!("! {:?}", why.kind());
+            });
             let rust_path_src = tmp_dir.path().join(&test.name).join("test.rs.in");
             let mut src = File::create(&rust_path_src).expect("can not create test.rs.in");
             src.write_all(test.text.as_bytes()).unwrap();
@@ -32,9 +32,9 @@ fn check_code_in_readme() {
 
             let mut registry = syntex::Registry::new();
             let swig_gen = rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
-                                                         output_dir: java_path,
-                                                         package_name: "com.example".into(),
-                                                     });
+                output_dir: java_path,
+                package_name: "com.example".into(),
+            });
             swig_gen.register(&mut registry);
             registry
                 .expand("rust_swig_test_jni", &rust_path_src, &rust_path_dst)
@@ -79,23 +79,20 @@ fn parse_readme() -> Vec<Test> {
                     code_buffer = Some(Vec::new());
                 }
             }
-            Event::Text(text) => {
-                if let Some(ref mut buf) = code_buffer {
-                    buf.push(text.to_string());
-                }
-            }
+            Event::Text(text) => if let Some(ref mut buf) = code_buffer {
+                buf.push(text.to_string());
+            },
             Event::End(Tag::CodeBlock(ref info)) => {
                 let code_block_info = parse_code_block_info(info);
                 if let Some(buf) = code_buffer.take() {
                     tests.push(Test {
-                                   name: format!("test_{}", test_number),
-                                   text: buf.iter()
-                                       .fold(String::new(), |acc, x| acc + x.as_str()),
-                                   ignore: code_block_info.ignore,
-                                   no_run: code_block_info.no_run,
-                                   should_panic: code_block_info.should_panic,
-                                   template: code_block_info.template,
-                               });
+                        name: format!("test_{}", test_number),
+                        text: buf.iter().fold(String::new(), |acc, x| acc + x.as_str()),
+                        ignore: code_block_info.ignore,
+                        no_run: code_block_info.no_run,
+                        should_panic: code_block_info.should_panic,
+                        template: code_block_info.template,
+                    });
                     test_number += 1;
                 }
             }

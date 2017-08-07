@@ -10,16 +10,17 @@ use syntex_syntax::parse::ParseSess;
 use ForeignerClassInfo;
 use ForeignTypesMap;
 use MethodVariant;
-use types_map::{MethodSignatureWithForeignTypes, unpack_unique_typename, fn_decl_output_typename};
+use types_map::{fn_decl_output_typename, unpack_unique_typename, MethodSignatureWithForeignTypes};
 use java_jni::java_code;
 use utils::fmt_write_err_map;
 
-pub(crate) fn generate_rust_code(parse_sess: &ParseSess,
-                                 types_map: &mut ForeignTypesMap,
-                                 package_name: &str,
-                                 class: &ForeignerClassInfo,
-                                 methods_sign: &[MethodSignatureWithForeignTypes])
-                                 -> Result<Vec<P<ast::Item>>, String> {
+pub(crate) fn generate_rust_code(
+    parse_sess: &ParseSess,
+    types_map: &mut ForeignTypesMap,
+    package_name: &str,
+    class: &ForeignerClassInfo,
+    methods_sign: &[MethodSignatureWithForeignTypes],
+) -> Result<Vec<P<ast::Item>>, String> {
     let mut gen_fnames = HashMap::<String, usize>::new(); //handle overload names
     for method in &class.methods {
         let val_ref = gen_fnames.entry(java_code::method_name(&*method));
@@ -30,11 +31,13 @@ pub(crate) fn generate_rust_code(parse_sess: &ParseSess,
         let ret: ast::Ty = cls.constructor_ret_type
             .as_ref()
             .ok_or_else(|| {
-                            format!("package_name {}, class_name {}, have methods, \
-                                    but no constructor",
-                                    package_name,
-                                    class.name)
-                        })?
+                format!(
+                    "package_name {}, class_name {}, have methods, \
+                     but no constructor",
+                    package_name,
+                    class.name
+                )
+            })?
             .clone();
         Ok(ret)
     };
@@ -43,11 +46,13 @@ pub(crate) fn generate_rust_code(parse_sess: &ParseSess,
         let ret: ast::Ty = cls.this_type_for_method
             .as_ref()
             .ok_or_else(|| {
-                            format!("package_name {}, class_name {}, have methods, \
-                                    but no constructor this type for method",
-                                    package_name,
-                                    class.name)
-                        })?
+                format!(
+                    "package_name {}, class_name {}, have methods, \
+                     but no constructor this type for method",
+                    package_name,
+                    class.name
+                )
+            })?
             .clone();
         Ok(ret)
     };
@@ -59,18 +64,20 @@ pub(crate) fn generate_rust_code(parse_sess: &ParseSess,
     for (method, method_sign) in class.methods.iter().zip(methods_sign.iter()) {
         let java_method_name = java_code::method_name(&*method);
         let method_overloading = gen_fnames[&java_method_name] > 1;
-        let jni_func_name = generate_jni_func_name(package_name,
-                                                   &class.name,
-                                                   &java_method_name,
-                                                   &method_sign,
-                                                   method_overloading);
+        let jni_func_name = generate_jni_func_name(
+            package_name,
+            &class.name,
+            &java_method_name,
+            &method_sign,
+            method_overloading,
+        );
         let n_args = method_sign.rust_input.len();
-        let (mut deps_code_in, convert_input_code) =
-            types_map
-                .convert_foreign_input(parse_sess,
-                                       &*method,
-                                       &method_sign,
-                                       (0..n_args).map(|v| format!("a_{}", v)))?;
+        let (mut deps_code_in, convert_input_code) = types_map.convert_foreign_input(
+            parse_sess,
+            &*method,
+            &method_sign,
+            (0..n_args).map(|v| format!("a_{}", v)),
+        )?;
         let args_names = method_sign
             .rust_input
             .iter()
@@ -83,10 +90,11 @@ pub(crate) fn generate_rust_code(parse_sess: &ParseSess,
         let mut code = String::new();
         match method.variant {
             MethodVariant::StaticMethod => {
-                let (mut deps_code_out, convert_output_code) =
-                    types_map
-                        .convert_output_to_foreign(parse_sess, &*method, &method_sign, "ret")?;
-                write!(&mut code, r#"
+                let (mut deps_code_out, convert_output_code) = types_map
+                    .convert_output_to_foreign(parse_sess, &*method, &method_sign, "ret")?;
+                write!(
+                    &mut code,
+                    r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
 #[no_mangle]
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_type} {{
@@ -96,16 +104,15 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_ty
     ret
 }}
 "#,
-                       func_name = jni_func_name,
-                       decl_func_args = decl_func_args,
-                       jni_ret_type = unpack_unique_typename(method_sign.rust_output),
-                       convert_input_code = convert_input_code,
-                       rust_func_name = method.rust_id,
-                       args_names = args_names,
-                       convert_output_code = convert_output_code,
-                       real_output_typename = real_output_typename,
-                )
-                        .map_err(fmt_write_err_map)?;
+                    func_name = jni_func_name,
+                    decl_func_args = decl_func_args,
+                    jni_ret_type = unpack_unique_typename(method_sign.rust_output),
+                    convert_input_code = convert_input_code,
+                    rust_func_name = method.rust_id,
+                    args_names = args_names,
+                    convert_output_code = convert_output_code,
+                    real_output_typename = real_output_typename,
+                ).map_err(fmt_write_err_map)?;
 
 
 
@@ -118,10 +125,11 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_ty
             MethodVariant::Method => {
                 let constructor_ret_type = get_real_constructor_ret_type(class)?;
 
-                let (mut deps_code_out, convert_output_code) =
-                    types_map
-                        .convert_output_to_foreign(parse_sess, &*method, &method_sign, "ret")?;
-                write!(&mut code, r#"
+                let (mut deps_code_out, convert_output_code) = types_map
+                    .convert_output_to_foreign(parse_sess, &*method, &method_sign, "ret")?;
+                write!(
+                    &mut code,
+                    r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
 #[no_mangle]
 pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -> {jni_ret_type} {{
@@ -135,18 +143,17 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -
     ret
 }}
 "#,
-                       func_name = jni_func_name,
-                       decl_func_args = decl_func_args,
-                       convert_input_code = convert_input_code,
-                       jni_ret_type = unpack_unique_typename(method_sign.rust_output),
-                       this_type = pprust::ty_to_string(&constructor_ret_type),
-                       convert_this = generate_rust_to_convert_this(class, &constructor_ret_type)?,
-                       rust_func_name = method.rust_id,
-                       args_names = args_names,
-                       convert_output_code = convert_output_code,
-                       real_output_typename = real_output_typename,
-                )
-                        .map_err(fmt_write_err_map)?;
+                    func_name = jni_func_name,
+                    decl_func_args = decl_func_args,
+                    convert_input_code = convert_input_code,
+                    jni_ret_type = unpack_unique_typename(method_sign.rust_output),
+                    this_type = pprust::ty_to_string(&constructor_ret_type),
+                    convert_this = generate_rust_to_convert_this(class, &constructor_ret_type)?,
+                    rust_func_name = method.rust_id,
+                    args_names = args_names,
+                    convert_output_code = convert_output_code,
+                    real_output_typename = real_output_typename,
+                ).map_err(fmt_write_err_map)?;
                 for item in deps_code_in.drain(..).chain(deps_code_out.drain(..)) {
                     gen_code.push(P(item));
                 }
@@ -156,7 +163,9 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -
             MethodVariant::Constructor => {
                 have_constructor = true;
                 let constructor_ret_type = get_constructor_ret_type(class)?;
-                write!(&mut code, r#"
+                write!(
+                    &mut code,
+                    r#"
 #[allow(non_snake_case)]
 #[no_mangle]
 #[allow(unused_variables)]
@@ -167,16 +176,14 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
   Box::into_raw(Box::new(this)) as jlong
 }}
 "#,
-                       func_name = jni_func_name,
-                       convert_this = jni_handle_result_from_constructor(class,
-                                                                         &constructor_ret_type),
-                       decl_func_args = decl_func_args,
-                       convert_input_code = convert_input_code,
-                       rust_func_name = method.rust_id,
-                       args_names = args_names,
-                       real_output_typename = real_output_typename,
-                )
-                        .map_err(fmt_write_err_map)?;
+                    func_name = jni_func_name,
+                    convert_this = jni_handle_result_from_constructor(class, &constructor_ret_type),
+                    decl_func_args = decl_func_args,
+                    convert_input_code = convert_input_code,
+                    rust_func_name = method.rust_id,
+                    args_names = args_names,
+                    real_output_typename = real_output_typename,
+                ).map_err(fmt_write_err_map)?;
                 for item in deps_code_in.drain(..) {
                     gen_code.push(P(item));
                 }
@@ -189,7 +196,9 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
     if have_constructor {
         let constructor_ret_type = get_real_constructor_ret_type(class)?;
         let mut code = String::new();
-        write!(&mut code, r#"
+        write!(
+            &mut code,
+            r#"
 #[allow(non_snake_case)]
 #[no_mangle]
 pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
@@ -200,17 +209,20 @@ pub fn {jni_destructor_name}(_: *mut JNIEnv, _: jclass, this: jlong) {{
     drop(this)
 }}
 "#,
-               jni_destructor_name = generate_jni_func_name(
-                   package_name, &class.name,
-                   "do_delete", &MethodSignatureWithForeignTypes {
-                       foreign_input: Vec::new(),
-                       rust_input: Vec::new(),
-                       foreign_output: Symbol::intern(""),
-                       rust_output: Symbol::intern(""),
-                   }, false),
-               type_name = pprust::ty_to_string(&constructor_ret_type),
-        )
-                .map_err(fmt_write_err_map)?;
+            jni_destructor_name = generate_jni_func_name(
+                package_name,
+                &class.name,
+                "do_delete",
+                &MethodSignatureWithForeignTypes {
+                    foreign_input: Vec::new(),
+                    rust_input: Vec::new(),
+                    foreign_output: Symbol::intern(""),
+                    rust_output: Symbol::intern(""),
+                },
+                false
+            ),
+            type_name = pprust::ty_to_string(&constructor_ret_type),
+        ).map_err(fmt_write_err_map)?;
         debug!("we generate and parse code: {}", code);
         let mut jni_func_items = code_to_item(&code);
         gen_code.extend(jni_func_items.drain(..));
@@ -238,12 +250,13 @@ lazy_static! {
     };
 }
 
-fn generate_jni_func_name(package_name: &str,
-                          class_name: &str,
-                          java_method_name: &str,
-                          method: &MethodSignatureWithForeignTypes,
-                          overloaded: bool)
-                          -> String {
+fn generate_jni_func_name(
+    package_name: &str,
+    class_name: &str,
+    java_method_name: &str,
+    method: &MethodSignatureWithForeignTypes,
+    overloaded: bool,
+) -> String {
     let mut output = String::new();
     output.push_str("Java_");
     fn escape_underscore(input: &str, mut output: &mut String) {
@@ -266,29 +279,33 @@ fn generate_jni_func_name(package_name: &str,
     if overloaded {
         output.push_str("__");
         for arg in &method.foreign_input {
-            escape_underscore(JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-                                  .get(&*arg)
-                                  .unwrap_or_else(|| {
-                panic!("generate_jni_func_name: Unknown Java type `{}`", *arg)
-            }),
-                              &mut output);
+            escape_underscore(
+                JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
+                    .get(&*arg)
+                    .unwrap_or_else(|| {
+                        panic!("generate_jni_func_name: Unknown Java type `{}`", *arg)
+                    }),
+                &mut output,
+            );
         }
     }
 
     output
 }
 
-fn generate_jni_args_with_types(method: &MethodSignatureWithForeignTypes)
-                                -> Result<String, String> {
+fn generate_jni_args_with_types(
+    method: &MethodSignatureWithForeignTypes,
+) -> Result<String, String> {
     use std::fmt::Write;
 
     let mut buf = String::new();
     for (i, rust_type_name) in method.rust_input.iter().enumerate() {
-        write!(&mut buf,
-               "a_{}: {}, ",
-               i,
-               unpack_unique_typename(*rust_type_name))
-                .map_err(fmt_write_err_map)?;
+        write!(
+            &mut buf,
+            "a_{}: {}, ",
+            i,
+            unpack_unique_typename(*rust_type_name)
+        ).map_err(fmt_write_err_map)?;
     }
     Ok(buf)
 }
@@ -310,9 +327,10 @@ fn code_to_item(code: &str) -> Vec<P<ast::Item>> {
 }
 
 /// may panic
-fn jni_handle_result_from_constructor(class: &ForeignerClassInfo,
-                                      constructor_ret_type: &ast::Ty)
-                                      -> String {
+fn jni_handle_result_from_constructor(
+    class: &ForeignerClassInfo,
+    constructor_ret_type: &ast::Ty,
+) -> String {
     let ret_typename = pprust::ty_to_string(constructor_ret_type);
     let self_typename = format!("{}", class.self_type);
     if ret_typename.starts_with(&format!("Result<{},", self_typename)) {
@@ -324,16 +342,16 @@ fn jni_handle_result_from_constructor(class: &ForeignerClassInfo,
       return 0;
     }
   };
-"#
-                .into()
+"#.into()
     } else {
         String::new()
     }
 }
 
-fn generate_rust_to_convert_this(class: &ForeignerClassInfo,
-                                 constructor_ret_type: &ast::Ty)
-                                 -> Result<String, String> {
+fn generate_rust_to_convert_this(
+    class: &ForeignerClassInfo,
+    constructor_ret_type: &ast::Ty,
+) -> Result<String, String> {
     let constructor_ret_type = pprust::ty_to_string(constructor_ret_type);
     let self_type = format!("{}", class.self_type);
     if constructor_ret_type == self_type {
@@ -347,8 +365,10 @@ fn generate_rust_to_convert_this(class: &ForeignerClassInfo,
     } else if format!("Arc<{}>", self_type) == constructor_ret_type {
         Ok(String::new())
     } else {
-        Err(format!("Not implemented conversation from '{}' to '{}'",
-                    constructor_ret_type,
-                    self_type))
+        Err(format!(
+            "Not implemented conversation from '{}' to '{}'",
+            constructor_ret_type,
+            self_type
+        ))
     }
 }

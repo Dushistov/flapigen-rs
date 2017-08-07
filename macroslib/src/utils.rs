@@ -1,4 +1,4 @@
-use std::{io, fmt};
+use std::{fmt, io};
 
 use syntex_syntax::parse;
 use syntex_pos::Span;

@@ -6,13 +6,14 @@ use MethodVariant;
 use ForeignerClassInfo;
 use ForeignerMethod;
 use types_map::MethodSignatureWithForeignTypes;
-use utils::{map_write_err, fmt_write_err_map};
+use utils::{fmt_write_err_map, map_write_err};
 
-pub(crate) fn generate_java_code(output_dir: &Path,
-                                 package_name: &str,
-                                 class: &ForeignerClassInfo,
-                                 methods_sign: &[MethodSignatureWithForeignTypes])
-                                 -> Result<(), String> {
+pub(crate) fn generate_java_code(
+    output_dir: &Path,
+    package_name: &str,
+    class: &ForeignerClassInfo,
+    methods_sign: &[MethodSignatureWithForeignTypes],
+) -> Result<(), String> {
     let path = output_dir.join(format!("{}.java", class.name));
     let mut file = File::create(&path)
         .map_err(|err| format!("Couldn't create {:?}: {}", path, err))?;
@@ -44,39 +45,39 @@ public final class {class_name} {{
         match method.variant {
             MethodVariant::StaticMethod => {
                 let ret_type = methods_sign[method_idx].foreign_output;
-                write!(file,
-"
+                write!(
+                    file,
+                    "
     {method_access} static native {ret_type} {func_name}({args_with_types}) {exception_spec};
 ",
-                       method_access = method_access,
-                       ret_type = ret_type,
-                       func_name = method_name(&*method),
-                       args_with_types  = args_with_java_types(&methods_sign[method_idx], false
-                           )?,
-                       exception_spec = exception_spec,
+                    method_access = method_access,
+                    ret_type = ret_type,
+                    func_name = method_name(&*method),
+                    args_with_types = args_with_java_types(&methods_sign[method_idx], false)?,
+                    exception_spec = exception_spec,
                 ).map_err(&map_write_err)?;
             }
             MethodVariant::Method => {
                 have_methods = true;
                 let ret_type = methods_sign[method_idx].foreign_output;
-                write!(file,
-"
+                write!(
+                    file,
+                    "
     {method_access} {ret_type} {method_name}({single_args_with_types}) {exception_spec} {{
          {return_code} {func_name}(mNativeObj{args});
     }}
     private static native {ret_type} {func_name}(long me{args_with_types}) {exception_spec};
 ",
-                       method_access = method_access,
-                       ret_type = ret_type,
-                       method_name = method.short_name(),
-                       exception_spec = exception_spec,
-                       return_code = if ret_type != "void" { "return" } else { "" },
-                                       func_name = method_name(&*method),
-                       single_args_with_types =
-                           args_with_java_types(&methods_sign[method_idx], false)?,
-                       args_with_types =
-                           args_with_java_types(&methods_sign[method_idx], true)?,
-                       args = list_of_args_for_call_method(&*method, true)?,
+                    method_access = method_access,
+                    ret_type = ret_type,
+                    method_name = method.short_name(),
+                    exception_spec = exception_spec,
+                    return_code = if ret_type != "void" { "return" } else { "" },
+                    func_name = method_name(&*method),
+                    single_args_with_types =
+                        args_with_java_types(&methods_sign[method_idx], false)?,
+                    args_with_types = args_with_java_types(&methods_sign[method_idx], true)?,
+                    args = list_of_args_for_call_method(&*method, true)?,
                 ).map_err(&map_write_err)?;
             }
             MethodVariant::Constructor => {
@@ -102,9 +103,11 @@ public final class {class_name} {{
     }
 
     if have_methods && !have_constructor {
-        return Err(format!("package_name {}, class_name {}, have methods, but no constructor",
-                           package_name,
-                           class.name));
+        return Err(format!(
+            "package_name {}, class_name {}, have methods, but no constructor",
+            package_name,
+            class.name
+        ));
     }
     if have_constructor {
         write!(
@@ -127,10 +130,13 @@ public final class {class_name} {{
     //utility class, so add private constructor
     //to prevent object creation
     if !have_constructor && !have_methods {
-        write!(file, r#"
+        write!(
+            file,
+            r#"
     private {class_name}() {{}}
-"#, class_name = class.name)
-            .map_err(&map_write_err)?;
+"#,
+            class_name = class.name
+        ).map_err(&map_write_err)?;
     }
 
     file.write_all(class.foreigner_code.as_bytes())
@@ -140,9 +146,10 @@ public final class {class_name} {{
     Ok(())
 }
 
-fn args_with_java_types(method: &MethodSignatureWithForeignTypes,
-                        use_comma_if_need: bool)
-                        -> Result<String, String> {
+fn args_with_java_types(
+    method: &MethodSignatureWithForeignTypes,
+    use_comma_if_need: bool,
+) -> Result<String, String> {
     use std::fmt::Write;
 
 
@@ -160,9 +167,10 @@ fn args_with_java_types(method: &MethodSignatureWithForeignTypes,
     Ok(res)
 }
 
-fn list_of_args_for_call_method(method: &ForeignerMethod,
-                                comma_before: bool)
-                                -> Result<String, String> {
+fn list_of_args_for_call_method(
+    method: &ForeignerMethod,
+    comma_before: bool,
+) -> Result<String, String> {
     use std::fmt::Write;
 
     let n = method.fn_decl.inputs.len();

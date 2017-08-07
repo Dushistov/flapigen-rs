@@ -20,8 +20,15 @@ addons:
       - python3
 env: # specify the clang path for rust-bindgen
   - LIBCLANG_PATH=/usr/lib/llvm-3.9/lib
+before_script:
+    - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
+        cargo install --vers 0.2.1 rustfmt-nightly;
+      fi
 script:
   - cd macroslib
+  - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
+      cargo fmt -- --write-mode diff;
+    fi
   - cargo build -v
   - cargo test -v
   - cargo doc
