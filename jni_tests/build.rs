@@ -2,7 +2,6 @@ extern crate syntex;
 extern crate rust_swig;
 extern crate env_logger;
 extern crate bindgen;
-extern crate depgraph;
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -16,40 +15,35 @@ fn main() {
 
     let target = env::var("TARGET").expect("target env var not setted");
     let java_sys_include_dir = java_include_dir.join(if target.contains("windows") {
-                                                         "win32"
-                                                     } else {
-                                                         "linux"
-                                                     });
+        "win32"
+    } else {
+        "linux"
+    });
 
     let include_dirs = [java_include_dir, java_sys_include_dir];
     println!("jni include dirs {:?}", include_dirs);
+    for dir in &include_dirs {
+        println!("cargo:rerun-if-changed={}", dir.display());
+    }
 
-    let jni_h_path = search_file_in_directory(&include_dirs[..], "jni.h")
-        .expect("Can not find jni.h");
+    let jni_h_path =
+        search_file_in_directory(&include_dirs[..], "jni.h").expect("Can not find jni.h");
 
     let out_dir = env::var("OUT_DIR").unwrap();
-    println!("We going to generate {:?}", Path::new(&out_dir).join("lib.rs"));
 
-    let build_graph = depgraph::DepGraphBuilder::new()
-        .add_rule(Path::new(&env::var("OUT_DIR").unwrap()).join("jni_c_header.rs"),
-                  &[jni_h_path],
-                  move |out, deps| {
-                      let dep = deps.iter()
-                          .filter_map(|v| if *v != Path::new("build.rs") { Some(v) } else { None })
-                          .nth(0).unwrap();
-                      gen_binding(&include_dirs[..], dep, out)
-                  })
-        .add_rule(Path::new(&env::var("OUT_DIR").unwrap()).join("lib.rs"),
-                  &[Path::new("src/lib.rs.in")],
-                  rust_swig_expand)
-        .add_dep_to_all("build.rs")
-        .build()
-        .expect("Can not create build dep graph");
+    gen_binding(
+        &include_dirs[..],
+        &jni_h_path,
+        &Path::new(&out_dir).join("jni_c_header.rs"),
+    ).unwrap();
 
-    build_graph
-        .make(depgraph::MakeParams::None)
-        .expect("build.rs rules failed");
+    rust_swig_expand(
+        Path::new("src/lib.rs.in"),
+        &Path::new(&out_dir).join("lib.rs"),
+    ).unwrap();
     println!("cargo:rerun-if-changed=src");
+
+    //rebuild if user remove generated code
     println!("cargo:rerun-if-changed={}", out_dir);
 }
 
@@ -64,10 +58,11 @@ fn search_file_in_directory<P: AsRef<Path>>(dirs: &[P], file: &str) -> Result<Pa
     Err(())
 }
 
-fn gen_binding<P: AsRef<Path>>(include_dirs: &[P],
-                               c_file_path: &Path,
-                               output_rust: &Path)
-                               -> Result<(), String> {
+fn gen_binding<P: AsRef<Path>>(
+    include_dirs: &[P],
+    c_file_path: &Path,
+    output_rust: &Path,
+) -> Result<(), String> {
     let mut bindings: ::bindgen::Builder = bindgen::builder().header(c_file_path.to_str().unwrap());
     bindings = include_dirs.iter().fold(bindings, |acc, x| {
         acc.clang_arg("-I".to_string() + x.as_ref().to_str().unwrap())
@@ -85,24 +80,15 @@ fn gen_binding<P: AsRef<Path>>(include_dirs: &[P],
     Ok(())
 }
 
-fn rust_swig_expand(out: &Path, deps: &[&Path]) -> Result<(), String> {
+fn rust_swig_expand(from: &Path, out: &Path) -> Result<(), String> {
     println!("Run rust_swig_expand");
     let mut registry = syntex::Registry::new();
-    let swig_gen =
-        rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
-                                      output_dir: Path::new("src").join("com").join("example"),
-                                      package_name: "com.example".into(),
-                                  });
+    let swig_gen = rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
+        output_dir: Path::new("java").join("com").join("example").join("rust"),
+        package_name: "com.example.rust".into(),
+    });
     swig_gen.register(&mut registry);
-    let dep = deps.iter()
-        .filter_map(|v| if *v != Path::new("build.rs") {
-                        Some(v)
-                    } else {
-                        None
-                    })
-        .nth(0)
-        .unwrap();
     registry
-        .expand("rust_swig_test_jni", dep, out)
+        .expand("rust_swig_test_jni", from, out)
         .map_err(|err| format!("rust swig macros expand failed: {}", err))
 }

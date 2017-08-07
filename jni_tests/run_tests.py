@@ -25,6 +25,14 @@ def find_dir(dir_name):
         last_dir = os.getcwd()
     raise Exception("Can not find %s" % dir_name)
 
+java_dir = str(os.path.join(os.getcwd(), "java/com/example"))
+purge(java_dir, ".*\.class$")
+java_native_dir = str(os.path.join(os.getcwd(), "java/com/example/rust"))
+if not os.path.exists(java_native_dir):
+    os.makedirs(java_native_dir)
+else:
+    purge(java_dir, ".*\.class$")
+
 subprocess.check_call(["cargo", "test"],
                       cwd = str(os.path.join(os.path.abspath('..'), "macroslib")),
                       shell=False)
@@ -35,13 +43,16 @@ subprocess.check_call(["cargo", "build"], shell=False)
 #becuase of http://bugs.python.org/issue17023
 use_shell = os.name == 'nt'
 
-java_dir = str(os.path.join(os.getcwd(), "src/com/example"))
-purge(java_dir, ".*\.class$")
-subprocess.check_call(["javac", "Main.java", "Foo.java", "Boo.java", "TestPathAndResult.java",
-                       "TestInner.java", "Xyz.java", "TestContainers.java", "OneStaticFunctionTest.java"],
+
+generated_java = [os.path.join("rust", f) for f in os.listdir(java_native_dir)
+                  if os.path.isfile(os.path.join(java_native_dir, f)) and f.endswith(".java")]
+javac_cmd_args = ["javac", "Main.java"]
+javac_cmd_args.extend(generated_java)
+    
+subprocess.check_call(javac_cmd_args,
                       cwd=java_dir, shell=use_shell)
 
-jar_dir = str(os.path.join(os.getcwd(), "src"))
+jar_dir = str(os.path.join(os.getcwd(), "java"))
 purge(java_dir, ".*\.jar$")
 subprocess.check_call(["jar", "cfv", "Test.jar", "com"], cwd=jar_dir, shell=use_shell)
 

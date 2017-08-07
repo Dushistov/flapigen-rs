@@ -239,11 +239,11 @@ foreigner_class!(class TestPathAndResult {
 
 #[allow(non_snake_case)]
 #[no_mangle]
-pub fn Java_com_example_TestPathAndResult_do_1testHandArrayReturn(env: *mut JNIEnv,
+pub fn Java_com_example_rust_TestPathAndResult_do_1testHandArrayReturn(env: *mut JNIEnv,
                                                                   _: jclass,
                                                                   _: jlong)
                                                                   -> jobjectArray {
-    let class_id = ::std::ffi::CString::new("com/example/Boo").unwrap();
+    let class_id = ::std::ffi::CString::new("com/example/rust/Boo").unwrap();
     let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
     if jcls.is_null() {
         panic!("Can not find class_id {:?}", class_id);
@@ -292,8 +292,8 @@ foreigner_class!(class TestInner {
 
 #[allow(non_snake_case)]
 #[no_mangle]
-pub fn Java_com_example_TestInner_getInner(env: *mut JNIEnv, _: jclass) -> jobject {
-    let class_id = ::std::ffi::CString::new("com/example/TestInner$Inner").unwrap();
+pub fn Java_com_example_rust_TestInner_getInner(env: *mut JNIEnv, _: jclass) -> jobject {
+    let class_id = ::std::ffi::CString::new("com/example/rust/TestInner$Inner").unwrap();
     let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
     assert!(!jcls.is_null());
     let ret: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };

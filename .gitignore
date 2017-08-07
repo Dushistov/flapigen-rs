@@ -1,2 +1,5 @@
 *~
 *.bk
+jni_tests/java/com/example/rust
+*.class
+*.jar

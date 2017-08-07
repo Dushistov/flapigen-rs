@@ -26,8 +26,13 @@ before_script:
       fi
 script:
   - cd macroslib
-  - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
+  - echo ${TRAVIS_RUST_VERSION}
+  - if [ "${TRAVIS_RUST_VERSION}" == "nightly" ]; then
+      echo "check code style";
       cargo fmt -- --write-mode diff;
+      cd ../jni_tests;
+      cargo fmt -- --write-mode diff;
+      cd ../macroslib;
     fi
   - cargo build -v
   - cargo test -v
