@@ -32,6 +32,8 @@ script:
       cargo fmt -- --write-mode diff;
       cd ../jni_tests;
       cargo fmt -- --write-mode diff;
+      cd ../android-example;
+      cargo fmt -- --write-mode diff;
       cd ../macroslib;
     fi
   - cargo build -v

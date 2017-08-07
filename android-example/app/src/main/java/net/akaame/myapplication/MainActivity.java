@@ -30,7 +30,7 @@ public class MainActivity extends AppCompatActivity {
 
         final TextView textView = (TextView) findViewById(R.id.mainLabel);
         final int res = MyApplication.get().getSession().test(2);
-        textView.setText(String.format("Get result from rust return %d", res));
+        textView.setText(getString(R.string.rust_code_return, res));
     }
 
     @Override

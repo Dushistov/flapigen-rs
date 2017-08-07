@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">My Application</string>
     <string name="action_settings">Settings</string>
+    <string name="rust_code_return">Rust code return %1$d</string>
 </resources>
