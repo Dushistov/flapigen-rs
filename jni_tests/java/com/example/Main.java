@@ -4,12 +4,14 @@ import java.util.Date;
 import java.util.Calendar;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import com.example.rust.Foo;
 import com.example.rust.Boo;
 import com.example.rust.TestPathAndResult;
 import com.example.rust.TestInner;
 import com.example.rust.Xyz;
 import com.example.rust.TestContainers;
+import com.example.rust.TestIntArrays;
 
 class Main {
     private static void testDoubleOverload() {
@@ -136,6 +138,20 @@ class Main {
 	    Foo foo = new Foo(17, null);
 	    assert foo.calcF(0, 0) == 17;
 	    assert foo.getName().equals("");
+	}
+
+	{
+	    //	    TestIntArrays test = new TestIntArrays();
+	    int[] arr1 = {1, 2, 3};
+	    int[] arr2 = TestIntArrays.arr_pass_thorough(arr1);
+	    int []empty = {};
+	    assert Arrays.equals(arr1, arr2);
+	    assert Arrays.equals(new TestIntArrays().get_ref(), empty);
+	    int[] bigArray = new int[20000];
+	    for (int i = 0; i < bigArray.length; ++i) {
+		bigArray[i] = 17;
+	    }
+	    assert Arrays.equals(bigArray, new TestIntArrays(17, bigArray.length).get_ref());
 	}
 
         System.out.println("ALL tests PASSED");

@@ -256,7 +256,7 @@ let {{to_var}}: {} = {{from_var}}.swig_into(env);
             to_type: for_typename,
             code: Symbol::intern(&format!(
                 r#"
-    let {{to_var}}: {} = {}::swig_from({{from_var}}, env);
+    let {{to_var}}: {} = <{}>::swig_from({{from_var}}, env);
 "#,
                 for_typename,
                 for_typename

@@ -1,28 +1,30 @@
 mod foreign_types_map {
-    #![foreigner_type="void"]
-    #![rust_type="()"]
-    #![foreigner_type="boolean"]
-    #![rust_type="jboolean"]
-    #![foreigner_type="byte"]
-    #![rust_type="jbyte"]
-    #![foreigner_type="short"]
-    #![rust_type="jshort"]
-    #![foreigner_type="int"]
-    #![rust_type="jint"]
-    #![foreigner_type="long"]
-    #![rust_type="jlong"]
-    #![foreigner_type="String"]
-    #![rust_type="jstring"]
-    #![foreigner_type="float"]
-    #![rust_type="jfloat"]
-    #![foreigner_type="double"]
-    #![rust_type="jdouble"]
-    #![foreigner_type="Object"]
-    #![rust_type_not_unique="jobject"]
-    #![foreigner_type="java.util.Date"]
-    #![rust_type_not_unique="jobject"]
-    #![foreigner_type="java.lang.String []"]
-    #![rust_type_not_unique="jobjectArray"]
+    #![foreigner_type = "void"]
+    #![rust_type = "()"]
+    #![foreigner_type = "boolean"]
+    #![rust_type = "jboolean"]
+    #![foreigner_type = "byte"]
+    #![rust_type = "jbyte"]
+    #![foreigner_type = "short"]
+    #![rust_type = "jshort"]
+    #![foreigner_type = "int"]
+    #![rust_type = "jint"]
+    #![foreigner_type = "long"]
+    #![rust_type = "jlong"]
+    #![foreigner_type = "String"]
+    #![rust_type = "jstring"]
+    #![foreigner_type = "float"]
+    #![rust_type = "jfloat"]
+    #![foreigner_type = "double"]
+    #![rust_type = "jdouble"]
+    #![foreigner_type = "int []"]
+    #![rust_type = "jintArray"]
+    #![foreigner_type = "Object"]
+    #![rust_type_not_unique = "jobject"]
+    #![foreigner_type = "java.util.Date"]
+    #![rust_type_not_unique = "jobject"]
+    #![foreigner_type = "java.lang.String []"]
+    #![rust_type_not_unique = "jobjectArray"]
 }
 
 #[cfg(target_pointer_width = "32")]
@@ -93,9 +95,11 @@ fn jni_throw(env: *mut JNIEnv, class_name: &'static str, message: &str) {
 
     let ex_class = unsafe { (**env).FindClass.unwrap()(env, class_name_c.as_ptr()) };
     if ex_class.is_null() {
-        error!("throw_exception: can not find exp class {}, msg {}",
-               class_name,
-               message);
+        error!(
+            "throw_exception: can not find exp class {}, msg {}",
+            class_name,
+            message
+        );
         return;
     }
     let c_message = ::std::ffi::CString::new(message).unwrap();
@@ -134,10 +138,11 @@ fn object_to_jobject<T>(obj: T, full_class_name: &str, env: *mut JNIEnv) -> jobj
 }
 
 #[allow(dead_code)]
-fn vec_of_objects_to_jobject_array<T>(mut arr: Vec<T>,
-                                      full_class_name: &str,
-                                      env: *mut JNIEnv)
-                                      -> jobjectArray {
+fn vec_of_objects_to_jobject_array<T>(
+    mut arr: Vec<T>,
+    full_class_name: &str,
+    env: *mut JNIEnv,
+) -> jobjectArray {
     let class_id = ::std::ffi::CString::new(full_class_name).unwrap();
     let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
     assert!(!jcls.is_null());
@@ -214,7 +219,11 @@ impl SwigInto<bool> for jboolean {
 
 impl SwigFrom<bool> for jboolean {
     fn swig_from(x: bool, _: *mut JNIEnv) -> Self {
-        if x { 1 as jboolean } else { 0 as jboolean }
+        if x {
+            1 as jboolean
+        } else {
+            0 as jboolean
+        }
     }
 }
 
@@ -381,18 +390,20 @@ impl SwigFrom<SystemTime> for jobject {
     fn swig_from(x: SystemTime, env: *mut JNIEnv) -> Self {
         let since_unix_epoch = x.duration_since(::std::time::UNIX_EPOCH).unwrap();
         let mills: jlong = (since_unix_epoch.as_secs() * 1_000 +
-                            (since_unix_epoch.subsec_nanos() / 1_000_000) as u64) as
-                           jlong;
+            (since_unix_epoch.subsec_nanos() / 1_000_000) as u64) as
+            jlong;
         let class_name_c = ::std::ffi::CString::new("java/util/Date").unwrap();
         let date_class: jclass = unsafe { (**env).FindClass.unwrap()(env, class_name_c.as_ptr()) };
         assert!(!date_class.is_null());
         let init_name_c = ::std::ffi::CString::new("<init>").unwrap();
         let method_args_c = ::std::ffi::CString::new("(J)V").unwrap();
         let init: jmethodID = unsafe {
-            (**env).GetMethodID.unwrap()(env,
-                                         date_class,
-                                         init_name_c.as_ptr(),
-                                         method_args_c.as_ptr())
+            (**env).GetMethodID.unwrap()(
+                env,
+                date_class,
+                init_name_c.as_ptr(),
+                method_args_c.as_ptr(),
+            )
         };
         assert!(!init.is_null());
         let x = unsafe { (**env).NewObject.unwrap()(env, date_class, init, mills) };
@@ -404,12 +415,14 @@ impl SwigFrom<SystemTime> for jobject {
 impl SwigInto<usize> for i64 {
     fn swig_into(self, _: *mut JNIEnv) -> usize {
         if self < 0 {
-            panic!("{}:{} expect self to be positive, got {}",
-                   file!(),
-                   line!(),
-                   self);
+            panic!(
+                "{}:{} expect self to be positive, got {}",
+                file!(),
+                line!(),
+                self
+            );
         } else if (self as u64) > (::std::usize::MAX as u64) {
-            panic!("{}:{} too big value for usize {}", self);
+            panic!("{}:{} too big value for usize {}", file!(), line!(), self);
         } else {
             self as usize
         }
@@ -429,7 +442,7 @@ impl SwigInto<jobjectArray> for Vec<String> {
     fn swig_into(mut self, env: *mut JNIEnv) -> jobjectArray {
         let class_id = unsafe {
             ::std::ffi::CStr::from_ptr(concat!("java/lang/String", "\0").as_ptr() as
-                                       *const ::std::os::raw::c_char)
+                *const ::std::os::raw::c_char)
         };
         let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
         assert!(!jcls.is_null());
@@ -450,5 +463,75 @@ impl SwigInto<jobjectArray> for Vec<String> {
             }
         }
         obj_arr
+    }
+}
+
+#[allow(dead_code)]
+struct JavaIntArray {
+    array: jintArray,
+    data: *mut jint,
+    env: *mut JNIEnv,
+}
+
+#[allow(dead_code)]
+impl JavaIntArray {
+    fn new(env: *mut JNIEnv, array: jintArray) -> JavaIntArray {
+        assert!(!array.is_null());
+        let data =
+            unsafe { (**env).GetIntArrayElements.unwrap()(env, array, ::std::ptr::null_mut()) };
+        JavaIntArray { array, data, env }
+    }
+    fn to_slice(&self) -> &[i32] {
+        unsafe {
+            let len = (**self.env).GetArrayLength.unwrap()(self.env, self.array);
+            //TODO: check jsize -> usize conversation safety
+            ::std::slice::from_raw_parts(self.data, len as usize)
+        }
+    }
+}
+
+#[allow(dead_code)]
+impl Drop for JavaIntArray {
+    fn drop(&mut self) {
+        assert!(!self.env.is_null());
+        assert!(!self.array.is_null());
+        unsafe {
+            (**self.env).ReleaseIntArrayElements.unwrap()(
+                self.env,
+                self.array,
+                self.data,
+                JNI_ABORT as jint,
+            )
+        };
+    }
+}
+
+impl SwigDeref for JavaIntArray {
+    type Target = [i32];
+    fn swig_deref(&self) -> &Self::Target {
+        self.to_slice()
+    }
+}
+
+impl SwigFrom<jintArray> for JavaIntArray {
+    fn swig_from(x: jintArray, env: *mut JNIEnv) -> Self {
+        JavaIntArray::new(env, x)
+    }
+}
+
+impl<'a> SwigInto<jintArray> for &'a [i32] {
+    fn swig_into(self, env: *mut JNIEnv) -> jintArray {
+        //TODO: check conversation usize <-> jsize in this function
+        let jarr: jintArray = unsafe { (**env).NewIntArray.unwrap()(env, self.len() as jsize) };
+        if jarr.is_null() {
+            panic!("Can not create jintArray");
+        }
+        unsafe {
+            (**env).SetIntArrayRegion.unwrap()(env, jarr, 0, self.len() as jsize, self.as_ptr());
+            if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                panic!("{}:{} SetIntArrayRegion failed", file!(), line!());
+            }
+        }
+        jarr
     }
 }

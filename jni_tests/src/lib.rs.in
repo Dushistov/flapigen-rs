@@ -3,8 +3,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use jni_c_header::{jint, JNIEnv, jclass, jlong, jstring, jdouble, jfloat, jboolean, jobject,
-                   jfieldID, jobjectArray, jmethodID, jsize, jshort, jbyte};
+use jni_c_header::*;
 
 #[derive(Clone)]
 struct Foo {
@@ -201,9 +200,9 @@ impl TestPathAndResult {
     fn new(path: &Path) -> Result<TestPathAndResult, String> {
         println!("TestPathAndResult::new path: {:?}", path);
         Ok(TestPathAndResult {
-               path: path.into(),
-               boo: create_boo(),
-           })
+            path: path.into(),
+            boo: create_boo(),
+        })
     }
 
     fn get_path(&self) -> String {
@@ -239,10 +238,11 @@ foreigner_class!(class TestPathAndResult {
 
 #[allow(non_snake_case)]
 #[no_mangle]
-pub fn Java_com_example_rust_TestPathAndResult_do_1testHandArrayReturn(env: *mut JNIEnv,
-                                                                  _: jclass,
-                                                                  _: jlong)
-                                                                  -> jobjectArray {
+pub fn Java_com_example_rust_TestPathAndResult_do_1testHandArrayReturn(
+    env: *mut JNIEnv,
+    _: jclass,
+    _: jlong,
+) -> jobjectArray {
     let class_id = ::std::ffi::CString::new("com/example/rust/Boo").unwrap();
     let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
     if jcls.is_null() {
@@ -266,10 +266,12 @@ pub fn Java_com_example_rust_TestPathAndResult_do_1testHandArrayReturn(env: *mut
         let boo = create_boo();
         boo.borrow_mut().set_a(i);
         unsafe {
-            (**env).SetLongField.unwrap()(env,
-                                          elem,
-                                          field_id,
-                                          Box::into_raw(Box::new(boo)) as jlong);
+            (**env).SetLongField.unwrap()(
+                env,
+                elem,
+                field_id,
+                Box::into_raw(Box::new(boo)) as jlong,
+            );
             (**env).SetObjectArrayElement.unwrap()(env, ret, i, elem);
             (**env).DeleteLocalRef.unwrap()(env, elem);
         }
@@ -344,13 +346,15 @@ impl Default for TestContainers {
     fn default() -> Self {
         let empty_struct_vec = vec![];
         let struct_vec = vec![Foo::new(1, "1"), Foo::new(2, "2")];
-        let string_vec = vec!["The".into(),
-                              "was".into(),
-                              "a".into(),
-                              "young".into(),
-                              "lady".into(),
-                              "whose".into(),
-                              "nose".into()];
+        let string_vec = vec![
+            "The".into(),
+            "was".into(),
+            "a".into(),
+            "young".into(),
+            "lady".into(),
+            "whose".into(),
+            "nose".into(),
+        ];
         TestContainers {
             empty_struct_vec,
             struct_vec,
@@ -381,4 +385,33 @@ foreigner_class!(class TestContainers {
 
 foreigner_class!(class OneStaticFunctionTest {
     static_method f_hypot(_ :f64, _: f64) -> f64;
+});
+
+#[derive(Default)]
+struct TestIntArrays {
+    vec: Vec<i32>,
+}
+
+impl TestIntArrays {
+    fn new(val: i32, size: usize) -> TestIntArrays {
+        TestIntArrays {
+            vec: vec![val; size],
+        }
+    }
+
+    fn get_ref(&self) -> &[i32] {
+        &self.vec[..]
+    }
+}
+
+fn arr_pass_thorough(a: &[i32]) -> &[i32] {
+    a
+}
+
+foreigner_class!(class TestIntArrays {
+    self_type TestIntArrays;
+    constructor TestIntArrays::default() -> TestIntArrays;
+    constructor TestIntArrays::new(_: i32, _: usize) -> TestIntArrays;
+    method TestIntArrays::get_ref(&self) -> &[i32];
+    static_method arr_pass_thorough(_: &[i32]) -> &[i32];
 });

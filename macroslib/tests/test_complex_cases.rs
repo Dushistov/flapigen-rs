@@ -64,6 +64,18 @@ foreigner_class!(class Foo {
     );
 }
 
+#[test]
+fn test_int_array() {
+    parse_code(
+        "test_int_array",
+        r#"
+foreigner_class!(class Utils {
+    static_method f(_: &[i32]) -> &[i32];
+});
+"#,
+    );
+}
+
 fn parse_code(test_name: &str, code: &str) -> String {
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");
     println!(
