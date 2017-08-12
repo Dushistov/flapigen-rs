@@ -1,30 +1,71 @@
-mod foreign_types_map {
-    #![foreigner_type = "void"]
-    #![rust_type = "()"]
-    #![foreigner_type = "boolean"]
-    #![rust_type = "jboolean"]
-    #![foreigner_type = "byte"]
-    #![rust_type = "jbyte"]
-    #![foreigner_type = "short"]
-    #![rust_type = "jshort"]
-    #![foreigner_type = "int"]
-    #![rust_type = "jint"]
-    #![foreigner_type = "long"]
-    #![rust_type = "jlong"]
-    #![foreigner_type = "String"]
-    #![rust_type = "jstring"]
-    #![foreigner_type = "float"]
-    #![rust_type = "jfloat"]
-    #![foreigner_type = "double"]
-    #![rust_type = "jdouble"]
-    #![foreigner_type = "int []"]
-    #![rust_type = "jintArray"]
-    #![foreigner_type = "Object"]
-    #![rust_type_not_unique = "jobject"]
-    #![foreigner_type = "java.util.Date"]
-    #![rust_type_not_unique = "jobject"]
-    #![foreigner_type = "java.lang.String []"]
-    #![rust_type_not_unique = "jobjectArray"]
+mod swig_foreign_types_map {
+    #![swig_foreigner_type = "void"]
+    #![swig_rust_type = "()"]
+    #![swig_foreigner_type = "boolean"]
+    #![swig_rust_type = "jboolean"]
+    #![swig_foreigner_type = "byte"]
+    #![swig_rust_type = "jbyte"]
+    #![swig_foreigner_type = "short"]
+    #![swig_rust_type = "jshort"]
+    #![swig_foreigner_type = "int"]
+    #![swig_rust_type = "jint"]
+    #![swig_foreigner_type = "long"]
+    #![swig_rust_type = "jlong"]
+    #![swig_foreigner_type = "String"]
+    #![swig_rust_type = "jstring"]
+    #![swig_foreigner_type = "float"]
+    #![swig_rust_type = "jfloat"]
+    #![swig_foreigner_type = "double"]
+    #![swig_rust_type = "jdouble"]
+    #![swig_foreigner_type = "int []"]
+    #![swig_rust_type = "jintArray"]
+    #![swig_foreigner_type = "Object"]
+    #![swig_rust_type_not_unique = "jobject"]
+    #![swig_foreigner_type = "java.util.Date"]
+    #![swig_rust_type_not_unique = "jobject"]
+    #![swig_foreigner_type = "Object []"]
+    #![swig_rust_type_not_unique = "jobjectArray"]
+    #![swig_foreigner_type = "java.lang.String []"]
+    #![swig_rust_type_not_unique = "jobjectArray"]
+}
+
+#[allow(dead_code)]
+#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_into(env);"]
+trait SwigInto<T> {
+    fn swig_into(self, env: *mut JNIEnv) -> T;
+}
+
+#[allow(dead_code)]
+#[swig_code = "let mut {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var}, env);"]
+trait SwigFrom<T> {
+    fn swig_from(T, env: *mut JNIEnv) -> Self;
+}
+
+#[allow(dead_code)]
+#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_deref();"]
+trait SwigDeref {
+    type Target: ?Sized;
+    fn swig_deref(&self) -> &Self::Target;
+}
+
+#[allow(dead_code)]
+#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_deref_mut();"]
+trait SwigDerefMut {
+    type Target: ?Sized;
+    fn swig_deref_mut(&mut self) -> &mut Self::Target;
+}
+
+#[allow(dead_code)]
+trait SwigForeignClass {
+    fn jni_class_name() -> *const ::std::os::raw::c_char;
+    fn box_object(x: Self) -> jlong;
+}
+
+macro_rules! swig_c_str {
+    ($lit:expr) => {
+        concat!($lit, "\0").as_ptr()
+            as *const ::std::os::raw::c_char
+    }
 }
 
 #[cfg(target_pointer_width = "32")]
@@ -114,20 +155,28 @@ fn jni_throw_exception(env: *mut JNIEnv, message: &str) {
     jni_throw(env, "java/lang/Exception", message)
 }
 
+#[swig_to_foreigner_hint = "T"]
+impl<T: SwigForeignClass> SwigFrom<T> for jobject {
+    fn swig_from(x: T, env: *mut JNIEnv) -> Self {
+        object_to_jobject(x, <T>::jni_class_name(), env)
+    }
+}
+
 #[allow(dead_code)]
-fn object_to_jobject<T>(obj: T, full_class_name: &str, env: *mut JNIEnv) -> jobject {
-    let class_id = ::std::ffi::CString::new(full_class_name).unwrap();
-    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
+fn object_to_jobject<T: SwigForeignClass>(
+    obj: T,
+    class_id: *const ::std::os::raw::c_char,
+    env: *mut JNIEnv,
+) -> jobject {
+    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
     assert!(!jcls.is_null());
     let jobj: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
     assert!(!jobj.is_null());
-    let field_id = ::std::ffi::CString::new("mNativeObj").unwrap();
-    let type_id = ::std::ffi::CString::new("J").unwrap();
-    let field_id: jfieldID =
-        unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
+    let field_id = swig_c_str!("mNativeObj");
+    let type_id = swig_c_str!("J");
+    let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id, type_id) };
     assert!(!field_id.is_null());
-    let b: Box<T> = Box::new(obj);
-    let ret = Box::into_raw(b) as jlong;
+    let ret: jlong = <T>::box_object(obj);
     unsafe {
         (**env).SetLongField.unwrap()(env, jobj, field_id, ret);
         if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -137,14 +186,21 @@ fn object_to_jobject<T>(obj: T, full_class_name: &str, env: *mut JNIEnv) -> jobj
     jobj
 }
 
+#[swig_to_foreigner_hint = "T []"]
+impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
+    fn swig_from(x: Vec<T>, env: *mut JNIEnv) -> Self {
+        vec_of_objects_to_jobject_array(x, <T>::jni_class_name(), env)
+    }
+}
+
+
 #[allow(dead_code)]
-fn vec_of_objects_to_jobject_array<T>(
+fn vec_of_objects_to_jobject_array<T: SwigForeignClass>(
     mut arr: Vec<T>,
-    full_class_name: &str,
+    class_id: *const ::std::os::raw::c_char,
     env: *mut JNIEnv,
 ) -> jobjectArray {
-    let class_id = ::std::ffi::CString::new(full_class_name).unwrap();
-    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
+    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
     assert!(!jcls.is_null());
     //TODO: check for arr.len() -> jsize overflow
     let obj_arr: jobjectArray = unsafe {
@@ -152,17 +208,16 @@ fn vec_of_objects_to_jobject_array<T>(
     };
     assert!(!obj_arr.is_null());
 
-    let field_id = ::std::ffi::CString::new("mNativeObj").unwrap();
-    let type_id = ::std::ffi::CString::new("J").unwrap();
-    let field_id: jfieldID =
-        unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
+    let field_id = swig_c_str!("mNativeObj");
+    let type_id = swig_c_str!("J");
+    let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id, type_id) };
     assert!(!field_id.is_null());
 
     for (i, r_obj) in arr.drain(..).enumerate() {
         let jobj: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
         assert!(!jobj.is_null());
 
-        let r_obj = Box::into_raw(Box::new(r_obj)) as jlong;
+        let r_obj: jlong = <T>::box_object(r_obj);
         unsafe {
             (**env).SetLongField.unwrap()(env, jobj, field_id, r_obj);
             if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -178,38 +233,60 @@ fn vec_of_objects_to_jobject_array<T>(
     obj_arr
 }
 
-#[allow(unused_macros)]
+#[allow(dead_code)]
+trait JniInvalidValue<T> {
+    fn invalid_value() -> T;
+}
+
+impl<T> JniInvalidValue<*const T> for *const T {
+    fn invalid_value() -> *const T {
+        ::std::ptr::null()
+    }
+}
+
+impl<T> JniInvalidValue<*mut T> for *mut T {
+    fn invalid_value() -> *mut T {
+        ::std::ptr::null_mut()
+    }
+}
+
+impl JniInvalidValue<()> for () {
+    fn invalid_value() {}
+}
+
+macro_rules! impl_jni_invalid_value {
+    ($($type:ty)*) => ($(
+        impl JniInvalidValue<$type> for $type {
+            fn invalid_value() -> $type {
+                <$type>::default()
+            }
+        }
+    )*)
+}
+
+impl_jni_invalid_value! {
+    jbyte jshort jint jlong jfloat jdouble
+}
+
+#[swig_generic_arg = "T"]
+#[swig_generic_arg = "E"]
+#[swig_from = "Result<T, E>"]
+#[swig_to = "T"]
+#[swig_code = "let mut {to_var}:{to_var_type}=jni_unpack_return!({from_var},{function_ret_type}, env);"]
 macro_rules! jni_unpack_return {
-    ($result_value:expr, $default_value:expr, $env:ident) => {
+    ($result_value:expr, $func_ret_type:ty, $env:ident) => {
         {
             let ret = match $result_value {
                 Ok(x) => x,
                 Err(msg) => {
                     jni_throw_exception($env, &msg);
-                    return $default_value;
+                    return <$func_ret_type>::invalid_value();
                 }
             };
             ret
         }
     }
 }
-
-#[allow(dead_code)]
-trait SwigInto<T> {
-    fn swig_into(self, env: *mut JNIEnv) -> T;
-}
-
-#[allow(dead_code)]
-trait SwigFrom<T> {
-    fn swig_from(T, env: *mut JNIEnv) -> Self;
-}
-
-#[allow(dead_code)]
-trait SwigDeref {
-    type Target: ?Sized;
-    fn swig_deref(&self) -> &Self::Target;
-}
-
 
 impl SwigInto<bool> for jboolean {
     fn swig_into(self, _: *mut JNIEnv) -> bool {
@@ -385,26 +462,20 @@ impl SwigFrom<String> for jstring {
     }
 }
 
-#[to_foreigner_hint = "java.util.Date"]
+#[swig_to_foreigner_hint = "java.util.Date"]
 impl SwigFrom<SystemTime> for jobject {
     fn swig_from(x: SystemTime, env: *mut JNIEnv) -> Self {
         let since_unix_epoch = x.duration_since(::std::time::UNIX_EPOCH).unwrap();
         let mills: jlong = (since_unix_epoch.as_secs() * 1_000 +
             (since_unix_epoch.subsec_nanos() / 1_000_000) as u64) as
             jlong;
-        let class_name_c = ::std::ffi::CString::new("java/util/Date").unwrap();
-        let date_class: jclass = unsafe { (**env).FindClass.unwrap()(env, class_name_c.as_ptr()) };
+        let class_name_c = swig_c_str!("java/util/Date");
+        let date_class: jclass = unsafe { (**env).FindClass.unwrap()(env, class_name_c) };
         assert!(!date_class.is_null());
-        let init_name_c = ::std::ffi::CString::new("<init>").unwrap();
-        let method_args_c = ::std::ffi::CString::new("(J)V").unwrap();
-        let init: jmethodID = unsafe {
-            (**env).GetMethodID.unwrap()(
-                env,
-                date_class,
-                init_name_c.as_ptr(),
-                method_args_c.as_ptr(),
-            )
-        };
+        let init_name_c = swig_c_str!("<init>");
+        let method_args_c = swig_c_str!("(J)V");
+        let init: jmethodID =
+            unsafe { (**env).GetMethodID.unwrap()(env, date_class, init_name_c, method_args_c) };
         assert!(!init.is_null());
         let x = unsafe { (**env).NewObject.unwrap()(env, date_class, init, mills) };
         assert!(!x.is_null());
@@ -437,14 +508,11 @@ impl<'a> SwigInto<&'a Path> for &'a str {
 }
 
 // Vec<String> -> jobjectArray
-#[to_foreigner_hint = "java.lang.String []"]
+#[swig_to_foreigner_hint = "java.lang.String []"]
 impl SwigInto<jobjectArray> for Vec<String> {
     fn swig_into(mut self, env: *mut JNIEnv) -> jobjectArray {
-        let class_id = unsafe {
-            ::std::ffi::CStr::from_ptr(concat!("java/lang/String", "\0").as_ptr() as
-                *const ::std::os::raw::c_char)
-        };
-        let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
+        let class_id = swig_c_str!("java/lang/String");
+        let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
         assert!(!jcls.is_null());
         let obj_arr: jobjectArray = unsafe {
             (**env).NewObjectArray.unwrap()(env, self.len() as jsize, jcls, ::std::ptr::null_mut())
@@ -533,5 +601,87 @@ impl<'a> SwigInto<jintArray> for &'a [i32] {
             }
         }
         jarr
+    }
+}
+
+impl SwigDeref for String {
+    type Target = str;
+    fn swig_deref(&self) -> &str {
+        &self
+    }
+}
+
+impl<T> SwigDeref for Arc<Mutex<T>> {
+    type Target = Mutex<T>;
+    fn swig_deref(&self) -> &Mutex<T> {
+        &self
+    }
+}
+
+
+impl<'a, T> SwigFrom<&'a Mutex<T>> for MutexGuard<'a, T> {
+    fn swig_from(m: &'a Mutex<T>, _: *mut JNIEnv) -> MutexGuard<'a, T> {
+        m.lock().unwrap()
+    }
+}
+
+impl<'a, T> SwigDeref for MutexGuard<'a, T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        &self
+    }
+}
+
+impl<T> SwigDeref for Rc<T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        &self
+    }
+}
+
+impl<'a, T> SwigDeref for &'a Rc<T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        &self
+    }
+}
+
+impl<'a, T> SwigFrom<&'a RefCell<T>> for Ref<'a, T> {
+    fn swig_from(m: &'a RefCell<T>, _: *mut JNIEnv) -> Ref<'a, T> {
+        m.borrow()
+    }
+}
+
+impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
+    fn swig_from(m: &'a RefCell<T>, _: *mut JNIEnv) -> RefMut<'a, T> {
+        m.borrow_mut()
+    }
+}
+
+impl<'a, T> SwigDeref for Ref<'a, T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        &self
+    }
+}
+
+impl<'a, T> SwigDerefMut for RefMut<'a, T> {
+    type Target = T;
+    fn swig_deref_mut(&mut self) -> &mut T {
+        self
+    }
+}
+
+impl<T: SwigForeignClass> SwigDeref for T {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        self
+    }
+}
+
+impl<T: SwigForeignClass> SwigDerefMut for T {
+    type Target = T;
+    fn swig_deref_mut(&mut self) -> &mut T {
+        self
     }
 }

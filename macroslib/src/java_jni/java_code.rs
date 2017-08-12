@@ -1,18 +1,16 @@
 use std::path::Path;
 use std::fs::File;
+use std::io;
 use std::io::Write;
 
-use MethodVariant;
-use ForeignerClassInfo;
-use ForeignerMethod;
-use types_map::MethodSignatureWithForeignTypes;
-use utils::{fmt_write_err_map, map_write_err};
+use super::{fmt_write_err_map, method_name, ForeignMethodSignature};
+use {ForeignerClassInfo, ForeignerMethod, MethodVariant};
 
-pub(crate) fn generate_java_code(
+pub(in java_jni) fn generate_java_code(
     output_dir: &Path,
     package_name: &str,
     class: &ForeignerClassInfo,
-    methods_sign: &[MethodSignatureWithForeignTypes],
+    methods_sign: &[ForeignMethodSignature],
 ) -> Result<(), String> {
     let path = output_dir.join(format!("{}.java", class.name));
     let mut file = File::create(&path)
@@ -29,7 +27,7 @@ public final class {class_name} {{
     let mut have_methods = false;
     let mut have_constructor = false;
 
-    for (method_idx, method) in class.methods.iter().enumerate() {
+    for (method, f_method) in class.methods.iter().zip(methods_sign) {
         let exception_spec = if method.may_return_error {
             "throws Exception"
         } else {
@@ -41,10 +39,9 @@ public final class {class_name} {{
         } else {
             "public"
         };
-
         match method.variant {
             MethodVariant::StaticMethod => {
-                let ret_type = methods_sign[method_idx].foreign_output;
+                let ret_type = f_method.output.name;
                 write!(
                     file,
                     "
@@ -53,13 +50,13 @@ public final class {class_name} {{
                     method_access = method_access,
                     ret_type = ret_type,
                     func_name = method_name(&*method),
-                    args_with_types = args_with_java_types(&methods_sign[method_idx], false)?,
+                    args_with_types = args_with_java_types(&f_method, false)?,
                     exception_spec = exception_spec,
                 ).map_err(&map_write_err)?;
             }
-            MethodVariant::Method => {
+            MethodVariant::Method(_) => {
                 have_methods = true;
-                let ret_type = methods_sign[method_idx].foreign_output;
+                let ret_type = f_method.output.name;
                 write!(
                     file,
                     "
@@ -74,9 +71,8 @@ public final class {class_name} {{
                     exception_spec = exception_spec,
                     return_code = if ret_type != "void" { "return" } else { "" },
                     func_name = method_name(&*method),
-                    single_args_with_types =
-                        args_with_java_types(&methods_sign[method_idx], false)?,
-                    args_with_types = args_with_java_types(&methods_sign[method_idx], true)?,
+                    single_args_with_types = args_with_java_types(&f_method, false)?,
+                    args_with_types = args_with_java_types(&f_method, true)?,
                     args = list_of_args_for_call_method(&*method, true)?,
                 ).map_err(&map_write_err)?;
             }
@@ -95,7 +91,7 @@ public final class {class_name} {{
                     class_name = class.name,
                     exception_spec = exception_spec,
                     func_name = method_name(&*method),
-                    args_with_types = args_with_java_types(&methods_sign[method_idx], false)?,
+                    args_with_types = args_with_java_types(&f_method, false)?,
                     args = list_of_args_for_call_method(&*method, false)?
                 ).map_err(&map_write_err)?;
             }
@@ -146,19 +142,22 @@ public final class {class_name} {{
     Ok(())
 }
 
+fn map_write_err(err: io::Error) -> String {
+    format!("write failed: {}", err)
+}
+
 fn args_with_java_types(
-    method: &MethodSignatureWithForeignTypes,
+    method: &ForeignMethodSignature,
     use_comma_if_need: bool,
 ) -> Result<String, String> {
     use std::fmt::Write;
 
-
     let mut res = String::new();
-    if use_comma_if_need && !method.foreign_input.is_empty() {
+    if use_comma_if_need && !method.input.is_empty() {
         write!(&mut res, ", ").map_err(fmt_write_err_map)?;
     }
-    for (i, type_name) in method.foreign_input.iter().enumerate() {
-        if i == (method.foreign_input.len() - 1) {
+    for (i, type_name) in method.input.iter().map(|v| v.name).enumerate() {
+        if i == (method.input.len() - 1) {
             write!(&mut res, "{} a_{}", type_name, i)
         } else {
             write!(&mut res, "{} a_{}, ", type_name, i)
@@ -174,10 +173,9 @@ fn list_of_args_for_call_method(
     use std::fmt::Write;
 
     let n = method.fn_decl.inputs.len();
-    let skip_n = if method.variant == MethodVariant::Method {
-        1
-    } else {
-        0
+    let skip_n = match method.variant {
+        MethodVariant::Method(_) => 1,
+        _ => 0,
     };
     let mut res = String::new();
     if skip_n >= n {
@@ -197,12 +195,4 @@ fn list_of_args_for_call_method(
     }
 
     Ok(res)
-}
-
-pub(crate) fn method_name(method: &ForeignerMethod) -> String {
-    match method.variant {
-        MethodVariant::StaticMethod => method.short_name().as_str().to_string(),
-        MethodVariant::Method => format!("do_{}", method.short_name()),
-        MethodVariant::Constructor => "init".into(),
-    }
 }

@@ -2,51 +2,151 @@ mod java_code;
 mod rust_code;
 
 use std::path::Path;
+use std::fmt;
 
-use syntex_syntax::ast;
+use petgraph::Direction;
+use syntex_syntax::{ast, parse};
 use syntex_syntax::ptr::P;
 use syntex_syntax::parse::ParseSess;
 use syntex_syntax::symbol::Symbol;
+use syntex_syntax::parse::PResult;
+use syntex_pos::DUMMY_SP;
+use syntex_syntax::ast::DUMMY_NODE_ID;
 
-use ForeignerClassInfo;
-use ForeignTypesMap;
-use TypesMapUpdater;
-use types_map::norm_ty::normalized_ty_string;
-use types_map::make_unique_rust_typename;
-use my_ast::{is_type_name, unpack_generic_first_parameter};
+use types_conv_map::{make_unique_rust_typename, ForeignTypeInfo};
+use errors::fatal_error;
+use {ForeignerClassInfo, ForeignerMethod, MethodVariant, TypesConvMap};
+use my_ast::{normalized_ty_string, parse_ty, RustType};
 
-pub(crate) fn generate(
-    parse_sess: &ParseSess,
-    types_map: &mut ForeignTypesMap,
+struct ForeignMethodSignature {
+    output: ForeignTypeInfo,
+    input: Vec<ForeignTypeInfo>,
+}
+
+pub(crate) fn generate<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
     output_dir: &Path,
     package_name: &str,
     class: &ForeignerClassInfo,
-) -> Result<Vec<P<ast::Item>>, String> {
-    let mut methods_sign = Vec::with_capacity(class.methods.len());
-    for method in &class.methods {
-        methods_sign.push(types_map.resolve_types(parse_sess, &*method)?);
-    }
-    java_code::generate_java_code(output_dir, package_name, class, &methods_sign)?;
-    let ret =
-        rust_code::generate_rust_code(parse_sess, types_map, package_name, class, &methods_sign);
-    if let Some(ref this_type_for_method) = class.this_type_for_method {
-        let from_typename = Symbol::intern(&normalized_ty_string(this_type_for_method));
-        let class_name_for_user = java_class_full_name(package_name, &class.name);
-        let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
-        let class_name_for_user = Symbol::intern(&class_name_for_user);
-        types_map.add_conversation(
-            from_typename,
-            make_unique_rust_typename(Symbol::intern("jobject"), class_name_for_user),
-            Some(class_name_for_user),
-            format!(
-                "\nlet {{to_var}}: jobject = \
-                 object_to_jobject({{from_var}}, \"{}\", env);",
-                class_name_for_jni
-            ),
-        )?;
-    }
+) -> PResult<'a, Vec<P<ast::Item>>> {
+    trace!("generate: begin");
+    let f_methods_sign = find_suitable_foreign_types_for_methods(sess, conv_map, class)?;
+    java_code::generate_java_code(output_dir, package_name, class, &f_methods_sign)
+        .map_err(|err| fatal_error(sess, DUMMY_SP, &err))?;
+    trace!("generate: java code done");
+    let ast_items =
+        rust_code::generate_rust_code(sess, conv_map, package_name, class, &f_methods_sign)?;
 
-    ret
+    if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
+        //
+
+        let this_type: RustType = this_type_for_method.clone().into();
+        let this_type = this_type.implements("SwigForeignClass");
+        let jobject_name = Symbol::intern("jobject");
+        let jobject_ty = parse_ty(sess, DUMMY_SP, jobject_name)?;
+        let my_jobj_ti = RustType::new(
+            jobject_ty,
+            make_unique_rust_typename(jobject_name, this_type.normalized_name),
+        );
+        conv_map.cache_rust_to_foreign_conv(&this_type, (my_jobj_ti, class.name));
+    }
+    Ok(ast_items)
+}
+
+fn method_name(method: &ForeignerMethod) -> String {
+    match method.variant {
+        MethodVariant::StaticMethod => method.short_name().as_str().to_string(),
+        MethodVariant::Method(_) => format!("do_{}", method.short_name()),
+        MethodVariant::Constructor => "init".into(),
+    }
+}
+
+
+fn find_suitable_foreign_types_for_methods<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    class: &ForeignerClassInfo,
+) -> PResult<'a, Vec<ForeignMethodSignature>> {
+    let mut ret = Vec::<ForeignMethodSignature>::with_capacity(class.methods.len());
+    let empty_symbol = Symbol::intern("");
+    let dummy_ty = ast::Ty {
+        id: DUMMY_NODE_ID,
+        span: DUMMY_SP,
+        node: ast::TyKind::Tup(vec![]),
+    };
+    for method in &class.methods {
+        //skip self argument
+        let skip_n = match method.variant {
+            MethodVariant::Method(_) => 1,
+            _ => 0,
+        };
+        assert!(method.fn_decl.inputs.len() >= skip_n);
+        let mut input = Vec::with_capacity(method.fn_decl.inputs.len() - skip_n);
+        for arg in method.fn_decl.inputs.iter().skip(skip_n) {
+            let rust_typename = Symbol::intern(&normalized_ty_string(&*arg.ty));
+            let f_arg_type = conv_map
+                .map_through_conversation_to_foreign(&*arg.ty, Direction::Incoming)
+                .ok_or_else(|| {
+                    fatal_error(
+                        sess,
+                        arg.ty.span,
+                        &format!(
+                            "Do not know conversation from foreign \
+                             to such rust type {}",
+                            rust_typename
+                        ),
+                    )
+                })?;
+            input.push(f_arg_type);
+        }
+        let output = match method.variant {
+            MethodVariant::Constructor => ForeignTypeInfo {
+                name: empty_symbol,
+                correspoding_rust_type: dummy_ty.clone().into(),
+            },
+            _ => match method.fn_decl.output {
+                ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
+                    name: Symbol::intern("void"),
+                    correspoding_rust_type: {
+                        let mut ty: ast::Ty = dummy_ty.clone().into();
+                        ty.span = sp;
+                        ty.into()
+                    },
+                },
+                ast::FunctionRetTy::Ty(ref rt) => conv_map
+                    .map_through_conversation_to_foreign(&*rt, Direction::Outgoing)
+                    .ok_or_else(|| {
+                        fatal_error(
+                            sess,
+                            rt.span,
+                            &format!(
+                                "Do not know conversation from \
+                                 such rust type {} to foreign",
+                                normalized_ty_string(&*rt)
+                            ),
+                        )
+                    })?,
+            },
+        };
+        ret.push(ForeignMethodSignature { output, input });
+    }
+    Ok(ret)
+}
+
+fn fmt_write_err_map(err: fmt::Error) -> String {
+    format!("fmt write error: {}", err)
+}
+
+fn code_to_item<'a>(
+    sess: &'a ParseSess,
+    for_func_name: &str,
+    code: &str,
+) -> PResult<'a, Vec<P<ast::Item>>> {
+    let mut parser = parse::new_parser_from_source_str(sess, for_func_name.into(), code.into());
+
+    let krate = parser.parse_crate_mod()?;
+    Ok(krate.module.items)
 }
 
 fn java_class_full_name(package_name: &str, class_name: &str) -> String {
@@ -58,138 +158,4 @@ fn java_class_full_name(package_name: &str, class_name: &str) -> String {
 
 fn java_class_name_to_jni(full_name: &str) -> String {
     full_name.replace(".", "/")
-}
-
-pub(crate) struct JniVecRetTypesFix;
-
-impl TypesMapUpdater for JniVecRetTypesFix {
-    fn update(&self, types_map: &mut ForeignTypesMap, class: &ForeignerClassInfo) {
-        fn generate_conversation(
-            types_map: &mut ForeignTypesMap,
-            from_ty: &ast::Ty,
-            foreign_in_type: Symbol,
-            rust_in_type: Symbol,
-        ) {
-            let in_type_class_name_for_jni = java_class_name_to_jni(&foreign_in_type.as_str());
-
-            let code = format!(
-                "\nlet {{to_var}}: jobjectArray = \
-                 vec_of_objects_to_jobject_array({{from_var}}, \"{}\", env);",
-                in_type_class_name_for_jni
-            );
-            let from_typename = Symbol::intern(&normalized_ty_string(from_ty));
-            let foreign_res_typename = Symbol::intern(&format!("{} []", foreign_in_type));
-            types_map
-                .add_conversation(
-                    from_typename,
-                    make_unique_rust_typename(Symbol::intern("jobjectArray"), rust_in_type),
-                    Some(foreign_res_typename),
-                    code,
-                )
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "Can not add conversation from {} to {}: {}",
-                        from_typename,
-                        foreign_res_typename,
-                        err
-                    );
-                });
-        }
-        for method in &class.methods {
-            if let ast::FunctionRetTy::Ty(ref ret_type) = method.fn_decl.output {
-
-                if types_map
-                    .foreign_return_type(&method.fn_decl.output)
-                    .is_none() && is_type_name(ret_type, "Vec")
-                {
-                    let in_type = unpack_generic_first_parameter(ret_type, "Vec");
-                    let in_type_name = Symbol::intern(&normalized_ty_string(&in_type));
-
-                    debug!(
-                        "{}:{} we have vec with type {:?}",
-                        file!(),
-                        line!(),
-                        in_type
-                    );
-                    if let Some((foreign_in_type, rust_in_type)) =
-                        types_map.to_foreign_type_name(in_type_name)
-                    {
-                        if rust_in_type.as_str().starts_with("jobject") {
-                            generate_conversation(
-                                types_map,
-                                ret_type,
-                                foreign_in_type,
-                                rust_in_type,
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-pub(crate) struct JniResultRetTypesFix;
-
-impl TypesMapUpdater for JniResultRetTypesFix {
-    fn update(&self, types_map: &mut ForeignTypesMap, class: &ForeignerClassInfo) {
-        fn get_default_value_for_rust_type(rust_type_name: &str) -> &'static str {
-            match rust_type_name {
-                "()" => "()",
-                "i8" | "u8" | "u16" | "i16" | "u32" | "i32" | "u64" | "i64" => "0",
-                "f32" => "::std::f32::NAN",
-                "f64" => "::std::f64::NAN",
-                _ => "::std::ptr::null_mut()",
-            }
-        }
-
-
-        fn generate_conversation(
-            types_map: &mut ForeignTypesMap,
-            from_ty: &ast::Ty,
-            rust_in_type: Symbol,
-        ) {
-            let from_typename = Symbol::intern(&normalized_ty_string(from_ty));
-            debug!(
-                "{}:{} gen conv for type {} ({})",
-                file!(),
-                line!(),
-                rust_in_type,
-                from_typename
-            );
-            let def_val = get_default_value_for_rust_type(&rust_in_type.as_str());
-            let code = format!(
-                "\nlet {{to_var}} = jni_unpack_return!({{from_var}}, {}, env);",
-                def_val
-            );
-            types_map
-                .add_conversation(from_typename, rust_in_type, None, code)
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "Can not add conversation from {} to {}: {}",
-                        from_typename,
-                        rust_in_type,
-                        err
-                    );
-                });
-        }
-        for method in &class.methods {
-            if let ast::FunctionRetTy::Ty(ref ret_type) = method.fn_decl.output {
-
-                if types_map
-                    .foreign_return_type(&method.fn_decl.output)
-                    .is_none() && is_type_name(ret_type, "Result")
-                {
-
-                    let in_type = unpack_generic_first_parameter(ret_type, "Result");
-                    let in_type_name = Symbol::intern(&normalized_ty_string(&in_type));
-                    debug!("{}:{} we have Result<{:?},...>", file!(), line!(), in_type);
-
-                    if let Some((_, _)) = types_map.to_foreign_type_name(in_type_name) {
-                        generate_conversation(types_map, ret_type, in_type_name);
-                    }
-                }
-            }
-        }
-    }
 }

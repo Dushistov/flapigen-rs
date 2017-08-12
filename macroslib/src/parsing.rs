@@ -1,4 +1,3 @@
-///missed stuff in syntex
 use syntex_syntax::parse::{token, PResult};
 use syntex_syntax::codemap;
 use syntex_syntax::parse;
@@ -13,12 +12,10 @@ use syntex_syntax::ext::base::ExtCtxt;
 use syntex_syntax::tokenstream::TokenTree;
 use syntex_pos::Span;
 use syntex_syntax::parse::parser;
+use syntex_syntax::symbol::Symbol;
 
-use ForeignerClassInfo;
-use MethodVariant;
-use ForeignerMethod;
-use my_ast::{is_type_name, unpack_generic_first_parameter};
-use types_map::norm_ty::normalized_ty_string;
+use {ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
+use my_ast::{if_result_return_ok_type, normalized_ty_string, self_variant};
 
 /// Returns the parsed optional self argument and whether a self shortcut was used.
 fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>> {
@@ -184,6 +181,11 @@ pub(crate) fn parse_foreigner_class(
     let alias_keyword = ast::Ident::from_str("alias");
     let private_keyword = ast::Ident::from_str("private");
 
+    let constructor_keyword = Symbol::intern("constructor");
+    let method_keyword = Symbol::intern("method");
+    let static_method_keyword = Symbol::intern("static_method");
+
+
     let mut parser = parse::new_parser_from_tts(cx.parse_sess, tokens.to_vec());
     if !parser.eat_contextual_keyword(class_keyword) {
         cx.span_err(parser.span, "expect class keyword here");
@@ -192,6 +194,7 @@ pub(crate) fn parse_foreigner_class(
 
     let class_name_indent = parser.parse_ident().unwrap();
     debug!("CLASS NAME {:?}", class_name_indent);
+    let class_span = parser.span;
 
     parser
         .expect(&token::Token::OpenDelim(token::DelimToken::Brace))
@@ -238,9 +241,13 @@ pub(crate) fn parse_foreigner_class(
             continue;
         }
 
-        let func_type = match MethodVariant::from_ident(&func_type_name.name.as_str()) {
-            Some(x) => x,
-            None => {
+        let mut func_type = match func_type_name.name {
+            _ if func_type_name.name == constructor_keyword => MethodVariant::Constructor,
+            _ if func_type_name.name == static_method_keyword => MethodVariant::StaticMethod,
+            _ if func_type_name.name == method_keyword => {
+                MethodVariant::Method(SelfTypeVariant::Default)
+            }
+            _ => {
                 cx.span_err(
                     parser.span,
                     &format!(
@@ -259,8 +266,17 @@ pub(crate) fn parse_foreigner_class(
             MethodVariant::Constructor | MethodVariant::StaticMethod => {
                 parser.parse_fn_decl(false).unwrap()
             }
-            MethodVariant::Method => {
-                parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).unwrap()
+            MethodVariant::Method(ref mut self_type) => {
+                let fn_decl = parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).unwrap();
+                *self_type = self_variant(&fn_decl.inputs[0].ty).ok_or_else(|| {
+                    cx.span_err(
+                        parser.span,
+                        &format!("Can not parse type {:?} as self type", fn_decl.inputs[0].ty),
+                    );
+                    parser.span
+                })?;
+
+                fn_decl
             }
         };
         debug!("func_decl {:?}", func_decl);
@@ -279,9 +295,10 @@ pub(crate) fn parse_foreigner_class(
         }
         let (may_return_error, ret_type) = match func_decl.output {
             ast::FunctionRetTy::Default(_) => (false, None),
-            ast::FunctionRetTy::Ty(ref ret_type) => {
-                (is_type_name(ret_type, "Result"), Some(ret_type.clone()))
-            }
+            ast::FunctionRetTy::Ty(ref ret_type) => (
+                if_result_return_ok_type(ret_type).is_some(),
+                Some(ret_type.clone()),
+            ),
         };
         if let MethodVariant::Constructor = func_type {
             let ret_type = match ret_type {
@@ -295,6 +312,7 @@ pub(crate) fn parse_foreigner_class(
                 }
             };
             if let Some(ref constructor_ret_type) = constructor_ret_type {
+                debug!("second constructor, ret type: {:?}", constructor_ret_type);
                 if normalized_ty_string(constructor_ret_type) != normalized_ty_string(&*ret_type) {
                     cx.span_err(
                         parser.span,
@@ -307,11 +325,12 @@ pub(crate) fn parse_foreigner_class(
                     return Err(parser.span);
                 }
             } else {
-                constructor_ret_type = Some(ret_type.unwrap());
-                this_type_for_method = Some(unpack_generic_first_parameter(
-                    constructor_ret_type.as_ref().unwrap(),
-                    "Result",
-                ));
+                let ret_type = ret_type.unwrap();
+                constructor_ret_type = Some(ret_type.clone());
+                this_type_for_method = Some(
+                    if_result_return_ok_type(constructor_ret_type.as_ref().unwrap())
+                        .unwrap_or_else(|| ret_type),
+                );
             }
         }
         methods.push(ForeignerMethod {
@@ -326,11 +345,12 @@ pub(crate) fn parse_foreigner_class(
 
 
     Ok(ForeignerClassInfo {
-        name: class_name_indent.name.as_str(),
-        methods: methods,
+        name: class_name_indent.name,
+        methods,
         self_type: rust_self_type,
-        this_type_for_method: this_type_for_method,
-        foreigner_code: foreigner_code,
-        constructor_ret_type: constructor_ret_type,
+        this_type_for_method,
+        foreigner_code,
+        constructor_ret_type,
+        span: class_span,
     })
 }
