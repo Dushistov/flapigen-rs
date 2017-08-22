@@ -25,6 +25,12 @@ def find_dir(dir_name):
         last_dir = os.getcwd()
     raise Exception("Can not find %s" % dir_name)
 
+def run_jar(target_dir, jar_dir, use_shell):
+    subprocess.check_call(["java", "-verbose:jni", "-ea", "-Djava.library.path=" + target_dir,
+                           "-cp", "Test.jar", "com.example.Main"],
+                          cwd=jar_dir, shell=use_shell)
+
+
 java_dir = str(os.path.join(os.getcwd(), "java/com/example"))
 purge(java_dir, ".*\.class$")
 java_native_dir = str(os.path.join(os.getcwd(), "java/com/example/rust"))
@@ -57,7 +63,10 @@ purge(java_dir, ".*\.jar$")
 subprocess.check_call(["jar", "cfv", "Test.jar", "com"], cwd=jar_dir, shell=use_shell)
 
 target_dir = os.path.join(find_dir("target"), "debug")
-subprocess.check_call(["java", "-verbose:jni", "-ea", "-Djava.library.path=" + target_dir,
-                       "-cp", "Test.jar", "com.example.Main"],
-                      cwd=jar_dir, shell=use_shell)
+run_jar(target_dir, jar_dir, use_shell)
 
+#rerun in release mode
+subprocess.check_call(["cargo", "test", "--release"], shell=False)
+subprocess.check_call(["cargo", "build", "--release"], shell=False)
+target_dir = os.path.join(find_dir("target"), "release")
+run_jar(target_dir, jar_dir, use_shell)

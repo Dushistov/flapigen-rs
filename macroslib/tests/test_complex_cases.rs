@@ -1,11 +1,16 @@
 extern crate rust_swig;
 extern crate syntex;
 extern crate tempdir;
+extern crate env_logger;
+extern crate regex;
 
 use std::fs;
+use regex::Regex;
 use tempdir::TempDir;
 
-
+#[macro_use]
+#[path = "../src/test_helper.rs"]
+mod test_helper;
 
 #[test]
 fn test_own_objects_creation() {
@@ -46,6 +51,7 @@ foreigner_class!(class Boo {
     method Boo::get_foo_arr(&self) -> Vec<Foo>;
     method Boo::get_one_foo(&self) -> Result<Foo, String>;
     static_method now() -> SystemTime;
+    static_method r_test_u8(v: u8) -> Result<u8, &'static str>;
 });
 "#,
     );
@@ -76,7 +82,50 @@ foreigner_class!(class Utils {
     );
 }
 
+#[test]
+fn test_work_with_rc() {
+    parse_code(
+        "test_work_with_rc",
+        r#"
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor create_boo() -> Rc<RefCell<Boo>>;
+    method Boo::test(&self, _: bool) -> f32;
+    method Boo::set_a(&mut self, _: i32);
+});
+"#,
+    );
+}
+
+#[test]
+fn test_return_foreign_class() {
+    let gen_code = parse_code(
+        "test_work_with_rc",
+        r#"
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor create_boo() -> Rc<RefCell<Boo>>;
+    method Boo::test(&self, _: bool) -> f32;
+    method Boo::set_a(&mut self, _: i32);
+});
+foreigner_class!(class Moo {
+    self_type Moo;
+    constructor TestPathAndResult::empty() -> Result<Moo, String>;
+    method TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
+});
+"#,
+    );
+    let get_boo_re = Regex::new(
+        r"fn\s+Java_com_example_Moo_do_1getBoo\([^\)]+\)\s*->\s*([[:alnum:]]+)\s*\{",
+    ).expect("wrong regexp");
+    let caps = get_boo_re.captures(&gen_code).unwrap();
+    println!("{:?}", caps);
+    assert_eq!("jobject", caps.get(1).unwrap().as_str());
+}
+
+
 fn parse_code(test_name: &str, code: &str) -> String {
+    test_helper::logger_init();
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");
     println!(
         "{}: test name {} tmp_dir {:?}",

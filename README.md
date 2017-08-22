@@ -39,6 +39,7 @@ in Rust project you write (in Rust language):
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
+	method Foo::set_field(&mut self, _: i32);
     method Foo::f(&self, _: i32, _: i32) -> i32;
     static_method f2(_: i32) -> i32;
 });

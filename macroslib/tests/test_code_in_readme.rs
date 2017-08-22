@@ -2,6 +2,7 @@ extern crate rust_swig;
 extern crate syntex;
 extern crate pulldown_cmark as cmark;
 extern crate tempdir;
+extern crate env_logger;
 
 use std::path::Path;
 use std::fs::File;
@@ -10,8 +11,13 @@ use std::fs;
 use tempdir::TempDir;
 use cmark::{Event, Parser, Tag};
 
+#[macro_use]
+#[path = "../src/test_helper.rs"]
+mod test_helper;
+
 #[test]
-fn check_code_in_readme() {
+fn test_code_in_readme() {
+    test_helper::logger_init();
     let tests = parse_readme();
     let tmp_dir = TempDir::new("readme_test").expect("Can not create tmp dir");
 

@@ -26,6 +26,7 @@ class Main {
             System.out.println("Can not load library");
             throw e;
         }
+	try {
 	{
 	    final String FOO_NAME = "Me is foo";
 	    Foo foo = new Foo(5, FOO_NAME);
@@ -153,7 +154,10 @@ class Main {
 	    }
 	    assert Arrays.equals(bigArray, new TestIntArrays(17, bigArray.length).get_ref());
 	}
-
+	} catch (java.lang.AssertionError ex) {
+	    ex.printStackTrace();
+	    throw ex;
+	}
         System.out.println("ALL tests PASSED");
     }
 }

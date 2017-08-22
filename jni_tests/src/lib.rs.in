@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -13,7 +13,7 @@ struct Foo {
 
 impl Foo {
     fn new(val: i32, name: &str) -> Foo {
-        println!("name: {}", name);
+        println!("Foo::new {}  {}", val, name);
         Foo {
             data: val,
             name: name.to_string(),
@@ -21,6 +21,7 @@ impl Foo {
     }
 
     fn f(&self, a: i32, b: i32) -> i32 {
+        println!("Foo::f {} {} {}", self.data, a, b);
         self.data + a + b
     }
 
@@ -243,8 +244,8 @@ pub fn Java_com_example_rust_TestPathAndResult_do_1testHandArrayReturn(
     _: jclass,
     _: jlong,
 ) -> jobjectArray {
-    let class_id = ::std::ffi::CString::new("com/example/rust/Boo").unwrap();
-    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id.as_ptr()) };
+    let class_id = swig_c_str!("com/example/rust/Boo");
+    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
     if jcls.is_null() {
         panic!("Can not find class_id {:?}", class_id);
     }
@@ -255,23 +256,17 @@ pub fn Java_com_example_rust_TestPathAndResult_do_1testHandArrayReturn(
         panic!("Can not create object array");
     }
 
-    let field_id = ::std::ffi::CString::new("mNativeObj").unwrap();
-    let type_id = ::std::ffi::CString::new("J").unwrap();
-    let field_id: jfieldID =
-        unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id.as_ptr(), type_id.as_ptr()) };
+    let field_id = swig_c_str!("mNativeObj");
+    let type_id = swig_c_str!("J");
+    let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id, type_id) };
     assert!(!field_id.is_null());
 
     for i in 0..n {
         let elem: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
-        let boo = create_boo();
+        let boo: Rc<RefCell<Boo>> = create_boo();
         boo.borrow_mut().set_a(i);
         unsafe {
-            (**env).SetLongField.unwrap()(
-                env,
-                elem,
-                field_id,
-                Box::into_raw(Box::new(boo)) as jlong,
-            );
+            (**env).SetLongField.unwrap()(env, elem, field_id, <Rc<RefCell<Boo>>>::box_object(boo));
             (**env).SetObjectArrayElement.unwrap()(env, ret, i, elem);
             (**env).DeleteLocalRef.unwrap()(env, elem);
         }

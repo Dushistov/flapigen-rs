@@ -4,39 +4,67 @@
 //! For macros expansion it uses [syntex](https://crates.io/crates/syntex).
 //! More details can be found at
 //! [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
-extern crate syntex;
 extern crate syntex_syntax;
 extern crate syntex_pos;
+extern crate syntex_errors;
+extern crate syntex;
 extern crate petgraph;
-
 #[macro_use]
 extern crate log;
+#[cfg(test)]
+extern crate env_logger;
 #[macro_use]
 extern crate lazy_static;
 
-mod parse;
-mod my_ast;
-mod types_map;
+
+macro_rules! unwrap_presult {
+    ($presult_epxr:expr) => {
+        match $presult_epxr {
+            Ok(x) => x,
+            Err(mut err) => {
+                err.emit();
+                panic!("rust_swig fatal error, see above");
+            }
+        }
+    };
+    ($presult_epxr:expr, $conv_map:expr) => {
+        match $presult_epxr {
+            Ok(x) => x,
+            Err(mut err) => {
+                debug!("{}", $conv_map);
+                err.emit();
+         
+                panic!("rust_swig fatal error, see above");
+            }
+        }
+    };
+}
+
+mod types_conv_map;
 mod java_jni;
-mod utils;
+mod errors;
+mod parsing;
+mod my_ast;
 
 use std::path::PathBuf;
 use std::cell::RefCell;
+use std::rc::Rc;
 
-use syntex::Registry;
-use syntex_syntax::codemap::Span;
-use syntex_syntax::ext::base::{DummyResult, ExtCtxt, MacEager, MacResult, TTMacroExpander};
-use syntex_syntax::tokenstream::TokenTree;
-use syntex_syntax::ast;
-use syntex_syntax::ptr::P;
-use syntex_syntax::symbol::InternedString;
-use syntex_syntax::util::small_vector::SmallVector;
-use syntex_syntax::symbol::Symbol;
 use syntex_syntax::parse::ParseSess;
+use syntex_syntax::codemap::Span;
+use syntex::Registry;
+use syntex_syntax::tokenstream::TokenTree;
+use syntex_syntax::ext::base::{DummyResult, ExtCtxt, MacEager, MacResult, TTMacroExpander};
+use syntex_syntax::parse::PResult;
+use syntex_syntax::ptr::P;
+use syntex_syntax::ast;
+use syntex_pos::DUMMY_SP;
+use syntex_syntax::symbol::Symbol;
+use syntex_syntax::util::small_vector::SmallVector;
 
-use java_jni::{JniResultRetTypesFix, JniVecRetTypesFix};
-use parse::parse_foreigner_class;
-use types_map::ForeignTypesMap;
+use types_conv_map::TypesConvMap;
+use errors::fatal_error;
+use parsing::parse_foreigner_class;
 
 /// `LanguageConfig` contains configuration for specific programming language
 pub enum LanguageConfig {
@@ -48,92 +76,39 @@ pub enum LanguageConfig {
     },
 }
 
-struct TypesMapCode {
-    name: &'static str,
-    code: &'static str,
-}
-
-pub(crate) trait TypesMapUpdater {
-    fn update(&self, types_map: &mut ForeignTypesMap, class: &ForeignerClassInfo);
-}
-
 /// `Generator` is a main point of `rust_swig`.
 /// It expands rust macroses and generates not rust code.
 /// It designed to use inside `build.rs`.
 pub struct Generator {
-    config: LanguageConfig,
-    types_map: RefCell<ForeignTypesMap>,
-    code_of_types_map: RefCell<Option<Vec<TypesMapCode>>>,
-    types_map_updaters: Vec<Box<TypesMapUpdater>>,
+    // Because of API of syntex, to register for several macroses
+    data: Rc<RefCell<GeneratorData>>,
 }
 
-impl Generator {
-    pub fn new(config: LanguageConfig) -> Generator {
-        let mut code_of_types_map = Vec::new();
-        let mut types_map_updaters = Vec::<Box<TypesMapUpdater>>::new();
-        match config {
-            LanguageConfig::Java { .. } => {
-                code_of_types_map.push(TypesMapCode {
-                    name: "jni-type-map-include.rs",
-                    code: include_str!("java_jni/jni-type-map-include.rs"),
-                });
-                types_map_updaters.push(Box::new(JniVecRetTypesFix));
-                types_map_updaters.push(Box::new(JniResultRetTypesFix));
-            }
-        }
-        Generator {
-            config,
-            types_map: RefCell::new(ForeignTypesMap::default()),
-            code_of_types_map: RefCell::new(Some(code_of_types_map)),
-            types_map_updaters,
-        }
-    }
+struct GeneratorData {
+    init_done: bool,
+    config: LanguageConfig,
+    conv_map: TypesConvMap,
+    conv_map_source: Vec<TypesConvMapCode>,
+}
 
-    pub fn register(self, registry: &mut Registry) {
-        registry.add_macro("foreigner_class", self);
-    }
+struct TypesConvMapCode {
+    id_of_code: &'static str,
+    code: &'static str,
+}
 
-    /// may panic
-    fn init_types_map(&self, parse_session: &ParseSess) -> Vec<P<ast::Item>> {
-        if let Some(code_list) = self.code_of_types_map.borrow_mut().take() {
-            for code in &code_list {
-                self.types_map
-                    .borrow_mut()
-                    .merge(parse_session, code.name, code.code)
-                    .unwrap_or_else(|err| {
-                        panic!(
-                            "Can not merge {} with previous types map: {}",
-                            code.name,
-                            err
-                        )
-                    });
-            }
-        }
-        let mut types_map = self.types_map.borrow_mut();
-        if types_map.is_empty() {
-            panic!("After merge all types maps with have no convertion code");
-        }
-        let utils_code: Vec<_> = types_map.take_utils_code();
-        utils_code
-    }
+#[derive(PartialEq, Clone, Copy)]
+enum SelfTypeVariant {
+    RptrMut,
+    Rptr,
+    Mut,
+    Default,
 }
 
 #[derive(PartialEq, Clone, Copy)]
 enum MethodVariant {
     Constructor,
-    Method,
+    Method(SelfTypeVariant),
     StaticMethod,
-}
-
-impl MethodVariant {
-    pub fn from_ident(ident: &InternedString) -> Option<MethodVariant> {
-        match &**ident {
-            "constructor" => Some(MethodVariant::Constructor),
-            "method" => Some(MethodVariant::Method),
-            "static_method" => Some(MethodVariant::StaticMethod),
-            _ => None,
-        }
-    }
 }
 
 struct ForeignerMethod {
@@ -160,14 +135,41 @@ impl ForeignerMethod {
 }
 
 pub(crate) struct ForeignerClassInfo {
-    name: InternedString,
+    name: Symbol,
     methods: Vec<ForeignerMethod>,
     self_type: ast::Path,
-    /// Not equal self_type, may be for example Box<self_type>
+    /// Not necessarily equal to self_type, may be for example Rc<self_type>
     this_type_for_method: Option<ast::Ty>,
     foreigner_code: String,
-    /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then `Y`
+    /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
     constructor_ret_type: Option<ast::Ty>,
+    span: Span,
+}
+
+impl Generator {
+    pub fn new(config: LanguageConfig) -> Generator {
+        let mut conv_map_source = Vec::new();
+        match config {
+            LanguageConfig::Java { .. } => {
+                conv_map_source.push(TypesConvMapCode {
+                    id_of_code: "jni-include.rs",
+                    code: include_str!("java_jni/jni-include.rs"),
+                });
+            }
+        }
+        Generator {
+            data: Rc::new(RefCell::new(GeneratorData {
+                init_done: false,
+                config,
+                conv_map: TypesConvMap::default(),
+                conv_map_source,
+            })),
+        }
+    }
+
+    pub fn register(self, registry: &mut Registry) {
+        registry.add_macro("foreigner_class", self);
+    }
 }
 
 impl TTMacroExpander for Generator {
@@ -177,32 +179,59 @@ impl TTMacroExpander for Generator {
         _: Span,
         tokens: &[TokenTree],
     ) -> Box<MacResult + 'a> {
-        let mut utils_code = self.init_types_map(cx.parse_sess());
+        self.data.borrow_mut().expand_foreigner_class(cx, tokens)
+    }
+}
+
+impl GeneratorData {
+    fn expand_foreigner_class<'a>(
+        &mut self,
+        cx: &'a mut ExtCtxt,
+        tokens: &[TokenTree],
+    ) -> Box<MacResult + 'a> {
+        let mut items = unwrap_presult!(self.init_types_map(cx.parse_sess()), self.conv_map);
         let foreigner_class = match parse_foreigner_class(cx, tokens) {
             Ok(x) => x,
             Err(span) => return DummyResult::any(span),
         };
-        for updater in &self.types_map_updaters {
-            updater.update(&mut *self.types_map.borrow_mut(), &foreigner_class);
-        }
-
         match self.config {
             LanguageConfig::Java {
                 ref output_dir,
                 ref package_name,
-            } => match java_jni::generate(
-                cx.parse_sess(),
-                &mut *self.types_map.borrow_mut(),
-                output_dir,
-                package_name,
-                &foreigner_class,
-            ) {
-                Ok(mut items) => {
-                    items.extend(utils_code.drain(..));
-                    MacEager::items(SmallVector::many(items))
-                }
-                Err(msg) => panic!("java/jni code generation error: {}", msg),
-            },
+            } => {
+                let mut gen_items = unwrap_presult!(
+                    java_jni::generate(
+                        cx.parse_sess(),
+                        &mut self.conv_map,
+                        output_dir,
+                        package_name,
+                        &foreigner_class,
+                    ),
+                    self.conv_map
+                );
+                items.append(&mut gen_items);
+                MacEager::items(SmallVector::many(items))
+            }
         }
+    }
+
+    fn init_types_map<'a>(&mut self, sess: &'a ParseSess) -> PResult<'a, Vec<P<ast::Item>>> {
+        if self.init_done {
+            return Ok(vec![]);
+        }
+        self.init_done = true;
+        for code in &self.conv_map_source {
+            self.conv_map.merge(sess, code.id_of_code, code.code)?;
+        }
+
+        if self.conv_map.is_empty() {
+            return Err(fatal_error(
+                sess,
+                DUMMY_SP,
+                "After merge all types maps with have no convertion code",
+            ));
+        }
+
+        Ok(self.conv_map.take_utils_code())
     }
 }

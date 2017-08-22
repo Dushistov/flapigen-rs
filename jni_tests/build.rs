@@ -4,6 +4,7 @@ extern crate env_logger;
 extern crate bindgen;
 
 use std::env;
+use std::time::Instant;
 use std::path::{Path, PathBuf};
 
 fn main() {
@@ -37,12 +38,17 @@ fn main() {
         &Path::new(&out_dir).join("jni_c_header.rs"),
     ).unwrap();
 
+    let now = Instant::now();
     rust_swig_expand(
         Path::new("src/lib.rs.in"),
         &Path::new(&out_dir).join("lib.rs"),
     ).unwrap();
+    let expand_time = now.elapsed();
+    println!(
+        "rust swig expand time: {}",
+        expand_time.as_secs() as f64 + (expand_time.subsec_nanos() as f64) / 1_000_000_000.
+    );
     println!("cargo:rerun-if-changed=src");
-
     //rebuild if user remove generated code
     println!("cargo:rerun-if-changed={}", out_dir);
 }

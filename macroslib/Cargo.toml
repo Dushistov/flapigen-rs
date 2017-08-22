@@ -12,6 +12,7 @@ documentation = "https://docs.rs/rust_swig"
 syntex = "0.58.1"
 syntex_syntax = "0.58.1"
 syntex_pos = "0.58.1"
+syntex_errors = "0.58.1"
 log = "0.3"
 petgraph = "0.4.5"
 lazy_static = "0.2.8"
@@ -19,6 +20,13 @@ lazy_static = "0.2.8"
 [dev-dependencies]
 pulldown-cmark = "0.0.15"
 tempdir = "0.3.5"
+jni-sys = "0.3.0"
+log = "0.3"
+env_logger = "0.4.3"
+regex = "0.2.2"
+
+[build-dependencies]
+syntex_syntax = "0.58.1"
 
 [badges]
 travis-ci = { repository = "Dushistov/rust_swig" }
