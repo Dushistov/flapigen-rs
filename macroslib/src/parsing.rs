@@ -1,18 +1,16 @@
 use syntex_syntax::parse::{token, PResult};
-use syntex_syntax::codemap;
-use syntex_syntax::parse;
+use syntex_syntax::{ast, codemap, parse};
 use syntex_syntax::ptr::P;
 use syntex_syntax::parse::common::SeqSep;
 use syntex_syntax::symbol::keywords;
-use syntex_syntax::ast;
 use syntex_syntax::ast::{Arg, FnDecl, Mutability, SelfKind};
-use syntex_pos::mk_sp;
+use syntex_pos::{mk_sp, Span, DUMMY_SP};
 use syntex_syntax::parse::parser::Parser;
 use syntex_syntax::ext::base::ExtCtxt;
 use syntex_syntax::tokenstream::TokenTree;
-use syntex_pos::Span;
 use syntex_syntax::parse::parser;
 use syntex_syntax::symbol::Symbol;
+use syntex_errors::DiagnosticBuilder;
 
 use {ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
 use my_ast::{if_result_return_ok_type, normalized_ty_string, self_variant};
@@ -192,13 +190,22 @@ pub(crate) fn parse_foreigner_class(
         return Err(parser.span);
     }
 
+    let map_perror = |err: DiagnosticBuilder| -> Span {
+        let diag = err.into_diagnostic();
+        let primary_span = diag.span.primary_span().unwrap_or(DUMMY_SP);
+        cx.parse_sess
+            .span_diagnostic
+            .span_err(diag.span.clone(), &diag.message());
+        primary_span
+    };
+
     let class_name_indent = parser.parse_ident().unwrap();
     debug!("CLASS NAME {:?}", class_name_indent);
     let class_span = parser.span;
 
     parser
         .expect(&token::Token::OpenDelim(token::DelimToken::Brace))
-        .unwrap();
+        .map_err(&map_perror)?;
     let mut methods = Vec::new();
     let mut rust_self_type = ast::Path {
         span: parser.span,
@@ -212,14 +219,14 @@ pub(crate) fn parse_foreigner_class(
             break;
         }
         let private_func = parser.eat_contextual_keyword(private_keyword);
-        let func_type_name = parser.parse_ident().unwrap();
+        let func_type_name = parser.parse_ident().map_err(&map_perror)?;
         debug!("func_type {:?}", func_type_name);
         if &*func_type_name.name.as_str() == "self_type" {
             rust_self_type = parser
                 .parse_path(parser::PathStyle::Type)
                 .expect("Can not parse self_type");
             debug!("self_type: {:?}", rust_self_type);
-            parser.expect(&token::Token::Semi).unwrap();
+            parser.expect(&token::Token::Semi).map_err(&map_perror)?;
             continue;
         }
 
@@ -237,7 +244,7 @@ pub(crate) fn parse_foreigner_class(
                     return Err(parser.span);
                 }
             }
-            parser.expect(&token::Token::Semi).unwrap();
+            parser.expect(&token::Token::Semi).map_err(&map_perror)?;
             continue;
         }
 
@@ -259,15 +266,18 @@ pub(crate) fn parse_foreigner_class(
                 return Err(parser.span);
             }
         };
-        let func_name = parser.parse_path(parser::PathStyle::Mod).unwrap();
+        let func_name = parser
+            .parse_path(parser::PathStyle::Mod)
+            .map_err(&map_perror)?;
         debug!("func_name {:?}", func_name);
 
         let func_decl = match func_type {
             MethodVariant::Constructor | MethodVariant::StaticMethod => {
-                parser.parse_fn_decl(false).unwrap()
+                parser.parse_fn_decl(false).map_err(&map_perror)?
             }
             MethodVariant::Method(ref mut self_type) => {
-                let fn_decl = parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).unwrap();
+                let fn_decl = parse_fn_decl_with_self(&mut parser, |p| p.parse_arg())
+                    .map_err(&map_perror)?;
                 *self_type = self_variant(&fn_decl.inputs[0].ty).ok_or_else(|| {
                     cx.span_err(
                         parser.span,
@@ -280,14 +290,14 @@ pub(crate) fn parse_foreigner_class(
             }
         };
         debug!("func_decl {:?}", func_decl);
-        parser.expect(&token::Token::Semi).unwrap();
+        parser.expect(&token::Token::Semi).map_err(&map_perror)?;
         let mut func_name_alias = None;
         if parser.eat_contextual_keyword(alias_keyword) {
             if func_type == MethodVariant::Constructor {
                 cx.span_err(parser.span, "alias not supported for 'constructor'");
                 return Err(parser.span);
             }
-            func_name_alias = Some(parser.parse_ident().unwrap());
+            func_name_alias = Some(parser.parse_ident().map_err(&map_perror)?);
             debug!("we have ALIAS `{:?}`", func_name_alias.unwrap());
             parser
                 .expect(&token::Token::Semi)
