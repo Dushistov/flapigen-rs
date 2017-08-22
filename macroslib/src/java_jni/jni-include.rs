@@ -70,12 +70,12 @@ macro_rules! swig_c_str {
 
 #[cfg(target_pointer_width = "32")]
 unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    ::std::mem::transmute::<u32, *mut T>(val as u32)
+    (val as u32) as *mut T
 }
 
 #[cfg(target_pointer_width = "64")]
 unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    ::std::mem::transmute::<jlong, *mut T>(val)
+    val as *mut T
 }
 
 #[allow(dead_code)]
@@ -607,14 +607,14 @@ impl<'a> SwigInto<jintArray> for &'a [i32] {
 impl SwigDeref for String {
     type Target = str;
     fn swig_deref(&self) -> &str {
-        &self
+        self
     }
 }
 
 impl<T> SwigDeref for Arc<Mutex<T>> {
     type Target = Mutex<T>;
     fn swig_deref(&self) -> &Mutex<T> {
-        &self
+        self
     }
 }
 
@@ -628,21 +628,21 @@ impl<'a, T> SwigFrom<&'a Mutex<T>> for MutexGuard<'a, T> {
 impl<'a, T> SwigDeref for MutexGuard<'a, T> {
     type Target = T;
     fn swig_deref(&self) -> &T {
-        &self
+        self
     }
 }
 
 impl<T> SwigDeref for Rc<T> {
     type Target = T;
     fn swig_deref(&self) -> &T {
-        &self
+        self
     }
 }
 
 impl<'a, T> SwigDeref for &'a Rc<T> {
     type Target = T;
     fn swig_deref(&self) -> &T {
-        &self
+        self
     }
 }
 
@@ -661,7 +661,7 @@ impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
 impl<'a, T> SwigDeref for Ref<'a, T> {
     type Target = T;
     fn swig_deref(&self) -> &T {
-        &self
+        self
     }
 }
 

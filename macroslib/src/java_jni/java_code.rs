@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::fs::File;
-use std::io;
 use std::io::Write;
 
 use super::{fmt_write_err_map, method_name, ForeignMethodSignature};
@@ -15,6 +14,9 @@ pub(in java_jni) fn generate_java_code(
     let path = output_dir.join(format!("{}.java", class.name));
     let mut file = File::create(&path)
         .map_err(|err| format!("Couldn't create {:?}: {}", path, err))?;
+
+    let map_write_err = |err| format!("write failed: {}", err);
+
     write!(
         file,
         "package {package_name};
@@ -50,7 +52,7 @@ public final class {class_name} {{
                     method_access = method_access,
                     ret_type = ret_type,
                     func_name = method_name(&*method),
-                    args_with_types = args_with_java_types(&f_method, false)?,
+                    args_with_types = args_with_java_types(f_method, false)?,
                     exception_spec = exception_spec,
                 ).map_err(&map_write_err)?;
             }
@@ -71,8 +73,8 @@ public final class {class_name} {{
                     exception_spec = exception_spec,
                     return_code = if ret_type != "void" { "return" } else { "" },
                     func_name = method_name(&*method),
-                    single_args_with_types = args_with_java_types(&f_method, false)?,
-                    args_with_types = args_with_java_types(&f_method, true)?,
+                    single_args_with_types = args_with_java_types(f_method, false)?,
+                    args_with_types = args_with_java_types(f_method, true)?,
                     args = list_of_args_for_call_method(&*method, true)?,
                 ).map_err(&map_write_err)?;
             }
@@ -91,7 +93,7 @@ public final class {class_name} {{
                     class_name = class.name,
                     exception_spec = exception_spec,
                     func_name = method_name(&*method),
-                    args_with_types = args_with_java_types(&f_method, false)?,
+                    args_with_types = args_with_java_types(f_method, false)?,
                     args = list_of_args_for_call_method(&*method, false)?
                 ).map_err(&map_write_err)?;
             }
@@ -140,10 +142,6 @@ public final class {class_name} {{
     write!(file, "}}").map_err(&map_write_err)?;
 
     Ok(())
-}
-
-fn map_write_err(err: io::Error) -> String {
-    format!("write failed: {}", err)
 }
 
 fn args_with_java_types(

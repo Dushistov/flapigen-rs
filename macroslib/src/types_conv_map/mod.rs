@@ -203,7 +203,7 @@ impl TypesConvMap {
                 });
             }
         }
-        if let Some(from) = self.rust_names_map.get(&norm_rust_typename).map(|v| *v) {
+        if let Some(from) = self.rust_names_map.get(&norm_rust_typename).cloned() {
             for (foreign_name, graph_idx) in &self.foreign_names_map {
                 let is_connected = match direction {
                     petgraph::Direction::Outgoing => petgraph::algo::has_path_connecting(
@@ -302,7 +302,7 @@ impl TypesConvMap {
     ) -> PResult<'a, NodeIndex<TypeGraphIdx>> {
         self.rust_names_map
             .get(&ty.normalized_name)
-            .map(|v| *v)
+            .cloned()
             .ok_or_else(|| {
                 fatal_error(
                     sess,
@@ -410,7 +410,7 @@ impl TypesConvMap {
 
 
         const MAX_STEPS: usize = 7;
-        'out: for step in 0..MAX_STEPS {
+        for step in 0..MAX_STEPS {
             debug!("try_build_path do step {}", step);
             if cur_step.is_empty() {
                 break;
@@ -431,7 +431,7 @@ impl TypesConvMap {
                 let from: RustType = possible_ways_graph[*from_ty].clone();
                 for edge in &self.generic_edges {
                     trace!("we check {:?} for {:?}", edge.from_ty, from);
-                    if let Some(to_ty) = edge.is_conv_possible(&from, Some(&goal_to), |name| {
+                    if let Some(to_ty) = edge.is_conv_possible(&from, Some(goal_to), |name| {
                         names_to_graph_map
                             .get(&name)
                             .map(|i| &possible_ways_graph[*i])

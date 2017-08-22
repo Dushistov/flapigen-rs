@@ -111,7 +111,7 @@ impl GenericTypeConv {
                     trait_bounds
                 );
                 if trait_bounds.get(key).map_or(false, |requires| {
-                    let val_name = Symbol::intern(&normalized_ty_string(&val));
+                    let val_name = Symbol::intern(&normalized_ty_string(val));
                     others(val_name).map_or(true, |rt| !requires.is_subset(&rt.implements))
                 }) {
                     trace!("is_ty_substitute_of trait bounds check failed");
@@ -130,7 +130,7 @@ impl GenericTypeConv {
         let suffix = if let Some(to_foreigner_hint) = self.to_foreigner_hint {
             assert_eq!(subst_map.len(), 1);
             if let Some(&(key, &Some(ref val))) = subst_map.iter().nth(0).as_ref() {
-                let val_name = normalized_ty_string(&val);
+                let val_name = normalized_ty_string(val);
                 let foreign_name = (*to_foreigner_hint.as_str()).replace(&*key.as_str(), &val_name);
                 Some(Symbol::intern(&foreign_name))
             } else {
@@ -233,7 +233,7 @@ fn is_second_subst_of_first_ppath(
                         return false;
                     }
                     for (type_p1, type_p2) in p1.types.iter().zip(p2.types.iter()) {
-                        let type_p1_name = Symbol::intern(&normalized_ty_string(&type_p1));
+                        let type_p1_name = Symbol::intern(&normalized_ty_string(type_p1));
                         let real_type_p1: ast::Ty =
                             if let Some(subst) = subst_map.get_mut(&type_p1_name) {
                                 match *subst {
@@ -306,11 +306,7 @@ fn replace_all_types_with(in_ty: &ast::Ty, subst_map: &TyParamsSubstMap) -> ast:
     rt.fold_ty(P(in_ty.clone())).unwrap()
 }
 
-pub(crate) fn parse_ty<'a>(
-    sess: &'a ParseSess,
-    sp: Span,
-    type_str: Symbol,
-) -> PResult<'a, ast::Ty> {
+pub(crate) fn parse_ty(sess: &ParseSess, sp: Span, type_str: Symbol) -> PResult<ast::Ty> {
     let mut parser = parse::new_parser_from_source_str(
         sess,
         format!("{:?}_{:?}", sp.lo, sp.hi),

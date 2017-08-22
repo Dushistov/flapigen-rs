@@ -114,7 +114,7 @@ pub(in java_jni) fn generate_rust_code<'a>(
             package_name,
             class,
             &java_method_name,
-            &f_method,
+            f_method,
             method_overloading,
         )?;
         trace!("generate_rust_code jni name: {}", jni_func_name);
@@ -126,7 +126,7 @@ pub(in java_jni) fn generate_rust_code<'a>(
             .map(|a| format!("a_{}, ", a.0))
             .fold(String::new(), |acc, x| acc + &x);
 
-        let decl_func_args = generate_jni_args_with_types(&f_method)
+        let decl_func_args = generate_jni_args_with_types(f_method)
             .map_err(|err| fatal_error(sess, class.span, &err))?;
         let real_output_typename = match method.fn_decl.output {
             ast::FunctionRetTy::Default(_) => "()".to_string(),
@@ -253,7 +253,7 @@ fn generate_jni_func_name<'a>(
 ) -> PResult<'a, String> {
     let mut output = String::new();
     output.push_str("Java_");
-    fn escape_underscore(input: &str, mut output: &mut String) {
+    fn escape_underscore(input: &str, output: &mut String) {
         for c in input.chars() {
             match c {
                 '.' => output.push('_'),
@@ -478,7 +478,7 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_ty
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
-    gen_code.append(&mut code_to_item(sess, &mc.jni_func_name, &code)?);
+    gen_code.append(&mut code_to_item(sess, mc.jni_func_name, &code)?);
     Ok(gen_code)
 }
 
@@ -613,6 +613,6 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
     gen_code.append(&mut deps_this);
-    gen_code.append(&mut code_to_item(sess, &mc.jni_func_name, &code)?);
+    gen_code.append(&mut code_to_item(sess, mc.jni_func_name, &code)?);
     Ok(gen_code)
 }

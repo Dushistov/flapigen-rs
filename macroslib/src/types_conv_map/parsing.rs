@@ -142,7 +142,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                         generic_params: generic.clone(),
                         to_foreigner_hint: get_to_foreigner_hint_for_generic(
                             sess,
-                            &generic,
+                            generic,
                             &swig_attrs,
                         )?,
                     });
@@ -234,7 +234,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                         generic_params: generic.clone(),
                         to_foreigner_hint: get_to_foreigner_hint_for_generic(
                             sess,
-                            &generic,
+                            generic,
                             &swig_attrs,
                         )?,
                     });
@@ -300,7 +300,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
 
                 if let Some(generic_types) = swig_attrs.get(&swig_generic_arg) {
                     assert!(!generic_types.is_empty());
-                    let ty_params = swig_attrs_to_ty_params(&generic_types);
+                    let ty_params = swig_attrs_to_ty_params(generic_types);
                     assert!(!ty_params.is_empty());
                     let generic_span = ty_params.last().unwrap().span;
                     let generic_params = ast::Generics {
@@ -510,10 +510,10 @@ fn get_to_foreigner_hint_for_generic<'a>(
     }
 }
 
-fn ast_attrs_to_hashmap<'a>(
-    sess: &'a ParseSess,
+fn ast_attrs_to_hashmap(
+    sess: &ParseSess,
     attrs: Vec<ast::Attribute>,
-) -> PResult<'a, HashMap<Symbol, Vec<(Symbol, Span)>>> {
+) -> PResult<HashMap<Symbol, Vec<(Symbol, Span)>>> {
     let mut ret = HashMap::new();
     for attr in attrs {
         let attr_name: Symbol = attr.value.name;
@@ -523,7 +523,7 @@ fn ast_attrs_to_hashmap<'a>(
                 ..
             }) => {
                 ret.entry(attr_name)
-                    .or_insert_with(|| Vec::new())
+                    .or_insert_with(Vec::new)
                     .push((lit, attr.span));
             }
             _ => return Err(fatal_error(sess, attr.span, "Invalid attribute")),
@@ -537,7 +537,7 @@ fn extract_trait_param_type<'a>(
     trait_ref: &ast::TraitRef,
 ) -> PResult<'a, ast::Ty> {
     assert_eq!(1, trait_ref.path.segments.len());
-    let seg = trait_ref.path.segments.iter().nth(0).unwrap();
+    let seg = &trait_ref.path.segments[0];
     let param = seg.parameters
         .as_ref()
         .ok_or_else(|| fatal_error(sess, trait_ref.path.span, "No type param"))?;
@@ -550,7 +550,7 @@ fn extract_trait_param_type<'a>(
                     "Expect one type parameter",
                 ));
             }
-            let pty: &P<ast::Ty> = p.types.iter().nth(0).unwrap();
+            let pty: &P<ast::Ty> = &p.types[0];
             Ok((**pty).clone())
         }
         _ => Err(fatal_error(
