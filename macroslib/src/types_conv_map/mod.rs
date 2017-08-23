@@ -9,8 +9,7 @@ use syntex_syntax::ptr::P;
 use syntex_syntax::symbol::Symbol;
 use syntex_syntax::ast;
 use syntex_syntax::parse::{PResult, ParseSess};
-use syntex_pos::Span;
-use syntex_pos::DUMMY_SP;
+use syntex_pos::{Span, DUMMY_SP};
 use syntex_errors::DiagnosticBuilder;
 
 use petgraph::Graph;
@@ -23,9 +22,10 @@ use errors::fatal_error;
 use my_ast::{get_trait_bounds, if_rc_return_inner_type, normalized_ty_string, parse_ty,
              GenericTypeConv, RustType};
 use self::parsing::parse_types_conv_map;
+use ForeignerClassInfo;
 
-pub(in types_conv_map) static TO_VAR_TEMPLATE: &'static str = "{to_var}";
-pub(in types_conv_map) static FROM_VAR_TEMPLATE: &'static str = "{from_var}";
+pub(crate) static TO_VAR_TEMPLATE: &'static str = "{to_var}";
+pub(crate) static FROM_VAR_TEMPLATE: &'static str = "{from_var}";
 pub(in types_conv_map) static TO_VAR_TYPE_TEMPLATE: &'static str = "{to_var_type}";
 pub(in types_conv_map) static FUNCTION_RETURN_TYPE_TEMPLATE: &'static str = "{function_ret_type}";
 
@@ -34,6 +34,15 @@ pub(in types_conv_map) static FUNCTION_RETURN_TYPE_TEMPLATE: &'static str = "{fu
 pub(crate) struct TypeConvEdge {
     code_template: Symbol,
     dependency: Rc<RefCell<Option<ast::Item>>>,
+}
+
+impl From<Symbol> for TypeConvEdge {
+    fn from(x: Symbol) -> Self {
+        TypeConvEdge {
+            code_template: x,
+            dependency: Rc::new(RefCell::new(None)),
+        }
+    }
 }
 
 impl TypeConvEdge {
@@ -57,6 +66,7 @@ pub(crate) struct TypesConvMap {
     utils_code: Vec<P<ast::Item>>,
     generic_edges: Vec<GenericTypeConv>,
     rust_to_foreign_cache: HashMap<Symbol, Symbol>,
+    foreign_classes: Vec<ForeignerClassInfo>,
 }
 
 struct DisplayTypesConvGraph<'a>(&'a TypesConvGraph);
@@ -187,20 +197,23 @@ impl TypesConvMap {
         Ok(())
     }
 
-    /// rust as input, foreign as output
+    /// find correspoint to rust foreign type
     pub(crate) fn map_through_conversation_to_foreign(
         &mut self,
         rust_ty: &ast::Ty,
         direction: petgraph::Direction,
+        build_for_sp: Span,
     ) -> Option<ForeignTypeInfo> {
         let norm_rust_typename = Symbol::intern(&normalized_ty_string(rust_ty));
-        if let Some(foreign_name) = self.rust_to_foreign_cache.get(&norm_rust_typename) {
-            if let Some(to) = self.foreign_names_map.get(foreign_name) {
-                let to = &self.conv_graph[*to];
-                return Some(ForeignTypeInfo {
-                    name: *foreign_name,
-                    correspoding_rust_type: to.clone(),
-                });
+        if direction == petgraph::Direction::Outgoing {
+            if let Some(foreign_name) = self.rust_to_foreign_cache.get(&norm_rust_typename) {
+                if let Some(to) = self.foreign_names_map.get(foreign_name) {
+                    let to = &self.conv_graph[*to];
+                    return Some(ForeignTypeInfo {
+                        name: *foreign_name,
+                        correspoding_rust_type: to.clone(),
+                    });
+                }
             }
         }
         if let Some(from) = self.rust_names_map.get(&norm_rust_typename).cloned() {
@@ -271,10 +284,10 @@ impl TypesConvMap {
         for (foreign_name, graph_idx) in &self.foreign_names_map {
             let path = match direction {
                 petgraph::Direction::Outgoing => {
-                    self.try_build_path(&from, &self.conv_graph[*graph_idx])
+                    self.try_build_path(&from, &self.conv_graph[*graph_idx], build_for_sp)
                 }
                 petgraph::Direction::Incoming => {
-                    self.try_build_path(&self.conv_graph[*graph_idx], &from)
+                    self.try_build_path(&self.conv_graph[*graph_idx], &from, build_for_sp)
                 }
             };
             if let Some(path) = path {
@@ -311,6 +324,7 @@ impl TypesConvMap {
                 )
             })
     }
+
     pub(crate) fn convert_rust_types<'a>(
         &mut self,
         sess: &'a ParseSess,
@@ -318,14 +332,15 @@ impl TypesConvMap {
         to: &RustType,
         var_name: &str,
         function_ret_type: &str,
+        build_for_sp: Span,
     ) -> PResult<'a, (Vec<P<ast::Item>>, String)> {
-        let path = match self.find_path(sess, from, to) {
+        let path = match self.find_path(sess, from, to, build_for_sp) {
             Ok(x) => x,
             Err(mut err) => {
                 err.cancel();
                 debug!("convert_rust_types: no path, trying to build it");
-                self.build_path_if_possible(from, to);
-                self.find_path(sess, from, to)?
+                self.build_path_if_possible(from, to, build_for_sp);
+                self.find_path(sess, from, to, build_for_sp)?
             }
         };
         let mut ret_code = String::new();
@@ -355,6 +370,7 @@ impl TypesConvMap {
         sess: &'a ParseSess,
         from: &RustType,
         to: &RustType,
+        build_for_sp: Span,
     ) -> PResult<'a, Vec<EdgeIndex<TypeGraphIdx>>> {
         debug!(
             "find_path: begin {} -> {}",
@@ -379,10 +395,15 @@ impl TypesConvMap {
         debug!("find_path: from {:?}", from);
         let to = self.find_rust_type(sess, to).map_err(&err_add_note)?;
         debug!("find_path: to {:?}", to);
-        find_conversation_path(sess, &self.conv_graph, from, to)
+        find_conversation_path(sess, &self.conv_graph, from, to, build_for_sp)
     }
 
-    fn try_build_path(&self, start_from: &RustType, goal_to: &RustType) -> Option<PossibePath> {
+    fn try_build_path(
+        &self,
+        start_from: &RustType,
+        goal_to: &RustType,
+        build_for_sp: Span,
+    ) -> Option<PossibePath> {
         debug!(
             "try_build_path from {} to {}",
             start_from.normalized_name,
@@ -466,6 +487,7 @@ impl TypesConvMap {
                                 &possible_ways_graph,
                                 start_from_idx,
                                 goal_to_idx,
+                                build_for_sp,
                             ).unwrap();
                             for edge in &path {
                                 if let Some((from, to)) =
@@ -494,14 +516,19 @@ impl TypesConvMap {
         None
     }
 
-    fn build_path_if_possible(&mut self, start_from: &RustType, goal_to: &RustType) {
+    fn build_path_if_possible(
+        &mut self,
+        start_from: &RustType,
+        goal_to: &RustType,
+        build_for_sp: Span,
+    ) {
         debug!(
             "build_path_if_possible begin {}\n {} -> {}",
             DisplayTypesConvGraph(&self.conv_graph),
             start_from.normalized_name,
             goal_to.normalized_name
         );
-        if let Some(path) = self.try_build_path(start_from, goal_to) {
+        if let Some(path) = self.try_build_path(start_from, goal_to, build_for_sp) {
             merge_path_to_conv_map(path, self);
         }
     }
@@ -522,11 +549,7 @@ impl TypesConvMap {
         self.foreign_names_map.insert(to.1, to_id);
     }
 
-    pub(crate) fn convert_to_heap_pointer(
-        &mut self,
-        from: &RustType,
-        var_name: &str,
-    ) -> (RustType, String) {
+    pub(crate) fn convert_to_heap_pointer(from: &RustType, var_name: &str) -> (RustType, String) {
         if let Some(inner_ty) = if_rc_return_inner_type(&from.ty) {
             let inner_ty: RustType = inner_ty.into();
             let inner_ty_str = normalized_ty_string(&inner_ty.ty);
@@ -557,22 +580,95 @@ impl TypesConvMap {
         }
     }
 
-    pub(crate) fn free_mem_on_heap(&mut self, from: &RustType, var_name: &str) -> String {
+    pub(crate) fn unpack_from_heap_pointer(
+        from: &RustType,
+        var_name: &str,
+        unbox_if_boxed: bool,
+    ) -> String {
         if if_rc_return_inner_type(&from.ty).is_some() {
             format!(
                 r#"
     let {var_name}: {rc_type}  = unsafe {{ Rc::from_raw({var_name}) }};
-    drop({var_name});
 "#,
                 var_name = var_name,
                 rc_type = from.normalized_name,
             )
         } else {
-            format!(r#"
-    let {var_name}: Box<{type}> = unsafe {{ Box::from_raw({var_name}) }};
-    drop({var_name});
-"#, var_name = var_name, type = from.normalized_name)
+            let unbox_code = if unbox_if_boxed {
+                format!(
+                    r#"
+    let {var_name}: {inside_box_type} = *{var_name};
+"#,
+                    var_name = var_name,
+                    inside_box_type = from.normalized_name
+                )
+            } else {
+                String::new()
+            };
+            format!(
+                r#"
+    let {var_name}: Box<{inside_box_type}> = unsafe {{ Box::from_raw({var_name}) }};
+{unbox_code}
+"#,
+                var_name = var_name,
+                inside_box_type = from.normalized_name,
+                unbox_code = unbox_code
+            )
         }
+    }
+
+    pub(crate) fn is_ty_implements(&self, ty: &ast::Ty, trait_name: Symbol) -> Option<RustType> {
+        let ty_name = Symbol::intern(&normalized_ty_string(ty));
+        if let Some(idx) = self.rust_names_map.get(&ty_name) {
+            if self.conv_graph[*idx].implements.contains(&trait_name) {
+                return Some(self.conv_graph[*idx].clone());
+            }
+        }
+        if let ast::TyKind::Rptr(_, ref mut_ty) = ty.node {
+            let ty_name = Symbol::intern(&normalized_ty_string(&mut_ty.ty));
+            self.rust_names_map.get(&ty_name).map_or(None, |idx| {
+                if self.conv_graph[*idx].implements.contains(&trait_name) {
+                    Some(self.conv_graph[*idx].clone())
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        }
+
+    }
+
+    pub(crate) fn register_foreigner_class(&mut self, class: &ForeignerClassInfo) {
+        self.foreign_classes.push(class.clone());
+    }
+
+    pub(crate) fn find_foreigner_class_with_such_this_type(
+        &self,
+        this_ty: &ast::Ty,
+    ) -> Option<&ForeignerClassInfo> {
+        let this_name = normalized_ty_string(&this_ty);
+        for fc in &self.foreign_classes {
+            if let Some(this_type_for_method) = fc.this_type_for_method.as_ref() {
+                let cur_this = normalized_ty_string(this_type_for_method);
+                if cur_this == this_name {
+                    return Some(fc);
+                }
+            }
+        }
+        None
+    }
+
+    pub(crate) fn add_conversation_rule(
+        &mut self,
+        from: RustType,
+        to: RustType,
+        rule: TypeConvEdge,
+    ) {
+        debug!("TypesConvMap::add_conversation_rule {} -> {}", from, to);
+        let from = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, from);
+        let to = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, to);
+        self.conv_graph.add_edge(from, to, rule);
     }
 }
 
@@ -581,6 +677,7 @@ fn find_conversation_path<'a>(
     conv_graph: &TypesConvGraph,
     from: NodeIndex<TypeGraphIdx>,
     to: NodeIndex<TypeGraphIdx>,
+    build_for_sp: Span,
 ) -> PResult<'a, Vec<EdgeIndex<TypeGraphIdx>>> {
     debug!("search {:?} -> {:?}", conv_graph[from], conv_graph[to]);
 
@@ -606,6 +703,7 @@ fn find_conversation_path<'a>(
                     conv_graph[to].ty.span,
                     &format!("to type '{}'", conv_graph[to]),
                 );
+                err.span_note(build_for_sp, "In this context");
                 return Err(err);
             }
         };
@@ -757,6 +855,7 @@ impl Default for TypesConvMap {
             utils_code: Vec::new(),
             generic_edges: default_rules,
             rust_to_foreign_cache: HashMap::new(),
+            foreign_classes: Vec::new(),
         }
     }
 }
@@ -863,7 +962,8 @@ fn helper3() {
             types_map
                 .map_through_conversation_to_foreign(
                     &parse_ty(&sess, DUMMY_SP, Symbol::intern("i32")).unwrap(),
-                    petgraph::Direction::Outgoing
+                    petgraph::Direction::Outgoing,
+                    DUMMY_SP
                 )
                 .unwrap()
                 .name,
@@ -882,14 +982,14 @@ fn helper3() {
         let from = types_map.rust_names_map[&Symbol::intern("jboolean")];
         let to = types_map.rust_names_map[&Symbol::intern("bool")];
         assert_eq!(
-            find_conversation_path(&sess, &types_map.conv_graph, from, to).unwrap(),
+            find_conversation_path(&sess, &types_map.conv_graph, from, to, DUMMY_SP).unwrap(),
             vec![types_map.conv_graph.find_edge(from, to).unwrap()]
         );
 
         let from = types_map.rust_names_map[&Symbol::intern("bool")];
         let to = types_map.rust_names_map[&Symbol::intern("jboolean")];
         assert_eq!(
-            find_conversation_path(&sess, &types_map.conv_graph, from, to).unwrap(),
+            find_conversation_path(&sess, &types_map.conv_graph, from, to, DUMMY_SP).unwrap(),
             vec![types_map.conv_graph.find_edge(from, to).unwrap()]
         );
         assert_eq!(
@@ -930,7 +1030,8 @@ fn helper3() {
                         .unwrap()
                         .into(),
                     "a0",
-                    "jlong"
+                    "jlong",
+                    DUMMY_SP
                 )
                 .expect("path from &mut Rc<RefCell<Foo>> to &mut Foo NOT exists")
                 .1,
@@ -953,7 +1054,8 @@ fn helper3() {
                         .unwrap()
                         .into(),
                     "a0",
-                    "jlong"
+                    "jlong",
+                    DUMMY_SP
                 )
                 .expect("path from &RefCell<Foo> to &Foo NOT exists")
                 .1,
@@ -967,7 +1069,8 @@ fn helper3() {
             types_map
                 .map_through_conversation_to_foreign(
                     &parse_ty(&sess, DUMMY_SP, Symbol::intern("Vec<Foo>")).unwrap(),
-                    petgraph::Direction::Outgoing
+                    petgraph::Direction::Outgoing,
+                    DUMMY_SP
                 )
                 .unwrap()
                 .name,
@@ -982,7 +1085,8 @@ fn helper3() {
                         .into(),
                     &parse_ty(&sess, DUMMY_SP, Symbol::intern("jlong"))
                         .unwrap()
-                        .into()
+                        .into(),
+                    DUMMY_SP
                 )
                 .is_none()
         );

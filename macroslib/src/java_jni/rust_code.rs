@@ -12,8 +12,8 @@ use {ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant, TypesC
 use super::{code_to_item, fmt_write_err_map, java_class_full_name, java_class_name_to_jni,
             method_name, ForeignMethodSignature, ForeignTypeInfo};
 use errors::fatal_error;
-use my_ast::{normalized_ty_string, RustType};
-use types_conv_map::unpack_unique_typename;
+use my_ast::{normalized_ty_string, parse_ty, RustType};
+use types_conv_map::{unpack_unique_typename, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
 
 struct MethodContext<'a> {
     method: &'a ForeignerMethod,
@@ -35,8 +35,8 @@ pub(in java_jni) fn generate_rust_code<'a>(
 
     //to handle java method overload
     let mut gen_fnames = HashMap::<String, usize>::new();
-    for method in &class.methods {
-        let val_ref = gen_fnames.entry(method_name(&*method));
+    for (method, f_method) in class.methods.iter().zip(f_methods_sign.iter()) {
+        let val_ref = gen_fnames.entry(method_name(method, f_method));
         *val_ref.or_insert(0) += 1;
     }
 
@@ -46,32 +46,34 @@ pub(in java_jni) fn generate_rust_code<'a>(
         span: DUMMY_SP,
     };
     let mut gen_code = Vec::<P<ast::Item>>::new();
-    let (this_type_for_method, code_box_this) =
-        if let (Some(this_type), Some(constructor_ret_type)) = (
-            class.this_type_for_method.as_ref(),
-            class.constructor_ret_type.as_ref(),
-        ) {
-            let this_type: RustType = this_type.clone().into();
-            let this_type = this_type.implements("SwigForeignClass");
-            debug!(
-                "generate_rust_code: add implements SwigForeignClass for {}",
-                this_type.normalized_name
-            );
-            conv_map.add_type(this_type.clone());
+    let (this_type_for_method, code_box_this) = if let (
+        Some(this_type),
+        Some(constructor_ret_type),
+    ) = (
+        class.this_type_for_method.as_ref(),
+        class.constructor_ret_type.as_ref(),
+    ) {
+        let this_type: RustType = this_type.clone().into();
+        let this_type = this_type.implements("SwigForeignClass");
+        debug!(
+            "generate_rust_code: add implements SwigForeignClass for {}",
+            this_type.normalized_name
+        );
+        conv_map.add_type(this_type.clone());
 
-            let constructor_ret_type: RustType = constructor_ret_type.clone().into();
-            conv_map.add_type(constructor_ret_type);
+        let constructor_ret_type: RustType = constructor_ret_type.clone().into();
+        conv_map.add_type(constructor_ret_type);
 
-            let (this_type_for_method, code_box_this) =
-                conv_map.convert_to_heap_pointer(&this_type, "this");
-            let class_name_for_user = java_class_full_name(package_name, &class.name.as_str());
-            let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
+        let (this_type_for_method, code_box_this) =
+            TypesConvMap::convert_to_heap_pointer(&this_type, "this");
+        let class_name_for_user = java_class_full_name(package_name, &class.name.as_str());
+        let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
 
-            gen_code.append(&mut code_to_item(
-                sess,
-                &class_name_for_jni,
-                &format!(
-                    r#"impl SwigForeignClass for {class_name} {{
+        gen_code.append(&mut code_to_item(
+            sess,
+            &class_name_for_jni,
+            &format!(
+                r#"impl SwigForeignClass for {class_name} {{
     fn jni_class_name() -> *const ::std::os::raw::c_char {{
         swig_c_str!("{jni_class_name}")
     }}
@@ -80,16 +82,68 @@ pub(in java_jni) fn generate_rust_code<'a>(
        this as jlong
     }}
 }}"#,
-                    class_name = this_type.normalized_name,
-                    jni_class_name = class_name_for_jni,
-                    code_box_this = code_box_this,
-                ),
-            )?);
-            //            conv_map.add_type(this_type_for_method.clone());
-            (this_type_for_method, code_box_this)
-        } else {
-            (dummy_ty.clone().into(), String::new())
-        };
+                class_name = this_type.normalized_name,
+                jni_class_name = class_name_for_jni,
+                code_box_this = code_box_this,
+            ),
+        )?);
+
+
+        let jlong_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("jlong"))?.into();
+
+        conv_map.add_conversation_rule(
+            jlong_ti.clone(),
+            get_ref_type(&this_type_for_method.ty, ast::Mutability::Immutable).into(),
+            Symbol::intern(&format!(
+                r#"
+    let {to_var}: &{this_type} = unsafe {{
+        jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
+    }};
+"#,
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE,
+                this_type = this_type_for_method.normalized_name,
+            )).into(),
+        );
+
+        conv_map.add_conversation_rule(
+            jlong_ti.clone(),
+            get_ref_type(&this_type_for_method.ty, ast::Mutability::Mutable).into(),
+            Symbol::intern(&format!(
+                r#"
+    let {to_var}: &mut {this_type} = unsafe {{
+        jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
+    }};
+"#,
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE,
+                this_type = this_type_for_method.normalized_name,
+            )).into(),
+        );
+
+        let unpack_code =
+            TypesConvMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
+        conv_map.add_conversation_rule(
+            jlong_ti,
+            this_type,
+            Symbol::intern(&format!(
+                r#"
+    let {to_var}: *mut {this_type} = unsafe {{
+        jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
+    }};
+{unpack_code}
+"#,
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE,
+                this_type = this_type_for_method.normalized_name,
+                unpack_code = unpack_code,
+            )).into(),
+        );
+
+        (this_type_for_method, code_box_this)
+    } else {
+        (dummy_ty.clone().into(), String::new())
+    };
 
 
     let no_this_info = || {
@@ -107,7 +161,7 @@ pub(in java_jni) fn generate_rust_code<'a>(
     let mut have_constructor = false;
 
     for (method, f_method) in class.methods.iter().zip(f_methods_sign.iter()) {
-        let java_method_name = method_name(&*method);
+        let java_method_name = method_name(method, f_method);
         let method_overloading = gen_fnames[&java_method_name] > 1;
         let jni_func_name = generate_jni_func_name(
             sess,
@@ -187,7 +241,7 @@ pub(in java_jni) fn generate_rust_code<'a>(
             .ok_or_else(&no_this_info)?
             .clone()
             .into();
-        let free_code = conv_map.free_mem_on_heap(&this_type, "this");
+        let unpack_code = TypesConvMap::unpack_from_heap_pointer(&this_type, "this", false);
 
         let jni_destructor_name = generate_jni_func_name(
             sess,
@@ -211,11 +265,12 @@ pub fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong) {{
     let this: *mut {this_type} = unsafe {{
         jlong_to_pointer::<{this_type}>(this).as_mut().unwrap()
     }};
-{free_code}
+{unpack_code}
+    drop(this);
 }}
 "#,
             jni_destructor_name = jni_destructor_name,
-            free_code = free_code,
+            unpack_code = unpack_code,
             this_type = this_type_for_method.normalized_name,
         );
         debug!("we generate and parse code: {}", code);
@@ -273,23 +328,27 @@ fn generate_jni_func_name<'a>(
     if overloaded {
         output.push_str("__");
         for arg in &f_method.input {
-            escape_underscore(
-                JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-                    .get(&arg.name)
-                    .ok_or_else(|| {
-                        fatal_error(
-                            sess,
-                            class.span,
-                            &format!(
-                                "Can not generate JNI function name for overload method {},\
-                                 unknown java type {}",
-                                java_method_name,
-                                arg.name
-                            ),
-                        )
-                    })?,
-                &mut output,
-            );
+            let type_name = if arg.java_need_conversation() {
+                arg.java_transition_type.unwrap()
+            } else {
+                arg.name
+            };
+            let type_name = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
+                .get(&type_name)
+                .ok_or_else(|| {
+                    fatal_error(
+                        sess,
+                        class.span,
+                        &format!(
+                            "Can not generate JNI function name for overload method '{}',\
+                             unknown java type '{}'",
+                            java_method_name,
+                            arg.name
+                        ),
+                    )
+                })?;
+
+            escape_underscore(type_name, &mut output);
         }
     }
 
@@ -316,13 +375,14 @@ fn foreign_from_rust_convert_method_output<'a>(
         },
         ast::FunctionRetTy::Ty(ref p_ty) => (**p_ty).clone(),
     };
-
+    let context_span = rust_ret_ty.span;
     conv_map.convert_rust_types(
         sess,
         &rust_ret_ty.into(),
         &f_output.correspoding_rust_type,
         var_name,
         func_ret_type,
+        context_span,
     )
 }
 
@@ -351,13 +411,13 @@ fn foreign_to_rust_convert_method_inputs<'a, GI: Iterator<Item = String>>(
         .zip(arg_names)
     {
         let to: RustType = (*to_type.ty).clone().into();
-
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             sess,
             &f_from.correspoding_rust_type,
             &to,
             &arg_name,
             func_ret_type,
+            to_type.pat.span,
         )?;
         code_deps.append(&mut cur_deps);
         ret_code.push_str(&cur_code);
@@ -508,6 +568,7 @@ fn generate_constructor<'a>(
         &this_type,
         "this",
         "jlong",
+        mc.method.span(),
     )?;
 
 
@@ -581,6 +642,7 @@ fn generate_method<'a>(
         &to_ty.into(),
         "this",
         &jni_ret_type.as_str(),
+        mc.method.span(),
     )?;
 
     let code = format!(
@@ -615,4 +677,18 @@ pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -
     gen_code.append(&mut deps_this);
     gen_code.append(&mut code_to_item(sess, mc.jni_func_name, &code)?);
     Ok(gen_code)
+}
+
+fn get_ref_type(ty: &ast::Ty, mutbl: ast::Mutability) -> ast::Ty {
+    ast::Ty {
+        id: DUMMY_NODE_ID,
+        span: ty.span,
+        node: ast::TyKind::Rptr(
+            None,
+            ast::MutTy {
+                mutbl: mutbl,
+                ty: P(ty.clone()),
+            },
+        ),
+    }
 }

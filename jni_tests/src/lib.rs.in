@@ -410,3 +410,69 @@ foreigner_class!(class TestIntArrays {
     method TestIntArrays::get_ref(&self) -> &[i32];
     static_method arr_pass_thorough(_: &[i32]) -> &[i32];
 });
+
+#[derive(Default)]
+struct TestPassObjectsAsParams {
+    data: i32,
+    name: String,
+}
+
+impl TestPassObjectsAsParams {
+    fn f1(&mut self, foo: &Foo) {
+        self.data = foo.data;
+        self.name = foo.name.clone();
+    }
+    fn f2(&mut self, foo: &mut Foo) {
+        self.f1(foo);
+        foo.data = 0;
+        foo.name = String::new();
+    }
+    fn f3(&mut self, foo: Foo) {
+        self.f1(&foo);
+    }
+
+    fn f4(foo: &Foo) -> String {
+        format!("{}{}", foo.name, foo.data)
+    }
+
+    fn f5(a: i32, s: &str, foo: &mut Foo) -> String {
+        let ret = TestPassObjectsAsParams::f4(foo);
+        foo.data = a;
+        foo.name = s.into();
+        ret
+    }
+
+    fn f6(foo: Foo) -> String {
+        TestPassObjectsAsParams::f4(&foo)
+    }
+
+    fn get_data(&self) -> i32 {
+        self.data
+    }
+    fn get_name(&self) -> &str {
+        &self.name
+    }
+
+    fn new_from_foo(foo: Foo) -> TestPassObjectsAsParams {
+        TestPassObjectsAsParams {
+            name: foo.name,
+            data: foo.data,
+        }
+    }
+}
+
+foreigner_class!(class TestPassObjectsAsParams {
+    self_type TestPassObjectsAsParams;
+    constructor TestPassObjectsAsParams::default() -> TestPassObjectsAsParams;
+    constructor TestPassObjectsAsParams::new_from_foo(_: Foo) -> TestPassObjectsAsParams;
+    
+    method TestPassObjectsAsParams::f1(&mut self, _: &Foo);
+    method TestPassObjectsAsParams::f2(&mut self, _: &mut Foo);
+    method TestPassObjectsAsParams::f3(&mut self, _: Foo);
+    method TestPassObjectsAsParams::get_data(&self) -> i32;
+    method TestPassObjectsAsParams::get_name(&self) -> &str;
+
+    static_method TestPassObjectsAsParams::f4(_: &Foo) -> String;
+    static_method TestPassObjectsAsParams::f5(_: i32, _: &str, _: &mut Foo) -> String;
+    static_method TestPassObjectsAsParams::f6(_: Foo) -> String;
+});

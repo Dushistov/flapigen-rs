@@ -12,6 +12,7 @@ import com.example.rust.TestInner;
 import com.example.rust.Xyz;
 import com.example.rust.TestContainers;
 import com.example.rust.TestIntArrays;
+import com.example.rust.TestPassObjectsAsParams;
 
 class Main {
     private static void testDoubleOverload() {
@@ -154,10 +155,60 @@ class Main {
 	    }
 	    assert Arrays.equals(bigArray, new TestIntArrays(17, bigArray.length).get_ref());
 	}
+	testPassObjectsAsParams();
 	} catch (java.lang.AssertionError ex) {
 	    ex.printStackTrace();
 	    throw ex;
 	}
         System.out.println("ALL tests PASSED");
+    }
+
+    private static void testPassObjectsAsParams() {
+	TestPassObjectsAsParams x = new TestPassObjectsAsParams();
+	assert x.get_data() == 0;
+	assert x.get_name().equals("");
+
+	Foo foo1 = new Foo(5, "aaa");
+	assert foo1.calcF(0, 0) == 5;
+	assert foo1.getName().equals("aaa");
+	x.f1(foo1);
+	assert x.get_data() == 5;
+	assert x.get_name().equals("aaa");
+	assert foo1.calcF(0, 0) == 5;
+	assert foo1.getName().equals("aaa");
+
+	x.f1(new Foo(0, ""));
+	assert x.get_data() == 0;
+	assert x.get_name().equals("");
+	assert foo1.calcF(0, 0) == 5;
+	assert foo1.getName().equals("aaa");
+
+	x.f2(foo1);
+	assert x.get_data() == 5;
+	assert x.get_name().equals("aaa");
+	assert foo1.calcF(0, 0) == 0;
+	assert foo1.getName().equals("");
+
+	x.f1(new Foo(0, ""));
+	Foo foo2 = new Foo(17, "bbb");
+	x.f3(foo2);
+	foo2 = null;
+        System.gc();
+
+	foo1 = new Foo(5, "aaa");
+	assert TestPassObjectsAsParams.f4(foo1).equals("aaa5");
+	assert foo1.calcF(0, 0) == 5;
+	assert foo1.getName().equals("aaa");
+
+	assert TestPassObjectsAsParams.f5(1, "ccc", foo1).equals("aaa5");
+	assert foo1.calcF(0, 0) == 1;
+	assert foo1.getName().equals("ccc");
+
+	assert TestPassObjectsAsParams.f6(foo1).equals("ccc1");
+
+	foo1 = new Foo(5, "aaa");
+	TestPassObjectsAsParams y = new TestPassObjectsAsParams(foo1);
+	assert y.get_data() == 5;
+	assert y.get_name().equals("aaa");
     }
 }

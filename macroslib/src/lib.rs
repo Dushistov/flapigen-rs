@@ -15,7 +15,8 @@ extern crate log;
 extern crate env_logger;
 #[macro_use]
 extern crate lazy_static;
-
+#[macro_use]
+extern crate bitflags;
 
 macro_rules! unwrap_presult {
     ($presult_epxr:expr) => {
@@ -96,7 +97,7 @@ struct TypesConvMapCode {
     code: &'static str,
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 enum SelfTypeVariant {
     RptrMut,
     Rptr,
@@ -104,13 +105,14 @@ enum SelfTypeVariant {
     Default,
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 enum MethodVariant {
     Constructor,
     Method(SelfTypeVariant),
     StaticMethod,
 }
 
+#[derive(Debug, Clone)]
 struct ForeignerMethod {
     variant: MethodVariant,
     rust_id: ast::Path,
@@ -132,8 +134,13 @@ impl ForeignerMethod {
             }
         }
     }
+
+    pub(crate) fn span(&self) -> Span {
+        self.rust_id.span
+    }
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct ForeignerClassInfo {
     name: Symbol,
     methods: Vec<ForeignerMethod>,
@@ -194,6 +201,7 @@ impl GeneratorData {
             Ok(x) => x,
             Err(span) => return DummyResult::any(span),
         };
+        self.conv_map.register_foreigner_class(&foreigner_class);
         match self.config {
             LanguageConfig::Java {
                 ref output_dir,

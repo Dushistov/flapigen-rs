@@ -4,6 +4,7 @@ import subprocess
 import os
 import re
 import glob
+import sys
 
 def purge(dir, pattern):
     for f in os.listdir(dir):
@@ -65,6 +66,8 @@ subprocess.check_call(["jar", "cfv", "Test.jar", "com"], cwd=jar_dir, shell=use_
 target_dir = os.path.join(find_dir("target"), "debug")
 run_jar(target_dir, jar_dir, use_shell)
 
+if len(sys.argv) > 1 and sys.argv[1] == "--debug-only":
+    sys.exit(0)
 #rerun in release mode
 subprocess.check_call(["cargo", "test", "--release"], shell=False)
 subprocess.check_call(["cargo", "build", "--release"], shell=False)

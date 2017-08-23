@@ -341,6 +341,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
         utils_code,
         generic_edges,
         rust_to_foreign_cache: HashMap::new(),
+        foreign_classes: Vec::new(),
     })
 }
 
@@ -789,6 +790,7 @@ impl SwigFrom<bool> for jboolean {
             &rust_type_from_str("bool"),
             "a0",
             "jlong",
+            DUMMY_SP
         ));
         assert_eq!("    let a0: bool = a0.swig_into(env);\n".to_string(), code);
 
@@ -798,6 +800,7 @@ impl SwigFrom<bool> for jboolean {
             &rust_type_from_str("jboolean"),
             "a0",
             "jlong",
+            DUMMY_SP
         ));
 
         assert_eq!(
@@ -835,6 +838,7 @@ impl SwigDeref for String {
             &rust_type_from_str("&str"),
             "a0",
             "jlong",
+            DUMMY_SP
         ));
         assert_eq!("    let a0: &str = a0.swig_deref();\n".to_string(), code);
     }
@@ -896,6 +900,7 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
             &rust_type_from_str("&Foo"),
             "a0",
             "jlong",
+            DUMMY_SP
         ));
         assert_eq!(
             r#"    let a0: &Mutex<Foo> = a0.swig_deref();
@@ -963,6 +968,7 @@ macro_rules! jni_unpack_return {
             &rust_type_from_str("Foo"),
             "a0",
             "jlong",
+            DUMMY_SP
         ));
         assert_eq!(
             r#"    let a0: Foo = jni_unpack_return!(a0, env);
@@ -977,6 +983,7 @@ macro_rules! jni_unpack_return {
             &rust_type_from_str("jshort"),
             "a0",
             "jlong",
+            DUMMY_SP
         ));
         assert_eq!(
             r#"    let a0: u8 = jni_unpack_return!(a0, env);

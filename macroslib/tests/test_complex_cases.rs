@@ -5,6 +5,7 @@ extern crate env_logger;
 extern crate regex;
 
 use std::fs;
+use std::path::Path;
 use regex::Regex;
 use tempdir::TempDir;
 
@@ -123,6 +124,49 @@ foreigner_class!(class Moo {
     assert_eq!("jobject", caps.get(1).unwrap().as_str());
 }
 
+#[test]
+fn test_pass_objects_as_param_simple() {
+    parse_code(
+        "test_pass_objects_as_param_simple",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32, _: &str) -> Foo;
+    method Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
+});
+
+foreigner_class!(class TestPassObjectsAsParams {
+    self_type TestPassObjectsAsParams;
+    constructor TestPassObjectsAsParams::default() -> TestPassObjectsAsParams;
+    method TestPassObjectsAsParams::f1(&self, _: &Foo);
+    method TestPassObjectsAsParams::f2(&self, _: Foo);
+    method TestPassObjectsAsParams::f3(&self, _: &mut Foo);
+});
+"#,
+    );
+}
+
+#[test]
+fn test_pass_objects_as_param() {
+    parse_code(
+        "test_pass_objects_as_param",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32, _: &str) -> Rc<RefCell<Foo>>;
+    method Foo::f(&self, _: i32, _: i32) -> i32;
+});
+
+foreigner_class!(class TestPassObjectsAsParams {
+    self_type TestPassObjectsAsParams;
+    constructor TestPassObjectsAsParams::default() -> TestPassObjectsAsParams;
+    method TestPassObjectsAsParams::f1(&self, _: &RefCell<Foo>);
+    method TestPassObjectsAsParams::f2(&self, _: Rc<RefCell<Foo>>);
+    method TestPassObjectsAsParams::f3(&self, _: &mut RefCell<Foo>);
+});
+"#,
+    );
+}
 
 fn parse_code(test_name: &str, code: &str) -> String {
     test_helper::logger_init();
@@ -139,7 +183,7 @@ fn parse_code(test_name: &str, code: &str) -> String {
     });
     let mut registry = syntex::Registry::new();
     let swig_gen = rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
-        output_dir: java_path,
+        output_dir: Path::new("-").into(),
         package_name: "com.example".into(),
     });
     swig_gen.register(&mut registry);
