@@ -19,8 +19,8 @@ use petgraph::algo::dijkstra;
 use petgraph::visit::EdgeRef;
 
 use errors::fatal_error;
-use my_ast::{get_trait_bounds, if_rc_return_inner_type, normalized_ty_string, parse_ty,
-             GenericTypeConv, RustType};
+use my_ast::{check_if_smart_pointer_return_inner_type, get_trait_bounds, normalized_ty_string,
+             parse_ty, GenericTypeConv, RustType};
 use self::parsing::parse_types_conv_map;
 use ForeignerClassInfo;
 
@@ -550,34 +550,39 @@ impl TypesConvMap {
     }
 
     pub(crate) fn convert_to_heap_pointer(from: &RustType, var_name: &str) -> (RustType, String) {
-        if let Some(inner_ty) = if_rc_return_inner_type(&from.ty) {
-            let inner_ty: RustType = inner_ty.into();
-            let inner_ty_str = normalized_ty_string(&inner_ty.ty);
-            (
-                inner_ty,
-                format!(
-                    r#"
-    let {var_name}: *const {inner_ty} = Rc::into_raw({var_name});
+        for smart_pointer in &["Box", "Rc", "Arc"] {
+            if let Some(inner_ty) =
+                check_if_smart_pointer_return_inner_type(&from.ty, *smart_pointer)
+            {
+                let inner_ty: RustType = inner_ty.into();
+                let inner_ty_str = normalized_ty_string(&inner_ty.ty);
+                return (
+                    inner_ty,
+                    format!(
+                        r#"
+    let {var_name}: *const {inner_ty} = {smart_pointer}::into_raw({var_name});
 "#,
-                    var_name = var_name,
-                    inner_ty = inner_ty_str,
-                ),
-            )
-        } else {
-            let inner_ty = from.clone();
-            let inner_ty_str = normalized_ty_string(&inner_ty.ty);
-            (
-                inner_ty,
-                format!(
-                    r#"
+                        var_name = var_name,
+                        inner_ty = inner_ty_str,
+                        smart_pointer = *smart_pointer,
+                    ),
+                );
+            }
+        }
+
+        let inner_ty = from.clone();
+        let inner_ty_str = normalized_ty_string(&inner_ty.ty);
+        (
+            inner_ty,
+            format!(
+                r#"
     let {var_name}: Box<{inner_ty}> = Box::new({var_name});
     let {var_name}: *const {inner_ty} = Box::into_raw({var_name});
 "#,
-                    var_name = var_name,
-                    inner_ty = inner_ty_str
-                ),
-            )
-        }
+                var_name = var_name,
+                inner_ty = inner_ty_str
+            ),
+        )
     }
 
     pub(crate) fn unpack_from_heap_pointer(
@@ -585,36 +590,38 @@ impl TypesConvMap {
         var_name: &str,
         unbox_if_boxed: bool,
     ) -> String {
-        if if_rc_return_inner_type(&from.ty).is_some() {
-            format!(
-                r#"
-    let {var_name}: {rc_type}  = unsafe {{ Rc::from_raw({var_name}) }};
-"#,
-                var_name = var_name,
-                rc_type = from.normalized_name,
-            )
-        } else {
-            let unbox_code = if unbox_if_boxed {
-                format!(
+        for smart_pointer in &["Box", "Rc", "Arc"] {
+            if check_if_smart_pointer_return_inner_type(&from.ty, *smart_pointer).is_some() {
+                return format!(
                     r#"
-    let {var_name}: {inside_box_type} = *{var_name};
+    let {var_name}: {rc_type}  = unsafe {{ {smart_pointer}::from_raw({var_name}) }};
 "#,
                     var_name = var_name,
-                    inside_box_type = from.normalized_name
-                )
-            } else {
-                String::new()
-            };
+                    rc_type = from.normalized_name,
+                    smart_pointer = *smart_pointer,
+                );
+            }
+        }
+        let unbox_code = if unbox_if_boxed {
             format!(
                 r#"
+    let {var_name}: {inside_box_type} = *{var_name};
+"#,
+                var_name = var_name,
+                inside_box_type = from.normalized_name
+            )
+        } else {
+            String::new()
+        };
+        format!(
+            r#"
     let {var_name}: Box<{inside_box_type}> = unsafe {{ Box::from_raw({var_name}) }};
 {unbox_code}
 "#,
-                var_name = var_name,
-                inside_box_type = from.normalized_name,
-                unbox_code = unbox_code
-            )
-        }
+            var_name = var_name,
+            inside_box_type = from.normalized_name,
+            unbox_code = unbox_code
+        )
     }
 
     pub(crate) fn is_ty_implements(&self, ty: &ast::Ty, trait_name: Symbol) -> Option<RustType> {

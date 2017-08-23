@@ -632,6 +632,13 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
     }
 }
 
+impl<'a, T> SwigDerefMut for MutexGuard<'a, T> {
+    type Target = T;
+    fn swig_deref_mut(&mut self) -> &mut T {
+        self
+    }
+}
+
 impl<T> SwigDeref for Rc<T> {
     type Target = T;
     fn swig_deref(&self) -> &T {

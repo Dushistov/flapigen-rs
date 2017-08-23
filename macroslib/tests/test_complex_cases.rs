@@ -125,6 +125,32 @@ foreigner_class!(class Moo {
 }
 
 #[test]
+fn test_return_foreign_class_arc() {
+    let gen_code = parse_code(
+        "test_work_with_rc",
+        r#"
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor create_boo() -> Arc<Mutex<Boo>>;
+    method Boo::test(&self, _: bool) -> f32;
+    method Boo::set_a(&mut self, _: i32);
+});
+foreigner_class!(class Moo {
+    self_type Moo;
+    constructor TestPathAndResult::empty() -> Result<Moo, String>;
+    method TestPathAndResult::get_boo(&self) -> Arc<Mutex<Boo>>; alias getBoo;
+});
+"#,
+    );
+    let get_boo_re = Regex::new(
+        r"fn\s+Java_com_example_Moo_do_1getBoo\([^\)]+\)\s*->\s*([[:alnum:]]+)\s*\{",
+    ).expect("wrong regexp");
+    let caps = get_boo_re.captures(&gen_code).unwrap();
+    println!("{:?}", caps);
+    assert_eq!("jobject", caps.get(1).unwrap().as_str());
+}
+
+#[test]
 fn test_pass_objects_as_param_simple() {
     parse_code(
         "test_pass_objects_as_param_simple",

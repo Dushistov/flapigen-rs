@@ -364,7 +364,10 @@ pub(crate) fn if_result_return_ok_type(ty: &ast::Ty) -> Option<ast::Ty> {
         .map(|x| x.ty)
 }
 
-pub(crate) fn if_rc_return_inner_type(ty: &ast::Ty) -> Option<ast::Ty> {
+pub(crate) fn check_if_smart_pointer_return_inner_type(
+    ty: &ast::Ty,
+    smart_ptr_name: &str,
+) -> Option<ast::Ty> {
     let generic_params = ast::Generics {
         lifetimes: vec![],
         ty_params: vec![
@@ -384,7 +387,11 @@ pub(crate) fn if_rc_return_inner_type(ty: &ast::Ty) -> Option<ast::Ty> {
         span: DUMMY_SP,
     };
     let sess = ParseSess::new();
-    let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Rc<T>")));
+    let from_ty = unwrap_presult!(parse_ty(
+        &sess,
+        DUMMY_SP,
+        Symbol::intern(&format!("{}<T>", smart_ptr_name))
+    ));
     let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("T")));
 
     GenericTypeConv {
@@ -706,7 +713,9 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
     fn test_work_with_rc() {
         logger_init();
         let sess = ParseSess::new();
-        let ty = if_rc_return_inner_type(&str_to_ty(&sess, "Rc<RefCell<bool>>")).unwrap();
+        let ty =
+            check_if_smart_pointer_return_inner_type(&str_to_ty(&sess, "Rc<RefCell<bool>>"), "Rc")
+                .unwrap();
         assert_eq!(normalized_ty_string(&ty), "RefCell<bool>".to_string());
 
         let generic_params = ast::Generics {
