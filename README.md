@@ -84,3 +84,15 @@ foreigner_class!(class Foo {
 may be usefull if you want name functions in Java in camel case style,
 while want in Rust use snake case style.
 
+Also you can add comments to generated code with Rust's doc comments:
+
+```rust
+foreigner_class!(
+/// This is class you dream about
+class Foo {
+    self_type Foo;
+	/// Cool constructor
+    constructor Foo::new(_: i32) -> Foo;
+    method Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
+});
+```

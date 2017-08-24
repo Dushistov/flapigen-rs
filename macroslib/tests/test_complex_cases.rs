@@ -196,6 +196,25 @@ foreigner_class!(class TestPassObjectsAsParams {
     );
 }
 
+#[test]
+fn test_document_generated_code() {
+    parse_code(
+        "test_document_generated_code",
+        r#"
+foreigner_class!(
+/// This is class Foo
+class Foo {
+    self_type Foo;
+    /// Some documentation comment
+    constructor Foo::new(_: i32, _: &str) -> Rc<RefCell<Foo>>;
+    /// 1 Some documentation comment
+    /// 2 Some documentation comment
+    method Foo::f(&self, _: i32, _: i32) -> i32;
+}); 
+"#,
+    );
+}
+
 fn parse_code(test_name: &str, code: &str) -> String {
     test_helper::logger_init();
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");

@@ -5,6 +5,8 @@ use std::io;
 
 use super::{fmt_write_err_map, method_name, ForeignMethodSignature};
 use {ForeignerClassInfo, MethodVariant};
+use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
+use syntex_syntax::symbol::Symbol;
 
 mod args_format_flags {
     bitflags! {
@@ -36,20 +38,27 @@ pub(in java_jni) fn generate_java_code(
     };
 
     let map_write_err = |err| format!("write failed: {}", err);
-
+    let class_doc_comments = doc_comments_to_java_comments(&class.doc_comments, true);
     write!(
         file,
-        "package {package_name};
+        r#"package {package_name};
+{doc_comments}
 public final class {class_name} {{
-",
+"#,
         package_name = package_name,
-        class_name = class.name
+        class_name = class.name,
+        doc_comments = class_doc_comments,
     ).map_err(&map_write_err)?;
 
     let mut have_methods = false;
     let mut have_constructor = false;
 
     for (method, f_method) in class.methods.iter().zip(methods_sign) {
+        write!(
+            &mut file,
+            "{doc_comments}",
+            doc_comments = doc_comments_to_java_comments(&method.doc_comments, false)
+        ).map_err(&map_write_err)?;
         let exception_spec = if method.may_return_error {
             "throws Exception"
         } else {
@@ -289,4 +298,23 @@ fn convert_code_for_method(f_method: &ForeignMethodSignature) -> String {
         }
     }
     ret
+}
+
+fn doc_comments_to_java_comments(doc_comments: &[Symbol], class_comments: bool) -> String {
+    use std::fmt::Write;
+    let mut comments = String::new();
+    for (i, comment) in doc_comments.iter().enumerate() {
+        if i != 0 {
+            comments.push('\n');
+        }
+        if !class_comments {
+            comments.push_str("    ");
+        }
+        write!(
+            &mut comments,
+            "//{}",
+            strip_doc_comment_decoration(&*comment.as_str())
+        ).unwrap();
+    }
+    comments
 }

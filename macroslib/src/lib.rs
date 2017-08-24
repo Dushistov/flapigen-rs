@@ -55,7 +55,7 @@ use syntex_syntax::parse::ParseSess;
 use syntex_syntax::codemap::Span;
 use syntex::Registry;
 use syntex_syntax::tokenstream::TokenTree;
-use syntex_syntax::ext::base::{DummyResult, ExtCtxt, MacEager, MacResult, TTMacroExpander};
+use syntex_syntax::ext::base::{ExtCtxt, MacEager, MacResult, TTMacroExpander};
 use syntex_syntax::parse::PResult;
 use syntex_syntax::ptr::P;
 use syntex_syntax::ast;
@@ -121,6 +121,7 @@ struct ForeignerMethod {
     /// cache if rust_fn_decl.output == Result
     may_return_error: bool,
     foreigner_private: bool,
+    doc_comments: Vec<Symbol>,
 }
 
 impl ForeignerMethod {
@@ -151,6 +152,7 @@ pub(crate) struct ForeignerClassInfo {
     /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
     constructor_ret_type: Option<ast::Ty>,
     span: Span,
+    doc_comments: Vec<Symbol>,
 }
 
 impl Generator {
@@ -199,7 +201,10 @@ impl GeneratorData {
         let mut items = unwrap_presult!(self.init_types_map(cx.parse_sess()), self.conv_map);
         let foreigner_class = match parse_foreigner_class(cx, tokens) {
             Ok(x) => x,
-            Err(span) => return DummyResult::any(span),
+            Err(_) => {
+                panic!("Can not parse foreigner_class");
+                //return DummyResult::any(span);
+            }
         };
         self.conv_map.register_foreigner_class(&foreigner_class);
         match self.config {

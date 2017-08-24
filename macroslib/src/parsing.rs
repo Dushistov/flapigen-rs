@@ -185,6 +185,14 @@ pub(crate) fn parse_foreigner_class(
 
 
     let mut parser = parse::new_parser_from_tts(cx.parse_sess, tokens.to_vec());
+
+    let mut class_doc_comments = vec![];
+    while let token::Token::DocComment(comment) = parser.token {
+        trace!("parse_foreigner_class: comment {:?}", comment);
+        class_doc_comments.push(comment);
+        parser.bump();
+    }
+
     if !parser.eat_contextual_keyword(class_keyword) {
         cx.span_err(parser.span, "expect class keyword here");
         return Err(parser.span);
@@ -199,7 +207,7 @@ pub(crate) fn parse_foreigner_class(
         primary_span
     };
 
-    let class_name_indent = parser.parse_ident().unwrap();
+    let class_name_indent = parser.parse_ident().map_err(&map_perror)?;
     debug!("CLASS NAME {:?}", class_name_indent);
     let class_span = parser.span;
 
@@ -218,6 +226,14 @@ pub(crate) fn parse_foreigner_class(
         if parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
             break;
         }
+
+        let mut doc_comments = vec![];
+        while let token::Token::DocComment(comment) = parser.token {
+            trace!("parse_foreigner_class: comment {:?}", comment);
+            doc_comments.push(comment);
+            parser.bump();
+        }
+
         let private_func = parser.eat_contextual_keyword(private_keyword);
         let func_type_name = parser.parse_ident().map_err(&map_perror)?;
         debug!("func_type {:?}", func_type_name);
@@ -350,6 +366,7 @@ pub(crate) fn parse_foreigner_class(
             name_alias: func_name_alias.map(|v| v.name),
             may_return_error: may_return_error,
             foreigner_private: private_func,
+            doc_comments,
         });
     }
 
@@ -362,5 +379,6 @@ pub(crate) fn parse_foreigner_class(
         foreigner_code,
         constructor_ret_type,
         span: class_span,
+        doc_comments: class_doc_comments,
     })
 }
