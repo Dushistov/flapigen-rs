@@ -89,7 +89,7 @@ pub(in java_jni) fn generate_rust_code<'a>(
         )?);
 
 
-        let jlong_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("jlong"))?.into();
+        let jlong_ti: RustType = parse_ty(sess, DUMMY_SP, Symbol::intern("jlong"))?.into();
 
         conv_map.add_conversation_rule(
             jlong_ti.clone(),

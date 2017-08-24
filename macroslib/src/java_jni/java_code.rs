@@ -271,12 +271,10 @@ fn list_of_args_for_call_method(
             } else {
                 write!(&mut res, "a_{}", i)
             }
+        } else if need_conv {
+            write!(&mut res, "a_{}_0, ", i)
         } else {
-            if need_conv {
-                write!(&mut res, "a_{}_0, ", i)
-            } else {
-                write!(&mut res, "a_{}, ", i)
-            }
+            write!(&mut res, "a_{}, ", i)
         }.map_err(|err| format!("write fmt failed: {}", err))?;
     }
 

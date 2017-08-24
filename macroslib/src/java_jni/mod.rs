@@ -227,7 +227,7 @@ fn calc_converter_for_foreign_class_arg(
     let this_ty: RustType = this_ty.clone().into();
 
 
-    let java_converter = if *this_ty.normalized_name.as_str() == *normalized_ty_string(&arg_ty) {
+    let java_converter = if *this_ty.normalized_name.as_str() == *normalized_ty_string(arg_ty) {
         r#"
     long {to_var} = {from_var}.mNativeObj;
     {from_var}.mNativeObj = 0;

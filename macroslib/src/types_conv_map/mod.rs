@@ -654,7 +654,7 @@ impl TypesConvMap {
         &self,
         this_ty: &ast::Ty,
     ) -> Option<&ForeignerClassInfo> {
-        let this_name = normalized_ty_string(&this_ty);
+        let this_name = normalized_ty_string(this_ty);
         for fc in &self.foreign_classes {
             if let Some(this_type_for_method) = fc.this_type_for_method.as_ref() {
                 let cur_this = normalized_ty_string(this_type_for_method);
