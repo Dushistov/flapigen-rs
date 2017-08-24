@@ -31,6 +31,8 @@ def run_jar(target_dir, jar_dir, use_shell):
                            "-cp", "Test.jar", "com.example.Main"],
                           cwd=jar_dir, shell=use_shell)
 
+def has_option(option):
+    return any(option == s for s in sys.argv[1:])
 
 java_dir = str(os.path.join(os.getcwd(), "java/com/example"))
 purge(java_dir, ".*\.class$")
@@ -55,7 +57,7 @@ generated_java = [os.path.join("rust", f) for f in os.listdir(java_native_dir)
                   if os.path.isfile(os.path.join(java_native_dir, f)) and f.endswith(".java")]
 javac_cmd_args = ["javac", "Main.java"]
 javac_cmd_args.extend(generated_java)
-    
+
 subprocess.check_call(javac_cmd_args,
                       cwd=java_dir, shell=use_shell)
 
@@ -66,10 +68,14 @@ subprocess.check_call(["jar", "cfv", "Test.jar", "com"], cwd=jar_dir, shell=use_
 target_dir = os.path.join(find_dir("target"), "debug")
 run_jar(target_dir, jar_dir, use_shell)
 
-if len(sys.argv) > 1 and sys.argv[1] == "--debug-only":
+if has_option("--debug-only"):
     sys.exit(0)
 #rerun in release mode
 subprocess.check_call(["cargo", "test", "--release"], shell=False)
 subprocess.check_call(["cargo", "build", "--release"], shell=False)
 target_dir = os.path.join(find_dir("target"), "release")
 run_jar(target_dir, jar_dir, use_shell)
+
+if not has_option("--skip-android-test"):
+    subprocess.check_call(["cargo", "check", "--target=arm-linux-androideabi"], shell=False,
+                          cwd = str(os.path.join(os.path.abspath('..'), "android-example")))

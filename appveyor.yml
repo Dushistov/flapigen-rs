@@ -23,4 +23,4 @@ test_script:
   - cargo test
   - cd ..\jni_tests
   - cargo test
-  - python run_tests.py
+  - python run_tests.py --skip-android-test
