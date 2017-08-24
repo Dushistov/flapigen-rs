@@ -234,6 +234,7 @@ impl TypesConvMap {
                 };
                 if is_connected {
                     let node = &self.conv_graph[*graph_idx];
+                    debug!("map foreign {:?} <-> {}", rust_ty, foreign_name);
                     return Some(ForeignTypeInfo {
                         name: *foreign_name,
                         correspoding_rust_type: node.clone(),
@@ -241,7 +242,10 @@ impl TypesConvMap {
                 }
             }
         }
-        debug!("No paths exists, may be we can create one?");
+        debug!(
+            "No paths exists, may be we can create one for '{:?}'?",
+            rust_ty
+        );
 
         let mut new_foreign_types = HashSet::new();
         for edge in &self.generic_edges {
@@ -255,26 +259,38 @@ impl TypesConvMap {
                     for (ty_param, traits) in &trait_bounds {
                         let rust_ty = &self.conv_graph[*graph_idx];
                         if traits.is_subset(&rust_ty.implements) {
-                            let foreign_name = to_foreigner_hint
-                                .as_str()
-                                .replace(&*ty_param.as_str(), &*rust_ty.normalized_name.as_str());
-                            new_foreign_types
-                                .insert((edge.to_ty.clone(), Symbol::intern(&foreign_name)));
+                            if let Some(class) =
+                                self.find_foreigner_class_with_such_this_type(&rust_ty.ty)
+                            {
+                                let suffix = Symbol::intern(&to_foreigner_hint.as_str().replace(
+                                    &*ty_param.as_str(),
+                                    &*rust_ty.normalized_name.as_str(),
+                                ));
+                                let foreign_name = to_foreigner_hint
+                                    .as_str()
+                                    .replace(&*ty_param.as_str(), &*class.name.as_str());
+                                new_foreign_types.insert(
+                                    (edge.to_ty.clone(), suffix, Symbol::intern(&foreign_name)),
+                                );
+                            } else {
+                                warn!("No foreign_class for type '{}'", rust_ty.normalized_name);
+                            }
                         }
                     }
                 }
             }
         }
-        for (ty, foreign_name) in new_foreign_types {
-            trace!(
-                "map_through_conversation_to_foreign: add possible type {:?} {}",
+        for (ty, suffix, foreign_name) in new_foreign_types {
+            debug!(
+                "map foreign: add possible type {:?} {} <-> {}",
                 ty,
+                suffix,
                 foreign_name
             );
             let not_uniq_name = Symbol::intern(&normalized_ty_string(&ty));
             let node = self.add_type(RustType::new(
                 ty,
-                make_unique_rust_typename(not_uniq_name, foreign_name),
+                make_unique_rust_typename(not_uniq_name, suffix),
             ));
             self.foreign_names_map.insert(foreign_name, node);
         }
@@ -291,7 +307,6 @@ impl TypesConvMap {
                 }
             };
             if let Some(path) = path {
-                debug!("we found possible path: {:?}", path);
                 possible_paths.push((path, *foreign_name, *graph_idx));
             }
         }
@@ -1025,6 +1040,19 @@ fn helper3() {
             .into();
         let foo_rt = foo_rt.implements("SwigForeignClass");
         types_map.add_type(foo_rt.clone());
+        types_map.register_foreigner_class(&ForeignerClassInfo {
+            name: Symbol::intern("Foo"),
+            methods: vec![],
+            self_type: ast::Path {
+                span: DUMMY_SP,
+                segments: vec![],
+            },
+            this_type_for_method: Some(foo_rt.ty.clone()),
+            foreigner_code: String::new(),
+            constructor_ret_type: Some(foo_rt.ty.clone()),
+            span: DUMMY_SP,
+            doc_comments: vec![],
+        });
 
         assert_eq!(
             types_map

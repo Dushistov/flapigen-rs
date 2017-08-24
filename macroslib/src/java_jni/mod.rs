@@ -66,10 +66,8 @@ pub(crate) fn generate<'a>(
     package_name: &str,
     class: &ForeignerClassInfo,
 ) -> PResult<'a, Vec<P<ast::Item>>> {
-    trace!("generate: begin");
+    debug!("generate: begin");
     if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
-        //
-
         let this_type: RustType = this_type_for_method.clone().into();
         let this_type = this_type.implements("SwigForeignClass");
         let jobject_name = Symbol::intern("jobject");
@@ -79,12 +77,12 @@ pub(crate) fn generate<'a>(
             make_unique_rust_typename(jobject_name, this_type.normalized_name),
         );
         conv_map.cache_rust_to_foreign_conv(&this_type, (my_jobj_ti, class.name));
-
     }
+
     let f_methods_sign = find_suitable_foreign_types_for_methods(sess, conv_map, class)?;
     java_code::generate_java_code(output_dir, package_name, class, &f_methods_sign)
         .map_err(|err| fatal_error(sess, DUMMY_SP, &err))?;
-    trace!("generate: java code done");
+    debug!("generate: java code done");
     let ast_items =
         rust_code::generate_rust_code(sess, conv_map, package_name, class, &f_methods_sign)?;
 
@@ -136,7 +134,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
                         fatal_error(
                             sess,
                             arg.ty.span,
-                            &format!("Can not find foreigner_class for {:?}", arg.ty),
+                            &format!("Can not find foreigner_class for '{:?}'", arg.ty),
                         )
                     })?;
                 let converter = calc_converter_for_foreign_class_arg(foreigner_class, &arg.ty);
@@ -152,7 +150,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
                         arg.ty.span,
                         &format!(
                             "Do not know conversation from foreign \
-                             to such rust type {}",
+                             to such rust type '{}'",
                             rust_typename
                         ),
                     )
@@ -181,7 +179,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
                             rt.span,
                             &format!(
                                 "Do not know conversation from \
-                                 such rust type {} to foreign",
+                                 such rust type '{}' to foreign",
                                 normalized_ty_string(&*rt)
                             ),
                         )

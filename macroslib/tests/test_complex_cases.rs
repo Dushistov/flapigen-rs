@@ -5,7 +5,8 @@ extern crate env_logger;
 extern crate regex;
 
 use std::fs;
-use std::path::Path;
+use std::fs::File;
+use std::io::Read;
 use regex::Regex;
 use tempdir::TempDir;
 
@@ -102,7 +103,7 @@ foreigner_class!(class Boo {
 
 #[test]
 fn test_return_foreign_class() {
-    let gen_code = parse_code(
+    let (gen_code, _) = parse_code(
         "test_work_with_rc",
         r#"
 foreigner_class!(class Boo {
@@ -128,7 +129,7 @@ foreigner_class!(class Moo {
 
 #[test]
 fn test_return_foreign_class_arc() {
-    let gen_code = parse_code(
+    let (gen_code, _) = parse_code(
         "test_work_with_rc",
         r#"
 foreigner_class!(class Boo {
@@ -215,7 +216,30 @@ class Foo {
     );
 }
 
-fn parse_code(test_name: &str, code: &str) -> String {
+#[test]
+fn test_return_result_type_with_object() {
+    for _ in 0..10 {
+        let (_, java_code) = parse_code(
+            "test_return_result_type_with_object",
+            r#"
+foreigner_class!(class Position {
+    self_type GnssInfo;
+    private constructor create_position() -> GnssInfo;
+    method Position::timeStamp(&self) -> SystemTime;
+    method Position::getLatitude(&self) -> f64;
+});
+
+foreigner_class!(class LocationService {
+    static_method LocationService::position() -> Result<GnssInfo, &'static str>;
+});
+"#,
+        );
+        println!("{}", java_code);
+        assert!(java_code.contains("public static native Position position() throws Exception;"));
+    }
+}
+
+fn parse_code(test_name: &str, code: &str) -> (String, String) {
     test_helper::logger_init();
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");
     println!(
@@ -230,11 +254,21 @@ fn parse_code(test_name: &str, code: &str) -> String {
     });
     let mut registry = syntex::Registry::new();
     let swig_gen = rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
-        output_dir: Path::new("-").into(),
+        output_dir: tmp_dir.path().into(),
         package_name: "com.example".into(),
     });
     swig_gen.register(&mut registry);
     let res_code = registry.expand_str(test_name, "use_case", code).unwrap();
-    println!("res_code: {}", res_code);
-    res_code
+    let mut java_code = String::new();
+    for path in fs::read_dir(tmp_dir.path()).unwrap() {
+        let path = path.unwrap();
+        if path.file_type().unwrap().is_file() && path.path().to_str().unwrap().ends_with(".java") {
+            let mut contents = String::new();
+            let mut file = File::open(path.path()).unwrap();
+            file.read_to_string(&mut contents).unwrap();
+            java_code.push_str(&contents);
+            java_code.push('\n');
+        }
+    }
+    (res_code, java_code)
 }

@@ -492,3 +492,42 @@ foreigner_class!(class TestPassObjectsAsParams {
     static_method TestPassObjectsAsParams::factory_method(_: i32, _: &str)
                                                           -> TestPassObjectsAsParams;
 });
+
+struct GnssInfo {
+    pub x: f64,
+}
+
+#[allow(non_snake_case)]
+mod Position {
+    use super::*;
+
+    pub(crate) fn timeStamp(_: &GnssInfo) -> SystemTime {
+        SystemTime::now()
+    }
+    pub(crate) fn getLatitude(gi: &GnssInfo) -> f64 {
+        gi.x
+    }
+}
+
+fn create_position() -> GnssInfo {
+    unreachable!();
+}
+
+foreigner_class!(class Position {
+    self_type GnssInfo;
+    private constructor create_position() -> GnssInfo;
+    method Position::timeStamp(&self) -> SystemTime;
+    method Position::getLatitude(&self) -> f64;
+});
+
+struct LocationService;
+
+impl LocationService {
+    fn position() -> Result<GnssInfo, &'static str> {
+        Ok(GnssInfo { x: 17.17 })
+    }
+}
+
+foreigner_class!(class LocationService {
+    static_method LocationService::position() -> Result<GnssInfo, &'static str>;
+});
