@@ -20,7 +20,7 @@ lazy_static = "0.2.8"
 bitflags = "0.9"
 
 [dev-dependencies]
-pulldown-cmark = "0.0.15"
+pulldown-cmark = "0.1.0"
 tempdir = "0.3.5"
 jni-sys = "0.3.0"
 log = "0.3"
