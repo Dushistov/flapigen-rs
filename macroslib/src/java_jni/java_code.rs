@@ -181,7 +181,14 @@ public final class {class_name} {{
        }}
     }}
     @Override
-    protected void finalize() {{ delete(); }}
+    protected void finalize() throws Throwable {{
+        try {{
+            delete();
+        }}
+        finally {{
+             super.finalize();
+        }}
+    }}
     private static native void do_delete(long me);
     /*package*/ long mNativeObj;
 "
