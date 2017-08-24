@@ -464,6 +464,13 @@ impl TestPassObjectsAsParams {
         self.data = other.data;
         self.name = other.name;
     }
+
+    fn factory_method(data: i32, name: &str) -> TestPassObjectsAsParams {
+        TestPassObjectsAsParams {
+            data,
+            name: name.into(),
+        }
+    }
 }
 
 foreigner_class!(class TestPassObjectsAsParams {
@@ -481,4 +488,7 @@ foreigner_class!(class TestPassObjectsAsParams {
     static_method TestPassObjectsAsParams::f4(_: &Foo) -> String;
     static_method TestPassObjectsAsParams::f5(_: i32, _: &str, _: &mut Foo) -> String;
     static_method TestPassObjectsAsParams::f6(_: Foo) -> String;
+
+    static_method TestPassObjectsAsParams::factory_method(_: i32, _: &str)
+                                                          -> TestPassObjectsAsParams;
 });

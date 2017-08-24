@@ -212,6 +212,10 @@ class Main {
 	z.f_get_like_me(y);
 	assert z.get_data() == 5;
 	assert z.get_name().equals("aaa");
+
+	z = TestPassObjectsAsParams.factory_method(13, "13");
+	assert z.get_data() == 13;
+	assert z.get_name().equals("13");
     }
 
     private static void testDateTime() {
