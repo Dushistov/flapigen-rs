@@ -93,12 +93,7 @@ class Main {
         tpr2 = null;
         System.gc();
 
-        final Date now = Foo.now();
-        final DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
-        System.out.println("now: " + df.format(now));
-        final Date today = Calendar.getInstance().getTime();
-        assert (today.getTime() - now.getTime()) < 1000;
-
+	testDateTime();
         TestInner.Inner testInner = TestInner.getInner();
         assert testInner.name.equals("Boo Boo");
 
@@ -210,5 +205,15 @@ class Main {
 	TestPassObjectsAsParams y = new TestPassObjectsAsParams(foo1);
 	assert y.get_data() == 5;
 	assert y.get_name().equals("aaa");
+    }
+
+    private static void testDateTime() {
+        final Date now = Foo.now();
+        final DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+        System.out.println("now: " + df.format(now));
+        final Date today = Calendar.getInstance().getTime();
+	System.out.println("now: " + now);
+	System.out.println("today: " + today);
+        assert (today.getTime() - now.getTime()) < 2000;
     }
 }
