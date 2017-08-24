@@ -205,6 +205,13 @@ class Main {
 	TestPassObjectsAsParams y = new TestPassObjectsAsParams(foo1);
 	assert y.get_data() == 5;
 	assert y.get_name().equals("aaa");
+
+	TestPassObjectsAsParams z = new TestPassObjectsAsParams(new Foo(7, "7"));
+	assert z.get_data() == 7;
+	assert z.get_name().equals("7");
+	z.f_get_like_me(y);
+	assert z.get_data() == 5;
+	assert z.get_name().equals("aaa");
     }
 
     private static void testDateTime() {

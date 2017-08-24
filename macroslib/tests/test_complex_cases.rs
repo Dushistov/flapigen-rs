@@ -28,6 +28,7 @@ foreigner_class!(class Boo {
     self_type Boo;
 
     constructor Boo::new(_: i32, _: usize) -> Result<Boo, String>;
+    method Boo::boo_as_arg(&self, _: Boo) -> i32;
     method Boo::get_one_foo(&self) -> Foo;
 });
 "#,

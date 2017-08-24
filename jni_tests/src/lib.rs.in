@@ -459,6 +459,11 @@ impl TestPassObjectsAsParams {
             data: foo.data,
         }
     }
+
+    fn f_get_like_me(&mut self, other: TestPassObjectsAsParams) {
+        self.data = other.data;
+        self.name = other.name;
+    }
 }
 
 foreigner_class!(class TestPassObjectsAsParams {
@@ -469,6 +474,7 @@ foreigner_class!(class TestPassObjectsAsParams {
     method TestPassObjectsAsParams::f1(&mut self, _: &Foo);
     method TestPassObjectsAsParams::f2(&mut self, _: &mut Foo);
     method TestPassObjectsAsParams::f3(&mut self, _: Foo);
+    method TestPassObjectsAsParams::f_get_like_me(&mut self, _: TestPassObjectsAsParams);
     method TestPassObjectsAsParams::get_data(&self) -> i32;
     method TestPassObjectsAsParams::get_name(&self) -> &str;
 
