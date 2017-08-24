@@ -1,5 +1,4 @@
-use android_c_headers::{JNIEnv, jstring, jlong, jclass, jint, jsize,
-                        jobject, jobjectArray, jfieldID};
+use android_c_headers::*;
 use Session;
 
 foreigner_class!(class Session {
