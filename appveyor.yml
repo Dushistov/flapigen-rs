@@ -12,6 +12,9 @@ install:
   - rustc -vV
   - cargo -vV
   - javac -version
+cache:
+  - '%USERPROFILE%\.cargo'
+  - target
 build_script:
   - cd macroslib
   - cargo build
