@@ -8,6 +8,7 @@ matrix:
     - rust: nightly
 os:
   - linux
+cache: cargo
 addons:
   apt:
     sources:
@@ -22,7 +23,7 @@ env: # specify the clang path for rust-bindgen
   - LIBCLANG_PATH=/usr/lib/llvm-3.9/lib
 before_script:
     - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
-        cargo install --vers 0.2.1 rustfmt-nightly;
+        cargo install -f --vers 0.2.1 rustfmt-nightly;
       fi
 script:
   - cd macroslib
