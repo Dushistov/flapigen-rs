@@ -69,12 +69,23 @@ use parsing::parse_foreigner_class;
 
 /// `LanguageConfig` contains configuration for specific programming language
 pub enum LanguageConfig {
+    #[deprecated(since = "0.1.0", note = "please use `JavaConfig` instead")]
     Java {
         /// directory where place generated java files
         output_dir: PathBuf,
         /// package name for generated java files
         package_name: String,
     },
+    JavaConfig(JavaConfig),
+}
+
+trait LanguageGenerator {
+    fn generate<'a>(
+        &self,
+        sess: &'a ParseSess,
+        conv_map: &mut TypesConvMap,
+        class: &ForeignerClassInfo,
+    ) -> PResult<'a, Vec<P<ast::Item>>>;
 }
 
 /// `Generator` is a main point of `rust_swig`.
@@ -159,7 +170,7 @@ impl Generator {
     pub fn new(config: LanguageConfig) -> Generator {
         let mut conv_map_source = Vec::new();
         match config {
-            LanguageConfig::Java { .. } => {
+            LanguageConfig::Java { .. } | LanguageConfig::JavaConfig(..) => {
                 conv_map_source.push(TypesConvMapCode {
                     id_of_code: "jni-include.rs",
                     code: include_str!("java_jni/jni-include.rs"),
@@ -212,14 +223,17 @@ impl GeneratorData {
                 ref output_dir,
                 ref package_name,
             } => {
+                let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
                 let mut gen_items = unwrap_presult!(
-                    java_jni::generate(
-                        cx.parse_sess(),
-                        &mut self.conv_map,
-                        output_dir,
-                        package_name,
-                        &foreigner_class,
-                    ),
+                    java_cfg.generate(cx.parse_sess(), &mut self.conv_map, &foreigner_class,),
+                    self.conv_map
+                );
+                items.append(&mut gen_items);
+                MacEager::items(SmallVector::many(items))
+            }
+            LanguageConfig::JavaConfig(ref java_cfg) => {
+                let mut gen_items = unwrap_presult!(
+                    java_cfg.generate(cx.parse_sess(), &mut self.conv_map, &foreigner_class),
                     self.conv_map
                 );
                 items.append(&mut gen_items);
@@ -246,5 +260,34 @@ impl GeneratorData {
         }
 
         Ok(self.conv_map.take_utils_code())
+    }
+}
+
+/// Configuration for Java
+pub struct JavaConfig {
+    output_dir: PathBuf,
+    package_name: String,
+    use_null_annotation: Option<String>,
+}
+
+impl JavaConfig {
+    /// Create `JavaConfig`
+    /// # Arguments
+    /// * `output_dir` - directory where place generated java files
+    /// * `package_name` - package name for generated java files
+    pub fn new(output_dir: PathBuf, package_name: String) -> JavaConfig {
+        JavaConfig {
+            output_dir,
+            package_name,
+            use_null_annotation: None,
+        }
+    }
+    /// Use @NonNull for types where appropriate
+    /// # Arguments
+    /// * `import_annotation` - import statement for @NonNull,
+    ///                         for example android.support.annotation.NonNull
+    pub fn use_null_annotation(mut self, import_annotation: String) -> JavaConfig {
+        self.use_null_annotation = Some(import_annotation);
+        self
     }
 }

@@ -1,7 +1,6 @@
 mod java_code;
 mod rust_code;
 
-use std::path::Path;
 use std::fmt;
 
 use petgraph::Direction;
@@ -15,7 +14,8 @@ use syntex_syntax::ast::DUMMY_NODE_ID;
 use types_conv_map::{make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE,
                      TO_VAR_TEMPLATE};
 use errors::fatal_error;
-use {ForeignerClassInfo, ForeignerMethod, MethodVariant, TypesConvMap};
+use {ForeignerClassInfo, ForeignerMethod, JavaConfig, LanguageGenerator, MethodVariant,
+     TypesConvMap};
 use my_ast::{normalized_ty_string, parse_ty, RustType};
 
 struct JavaForeignTypeInfo {
@@ -59,34 +59,45 @@ struct ForeignMethodSignature {
     input: Vec<JavaForeignTypeInfo>,
 }
 
-pub(crate) fn generate<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
-    output_dir: &Path,
-    package_name: &str,
-    class: &ForeignerClassInfo,
-) -> PResult<'a, Vec<P<ast::Item>>> {
-    debug!("generate: begin");
-    if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
-        let this_type: RustType = this_type_for_method.clone().into();
-        let this_type = this_type.implements("SwigForeignClass");
-        let jobject_name = Symbol::intern("jobject");
-        let jobject_ty = parse_ty(sess, DUMMY_SP, jobject_name)?;
-        let my_jobj_ti = RustType::new(
-            jobject_ty,
-            make_unique_rust_typename(jobject_name, this_type.normalized_name),
-        );
-        conv_map.cache_rust_to_foreign_conv(&this_type, (my_jobj_ti, class.name));
+impl LanguageGenerator for JavaConfig {
+    fn generate<'a>(
+        &self,
+        sess: &'a ParseSess,
+        conv_map: &mut TypesConvMap,
+        class: &ForeignerClassInfo,
+    ) -> PResult<'a, Vec<P<ast::Item>>> {
+        debug!("generate: begin");
+        if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
+            let this_type: RustType = this_type_for_method.clone().into();
+            let this_type = this_type.implements("SwigForeignClass");
+            let jobject_name = Symbol::intern("jobject");
+            let jobject_ty = parse_ty(sess, DUMMY_SP, jobject_name)?;
+            let my_jobj_ti = RustType::new(
+                jobject_ty,
+                make_unique_rust_typename(jobject_name, this_type.normalized_name),
+            );
+            conv_map.cache_rust_to_foreign_conv(&this_type, (my_jobj_ti, class.name));
+        }
+
+        let f_methods_sign = find_suitable_foreign_types_for_methods(sess, conv_map, class)?;
+        java_code::generate_java_code(
+            &self.output_dir,
+            &self.package_name,
+            class,
+            &f_methods_sign,
+            self.use_null_annotation.as_ref().map(|x| &**x),
+        ).map_err(|err| fatal_error(sess, DUMMY_SP, &err))?;
+        debug!("generate: java code done");
+        let ast_items = rust_code::generate_rust_code(
+            sess,
+            conv_map,
+            &self.package_name,
+            class,
+            &f_methods_sign,
+        )?;
+
+        Ok(ast_items)
     }
-
-    let f_methods_sign = find_suitable_foreign_types_for_methods(sess, conv_map, class)?;
-    java_code::generate_java_code(output_dir, package_name, class, &f_methods_sign)
-        .map_err(|err| fatal_error(sess, DUMMY_SP, &err))?;
-    debug!("generate: java code done");
-    let ast_items =
-        rust_code::generate_rust_code(sess, conv_map, package_name, class, &f_methods_sign)?;
-
-    Ok(ast_items)
 }
 
 fn method_name(method: &ForeignerMethod, f_method: &ForeignMethodSignature) -> String {
