@@ -531,3 +531,34 @@ impl LocationService {
 foreigner_class!(class LocationService {
     static_method LocationService::position() -> Result<GnssInfo, &'static str>;
 });
+
+enum MyEnum {
+    Item1,
+    Item2,
+    Item3,
+}
+
+foreign_enum!(enum MyEnum {
+  ITEM1 = MyEnum::Item1,
+  ITEM2 = MyEnum::Item2,
+  ITEM3 = MyEnum::Item3,
+});
+
+#[derive(Default)]
+struct Moo;
+
+impl Moo {
+    fn f1(&mut self, v: MyEnum) -> i32 {
+        if let MyEnum::Item2 = v {
+            17
+        } else {
+            -5
+        }
+    }
+}
+
+foreigner_class!(class TestEnumClass {
+    self_type Moo;
+    constructor Moo::default() -> Moo;
+    method Moo::f1(&mut self, v: MyEnum) -> i32;
+});

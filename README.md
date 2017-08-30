@@ -96,3 +96,33 @@ class Foo {
     method Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
 });
 ```
+
+Also you can "export" `enum` without data to foreign language:
+
+```rust
+enum MyEnum {
+    Item1,
+	Item2,
+	Item3,
+}
+
+foreign_enum!(enum MyEnum {
+  ITEM1 = MyEnum::Item1,
+  ITEM2 = MyEnum::Item2,
+  ITEM3 = MyEnum::Item3,
+});
+
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::default() -> Foo;
+	method f1(&mut self, v: MyEnum);
+});
+```
+
+after that you can write in Java:
+
+```Java
+MyEnum v1 = MyEnum.ITEM1;
+Foo foo = new Foo();
+foo.f1(v1);
+```

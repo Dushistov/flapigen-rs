@@ -13,6 +13,8 @@ import com.example.rust.Xyz;
 import com.example.rust.TestContainers;
 import com.example.rust.TestIntArrays;
 import com.example.rust.TestPassObjectsAsParams;
+import com.example.rust.MyEnum;
+import com.example.rust.TestEnumClass;
 
 class Main {
     private static void testDoubleOverload() {
@@ -151,6 +153,7 @@ class Main {
 	    assert Arrays.equals(bigArray, new TestIntArrays(17, bigArray.length).get_ref());
 	}
 	testPassObjectsAsParams();
+	testTestEnumClass();
 	} catch (java.lang.AssertionError ex) {
 	    ex.printStackTrace();
 	    throw ex;
@@ -226,5 +229,12 @@ class Main {
 	System.out.println("now: " + now);
 	System.out.println("today: " + today);
         assert (today.getTime() - now.getTime()) < 2000;
+    }
+
+    private static void testTestEnumClass() {
+	MyEnum v1 = MyEnum.ITEM1;
+	TestEnumClass o = new TestEnumClass();
+	assert o.f1(v1) == -5;
+	assert o.f1(MyEnum.ITEM2) == 17;
     }
 }

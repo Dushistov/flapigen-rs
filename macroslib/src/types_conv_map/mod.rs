@@ -22,7 +22,7 @@ use errors::fatal_error;
 use my_ast::{check_if_smart_pointer_return_inner_type, get_trait_bounds, normalized_ty_string,
              parse_ty, GenericTypeConv, RustType};
 use self::parsing::parse_types_conv_map;
-use ForeignerClassInfo;
+use {ForeignEnumInfo, ForeignerClassInfo};
 
 pub(crate) static TO_VAR_TEMPLATE: &'static str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &'static str = "{from_var}";
@@ -67,6 +67,8 @@ pub(crate) struct TypesConvMap {
     generic_edges: Vec<GenericTypeConv>,
     rust_to_foreign_cache: HashMap<Symbol, Symbol>,
     foreign_classes: Vec<ForeignerClassInfo>,
+    exported_enums: HashMap<Symbol, ForeignEnumInfo>,
+    traits_usage_code: HashMap<Symbol, Symbol>,
 }
 
 struct DisplayTypesConvGraph<'a>(&'a TypesConvGraph);
@@ -132,7 +134,10 @@ impl TypesConvMap {
         code: &str,
     ) -> PResult<'a, ()> {
         debug!("merging {} with our rules", id_of_code);
-        let mut new_data = parse_types_conv_map(sess, id_of_code, code)?;
+        let mut was_traits_usage_code = HashMap::new();
+        mem::swap(&mut was_traits_usage_code, &mut self.traits_usage_code);
+        let mut new_data = parse_types_conv_map(sess, id_of_code, code, was_traits_usage_code)?;
+        mem::swap(&mut new_data.traits_usage_code, &mut self.traits_usage_code);
 
         fn get_graph_node_idx(
             node_new_data_idx: NodeIndex<TypeGraphIdx>,
@@ -692,6 +697,16 @@ impl TypesConvMap {
         let to = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, to);
         self.conv_graph.add_edge(from, to, rule);
     }
+
+    pub(crate) fn register_exported_enum(&mut self, enum_info: &ForeignEnumInfo) {
+        self.exported_enums
+            .insert(enum_info.name, enum_info.clone());
+    }
+
+    pub(crate) fn is_this_exported_enum(&self, ty: &ast::Ty) -> Option<&ForeignEnumInfo> {
+        let type_name = Symbol::intern(&normalized_ty_string(ty));
+        self.exported_enums.get(&type_name)
+    }
 }
 
 fn find_conversation_path<'a>(
@@ -878,6 +893,8 @@ impl Default for TypesConvMap {
             generic_edges: default_rules,
             rust_to_foreign_cache: HashMap::new(),
             foreign_classes: Vec::new(),
+            exported_enums: HashMap::new(),
+            traits_usage_code: HashMap::new(),
         }
     }
 }

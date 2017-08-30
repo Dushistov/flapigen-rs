@@ -23,6 +23,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
     sess: &'a ParseSess,
     name: &str,
     code: &str,
+    mut traits_usage_code: HashMap<Symbol, Symbol>,
 ) -> PResult<'a, TypesConvMap> {
 
     let swig_code = Symbol::intern("swig_code");
@@ -45,7 +46,6 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
     let mut foreign_names_map = HashMap::new();
     let mut rust_names_map = HashMap::new();
     let mut utils_code = Vec::new();
-    let mut traits_usage_code = HashMap::<Symbol, Symbol>::new();
     let mut generic_edges = Vec::<GenericTypeConv>::new();
 
     for item in krate.module.items {
@@ -342,6 +342,8 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
         generic_edges,
         rust_to_foreign_cache: HashMap::new(),
         foreign_classes: Vec::new(),
+        exported_enums: HashMap::new(),
+        traits_usage_code,
     })
 }
 
@@ -671,6 +673,7 @@ mod tests {
 mod swig_foreign_types_map {}
 mod swig_foreign_types_map {}
 "#,
+            HashMap::new(),
         ).unwrap_err();
         err.emit();
     }
@@ -729,7 +732,8 @@ mod swig_foreign_types_map {
     #![swig_foreigner_type="int"]
     #![swig_rust_type="jint"]
 }
-"#
+"#,
+            HashMap::new(),
         ));
         assert_eq!(
             {
@@ -782,6 +786,7 @@ impl SwigFrom<bool> for jboolean {
     }
 }
 "#,
+            HashMap::new(),
         ).unwrap();
 
         let (_, code) = unwrap_presult!(conv_map.convert_rust_types(
@@ -831,6 +836,7 @@ impl SwigDeref for String {
     }
 }
 "#,
+            HashMap::new(),
         ));
         let (_, code) = unwrap_presult!(conv_map.convert_rust_types(
             &sess,
@@ -890,6 +896,7 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
     }
 }
 "#,
+            HashMap::new(),
         ));
 
         conv_map.add_type(rust_type_from_str("Foo").implements("SwigForeignClass"));
@@ -958,7 +965,8 @@ macro_rules! jni_unpack_return {
         }
     }
 }
-"#
+"#,
+            HashMap::new(),
         ));
         conv_map.add_type(rust_type_from_str("Foo"));
 

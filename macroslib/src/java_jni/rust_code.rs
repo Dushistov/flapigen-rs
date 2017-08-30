@@ -8,7 +8,8 @@ use syntex_syntax::ast;
 use syntex_syntax::ast::DUMMY_NODE_ID;
 use syntex_pos::DUMMY_SP;
 
-use {ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant, TypesConvMap};
+use {ForeignEnumInfo, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
+     TypesConvMap};
 use super::{code_to_item, fmt_write_err_map, java_class_full_name, java_class_name_to_jni,
             method_name, ForeignMethodSignature, ForeignTypeInfo};
 use errors::fatal_error;
@@ -278,6 +279,48 @@ pub fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong) {{
     }
 
     Ok(gen_code)
+}
+
+pub(in java_jni) fn generate_rust_code_for_enum<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    package_name: &str,
+    enum_info: &ForeignEnumInfo,
+) -> PResult<'a, Vec<P<ast::Item>>> {
+    use std::fmt::Write;
+
+    let rust_enum_name = enum_info.rust_enum_name();
+    let mut code = format!(
+        r#"
+impl SwigFrom<jint> for {rust_enum_name} {{
+    fn swig_from(x: jint, _: *mut JNIEnv) -> {rust_enum_name} {{
+        match x {{
+
+"#,
+        rust_enum_name = rust_enum_name,
+    );
+    for (i, item) in enum_info.items.iter().enumerate() {
+        write!(
+            &mut code,
+            "{index} => {item_name},\n",
+            index = i,
+            item_name = item.rust_name
+        ).unwrap();
+    }
+    write!(
+        &mut code,
+        r#"
+        _ => panic!("{{}} not expected for {rust_enum_name}", x),
+        }}
+    }}
+}}
+"#,
+        rust_enum_name = rust_enum_name,
+    ).unwrap();
+    conv_map.register_exported_enum(enum_info);
+    conv_map
+        .merge(sess, &*enum_info.rust_enum_name().as_str(), &code)?;
+    Ok(vec![])
 }
 
 lazy_static! {

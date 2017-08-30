@@ -1,18 +1,17 @@
-use syntex_syntax::parse::{token, PResult};
+use syntex_syntax::parse::{parser, token, PResult};
 use syntex_syntax::{ast, codemap, parse};
 use syntex_syntax::ptr::P;
 use syntex_syntax::parse::common::SeqSep;
-use syntex_syntax::symbol::keywords;
+use syntex_syntax::symbol::{keywords, Symbol};
 use syntex_syntax::ast::{Arg, FnDecl, Mutability, SelfKind};
 use syntex_pos::{mk_sp, Span, DUMMY_SP};
 use syntex_syntax::parse::parser::Parser;
 use syntex_syntax::ext::base::ExtCtxt;
 use syntex_syntax::tokenstream::TokenTree;
-use syntex_syntax::parse::parser;
-use syntex_syntax::symbol::Symbol;
 use syntex_errors::DiagnosticBuilder;
 
-use {ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
+use {ForeignEnumInfo, ForeignEnumItem, ForeignerClassInfo, ForeignerMethod, MethodVariant,
+     SelfTypeVariant};
 use my_ast::{if_result_return_ok_type, normalized_ty_string, self_variant};
 
 /// Returns the parsed optional self argument and whether a self shortcut was used.
@@ -194,7 +193,7 @@ pub(crate) fn parse_foreigner_class(
     }
 
     if !parser.eat_contextual_keyword(class_keyword) {
-        cx.span_err(parser.span, "expect class keyword here");
+        cx.span_err(parser.span, "expect `class` keyword here");
         return Err(parser.span);
     }
 
@@ -380,5 +379,68 @@ pub(crate) fn parse_foreigner_class(
         constructor_ret_type,
         span: class_span,
         doc_comments: class_doc_comments,
+    })
+}
+
+pub(crate) fn parse_foreign_enum(
+    cx: &ExtCtxt,
+    tokens: &[TokenTree],
+) -> Result<ForeignEnumInfo, Span> {
+    let enum_keyword = ast::Ident::from_str("enum");
+    let mut parser = parse::new_parser_from_tts(cx.parse_sess, tokens.to_vec());
+    let mut enum_doc_comments = vec![];
+    while let token::Token::DocComment(comment) = parser.token {
+        trace!("parse_foreign_enum: comment {:?}", comment);
+        enum_doc_comments.push(comment);
+        parser.bump();
+    }
+
+    if !parser.eat_contextual_keyword(enum_keyword) {
+        cx.span_err(parser.span, "expect `enum` keyword here");
+        return Err(parser.span);
+    }
+
+    let map_perror = |err: DiagnosticBuilder| -> Span {
+        let diag = err.into_diagnostic();
+        let primary_span = diag.span.primary_span().unwrap_or(DUMMY_SP);
+        cx.parse_sess
+            .span_diagnostic
+            .span_err(diag.span.clone(), &diag.message());
+        primary_span
+    };
+    let enum_name = parser.parse_ident().map_err(&map_perror)?.name;
+    debug!("ENUM NAME {:?}", enum_name);
+    let enum_span = parser.span;
+
+    parser
+        .expect(&token::Token::OpenDelim(token::DelimToken::Brace))
+        .map_err(&map_perror)?;
+    let mut items = vec![];
+    while !parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
+        let mut doc_comments = vec![];
+        while let token::Token::DocComment(comment) = parser.token {
+            trace!("parse_foreig_enum: comment {:?}", comment);
+            doc_comments.push(comment);
+            parser.bump();
+        }
+        let span = parser.span;
+        let f_item_name = parser.parse_ident().map_err(&map_perror)?.name;
+        parser.expect(&token::Token::Eq).map_err(&map_perror)?;
+        let item_name = parser
+            .parse_path(parser::PathStyle::Mod)
+            .map_err(&map_perror)?;
+        parser.expect(&token::Token::Comma).map_err(&map_perror)?;
+        items.push(ForeignEnumItem {
+            name: f_item_name,
+            span: span,
+            rust_name: item_name,
+            doc_comments,
+        });
+    }
+    Ok(ForeignEnumInfo {
+        span: enum_span,
+        name: enum_name,
+        items,
+        doc_comments: enum_doc_comments,
     })
 }

@@ -14,8 +14,8 @@ use syntex_syntax::ast::DUMMY_NODE_ID;
 use types_conv_map::{make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE,
                      TO_VAR_TEMPLATE};
 use errors::fatal_error;
-use {ForeignerClassInfo, ForeignerMethod, JavaConfig, LanguageGenerator, MethodVariant,
-     TypesConvMap};
+use {ForeignEnumInfo, ForeignerClassInfo, ForeignerMethod, JavaConfig, LanguageGenerator,
+     MethodVariant, TypesConvMap};
 use my_ast::{normalized_ty_string, parse_ty, RustType};
 
 struct JavaForeignTypeInfo {
@@ -86,7 +86,7 @@ impl LanguageGenerator for JavaConfig {
             class,
             &f_methods_sign,
             self.use_null_annotation.as_ref().map(|x| &**x),
-        ).map_err(|err| fatal_error(sess, DUMMY_SP, &err))?;
+        ).map_err(|err| fatal_error(sess, class.span, &err))?;
         debug!("generate: java code done");
         let ast_items = rust_code::generate_rust_code(
             sess,
@@ -97,6 +97,22 @@ impl LanguageGenerator for JavaConfig {
         )?;
 
         Ok(ast_items)
+    }
+
+    fn generate_enum<'a>(
+        &self,
+        sess: &'a ParseSess,
+        conv_map: &mut TypesConvMap,
+        enum_info: &ForeignEnumInfo,
+    ) -> PResult<'a, Vec<P<ast::Item>>> {
+        if (enum_info.items.len() as u64) >= (i32::max_value() as u64) {
+            return Err(fatal_error(sess, enum_info.span, "Too many items in enum"));
+        }
+
+        java_code::generate_java_code_for_enum(&self.output_dir, &self.package_name, enum_info)
+            .map_err(|err| fatal_error(sess, enum_info.span, &err))?;
+
+        rust_code::generate_rust_code_for_enum(sess, conv_map, &self.package_name, enum_info)
     }
 }
 
@@ -149,6 +165,11 @@ fn find_suitable_foreign_types_for_methods<'a>(
                         )
                     })?;
                 let converter = calc_converter_for_foreign_class_arg(foreigner_class, &arg.ty);
+                input.push(converter);
+                continue;
+            }
+            if let Some(foreign_enum) = conv_map.is_this_exported_enum(&arg.ty) {
+                let converter = calc_converter_for_enum(foreign_enum);
                 input.push(converter);
                 continue;
             }
@@ -258,8 +279,24 @@ fn calc_converter_for_foreign_class_arg(
         .into();
     JavaForeignTypeInfo {
         name: foreigner_class.name,
-        correspoding_rust_type: jlong_ti.clone(),
+        correspoding_rust_type: jlong_ti,
         java_transition_type: Some(Symbol::intern("long")),
+        java_converter,
+    }
+}
+
+fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> JavaForeignTypeInfo {
+    let sess = ParseSess::new();
+    let jint_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("jint"))
+        .unwrap()
+        .into();
+    let java_converter: String = r#"
+    int {to_var} = {from_var}.getValue();
+"#.into();
+    JavaForeignTypeInfo {
+        name: foreign_enum.name,
+        correspoding_rust_type: jint_ti,
+        java_transition_type: Some(Symbol::intern("int")),
         java_converter,
     }
 }

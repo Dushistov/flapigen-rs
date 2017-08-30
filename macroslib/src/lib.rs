@@ -65,7 +65,7 @@ use syntex_syntax::util::small_vector::SmallVector;
 
 use types_conv_map::TypesConvMap;
 use errors::fatal_error;
-use parsing::parse_foreigner_class;
+use parsing::{parse_foreign_enum, parse_foreigner_class};
 
 /// `LanguageConfig` contains configuration for specific programming language
 pub enum LanguageConfig {
@@ -85,6 +85,13 @@ trait LanguageGenerator {
         sess: &'a ParseSess,
         conv_map: &mut TypesConvMap,
         class: &ForeignerClassInfo,
+    ) -> PResult<'a, Vec<P<ast::Item>>>;
+
+    fn generate_enum<'a>(
+        &self,
+        sess: &'a ParseSess,
+        conv_map: &mut TypesConvMap,
+        enum_info: &ForeignEnumInfo,
     ) -> PResult<'a, Vec<P<ast::Item>>>;
 }
 
@@ -136,7 +143,7 @@ struct ForeignerMethod {
 }
 
 impl ForeignerMethod {
-    pub(crate) fn short_name(&self) -> Symbol {
+    fn short_name(&self) -> Symbol {
         if let Some(name) = self.name_alias {
             name
         } else {
@@ -147,13 +154,13 @@ impl ForeignerMethod {
         }
     }
 
-    pub(crate) fn span(&self) -> Span {
+    fn span(&self) -> Span {
         self.rust_id.span
     }
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ForeignerClassInfo {
+struct ForeignerClassInfo {
     name: Symbol,
     methods: Vec<ForeignerMethod>,
     self_type: ast::Path,
@@ -164,6 +171,28 @@ pub(crate) struct ForeignerClassInfo {
     constructor_ret_type: Option<ast::Ty>,
     span: Span,
     doc_comments: Vec<Symbol>,
+}
+
+#[derive(Debug, Clone)]
+struct ForeignEnumItem {
+    name: Symbol,
+    span: Span,
+    rust_name: ast::Path,
+    doc_comments: Vec<Symbol>,
+}
+
+#[derive(Debug, Clone)]
+struct ForeignEnumInfo {
+    name: Symbol,
+    span: Span,
+    items: Vec<ForeignEnumItem>,
+    doc_comments: Vec<Symbol>,
+}
+
+impl ForeignEnumInfo {
+    fn rust_enum_name(&self) -> Symbol {
+        self.name
+    }
 }
 
 impl Generator {
@@ -188,6 +217,9 @@ impl Generator {
     }
 
     pub fn register(self, registry: &mut Registry) {
+        let enum_handler = EnumHandler(self.data.clone());
+
+        registry.add_macro("foreign_enum", enum_handler);
         registry.add_macro("foreigner_class", self);
     }
 }
@@ -203,7 +235,52 @@ impl TTMacroExpander for Generator {
     }
 }
 
+struct EnumHandler(Rc<RefCell<GeneratorData>>);
+
+impl TTMacroExpander for EnumHandler {
+    fn expand<'a>(
+        &self,
+        cx: &'a mut ExtCtxt,
+        _: Span,
+        tokens: &[TokenTree],
+    ) -> Box<MacResult + 'a> {
+        self.0.borrow_mut().expand_foreign_enum(cx, tokens)
+    }
+}
+
 impl GeneratorData {
+    fn expand_foreign_enum<'a>(
+        &mut self,
+        cx: &'a mut ExtCtxt,
+        tokens: &[TokenTree],
+    ) -> Box<MacResult + 'a> {
+        let mut items = unwrap_presult!(self.init_types_map(cx.parse_sess()), self.conv_map);
+        let foreign_enum = parse_foreign_enum(cx, tokens).expect("Can not parse foreign_enum");
+
+        match self.config {
+            LanguageConfig::Java {
+                ref output_dir,
+                ref package_name,
+            } => {
+                let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
+                let mut gen_items = unwrap_presult!(
+                    java_cfg.generate_enum(cx.parse_sess(), &mut self.conv_map, &foreign_enum),
+                    self.conv_map
+                );
+                items.append(&mut gen_items);
+                MacEager::items(SmallVector::many(items))
+            }
+            LanguageConfig::JavaConfig(ref java_cfg) => {
+                let mut gen_items = unwrap_presult!(
+                    java_cfg.generate_enum(cx.parse_sess(), &mut self.conv_map, &foreign_enum),
+                    self.conv_map
+                );
+                items.append(&mut gen_items);
+                MacEager::items(SmallVector::many(items))
+            }
+        }
+    }
+
     fn expand_foreigner_class<'a>(
         &mut self,
         cx: &'a mut ExtCtxt,
