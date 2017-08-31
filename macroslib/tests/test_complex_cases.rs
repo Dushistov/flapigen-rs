@@ -239,6 +239,29 @@ foreigner_class!(class LocationService {
     }
 }
 
+#[test]
+fn test_foreign_interface() {
+    parse_code(
+        "test_foreign_interface",
+        r#"
+trait SomeTrait {
+    fn on_state_changed(&self, item: i32, is_ok: bool);
+}
+
+foreign_interface!(interface SomeObserver {
+    self_type SomeTrait;
+    onStateChanged = SomeTrait::on_state_changed(&self, _: i32, _: bool);
+});
+
+foreigner_class!(class ClassWithCallbacks {
+    self_type Foo;
+    constructor Foo::default() -> Foo;
+    method f1(&mut self, cb: Box<SomeTrait>);
+});
+"#,
+    );
+}
+
 fn parse_code(test_name: &str, code: &str) -> (String, String) {
     test_helper::logger_init();
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");

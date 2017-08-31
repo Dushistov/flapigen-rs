@@ -97,7 +97,7 @@ class Foo {
 });
 ```
 
-Also you can "export" `enum` without data to foreign language:
+Also you can "export" `enum` (`C` like enum) to foreign language:
 
 ```rust
 enum MyEnum {
@@ -125,4 +125,35 @@ after that you can write in Java:
 MyEnum v1 = MyEnum.ITEM1;
 Foo foo = new Foo();
 foo.f1(v1);
+```
+
+Also you can use `trait` to describe callback from Rust to Java:
+
+```rust
+trait SomeTrait {
+    fn on_state_changed(&self, item: i32, is_ok: bool);
+}
+
+foreign_interface!(interface SomeObserver {
+    self_type SomeTrait;
+    onStateChanged = SomeTrait::on_state_changed(&self, _: i32, _: bool);
+});
+
+foreigner_class!(class ClassWithCallbacks {
+    self_type Foo;
+	constructor Foo::default() -> Foo;
+	method f1(&mut self, cb: Box<SomeTrait>);
+});
+```
+
+and in Java you can write:
+
+```Java
+class Boo implements SomeObserver {
+    public void onStateChanged(int item, boolean isOk) {}
+}
+
+Foo foo = new Foo();
+Boo boo = new Boo();
+foo.f1(boo);
 ```

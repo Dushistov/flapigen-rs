@@ -562,3 +562,36 @@ foreigner_class!(class TestEnumClass {
     constructor Moo::default() -> Moo;
     method Moo::f1(&mut self, v: MyEnum) -> i32;
 });
+
+trait OnEvent {
+    fn something_change(&self, x: i32);
+}
+
+#[derive(Default)]
+struct Observable {
+    observers: Vec<Box<OnEvent>>,
+}
+
+impl Observable {
+    fn subscribe(&mut self, cb: Box<OnEvent>) {
+        self.observers.push(cb);
+    }
+    fn change(&self, x: i32) {
+        println!("Observable::change x {}", x);
+        for cb in &self.observers {
+            cb.something_change(x);
+        }
+    }
+}
+
+foreign_interface!(interface MyObserver {
+    self_type OnEvent;
+    onStateChanged = OnEvent::something_change(&self, x: i32);
+});
+
+foreigner_class!(class Observable {
+    self_type Observable;
+    constructor Observable::default() -> Observable;
+    method Observable::subscribe(&mut self, _: Box<OnEvent>);
+    method Observable::change(&self, _: i32);
+});

@@ -65,7 +65,7 @@ use syntex_syntax::util::small_vector::SmallVector;
 
 use types_conv_map::TypesConvMap;
 use errors::fatal_error;
-use parsing::{parse_foreign_enum, parse_foreigner_class};
+use parsing::{parse_foreign_enum, parse_foreign_interface, parse_foreigner_class};
 
 /// `LanguageConfig` contains configuration for specific programming language
 pub enum LanguageConfig {
@@ -92,6 +92,13 @@ trait LanguageGenerator {
         sess: &'a ParseSess,
         conv_map: &mut TypesConvMap,
         enum_info: &ForeignEnumInfo,
+    ) -> PResult<'a, Vec<P<ast::Item>>>;
+
+    fn generate_interface<'a>(
+        &self,
+        sess: &'a ParseSess,
+        conv_map: &mut TypesConvMap,
+        interace: &ForeignInterface,
     ) -> PResult<'a, Vec<P<ast::Item>>>;
 }
 
@@ -195,6 +202,21 @@ impl ForeignEnumInfo {
     }
 }
 
+struct ForeignInterfaceMethod {
+    name: Symbol,
+    rust_name: ast::Path,
+    fn_decl: P<ast::FnDecl>,
+    doc_comments: Vec<Symbol>,
+}
+
+struct ForeignInterface {
+    name: Symbol,
+    self_type: ast::Path,
+    doc_comments: Vec<Symbol>,
+    items: Vec<ForeignInterfaceMethod>,
+    span: Span,
+}
+
 impl Generator {
     pub fn new(config: LanguageConfig) -> Generator {
         let mut conv_map_source = Vec::new();
@@ -217,9 +239,8 @@ impl Generator {
     }
 
     pub fn register(self, registry: &mut Registry) {
-        let enum_handler = EnumHandler(self.data.clone());
-
-        registry.add_macro("foreign_enum", enum_handler);
+        registry.add_macro("foreign_enum", EnumHandler(self.data.clone()));
+        registry.add_macro("foreign_interface", InterfaceHandler(self.data.clone()));
         registry.add_macro("foreigner_class", self);
     }
 }
@@ -248,7 +269,59 @@ impl TTMacroExpander for EnumHandler {
     }
 }
 
+struct InterfaceHandler(Rc<RefCell<GeneratorData>>);
+impl TTMacroExpander for InterfaceHandler {
+    fn expand<'a>(
+        &self,
+        cx: &'a mut ExtCtxt,
+        _: Span,
+        tokens: &[TokenTree],
+    ) -> Box<MacResult + 'a> {
+        self.0.borrow_mut().expand_foreign_interface(cx, tokens)
+    }
+}
+
 impl GeneratorData {
+    fn expand_foreign_interface<'a>(
+        &mut self,
+        cx: &'a mut ExtCtxt,
+        tokens: &[TokenTree],
+    ) -> Box<MacResult + 'a> {
+        let mut items = unwrap_presult!(self.init_types_map(cx.parse_sess()), self.conv_map);
+        let foreign_interface =
+            parse_foreign_interface(cx, tokens).expect("Can not parse foreign_interface");
+        match self.config {
+            LanguageConfig::Java {
+                ref output_dir,
+                ref package_name,
+            } => {
+                let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
+                let mut gen_items = unwrap_presult!(
+                        java_cfg.generate_interface(
+                            cx.parse_sess(),
+                            &mut self.conv_map,
+                            &foreign_interface
+                        ),
+                        self.conv_map
+                    );
+                items.append(&mut gen_items);
+                MacEager::items(SmallVector::many(items))
+            }
+            LanguageConfig::JavaConfig(ref java_cfg) => {
+                let mut gen_items = unwrap_presult!(
+                        java_cfg.generate_interface(
+                            cx.parse_sess(),
+                            &mut self.conv_map,
+                            &foreign_interface
+                        ),
+                        self.conv_map
+                    );
+                items.append(&mut gen_items);
+                MacEager::items(SmallVector::many(items))
+            }
+        }
+    }
+
     fn expand_foreign_enum<'a>(
         &mut self,
         cx: &'a mut ExtCtxt,

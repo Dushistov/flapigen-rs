@@ -131,6 +131,94 @@ impl SwigDeref for JavaString {
 }
 
 #[allow(dead_code)]
+struct JavaCallback {
+    java_vm: *mut JavaVM,
+    this: jobject,
+    methods: Vec<jmethodID>,
+}
+
+#[allow(dead_code)]
+struct JniEnvHolder<'a> {
+    env: Option<*mut JNIEnv>,
+    callback: &'a JavaCallback,
+}
+
+#[allow(dead_code)]
+impl<'a> Drop for JniEnvHolder<'a> {
+    fn drop(&mut self) {
+        let res = unsafe {
+            (**self.callback.java_vm).DetachCurrentThread.unwrap()(self.callback.java_vm)
+        };
+        if res != 0 {
+            error!("JniEnvHolder: DetachCurrentThread failed: {}", res);
+        }
+    }
+}
+
+#[allow(dead_code)]
+impl JavaCallback {
+    fn new(obj: jobject, env: *mut JNIEnv) -> JavaCallback {
+        let mut java_vm: *mut JavaVM = ::std::ptr::null_mut();
+        let ret = unsafe { (**env).GetJavaVM.unwrap()(env, &mut java_vm) };
+        assert_eq!(0, ret, "GetJavaVm failed");
+        let global_obj = unsafe { (**env).NewGlobalRef.unwrap()(env, obj) };
+        assert!(!global_obj.is_null());
+        JavaCallback {
+            java_vm,
+            this: global_obj,
+            methods: Vec::new(),
+        }
+    }
+
+    fn get_jni_env<'a>(&'a self) -> JniEnvHolder<'a> {
+        assert!(!self.java_vm.is_null());
+        let mut env: *mut JNIEnv = ::std::ptr::null_mut();
+
+        #[cfg(target_os = "android")]
+        type GetJNiEnvPtrPtr = *mut *mut JNIEnv;
+        #[cfg(not(target_os = "android"))]
+        type GetJNiEnvPtrPtr = *mut *mut ::std::os::raw::c_void;
+
+        let res = unsafe {
+            (**self.java_vm).AttachCurrentThread.unwrap()(
+                self.java_vm,
+                (&mut env) as *mut *mut JNIEnv as GetJNiEnvPtrPtr,
+                ::std::ptr::null_mut(),
+            )
+        };
+        if res != 0 {
+            error!(
+                "JavaCallback::get_jnienv: AttachCurrentThread failed: {}",
+                res
+            );
+            JniEnvHolder {
+                env: None,
+                callback: self,
+            }
+        } else {
+            assert!(!env.is_null());
+            JniEnvHolder {
+                env: Some(env),
+                callback: self,
+            }
+        }
+    }
+}
+
+#[allow(dead_code)]
+impl Drop for JavaCallback {
+    fn drop(&mut self) {
+        let env = self.get_jni_env();
+        if let Some(env) = env.env {
+            assert!(!env.is_null());
+            unsafe { (**env).DeleteGlobalRef.unwrap()(env, self.this) };
+        } else {
+            error!("JavaCallback::drop failed, can not get JNIEnv");
+        }
+    }
+}
+
+#[allow(dead_code)]
 fn jni_throw(env: *mut JNIEnv, class_name: &'static str, message: &str) {
     let class_name_c = ::std::ffi::CString::new(class_name).unwrap();
 

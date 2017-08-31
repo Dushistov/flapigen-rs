@@ -561,6 +561,11 @@ impl TypesConvMap {
             .or_insert_with(|| conv_graph.add_node(ty))
     }
 
+    pub(crate) fn add_foreign(&mut self, correspoding_rty: RustType, foreign_name: Symbol) {
+        let idx = self.add_type(correspoding_rty);
+        self.foreign_names_map.insert(foreign_name, idx);
+    }
+
     pub(crate) fn cache_rust_to_foreign_conv(&mut self, from: &RustType, to: (RustType, Symbol)) {
         self.add_type(from.clone());
         let to_id = self.add_type(to.0);

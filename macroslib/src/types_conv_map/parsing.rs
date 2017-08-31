@@ -28,6 +28,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
 
     let swig_code = Symbol::intern("swig_code");
     let swig_to_foreigner_hint = Symbol::intern("swig_to_foreigner_hint");
+    let swig_from_foreigner_hint = Symbol::intern("swig_from_foreigner_hint");
     let swig_into_trait = Symbol::intern("SwigInto");
     let swig_from_trait = Symbol::intern("SwigFrom");
     let swig_deref_trait = Symbol::intern("SwigDeref");
@@ -102,10 +103,10 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
             } if trait_path_match(&trait_type.path, "SwigInto") ||
                 trait_path_match(&trait_type.path, "SwigFrom") =>
             {
-                let to_suffix = if !swig_attrs.is_empty() {
-                    if swig_attrs.len() != 1 || !swig_attrs.contains_key(&swig_to_foreigner_hint) ||
-                        swig_attrs[&swig_to_foreigner_hint].len() != 1
-                    {
+                let to_suffix = if !swig_attrs.is_empty() &&
+                    swig_attrs.contains_key(&swig_to_foreigner_hint)
+                {
+                    if swig_attrs.len() != 1 || swig_attrs[&swig_to_foreigner_hint].len() != 1 {
                         return Err(fatal_error(
                             sess,
                             item.span,
@@ -116,6 +117,25 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                 } else {
                     None
                 };
+
+                let from_suffix = if !swig_attrs.is_empty() &&
+                    swig_attrs.contains_key(&swig_from_foreigner_hint)
+                {
+                    if swig_attrs.len() != 1 || swig_attrs[&swig_from_foreigner_hint].len() != 1 {
+                        return Err(fatal_error(
+                            sess,
+                            item.span,
+                            &format!(
+                                "Expect only {} attribute",
+                                swig_from_foreigner_hint.as_str()
+                            ),
+                        ));
+                    }
+                    Some(swig_attrs[&swig_from_foreigner_hint][0].0)
+                } else {
+                    None
+                };
+
                 let type_param = extract_trait_param_type(sess, trait_type)?;
                 let (from_ty, to_ty, trait_name) =
                     if trait_path_match(&trait_type.path, "SwigInto") {
@@ -149,6 +169,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                 } else {
                     add_conv_code(
                         from_ty,
+                        from_suffix,
                         to_ty,
                         to_suffix,
                         P(item.clone()),
@@ -256,6 +277,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                     };
                     add_conv_code(
                         from_ty,
+                        None,
                         to_ty,
                         None,
                         P(item.clone()),
@@ -566,6 +588,7 @@ fn extract_trait_param_type<'a>(
 
 fn add_conv_code(
     from: ast::Ty,
+    from_suffix: Option<Symbol>,
     to: ast::Ty,
     to_suffix: Option<Symbol>,
     item: P<ast::Item>,
@@ -573,7 +596,11 @@ fn add_conv_code(
     conv_graph: &mut TypesConvGraph,
     rust_names_map: &mut HashMap<Symbol, NodeIndex<TypeGraphIdx>>,
 ) {
-    let from: RustType = from.into();
+    let from_typename = make_unique_rust_typename_if_need(
+        Symbol::intern(&normalized_ty_string(&from)),
+        from_suffix,
+    );
+    let from: RustType = RustType::new(from, from_typename);
     let to_typename =
         make_unique_rust_typename_if_need(Symbol::intern(&normalized_ty_string(&to)), to_suffix);
     let to = RustType::new(to, to_typename);

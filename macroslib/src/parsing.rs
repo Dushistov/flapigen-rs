@@ -10,8 +10,8 @@ use syntex_syntax::ext::base::ExtCtxt;
 use syntex_syntax::tokenstream::TokenTree;
 use syntex_errors::DiagnosticBuilder;
 
-use {ForeignEnumInfo, ForeignEnumItem, ForeignerClassInfo, ForeignerMethod, MethodVariant,
-     SelfTypeVariant};
+use {ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
+     ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
 use my_ast::{if_result_return_ok_type, normalized_ty_string, self_variant};
 
 /// Returns the parsed optional self argument and whether a self shortcut was used.
@@ -221,11 +221,7 @@ pub(crate) fn parse_foreigner_class(
     let mut constructor_ret_type: Option<ast::Ty> = None;
     let mut this_type_for_method: Option<ast::Ty> = None;
     let mut foreigner_code = String::new();
-    loop {
-        if parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
-            break;
-        }
-
+    while !parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
         let mut doc_comments = vec![];
         while let token::Token::DocComment(comment) = parser.token {
             trace!("parse_foreigner_class: comment {:?}", comment);
@@ -423,8 +419,8 @@ pub(crate) fn parse_foreign_enum(
             doc_comments.push(comment);
             parser.bump();
         }
-        let span = parser.span;
         let f_item_name = parser.parse_ident().map_err(&map_perror)?.name;
+        let span = parser.span;
         parser.expect(&token::Token::Eq).map_err(&map_perror)?;
         let item_name = parser
             .parse_path(parser::PathStyle::Mod)
@@ -442,5 +438,85 @@ pub(crate) fn parse_foreign_enum(
         name: enum_name,
         items,
         doc_comments: enum_doc_comments,
+    })
+}
+
+pub(crate) fn parse_foreign_interface(
+    cx: &ExtCtxt,
+    tokens: &[TokenTree],
+) -> Result<ForeignInterface, Span> {
+    let interface_keyword = ast::Ident::from_str("interface");
+    let mut parser = parse::new_parser_from_tts(cx.parse_sess, tokens.to_vec());
+    let mut interface_doc_comments = vec![];
+    while let token::Token::DocComment(comment) = parser.token {
+        trace!("parse_foreign_interface: comment {:?}", comment);
+        interface_doc_comments.push(comment);
+        parser.bump();
+    }
+
+    if !parser.eat_contextual_keyword(interface_keyword) {
+        cx.span_err(parser.span, "expect `interface` keyword here");
+        return Err(parser.span);
+    }
+
+    let map_perror = |err: DiagnosticBuilder| -> Span {
+        let diag = err.into_diagnostic();
+        let primary_span = diag.span.primary_span().unwrap_or(DUMMY_SP);
+        cx.parse_sess
+            .span_diagnostic
+            .span_err(diag.span.clone(), &diag.message());
+        primary_span
+    };
+    let interface_name = parser.parse_ident().map_err(&map_perror)?.name;
+    debug!("INTERFACE NAME {:?}", interface_name);
+    let interface_span = parser.span;
+
+    parser
+        .expect(&token::Token::OpenDelim(token::DelimToken::Brace))
+        .map_err(&map_perror)?;
+    let mut self_type = None;
+    let mut items = vec![];
+    while !parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
+        let mut doc_comments = vec![];
+        while let token::Token::DocComment(comment) = parser.token {
+            trace!("parse_foreign_interface: comment {:?}", comment);
+            doc_comments.push(comment);
+            parser.bump();
+        }
+        let func_name = parser.parse_ident().map_err(&map_perror)?.name;
+        if &*func_name.as_str() == "self_type" {
+            self_type = Some(
+                parser
+                    .parse_path(parser::PathStyle::Type)
+                    .expect("Can not parse self_type"),
+            );
+            debug!("self_type: {:?} for {}", self_type, interface_name);
+            parser.expect(&token::Token::Semi).map_err(&map_perror)?;
+            continue;
+        }
+        parser.expect(&token::Token::Eq).map_err(&map_perror)?;
+        let rust_func_name = parser
+            .parse_path(parser::PathStyle::Mod)
+            .map_err(&map_perror)?;
+        let fn_decl = parse_fn_decl_with_self(&mut parser, |p| p.parse_arg())
+            .map_err(&map_perror)?;
+        parser.expect(&token::Token::Semi).map_err(&map_perror)?;
+        items.push(ForeignInterfaceMethod {
+            name: func_name,
+            rust_name: rust_func_name,
+            fn_decl,
+            doc_comments,
+        });
+    }
+    let self_type: ast::Path = self_type.ok_or_else(|| {
+        cx.span_err(interface_span, "No `self_type` in foreign_interface");
+        interface_span
+    })?;
+    Ok(ForeignInterface {
+        name: interface_name,
+        self_type,
+        doc_comments: interface_doc_comments,
+        items,
+        span: interface_span,
     })
 }

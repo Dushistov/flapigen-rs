@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
 use syntex_syntax::symbol::Symbol;
-use syntex_syntax::parse::ParseSess;
-use syntex_syntax::parse::PResult;
+use syntex_syntax::parse::{PResult, ParseSess};
 use syntex_syntax::ptr::P;
 use syntex_syntax::ast;
 use syntex_syntax::ast::DUMMY_NODE_ID;
 use syntex_pos::DUMMY_SP;
+use syntex_syntax::print::pprust;
 
-use {ForeignEnumInfo, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
-     TypesConvMap};
+use {ForeignEnumInfo, ForeignInterface, ForeignInterfaceMethod, ForeignerClassInfo,
+     ForeignerMethod, MethodVariant, SelfTypeVariant, TypesConvMap};
 use super::{code_to_item, fmt_write_err_map, java_class_full_name, java_class_name_to_jni,
             method_name, ForeignMethodSignature, ForeignTypeInfo};
 use errors::fatal_error;
-use my_ast::{normalized_ty_string, parse_ty, RustType};
+use my_ast::{normalized_ty_string, parse_ty, self_variant, RustType};
 use types_conv_map::{unpack_unique_typename, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
 
 struct MethodContext<'a> {
@@ -284,7 +284,6 @@ pub fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong) {{
 pub(in java_jni) fn generate_rust_code_for_enum<'a>(
     sess: &'a ParseSess,
     conv_map: &mut TypesConvMap,
-    package_name: &str,
     enum_info: &ForeignEnumInfo,
 ) -> PResult<'a, Vec<P<ast::Item>>> {
     use std::fmt::Write;
@@ -321,6 +320,152 @@ impl SwigFrom<jint> for {rust_enum_name} {{
     conv_map
         .merge(sess, &*enum_info.rust_enum_name().as_str(), &code)?;
     Ok(vec![])
+}
+
+pub(in java_jni) fn generate_interface<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    interface: &ForeignInterface,
+    methods_sign: &[ForeignMethodSignature],
+) -> PResult<'a, Vec<P<ast::Item>>> {
+    use std::fmt::Write;
+
+    let mut new_conv_code = format!(
+        r#"
+#[swig_from_foreigner_hint = "{interface_name}"]
+impl SwigFrom<jobject> for Box<{trait_name}> {{
+    fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {{
+        let mut cb = JavaCallback::new(this, env);
+        cb.methods.reserve({methods_len});
+        let class = unsafe {{ (**env).GetObjectClass.unwrap()(env, cb.this) }};
+        assert!(!class.is_null(), "GetObjectClass return null class for {interface_name}");
+"#,
+        interface_name = interface.name,
+        trait_name = interface.self_type,
+        methods_len = interface.items.len(),
+    );
+    for (method, f_method) in interface.items.iter().zip(methods_sign) {
+        write!(
+            &mut new_conv_code,
+            r#"
+        let method_id: jmethodID = unsafe {{
+            (**env).GetMethodID.unwrap()(env, class, swig_c_str!("{method_name}"),
+                                         swig_c_str!("{method_sig}"))
+        }};
+        assert!(!method_id.is_null(), "Can not find {method_name} id");
+        cb.methods.push(method_id);
+"#,
+            method_name = method.name,
+            method_sig = jni_method_signature(f_method),
+        ).unwrap();
+    }
+    write!(
+        &mut new_conv_code,
+        r#"
+        Box::new(cb)
+    }}
+}}
+"#
+    ).unwrap();
+    conv_map
+        .merge(sess, &format!("{}", interface.self_type), &new_conv_code)?;
+
+    let mut gen_items = vec![];
+
+    let mut impl_trait_code = format!(
+        r#"
+impl {trait_name} for JavaCallback {{
+"#,
+        trait_name = interface.self_type
+    );
+
+    for (method_idx, (method, f_method)) in interface.items.iter().zip(methods_sign).enumerate() {
+        let func_name = method
+            .rust_name
+            .segments
+            .last()
+            .ok_or_else(|| {
+                fatal_error(sess, method.rust_name.span, "Empty trait function name")
+            })?
+            .identifier
+            .name;
+        let rest_args_with_types: String = method
+            .fn_decl
+            .inputs
+            .iter()
+            .skip(1)
+            .enumerate()
+            .map(|(i, v)| {
+                format!("a_{}: {}", i, pprust::ty_to_string(&*v.ty))
+            })
+            .fold(String::new(), |mut acc, x| {
+                acc.push_str(", ");
+                acc.push_str(&x);
+                acc
+            });
+        let self_arg = match self_variant(&method.fn_decl.inputs[0].ty)
+            .expect("Expect Self type for first argument")
+        {
+            SelfTypeVariant::Default => "self",
+            SelfTypeVariant::Mut => "mut self",
+            SelfTypeVariant::Rptr => "&self",
+            SelfTypeVariant::RptrMut => "&mut self",
+        };
+        let args_with_types: String = [self_arg.to_string(), rest_args_with_types].concat();
+        assert!(!method.fn_decl.inputs.is_empty());
+        let n_args = method.fn_decl.inputs.len() - 1;
+        let args: String = (0..n_args).map(|i| format!(", a_{}", i)).fold(
+            String::new(),
+            |mut acc, x| {
+                acc.push_str(&x);
+                acc
+            },
+        );
+        let (mut conv_deps, convert_args) = rust_to_foreign_convert_method_inputs(
+            sess,
+            conv_map,
+            method,
+            f_method,
+            (0..n_args).map(|v| format!("a_{}", v)),
+            "()",
+        )?;
+
+        write!(
+            &mut impl_trait_code,
+            r#"
+    #[allow(unused_mut)]
+    fn {func_name}({args_with_types}) {{
+        let env = self.get_jni_env();
+        if let Some(env) = env.env {{
+{convert_args}  
+            unsafe {{
+                (**env).CallVoidMethod.unwrap()(env, self.this, self.methods[{method_idx}]
+                                                {args});
+            }};
+        }}
+    }}
+"#,
+            func_name = func_name,
+            args_with_types = args_with_types,
+            method_idx = method_idx,
+            args = args,
+            convert_args = convert_args,
+        ).unwrap();
+        gen_items.append(&mut conv_deps);
+    }
+
+    write!(
+        &mut impl_trait_code,
+        r#"
+}}
+"#
+    ).unwrap();
+    gen_items.append(&mut code_to_item(
+        sess,
+        &format!("impl {} for JavaCallback", interface.self_type),
+        &impl_trait_code,
+    )?);
+    Ok(gen_items)
 }
 
 lazy_static! {
@@ -461,6 +606,41 @@ fn foreign_to_rust_convert_method_inputs<'a, GI: Iterator<Item = String>>(
             &arg_name,
             func_ret_type,
             to_type.pat.span,
+        )?;
+        code_deps.append(&mut cur_deps);
+        ret_code.push_str(&cur_code);
+    }
+    Ok((code_deps, ret_code))
+}
+
+fn rust_to_foreign_convert_method_inputs<'a, GI: Iterator<Item = String>>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    method: &ForeignInterfaceMethod,
+    f_method: &ForeignMethodSignature,
+    arg_names: GI,
+    func_ret_type: &str,
+) -> PResult<'a, (Vec<P<ast::Item>>, String)> {
+    let mut code_deps = Vec::<P<ast::Item>>::new();
+    let mut ret_code = String::new();
+
+
+    for ((from_ty, to_f), arg_name) in method
+        .fn_decl
+        .inputs
+        .iter()
+        .skip(1)//skip self
+        .zip(f_method.input.iter())
+        .zip(arg_names)
+    {
+        let from: RustType = (*from_ty.ty).clone().into();
+        let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
+            sess,
+            &from,
+            &to_f.correspoding_rust_type,
+            &arg_name,
+            func_ret_type,
+            from_ty.pat.span,
         )?;
         code_deps.append(&mut cur_deps);
         ret_code.push_str(&cur_code);
@@ -734,4 +914,24 @@ fn get_ref_type(ty: &ast::Ty, mutbl: ast::Mutability) -> ast::Ty {
             },
         ),
     }
+}
+
+fn jni_method_signature(method: &ForeignMethodSignature) -> String {
+    let mut ret: String = "(".into();
+    for arg in &method.input {
+        let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
+            .get(&arg.name)
+            .unwrap_or_else(|| {
+                panic!("Unknown type `{}`, can not generate jni signature")
+            });
+        ret.push_str(sig);
+    }
+    ret.push(')');
+    let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
+        .get(&method.output.name)
+        .unwrap_or_else(|| {
+            panic!("Unknown type `{}`, can not generate jni signature")
+        });
+    ret.push_str(sig);
+    ret
 }

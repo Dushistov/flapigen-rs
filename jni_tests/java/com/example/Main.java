@@ -15,6 +15,8 @@ import com.example.rust.TestIntArrays;
 import com.example.rust.TestPassObjectsAsParams;
 import com.example.rust.MyEnum;
 import com.example.rust.TestEnumClass;
+import com.example.rust.Observable;
+import com.example.rust.MyObserver;
 
 class Main {
     private static void testDoubleOverload() {
@@ -154,6 +156,7 @@ class Main {
 	}
 	testPassObjectsAsParams();
 	testTestEnumClass();
+	testCallbacks();
 	} catch (java.lang.AssertionError ex) {
 	    ex.printStackTrace();
 	    throw ex;
@@ -236,5 +239,24 @@ class Main {
 	TestEnumClass o = new TestEnumClass();
 	assert o.f1(v1) == -5;
 	assert o.f1(MyEnum.ITEM2) == 17;
+    }
+
+    private static class TestObserver implements MyObserver {
+	int x;
+	public void onStateChanged(int x) {
+	    System.out.println(String.format("TestObserver.onStateChange %d", x));
+	    this.x = x;
+	}
+    }
+
+    private static void testCallbacks() {
+	Observable events = new Observable();
+	TestObserver eventHandler = new TestObserver();
+	assert eventHandler.x == 0;
+	events.subscribe(eventHandler);
+	for (int i = 0; i < 1000; ++i) {
+	    events.change(i);
+	    assert eventHandler.x == i;
+	}
     }
 }
