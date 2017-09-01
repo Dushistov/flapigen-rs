@@ -219,14 +219,13 @@ impl Drop for JavaCallback {
 }
 
 #[allow(dead_code)]
-fn jni_throw(env: *mut JNIEnv, class_name: &'static str, message: &str) {
-    let class_name_c = ::std::ffi::CString::new(class_name).unwrap();
+fn jni_throw(env: *mut JNIEnv, class_name: *const ::std::os::raw::c_char, message: &str) {
 
-    let ex_class = unsafe { (**env).FindClass.unwrap()(env, class_name_c.as_ptr()) };
+    let ex_class = unsafe { (**env).FindClass.unwrap()(env, class_name) };
     if ex_class.is_null() {
         error!(
-            "throw_exception: can not find exp class {}, msg {}",
-            class_name,
+            "throw_exception: can not find exp class {:?}, msg {}",
+            unsafe { ::std::ffi::CStr::from_ptr(class_name) },
             message
         );
         return;
@@ -234,13 +233,15 @@ fn jni_throw(env: *mut JNIEnv, class_name: &'static str, message: &str) {
     let c_message = ::std::ffi::CString::new(message).unwrap();
     let res = unsafe { (**env).ThrowNew.unwrap()(env, ex_class, c_message.as_ptr()) };
     if res != 0 {
-        error!("ThrowNew({}) for class {} failed", message, class_name);
+        error!("ThrowNew({}) for class {:?} failed", message, unsafe {
+            ::std::ffi::CStr::from_ptr(class_name)
+        });
     }
 }
 
 #[allow(dead_code)]
 fn jni_throw_exception(env: *mut JNIEnv, message: &str) {
-    jni_throw(env, "java/lang/Exception", message)
+    jni_throw(env, swig_c_str!("java/lang/Exception"), message)
 }
 
 #[swig_to_foreigner_hint = "T"]
@@ -257,18 +258,21 @@ fn object_to_jobject<T: SwigForeignClass>(
     env: *mut JNIEnv,
 ) -> jobject {
     let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
-    assert!(!jcls.is_null());
+    assert!(!jcls.is_null(), "object_to_jobject: FindClass failed");
     let jobj: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
-    assert!(!jobj.is_null());
-    let field_id = swig_c_str!("mNativeObj");
-    let type_id = swig_c_str!("J");
-    let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id, type_id) };
-    assert!(!field_id.is_null());
+    assert!(!jobj.is_null(), "object_to_jobject: AllocObject failed");
+    let field_id: jfieldID = unsafe {
+        (**env).GetFieldID.unwrap()(env, jcls, swig_c_str!("mNativeObj"), swig_c_str!("J"))
+    };
+    assert!(
+        !field_id.is_null(),
+        "object_to_jobject: GetFieldID(mNativeObj) failed"
+    );
     let ret: jlong = <T>::box_object(obj);
     unsafe {
         (**env).SetLongField.unwrap()(env, jobj, field_id, ret);
         if (**env).ExceptionCheck.unwrap()(env) != 0 {
-            panic!("Can not mNativeObj field: catch exception");
+            panic!("object_to_jobject: Can not set mNativeObj field: catch exception");
         }
     }
     jobj

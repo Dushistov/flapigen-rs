@@ -157,9 +157,11 @@ class Main {
 	testPassObjectsAsParams();
 	testTestEnumClass();
 	testCallbacks();
-	} catch (java.lang.AssertionError ex) {
+	testCallbacksMultiThread();
+	testCallbacksWithException();
+	} catch (Throwable ex) {
 	    ex.printStackTrace();
-	    throw ex;
+	    System.exit(-1);
 	}
         System.out.println("ALL tests PASSED");
     }
@@ -244,7 +246,7 @@ class Main {
     private static class TestObserver implements MyObserver {
 	int x;
 	public void onStateChanged(int x) {
-	    System.out.println(String.format("TestObserver.onStateChange %d", x));
+	    //System.out.println(String.format("TestObserver.onStateChange %d", x));
 	    this.x = x;
 	}
     }
@@ -258,5 +260,35 @@ class Main {
 	    events.change(i);
 	    assert eventHandler.x == i;
 	}
+    }
+
+    private static void testCallbacksMultiThread() throws InterruptedException {
+	final Observable events = new Observable();
+	final TestObserver eventHandler = new TestObserver();
+	assert eventHandler.x == 0;
+	events.subscribe(eventHandler);
+	Thread t = new Thread(new Runnable() {
+		public void run() {
+		    System.out.println("testCallbacksMultiThread another thread");
+		    for (int i = 0; i < 1000; ++i) {
+			events.change(i);
+			assert eventHandler.x == i;
+		    }
+		}
+	    });
+	t.start();
+	t.join();
+    }
+
+    private static void testCallbacksWithException() {
+	Observable events = new Observable();
+	MyObserver o = new MyObserver() {
+		public void onStateChanged(int x) {
+		    //System.out.println(String.format("CheckException.onStateChange %d", x));
+		    throw new RuntimeException("Something bad");
+		}
+	    };
+	events.subscribe(o);
+	events.change(17);
     }
 }

@@ -577,7 +577,7 @@ impl Observable {
         self.observers.push(cb);
     }
     fn change(&self, x: i32) {
-        println!("Observable::change x {}", x);
+        debug!("Observable::change x {}", x);
         for cb in &self.observers {
             cb.something_change(x);
         }

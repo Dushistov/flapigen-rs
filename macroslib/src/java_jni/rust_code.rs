@@ -441,6 +441,11 @@ impl {trait_name} for JavaCallback {{
             unsafe {{
                 (**env).CallVoidMethod.unwrap()(env, self.this, self.methods[{method_idx}]
                                                 {args});
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {{
+                    error!("{func_name}: java throw exception");
+                    (**env).ExceptionDescribe.unwrap()(env);
+                    (**env).ExceptionClear.unwrap()(env);
+                }}   
             }};
         }}
     }}

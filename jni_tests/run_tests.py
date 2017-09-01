@@ -27,7 +27,7 @@ def find_dir(dir_name):
     raise Exception("Can not find %s" % dir_name)
 
 def run_jar(target_dir, jar_dir, use_shell):
-    subprocess.check_call(["java", "-verbose:jni", "-ea", "-Djava.library.path=" + target_dir,
+    subprocess.check_call(["java", "-Xcheck:jni", "-verbose:jni", "-ea", "-Djava.library.path=" + target_dir,
                            "-cp", "Test.jar", "com.example.Main"],
                           cwd=jar_dir, shell=use_shell)
 

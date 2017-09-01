@@ -141,8 +141,8 @@ foreign_interface!(interface SomeObserver {
 
 foreigner_class!(class ClassWithCallbacks {
     self_type Foo;
-	constructor Foo::default() -> Foo;
-	method f1(&mut self, cb: Box<SomeTrait>);
+    constructor Foo::default() -> Foo;
+    method f1(&mut self, cb: Box<SomeTrait>);
 });
 ```
 
@@ -155,5 +155,5 @@ class Boo implements SomeObserver {
 
 Foo foo = new Foo();
 Boo boo = new Boo();
-foo.f1(boo);
+foo.f1(boo);//we register callback here
 ```
