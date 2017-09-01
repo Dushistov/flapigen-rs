@@ -280,6 +280,32 @@ foreign_interface!(interface ControlStateObserver {
     );
 }
 
+#[test]
+fn test_foreign_enum_vs_int() {
+    for _ in (0..10) {
+        let (rust_code, java_code) = parse_code(
+            "test_foreign_enum_vs_int",
+            r#"
+foreign_enum!(enum MyEnum {
+  ITEM1 = MyEnum::Item1,
+  ITEM2 = MyEnum::Item2,
+  ITEM3 = MyEnum::Item3,
+});
+
+foreigner_class!(class TestEnumClass {
+    self_type Moo;
+    constructor Moo::default() -> Moo;
+    method Moo::f1(&mut self, v: MyEnum) -> i32;
+    static_method Moo::next_enum(v: MyEnum) -> MyEnum;
+});
+"#,
+        );
+        println!("{}", rust_code);
+        println!("{}", java_code);
+        assert!(java_code.contains("int f1(MyEnum"));
+    }
+}
+
 fn parse_code(test_name: &str, code: &str) -> (String, String) {
     test_helper::logger_init();
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");

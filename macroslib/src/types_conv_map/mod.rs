@@ -210,6 +210,7 @@ impl TypesConvMap {
         build_for_sp: Span,
     ) -> Option<ForeignTypeInfo> {
         let norm_rust_typename = Symbol::intern(&normalized_ty_string(rust_ty));
+        trace!("map foreign: {:?} {:?}", rust_ty, direction);
         if direction == petgraph::Direction::Outgoing {
             if let Some(foreign_name) = self.rust_to_foreign_cache.get(&norm_rust_typename) {
                 if let Some(to) = self.foreign_names_map.get(foreign_name) {
@@ -221,30 +222,45 @@ impl TypesConvMap {
                 }
             }
         }
+
         if let Some(from) = self.rust_names_map.get(&norm_rust_typename).cloned() {
-            for (foreign_name, graph_idx) in &self.foreign_names_map {
-                let is_connected = match direction {
-                    petgraph::Direction::Outgoing => petgraph::algo::has_path_connecting(
-                        &self.conv_graph,
-                        from,
-                        *graph_idx,
-                        None,
-                    ),
-                    petgraph::Direction::Incoming => petgraph::algo::has_path_connecting(
-                        &self.conv_graph,
-                        *graph_idx,
-                        from,
-                        None,
-                    ),
-                };
-                if is_connected {
-                    let node = &self.conv_graph[*graph_idx];
-                    debug!("map foreign {:?} <-> {}", rust_ty, foreign_name);
-                    return Some(ForeignTypeInfo {
-                        name: *foreign_name,
-                        correspoding_rust_type: node.clone(),
-                    });
+            let sess = ParseSess::new();
+            let find_path = |from, to| match find_conversation_path(
+                &sess,
+                &self.conv_graph,
+                from,
+                to,
+                DUMMY_SP,
+            ) {
+                Ok(x) => Some(x),
+                Err(mut err) => {
+                    err.cancel();
+                    None
                 }
+            };
+            let mut min_path: Option<(usize, NodeIndex, Symbol)> = None;
+            for (foreign_name, graph_idx) in &self.foreign_names_map {
+                let path = match direction {
+                    petgraph::Direction::Outgoing => find_path(from, *graph_idx),
+                    petgraph::Direction::Incoming => find_path(*graph_idx, from),
+                };
+                if let Some(path) = path {
+                    trace!(
+                        "map foreign: we find path {} <-> {}",
+                        foreign_name,
+                        self.conv_graph[*graph_idx]
+                    );
+                    let cur = (path.len(), *graph_idx, *foreign_name);
+                    min_path = Some(min_path.map_or(cur, |x| if cur.0 < x.0 { cur } else { x }));
+                }
+            }
+            if let Some(min_path) = min_path {
+                let node = &self.conv_graph[min_path.1];
+                debug!("map foreign {:?} <-> {}", rust_ty, min_path.2);
+                return Some(ForeignTypeInfo {
+                    name: min_path.2,
+                    correspoding_rust_type: node.clone(),
+                });
             }
         }
         debug!(
