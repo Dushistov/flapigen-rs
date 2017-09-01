@@ -262,6 +262,24 @@ foreigner_class!(class ClassWithCallbacks {
     );
 }
 
+#[test]
+fn test_foreign_enum_plus_interface() {
+    parse_code(
+        "test_foreign_enum_plus_interface",
+        r#"
+foreign_enum!(enum ControlItem {
+    GNSS = ControlItem::GnssWorking,
+    GPS_PROVIDER = ControlItem::AndroidGPSOn,
+});
+
+foreign_interface!(interface ControlStateObserver {
+    self_type ControlStateChange;
+    onSessionUpdate = ControlStateChange::on_state_changed(&self, item: ControlItem, is_ok: bool);
+});
+"#,
+    );
+}
+
 fn parse_code(test_name: &str, code: &str) -> (String, String) {
     test_helper::logger_init();
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");

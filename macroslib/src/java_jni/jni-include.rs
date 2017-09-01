@@ -561,14 +561,24 @@ impl SwigFrom<SystemTime> for jobject {
         let mills: jlong = (since_unix_epoch.as_secs() * 1_000 +
             (since_unix_epoch.subsec_nanos() / 1_000_000) as u64) as
             jlong;
-        let class_name_c = swig_c_str!("java/util/Date");
-        let date_class: jclass = unsafe { (**env).FindClass.unwrap()(env, class_name_c) };
-        assert!(!date_class.is_null());
-        let init_name_c = swig_c_str!("<init>");
-        let method_args_c = swig_c_str!("(J)V");
-        let init: jmethodID =
-            unsafe { (**env).GetMethodID.unwrap()(env, date_class, init_name_c, method_args_c) };
-        assert!(!init.is_null());
+        let date_class: jclass =
+            unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/Date")) };
+        assert!(
+            !date_class.is_null(),
+            "FindClass for `java/util/Date` failed"
+        );
+        let init: jmethodID = unsafe {
+            (**env).GetMethodID.unwrap()(
+                env,
+                date_class,
+                swig_c_str!("<init>"),
+                swig_c_str!("(J)V"),
+            )
+        };
+        assert!(
+            !init.is_null(),
+            "java/util/Date GetMethodID for init failed"
+        );
         let x = unsafe { (**env).NewObject.unwrap()(env, date_class, init, mills) };
         assert!(!x.is_null());
         x

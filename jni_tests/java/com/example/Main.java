@@ -159,6 +159,7 @@ class Main {
 	testCallbacks();
 	testCallbacksMultiThread();
 	testCallbacksWithException();
+	testReturnOfEnum();
 	} catch (Throwable ex) {
 	    ex.printStackTrace();
 	    System.exit(-1);
@@ -290,5 +291,11 @@ class Main {
 	    };
 	events.subscribe(o);
 	events.change(17);
+    }
+
+    private static void testReturnOfEnum() {
+	assert TestEnumClass.next_enum(MyEnum.ITEM1) == MyEnum.ITEM2;
+	assert TestEnumClass.next_enum(MyEnum.ITEM2) == MyEnum.ITEM3;
+	assert TestEnumClass.next_enum(MyEnum.ITEM3) == MyEnum.ITEM1;
     }
 }

@@ -555,12 +555,22 @@ impl Moo {
             -5
         }
     }
+
+    fn next_enum(v: MyEnum) -> MyEnum {
+        use MyEnum::*;
+        match v {
+            Item1 => Item2,
+            Item2 => Item3,
+            Item3 => Item1,
+        }
+    }
 }
 
 foreigner_class!(class TestEnumClass {
     self_type Moo;
     constructor Moo::default() -> Moo;
     method Moo::f1(&mut self, v: MyEnum) -> i32;
+    static_method Moo::next_enum(v: MyEnum) -> MyEnum;
 });
 
 trait OnEvent {

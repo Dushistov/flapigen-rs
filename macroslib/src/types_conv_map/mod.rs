@@ -315,7 +315,7 @@ impl TypesConvMap {
                 possible_paths.push((path, *foreign_name, *graph_idx));
             }
         }
-        possible_paths
+        let ret = possible_paths
             .into_iter()
             .min_by_key(|pp| pp.0.path.len())
             .map(|(pp, foreign_name, graph_idx)| {
@@ -325,7 +325,14 @@ impl TypesConvMap {
                     name: foreign_name,
                     correspoding_rust_type: node.clone(),
                 }
-            })
+            });
+        if ret.is_none() {
+            debug!(
+                "map to foreign failed, foreign_map {:?}",
+                self.foreign_names_map
+            );
+        }
+        ret
     }
 
     fn find_rust_type<'a>(
@@ -711,6 +718,15 @@ impl TypesConvMap {
     pub(crate) fn is_this_exported_enum(&self, ty: &ast::Ty) -> Option<&ForeignEnumInfo> {
         let type_name = Symbol::intern(&normalized_ty_string(ty));
         self.exported_enums.get(&type_name)
+    }
+
+    pub(crate) fn is_generated_foreign_type(&self, foreign_name: Symbol) -> bool {
+        if self.exported_enums.contains_key(&foreign_name) {
+            return true;
+        }
+        self.foreign_classes
+            .iter()
+            .any(|fc| fc.name == foreign_name)
     }
 }
 

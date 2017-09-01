@@ -283,6 +283,7 @@ pub fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong) {{
 
 pub(in java_jni) fn generate_rust_code_for_enum<'a>(
     sess: &'a ParseSess,
+    package_name: &str,
     conv_map: &mut TypesConvMap,
     enum_info: &ForeignEnumInfo,
 ) -> PResult<'a, Vec<P<ast::Item>>> {
@@ -316,6 +317,58 @@ impl SwigFrom<jint> for {rust_enum_name} {{
 "#,
         rust_enum_name = rust_enum_name,
     ).unwrap();
+
+    let java_enum_full_name = java_class_full_name(package_name, &*enum_info.name.as_str());
+    let enum_class_name = java_class_name_to_jni(&java_enum_full_name);
+
+    write!(
+        &mut code,
+        r#"
+mod swig_foreign_types_map {{
+    #![swig_foreigner_type = "{enum_name}"]
+    #![swig_rust_type_not_unique = "jobject"]
+}}
+#[swig_to_foreigner_hint = "{enum_name}"]
+impl SwigFrom<{rust_enum_name}> for jobject {{
+   fn swig_from(x: {rust_enum_name}, env: *mut JNIEnv) -> jobject {{
+       let cls: jclass = unsafe {{ (**env).FindClass.unwrap()(env, swig_c_str!("{class_name}")) }};
+       assert!(!cls.is_null(), "FindClass {class_name} failed");
+       let static_field_id = match x {{
+"#,
+        enum_name = enum_info.name,
+        rust_enum_name = rust_enum_name,
+        class_name = enum_class_name,
+    ).unwrap();
+
+    for item in &enum_info.items {
+        write!(
+            &mut code,
+            r#"
+           {rust_item} => swig_c_str!("{java_item}"),
+"#,
+            rust_item = item.rust_name,
+            java_item = item.name,
+        ).unwrap();
+    }
+    write!(
+        &mut code,
+        r#"
+      }};
+      let item_id: jfieldID = unsafe {{
+          (**env).GetStaticFieldID.unwrap()(env, cls , static_field_id,
+                                             swig_c_str!("L{class_name};"))
+      }};
+      assert!(!item_id.is_null(), "Can not find item in {class_name}");
+      let ret: jobject = unsafe {{
+        (**env).GetStaticObjectField.unwrap()(env, cls, item_id)
+      }};
+      assert!(!ret.is_null(), "Can get value of item in {class_name}");
+      ret
+   }}
+}}
+"#,
+        class_name = enum_class_name,
+    ).unwrap();
     conv_map.register_exported_enum(enum_info);
     conv_map
         .merge(sess, &*enum_info.rust_enum_name().as_str(), &code)?;
@@ -324,6 +377,7 @@ impl SwigFrom<jint> for {rust_enum_name} {{
 
 pub(in java_jni) fn generate_interface<'a>(
     sess: &'a ParseSess,
+    package_name: &str,
     conv_map: &mut TypesConvMap,
     interface: &ForeignInterface,
     methods_sign: &[ForeignMethodSignature],
@@ -356,7 +410,7 @@ impl SwigFrom<jobject> for Box<{trait_name}> {{
         cb.methods.push(method_id);
 "#,
             method_name = method.name,
-            method_sig = jni_method_signature(f_method),
+            method_sig = jni_method_signature(f_method, package_name, conv_map),
         ).unwrap();
     }
     write!(
@@ -474,19 +528,19 @@ impl {trait_name} for JavaCallback {{
 }
 
 lazy_static! {
-    static ref JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE: HashMap<Symbol, &'static str> = {
+    static ref JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
-        m.insert(Symbol::intern("String"), "Ljava.lang.String;");
-        m.insert(Symbol::intern("boolean"), "Z");
-        m.insert(Symbol::intern("byte"), "B");
-        m.insert(Symbol::intern("char"), "C");
-        m.insert(Symbol::intern("double"), "D");
-        m.insert(Symbol::intern("float"), "F");
-        m.insert(Symbol::intern("int"), "I");
-        m.insert(Symbol::intern("long"), "J");
-        m.insert(Symbol::intern("object"), "L");
-        m.insert(Symbol::intern("short"), "S");
-        m.insert(Symbol::intern("void"), "V");
+        m.insert("String", "Ljava.lang.String;");
+        m.insert("boolean", "Z");
+        m.insert("byte", "B");
+        m.insert("char", "C");
+        m.insert("double", "D");
+        m.insert("float", "F");
+        m.insert("int", "I");
+        m.insert("long", "J");
+        m.insert("object", "L");
+        m.insert("short", "S");
+        m.insert("void", "V");
         m
     };
 }
@@ -527,7 +581,7 @@ fn generate_jni_func_name<'a>(
                 arg.name
             };
             let type_name = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-                .get(&type_name)
+                .get(&*type_name.as_str())
                 .ok_or_else(|| {
                     fatal_error(
                         sess,
@@ -921,11 +975,28 @@ fn get_ref_type(ty: &ast::Ty, mutbl: ast::Mutability) -> ast::Ty {
     }
 }
 
-fn jni_method_signature(method: &ForeignMethodSignature) -> String {
+fn jni_method_signature(
+    method: &ForeignMethodSignature,
+    package_name: &str,
+    conv_map: &TypesConvMap,
+) -> String {
     let mut ret: String = "(".into();
     for arg in &method.input {
+        let mut gen_sig = String::new();
         let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-            .get(&arg.name)
+            .get(&*arg.name.as_str())
+            .map(|v| *v)
+            .or_else(|| if conv_map.is_generated_foreign_type(arg.name) {
+                gen_sig = format!(
+                    "L{};",
+                    java_class_name_to_jni(
+                        &java_class_full_name(package_name, &*arg.name.as_str())
+                    )
+                );
+                Some(&gen_sig)
+            } else {
+                None
+            })
             .unwrap_or_else(|| {
                 panic!(
                     "Unknown type `{}`, can not generate jni signature",
@@ -936,7 +1007,7 @@ fn jni_method_signature(method: &ForeignMethodSignature) -> String {
     }
     ret.push(')');
     let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-        .get(&method.output.name)
+        .get(&*method.output.name.as_str())
         .unwrap_or_else(|| {
             panic!(
                 "Unknown type `{}`, can not generate jni signature",

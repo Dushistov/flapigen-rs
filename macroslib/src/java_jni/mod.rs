@@ -112,7 +112,7 @@ impl LanguageGenerator for JavaConfig {
         java_code::generate_java_code_for_enum(&self.output_dir, &self.package_name, enum_info)
             .map_err(|err| fatal_error(sess, enum_info.span, &err))?;
 
-        rust_code::generate_rust_code_for_enum(sess, conv_map, enum_info)
+        rust_code::generate_rust_code_for_enum(sess, &self.package_name, conv_map, enum_info)
     }
 
     fn generate_interface<'a>(
@@ -129,7 +129,13 @@ impl LanguageGenerator for JavaConfig {
             &f_methods,
             self.use_null_annotation.as_ref().map(|x| &**x),
         ).map_err(|err| fatal_error(sess, interface.span, &err))?;
-        let items = rust_code::generate_interface(sess, conv_map, interface, &f_methods)?;
+        let items = rust_code::generate_interface(
+            sess,
+            &self.package_name,
+            conv_map,
+            interface,
+            &f_methods,
+        )?;
         let jobject_name = Symbol::intern("jobject");
         let jobject_ty = parse_ty(sess, DUMMY_SP, jobject_name)?;
         let my_jobj_ti = RustType::new(
@@ -175,8 +181,8 @@ fn find_suitable_ftypes_for_interace_methods<'a>(
                         sess,
                         arg.ty.span,
                         &format!(
-                            "Do not know conversation from foreign \
-                             to such rust type '{}'",
+                            "Do not know conversation to foreign \
+                             from such rust type '{}'",
                             normalized_ty_string(&arg.ty)
                         ),
                     )
