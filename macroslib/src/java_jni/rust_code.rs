@@ -927,7 +927,10 @@ fn jni_method_signature(method: &ForeignMethodSignature) -> String {
         let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
             .get(&arg.name)
             .unwrap_or_else(|| {
-                panic!("Unknown type `{}`, can not generate jni signature")
+                panic!(
+                    "Unknown type `{}`, can not generate jni signature",
+                    arg.name
+                )
             });
         ret.push_str(sig);
     }
@@ -935,7 +938,10 @@ fn jni_method_signature(method: &ForeignMethodSignature) -> String {
     let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
         .get(&method.output.name)
         .unwrap_or_else(|| {
-            panic!("Unknown type `{}`, can not generate jni signature")
+            panic!(
+                "Unknown type `{}`, can not generate jni signature",
+                method.output.name
+            )
         });
     ret.push_str(sig);
     ret

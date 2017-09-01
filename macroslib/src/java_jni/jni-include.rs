@@ -170,7 +170,7 @@ impl JavaCallback {
         }
     }
 
-    fn get_jni_env<'a>(&'a self) -> JniEnvHolder<'a> {
+    fn get_jni_env(&self) -> JniEnvHolder {
         assert!(!self.java_vm.is_null());
         let mut env: *mut JNIEnv = ::std::ptr::null_mut();
 

@@ -168,10 +168,8 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                     });
                 } else {
                     add_conv_code(
-                        from_ty,
-                        from_suffix,
-                        to_ty,
-                        to_suffix,
+                        (from_ty, from_suffix),
+                        (to_ty, to_suffix),
                         P(item.clone()),
                         conv_code,
                         &mut conv_graph,
@@ -276,10 +274,8 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                         }
                     };
                     add_conv_code(
-                        from_ty,
-                        None,
-                        to_ty,
-                        None,
+                        (from_ty, None),
+                        (to_ty, None),
                         P(item.clone()),
                         conv_code,
                         &mut conv_graph,
@@ -587,20 +583,20 @@ fn extract_trait_param_type<'a>(
 }
 
 fn add_conv_code(
-    from: ast::Ty,
-    from_suffix: Option<Symbol>,
-    to: ast::Ty,
-    to_suffix: Option<Symbol>,
+    from: (ast::Ty, Option<Symbol>),
+    to: (ast::Ty, Option<Symbol>),
     item: P<ast::Item>,
     conv_code: Symbol,
     conv_graph: &mut TypesConvGraph,
     rust_names_map: &mut HashMap<Symbol, NodeIndex<TypeGraphIdx>>,
 ) {
+    let (from, from_suffix) = from;
     let from_typename = make_unique_rust_typename_if_need(
         Symbol::intern(&normalized_ty_string(&from)),
         from_suffix,
     );
     let from: RustType = RustType::new(from, from_typename);
+    let (to, to_suffix) = to;
     let to_typename =
         make_unique_rust_typename_if_need(Symbol::intern(&normalized_ty_string(&to)), to_suffix);
     let to = RustType::new(to, to_typename);
