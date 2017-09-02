@@ -3,10 +3,11 @@ extern crate syntex;
 extern crate rust_swig;
 
 use std::process::{Command, Stdio};
-use std::env;
+use std::{env, fmt};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 
+use bindgen::RustTarget;
 use rust_swig::{target_pointer_width_from_env, JavaConfig, LanguageConfig};
 
 fn main() {
@@ -117,8 +118,8 @@ fn gen_binding<P1, P2>(
     output_rust: &Path,
 ) -> Result<(), String>
 where
-    P1: AsRef<Path>,
-    P2: AsRef<Path>,
+    P1: AsRef<Path> + fmt::Debug,
+    P2: AsRef<Path> + fmt::Debug,
 {
     assert!(!c_headers.is_empty());
     let c_file_path = &c_headers[0];
@@ -128,9 +129,9 @@ where
     bindings = include_dirs.iter().fold(bindings, |acc, x| {
         acc.clang_arg("-I".to_string() + x.as_ref().to_str().unwrap())
     });
-
+    println!("Generate binding for {:?}", c_headers);
     bindings = bindings
-        .unstable_rust(false)
+        .rust_target(RustTarget::Stable_1_19)
         //long double not supported yet, see https://github.com/servo/rust-bindgen/issues/550
         .hide_type("max_align_t");
     bindings = if target.contains("windows") {
@@ -154,6 +155,7 @@ where
     )?;
 
     let generated_bindings = bindings
+//        .clang_arg(format!("-target {}", target))
         .generate()
         .map_err(|_| "Failed to generate bindings".to_string())?;
     generated_bindings

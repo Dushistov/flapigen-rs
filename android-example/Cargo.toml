@@ -14,6 +14,6 @@ log-panics = "1.1.0"
 android_logger = "0.3.0"
 
 [build-dependencies]
-bindgen = "0.29.0"
+bindgen = "0.30.0"
 syntex = "0.58.1"
 rust_swig = { path = "../macroslib" }
