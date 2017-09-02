@@ -478,13 +478,7 @@ impl {trait_name} for JavaCallback {{
         let args_with_types: String = [self_arg.to_string(), rest_args_with_types].concat();
         assert!(!method.fn_decl.inputs.is_empty());
         let n_args = method.fn_decl.inputs.len() - 1;
-        let args: String = (0..n_args).map(|i| format!(", a_{}", i)).fold(
-            String::new(),
-            |mut acc, x| {
-                acc.push_str(&x);
-                acc
-            },
-        );
+        let (args, type_size_asserts) = convert_args_for_variadic_function_call(f_method);
         let (mut conv_deps, convert_args) = rust_to_foreign_convert_method_inputs(
             sess,
             conv_map,
@@ -499,6 +493,7 @@ impl {trait_name} for JavaCallback {{
             r#"
     #[allow(unused_mut)]
     fn {func_name}({args_with_types}) {{
+{type_size_asserts}
         let env = self.get_jni_env();
         if let Some(env) = env.env {{
 {convert_args}  
@@ -519,6 +514,7 @@ impl {trait_name} for JavaCallback {{
             method_idx = method_idx,
             args = args,
             convert_args = convert_args,
+            type_size_asserts = type_size_asserts,
         ).unwrap();
         gen_items.append(&mut conv_deps);
     }
@@ -551,6 +547,15 @@ lazy_static! {
         m.insert("object", "L");
         m.insert("short", "S");
         m.insert("void", "V");
+        m
+    };
+
+    static ref JNI_FOR_VARIADIC_C_FUNC_CALL: HashMap<&'static str, &'static str> = {
+        let mut m = HashMap::new();
+        m.insert("jboolean", "::std::os::raw::c_uint");
+        m.insert("jbyte", "::std::os::raw::c_int");
+        m.insert("jshort", "::std::os::raw::c_int");
+        m.insert("jfloat", "f64");
         m
     };
 }
@@ -1026,4 +1031,31 @@ fn jni_method_signature(
         });
     ret.push_str(sig);
     ret
+}
+
+// To use `C` function with variable number of arguments,
+// we need automatic type conversation, see
+// http://en.cppreference.com/w/c/language/conversion#Default_argument_promotions
+// for more details.
+// return arg with conversation plus asserts
+fn convert_args_for_variadic_function_call(
+    f_method: &ForeignMethodSignature,
+) -> (String, &'static str) {
+    use std::fmt::Write;
+
+    let mut ret = String::new();
+    for (i, arg) in f_method.input.iter().enumerate() {
+        if let Some(conv_type) = JNI_FOR_VARIADIC_C_FUNC_CALL
+            .get(&*arg.correspoding_rust_type.normalized_name.as_str())
+        {
+            write!(&mut ret, ", a_{} as {}", i, conv_type).unwrap();
+        } else {
+            write!(&mut ret, ", a_{}", i).unwrap();
+        }
+    }
+    let check_sizes = r#"
+    swig_assert_eq_size!(::std::os::raw::c_uint, u32);
+    swig_assert_eq_size!(::std::os::raw::c_int, i32);
+"#;
+    (ret, check_sizes)
 }

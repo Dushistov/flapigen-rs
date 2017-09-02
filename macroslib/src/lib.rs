@@ -232,11 +232,12 @@ struct ForeignInterface {
 }
 
 impl Generator {
-    #[deprecated(since = "0.1.0", note = "please use `Generator::new_for_target` instead")]
+    #[deprecated(since = "0.1.0", note = "please use `new_with_pointer_target_width` instead")]
     pub fn new(config: LanguageConfig) -> Generator {
         Generator::new_with_pointer_target_width(config, target_pointer_width_from_env())
     }
 
+    #[allow(deprecated)]
     pub fn new_with_pointer_target_width(
         config: LanguageConfig,
         pointer_target_width: usize,
@@ -305,6 +306,7 @@ impl TTMacroExpander for InterfaceHandler {
 }
 
 impl GeneratorData {
+    #[allow(deprecated)]
     fn expand_foreign_interface<'a>(
         &mut self,
         cx: &'a mut ExtCtxt,
@@ -351,6 +353,7 @@ impl GeneratorData {
         }
     }
 
+    #[allow(deprecated)]
     fn expand_foreign_enum<'a>(
         &mut self,
         cx: &'a mut ExtCtxt,
@@ -397,6 +400,7 @@ impl GeneratorData {
         }
     }
 
+    #[allow(deprecated)]
     fn expand_foreigner_class<'a>(
         &mut self,
         cx: &'a mut ExtCtxt,

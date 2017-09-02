@@ -1109,7 +1109,7 @@ impl SwigFrom<isize> for jlong {
             swig_from_info.clone(),
             64
         ));
-        let mut convert_types = |conv_map: &mut TypesConvMap, from: &str, to: &str| {
+        let convert_types = |conv_map: &mut TypesConvMap, from: &str, to: &str| {
             conv_map.convert_rust_types(
                 &sess,
                 &rust_type_from_str(from),

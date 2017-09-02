@@ -235,16 +235,14 @@ pub(crate) fn parse_foreigner_class(
         if &*func_type_name.name.as_str() == "self_type" {
             rust_self_type = parser
                 .parse_path(parser::PathStyle::Type)
-                .expect("Can not parse self_type");
+                .map_err(&map_perror)?;
             debug!("self_type: {:?}", rust_self_type);
             parser.expect(&token::Token::Semi).map_err(&map_perror)?;
             continue;
         }
 
         if &*func_type_name.name.as_str() == "foreigner_code" {
-            let lit = parser
-                .parse_lit()
-                .expect("expect literal after foreigner_code");
+            let lit = parser.parse_lit().map_err(&map_perror)?;
             match lit.node {
                 ast::LitKind::Str(s, _) => {
                     debug!("foreigner_code s: {:?}", s);
@@ -310,9 +308,7 @@ pub(crate) fn parse_foreigner_class(
             }
             func_name_alias = Some(parser.parse_ident().map_err(&map_perror)?);
             debug!("we have ALIAS `{:?}`", func_name_alias.unwrap());
-            parser
-                .expect(&token::Token::Semi)
-                .expect("no ; at the end of alias");
+            parser.expect(&token::Token::Semi).map_err(&map_perror)?;
         }
         let (may_return_error, ret_type) = match func_decl.output {
             ast::FunctionRetTy::Default(_) => (false, None),
@@ -485,11 +481,9 @@ pub(crate) fn parse_foreign_interface(
         }
         let func_name = parser.parse_ident().map_err(&map_perror)?.name;
         if &*func_name.as_str() == "self_type" {
-            self_type = Some(
-                parser
-                    .parse_path(parser::PathStyle::Type)
-                    .expect("Can not parse self_type"),
-            );
+            self_type = Some(parser
+                .parse_path(parser::PathStyle::Type)
+                .map_err(&map_perror)?);
             debug!("self_type: {:?} for {}", self_type, interface_name);
             parser.expect(&token::Token::Semi).map_err(&map_perror)?;
             continue;

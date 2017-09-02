@@ -7,8 +7,11 @@ extern crate regex;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
+
 use regex::Regex;
 use tempdir::TempDir;
+use rust_swig::{Generator, JavaConfig, LanguageConfig};
+use syntex::Registry;
 
 #[macro_use]
 #[path = "../src/test_helper.rs"]
@@ -282,7 +285,7 @@ foreign_interface!(interface ControlStateObserver {
 
 #[test]
 fn test_foreign_enum_vs_int() {
-    for _ in (0..10) {
+    for _ in 0..10 {
         let (rust_code, java_code) = parse_code(
             "test_foreign_enum_vs_int",
             r#"
@@ -319,12 +322,9 @@ fn parse_code(test_name: &str, code: &str) -> (String, String) {
     fs::create_dir_all(&java_path).unwrap_or_else(|why| {
         panic!("! {:?}", why.kind());
     });
-    let mut registry = syntex::Registry::new();
-    let swig_gen = rust_swig::Generator::new_with_pointer_target_width(
-        rust_swig::LanguageConfig::Java {
-            output_dir: tmp_dir.path().into(),
-            package_name: "com.example".into(),
-        },
+    let mut registry = Registry::new();
+    let swig_gen = Generator::new_with_pointer_target_width(
+        LanguageConfig::JavaConfig(JavaConfig::new(tmp_dir.path().into(), "com.example".into())),
         64,
     );
     swig_gen.register(&mut registry);

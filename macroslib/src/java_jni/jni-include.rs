@@ -61,12 +61,25 @@ trait SwigForeignClass {
     fn box_object(x: Self) -> jlong;
 }
 
+#[allow(unused_macros)]
 macro_rules! swig_c_str {
     ($lit:expr) => {
         concat!($lit, "\0").as_ptr()
             as *const ::std::os::raw::c_char
     }
 }
+
+#[allow(unused_macros)]
+macro_rules! swig_assert_eq_size {
+    ($x:ty, $($xs:ty),+ $(,)*) => {
+        #[allow(unknown_lints, forget_copy, unused_unsafe, useless_transmute)]
+        unsafe {
+            use std::mem::{forget, transmute, uninitialized};
+            $(forget::<$xs>(transmute(uninitialized::<$x>()));)+
+        }
+    };
+}
+
 
 #[cfg(target_pointer_width = "32")]
 unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {

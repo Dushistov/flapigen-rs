@@ -6,7 +6,7 @@ extern crate bindgen;
 use std::env;
 use std::time::Instant;
 use std::path::{Path, PathBuf};
-use rust_swig::{JavaConfig, LanguageConfig};
+use rust_swig::{target_pointer_width_from_env, JavaConfig, LanguageConfig};
 
 fn main() {
     env_logger::init().unwrap();
@@ -90,10 +90,13 @@ fn gen_binding<P: AsRef<Path>>(
 fn rust_swig_expand(from: &Path, out: &Path) -> Result<(), String> {
     println!("Run rust_swig_expand");
     let mut registry = syntex::Registry::new();
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
-        Path::new("java").join("com").join("example").join("rust"),
-        "com.example.rust".into(),
-    )));
+    let swig_gen = rust_swig::Generator::new_with_pointer_target_width(
+        LanguageConfig::JavaConfig(JavaConfig::new(
+            Path::new("java").join("com").join("example").join("rust"),
+            "com.example.rust".into(),
+        )),
+        target_pointer_width_from_env(),
+    );
     swig_gen.register(&mut registry);
     registry
         .expand("rust_swig_test_jni", from, out)

@@ -64,7 +64,7 @@ impl LanguageGenerator for JavaConfig {
         &self,
         sess: &'a ParseSess,
         conv_map: &mut TypesConvMap,
-        pointer_target_width: usize,
+        _: usize,
         class: &ForeignerClassInfo,
     ) -> PResult<'a, Vec<P<ast::Item>>> {
         debug!("generate: begin");
