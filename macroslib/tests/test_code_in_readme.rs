@@ -8,8 +8,10 @@ use std::path::Path;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::fs;
+
 use tempdir::TempDir;
 use cmark::{Event, Parser, Tag};
+use rust_swig::{Generator, JavaConfig, LanguageConfig};
 
 #[macro_use]
 #[path = "../src/test_helper.rs"]
@@ -37,11 +39,8 @@ fn test_code_in_readme() {
             let rust_path_dst = tmp_dir.path().join(&test.name).join("test.rs");
 
             let mut registry = syntex::Registry::new();
-            let swig_gen = rust_swig::Generator::new_with_pointer_target_width(
-                rust_swig::LanguageConfig::Java {
-                    output_dir: java_path,
-                    package_name: "com.example".into(),
-                },
+            let swig_gen = Generator::new_with_pointer_target_width(
+                LanguageConfig::JavaConfig(JavaConfig::new(java_path, "com.example".into())),
                 64,
             );
             swig_gen.register(&mut registry);

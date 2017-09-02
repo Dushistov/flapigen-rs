@@ -154,16 +154,19 @@ struct JavaCallback {
 struct JniEnvHolder<'a> {
     env: Option<*mut JNIEnv>,
     callback: &'a JavaCallback,
+    need_detach: bool,
 }
 
 #[allow(dead_code)]
 impl<'a> Drop for JniEnvHolder<'a> {
     fn drop(&mut self) {
-        let res = unsafe {
-            (**self.callback.java_vm).DetachCurrentThread.unwrap()(self.callback.java_vm)
-        };
-        if res != 0 {
-            error!("JniEnvHolder: DetachCurrentThread failed: {}", res);
+        if self.need_detach {
+            let res = unsafe {
+                (**self.callback.java_vm).DetachCurrentThread.unwrap()(self.callback.java_vm)
+            };
+            if res != 0 {
+                error!("JniEnvHolder: DetachCurrentThread failed: {}", res);
+            }
         }
     }
 }
@@ -193,6 +196,24 @@ impl JavaCallback {
         type GetJNiEnvPtrPtr = *mut *mut ::std::os::raw::c_void;
 
         let res = unsafe {
+            (**self.java_vm).GetEnv.unwrap()(
+                self.java_vm,
+                (&mut env) as *mut *mut JNIEnv as *mut *mut ::std::os::raw::c_void,
+                JNI_VERSION_1_6 as jint,
+            )
+        };
+        if res == (JNI_OK as jint) {
+            return JniEnvHolder {
+                env: Some(env),
+                callback: self,
+                need_detach: false,
+            };
+        }
+        if res != (JNI_EDETACHED as jint) {
+            panic!("get_jni_env: GetEnv return error `{}`", res);
+        }
+
+        let res = unsafe {
             (**self.java_vm).AttachCurrentThread.unwrap()(
                 self.java_vm,
                 (&mut env) as *mut *mut JNIEnv as GetJNiEnvPtrPtr,
@@ -207,12 +228,14 @@ impl JavaCallback {
             JniEnvHolder {
                 env: None,
                 callback: self,
+                need_detach: false,
             }
         } else {
             assert!(!env.is_null());
             JniEnvHolder {
                 env: Some(env),
                 callback: self,
+                need_detach: true,
             }
         }
     }
