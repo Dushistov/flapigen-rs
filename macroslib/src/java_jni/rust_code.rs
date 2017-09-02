@@ -32,8 +32,6 @@ pub(in java_jni) fn generate_rust_code<'a>(
     class: &ForeignerClassInfo,
     f_methods_sign: &[ForeignMethodSignature],
 ) -> PResult<'a, Vec<P<ast::Item>>> {
-
-
     //to handle java method overload
     let mut gen_fnames = HashMap::<String, usize>::new();
     for (method, f_method) in class.methods.iter().zip(f_methods_sign.iter()) {
@@ -496,7 +494,7 @@ impl {trait_name} for JavaCallback {{
 {type_size_asserts}
         let env = self.get_jni_env();
         if let Some(env) = env.env {{
-{convert_args}  
+{convert_args}
             unsafe {{
                 (**env).CallVoidMethod.unwrap()(env, self.this, self.methods[{method_idx}]
                                                 {args});
@@ -504,7 +502,7 @@ impl {trait_name} for JavaCallback {{
                     error!("{func_name}: java throw exception");
                     (**env).ExceptionDescribe.unwrap()(env);
                     (**env).ExceptionClear.unwrap()(env);
-                }}   
+                }}
             }};
         }}
     }}
@@ -767,7 +765,6 @@ fn create_suitable_types_for_constructor_and_self(
                         },
                     ),
                 },
-
                 ast::Ty {
                     id: DUMMY_NODE_ID,
                     span: class.self_type.span,
@@ -1045,8 +1042,8 @@ fn convert_args_for_variadic_function_call(
 
     let mut ret = String::new();
     for (i, arg) in f_method.input.iter().enumerate() {
-        if let Some(conv_type) = JNI_FOR_VARIADIC_C_FUNC_CALL
-            .get(&*arg.correspoding_rust_type.normalized_name.as_str())
+        if let Some(conv_type) =
+            JNI_FOR_VARIADIC_C_FUNC_CALL.get(&*arg.correspoding_rust_type.normalized_name.as_str())
         {
             write!(&mut ret, ", a_{} as {}", i, conv_type).unwrap();
         } else {

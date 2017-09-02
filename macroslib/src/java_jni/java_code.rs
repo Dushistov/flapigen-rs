@@ -27,8 +27,8 @@ pub(in java_jni) fn generate_java_code_for_enum(
     enum_info: &ForeignEnumInfo,
 ) -> Result<(), String> {
     let path = output_dir.join(format!("{}.java", enum_info.name));
-    let mut file = File::create(&path)
-        .map_err(|err| format!("Couldn't create {:?}: {}", path, err))?;
+    let mut file =
+        File::create(&path).map_err(|err| format!("Couldn't create {:?}: {}", path, err))?;
     let enum_doc_comments = doc_comments_to_java_comments(&enum_info.doc_comments, true);
     write!(
         file,
@@ -82,8 +82,8 @@ pub(in java_jni) fn generate_java_code_for_interface(
     use_null_annotation: Option<&str>,
 ) -> Result<(), String> {
     let path = output_dir.join(format!("{}.java", interface.name));
-    let mut file = File::create(&path)
-        .map_err(|err| format!("Couldn't create {:?}: {}", path, err))?;
+    let mut file =
+        File::create(&path).map_err(|err| format!("Couldn't create {:?}: {}", path, err))?;
     let imports = get_null_annotation_imports(use_null_annotation, methods_sign);
     let interface_comments = doc_comments_to_java_comments(&interface.doc_comments, true);
     write!(
@@ -139,8 +139,7 @@ pub(in java_jni) fn generate_java_code(
     } else {
         let path = output_dir.join(format!("{}.java", class.name));
         Box::new(
-            File::create(&path)
-                .map_err(|err| format!("Couldn't create {:?}: {}", path, err))?,
+            File::create(&path).map_err(|err| format!("Couldn't create {:?}: {}", path, err))?,
         )
     };
 

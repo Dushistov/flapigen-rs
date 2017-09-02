@@ -1,8 +1,8 @@
+extern crate env_logger;
+extern crate pulldown_cmark as cmark;
 extern crate rust_swig;
 extern crate syntex;
-extern crate pulldown_cmark as cmark;
 extern crate tempdir;
-extern crate env_logger;
 
 use std::path::Path;
 use std::fs::File;

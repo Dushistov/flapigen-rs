@@ -601,8 +601,15 @@ impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
 "#,
         );
 
-        check_subst(&sess, &generic, "&RefCell<T>", "RefMut<T>",
-                    "&RefCell<Foo>", "RefMut<Foo>", |_| None);
+        check_subst(
+            &sess,
+            &generic,
+            "&RefCell<T>",
+            "RefMut<T>",
+            "&RefCell<Foo>",
+            "RefMut<Foo>",
+            |_| None,
+        );
 
 
         check_subst(
@@ -615,12 +622,25 @@ impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
             |_| None,
         );
 
-        check_subst(&sess, &generic, "Arc<Mutex<T>>", "&Mutex<T>",
-                    "Arc<Mutex<Foo>>", "&Mutex<Foo>", |_| None);
+        check_subst(
+            &sess,
+            &generic,
+            "Arc<Mutex<T>>",
+            "&Mutex<T>",
+            "Arc<Mutex<Foo>>",
+            "&Mutex<Foo>",
+            |_| None,
+        );
 
-        let mutex_guard_foo = check_subst(&sess, &generic,
-                                          "&Mutex<T>", "MutexGuard<T>",
-                                          "&Mutex<Foo>", "MutexGuard<Foo>", |_| None);
+        let mutex_guard_foo = check_subst(
+            &sess,
+            &generic,
+            "&Mutex<T>",
+            "MutexGuard<T>",
+            "&Mutex<Foo>",
+            "MutexGuard<Foo>",
+            |_| None,
+        );
         assert_eq!(
             &*GenericTypeConv {
                 from_ty: str_to_ty(&sess, "MutexGuard<T>"),
@@ -750,7 +770,6 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
                 .as_str(),
             "bool"
         );
-
     }
 
     #[test]

@@ -4,19 +4,19 @@
 //! For macros expansion it uses [syntex](https://crates.io/crates/syntex).
 //! More details can be found at
 //! [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
-extern crate syntex_syntax;
-extern crate syntex_pos;
-extern crate syntex_errors;
-extern crate syntex;
-extern crate petgraph;
 #[macro_use]
-extern crate log;
+extern crate bitflags;
 #[cfg(test)]
 extern crate env_logger;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
-extern crate bitflags;
+extern crate log;
+extern crate petgraph;
+extern crate syntex;
+extern crate syntex_errors;
+extern crate syntex_pos;
+extern crate syntex_syntax;
 
 macro_rules! unwrap_presult {
     ($presult_epxr:expr) => {
@@ -34,7 +34,6 @@ macro_rules! unwrap_presult {
             Err(mut err) => {
                 debug!("{}", $conv_map);
                 err.emit();
-         
                 panic!("rust_swig fatal error, see above");
             }
         }

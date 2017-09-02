@@ -1,6 +1,7 @@
+
+extern crate android_logger;
 #[macro_use]
 extern crate log;
-extern crate android_logger;
 extern crate log_panics;
 
 mod java_glue;

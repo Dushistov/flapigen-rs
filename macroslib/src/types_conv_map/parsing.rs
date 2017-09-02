@@ -27,7 +27,6 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
     mut traits_usage_code: HashMap<Symbol, Symbol>,
     target_pointer_width: usize,
 ) -> PResult<'a, TypesConvMap> {
-
     let swig_code = Symbol::intern("swig_code");
     let swig_to_foreigner_hint = Symbol::intern("swig_to_foreigner_hint");
     let swig_from_foreigner_hint = Symbol::intern("swig_from_foreigner_hint");
@@ -149,12 +148,12 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                 };
 
                 let type_param = extract_trait_param_type(sess, trait_type)?;
-                let (from_ty, to_ty, trait_name) =
-                    if trait_path_match(&trait_type.path, "SwigInto") {
-                        ((**for_type).clone(), type_param, swig_into_trait)
-                    } else {
-                        (type_param, (**for_type).clone(), swig_from_trait)
-                    };
+                let (from_ty, to_ty, trait_name) = if trait_path_match(&trait_type.path, "SwigInto")
+                {
+                    ((**for_type).clone(), type_param, swig_into_trait)
+                } else {
+                    (type_param, (**for_type).clone(), swig_from_trait)
+                };
 
                 let conv_code = *traits_usage_code.get(&trait_name).ok_or_else(|| {
                     fatal_error(
@@ -269,7 +268,6 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                             &swig_attrs,
                         )?,
                     });
-
                 } else {
                     let to_ty = if let Some(ty_type_idx) = rust_names_map.get(&to_typename) {
                         conv_graph[*ty_type_idx].ty.clone()
@@ -360,7 +358,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
             } else {
                 utils_code.push(P(item.clone()));
             },
-            _ => utils_code.push(P(item)),            
+            _ => utils_code.push(P(item)),
         }
     }
 
@@ -450,7 +448,6 @@ fn parse_foreign_types_map_mod<'a>(
                 let rust_ty = parse_ty(sess, a.span, attr_value)?;
                 let unique_name = make_unique_rust_typename(attr_value, ftype);
                 names_map.insert(ftype, (unique_name, rust_ty));
-
             } else {
                 return Err(fatal_error(
                     sess,
@@ -471,7 +468,6 @@ fn parse_foreign_types_map_mod<'a>(
                 ));
             }
         }
-
     }
 
 
@@ -1139,7 +1135,6 @@ impl SwigFrom<isize> for jlong {
         assert_eq!("    let mut a0: jint = <jint>::swig_from(a0, env);\n", code);
         let mut err = convert_types(&mut conv_map, "isize", "jlong").unwrap_err();
         err.cancel();
-
     }
 
     fn rust_type_from_str(code: &str) -> RustType {

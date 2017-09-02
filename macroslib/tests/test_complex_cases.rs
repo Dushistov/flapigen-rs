@@ -1,8 +1,8 @@
+extern crate env_logger;
+extern crate regex;
 extern crate rust_swig;
 extern crate syntex;
 extern crate tempdir;
-extern crate env_logger;
-extern crate regex;
 
 use std::fs;
 use std::fs::File;
@@ -214,7 +214,7 @@ class Foo {
     /// 1 Some documentation comment
     /// 2 Some documentation comment
     method Foo::f(&self, _: i32, _: i32) -> i32;
-}); 
+});
 "#,
     );
 }

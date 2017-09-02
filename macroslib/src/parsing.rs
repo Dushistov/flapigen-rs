@@ -149,10 +149,11 @@ where
             vec![self_arg]
         } else if parser.eat(&token::Comma) {
             let mut fn_inputs = vec![self_arg];
-            fn_inputs.append(
-                &mut parser
-                    .parse_seq_to_before_end(&token::CloseDelim(token::Paren), sep, parse_arg_fn),
-            );
+            fn_inputs.append(&mut parser.parse_seq_to_before_end(
+                &token::CloseDelim(token::Paren),
+                sep,
+                parse_arg_fn,
+            ));
             fn_inputs
         } else {
             return parser.unexpected();
@@ -285,8 +286,8 @@ pub(crate) fn parse_foreigner_class(
                 parser.parse_fn_decl(false).map_err(&map_perror)?
             }
             MethodVariant::Method(ref mut self_type) => {
-                let fn_decl = parse_fn_decl_with_self(&mut parser, |p| p.parse_arg())
-                    .map_err(&map_perror)?;
+                let fn_decl =
+                    parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).map_err(&map_perror)?;
                 *self_type = self_variant(&fn_decl.inputs[0].ty).ok_or_else(|| {
                     cx.span_err(
                         parser.span,
@@ -492,8 +493,7 @@ pub(crate) fn parse_foreign_interface(
         let rust_func_name = parser
             .parse_path(parser::PathStyle::Mod)
             .map_err(&map_perror)?;
-        let fn_decl = parse_fn_decl_with_self(&mut parser, |p| p.parse_arg())
-            .map_err(&map_perror)?;
+        let fn_decl = parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).map_err(&map_perror)?;
         parser.expect(&token::Token::Semi).map_err(&map_perror)?;
         items.push(ForeignInterfaceMethod {
             name: func_name,

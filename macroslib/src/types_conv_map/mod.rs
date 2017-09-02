@@ -151,7 +151,6 @@ impl TypesConvMap {
             new_data: &TypesConvMap,
             data: &mut TypesConvMap,
         ) -> NodeIndex<TypeGraphIdx> {
-
             let node = &new_data.conv_graph[node_new_data_idx];
             debug!("handling new node {:?}", node);
             let node2 = node.clone();
@@ -194,8 +193,11 @@ impl TypesConvMap {
                         data.conv_graph[existing_edge]
                     );
                 } else {
-                    data.conv_graph
-                        .add_edge(self_src, self_target, new_data.conv_graph[edge].clone());
+                    data.conv_graph.add_edge(
+                        self_src,
+                        self_target,
+                        new_data.conv_graph[edge].clone(),
+                    );
                 }
             }
         }
@@ -232,19 +234,15 @@ impl TypesConvMap {
 
         if let Some(from) = self.rust_names_map.get(&norm_rust_typename).cloned() {
             let sess = ParseSess::new();
-            let find_path = |from, to| match find_conversation_path(
-                &sess,
-                &self.conv_graph,
-                from,
-                to,
-                DUMMY_SP,
-            ) {
-                Ok(x) => Some(x),
-                Err(mut err) => {
-                    err.cancel();
-                    None
-                }
-            };
+            let find_path =
+                |from, to| match find_conversation_path(&sess, &self.conv_graph, from, to, DUMMY_SP)
+                {
+                    Ok(x) => Some(x),
+                    Err(mut err) => {
+                        err.cancel();
+                        None
+                    }
+                };
             let mut min_path: Option<(usize, NodeIndex, Symbol)> = None;
             for (foreign_name, graph_idx) in &self.foreign_names_map {
                 let path = match direction {
@@ -540,8 +538,7 @@ impl TypesConvMap {
                                 build_for_sp,
                             ).unwrap();
                             for edge in &path {
-                                if let Some((from, to)) =
-                                    possible_ways_graph.edge_endpoints(*edge)
+                                if let Some((from, to)) = possible_ways_graph.edge_endpoints(*edge)
                                 {
                                     debug!(
                                         "path: {} -> {}",
@@ -698,7 +695,6 @@ impl TypesConvMap {
         } else {
             None
         }
-
     }
 
     pub(crate) fn register_foreigner_class(&mut self, class: &ForeignerClassInfo) {

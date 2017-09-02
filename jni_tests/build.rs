@@ -1,7 +1,8 @@
-extern crate syntex;
-extern crate rust_swig;
-extern crate env_logger;
+
 extern crate bindgen;
+extern crate env_logger;
+extern crate rust_swig;
+extern crate syntex;
 
 use std::env;
 use std::time::Instant;
