@@ -104,7 +104,7 @@ public interface {interface_name} {{
         write!(
             file,
             r#"
-    {doc_comments}
+{doc_comments}
     void {method_name}({single_args_with_types});
 "#,
             method_name = method.name,
@@ -243,7 +243,7 @@ public final class {class_name} {{
                     r#"
     {method_access} final {ret_type} {method_name}({single_args_with_types}) {exception_spec} {{
 {convert_code}
-         {return_code} {func_name}(mNativeObj{args});
+        {return_code}{func_name}(mNativeObj{args});
     }}
     private static native {ret_type} {func_name}(long me{args_with_types}) {exception_spec};
 "#,
@@ -251,7 +251,7 @@ public final class {class_name} {{
                     ret_type = ret_type,
                     method_name = method.short_name(),
                     exception_spec = exception_spec,
-                    return_code = if ret_type != "void" { "return" } else { "" },
+                    return_code = if ret_type != "void" { "return " } else { "" },
                     func_name = func_name,
                     convert_code = convert_code,
                     single_args_with_types = args_with_java_types(
