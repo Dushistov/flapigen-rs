@@ -345,8 +345,8 @@ fn calc_converter_for_foreign_class_arg(
 
     let java_converter = if *this_ty.normalized_name.as_str() == *normalized_ty_string(arg_ty) {
         r#"
-    long {to_var} = {from_var}.mNativeObj;
-    {from_var}.mNativeObj = 0;
+        long {to_var} = {from_var}.mNativeObj;
+        {from_var}.mNativeObj = 0;
 "#.to_string()
     } else if let ast::TyKind::Rptr(_, ref mut_ty) = arg_ty.node {
         assert_eq!(
@@ -354,7 +354,7 @@ fn calc_converter_for_foreign_class_arg(
             *this_ty.normalized_name.as_str()
         );
         r#"
-    long {to_var} = {from_var}.mNativeObj;
+        long {to_var} = {from_var}.mNativeObj;
 "#.to_string()
     } else {
         unreachable!();
@@ -377,7 +377,7 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> JavaForeignTypeInf
         .unwrap()
         .into();
     let java_converter: String = r#"
-    int {to_var} = {from_var}.getValue();
+        int {to_var} = {from_var}.getValue();
 "#.into();
     JavaForeignTypeInfo {
         name: foreign_enum.name,

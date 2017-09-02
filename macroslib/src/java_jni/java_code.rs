@@ -383,9 +383,9 @@ fn args_with_java_types(
             };
         let annotation = gen_annotation_if_need(type_name, annotation);
         if i == (method.input.len() - 1) {
-            write!(&mut res, "{}{} a_{}", annotation, type_name, i)
+            write!(&mut res, "{}{} a{}", annotation, type_name, i)
         } else {
-            write!(&mut res, "{}{} a_{}, ", annotation, type_name, i)
+            write!(&mut res, "{}{} a{}, ", annotation, type_name, i)
         }.map_err(&fmt_write_err_map)?;
     }
     Ok(res)
@@ -414,14 +414,14 @@ fn list_of_args_for_call_method(
         let need_conv = flags.contains(args_format_flags::INTERNAL) && arg.java_need_conversation();
         if i == (f_method.input.len() - 1) {
             if need_conv {
-                write!(&mut res, "a_{}_0", i)
+                write!(&mut res, "a{}C0", i)
             } else {
-                write!(&mut res, "a_{}", i)
+                write!(&mut res, "a{}", i)
             }
         } else if need_conv {
-            write!(&mut res, "a_{}_0, ", i)
+            write!(&mut res, "a{}C0, ", i)
         } else {
-            write!(&mut res, "a_{}, ", i)
+            write!(&mut res, "a{}, ", i)
         }.map_err(|err| format!("write fmt failed: {}", err))?;
     }
 
@@ -431,7 +431,7 @@ fn list_of_args_for_call_method(
 fn convert_code_for_method(f_method: &ForeignMethodSignature) -> String {
     let mut ret = String::new();
     for (i, arg) in f_method.input.iter().enumerate() {
-        if let Some(java_code) = arg.java_convert(|| (format!("a_{}", i), format!("a_{}_0", i))) {
+        if let Some(java_code) = arg.java_convert(|| (format!("a{}", i), format!("a{}C0", i))) {
             ret.push_str(&java_code);
         }
     }
