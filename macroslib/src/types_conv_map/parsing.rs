@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::str::FromStr;
 
 use syntex_syntax::parse::{PResult, ParseSess};
 use syntex_syntax::symbol::Symbol;
@@ -24,6 +25,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
     name: &str,
     code: &str,
     mut traits_usage_code: HashMap<Symbol, Symbol>,
+    target_pointer_width: usize,
 ) -> PResult<'a, TypesConvMap> {
 
     let swig_code = Symbol::intern("swig_code");
@@ -86,6 +88,16 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
         let (swig_attrs, other_attrs): (Vec<ast::Attribute>, Vec<ast::Attribute>) = item.attrs
             .into_iter()
             .partition(|attr| attr.value.name.as_str().starts_with("swig_"));
+        let is_wrong_cfg_pointer_width = other_attrs.iter().any(|attr| {
+            if let Some(p_width) = cfg_target_pointer_width(attr) {
+                target_pointer_width != p_width
+            } else {
+                false
+            }
+        });
+        if is_wrong_cfg_pointer_width {
+            continue;
+        }
         item.attrs = other_attrs;
         let swig_attrs = ast_attrs_to_hashmap(sess, swig_attrs)?;
 
@@ -674,6 +686,36 @@ fn get_swig_code_from_attrs<'a>(
     }
 }
 
+// for #[cfg(target_pointer_width = "32")] return Some(32)
+fn cfg_target_pointer_width(attr: &ast::Attribute) -> Option<usize> {
+    if &*attr.value.name.as_str() != "cfg" {
+        return None;
+    }
+    let items = match attr.value.node {
+        ast::MetaItemKind::List(ref items) => items,
+        _ => return None,
+    };
+    if items.len() != 1 {
+        return None;
+    }
+    let meta_item = match items[0].node {
+        ast::NestedMetaItemKind::MetaItem(ref meta_item) => meta_item,
+        _ => return None,
+    };
+    if &*meta_item.name.as_str() != "target_pointer_width" {
+        return None;
+    }
+    let lit = match meta_item.node {
+        ast::MetaItemKind::NameValue(ref lit) => lit,
+        _ => return None,
+    };
+    let width_sym = match lit.node {
+        ast::LitKind::Str(sym, _) => sym,
+        _ => return None,
+    };
+    <usize>::from_str(&*width_sym.as_str()).ok()
+}
+
 #[cfg(test)]
 #[macro_use]
 #[path = "../test_helper.rs"]
@@ -697,6 +739,7 @@ mod swig_foreign_types_map {}
 mod swig_foreign_types_map {}
 "#,
             HashMap::new(),
+            64,
         ).unwrap_err();
         err.emit();
     }
@@ -757,6 +800,7 @@ mod swig_foreign_types_map {
 }
 "#,
             HashMap::new(),
+            64
         ));
         assert_eq!(
             {
@@ -810,6 +854,7 @@ impl SwigFrom<bool> for jboolean {
 }
 "#,
             HashMap::new(),
+            64,
         ).unwrap();
 
         let (_, code) = unwrap_presult!(conv_map.convert_rust_types(
@@ -860,6 +905,7 @@ impl SwigDeref for String {
 }
 "#,
             HashMap::new(),
+            64
         ));
         let (_, code) = unwrap_presult!(conv_map.convert_rust_types(
             &sess,
@@ -920,6 +966,7 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
 }
 "#,
             HashMap::new(),
+            64
         ));
 
         conv_map.add_type(rust_type_from_str("Foo").implements("SwigForeignClass"));
@@ -990,6 +1037,7 @@ macro_rules! jni_unpack_return {
 }
 "#,
             HashMap::new(),
+            64
         ));
         conv_map.add_type(rust_type_from_str("Foo"));
 
@@ -1022,6 +1070,76 @@ macro_rules! jni_unpack_return {
 "#,
             code
         );
+    }
+
+    #[test]
+    fn test_parse_cfg_target_width() {
+        logger_init();
+        let sess = ParseSess::new();
+        let swig_from_info = {
+            let mut h = HashMap::new();
+            h.insert(
+                Symbol::intern("SwigFrom"),
+                Symbol::intern(
+                    "let mut {to_var}: {to_var_type} = \
+                     <{to_var_type}>::swig_from({from_var}, env);",
+                ),
+            );
+            h
+        };
+        let type_map_code = r#"
+#[cfg(target_pointer_width = "32")]
+impl SwigFrom<isize> for jint {
+    fn swig_from(x: isize, _: *mut JNIEnv) -> Self {
+        x as jint
+    }
+}
+
+#[cfg(target_pointer_width = "64")]
+impl SwigFrom<isize> for jlong {
+    fn swig_from(x: isize, _: *mut JNIEnv) -> Self {
+        x as jlong
+    }
+}
+"#;
+        let mut conv_map = unwrap_presult!(parse_types_conv_map(
+            &sess,
+            "cfg target width",
+            type_map_code,
+            swig_from_info.clone(),
+            64
+        ));
+        let mut convert_types = |conv_map: &mut TypesConvMap, from: &str, to: &str| {
+            conv_map.convert_rust_types(
+                &sess,
+                &rust_type_from_str(from),
+                &rust_type_from_str(to),
+                "a0",
+                "()",
+                DUMMY_SP,
+            )
+        };
+        let (_, code) = unwrap_presult!(convert_types(&mut conv_map, "isize", "jlong"));
+        assert_eq!(
+            "    let mut a0: jlong = <jlong>::swig_from(a0, env);\n",
+            code
+        );
+        let mut err = convert_types(&mut conv_map, "isize", "jint").unwrap_err();
+        err.cancel();
+
+        let mut conv_map = unwrap_presult!(parse_types_conv_map(
+            &sess,
+            "cfg target width",
+            type_map_code,
+            swig_from_info.clone(),
+            32
+        ));
+
+        let (_, code) = unwrap_presult!(convert_types(&mut conv_map, "isize", "jint"));
+        assert_eq!("    let mut a0: jint = <jint>::swig_from(a0, env);\n", code);
+        let mut err = convert_types(&mut conv_map, "isize", "jlong").unwrap_err();
+        err.cancel();
+
     }
 
     fn rust_type_from_str(code: &str) -> RustType {

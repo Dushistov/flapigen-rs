@@ -320,10 +320,13 @@ fn parse_code(test_name: &str, code: &str) -> (String, String) {
         panic!("! {:?}", why.kind());
     });
     let mut registry = syntex::Registry::new();
-    let swig_gen = rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
-        output_dir: tmp_dir.path().into(),
-        package_name: "com.example".into(),
-    });
+    let swig_gen = rust_swig::Generator::new_with_pointer_target_width(
+        rust_swig::LanguageConfig::Java {
+            output_dir: tmp_dir.path().into(),
+            package_name: "com.example".into(),
+        },
+        64,
+    );
     swig_gen.register(&mut registry);
     let res_code = registry.expand_str(test_name, "use_case", code).unwrap();
     let mut java_code = String::new();

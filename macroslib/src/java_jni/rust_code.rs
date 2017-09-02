@@ -285,6 +285,7 @@ pub(in java_jni) fn generate_rust_code_for_enum<'a>(
     sess: &'a ParseSess,
     package_name: &str,
     conv_map: &mut TypesConvMap,
+    pointer_target_width: usize,
     enum_info: &ForeignEnumInfo,
 ) -> PResult<'a, Vec<P<ast::Item>>> {
     use std::fmt::Write;
@@ -370,8 +371,12 @@ impl SwigFrom<{rust_enum_name}> for jobject {{
         class_name = enum_class_name,
     ).unwrap();
     conv_map.register_exported_enum(enum_info);
-    conv_map
-        .merge(sess, &*enum_info.rust_enum_name().as_str(), &code)?;
+    conv_map.merge(
+        sess,
+        &*enum_info.rust_enum_name().as_str(),
+        &code,
+        pointer_target_width,
+    )?;
     Ok(vec![])
 }
 
@@ -379,6 +384,7 @@ pub(in java_jni) fn generate_interface<'a>(
     sess: &'a ParseSess,
     package_name: &str,
     conv_map: &mut TypesConvMap,
+    pointer_target_width: usize,
     interface: &ForeignInterface,
     methods_sign: &[ForeignMethodSignature],
 ) -> PResult<'a, Vec<P<ast::Item>>> {
@@ -421,8 +427,12 @@ impl SwigFrom<jobject> for Box<{trait_name}> {{
 }}
 "#
     ).unwrap();
-    conv_map
-        .merge(sess, &format!("{}", interface.self_type), &new_conv_code)?;
+    conv_map.merge(
+        sess,
+        &format!("{}", interface.self_type),
+        &new_conv_code,
+        pointer_target_width,
+    )?;
 
     let mut gen_items = vec![];
 

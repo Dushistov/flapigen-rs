@@ -794,3 +794,32 @@ impl<T: SwigForeignClass> SwigDerefMut for T {
         self
     }
 }
+
+#[cfg(target_pointer_width = "32")]
+impl SwigFrom<isize> for jint {
+    fn swig_from(x: isize, _: *mut JNIEnv) -> Self {
+        x as jint
+    }
+}
+
+#[cfg(target_pointer_width = "64")]
+impl SwigFrom<isize> for jlong {
+    fn swig_from(x: isize, _: *mut JNIEnv) -> Self {
+        x as jlong
+    }
+}
+
+#[cfg(target_pointer_width = "32")]
+impl SwigFrom<usize> for jlong {
+    fn swig_from(x: usize, _: *mut JNIEnv) -> Self {
+        x as jlong
+    }
+}
+
+#[cfg(target_pointer_width = "64")]
+impl SwigFrom<usize> for jlong {
+    fn swig_from(x: usize, env: *mut JNIEnv) -> Self {
+        let x = x as u64;
+        <jlong>::swig_from(x, env)
+    }
+}

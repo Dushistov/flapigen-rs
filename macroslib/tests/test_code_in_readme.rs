@@ -37,10 +37,13 @@ fn test_code_in_readme() {
             let rust_path_dst = tmp_dir.path().join(&test.name).join("test.rs");
 
             let mut registry = syntex::Registry::new();
-            let swig_gen = rust_swig::Generator::new(rust_swig::LanguageConfig::Java {
-                output_dir: java_path,
-                package_name: "com.example".into(),
-            });
+            let swig_gen = rust_swig::Generator::new_with_pointer_target_width(
+                rust_swig::LanguageConfig::Java {
+                    output_dir: java_path,
+                    package_name: "com.example".into(),
+                },
+                64,
+            );
             swig_gen.register(&mut registry);
             registry
                 .expand("rust_swig_test_jni", &rust_path_src, &rust_path_dst)

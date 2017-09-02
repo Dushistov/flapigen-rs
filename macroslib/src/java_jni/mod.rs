@@ -64,6 +64,7 @@ impl LanguageGenerator for JavaConfig {
         &self,
         sess: &'a ParseSess,
         conv_map: &mut TypesConvMap,
+        pointer_target_width: usize,
         class: &ForeignerClassInfo,
     ) -> PResult<'a, Vec<P<ast::Item>>> {
         debug!("generate: begin");
@@ -103,6 +104,7 @@ impl LanguageGenerator for JavaConfig {
         &self,
         sess: &'a ParseSess,
         conv_map: &mut TypesConvMap,
+        pointer_target_width: usize,
         enum_info: &ForeignEnumInfo,
     ) -> PResult<'a, Vec<P<ast::Item>>> {
         if (enum_info.items.len() as u64) >= (i32::max_value() as u64) {
@@ -112,13 +114,20 @@ impl LanguageGenerator for JavaConfig {
         java_code::generate_java_code_for_enum(&self.output_dir, &self.package_name, enum_info)
             .map_err(|err| fatal_error(sess, enum_info.span, &err))?;
 
-        rust_code::generate_rust_code_for_enum(sess, &self.package_name, conv_map, enum_info)
+        rust_code::generate_rust_code_for_enum(
+            sess,
+            &self.package_name,
+            conv_map,
+            pointer_target_width,
+            enum_info,
+        )
     }
 
     fn generate_interface<'a>(
         &self,
         sess: &'a ParseSess,
         conv_map: &mut TypesConvMap,
+        pointer_target_width: usize,
         interface: &ForeignInterface,
     ) -> PResult<'a, Vec<P<ast::Item>>> {
         let f_methods = find_suitable_ftypes_for_interace_methods(sess, conv_map, interface)?;
@@ -133,6 +142,7 @@ impl LanguageGenerator for JavaConfig {
             sess,
             &self.package_name,
             conv_map,
+            pointer_target_width,
             interface,
             &f_methods,
         )?;

@@ -132,11 +132,18 @@ impl TypesConvMap {
         sess: &'a ParseSess,
         id_of_code: &str,
         code: &str,
+        target_pointer_width: usize,
     ) -> PResult<'a, ()> {
         debug!("merging {} with our rules", id_of_code);
         let mut was_traits_usage_code = HashMap::new();
         mem::swap(&mut was_traits_usage_code, &mut self.traits_usage_code);
-        let mut new_data = parse_types_conv_map(sess, id_of_code, code, was_traits_usage_code)?;
+        let mut new_data = parse_types_conv_map(
+            sess,
+            id_of_code,
+            code,
+            was_traits_usage_code,
+            target_pointer_width,
+        )?;
         mem::swap(&mut new_data.traits_usage_code, &mut self.traits_usage_code);
 
         fn get_graph_node_idx(
@@ -1018,6 +1025,7 @@ impl SwigFrom<i32> for jint {
 fn helper3() {
 }
 "#,
+            64
         ));
         assert_eq!(
             {
@@ -1086,7 +1094,8 @@ fn helper3() {
         unwrap_presult!(types_map.merge(
             &sess,
             "test_try_build_path",
-            include_str!("../java_jni/jni-include.rs")
+            include_str!("../java_jni/jni-include.rs"),
+            64
         ));
 
         let foo_rt: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("Foo"))

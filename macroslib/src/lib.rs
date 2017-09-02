@@ -50,6 +50,8 @@ mod my_ast;
 use std::path::PathBuf;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::env;
+use std::str::FromStr;
 
 use syntex_syntax::parse::ParseSess;
 use syntex_syntax::codemap::Span;
@@ -66,6 +68,14 @@ use syntex_syntax::util::small_vector::SmallVector;
 use types_conv_map::TypesConvMap;
 use errors::fatal_error;
 use parsing::{parse_foreign_enum, parse_foreign_interface, parse_foreigner_class};
+
+/// Calculate target pointer width from environment variable
+/// that `cargo` inserts
+pub fn target_pointer_width_from_env() -> usize {
+    let p_width = env::var("CARGO_CFG_TARGET_POINTER_WIDTH")
+        .expect("No CARGO_CFG_TARGET_POINTER_WIDTH environment variable");
+    <usize>::from_str(&p_width).expect("Can not convert CARGO_CFG_TARGET_POINTER_WIDTH to usize")
+}
 
 /// `LanguageConfig` contains configuration for specific programming language
 pub enum LanguageConfig {
@@ -84,6 +94,7 @@ trait LanguageGenerator {
         &self,
         sess: &'a ParseSess,
         conv_map: &mut TypesConvMap,
+        pointer_target_width: usize,
         class: &ForeignerClassInfo,
     ) -> PResult<'a, Vec<P<ast::Item>>>;
 
@@ -91,6 +102,7 @@ trait LanguageGenerator {
         &self,
         sess: &'a ParseSess,
         conv_map: &mut TypesConvMap,
+        pointer_target_width: usize,
         enum_info: &ForeignEnumInfo,
     ) -> PResult<'a, Vec<P<ast::Item>>>;
 
@@ -98,6 +110,7 @@ trait LanguageGenerator {
         &self,
         sess: &'a ParseSess,
         conv_map: &mut TypesConvMap,
+        pointer_target_width: usize,
         interace: &ForeignInterface,
     ) -> PResult<'a, Vec<P<ast::Item>>>;
 }
@@ -115,6 +128,7 @@ struct GeneratorData {
     config: LanguageConfig,
     conv_map: TypesConvMap,
     conv_map_source: Vec<TypesConvMapCode>,
+    pointer_target_width: usize,
 }
 
 struct TypesConvMapCode {
@@ -218,7 +232,15 @@ struct ForeignInterface {
 }
 
 impl Generator {
+    #[deprecated(since = "0.1.0", note = "please use `Generator::new_for_target` instead")]
     pub fn new(config: LanguageConfig) -> Generator {
+        Generator::new_with_pointer_target_width(config, target_pointer_width_from_env())
+    }
+
+    pub fn new_with_pointer_target_width(
+        config: LanguageConfig,
+        pointer_target_width: usize,
+    ) -> Generator {
         let mut conv_map_source = Vec::new();
         match config {
             LanguageConfig::Java { .. } | LanguageConfig::JavaConfig(..) => {
@@ -234,6 +256,7 @@ impl Generator {
                 config,
                 conv_map: TypesConvMap::default(),
                 conv_map_source,
+                pointer_target_width,
             })),
         }
     }
@@ -287,7 +310,11 @@ impl GeneratorData {
         cx: &'a mut ExtCtxt,
         tokens: &[TokenTree],
     ) -> Box<MacResult + 'a> {
-        let mut items = unwrap_presult!(self.init_types_map(cx.parse_sess()), self.conv_map);
+        let pointer_target_width = self.pointer_target_width;
+        let mut items = unwrap_presult!(
+            self.init_types_map(cx.parse_sess(), pointer_target_width),
+            self.conv_map
+        );
         let foreign_interface =
             parse_foreign_interface(cx, tokens).expect("Can not parse foreign_interface");
         match self.config {
@@ -297,25 +324,27 @@ impl GeneratorData {
             } => {
                 let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
                 let mut gen_items = unwrap_presult!(
-                        java_cfg.generate_interface(
-                            cx.parse_sess(),
-                            &mut self.conv_map,
-                            &foreign_interface
-                        ),
-                        self.conv_map
-                    );
+                    java_cfg.generate_interface(
+                        cx.parse_sess(),
+                        &mut self.conv_map,
+                        self.pointer_target_width,
+                        &foreign_interface
+                    ),
+                    self.conv_map
+                );
                 items.append(&mut gen_items);
                 MacEager::items(SmallVector::many(items))
             }
             LanguageConfig::JavaConfig(ref java_cfg) => {
                 let mut gen_items = unwrap_presult!(
-                        java_cfg.generate_interface(
-                            cx.parse_sess(),
-                            &mut self.conv_map,
-                            &foreign_interface
-                        ),
-                        self.conv_map
-                    );
+                    java_cfg.generate_interface(
+                        cx.parse_sess(),
+                        &mut self.conv_map,
+                        self.pointer_target_width,
+                        &foreign_interface
+                    ),
+                    self.conv_map
+                );
                 items.append(&mut gen_items);
                 MacEager::items(SmallVector::many(items))
             }
@@ -327,7 +356,11 @@ impl GeneratorData {
         cx: &'a mut ExtCtxt,
         tokens: &[TokenTree],
     ) -> Box<MacResult + 'a> {
-        let mut items = unwrap_presult!(self.init_types_map(cx.parse_sess()), self.conv_map);
+        let pointer_target_width = self.pointer_target_width;
+        let mut items = unwrap_presult!(
+            self.init_types_map(cx.parse_sess(), pointer_target_width),
+            self.conv_map
+        );
         let foreign_enum = parse_foreign_enum(cx, tokens).expect("Can not parse foreign_enum");
 
         match self.config {
@@ -337,7 +370,12 @@ impl GeneratorData {
             } => {
                 let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
                 let mut gen_items = unwrap_presult!(
-                    java_cfg.generate_enum(cx.parse_sess(), &mut self.conv_map, &foreign_enum),
+                    java_cfg.generate_enum(
+                        cx.parse_sess(),
+                        &mut self.conv_map,
+                        self.pointer_target_width,
+                        &foreign_enum
+                    ),
                     self.conv_map
                 );
                 items.append(&mut gen_items);
@@ -345,7 +383,12 @@ impl GeneratorData {
             }
             LanguageConfig::JavaConfig(ref java_cfg) => {
                 let mut gen_items = unwrap_presult!(
-                    java_cfg.generate_enum(cx.parse_sess(), &mut self.conv_map, &foreign_enum),
+                    java_cfg.generate_enum(
+                        cx.parse_sess(),
+                        &mut self.conv_map,
+                        self.pointer_target_width,
+                        &foreign_enum
+                    ),
                     self.conv_map
                 );
                 items.append(&mut gen_items);
@@ -359,7 +402,11 @@ impl GeneratorData {
         cx: &'a mut ExtCtxt,
         tokens: &[TokenTree],
     ) -> Box<MacResult + 'a> {
-        let mut items = unwrap_presult!(self.init_types_map(cx.parse_sess()), self.conv_map);
+        let pointer_target_width = self.pointer_target_width;
+        let mut items = unwrap_presult!(
+            self.init_types_map(cx.parse_sess(), pointer_target_width),
+            self.conv_map
+        );
         let foreigner_class = match parse_foreigner_class(cx, tokens) {
             Ok(x) => x,
             Err(_) => {
@@ -375,7 +422,12 @@ impl GeneratorData {
             } => {
                 let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
                 let mut gen_items = unwrap_presult!(
-                    java_cfg.generate(cx.parse_sess(), &mut self.conv_map, &foreigner_class,),
+                    java_cfg.generate(
+                        cx.parse_sess(),
+                        &mut self.conv_map,
+                        self.pointer_target_width,
+                        &foreigner_class,
+                    ),
                     self.conv_map
                 );
                 items.append(&mut gen_items);
@@ -383,7 +435,12 @@ impl GeneratorData {
             }
             LanguageConfig::JavaConfig(ref java_cfg) => {
                 let mut gen_items = unwrap_presult!(
-                    java_cfg.generate(cx.parse_sess(), &mut self.conv_map, &foreigner_class),
+                    java_cfg.generate(
+                        cx.parse_sess(),
+                        &mut self.conv_map,
+                        self.pointer_target_width,
+                        &foreigner_class
+                    ),
                     self.conv_map
                 );
                 items.append(&mut gen_items);
@@ -392,13 +449,18 @@ impl GeneratorData {
         }
     }
 
-    fn init_types_map<'a>(&mut self, sess: &'a ParseSess) -> PResult<'a, Vec<P<ast::Item>>> {
+    fn init_types_map<'a>(
+        &mut self,
+        sess: &'a ParseSess,
+        target_pointer_width: usize,
+    ) -> PResult<'a, Vec<P<ast::Item>>> {
         if self.init_done {
             return Ok(vec![]);
         }
         self.init_done = true;
         for code in &self.conv_map_source {
-            self.conv_map.merge(sess, code.id_of_code, code.code)?;
+            self.conv_map
+                .merge(sess, code.id_of_code, code.code, target_pointer_width)?;
         }
 
         if self.conv_map.is_empty() {
