@@ -1,0 +1,15 @@
+[package]
+name = "rust_swig_test_c++"
+version = "0.0.1"
+authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
+build = "build.rs"
+
+[lib]
+name = "rust_swig_test"
+crate-type = ["staticlib"]
+
+[build-dependencies]
+env_logger = "0.4.2"
+log = "0.3"
+rust_swig = { path = "../macroslib" }
+

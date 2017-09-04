@@ -19,6 +19,8 @@ addons:
       - llvm-3.9-dev
       - libclang-3.9-dev
       - python3
+      - cmake
+      - build-essential
 env: # specify the clang path for rust-bindgen
   - LIBCLANG_PATH=/usr/lib/llvm-3.9/lib
 before_script:
@@ -43,3 +45,11 @@ script:
   - cd ../jni_tests
   - cargo build -v
   - python3 run_tests.py --skip-android-test
+  - cd ../c++_tests
+  - cargo check
+  - cd c++
+  - mkdir build
+  - cd build
+  - cmake ..
+  - make -j2 -k VERBOSE=1
+  - ./c++-rust-swig-test
