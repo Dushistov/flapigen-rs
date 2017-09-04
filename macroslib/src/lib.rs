@@ -266,6 +266,15 @@ impl Generator {
         registry.add_macro("foreign_interface", InterfaceHandler(self.data.clone()));
         registry.add_macro("foreigner_class", self);
     }
+
+    /// Add new foreign langauge type <-> Rust mapping
+    pub fn merge_type_map(self, id_of_code: &'static str, code: &'static str) -> Generator {
+        self.data
+            .borrow_mut()
+            .conv_map_source
+            .push(TypesConvMapCode { id_of_code, code });
+        self
+    }
 }
 
 impl TTMacroExpander for Generator {

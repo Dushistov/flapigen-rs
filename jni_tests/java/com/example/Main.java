@@ -32,21 +32,7 @@ class Main {
             throw e;
         }
 	try {
-	{
-	    final String FOO_NAME = "Me is foo";
-	    Foo foo = new Foo(5, FOO_NAME);
-	    final int res = foo.calcF(1, 2);
-	    assert res == 8;
-	    System.out.println("res: " + Integer.toString(res));
-	    final double resf = foo.f_double(1.0, 1.0);
-	    assert Math.abs(Math.hypot(1.0, 1.0) + 5.0 - resf) < 1e-10;
-	    assert Math.abs(Math.hypot(1.0, 1.0) - Foo.fHypot(1.0, 1.0)) < 1e-10;
-	    System.out.println("resf: " + Double.toString(resf));
-	    assert foo.getName().equals(FOO_NAME);
-	    System.out.println("name from java: " + foo.getName());
-	    foo = null;
-	    System.gc();
-	}
+            testFoo();
         Boo boo = new Boo();
         System.out.println("E: " + Float.toString(boo.test(true)));
         assert Math.abs((float )Math.E - boo.test(true)) < 1e-10;
@@ -229,12 +215,14 @@ class Main {
 
     private static void testDateTime() {
         final Date now = Foo.now();
+        final Date nowChrono = Foo.chrono_now();
         final DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
         System.out.println("now: " + df.format(now));
         final Date today = Calendar.getInstance().getTime();
 	System.out.println("now: " + now);
 	System.out.println("today: " + today);
-        assert (today.getTime() - now.getTime()) < 2000;
+        assert Math.abs(today.getTime() - now.getTime()) < 2000;
+        assert Math.abs(nowChrono.getTime() - today.getTime()) < 2000;
     }
 
     private static void testTestEnumClass() {
@@ -297,5 +285,22 @@ class Main {
 	assert TestEnumClass.next_enum(MyEnum.ITEM1) == MyEnum.ITEM2;
 	assert TestEnumClass.next_enum(MyEnum.ITEM2) == MyEnum.ITEM3;
 	assert TestEnumClass.next_enum(MyEnum.ITEM3) == MyEnum.ITEM1;
+    }
+
+    private static void testFoo() {
+        final String FOO_NAME = "Me is foo";
+        Foo foo = new Foo(5, FOO_NAME);
+        final int res = foo.calcF(1, 2);
+        assert res == 8;
+        System.out.println("res: " + Integer.toString(res));
+        final double resf = foo.f_double(1.0, 1.0);
+        assert Math.abs(Math.hypot(1.0, 1.0) + 5.0 - resf) < 1e-10;
+        assert Math.abs(Math.hypot(1.0, 1.0) - Foo.fHypot(1.0, 1.0)) < 1e-10;
+        System.out.println("resf: " + Double.toString(resf));
+        assert foo.getName().equals(FOO_NAME);
+        System.out.println("name from java: " + foo.getName());
+        //check Drop call
+        foo = null;
+        System.gc();
     }
 }

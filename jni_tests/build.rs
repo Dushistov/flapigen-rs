@@ -1,4 +1,3 @@
-
 extern crate bindgen;
 extern crate env_logger;
 extern crate rust_swig;
@@ -97,7 +96,7 @@ fn rust_swig_expand(from: &Path, out: &Path) -> Result<(), String> {
             "com.example.rust".into(),
         )),
         target_pointer_width_from_env(),
-    );
+    ).merge_type_map("chono_support", include_str!("src/chrono-include.rs"));
     swig_gen.register(&mut registry);
     registry
         .expand("rust_swig_test_jni", from, out)

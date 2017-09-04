@@ -2,6 +2,7 @@ use std::rc::Rc;
 use std::cell::{Ref, RefCell, RefMut};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use chrono::{DateTime, Utc};
 
 use jni_c_header::*;
 
@@ -42,6 +43,10 @@ fn now() -> SystemTime {
     return SystemTime::now();
 }
 
+fn chrono_now() -> DateTime<Utc> {
+    Utc::now()
+}
+
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32, _: &str) -> Foo;
@@ -50,6 +55,7 @@ foreigner_class!(class Foo {
     method Foo::name(&self) -> &str; alias getName;
     static_method f_hypot(_: f64, _: f64) -> f64; alias fHypot;
     static_method now() -> SystemTime;
+    static_method chrono_now() -> DateTime<Utc>;
 });
 
 struct Boo {
