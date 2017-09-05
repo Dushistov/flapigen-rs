@@ -498,6 +498,10 @@ impl TypesConvMap {
             }
             for from_ty in &cur_step {
                 let from: RustType = possible_ways_graph[*from_ty].clone();
+                for neighbor in possible_ways_graph.neighbors_directed(*from_ty, petgraph::Outgoing)
+                {
+                    next_step.insert(neighbor);
+                }
                 for edge in &self.generic_edges {
                     trace!("we check {:?} for {:?}", edge.from_ty, from);
                     if let Some(to_ty) = edge.is_conv_possible(&from, Some(goal_to), |name| {
@@ -712,6 +716,26 @@ impl TypesConvMap {
                 if cur_this == this_name {
                     return Some(fc);
                 }
+            }
+        }
+        None
+    }
+
+    pub(crate) fn find_foreigner_class_with_such_self_type(
+        &self,
+        may_be_self_ty: &ast::Ty,
+    ) -> Option<&ForeignerClassInfo> {
+        let type_name = if let ast::TyKind::Rptr(_, ref mut_ty) = may_be_self_ty.node {
+            normalized_ty_string(&*mut_ty.ty)
+        } else {
+            normalized_ty_string(&may_be_self_ty)
+        };
+        trace!("find self type: possible name {:?}", type_name);
+        for fc in &self.foreign_classes {
+            let self_ty = format!("{}", fc.self_type);
+            trace!("self_type {:?}", fc.self_type);
+            if self_ty == type_name {
+                return Some(fc);
             }
         }
         None

@@ -158,7 +158,7 @@ foreigner_class!(class Moo {
 
 #[test]
 fn test_pass_objects_as_param_simple() {
-    parse_code(
+    let (_, java_code) = parse_code(
         "test_pass_objects_as_param_simple",
         r#"
 foreigner_class!(class Foo {
@@ -173,9 +173,13 @@ foreigner_class!(class TestPassObjectsAsParams {
     method TestPassObjectsAsParams::f1(&self, _: &Foo);
     method TestPassObjectsAsParams::f2(&self, _: Foo);
     method TestPassObjectsAsParams::f3(&self, _: &mut Foo);
+    static_method TestPassObjectsAsParams::f4(_: &Foo);
+    static_method TestPassObjectsAsParams::f5(_: Foo);
 });
 "#,
     );
+    assert!(java_code.contains("public static void f4(Foo"));
+    assert!(java_code.contains("public static void f5(Foo"));
 }
 
 #[test]
@@ -307,6 +311,41 @@ foreigner_class!(class TestEnumClass {
         println!("{}", java_code);
         assert!(java_code.contains("int f1(MyEnum"));
     }
+}
+
+#[test]
+fn test_static_func_with_foreign_class_as_param() {
+    let (_, java_code) = parse_code(
+        "static_func_with_foreign_class_as_param",
+        r#"
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor boo_init() -> Rc<RefCell<Boo>>;
+});
+foreigner_class!(class Foo {
+    static_method static_foo(_: &Boo);
+});
+"#,
+    );
+    println!("{}", java_code);
+    assert!(java_code.contains("public static void static_foo(Boo"));
+
+    //add method
+    let (_, java_code) = parse_code(
+        "static_func_with_foreign_class_as_param",
+        r#"
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor boo_init() -> Rc<RefCell<Boo>>;
+    method Boo::f1(&self);
+});
+foreigner_class!(class Foo {
+    static_method static_foo(_: &Boo);
+});
+"#,
+    );
+    println!("{}", java_code);
+    assert!(java_code.contains("public static void static_foo(Boo"));
 }
 
 fn parse_code(test_name: &str, code: &str) -> (String, String) {

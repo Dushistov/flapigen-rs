@@ -67,7 +67,11 @@ impl LanguageGenerator for JavaConfig {
         _: usize,
         class: &ForeignerClassInfo,
     ) -> PResult<'a, Vec<P<ast::Item>>> {
-        debug!("generate: begin");
+        debug!(
+            "generate: begin for {}, this_type_for_method {:?}",
+            class.name,
+            class.this_type_for_method
+        );
         if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
             let this_type: RustType = this_type_for_method.clone().into();
             let this_type = this_type.implements("SwigForeignClass");
@@ -228,7 +232,6 @@ fn find_suitable_foreign_types_for_methods<'a>(
         node: ast::TyKind::Tup(vec![]),
     };
 
-    let foreign_class_trait = Symbol::intern("SwigForeignClass");
     for method in &class.methods {
         //skip self argument
         let skip_n = match method.variant {
@@ -239,27 +242,11 @@ fn find_suitable_foreign_types_for_methods<'a>(
         let mut input =
             Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            if let Some(foreign_class_this_ty) =
-                conv_map.is_ty_implements(&arg.ty, foreign_class_trait)
-            {
-                let foreigner_class = conv_map
-                    .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
-                    .ok_or_else(|| {
-                        fatal_error(
-                            sess,
-                            arg.ty.span,
-                            &format!("Can not find foreigner_class for '{:?}'", arg.ty),
-                        )
-                    })?;
-                let converter = calc_converter_for_foreign_class_arg(foreigner_class, &arg.ty);
+            if let Some(converter) = special_type(sess, conv_map, &arg.ty)? {
                 input.push(converter);
                 continue;
             }
-            if let Some(foreign_enum) = conv_map.is_this_exported_enum(&arg.ty) {
-                let converter = calc_converter_for_enum(foreign_enum);
-                input.push(converter);
-                continue;
-            }
+
             let f_arg_type = conv_map
                 .map_through_conversation_to_foreign(&arg.ty, Direction::Incoming, arg.ty.span)
                 .ok_or_else(|| {
@@ -385,4 +372,54 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> JavaForeignTypeInf
         java_transition_type: Some(Symbol::intern("int")),
         java_converter,
     }
+}
+
+fn special_type<'a>(
+    sess: &'a ParseSess,
+    conv_map: &TypesConvMap,
+    arg_ty: &ast::Ty,
+) -> PResult<'a, Option<JavaForeignTypeInfo>> {
+    let foreign_class_trait = Symbol::intern("SwigForeignClass");
+
+    trace!(
+        "Check is arg.ty({:?}) implements foreign_class_trait",
+        arg_ty
+    );
+
+    if let Some(foreign_class_this_ty) = conv_map.is_ty_implements(arg_ty, foreign_class_trait) {
+        let foreigner_class = conv_map
+            .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
+            .ok_or_else(|| {
+                fatal_error(
+                    sess,
+                    arg_ty.span,
+                    &format!("Can not find foreigner_class for '{:?}'", arg_ty),
+                )
+            })?;
+        let converter = calc_converter_for_foreign_class_arg(foreigner_class, &arg_ty);
+        return Ok(Some(converter));
+    }
+    trace!("Check is arg.ty({:?}) implements exported enum", arg_ty);
+    if let Some(foreign_enum) = conv_map.is_this_exported_enum(&arg_ty) {
+        let converter = calc_converter_for_enum(foreign_enum);
+        return Ok(Some(converter));
+    }
+
+    trace!("Check is arg.ty({:?}) self type of foreign class", arg_ty);
+    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty) {
+        let sess = ParseSess::new();
+        let jlong_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("jlong"))
+            .unwrap()
+            .into();
+        let converter = JavaForeignTypeInfo {
+            name: foreign_class.name,
+            correspoding_rust_type: jlong_ti,
+            java_transition_type: Some(Symbol::intern("long")),
+            java_converter: "        long {to_var} = {from_var}.mNativeObj;".to_string(),
+        };
+        return Ok(Some(converter));
+    }
+
+    trace!("Oridinary type {:?}", arg_ty);
+    Ok(None)
 }

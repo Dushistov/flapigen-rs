@@ -343,6 +343,11 @@ pub(crate) fn parse_foreigner_class(
                     return Err(parser.span);
                 }
             } else {
+                debug!(
+                    "first constructor for {}, ret type {:?}",
+                    class_name_indent,
+                    ret_type
+                );
                 let ret_type = ret_type.unwrap();
                 constructor_ret_type = Some(ret_type.clone());
                 this_type_for_method = Some(
