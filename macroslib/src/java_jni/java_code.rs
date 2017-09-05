@@ -209,7 +209,7 @@ public final class {class_name} {{
                         r#"
     {method_access} static {ret_type} {method_name}({single_args_with_types}) {exception_spec} {{
 {convert_code}
-         {return_code} {func_name}({args});
+         {return_code}{func_name}({args});
     }}
     private static native {ret_type} {func_name}({args_with_types}) {exception_spec};
 "#,
@@ -217,7 +217,7 @@ public final class {class_name} {{
                         method_access = method_access,
                         ret_type = ret_type,
                         func_name = func_name,
-                        return_code = if ret_type != "void" { "return" } else { "" },
+                        return_code = if ret_type != "void" { "return " } else { "" },
                         args_with_types = args_with_java_types(
                             f_method,
                             args_format_flags::INTERNAL,
