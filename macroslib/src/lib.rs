@@ -131,8 +131,8 @@ struct GeneratorData {
 }
 
 struct TypesConvMapCode {
-    id_of_code: &'static str,
-    code: &'static str,
+    id_of_code: String,
+    code: String,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -245,8 +245,8 @@ impl Generator {
         match config {
             LanguageConfig::Java { .. } | LanguageConfig::JavaConfig(..) => {
                 conv_map_source.push(TypesConvMapCode {
-                    id_of_code: "jni-include.rs",
-                    code: include_str!("java_jni/jni-include.rs"),
+                    id_of_code: "jni-include.rs".into(),
+                    code: include_str!("java_jni/jni-include.rs").into(),
                 });
             }
         }
@@ -268,11 +268,14 @@ impl Generator {
     }
 
     /// Add new foreign langauge type <-> Rust mapping
-    pub fn merge_type_map(self, id_of_code: &'static str, code: &'static str) -> Generator {
+    pub fn merge_type_map(self, id_of_code: &str, code: &str) -> Generator {
         self.data
             .borrow_mut()
             .conv_map_source
-            .push(TypesConvMapCode { id_of_code, code });
+            .push(TypesConvMapCode {
+                id_of_code: id_of_code.into(),
+                code: code.into(),
+            });
         self
     }
 }
@@ -472,7 +475,7 @@ impl GeneratorData {
         self.init_done = true;
         for code in &self.conv_map_source {
             self.conv_map
-                .merge(sess, code.id_of_code, code.code, target_pointer_width)?;
+                .merge(sess, &code.id_of_code, &code.code, target_pointer_width)?;
         }
 
         if self.conv_map.is_empty() {
