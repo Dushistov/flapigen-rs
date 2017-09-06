@@ -348,6 +348,22 @@ foreigner_class!(class Foo {
     assert!(java_code.contains("public static void static_foo(Boo"));
 }
 
+#[test]
+fn test_lifetime_param_in_result() {
+    let (rust_code, _) = parse_code(
+        "lifetime_param_in_result",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo<'a>;
+    constructor new<'a>() -> Rc<RefCell<Foo<'a>>>;
+    method Foo::f(&self, _: i32);
+});
+"#,
+    );
+    println!("{}", rust_code);
+    assert!(rust_code.contains("impl <'a> SwigForeignClass for Rc<RefCell<Foo<'a>>> {"));
+}
+
 fn parse_code(test_name: &str, code: &str) -> (String, String) {
     test_helper::logger_init();
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");

@@ -13,7 +13,7 @@ use {ForeignEnumInfo, ForeignInterface, ForeignInterfaceMethod, ForeignerClassIn
 use super::{code_to_item, fmt_write_err_map, java_class_full_name, java_class_name_to_jni,
             method_name, ForeignMethodSignature, ForeignTypeInfo};
 use errors::fatal_error;
-use my_ast::{normalized_ty_string, parse_ty, self_variant, RustType};
+use my_ast::{list_lifetimes, normalized_ty_string, parse_ty, self_variant, RustType};
 use types_conv_map::{unpack_unique_typename, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
 
 struct MethodContext<'a> {
@@ -67,12 +67,23 @@ pub(in java_jni) fn generate_rust_code<'a>(
             TypesConvMap::convert_to_heap_pointer(&this_type, "this");
         let class_name_for_user = java_class_full_name(package_name, &class.name.as_str());
         let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
+        let lifetimes = {
+            let mut ret = String::new();
+            let lifetimes = list_lifetimes(&this_type.ty);
+            for (i, l) in lifetimes.iter().enumerate() {
+                ret.push_str(&*l.as_str());
+                if i != lifetimes.len() - 1 {
+                    ret.push(',');
+                }
+            }
+            ret
+        };
 
         gen_code.append(&mut code_to_item(
             sess,
             &class_name_for_jni,
             &format!(
-                r#"impl SwigForeignClass for {class_name} {{
+                r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
     fn jni_class_name() -> *const ::std::os::raw::c_char {{
         swig_c_str!("{jni_class_name}")
     }}
@@ -81,7 +92,8 @@ pub(in java_jni) fn generate_rust_code<'a>(
        this as jlong
     }}
 }}"#,
-                class_name = this_type.normalized_name,
+                lifetimes = lifetimes,
+                class_name = pprust::ty_to_string(&this_type.ty),
                 jni_class_name = class_name_for_jni,
                 code_box_this = code_box_this,
             ),

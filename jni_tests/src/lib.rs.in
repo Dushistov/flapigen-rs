@@ -625,3 +625,33 @@ foreign_interface!(interface CheckAllTypesInCallbackArgs {
     checkAllTypes2 = CheckAllTypesInCallbackArgs::check_all_types2(&self, _: u64, _: i64, _: f32,
                                                                    _: f64, _: usize, _: isize);
 });
+
+struct FooWithLifetime<'a> {
+    data: Box<OnEvent + 'a>,
+}
+
+struct PrintEvent;
+impl OnEvent for PrintEvent {
+    fn something_change(&self, x: i32) {
+        println!("something_change: x = {}", x);
+    }
+}
+
+impl<'a> FooWithLifetime<'a> {
+    fn set_data(&self, v: i32) {
+        self.data.something_change(v);
+    }
+}
+
+fn foo_with_lifetime_new<'a>() -> Rc<RefCell<FooWithLifetime<'a>>> {
+    Rc::new(RefCell::new(FooWithLifetime {
+        data: Box::new(PrintEvent),
+    }))
+}
+
+
+foreigner_class!(class FooWithLifetime {
+    self_type FooWithLifetime<'a>;
+    constructor foo_with_lifetime_new() -> Rc<RefCell<FooWithLifetime<'a>>>;
+    method FooWithLifetime::set_data(&self, v: i32);
+});

@@ -281,6 +281,8 @@ pub(crate) fn parse_foreigner_class(
             .map_err(&map_perror)?;
         debug!("func_name {:?}", func_name);
 
+        parser.parse_generics().map_err(&map_perror)?; //just skip <'a,...> section
+
         let func_decl = match func_type {
             MethodVariant::Constructor | MethodVariant::StaticMethod => {
                 parser.parse_fn_decl(false).map_err(&map_perror)?

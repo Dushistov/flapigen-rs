@@ -9,6 +9,7 @@ use syntex_syntax::symbol::Symbol;
 use syntex_pos::{Span, DUMMY_SP};
 use syntex_syntax::parse::{PResult, ParseSess};
 use syntex_syntax::fold::{noop_fold_ty, Folder};
+use syntex_syntax::visit::{walk_lifetime, walk_ty, Visitor};
 
 use SelfTypeVariant;
 use errors::fatal_error;
@@ -477,6 +478,19 @@ pub(crate) fn get_trait_bounds(generic: &ast::Generics) -> Vec<GenericTraitBound
     ret
 }
 
+pub(crate) fn list_lifetimes(ty: &ast::Ty) -> Vec<Symbol> {
+    struct CatchLifetimes(Vec<Symbol>);
+    impl<'a> Visitor<'a> for CatchLifetimes {
+        fn visit_lifetime(&mut self, lifetime: &'a ast::Lifetime) {
+            self.0.push(lifetime.name);
+            walk_lifetime(self, lifetime)
+        }
+    }
+    let mut catch_lifetimes = CatchLifetimes(Vec::new());
+    walk_ty(&mut catch_lifetimes, ty);
+    catch_lifetimes.0
+}
+
 #[cfg(test)]
 #[macro_use]
 #[path = "test_helper.rs"]
@@ -808,6 +822,16 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn test_list_lifetimes() {
+        let sess = ParseSess::new();
+        let my_list_lifetimes = |code| -> Vec<String> {
+            let ret = list_lifetimes(&str_to_ty(&sess, code));
+            ret.iter().map(|v| v.as_str().to_string()).collect()
+        };
+        assert_eq!(vec!["'a"], my_list_lifetimes("Rc<RefCell<Foo<'a>>>"));
     }
 
     fn str_to_ty(sess: &ParseSess, code: &str) -> ast::Ty {
