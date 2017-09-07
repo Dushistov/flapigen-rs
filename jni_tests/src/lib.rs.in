@@ -580,7 +580,7 @@ foreigner_class!(class TestEnumClass {
 });
 
 trait OnEvent {
-    fn something_change(&self, x: i32);
+    fn something_change(&self, x: i32, s: &str);
 }
 
 #[derive(Default)]
@@ -592,24 +592,24 @@ impl Observable {
     fn subscribe(&mut self, cb: Box<OnEvent>) {
         self.observers.push(cb);
     }
-    fn change(&self, x: i32) {
-        debug!("Observable::change x {}", x);
+    fn change(&self, x: i32, s: &str) {
+        debug!("Observable::change x {}, s {}", x, s);
         for cb in &self.observers {
-            cb.something_change(x);
+            cb.something_change(x, s);
         }
     }
 }
 
 foreign_interface!(interface MyObserver {
     self_type OnEvent;
-    onStateChanged = OnEvent::something_change(&self, x: i32);
+    onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
 });
 
 foreigner_class!(class Observable {
     self_type Observable;
     constructor Observable::default() -> Observable;
     method Observable::subscribe(&mut self, _: Box<OnEvent>);
-    method Observable::change(&self, _: i32);
+    method Observable::change(&self, _: i32, _: &str);
 });
 
 trait CheckAllTypesInCallbackArgs {
@@ -632,14 +632,14 @@ struct FooWithLifetime<'a> {
 
 struct PrintEvent;
 impl OnEvent for PrintEvent {
-    fn something_change(&self, x: i32) {
-        println!("something_change: x = {}", x);
+    fn something_change(&self, x: i32, s: &str) {
+        println!("something_change: x = {}, s = {}", x, s);
     }
 }
 
 impl<'a> FooWithLifetime<'a> {
     fn set_data(&self, v: i32) {
-        self.data.something_change(v);
+        self.data.something_change(v, "FooWithLifetime");
     }
 }
 

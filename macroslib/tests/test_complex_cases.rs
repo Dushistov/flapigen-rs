@@ -364,6 +364,27 @@ foreigner_class!(class Foo {
     assert!(rust_code.contains("impl <'a> SwigForeignClass for Rc<RefCell<Foo<'a>>> {"));
 }
 
+#[test]
+fn test_interface_with_str() {
+    let (rust_code, java_code) = parse_code(
+        "test_interface_with_str",
+        r#"
+foreign_interface!(interface SomeObserver {
+    self_type SomeTrait;
+    onStateChanged = SomeTrait::on_state_changed(&self, _: &str);
+});
+
+foreigner_class!(class ClassWithCallbacks {
+    self_type Foo;
+    constructor Foo::default() -> Foo;
+    method f1(&mut self, cb: Box<SomeTrait>);
+});
+"#,
+    );
+    println!("{}\n{}", rust_code, java_code);
+    assert!(rust_code.contains(r#"swig_c_str!("(Ljava/lang/String;)V")"#));
+}
+
 fn parse_code(test_name: &str, code: &str) -> (String, String) {
     test_helper::logger_init();
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");

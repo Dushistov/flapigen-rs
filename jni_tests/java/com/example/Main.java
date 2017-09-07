@@ -234,9 +234,12 @@ class Main {
 
     private static class TestObserver implements MyObserver {
 	int x;
-	public void onStateChanged(int x) {
+        String s;
+
+	public void onStateChanged(int x, String s) {
 	    //System.out.println(String.format("TestObserver.onStateChange %d", x));
 	    this.x = x;
+            this.s = s;
 	}
     }
 
@@ -246,8 +249,9 @@ class Main {
 	assert eventHandler.x == 0;
 	events.subscribe(eventHandler);
 	for (int i = 0; i < 1000; ++i) {
-	    events.change(i);
+	    events.change(i, Integer.toString(i));
 	    assert eventHandler.x == i;
+            assert eventHandler.s.equals(Integer.toString(i));
 	}
     }
 
@@ -260,8 +264,9 @@ class Main {
 		public void run() {
 		    System.out.println("testCallbacksMultiThread another thread");
 		    for (int i = 0; i < 1000; ++i) {
-			events.change(i);
+			events.change(i, Integer.toString(i));
 			assert eventHandler.x == i;
+                        assert eventHandler.s.equals(Integer.toString(i));
 		    }
 		}
 	    });
@@ -272,13 +277,13 @@ class Main {
     private static void testCallbacksWithException() {
 	Observable events = new Observable();
 	MyObserver o = new MyObserver() {
-		public void onStateChanged(int x) {
+		public void onStateChanged(int x, String s) {
 		    //System.out.println(String.format("CheckException.onStateChange %d", x));
 		    throw new RuntimeException("Something bad");
 		}
 	    };
 	events.subscribe(o);
-	events.change(17);
+	events.change(17, "17");
     }
 
     private static void testReturnOfEnum() {

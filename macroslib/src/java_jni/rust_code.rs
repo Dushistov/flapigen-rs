@@ -1013,9 +1013,7 @@ fn jni_method_signature(
             .or_else(|| if conv_map.is_generated_foreign_type(arg.name) {
                 gen_sig = format!(
                     "L{};",
-                    java_class_name_to_jni(
-                        &java_class_full_name(package_name, &*arg.name.as_str())
-                    )
+                    &java_class_full_name(package_name, &*arg.name.as_str())
                 );
                 Some(&gen_sig)
             } else {
@@ -1027,7 +1025,8 @@ fn jni_method_signature(
                     arg.name
                 )
             });
-        ret.push_str(sig);
+        let sig = sig.replace('.', "/");
+        ret.push_str(&sig);
     }
     ret.push(')');
     let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
