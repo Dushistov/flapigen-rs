@@ -12,6 +12,7 @@ readme = "../README.md"
 [[bin]]
 name = "rust_swig"
 path = "src/main.rs"
+doc = false
 
 [dependencies]
 syntex = "0.58.1"
