@@ -39,7 +39,7 @@ in Rust project you write (in Rust language):
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
-	method Foo::set_field(&mut self, _: i32);
+    method Foo::set_field(&mut self, _: i32);
     method Foo::f(&self, _: i32, _: i32) -> i32;
     static_method f2(_: i32) -> i32;
 });
@@ -91,7 +91,7 @@ foreigner_class!(
 /// This is class you dream about
 class Foo {
     self_type Foo;
-	/// Cool constructor
+    /// Cool constructor
     constructor Foo::new(_: i32) -> Foo;
     method Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
 });
@@ -102,8 +102,8 @@ Also you can "export" `enum` (`C` like enum) to foreign language:
 ```rust
 enum MyEnum {
     Item1,
-	Item2,
-	Item3,
+    Item2,
+    Item3,
 }
 
 foreign_enum!(enum MyEnum {
@@ -115,7 +115,7 @@ foreign_enum!(enum MyEnum {
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::default() -> Foo;
-	method f1(&mut self, v: MyEnum);
+    method f1(&mut self, v: MyEnum);
 });
 ```
 
