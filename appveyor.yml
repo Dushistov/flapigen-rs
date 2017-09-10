@@ -2,28 +2,24 @@ environment:
   matrix:
   - TARGET: nightly-x86_64-pc-windows-msvc
   - TARGET: nightly-x86_64-pc-windows-gnu
-  - TARGET: 1.19.0-x86_64-pc-windows-msvc
+  - TARGET: 1.19.0-x86_64-pc-windows-msvc    
+platform:
+  - x64
 install:
   - ps: if (ls -r . -fi "*.rs" | sls "`t") { throw "Found tab character" }
   - ps: Start-FileDownload "https://static.rust-lang.org/dist/rust-${env:TARGET}.exe" -FileName "rust-install.exe"
   - ps: .\rust-install.exe /VERYSILENT /NORESTART /DIR="C:\rust" | Out-Null
   - ps: $env:PATH="C:\Program Files\Java\jdk1.8.0\bin;$env:PATH;C:\rust\bin"
   - ps: $env:JAVA_HOME="C:\Program Files\Java\jdk1.8.0"
+  - cmd: set PATH=%cd%\_ci\cmake\bin;%PATH%
+  - cmd: set PATH=%cd%\_ci\ninja;%PATH%
   - rustc -vV
   - cargo -vV
   - javac -version
+  - cmake --version
 cache:
   - '%USERPROFILE%\.cargo'
   - target
-build_script:
-  - cd macroslib
-  - cargo build
-  - cd ..\jni_tests
-  - cargo build
-  - cd ..
+build: off
 test_script:
-  - cd macroslib
-  - cargo test
-  - cd ..\jni_tests
-  - cargo test
-  - python run_tests.py --skip-android-test
+  - python ci_build_and_test.py

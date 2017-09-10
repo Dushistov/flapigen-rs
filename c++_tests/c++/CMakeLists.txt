@@ -1,0 +1,87 @@
+cmake_minimum_required(VERSION 3.2)
+
+add_executable(c++-rust-swig-test main.cpp)
+
+function (find_target_directory CACHEVAR)
+  if (DEFINED ${CACHEVAR})
+    message(STATUS "Cashed target path: ${${CACHEVAR}}")
+    return ()
+  endif ()
+  set(CUR_DIR ${CMAKE_SOURCE_DIR})
+  while (True)
+    get_filename_component(NEW_DIR ${CUR_DIR}  DIRECTORY)
+    set(TARGET_PATH "${NEW_DIR}/target")
+    if (EXISTS "${TARGET_PATH}" AND IS_DIRECTORY "${TARGET_PATH}")
+      message(STATUS "Found cargo's target directory: ${TARGET_PATH}")
+      set(${CACHEVAR} "${TARGET_PATH}" CACHE PATH "Path to cargo's target directory with build artifacts" FORCE)
+      break()
+    endif ()
+
+    if ("${NEW_DIR}" STREQUAL "${CUR_DIR}")
+      message(FATAL_ERROR "Ca not find cargo's target directory")
+    endif ()
+
+    set(CUR_DIR "${NEW_DIR}")
+  endwhile()
+endfunction()
+
+function (required_libs_by_rust_library CACHEVAR)
+  if (DEFINED ${CACHEVAR})
+    message(STATUS "Cashed rust libraries: ${${CACHEVAR}}")
+    return ()
+  endif ()
+  execute_process(
+    COMMAND cargo build
+    OUTPUT_VARIABLE RUST_LINK_LIBRARIES_OUT
+    ERROR_VARIABLE RUST_LINK_LIBRARIES_ERR
+    RESULT_VARIABLE CARGO_RET
+    WORKING_DIRECTORY "${RUST_BUILD_CWD}"
+    )
+  if (NOT "${CARGO_RET}" STREQUAL "0")
+    message(FATAL_ERROR "cargo build failed: ${RUST_LINK_LIBRARIES_ERR}")
+  endif()
+  set(RUST_LINK_LIBRARIES "${RUST_LINK_LIBRARIES_OUT} ${RUST_LINK_LIBRARIES_ERR}")
+  string(REGEX MATCHALL "note: library: ([a-zA-Z_0-9]+)" RUST_LINK_LIBRARIES "${RUST_LINK_LIBRARIES}")
+  string(REPLACE "note: library: " "" RUST_LINK_LIBRARIES "${RUST_LINK_LIBRARIES}")
+  message(STATUS "rust libraries: ${RUST_LINK_LIBRARIES}")
+  set(${CACHEVAR} "${RUST_LINK_LIBRARIES}" CACHE STRING "Required link libraries by rust" FORCE)
+endfunction ()
+
+find_target_directory(TARGET_PATH)
+required_libs_by_rust_library(RUST_LINK_LIBRARIES)
+
+if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
+  set(CARGO_BUILD "cargo" "build" "--release")
+else()
+  set(CARGO_BUILD "cargo" "build")
+endif()
+
+include(ExternalProject)
+
+get_filename_component(RUST_BUILD_CWD ${CMAKE_SOURCE_DIR}  DIRECTORY)
+ExternalProject_Add(
+    rust_swig_test
+    DOWNLOAD_COMMAND ""
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ${CARGO_BUILD}
+    BINARY_DIR "${RUST_BUILD_CWD}"
+    INSTALL_COMMAND ""
+    LOG_BUILD ON)
+
+add_dependencies(c++-rust-swig-test rust_swig_test)
+
+if (WIN32)
+  set(LIBRUST_NAME "rust_swig_test.lib")
+else ()
+  set(LIBRUST_NAME "librust_swig_test.a")
+endif ()
+
+if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
+  target_link_libraries(c++-rust-swig-test "${TARGET_PATH}/release/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
+else()
+  target_link_libraries(c++-rust-swig-test "${TARGET_PATH}/debug/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
+endif()
+
+set_target_properties(c++-rust-swig-test PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED ON)
+enable_testing()
+add_test(NAME c++-rust-swig-test COMMAND c++-rust-swig-test)
