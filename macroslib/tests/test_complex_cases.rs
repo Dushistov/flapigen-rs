@@ -399,10 +399,9 @@ fn parse_code(test_name: &str, code: &str) -> (String, String) {
         panic!("! {:?}", why.kind());
     });
     let mut registry = Registry::new();
-    let swig_gen = Generator::new_with_pointer_target_width(
-        LanguageConfig::JavaConfig(JavaConfig::new(tmp_dir.path().into(), "com.example".into())),
-        64,
-    );
+    let swig_gen = Generator::new(LanguageConfig::JavaConfig(
+        JavaConfig::new(tmp_dir.path().into(), "com.example".into()),
+    )).with_pointer_target_width(64);
     swig_gen.register(&mut registry);
     let res_code = registry.expand_str(test_name, "use_case", code).unwrap();
     let mut java_code = String::new();

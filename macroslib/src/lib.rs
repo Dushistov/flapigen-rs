@@ -70,10 +70,13 @@ use parsing::{parse_foreign_enum, parse_foreign_interface, parse_foreigner_class
 
 /// Calculate target pointer width from environment variable
 /// that `cargo` inserts
-pub fn target_pointer_width_from_env() -> usize {
-    let p_width = env::var("CARGO_CFG_TARGET_POINTER_WIDTH")
-        .expect("No CARGO_CFG_TARGET_POINTER_WIDTH environment variable");
-    <usize>::from_str(&p_width).expect("Can not convert CARGO_CFG_TARGET_POINTER_WIDTH to usize")
+pub fn target_pointer_width_from_env() -> Option<usize> {
+    env::var("CARGO_CFG_TARGET_POINTER_WIDTH")
+        .ok()
+        .map(|p_width| {
+            <usize>::from_str(&p_width)
+                .expect("Can not convert CARGO_CFG_TARGET_POINTER_WIDTH to usize")
+        })
 }
 
 /// `LanguageConfig` contains configuration for specific programming language
@@ -118,6 +121,7 @@ trait LanguageGenerator {
 /// It expands rust macroses and generates not rust code.
 /// It designed to use inside `build.rs`.
 pub struct Generator {
+    pointer_target_width: Option<usize>,
     // Because of API of syntex, to register for several macroses
     data: Rc<RefCell<GeneratorData>>,
 }
@@ -231,17 +235,10 @@ struct ForeignInterface {
 }
 
 impl Generator {
-    #[deprecated(since = "0.1.0", note = "please use `new_with_pointer_target_width` instead")]
     pub fn new(config: LanguageConfig) -> Generator {
-        Generator::new_with_pointer_target_width(config, target_pointer_width_from_env())
-    }
-
-    #[allow(deprecated)]
-    pub fn new_with_pointer_target_width(
-        config: LanguageConfig,
-        pointer_target_width: usize,
-    ) -> Generator {
+        let pointer_target_width = target_pointer_width_from_env();
         let mut conv_map_source = Vec::new();
+        #[allow(deprecated)]
         match config {
             LanguageConfig::Java { .. } | LanguageConfig::JavaConfig(..) => {
                 conv_map_source.push(TypesConvMapCode {
@@ -251,17 +248,32 @@ impl Generator {
             }
         }
         Generator {
+            pointer_target_width,
             data: Rc::new(RefCell::new(GeneratorData {
                 init_done: false,
                 config,
                 conv_map: TypesConvMap::default(),
                 conv_map_source,
-                pointer_target_width,
+                pointer_target_width: pointer_target_width.unwrap_or(0),
             })),
         }
     }
 
+    pub fn with_pointer_target_width(mut self, pointer_target_width: usize) -> Generator {
+        self.pointer_target_width = Some(pointer_target_width);
+        self.data.borrow_mut().pointer_target_width = pointer_target_width;
+        self
+    }
+
     pub fn register(self, registry: &mut Registry) {
+        self.pointer_target_width.unwrap_or_else(|| {
+            panic!(
+                r#"pointer target width unknown,
+ set env CARGO_CFG_TARGET_POINTER_WIDTH environment variable,
+ or use `with_pointer_target_width` function
+"#
+            )
+        });
         registry.add_macro("foreign_enum", EnumHandler(self.data.clone()));
         registry.add_macro("foreign_interface", InterfaceHandler(self.data.clone()));
         registry.add_macro("foreigner_class", self);

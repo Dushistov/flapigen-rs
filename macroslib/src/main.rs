@@ -25,10 +25,10 @@ fn main() {
         panic!("! {:?}", why.kind());
     });
     let mut registry = Registry::new();
-    let swig_gen = Generator::new_with_pointer_target_width(
-        LanguageConfig::JavaConfig(JavaConfig::new(java_path, "com.example".into())),
-        64,
-    );
+    let swig_gen = Generator::new(LanguageConfig::JavaConfig(
+        JavaConfig::new(java_path, "com.example".into()),
+    )).with_pointer_target_width(64);
+
     let swig_gen = if let Some(type_map) = type_map {
         let mut tm_f = fs::File::open(&type_map)
             .unwrap_or_else(|err| panic!("Can not open {:?}: {}", type_map, err));

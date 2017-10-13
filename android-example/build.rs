@@ -8,7 +8,7 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 
 use bindgen::RustTarget;
-use rust_swig::{target_pointer_width_from_env, JavaConfig, LanguageConfig};
+use rust_swig::{JavaConfig, LanguageConfig};
 
 fn main() {
     let target = env::var("TARGET").unwrap();
@@ -160,21 +160,18 @@ where
 
 fn rust_swig_expand(from: &Path, out: &Path) -> Result<(), String> {
     let mut registry = syntex::Registry::new();
-    let swig_gen = rust_swig::Generator::new_with_pointer_target_width(
-        LanguageConfig::JavaConfig(
-            JavaConfig::new(
-                Path::new("app")
-                    .join("src")
-                    .join("main")
-                    .join("java")
-                    .join("net")
-                    .join("akaame")
-                    .join("myapplication"),
-                "net.akaame.myapplication".into(),
-            ).use_null_annotation("android.support.annotation.NonNull".into()),
-        ),
-        target_pointer_width_from_env(),
-    );
+    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(
+        JavaConfig::new(
+            Path::new("app")
+                .join("src")
+                .join("main")
+                .join("java")
+                .join("net")
+                .join("akaame")
+                .join("myapplication"),
+            "net.akaame.myapplication".into(),
+        ).use_null_annotation("android.support.annotation.NonNull".into()),
+    ));
     swig_gen.register(&mut registry);
     registry
         .expand("rust_swig_test_jni", from, out)
