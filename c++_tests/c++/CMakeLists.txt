@@ -59,6 +59,8 @@ function (required_libs_by_rust_library CACHEVAR)
   file(REMOVE_RECURSE "${TEST_CRATE_ROOT}")
 endfunction ()
 
+get_filename_component(RUST_BUILD_CWD ${CMAKE_CURRENT_SOURCE_DIR}  DIRECTORY)
+
 find_target_directory(TARGET_PATH)
 required_libs_by_rust_library(RUST_LINK_LIBRARIES)
 
@@ -70,7 +72,6 @@ endif()
 
 include(ExternalProject)
 
-get_filename_component(RUST_BUILD_CWD ${CMAKE_SOURCE_DIR}  DIRECTORY)
 ExternalProject_Add(
     rust_swig_test
     DOWNLOAD_COMMAND ""
