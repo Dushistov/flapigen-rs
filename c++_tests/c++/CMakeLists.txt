@@ -81,6 +81,13 @@ ExternalProject_Add(
     INSTALL_COMMAND ""
     LOG_BUILD ON)
 
+ExternalProject_Add_Step(
+  rust_swig_test rebuild
+  COMMAND ${CARGO_BUILD}
+  ALWAYS 1
+  WORKING_DIRECTORY "${RUST_BUILD_CWD}"
+)
+
 add_dependencies(c++-rust-swig-test rust_swig_test)
 
 if (WIN32)
