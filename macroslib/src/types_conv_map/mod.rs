@@ -1,4 +1,5 @@
 mod parsing;
+pub mod utils;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -107,6 +108,18 @@ impl fmt::Display for TypesConvMap {
 pub(crate) struct ForeignTypeInfo {
     pub name: Symbol,
     pub correspoding_rust_type: RustType,
+}
+
+impl AsRef<ForeignTypeInfo> for ForeignTypeInfo {
+    fn as_ref(&self) -> &ForeignTypeInfo {
+        self
+    }
+}
+
+pub(crate) trait ForeignMethodSignature {
+    type FI: AsRef<ForeignTypeInfo>;
+    fn output(&self) -> &ForeignTypeInfo;
+    fn input(&self) -> &[Self::FI];
 }
 
 #[derive(Debug)]
@@ -821,8 +834,8 @@ pub(in types_conv_map) fn validate_code_template<'a>(
     sp: Span,
     code: &str,
 ) -> PResult<'a, ()> {
-    if code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE) &&
-        code.contains(TO_VAR_TYPE_TEMPLATE)
+    if code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE)
+        && code.contains(TO_VAR_TYPE_TEMPLATE)
     {
         Ok(())
     } else {

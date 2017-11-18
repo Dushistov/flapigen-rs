@@ -45,6 +45,7 @@ mod java_jni;
 mod errors;
 mod parsing;
 mod my_ast;
+mod cpp;
 
 use std::path::PathBuf;
 use std::cell::RefCell;
@@ -80,6 +81,7 @@ pub fn target_pointer_width_from_env() -> Option<usize> {
 }
 
 /// `LanguageConfig` contains configuration for specific programming language
+#[derive(Clone)]
 pub enum LanguageConfig {
     #[deprecated(since = "0.1.0", note = "please use `JavaConfig` instead")]
     Java {
@@ -89,6 +91,7 @@ pub enum LanguageConfig {
         package_name: String,
     },
     JavaConfig(JavaConfig),
+    CppConfig(CppConfig),
 }
 
 trait LanguageGenerator {
@@ -145,6 +148,15 @@ enum SelfTypeVariant {
     Rptr,
     Mut,
     Default,
+}
+
+impl SelfTypeVariant {
+    fn is_read_only(&self) -> bool {
+        match *self {
+            SelfTypeVariant::RptrMut | SelfTypeVariant::Mut => false,
+            SelfTypeVariant::Default | SelfTypeVariant::Rptr => true,
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -246,6 +258,12 @@ impl Generator {
                     code: include_str!("java_jni/jni-include.rs").into(),
                 });
             }
+            LanguageConfig::CppConfig(..) => {
+                conv_map_source.push(TypesConvMapCode {
+                    id_of_code: "cpp-include.rs".into(),
+                    code: include_str!("cpp/types-include.rs").into(),
+                });
+            }
         }
         Generator {
             pointer_target_width,
@@ -329,96 +347,102 @@ impl TTMacroExpander for InterfaceHandler {
 }
 
 impl GeneratorData {
-    #[allow(deprecated)]
+    fn generate_code_for_foreign_interface<'a>(
+        &mut self,
+        cx: &'a mut ExtCtxt,
+        foreign_interface: &ForeignInterface,
+        lang_gen: &LanguageGenerator,
+        mut items: Vec<P<ast::Item>>,
+    ) -> Box<MacResult + 'a> {
+        let mut gen_items = unwrap_presult!(
+            lang_gen.generate_interface(
+                cx.parse_sess(),
+                &mut self.conv_map,
+                self.pointer_target_width,
+                &foreign_interface
+            ),
+            self.conv_map
+        );
+        items.append(&mut gen_items);
+        MacEager::items(SmallVector::many(items))
+    }
+
     fn expand_foreign_interface<'a>(
         &mut self,
         cx: &'a mut ExtCtxt,
         tokens: &[TokenTree],
     ) -> Box<MacResult + 'a> {
         let pointer_target_width = self.pointer_target_width;
-        let mut items = unwrap_presult!(
+        let items = unwrap_presult!(
             self.init_types_map(cx.parse_sess(), pointer_target_width),
             self.conv_map
         );
         let foreign_interface =
             parse_foreign_interface(cx, tokens).expect("Can not parse foreign_interface");
-        match self.config {
+        #[allow(deprecated)]
+        match self.config.clone() {
             LanguageConfig::Java {
                 ref output_dir,
                 ref package_name,
             } => {
                 let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
-                let mut gen_items = unwrap_presult!(
-                    java_cfg.generate_interface(
-                        cx.parse_sess(),
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &foreign_interface
-                    ),
-                    self.conv_map
-                );
-                items.append(&mut gen_items);
-                MacEager::items(SmallVector::many(items))
+                self.generate_code_for_foreign_interface(cx, &foreign_interface, &java_cfg, items)
             }
             LanguageConfig::JavaConfig(ref java_cfg) => {
-                let mut gen_items = unwrap_presult!(
-                    java_cfg.generate_interface(
-                        cx.parse_sess(),
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &foreign_interface
-                    ),
-                    self.conv_map
-                );
-                items.append(&mut gen_items);
-                MacEager::items(SmallVector::many(items))
+                self.generate_code_for_foreign_interface(cx, &foreign_interface, java_cfg, items)
+            }
+            LanguageConfig::CppConfig(ref cpp_cfg) => {
+                self.generate_code_for_foreign_interface(cx, &foreign_interface, cpp_cfg, items)
             }
         }
     }
 
-    #[allow(deprecated)]
+    fn generate_code_for_enum<'a>(
+        &mut self,
+        cx: &'a mut ExtCtxt,
+        foreign_enum: &ForeignEnumInfo,
+        lang_gen: &LanguageGenerator,
+        mut items: Vec<P<ast::Item>>,
+    ) -> Box<MacResult + 'a> {
+        let mut gen_items = unwrap_presult!(
+            lang_gen.generate_enum(
+                cx.parse_sess(),
+                &mut self.conv_map,
+                self.pointer_target_width,
+                foreign_enum
+            ),
+            self.conv_map
+        );
+        items.append(&mut gen_items);
+        MacEager::items(SmallVector::many(items))
+    }
+
     fn expand_foreign_enum<'a>(
         &mut self,
         cx: &'a mut ExtCtxt,
         tokens: &[TokenTree],
     ) -> Box<MacResult + 'a> {
         let pointer_target_width = self.pointer_target_width;
-        let mut items = unwrap_presult!(
+        let items = unwrap_presult!(
             self.init_types_map(cx.parse_sess(), pointer_target_width),
             self.conv_map
         );
         let foreign_enum = parse_foreign_enum(cx, tokens).expect("Can not parse foreign_enum");
 
-        match self.config {
+        #[allow(deprecated)]
+        match self.config.clone() {
             LanguageConfig::Java {
                 ref output_dir,
                 ref package_name,
             } => {
                 let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
-                let mut gen_items = unwrap_presult!(
-                    java_cfg.generate_enum(
-                        cx.parse_sess(),
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &foreign_enum
-                    ),
-                    self.conv_map
-                );
-                items.append(&mut gen_items);
-                MacEager::items(SmallVector::many(items))
+                self.generate_code_for_enum(cx, &foreign_enum, &java_cfg, items)
             }
             LanguageConfig::JavaConfig(ref java_cfg) => {
-                let mut gen_items = unwrap_presult!(
-                    java_cfg.generate_enum(
-                        cx.parse_sess(),
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &foreign_enum
-                    ),
-                    self.conv_map
-                );
-                items.append(&mut gen_items);
-                MacEager::items(SmallVector::many(items))
+                self.generate_code_for_enum(cx, &foreign_enum, java_cfg, items)
+            }
+            LanguageConfig::CppConfig(ref cpp_cfg) => {
+                self.generate_code_for_enum(cx, &foreign_enum, cpp_cfg, items)
             }
         }
     }
@@ -473,6 +497,19 @@ impl GeneratorData {
                 items.append(&mut gen_items);
                 MacEager::items(SmallVector::many(items))
             }
+            LanguageConfig::CppConfig(ref cpp_cfg) => {
+                let mut gen_items = unwrap_presult!(
+                    cpp_cfg.generate(
+                        cx.parse_sess(),
+                        &mut self.conv_map,
+                        self.pointer_target_width,
+                        &foreigner_class
+                    ),
+                    self.conv_map
+                );
+                items.append(&mut gen_items);
+                MacEager::items(SmallVector::many(items))
+            }
         }
     }
 
@@ -503,6 +540,7 @@ impl GeneratorData {
 }
 
 /// Configuration for Java
+#[derive(Clone)]
 pub struct JavaConfig {
     output_dir: PathBuf,
     package_name: String,
@@ -528,5 +566,24 @@ impl JavaConfig {
     pub fn use_null_annotation(mut self, import_annotation: String) -> JavaConfig {
         self.use_null_annotation = Some(import_annotation);
         self
+    }
+}
+
+#[derive(Clone)]
+pub struct CppConfig {
+    output_dir: PathBuf,
+    namespace_name: String,
+}
+
+impl CppConfig {
+    /// Create `CppConfig`
+    /// # Arguments
+    /// * `output_dir` - directory where place generated c++ files
+    /// * `namespace_name` - namespace name for generated c++ classes
+    pub fn new(output_dir: PathBuf, namespace_name: String) -> CppConfig {
+        CppConfig {
+            output_dir,
+            namespace_name,
+        }
     }
 }

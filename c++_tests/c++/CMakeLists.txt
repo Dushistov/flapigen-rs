@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.2)
 
-add_executable(c++-rust-swig-test main.cpp)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/gtest/googletest/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/gtest/googletest)
+add_executable(c++-rust-swig-test
+  #not use add_subdirectory(gtest/googletest)
+  #because of strange compiler settings in google's cmake files
+  gtest/googletest/src/gtest-all.cc
+  main.cpp)
 
 set(CARGO_CMD "cargo")
 set(RUST_TARGET "")
@@ -22,7 +28,7 @@ function (find_target_directory CACHEVAR)
     endif ()
 
     if ("${NEW_DIR}" STREQUAL "${CUR_DIR}")
-      message(FATAL_ERROR "Ca not find cargo's target directory")
+      message(FATAL_ERROR "Can not find cargo's target directory")
     endif ()
 
     set(CUR_DIR "${NEW_DIR}")
@@ -52,8 +58,13 @@ function (required_libs_by_rust_library CACHEVAR)
     message(FATAL_ERROR "cargo build failed: ${RUST_LINK_LIBRARIES_ERR}")
   endif()
   set(RUST_LINK_LIBRARIES "${RUST_LINK_LIBRARIES_OUT} ${RUST_LINK_LIBRARIES_ERR}")
-  string(REGEX MATCHALL "note: native-static-libs: ([\-a-zA-Z_0-9 ]+)" RUST_LINK_LIBRARIES "${RUST_LINK_LIBRARIES}")
+  string(REGEX MATCHALL "note: native-static-libs: ([\-a-zA-Z_0-9 \.]+)" RUST_LINK_LIBRARIES "${RUST_LINK_LIBRARIES}")
   string(REPLACE "note: native-static-libs: " "" RUST_LINK_LIBRARIES "${RUST_LINK_LIBRARIES}")
+  if (WIN32)
+    message(STATUS "Removing ms vcrt library from list")
+    string(REPLACE "msvcrt.lib" "" RUST_LINK_LIBRARIES "${RUST_LINK_LIBRARIES}")
+  endif ()
+  separate_arguments(RUST_LINK_LIBRARIES)
   message(STATUS "rust libraries: ${RUST_LINK_LIBRARIES}")
   set(${CACHEVAR} "${RUST_LINK_LIBRARIES}" CACHE STRING "Required link libraries by rust" FORCE)
   file(REMOVE_RECURSE "${TEST_CRATE_ROOT}")

@@ -8,17 +8,21 @@ use syntex_syntax::ast::DUMMY_NODE_ID;
 use syntex_pos::DUMMY_SP;
 use syntex_syntax::print::pprust;
 
-use {ForeignEnumInfo, ForeignInterface, ForeignInterfaceMethod, ForeignerClassInfo,
-     ForeignerMethod, MethodVariant, SelfTypeVariant, TypesConvMap};
-use super::{code_to_item, fmt_write_err_map, java_class_full_name, java_class_name_to_jni,
-            method_name, ForeignMethodSignature, ForeignTypeInfo};
+use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
+     SelfTypeVariant, TypesConvMap};
+use super::{fmt_write_err_map, java_class_full_name, java_class_name_to_jni, method_name,
+            ForeignTypeInfo, JniForeignMethodSignature};
 use errors::fatal_error;
-use my_ast::{list_lifetimes, normalized_ty_string, parse_ty, self_variant, RustType};
+use my_ast::{code_to_item, list_lifetimes, normalized_ty_string, parse_ty, self_variant, RustType};
 use types_conv_map::{unpack_unique_typename, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
+use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
+                            foreign_from_rust_convert_method_output,
+                            foreign_to_rust_convert_method_inputs,
+                            rust_to_foreign_convert_method_inputs};
 
 struct MethodContext<'a> {
     method: &'a ForeignerMethod,
-    f_method: &'a ForeignMethodSignature,
+    f_method: &'a JniForeignMethodSignature,
     jni_func_name: &'a str,
     decl_func_args: &'a str,
     args_names: &'a str,
@@ -30,7 +34,7 @@ pub(in java_jni) fn generate_rust_code<'a>(
     conv_map: &mut TypesConvMap,
     package_name: &str,
     class: &ForeignerClassInfo,
-    f_methods_sign: &[ForeignMethodSignature],
+    f_methods_sign: &[JniForeignMethodSignature],
 ) -> PResult<'a, Vec<P<ast::Item>>> {
     //to handle java method overload
     let mut gen_fnames = HashMap::<String, usize>::new();
@@ -259,7 +263,7 @@ pub(in java_jni) fn generate_rust_code<'a>(
             package_name,
             class,
             "do_delete",
-            &ForeignMethodSignature {
+            &JniForeignMethodSignature {
                 output: ForeignTypeInfo {
                     name: Symbol::intern(""),
                     correspoding_rust_type: dummy_ty.into(),
@@ -396,7 +400,7 @@ pub(in java_jni) fn generate_interface<'a>(
     conv_map: &mut TypesConvMap,
     pointer_target_width: usize,
     interface: &ForeignInterface,
-    methods_sign: &[ForeignMethodSignature],
+    methods_sign: &[JniForeignMethodSignature],
 ) -> PResult<'a, Vec<P<ast::Item>>> {
     use std::fmt::Write;
 
@@ -575,7 +579,7 @@ fn generate_jni_func_name<'a>(
     package_name: &str,
     class: &ForeignerClassInfo,
     java_method_name: &str,
-    f_method: &ForeignMethodSignature,
+    f_method: &JniForeignMethodSignature,
     overloaded: bool,
 ) -> PResult<'a, String> {
     let mut output = String::new();
@@ -603,7 +607,7 @@ fn generate_jni_func_name<'a>(
             let type_name = if arg.java_need_conversation() {
                 arg.java_transition_type.unwrap()
             } else {
-                arg.name
+                arg.as_ref().name
             };
             let type_name = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
                 .get(&*type_name.as_str())
@@ -615,7 +619,7 @@ fn generate_jni_func_name<'a>(
                             "Can not generate JNI function name for overload method '{}',\
                              unknown java type '{}'",
                             java_method_name,
-                            arg.name
+                            arg.as_ref().name
                         ),
                     )
                 })?;
@@ -627,112 +631,7 @@ fn generate_jni_func_name<'a>(
     Ok(output)
 }
 
-fn foreign_from_rust_convert_method_output<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
-    rust_ret_ty: &ast::FunctionRetTy,
-    f_output: &ForeignTypeInfo,
-    var_name: &str,
-    func_ret_type: &str,
-) -> PResult<'a, (Vec<P<ast::Item>>, String)> {
-    let rust_ret_ty: ast::Ty = match *rust_ret_ty {
-        ast::FunctionRetTy::Default(ref span) => if &*(f_output.name.as_str()) != "void" {
-            return Err(fatal_error(
-                sess,
-                *span,
-                &format!("Rust type `()` mapped to not void ({})", f_output.name),
-            ));
-        } else {
-            return Ok((Vec::new(), String::new()));
-        },
-        ast::FunctionRetTy::Ty(ref p_ty) => (**p_ty).clone(),
-    };
-    let context_span = rust_ret_ty.span;
-    conv_map.convert_rust_types(
-        sess,
-        &rust_ret_ty.into(),
-        &f_output.correspoding_rust_type,
-        var_name,
-        func_ret_type,
-        context_span,
-    )
-}
-
-fn foreign_to_rust_convert_method_inputs<'a, GI: Iterator<Item = String>>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
-    method: &ForeignerMethod,
-    f_method: &ForeignMethodSignature,
-    arg_names: GI,
-    func_ret_type: &str,
-) -> PResult<'a, (Vec<P<ast::Item>>, String)> {
-    let mut code_deps = Vec::<P<ast::Item>>::new();
-    let mut ret_code = String::new();
-
-    //skip self
-    let skip_n = match method.variant {
-        MethodVariant::Method(_) => 1,
-        _ => 0,
-    };
-    for ((to_type, f_from), arg_name) in method
-        .fn_decl
-        .inputs
-        .iter()
-        .skip(skip_n)
-        .zip(f_method.input.iter())
-        .zip(arg_names)
-    {
-        let to: RustType = (*to_type.ty).clone().into();
-        let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
-            sess,
-            &f_from.correspoding_rust_type,
-            &to,
-            &arg_name,
-            func_ret_type,
-            to_type.pat.span,
-        )?;
-        code_deps.append(&mut cur_deps);
-        ret_code.push_str(&cur_code);
-    }
-    Ok((code_deps, ret_code))
-}
-
-fn rust_to_foreign_convert_method_inputs<'a, GI: Iterator<Item = String>>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
-    method: &ForeignInterfaceMethod,
-    f_method: &ForeignMethodSignature,
-    arg_names: GI,
-    func_ret_type: &str,
-) -> PResult<'a, (Vec<P<ast::Item>>, String)> {
-    let mut code_deps = Vec::<P<ast::Item>>::new();
-    let mut ret_code = String::new();
-
-
-    for ((from_ty, to_f), arg_name) in method
-        .fn_decl
-        .inputs
-        .iter()
-        .skip(1)//skip self
-        .zip(f_method.input.iter())
-        .zip(arg_names)
-    {
-        let from: RustType = (*from_ty.ty).clone().into();
-        let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
-            sess,
-            &from,
-            &to_f.correspoding_rust_type,
-            &arg_name,
-            func_ret_type,
-            from_ty.pat.span,
-        )?;
-        code_deps.append(&mut cur_deps);
-        ret_code.push_str(&cur_code);
-    }
-    Ok((code_deps, ret_code))
-}
-
-fn generate_jni_args_with_types(f_method: &ForeignMethodSignature) -> Result<String, String> {
+fn generate_jni_args_with_types(f_method: &JniForeignMethodSignature) -> Result<String, String> {
     use std::fmt::Write;
 
     let mut buf = String::new();
@@ -741,60 +640,10 @@ fn generate_jni_args_with_types(f_method: &ForeignMethodSignature) -> Result<Str
             &mut buf,
             "a_{}: {}, ",
             i,
-            unpack_unique_typename(f_type_info.correspoding_rust_type.normalized_name)
+            unpack_unique_typename(f_type_info.as_ref().correspoding_rust_type.normalized_name)
         ).map_err(fmt_write_err_map)?;
     }
     Ok(buf)
-}
-
-fn create_suitable_types_for_constructor_and_self(
-    self_variant: SelfTypeVariant,
-    class: &ForeignerClassInfo,
-    constructor_real_type: &ast::Ty,
-) -> (ast::Ty, ast::Ty) {
-    match self_variant {
-        SelfTypeVariant::Default => {
-            unimplemented!();
-        }
-        SelfTypeVariant::Mut => {
-            unimplemented!();
-        }
-        SelfTypeVariant::Rptr | SelfTypeVariant::RptrMut => {
-            let mutbl = if self_variant == SelfTypeVariant::Rptr {
-                ast::Mutability::Immutable
-            } else {
-                ast::Mutability::Mutable
-            };
-            (
-                ast::Ty {
-                    id: DUMMY_NODE_ID,
-                    span: constructor_real_type.span,
-                    node: ast::TyKind::Rptr(
-                        None,
-                        ast::MutTy {
-                            mutbl: mutbl,
-                            ty: P(constructor_real_type.clone()),
-                        },
-                    ),
-                },
-                ast::Ty {
-                    id: DUMMY_NODE_ID,
-                    span: class.self_type.span,
-                    node: ast::TyKind::Rptr(
-                        None,
-                        ast::MutTy {
-                            mutbl: mutbl,
-                            ty: P(ast::Ty {
-                                id: DUMMY_NODE_ID,
-                                span: class.self_type.span,
-                                node: ast::TyKind::Path(None, class.self_type.clone()),
-                            }),
-                        },
-                    ),
-                },
-            )
-        }
-    }
 }
 
 fn generate_static_method<'a>(
@@ -1000,7 +849,7 @@ fn get_ref_type(ty: &ast::Ty, mutbl: ast::Mutability) -> ast::Ty {
 }
 
 fn jni_method_signature(
-    method: &ForeignMethodSignature,
+    method: &JniForeignMethodSignature,
     package_name: &str,
     conv_map: &TypesConvMap,
 ) -> String {
@@ -1008,21 +857,23 @@ fn jni_method_signature(
     for arg in &method.input {
         let mut gen_sig = String::new();
         let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-            .get(&*arg.name.as_str())
+            .get(&*arg.as_ref().name.as_str())
             .map(|v| *v)
-            .or_else(|| if conv_map.is_generated_foreign_type(arg.name) {
-                gen_sig = format!(
-                    "L{};",
-                    &java_class_full_name(package_name, &*arg.name.as_str())
-                );
-                Some(&gen_sig)
-            } else {
-                None
+            .or_else(|| {
+                if conv_map.is_generated_foreign_type(arg.as_ref().name) {
+                    gen_sig = format!(
+                        "L{};",
+                        &java_class_full_name(package_name, &*arg.as_ref().name.as_str())
+                    );
+                    Some(&gen_sig)
+                } else {
+                    None
+                }
             })
             .unwrap_or_else(|| {
                 panic!(
                     "Unknown type `{}`, can not generate jni signature",
-                    arg.name
+                    arg.as_ref().name
                 )
             });
         let sig = sig.replace('.', "/");
@@ -1047,14 +898,16 @@ fn jni_method_signature(
 // for more details.
 // return arg with conversation plus asserts
 fn convert_args_for_variadic_function_call(
-    f_method: &ForeignMethodSignature,
+    f_method: &JniForeignMethodSignature,
 ) -> (String, &'static str) {
     use std::fmt::Write;
 
     let mut ret = String::new();
     for (i, arg) in f_method.input.iter().enumerate() {
-        if let Some(conv_type) =
-            JNI_FOR_VARIADIC_C_FUNC_CALL.get(&*arg.correspoding_rust_type.normalized_name.as_str())
+        if let Some(conv_type) = JNI_FOR_VARIADIC_C_FUNC_CALL.get(&*arg.as_ref()
+            .correspoding_rust_type
+            .normalized_name
+            .as_str())
         {
             write!(&mut ret, ", a_{} as {}", i, conv_type).unwrap();
         } else {
