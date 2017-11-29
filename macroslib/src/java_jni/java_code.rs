@@ -8,9 +8,8 @@ use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodVariant};
 use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
 use syntex_syntax::symbol::Symbol;
 
-mod args_format_flags {
     bitflags! {
-        pub struct ArgsFormatFlags: u8 {
+        struct ArgsFormatFlags: u8 {
             const NONE = 0;
             const USE_COMMA_IF_NEED = 1;
             const EXTERNAL = 2;
@@ -18,8 +17,6 @@ mod args_format_flags {
             const COMMA_BEFORE = 8;
         }
     }
-}
-use self::args_format_flags::ArgsFormatFlags;
 
 pub(in java_jni) fn generate_java_code_for_enum(
     output_dir: &Path,
@@ -111,7 +108,7 @@ public interface {interface_name} {{
             doc_comments = doc_comments_to_java_comments(&method.doc_comments, false),
             single_args_with_types = args_with_java_types(
                 f_method,
-                args_format_flags::EXTERNAL,
+                ArgsFormatFlags::EXTERNAL,
                 use_null_annotation.is_some()
             )?,
         ).map_err(&map_write_err)?;
@@ -198,7 +195,7 @@ public final class {class_name} {{
                         func_name = func_name,
                         args_with_types = args_with_java_types(
                             f_method,
-                            args_format_flags::EXTERNAL,
+                            ArgsFormatFlags::EXTERNAL,
                             use_null_annotation.is_some()
                         )?,
                         exception_spec = exception_spec,
@@ -220,17 +217,17 @@ public final class {class_name} {{
                         return_code = if ret_type != "void" { "return " } else { "" },
                         args_with_types = args_with_java_types(
                             f_method,
-                            args_format_flags::INTERNAL,
+                            ArgsFormatFlags::INTERNAL,
                             use_null_annotation.is_some()
                         )?,
                         exception_spec = exception_spec,
                         single_args_with_types = args_with_java_types(
                             f_method,
-                            args_format_flags::EXTERNAL,
+                            ArgsFormatFlags::EXTERNAL,
                             use_null_annotation.is_some()
                         )?,
                         convert_code = convert_code,
-                        args = list_of_args_for_call_method(f_method, args_format_flags::INTERNAL)?,
+                        args = list_of_args_for_call_method(f_method, ArgsFormatFlags::INTERNAL)?,
                     ).map_err(&map_write_err)?;
                 }
             }
@@ -255,17 +252,17 @@ public final class {class_name} {{
                     convert_code = convert_code,
                     single_args_with_types = args_with_java_types(
                         f_method,
-                        args_format_flags::EXTERNAL,
+                        ArgsFormatFlags::EXTERNAL,
                         use_null_annotation.is_some()
                     )?,
                     args_with_types = args_with_java_types(
                         f_method,
-                        args_format_flags::USE_COMMA_IF_NEED | args_format_flags::INTERNAL,
+                        ArgsFormatFlags::USE_COMMA_IF_NEED | ArgsFormatFlags::INTERNAL,
                         use_null_annotation.is_some()
                     )?,
                     args = list_of_args_for_call_method(
                         f_method,
-                        args_format_flags::COMMA_BEFORE | args_format_flags::INTERNAL
+                        ArgsFormatFlags::COMMA_BEFORE | ArgsFormatFlags::INTERNAL
                     )?,
                 ).map_err(&map_write_err)?;
             }
@@ -287,16 +284,16 @@ public final class {class_name} {{
                     func_name = func_name,
                     ext_args_with_types = args_with_java_types(
                         f_method,
-                        args_format_flags::EXTERNAL,
+                        ArgsFormatFlags::EXTERNAL,
                         use_null_annotation.is_some()
                     )?,
                     args_with_types = args_with_java_types(
                         f_method,
-                        args_format_flags::INTERNAL,
+                        ArgsFormatFlags::INTERNAL,
                         use_null_annotation.is_some()
                     )?,
                     convert_code = convert_code,
-                    args = list_of_args_for_call_method(f_method, args_format_flags::INTERNAL)?
+                    args = list_of_args_for_call_method(f_method, ArgsFormatFlags::INTERNAL)?
                 ).map_err(&map_write_err)?;
             }
         }
@@ -361,21 +358,21 @@ fn args_with_java_types(
     use std::fmt::Write;
 
     assert!(
-        flags.contains(args_format_flags::INTERNAL) || flags.contains(args_format_flags::EXTERNAL)
+        flags.contains(ArgsFormatFlags::INTERNAL) || flags.contains(ArgsFormatFlags::EXTERNAL)
     );
 
     let mut res = String::new();
-    if flags.contains(args_format_flags::USE_COMMA_IF_NEED) && !method.input.is_empty() {
+    if flags.contains(ArgsFormatFlags::USE_COMMA_IF_NEED) && !method.input.is_empty() {
         write!(&mut res, ", ").map_err(fmt_write_err_map)?;
     }
-    let annotation = if flags.contains(args_format_flags::EXTERNAL) && use_null_annotation {
+    let annotation = if flags.contains(ArgsFormatFlags::EXTERNAL) && use_null_annotation {
         "@NonNull "
     } else {
         ""
     };
     for (i, arg) in method.input.iter().enumerate() {
         let type_name =
-            if flags.contains(args_format_flags::INTERNAL) && arg.java_need_conversation() {
+            if flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_need_conversation() {
                 arg.java_transition_type.unwrap()
             } else {
                 arg.name
@@ -397,7 +394,7 @@ fn list_of_args_for_call_method(
     use std::fmt::Write;
 
     assert!(
-        flags.contains(args_format_flags::INTERNAL) || flags.contains(args_format_flags::EXTERNAL)
+        flags.contains(ArgsFormatFlags::INTERNAL) || flags.contains(ArgsFormatFlags::EXTERNAL)
     );
 
     let mut res = String::new();
@@ -405,12 +402,12 @@ fn list_of_args_for_call_method(
         return Ok(res);
     }
 
-    if flags.contains(args_format_flags::COMMA_BEFORE) {
+    if flags.contains(ArgsFormatFlags::COMMA_BEFORE) {
         res.push_str(", ");
     }
 
     for (i, arg) in f_method.input.iter().enumerate() {
-        let need_conv = flags.contains(args_format_flags::INTERNAL) && arg.java_need_conversation();
+        let need_conv = flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_need_conversation();
         if i == (f_method.input.len() - 1) {
             if need_conv {
                 write!(&mut res, "a{}C0", i)
