@@ -11,7 +11,7 @@ use std::fs;
 
 use tempdir::TempDir;
 use cmark::{Event, Parser, Tag};
-use rust_swig::{Generator, JavaConfig, LanguageConfig};
+use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
 
 #[macro_use]
 #[path = "../src/test_helper.rs"]
@@ -27,10 +27,7 @@ fn test_code_in_readme() {
     for test in &tests {
         if test.text.contains("foreigner_class!") {
             println!("{} with such code:\n{}", test.name, test.text);
-
-            let java_path = tmp_dir.path().join(&test.name).join("java");
-
-            fs::create_dir_all(&java_path).unwrap_or_else(|why| {
+            fs::create_dir_all(&tmp_dir.path().join(&test.name)).unwrap_or_else(|why| {
                 panic!("! {:?}", why.kind());
             });
             let rust_path_src = tmp_dir.path().join(&test.name).join("test.rs.in");
@@ -38,14 +35,38 @@ fn test_code_in_readme() {
             src.write_all(test.text.as_bytes()).unwrap();
             let rust_path_dst = tmp_dir.path().join(&test.name).join("test.rs");
 
-            let mut registry = syntex::Registry::new();
-            let swig_gen = Generator::new(LanguageConfig::JavaConfig(
-                JavaConfig::new(java_path, "com.example".into()),
-            )).with_pointer_target_width(64);
-            swig_gen.register(&mut registry);
-            registry
-                .expand("rust_swig_test_jni", &rust_path_src, &rust_path_dst)
-                .unwrap();
+            {
+                let java_path = tmp_dir.path().join(&test.name).join("java");
+
+                fs::create_dir_all(&java_path).unwrap_or_else(|why| {
+                    panic!("! {:?}", why.kind());
+                });
+
+                let mut registry = syntex::Registry::new();
+                let swig_gen = Generator::new(LanguageConfig::JavaConfig(
+                    JavaConfig::new(java_path, "com.example".into()),
+                )).with_pointer_target_width(64);
+                swig_gen.register(&mut registry);
+                registry
+                    .expand("rust_swig_test_jni", &rust_path_src, &rust_path_dst)
+                    .unwrap();
+            }
+
+            {
+                let cpp_path = tmp_dir.path().join(&test.name).join("c++");
+
+                fs::create_dir_all(&cpp_path).unwrap_or_else(|why| {
+                    panic!("! {:?}", why.kind());
+                });
+                let mut registry = syntex::Registry::new();
+                let swig_gen = Generator::new(LanguageConfig::CppConfig(
+                    CppConfig::new(cpp_path, "com_example".into()),
+                )).with_pointer_target_width(64);
+                swig_gen.register(&mut registry);
+                registry
+                    .expand("rust_swig_test_c++", &rust_path_src, &rust_path_dst)
+                    .unwrap();
+            }
         }
     }
 }

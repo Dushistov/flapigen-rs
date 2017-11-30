@@ -4,25 +4,30 @@ mod rust_code;
 use std::fmt;
 
 use petgraph::Direction;
-use syntex_syntax::{ast, parse};
+use syntex_syntax::ast;
 use syntex_syntax::ptr::P;
 use syntex_syntax::parse::{PResult, ParseSess};
 use syntex_syntax::symbol::Symbol;
 use syntex_pos::DUMMY_SP;
 use syntex_syntax::ast::DUMMY_NODE_ID;
 
-use types_conv_map::{make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE,
-                     TO_VAR_TEMPLATE};
+use types_conv_map::{make_unique_rust_typename, ForeignMethodSignature, ForeignTypeInfo,
+                     FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
 use errors::fatal_error;
 use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
      LanguageGenerator, MethodVariant, TypesConvMap};
 use my_ast::{normalized_ty_string, parse_ty, RustType};
 
 struct JavaForeignTypeInfo {
-    pub name: Symbol,
+    pub base: ForeignTypeInfo,
     pub java_transition_type: Option<Symbol>,
-    pub correspoding_rust_type: RustType,
     java_converter: String,
+}
+
+impl AsRef<ForeignTypeInfo> for JavaForeignTypeInfo {
+    fn as_ref(&self) -> &ForeignTypeInfo {
+        &self.base
+    }
 }
 
 impl JavaForeignTypeInfo {
@@ -46,17 +51,29 @@ impl JavaForeignTypeInfo {
 impl From<ForeignTypeInfo> for JavaForeignTypeInfo {
     fn from(x: ForeignTypeInfo) -> Self {
         JavaForeignTypeInfo {
-            name: x.name,
+            base: ForeignTypeInfo {
+                name: x.name,
+                correspoding_rust_type: x.correspoding_rust_type,
+            },
             java_transition_type: None,
-            correspoding_rust_type: x.correspoding_rust_type,
             java_converter: String::new(),
         }
     }
 }
 
-struct ForeignMethodSignature {
+struct JniForeignMethodSignature {
     output: ForeignTypeInfo,
     input: Vec<JavaForeignTypeInfo>,
+}
+
+impl ForeignMethodSignature for JniForeignMethodSignature {
+    type FI = JavaForeignTypeInfo;
+    fn output(&self) -> &ForeignTypeInfo {
+        &self.output
+    }
+    fn input(&self) -> &[JavaForeignTypeInfo] {
+        &self.input[..]
+    }
 }
 
 impl LanguageGenerator for JavaConfig {
@@ -161,7 +178,7 @@ impl LanguageGenerator for JavaConfig {
     }
 }
 
-fn method_name(method: &ForeignerMethod, f_method: &ForeignMethodSignature) -> String {
+fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -> String {
     let need_conv = f_method.input.iter().any(|v| v.java_need_conversation());
     match method.variant {
         MethodVariant::StaticMethod if !need_conv => method.short_name().as_str().to_string(),
@@ -176,7 +193,7 @@ fn find_suitable_ftypes_for_interace_methods<'a>(
     sess: &'a ParseSess,
     conv_map: &mut TypesConvMap,
     interace: &ForeignInterface,
-) -> PResult<'a, Vec<ForeignMethodSignature>> {
+) -> PResult<'a, Vec<JniForeignMethodSignature>> {
     let void_sym = Symbol::intern("void");
     let dummy_ty = ast::Ty {
         id: DUMMY_NODE_ID,
@@ -214,7 +231,7 @@ fn find_suitable_ftypes_for_interace_methods<'a>(
             },
             _ => unimplemented!(),
         };
-        f_methods.push(ForeignMethodSignature { output, input });
+        f_methods.push(JniForeignMethodSignature { output, input });
     }
     Ok(f_methods)
 }
@@ -223,8 +240,8 @@ fn find_suitable_foreign_types_for_methods<'a>(
     sess: &'a ParseSess,
     conv_map: &mut TypesConvMap,
     class: &ForeignerClassInfo,
-) -> PResult<'a, Vec<ForeignMethodSignature>> {
-    let mut ret = Vec::<ForeignMethodSignature>::with_capacity(class.methods.len());
+) -> PResult<'a, Vec<JniForeignMethodSignature>> {
+    let mut ret = Vec::<JniForeignMethodSignature>::with_capacity(class.methods.len());
     let empty_symbol = Symbol::intern("");
     let dummy_ty = ast::Ty {
         id: DUMMY_NODE_ID,
@@ -291,24 +308,13 @@ fn find_suitable_foreign_types_for_methods<'a>(
                     })?,
             },
         };
-        ret.push(ForeignMethodSignature { output, input });
+        ret.push(JniForeignMethodSignature { output, input });
     }
     Ok(ret)
 }
 
 fn fmt_write_err_map(err: fmt::Error) -> String {
     format!("fmt write error: {}", err)
-}
-
-fn code_to_item<'a>(
-    sess: &'a ParseSess,
-    for_func_name: &str,
-    code: &str,
-) -> PResult<'a, Vec<P<ast::Item>>> {
-    let mut parser = parse::new_parser_from_source_str(sess, for_func_name.into(), code.into());
-
-    let krate = parser.parse_crate_mod()?;
-    Ok(krate.module.items)
 }
 
 fn java_class_full_name(package_name: &str, class_name: &str) -> String {
@@ -351,8 +357,10 @@ fn calc_converter_for_foreign_class_arg(
         .unwrap()
         .into();
     JavaForeignTypeInfo {
-        name: foreigner_class.name,
-        correspoding_rust_type: jlong_ti,
+        base: ForeignTypeInfo {
+            name: foreigner_class.name,
+            correspoding_rust_type: jlong_ti,
+        },
         java_transition_type: Some(Symbol::intern("long")),
         java_converter,
     }
@@ -367,8 +375,10 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> JavaForeignTypeInf
         int {to_var} = {from_var}.getValue();
 "#.into();
     JavaForeignTypeInfo {
-        name: foreign_enum.name,
-        correspoding_rust_type: jint_ti,
+        base: ForeignTypeInfo {
+            name: foreign_enum.name,
+            correspoding_rust_type: jint_ti,
+        },
         java_transition_type: Some(Symbol::intern("int")),
         java_converter,
     }
@@ -412,8 +422,10 @@ fn special_type<'a>(
             .unwrap()
             .into();
         let converter = JavaForeignTypeInfo {
-            name: foreign_class.name,
-            correspoding_rust_type: jlong_ti,
+            base: ForeignTypeInfo {
+                name: foreign_class.name,
+                correspoding_rust_type: jlong_ti,
+            },
             java_transition_type: Some(Symbol::intern("long")),
             java_converter: "        long {to_var} = {from_var}.mNativeObj;".to_string(),
         };

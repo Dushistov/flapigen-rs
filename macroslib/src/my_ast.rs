@@ -491,6 +491,18 @@ pub(crate) fn list_lifetimes(ty: &ast::Ty) -> Vec<Symbol> {
     catch_lifetimes.0
 }
 
+pub(crate) fn code_to_item<'a>(
+    sess: &'a ParseSess,
+    for_func_name: &str,
+    code: &str,
+) -> PResult<'a, Vec<P<ast::Item>>> {
+    let mut parser = parse::new_parser_from_source_str(sess, for_func_name.into(), code.into());
+
+    let krate = parser.parse_crate_mod()?;
+    Ok(krate.module.items)
+}
+
+
 #[cfg(test)]
 #[macro_use]
 #[path = "test_helper.rs"]
@@ -846,14 +858,15 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
         let item = unwrap_presult!(parser.parse_item()).unwrap();
         match *item {
             ast::Item {
-                node: ast::ItemKind::Impl(
-                    ast::Unsafety::Normal,
-                    ast::ImplPolarity::Positive,
-                    ref generic,
-                    _,
-                    _,
-                    _,
-                ),
+                node:
+                    ast::ItemKind::Impl(
+                        ast::Unsafety::Normal,
+                        ast::ImplPolarity::Positive,
+                        ref generic,
+                        _,
+                        _,
+                        _,
+                    ),
                 ..
             } => generic.clone(),
             _ => unreachable!(),

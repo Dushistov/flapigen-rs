@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Write;
 use std::{fmt, io};
 
-use super::{fmt_write_err_map, method_name, ForeignMethodSignature};
+use super::{fmt_write_err_map, method_name, JniForeignMethodSignature};
 use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodVariant};
 use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
 use syntex_syntax::symbol::Symbol;
@@ -75,7 +75,7 @@ pub(in java_jni) fn generate_java_code_for_interface(
     output_dir: &Path,
     package_name: &str,
     interface: &ForeignInterface,
-    methods_sign: &[ForeignMethodSignature],
+    methods_sign: &[JniForeignMethodSignature],
     use_null_annotation: Option<&str>,
 ) -> Result<(), String> {
     let path = output_dir.join(format!("{}.java", interface.name));
@@ -128,16 +128,15 @@ pub(in java_jni) fn generate_java_code(
     output_dir: &Path,
     package_name: &str,
     class: &ForeignerClassInfo,
-    methods_sign: &[ForeignMethodSignature],
+    methods_sign: &[JniForeignMethodSignature],
     use_null_annotation: Option<&str>,
 ) -> Result<(), String> {
     let mut file: Box<Write> = if output_dir.to_str() == Some("-") {
         Box::new(io::stdout())
     } else {
         let path = output_dir.join(format!("{}.java", class.name));
-        Box::new(
-            File::create(&path).map_err(|err| format!("Couldn't create {:?}: {}", path, err))?,
-        )
+        Box::new(File::create(&path)
+            .map_err(|err| format!("Couldn't create {:?}: {}", path, err))?)
     };
 
     let imports = get_null_annotation_imports(use_null_annotation, methods_sign);
@@ -351,7 +350,7 @@ public final class {class_name} {{
 }
 
 fn args_with_java_types(
-    method: &ForeignMethodSignature,
+    method: &JniForeignMethodSignature,
     flags: ArgsFormatFlags,
     use_null_annotation: bool,
 ) -> Result<String, String> {
@@ -375,7 +374,7 @@ fn args_with_java_types(
             if flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_need_conversation() {
                 arg.java_transition_type.unwrap()
             } else {
-                arg.name
+                arg.as_ref().name
             };
         let annotation = gen_annotation_if_need(type_name, annotation);
         if i == (method.input.len() - 1) {
@@ -388,7 +387,7 @@ fn args_with_java_types(
 }
 
 fn list_of_args_for_call_method(
-    f_method: &ForeignMethodSignature,
+    f_method: &JniForeignMethodSignature,
     flags: ArgsFormatFlags,
 ) -> Result<String, String> {
     use std::fmt::Write;
@@ -424,7 +423,7 @@ fn list_of_args_for_call_method(
     Ok(res)
 }
 
-fn convert_code_for_method(f_method: &ForeignMethodSignature) -> String {
+fn convert_code_for_method(f_method: &JniForeignMethodSignature) -> String {
     let mut ret = String::new();
     for (i, arg) in f_method.input.iter().enumerate() {
         if let Some(java_code) = arg.java_convert(|| (format!("a{}", i), format!("a{}C0", i))) {
@@ -462,14 +461,13 @@ fn gen_annotation_if_need(type_name: Symbol, annotation: &'static str) -> &'stat
 
 fn get_null_annotation_imports(
     use_null_annotation: Option<&str>,
-    methods_sign: &[ForeignMethodSignature],
+    methods_sign: &[JniForeignMethodSignature],
 ) -> String {
     if let Some(import) = use_null_annotation {
         for f_method in methods_sign {
-            let has_annotation = f_method
-                .input
-                .iter()
-                .any(|arg| !gen_annotation_if_need(arg.name, "x").is_empty());
+            let has_annotation = f_method.input.iter().any(|arg| {
+                !gen_annotation_if_need(arg.as_ref().name, "x").is_empty()
+            });
             if has_annotation {
                 return format!("import {};", import);
             }

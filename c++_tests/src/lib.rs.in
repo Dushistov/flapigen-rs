@@ -1,0 +1,42 @@
+#[derive(Clone)]
+pub struct Foo {
+    data: i32,
+    name: String,
+}
+
+impl Foo {
+    fn new(data: i32) -> Foo {
+        Foo {
+            data: data,
+            name: "test".to_string(),
+        }
+    }
+    fn f(&self, a: i32, b: i32) -> i32 {
+        println!("Foo::f {} {} {}", self.data, a, b);
+        self.data + a + b
+    }
+    fn set_field(&mut self, v: i32) {
+        self.data = v;
+    }
+    fn call_me(cb: Box<SomeObserver>) {
+        println!("call_me begin");
+        cb.on_state_changed(2, false);
+    }
+}
+
+trait SomeObserver {
+    fn on_state_changed(&self, _: i32, _: bool);
+}
+
+foreign_interface!(interface SomeObserver {
+    self_type SomeObserver;
+    onStateChanged = SomeObserver::on_state_changed(&self, _: i32, _: bool);
+});
+
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -> Foo;
+    method Foo::f(&self, a: i32, b: i32) -> i32;
+    method Foo::set_field(&mut self, v: i32);
+    static_method Foo::call_me(_: Box<SomeObserver>);
+});
