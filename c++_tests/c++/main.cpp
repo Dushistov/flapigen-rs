@@ -3,15 +3,20 @@
 #include <cassert>
 #include <cstdbool>
 #include <functional>
+#include <atomic>
 
 #include <gtest/gtest.h>
 #include "rust_interface/c_SomeObserver.h"
 #include "rust_interface/c_Foo.h"
+#include "rust_interface/Foo.hpp"
+
+static std::atomic<uint32_t> c_simple_cb_counter{0};
 
 static void c_delete_int(void *opaque)
 {
 	printf("clear\n");
 	auto self = static_cast<int *>(opaque);
+	ASSERT_EQ(17, *self);
 	delete self;
 }
 
@@ -19,10 +24,12 @@ static void c_simple_cb(int32_t a, char b, void *opaque)
 {
 	assert(opaque != nullptr);
 	const int tag = *static_cast<int *>(opaque);
+	ASSERT_EQ(17, tag);
 	printf("!!! a %d, b: %d, tag %d\n", static_cast<int>(a), b, tag);
+	++c_simple_cb_counter;
 }
 
-TEST(Foo, Simple)
+TEST(c_Foo, Simple)
 {
 	auto foo = Foo_new(1);
 	ASSERT_NE(foo, nullptr);
@@ -35,8 +42,26 @@ TEST(Foo, Simple)
 		c_delete_int,
 		c_simple_cb,
 	};
+	c_simple_cb_counter = 0;
 	Foo_call_me(&obs);
+	EXPECT_EQ(1, c_simple_cb_counter.load());
 	Foo_delete(foo);
+}
+
+TEST(Foo, Simple)
+{
+	Foo foo(1);
+	EXPECT_EQ(3, foo.f(1, 1));
+	foo.set_field(5);
+	EXPECT_EQ(7, foo.f(1, 1));
+	const C_SomeObserver obs = {
+		new int(17),
+		c_delete_int,
+		c_simple_cb,
+	};
+	c_simple_cb_counter = 0;
+	Foo::call_me(&obs);
+	EXPECT_EQ(1, c_simple_cb_counter.load());
 }
 
 int main(int argc, char *argv[])
