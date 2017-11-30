@@ -22,6 +22,9 @@ impl Foo {
         println!("call_me begin");
         cb.on_state_changed(2, false);
     }
+    fn one_and_half(&self) -> f64 {
+        (self.data as f64) * 1.5
+    }
 }
 
 trait SomeObserver {
@@ -38,5 +41,6 @@ foreigner_class!(class Foo {
     constructor Foo::new(_: i32) -> Foo;
     method Foo::f(&self, a: i32, b: i32) -> i32;
     method Foo::set_field(&mut self, v: i32);
+    method Foo::one_and_half(&self) -> f64;
     static_method Foo::call_me(_: Box<SomeObserver>);
 });

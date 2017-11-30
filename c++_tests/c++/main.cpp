@@ -62,6 +62,8 @@ TEST(Foo, Simple)
 	c_simple_cb_counter = 0;
 	Foo::call_me(&obs);
 	EXPECT_EQ(1, c_simple_cb_counter.load());
+
+	EXPECT_NEAR(7.5, foo.one_and_half(), 1e-16);
 }
 
 int main(int argc, char *argv[])

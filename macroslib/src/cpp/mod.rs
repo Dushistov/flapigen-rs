@@ -435,6 +435,11 @@ public:
         let c_func_name = c_func_name(class, method, f_method);
         let c_args_with_types = cpp_code::generate_args_with_types(f_method)
             .map_err(|err| fatal_error(sess, class.span, &err))?;
+        let comma_c_args_with_types = if c_args_with_types.is_empty() {
+            "".to_string()
+        } else {
+            format!(", {}", c_args_with_types)
+        };
         let args_names = n_arguments_list(f_method.input.len());
 
         let real_output_typename = match method.fn_decl.output {
@@ -499,12 +504,12 @@ public:
                 write!(
                     c_include_f,
                     r#"
-    {ret_type} {func_name}({const_if_readonly}{c_class_type} * const self, {args_with_types});
+    {ret_type} {func_name}({const_if_readonly}{c_class_type} * const self{args_with_types});
 "#,
                     ret_type = f_method.output.as_ref().name,
                     c_class_type = c_class_type,
                     func_name = c_func_name,
-                    args_with_types = c_args_with_types,
+                    args_with_types = comma_c_args_with_types,
                     const_if_readonly = const_if_readonly,
                 ).map_err(&map_write_err)?;
                 write!(
@@ -513,7 +518,7 @@ public:
 {access}:
     {ret_type} {method_name}({args_with_types}) {const_if_readonly}
     {{
-        return {c_func_name}(this->self_, {args});
+        return {c_func_name}(this->self_{args});
     }}
 "#,
                     access = method_access,
@@ -521,7 +526,11 @@ public:
                     ret_type = f_method.output.as_ref().name,
                     c_func_name = c_func_name,
                     args_with_types = c_args_with_types,
-                    args = args_names,
+                    args = if args_names.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!(", {}", args_names)
+                    },
                     const_if_readonly = const_if_readonly,
                 ).map_err(&map_write_err)?;
                 gen_code.append(&mut generate_method(
