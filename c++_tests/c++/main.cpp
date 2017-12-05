@@ -31,7 +31,7 @@ static void c_simple_cb(int32_t a, char b, void *opaque)
 
 TEST(c_Foo, Simple)
 {
-	auto foo = Foo_new(1);
+	auto foo = Foo_new(1, "a");
 	ASSERT_NE(foo, nullptr);
 
 	EXPECT_EQ(3, Foo_f(foo, 1, 1));
@@ -50,7 +50,7 @@ TEST(c_Foo, Simple)
 
 TEST(Foo, Simple)
 {
-	Foo foo(1);
+	Foo foo(1, "b");
 	EXPECT_EQ(3, foo.f(1, 1));
 	foo.set_field(5);
 	EXPECT_EQ(7, foo.f(1, 1));

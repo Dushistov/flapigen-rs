@@ -5,16 +5,22 @@ pub struct Foo {
 }
 
 impl Foo {
-    fn new(data: i32) -> Foo {
+    fn new(data: i32, name: &str) -> Foo {
+        println!("Foo::new name '{}'", name);
         Foo {
-            data: data,
-            name: "test".to_string(),
+            data,
+            name: name.to_string(),
         }
     }
     fn f(&self, a: i32, b: i32) -> i32 {
         println!("Foo::f {} {} {}", self.data, a, b);
         self.data + a + b
     }
+/*
+    fn name(&self) -> &str {
+        &self.name
+    }
+*/
     fn set_field(&mut self, v: i32) {
         self.data = v;
     }
@@ -38,8 +44,9 @@ foreign_interface!(interface SomeObserver {
 
 foreigner_class!(class Foo {
     self_type Foo;
-    constructor Foo::new(_: i32) -> Foo;
+    constructor Foo::new(_: i32, _: &str) -> Foo;
     method Foo::f(&self, a: i32, b: i32) -> i32;
+    //method Foo::name(&self) -> &str; alias getName;
     method Foo::set_field(&mut self, v: i32);
     method Foo::one_and_half(&self) -> f64;
     static_method Foo::call_me(_: Box<SomeObserver>);

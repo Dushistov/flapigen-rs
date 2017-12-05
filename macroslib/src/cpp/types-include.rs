@@ -23,6 +23,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "f64"]
     #![swig_foreigner_type = "char"]
     #![swig_rust_type = "::std::os::raw::c_char"]
+    #![swig_foreigner_type = "const char *"]
+    #![swig_rust_type = "*const ::std::os::raw::c_char"]
 }
 
 #[allow(unused_macros)]
@@ -51,6 +53,13 @@ trait SwigFrom<T> {
     fn swig_from(T) -> Self;
 }
 
+#[allow(dead_code)]
+#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_deref();"]
+trait SwigDeref {
+    type Target: ?Sized;
+    fn swig_deref(&self) -> &Self::Target;
+}
+
 impl SwigInto<bool> for ::std::os::raw::c_char {
     fn swig_into(self) -> bool {
         self != 0
@@ -64,5 +73,19 @@ impl SwigFrom<bool> for ::std::os::raw::c_char {
         } else {
             0
         }
+    }
+}
+
+impl<'a> SwigInto<&'a ::std::ffi::CStr> for *const ::std::os::raw::c_char {
+    fn swig_into(self) -> &'a ::std::ffi::CStr {
+        assert!(!self.is_null());
+        unsafe { ::std::ffi::CStr::from_ptr(self) }
+    }
+}
+
+impl<'a> SwigDeref for &'a ::std::ffi::CStr {
+    type Target = str;
+    fn swig_deref(&self) -> &Self::Target {
+        self.to_str().expect("wrong utf-8")
     }
 }
