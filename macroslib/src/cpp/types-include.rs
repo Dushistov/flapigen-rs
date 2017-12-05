@@ -25,6 +25,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "::std::os::raw::c_char"]
     #![swig_foreigner_type = "const char *"]
     #![swig_rust_type = "*const ::std::os::raw::c_char"]
+    #![swig_foreigner_type = "struct RustStrView"]
+    #![swig_rust_type = "RustStrView"]
 }
 
 #[allow(unused_macros)]
@@ -87,5 +89,22 @@ impl<'a> SwigDeref for &'a ::std::ffi::CStr {
     type Target = str;
     fn swig_deref(&self) -> &Self::Target {
         self.to_str().expect("wrong utf-8")
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct RustStrView {
+    data: *const ::std::os::raw::c_char,
+    len: u32,
+}
+
+impl<'a> SwigFrom<&'a str> for RustStrView {
+    fn swig_from(s: &'a str) -> RustStrView {
+        assert!((s.len() as u64) <= (::std::u32::MAX as u64));
+        RustStrView {
+            data: s.as_ptr() as *const ::std::os::raw::c_char,
+            len: s.len() as u32,
+        }
     }
 }

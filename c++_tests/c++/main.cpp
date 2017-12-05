@@ -6,6 +6,7 @@
 #include <atomic>
 
 #include <gtest/gtest.h>
+#include "rust_interface/RustStrView.h"
 #include "rust_interface/c_SomeObserver.h"
 #include "rust_interface/c_Foo.h"
 #include "rust_interface/Foo.hpp"
@@ -35,6 +36,9 @@ TEST(c_Foo, Simple)
 	ASSERT_NE(foo, nullptr);
 
 	EXPECT_EQ(3, Foo_f(foo, 1, 1));
+	auto name = Foo_getName(foo);
+	EXPECT_EQ(std::string("a"), std::string(name.data, name.len));
+
 	Foo_set_field(foo, 5);
 	EXPECT_EQ(7, Foo_f(foo, 1, 1));
 	const C_SomeObserver obs = {
@@ -52,6 +56,8 @@ TEST(Foo, Simple)
 {
 	Foo foo(1, "b");
 	EXPECT_EQ(3, foo.f(1, 1));
+	RustStrView name = foo.getName();
+	EXPECT_EQ(std::string("b"), std::string(name.data, name.len));
 	foo.set_field(5);
 	EXPECT_EQ(7, foo.f(1, 1));
 	const C_SomeObserver obs = {
@@ -64,6 +70,12 @@ TEST(Foo, Simple)
 	EXPECT_EQ(1, c_simple_cb_counter.load());
 
 	EXPECT_NEAR(7.5, foo.one_and_half(), 1e-16);
+	{
+		Foo f2(17, "");
+		EXPECT_EQ(19, f2.f(1, 1));
+		auto name = f2.getName();
+		EXPECT_EQ(std::string(""), std::string(name.data, name.len));
+	}
 }
 
 int main(int argc, char *argv[])
