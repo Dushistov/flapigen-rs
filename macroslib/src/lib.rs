@@ -447,14 +447,33 @@ impl GeneratorData {
         }
     }
 
-    #[allow(deprecated)]
+    fn generate_code_for_class<'a>(
+        &mut self,
+        cx: &'a mut ExtCtxt,
+        foreign_class: &ForeignerClassInfo,
+        lang_gen: &LanguageGenerator,
+        mut items: Vec<P<ast::Item>>,
+    ) -> Box<MacResult + 'a> {
+        let mut gen_items = unwrap_presult!(
+            lang_gen.generate(
+                cx.parse_sess(),
+                &mut self.conv_map,
+                self.pointer_target_width,
+                &foreign_class,
+            ),
+            self.conv_map
+        );
+        items.append(&mut gen_items);
+        MacEager::items(SmallVector::many(items))
+    }
+
     fn expand_foreigner_class<'a>(
         &mut self,
         cx: &'a mut ExtCtxt,
         tokens: &[TokenTree],
     ) -> Box<MacResult + 'a> {
         let pointer_target_width = self.pointer_target_width;
-        let mut items = unwrap_presult!(
+        let items = unwrap_presult!(
             self.init_types_map(cx.parse_sess(), pointer_target_width),
             self.conv_map
         );
@@ -466,49 +485,20 @@ impl GeneratorData {
             }
         };
         self.conv_map.register_foreigner_class(&foreigner_class);
-        match self.config {
+        #[allow(deprecated)]
+        match self.config.clone() {
             LanguageConfig::Java {
                 ref output_dir,
                 ref package_name,
             } => {
                 let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
-                let mut gen_items = unwrap_presult!(
-                    java_cfg.generate(
-                        cx.parse_sess(),
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &foreigner_class,
-                    ),
-                    self.conv_map
-                );
-                items.append(&mut gen_items);
-                MacEager::items(SmallVector::many(items))
+                self.generate_code_for_class(cx, &foreigner_class, &java_cfg, items)
             }
             LanguageConfig::JavaConfig(ref java_cfg) => {
-                let mut gen_items = unwrap_presult!(
-                    java_cfg.generate(
-                        cx.parse_sess(),
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &foreigner_class
-                    ),
-                    self.conv_map
-                );
-                items.append(&mut gen_items);
-                MacEager::items(SmallVector::many(items))
+                self.generate_code_for_class(cx, &foreigner_class, java_cfg, items)
             }
             LanguageConfig::CppConfig(ref cpp_cfg) => {
-                let mut gen_items = unwrap_presult!(
-                    cpp_cfg.generate(
-                        cx.parse_sess(),
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &foreigner_class
-                    ),
-                    self.conv_map
-                );
-                items.append(&mut gen_items);
-                MacEager::items(SmallVector::many(items))
+                self.generate_code_for_class(cx, &foreigner_class, cpp_cfg, items)
             }
         }
     }
