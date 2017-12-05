@@ -1105,7 +1105,7 @@ fn rust_code_generate_interface<'a>(
 #[allow(non_snake_case)]
 pub struct {struct_with_funcs} {{
     opaque: *const ::std::os::raw::c_void,
-    {struct_with_funcs}_deref: 
+    {struct_with_funcs}_deref:
         extern "C" fn(_: *const ::std::os::raw::c_void),
 "#,
         struct_with_funcs = struct_with_funcs,

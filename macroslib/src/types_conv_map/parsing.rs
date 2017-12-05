@@ -102,20 +102,21 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
 
         match item {
             ast::Item {
-                node: ast::ItemKind::Impl(
-                    ast::Unsafety::Normal,
-                    ast::ImplPolarity::Positive,
-                    ref generic,
-                    Some(ref trait_type),
-                    ref for_type,
-                    _,
-                ),
+                node:
+                    ast::ItemKind::Impl(
+                        ast::Unsafety::Normal,
+                        ast::ImplPolarity::Positive,
+                        ref generic,
+                        Some(ref trait_type),
+                        ref for_type,
+                        _,
+                    ),
                 ..
-            } if trait_path_match(&trait_type.path, "SwigInto") ||
-                trait_path_match(&trait_type.path, "SwigFrom") =>
+            } if trait_path_match(&trait_type.path, "SwigInto")
+                || trait_path_match(&trait_type.path, "SwigFrom") =>
             {
-                let to_suffix = if !swig_attrs.is_empty() &&
-                    swig_attrs.contains_key(&swig_to_foreigner_hint)
+                let to_suffix = if !swig_attrs.is_empty()
+                    && swig_attrs.contains_key(&swig_to_foreigner_hint)
                 {
                     if swig_attrs.len() != 1 || swig_attrs[&swig_to_foreigner_hint].len() != 1 {
                         return Err(fatal_error(
@@ -129,8 +130,8 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                     None
                 };
 
-                let from_suffix = if !swig_attrs.is_empty() &&
-                    swig_attrs.contains_key(&swig_from_foreigner_hint)
+                let from_suffix = if !swig_attrs.is_empty()
+                    && swig_attrs.contains_key(&swig_from_foreigner_hint)
                 {
                     if swig_attrs.len() != 1 || swig_attrs[&swig_from_foreigner_hint].len() != 1 {
                         return Err(fatal_error(
@@ -202,17 +203,18 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                 utils_code.push(P(item));
             }
             ast::Item {
-                node: ast::ItemKind::Impl(
-                    ast::Unsafety::Normal,
-                    ast::ImplPolarity::Positive,
-                    ref generic,
-                    Some(ref trait_type),
-                    ref for_type,
-                    ref impl_items,
-                ),
+                node:
+                    ast::ItemKind::Impl(
+                        ast::Unsafety::Normal,
+                        ast::ImplPolarity::Positive,
+                        ref generic,
+                        Some(ref trait_type),
+                        ref for_type,
+                        ref impl_items,
+                    ),
                 ..
-            } if trait_path_match(&trait_type.path, "SwigDeref") ||
-                trait_path_match(&trait_type.path, "SwigDerefMut") =>
+            } if trait_path_match(&trait_type.path, "SwigDeref")
+                || trait_path_match(&trait_type.path, "SwigDerefMut") =>
             {
                 let target_ty = unpack_first_associated_type(impl_items, target_assoc_type)
                     .ok_or_else(|| fatal_error(sess, item.span, "No Target associated type"))?;
@@ -487,8 +489,8 @@ fn parse_foreign_types_map_mod<'a>(
 
 
 fn trait_path_match(path: &ast::Path, type_name: &str) -> bool {
-    path.segments.len() == 1 &&
-        path.segments
+    path.segments.len() == 1
+        && path.segments
             .last()
             .map(|v| &*v.identifier.name.as_str() == type_name)
             .unwrap_or(false)

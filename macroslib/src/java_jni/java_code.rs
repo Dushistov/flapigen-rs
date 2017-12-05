@@ -8,15 +8,15 @@ use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodVariant};
 use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
 use syntex_syntax::symbol::Symbol;
 
-    bitflags! {
-        struct ArgsFormatFlags: u8 {
-            const NONE = 0;
-            const USE_COMMA_IF_NEED = 1;
-            const EXTERNAL = 2;
-            const INTERNAL = 4;
-            const COMMA_BEFORE = 8;
-        }
+bitflags! {
+    struct ArgsFormatFlags: u8 {
+        const NONE = 0;
+        const USE_COMMA_IF_NEED = 1;
+        const EXTERNAL = 2;
+        const INTERNAL = 4;
+        const COMMA_BEFORE = 8;
     }
+}
 
 pub(in java_jni) fn generate_java_code_for_enum(
     output_dir: &Path,
@@ -356,9 +356,7 @@ fn args_with_java_types(
 ) -> Result<String, String> {
     use std::fmt::Write;
 
-    assert!(
-        flags.contains(ArgsFormatFlags::INTERNAL) || flags.contains(ArgsFormatFlags::EXTERNAL)
-    );
+    assert!(flags.contains(ArgsFormatFlags::INTERNAL) || flags.contains(ArgsFormatFlags::EXTERNAL));
 
     let mut res = String::new();
     if flags.contains(ArgsFormatFlags::USE_COMMA_IF_NEED) && !method.input.is_empty() {
@@ -370,12 +368,12 @@ fn args_with_java_types(
         ""
     };
     for (i, arg) in method.input.iter().enumerate() {
-        let type_name =
-            if flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_need_conversation() {
-                arg.java_transition_type.unwrap()
-            } else {
-                arg.as_ref().name
-            };
+        let type_name = if flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_need_conversation()
+        {
+            arg.java_transition_type.unwrap()
+        } else {
+            arg.as_ref().name
+        };
         let annotation = gen_annotation_if_need(type_name, annotation);
         if i == (method.input.len() - 1) {
             write!(&mut res, "{}{} a{}", annotation, type_name, i)
@@ -392,9 +390,7 @@ fn list_of_args_for_call_method(
 ) -> Result<String, String> {
     use std::fmt::Write;
 
-    assert!(
-        flags.contains(ArgsFormatFlags::INTERNAL) || flags.contains(ArgsFormatFlags::EXTERNAL)
-    );
+    assert!(flags.contains(ArgsFormatFlags::INTERNAL) || flags.contains(ArgsFormatFlags::EXTERNAL));
 
     let mut res = String::new();
     if f_method.input.is_empty() {

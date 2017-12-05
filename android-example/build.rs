@@ -79,12 +79,14 @@ fn get_gcc_system_include_dirs(target: &str) -> Result<Vec<PathBuf>, String> {
 
     const BEGIN_PAT: &'static str = "\n#include <...> search starts here:\n";
     const END_PAT: &'static str = "\nEnd of search list.\n";
-    let start_includes = gcc_output.find(BEGIN_PAT).ok_or(
-        format!("No '{}' in output from {}", BEGIN_PAT, gcc_cmd).as_str(),
-    )? + BEGIN_PAT.len();
-    let end_includes = (&gcc_output[start_includes..]).find(END_PAT).ok_or(
-        format!("No '{}' in output from {}", END_PAT, gcc_cmd).as_str(),
-    )? + start_includes;
+    let start_includes = gcc_output
+        .find(BEGIN_PAT)
+        .ok_or(format!("No '{}' in output from {}", BEGIN_PAT, gcc_cmd).as_str())?
+        + BEGIN_PAT.len();
+    let end_includes = (&gcc_output[start_includes..])
+        .find(END_PAT)
+        .ok_or(format!("No '{}' in output from {}", END_PAT, gcc_cmd).as_str())?
+        + start_includes;
 
     Ok(
         (&gcc_output[start_includes..end_includes])

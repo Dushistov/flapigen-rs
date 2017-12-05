@@ -25,8 +25,8 @@ fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>
         _ => unreachable!(),
     };
     let isolated_self = |this: &mut Parser<'a>, n| {
-        this.look_ahead(n, |t| t.is_keyword(keywords::SelfValue)) &&
-            this.look_ahead(n + 1, |t| t != &token::ModSep)
+        this.look_ahead(n, |t| t.is_keyword(keywords::SelfValue))
+            && this.look_ahead(n + 1, |t| t != &token::ModSep)
     };
 
     // Parse optional self parameter of a method.
@@ -46,8 +46,8 @@ fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>
                     SelfKind::Region(None, Mutability::Immutable),
                     expect_ident(parser),
                 )
-            } else if parser.look_ahead(1, |t| t.is_keyword(keywords::Mut)) &&
-                isolated_self(parser, 2)
+            } else if parser.look_ahead(1, |t| t.is_keyword(keywords::Mut))
+                && isolated_self(parser, 2)
             {
                 parser.bump();
                 parser.bump();
@@ -62,9 +62,9 @@ fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>
                     SelfKind::Region(Some(lt), Mutability::Immutable),
                     expect_ident(parser),
                 )
-            } else if parser.look_ahead(1, |t| t.is_lifetime()) &&
-                parser.look_ahead(2, |t| t.is_keyword(keywords::Mut)) &&
-                isolated_self(parser, 3)
+            } else if parser.look_ahead(1, |t| t.is_lifetime())
+                && parser.look_ahead(2, |t| t.is_keyword(keywords::Mut))
+                && isolated_self(parser, 3)
             {
                 parser.bump();
                 let lt = try!(parser.parse_lifetime());
