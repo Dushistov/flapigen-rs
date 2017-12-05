@@ -76,9 +76,9 @@ find_target_directory(TARGET_PATH)
 required_libs_by_rust_library(RUST_LINK_LIBRARIES)
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
-  set(CARGO_BUILD "cargo" "build" "--release")
+  set(CARGO_BUILD ${CARGO_CMD} "build" "${RUST_TARGET}" "--release")
 else()
-  set(CARGO_BUILD "cargo" "build")
+  set(CARGO_BUILD ${CARGO_CMD} "build" "${RUST_TARGET}")
 endif()
 
 include(ExternalProject)
