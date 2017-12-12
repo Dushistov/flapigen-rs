@@ -60,9 +60,20 @@ pub(crate) type TypeGraphIdx = u32;
 pub(crate) type TypesConvGraph = Graph<RustType, TypeConvEdge, petgraph::Directed, TypeGraphIdx>;
 
 #[derive(Debug)]
+pub(crate) struct ForeignTypeData {
+    rust_type_idx: NodeIndex<TypeGraphIdx>,
+}
+
+impl ForeignTypeData {
+    fn new(rust_type_idx: NodeIndex<TypeGraphIdx>) -> ForeignTypeData {
+        ForeignTypeData { rust_type_idx }
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct TypesConvMap {
     conv_graph: TypesConvGraph,
-    foreign_names_map: HashMap<Symbol, NodeIndex<TypeGraphIdx>>,
+    foreign_names_map: HashMap<Symbol, ForeignTypeData>,
     rust_names_map: HashMap<Symbol, NodeIndex<TypeGraphIdx>>,
     utils_code: Vec<P<ast::Item>>,
     generic_edges: Vec<GenericTypeConv>,
@@ -177,9 +188,10 @@ impl TypesConvMap {
             if let Some((foreign_name, _)) = new_data
                 .foreign_names_map
                 .iter()
-                .find(|x| *x.1 == node_new_data_idx)
+                .find(|x| x.1.rust_type_idx == node_new_data_idx)
             {
-                data.foreign_names_map.insert(*foreign_name, idx);
+                data.foreign_names_map
+                    .insert(*foreign_name, ForeignTypeData::new(idx));
             }
             idx
         }
@@ -236,7 +248,7 @@ impl TypesConvMap {
         if direction == petgraph::Direction::Outgoing {
             if let Some(foreign_name) = self.rust_to_foreign_cache.get(&norm_rust_typename) {
                 if let Some(to) = self.foreign_names_map.get(foreign_name) {
-                    let to = &self.conv_graph[*to];
+                    let to = &self.conv_graph[to.rust_type_idx];
                     return Some(ForeignTypeInfo {
                         name: *foreign_name,
                         correspoding_rust_type: to.clone(),
@@ -247,28 +259,33 @@ impl TypesConvMap {
 
         if let Some(from) = self.rust_names_map.get(&norm_rust_typename).cloned() {
             let sess = ParseSess::new();
-            let find_path =
-                |from, to| match find_conversation_path(&sess, &self.conv_graph, from, to, DUMMY_SP)
-                {
-                    Ok(x) => Some(x),
-                    Err(mut err) => {
-                        err.cancel();
-                        None
-                    }
-                };
+            let find_path = |from, to| match find_conversation_path(
+                &sess,
+                &self.conv_graph,
+                from,
+                to,
+                DUMMY_SP,
+            ) {
+                Ok(x) => Some(x),
+                Err(mut err) => {
+                    err.cancel();
+                    None
+                }
+            };
             let mut min_path: Option<(usize, NodeIndex, Symbol)> = None;
-            for (foreign_name, graph_idx) in &self.foreign_names_map {
+            for (foreign_name, fdata) in &self.foreign_names_map {
+                let graph_idx = fdata.rust_type_idx;
                 let path = match direction {
-                    petgraph::Direction::Outgoing => find_path(from, *graph_idx),
-                    petgraph::Direction::Incoming => find_path(*graph_idx, from),
+                    petgraph::Direction::Outgoing => find_path(from, graph_idx),
+                    petgraph::Direction::Incoming => find_path(graph_idx, from),
                 };
                 if let Some(path) = path {
                     trace!(
                         "map foreign: we find path {} <-> {}",
                         foreign_name,
-                        self.conv_graph[*graph_idx]
+                        self.conv_graph[graph_idx]
                     );
-                    let cur = (path.len(), *graph_idx, *foreign_name);
+                    let cur = (path.len(), graph_idx, *foreign_name);
                     min_path = Some(min_path.map_or(cur, |x| if cur.0 < x.0 { cur } else { x }));
                 }
             }
@@ -308,9 +325,11 @@ impl TypesConvMap {
                                 let foreign_name = to_foreigner_hint
                                     .as_str()
                                     .replace(&*ty_param.as_str(), &*class.name.as_str());
-                                new_foreign_types.insert(
-                                    (edge.to_ty.clone(), suffix, Symbol::intern(&foreign_name)),
-                                );
+                                new_foreign_types.insert((
+                                    edge.to_ty.clone(),
+                                    suffix,
+                                    Symbol::intern(&foreign_name),
+                                ));
                             } else {
                                 warn!("No foreign_class for type '{}'", rust_ty.normalized_name);
                             }
@@ -331,22 +350,24 @@ impl TypesConvMap {
                 ty,
                 make_unique_rust_typename(not_uniq_name, suffix),
             ));
-            self.foreign_names_map.insert(foreign_name, node);
+            self.foreign_names_map
+                .insert(foreign_name, ForeignTypeData::new(node));
         }
 
         let from: RustType = rust_ty.clone().into();
         let mut possible_paths = Vec::<(PossibePath, Symbol, NodeIndex)>::new();
-        for (foreign_name, graph_idx) in &self.foreign_names_map {
+        for (foreign_name, fdata) in &self.foreign_names_map {
+            let graph_idx = fdata.rust_type_idx;
             let path = match direction {
                 petgraph::Direction::Outgoing => {
-                    self.try_build_path(&from, &self.conv_graph[*graph_idx], build_for_sp)
+                    self.try_build_path(&from, &self.conv_graph[graph_idx], build_for_sp)
                 }
                 petgraph::Direction::Incoming => {
-                    self.try_build_path(&self.conv_graph[*graph_idx], &from, build_for_sp)
+                    self.try_build_path(&self.conv_graph[graph_idx], &from, build_for_sp)
                 }
             };
             if let Some(path) = path {
-                possible_paths.push((path, *foreign_name, *graph_idx));
+                possible_paths.push((path, *foreign_name, graph_idx));
             }
         }
         let ret = possible_paths
@@ -607,7 +628,8 @@ impl TypesConvMap {
 
     pub(crate) fn add_foreign(&mut self, correspoding_rty: RustType, foreign_name: Symbol) {
         let idx = self.add_type(correspoding_rty);
-        self.foreign_names_map.insert(foreign_name, idx);
+        self.foreign_names_map
+            .insert(foreign_name, ForeignTypeData::new(idx));
     }
 
     pub(crate) fn cache_rust_to_foreign_conv(&mut self, from: &RustType, to: (RustType, Symbol)) {
@@ -615,7 +637,8 @@ impl TypesConvMap {
         let to_id = self.add_type(to.0);
         self.rust_to_foreign_cache
             .insert(from.normalized_name, to.1);
-        self.foreign_names_map.insert(to.1, to_id);
+        self.foreign_names_map
+            .insert(to.1, ForeignTypeData::new(to_id));
     }
 
     pub(crate) fn convert_to_heap_pointer(from: &RustType, var_name: &str) -> (RustType, String) {
