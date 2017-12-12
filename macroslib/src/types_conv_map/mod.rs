@@ -1,6 +1,7 @@
 mod parsing;
 pub mod utils;
 
+use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
@@ -62,11 +63,15 @@ pub(crate) type TypesConvGraph = Graph<RustType, TypeConvEdge, petgraph::Directe
 #[derive(Debug)]
 pub(crate) struct ForeignTypeData {
     rust_type_idx: NodeIndex<TypeGraphIdx>,
+    generator_data: Option<Box<Any>>,
 }
 
 impl ForeignTypeData {
     fn new(rust_type_idx: NodeIndex<TypeGraphIdx>) -> ForeignTypeData {
-        ForeignTypeData { rust_type_idx }
+        ForeignTypeData {
+            rust_type_idx,
+            generator_data: None,
+        }
     }
 }
 
@@ -641,6 +646,26 @@ impl TypesConvMap {
             .insert(to.1, ForeignTypeData::new(to_id));
     }
 
+    pub(crate) fn set_generator_data_for_foreign_type(
+        &mut self,
+        foreign_type: Symbol,
+        data: Box<Any>,
+    ) {
+        self.foreign_names_map
+            .get_mut(&foreign_type)
+            .unwrap_or_else(|| panic!("Can not find foreign_type {}", foreign_type))
+            .generator_data = Some(data);
+    }
+    pub(crate) fn generator_data_for_foreign_type(
+        &self,
+        foreign_type: Symbol,
+    ) -> Option<&Box<Any>> {
+        self.foreign_names_map
+            .get(&foreign_type)
+            .map(|x| x.generator_data.as_ref())
+            .unwrap_or(None)
+    }
+
     pub(crate) fn convert_to_heap_pointer(from: &RustType, var_name: &str) -> (RustType, String) {
         for smart_pointer in &["Box", "Rc", "Arc"] {
             if let Some(inner_ty) =
@@ -669,7 +694,7 @@ impl TypesConvMap {
             format!(
                 r#"
     let {var_name}: Box<{inner_ty}> = Box::new({var_name});
-    let {var_name}: *const {inner_ty} = Box::into_raw({var_name});
+    let {var_name}: *mut {inner_ty} = Box::into_raw({var_name});
 "#,
                 var_name = var_name,
                 inner_ty = inner_ty_str
