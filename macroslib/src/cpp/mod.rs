@@ -16,7 +16,8 @@ use syntex_syntax::print::pprust;
 
 use my_ast::{code_to_item, list_lifetimes, normalized_ty_string, parse_ty, self_variant, RustType};
 use errors::fatal_error;
-use types_conv_map::{unpack_unique_typename, ForeignMethodSignature, ForeignTypeInfo};
+use types_conv_map::{make_unique_rust_typename, unpack_unique_typename, ForeignMethodSignature,
+                     ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
 use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
                             foreign_from_rust_convert_method_output,
                             foreign_to_rust_convert_method_inputs,
@@ -79,6 +80,10 @@ struct MethodContext<'a> {
     real_output_typename: &'a str,
 }
 
+struct InfoForCpp {
+    class_name: Symbol,
+}
+
 impl LanguageGenerator for CppConfig {
     fn generate<'a>(
         &self,
@@ -87,6 +92,29 @@ impl LanguageGenerator for CppConfig {
         _: usize,
         class: &ForeignerClassInfo,
     ) -> PResult<'a, Vec<P<ast::Item>>> {
+        debug!(
+            "generate: begin for {}, this_type_for_method {:?}",
+            class.name,
+            class.this_type_for_method
+        );
+        if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
+            let this_type: RustType = this_type_for_method.clone().into();
+            let this_type = this_type.implements("SwigForeignClass");
+            let void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
+            let my_void_ptr_ti = RustType::new(
+                parse_ty(sess, DUMMY_SP, void_ptr_typename)?,
+                make_unique_rust_typename(void_ptr_typename, this_type.normalized_name),
+            );
+            let foreign_typename = Symbol::intern(&format!("{} *", cpp_code::c_class_type(class)));
+            conv_map.cache_rust_to_foreign_conv(&this_type, (my_void_ptr_ti, foreign_typename));
+            conv_map.set_generator_data_for_foreign_type(
+                foreign_typename,
+                Box::new(InfoForCpp {
+                    class_name: class.name,
+                }),
+            );
+        }
+
         let m_sigs = find_suitable_foreign_types_for_methods(sess, conv_map, class)?;
         generate_code(
             sess,
@@ -254,7 +282,7 @@ fn generate_code<'a>(
             &format!("write to {:?} failed: {}", c_path, err),
         )
     };
-    let c_class_type = format!("{}Opaque", class.name);
+    let c_class_type = cpp_code::c_class_type(class);
     let class_doc_comments = cpp_code::doc_comments_to_c_comments(&class.doc_comments, true);
     write!(
         c_include_f,
@@ -289,7 +317,26 @@ class {class_name} {{
 public:
     {class_name}(const {class_name}&) = delete;
     {class_name} &operator=(const {class_name}&) = delete;
+    {class_name}({class_name} &&o): self_(o.self_)
+    {{
+        o.self_ = nullptr;
+    }}
+    {class_name} &operator=({class_name} &&o)
+    {{
+        assert(this != &o);
+        self_ = o.self_;
+        o.self_ = nullptr;
+        return *this;
+    }}
+    explicit {class_name}({c_class_type} *o): self_(o) {{}}
+    {c_class_type} *release()
+    {{
+        {c_class_type} *ret = self_;
+        self_ = nullptr;
+        return ret;
+    }}
 "#,
+        c_class_type = c_class_type,
         class_name = class.name,
         doc_comments = class_doc_comments,
     ).map_err(&map_write_err)?;
@@ -301,98 +348,71 @@ public:
     };
     let mut gen_code = Vec::<P<ast::Item>>::new();
 
-    let (this_type_for_method, code_box_this) =
-        if let (Some(this_type), Some(constructor_ret_type)) = (
-            class.this_type_for_method.as_ref(),
-            class.constructor_ret_type.as_ref(),
-        ) {
-            let this_type: RustType = this_type.clone().into();
-            let this_type = this_type.implements("SwigForeignClass");
-            debug!(
-                "generate_code: add implements SwigForeignClass for {}",
-                this_type.normalized_name
-            );
-            conv_map.add_type(this_type.clone());
+    let (this_type_for_method, code_box_this) = if let (
+        Some(this_type),
+        Some(constructor_ret_type),
+    ) = (
+        class.this_type_for_method.as_ref(),
+        class.constructor_ret_type.as_ref(),
+    ) {
+        let this_type: RustType = this_type.clone().into();
+        let this_type = this_type.implements("SwigForeignClass");
+        debug!(
+            "generate_code: add implements SwigForeignClass for {}",
+            this_type.normalized_name
+        );
+        conv_map.add_type(this_type.clone());
 
-            let constructor_ret_type: RustType = constructor_ret_type.clone().into();
-            conv_map.add_type(constructor_ret_type);
+        let constructor_ret_type: RustType = constructor_ret_type.clone().into();
+        conv_map.add_type(constructor_ret_type);
 
-            let (this_type_for_method, code_box_this) =
-                TypesConvMap::convert_to_heap_pointer(&this_type, "this");
-            let lifetimes = {
-                let mut ret = String::new();
-                let lifetimes = list_lifetimes(&this_type.ty);
-                for (i, l) in lifetimes.iter().enumerate() {
-                    ret.push_str(&*l.as_str());
-                    if i != lifetimes.len() - 1 {
-                        ret.push(',');
-                    }
+        let (this_type_for_method, code_box_this) =
+            TypesConvMap::convert_to_heap_pointer(&this_type, "this");
+        let lifetimes = {
+            let mut ret = String::new();
+            let lifetimes = list_lifetimes(&this_type.ty);
+            for (i, l) in lifetimes.iter().enumerate() {
+                ret.push_str(&*l.as_str());
+                if i != lifetimes.len() - 1 {
+                    ret.push(',');
                 }
-                ret
-            };
+            }
+            ret
+        };
 
-            gen_code.append(&mut code_to_item(
-                sess,
-                &class.name.as_str(),
-                &format!(
-                    r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
+        gen_code.append(&mut code_to_item(
+            sess,
+            &class.name.as_str(),
+            &format!(
+                r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
     fn c_class_name() -> *const ::std::os::raw::c_char {{
         swig_c_str!("{class_name}")
     }}
-    fn box_object(this: Self) -> *const ::std::os::raw::c_void {{
+    fn box_object(this: Self) -> *mut ::std::os::raw::c_void {{
 {code_box_this}
-        this as *const ::std::os::raw::c_void
+        this as *mut ::std::os::raw::c_void
     }}
 }}"#,
-                    lifetimes = lifetimes,
-                    class_name = pprust::ty_to_string(&this_type.ty),
-                    code_box_this = code_box_this,
-                ),
-            )?);
+                lifetimes = lifetimes,
+                class_name = pprust::ty_to_string(&this_type.ty),
+                code_box_this = code_box_this,
+            ),
+        )?);
 
-            /*
-        let jlong_ti: RustType = parse_ty(sess, DUMMY_SP, Symbol::intern("jlong"))?.into();
-
-        conv_map.add_conversation_rule(
-            jlong_ti.clone(),
-            get_ref_type(&this_type_for_method.ty, ast::Mutability::Immutable).into(),
-            Symbol::intern(&format!(
-                r#"
-    let {to_var}: &{this_type} = unsafe {{
-        jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
-    }};
-"#,
-                to_var = TO_VAR_TEMPLATE,
-                from_var = FROM_VAR_TEMPLATE,
-                this_type = this_type_for_method.normalized_name,
-            )).into(),
-        );
-
-        conv_map.add_conversation_rule(
-            jlong_ti.clone(),
-            get_ref_type(&this_type_for_method.ty, ast::Mutability::Mutable).into(),
-            Symbol::intern(&format!(
-                r#"
-    let {to_var}: &mut {this_type} = unsafe {{
-        jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
-    }};
-"#,
-                to_var = TO_VAR_TEMPLATE,
-                from_var = FROM_VAR_TEMPLATE,
-                this_type = this_type_for_method.normalized_name,
-            )).into(),
+        let void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
+        let my_void_ptr_ti = RustType::new(
+            parse_ty(sess, DUMMY_SP, void_ptr_typename)?,
+            make_unique_rust_typename(void_ptr_typename, this_type.normalized_name),
         );
 
         let unpack_code =
             TypesConvMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
         conv_map.add_conversation_rule(
-            jlong_ti,
+            my_void_ptr_ti,
             this_type,
             Symbol::intern(&format!(
                 r#"
-    let {to_var}: *mut {this_type} = unsafe {{
-        jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
-    }};
+    let {to_var}: *mut {this_type} = {from_var} as *mut {this_type};
 {unpack_code}
 "#,
                 to_var = TO_VAR_TEMPLATE,
@@ -401,11 +421,11 @@ public:
                 unpack_code = unpack_code,
             )).into(),
         );
-*/
-            (this_type_for_method, code_box_this)
-        } else {
-            (dummy_ty.clone().into(), String::new())
-        };
+
+        (this_type_for_method, code_box_this)
+    } else {
+        (dummy_ty.clone().into(), String::new())
+    };
     let no_this_info = || {
         fatal_error(
             sess,
@@ -463,6 +483,17 @@ public:
         } else {
             "public"
         };
+
+        let wrap_ret_for_cpp = if let Some(info_for_cpp) =
+            conv_map.generator_data_for_foreign_type(f_method.output.base.name)
+        {
+            let info_for_cpp: &InfoForCpp = info_for_cpp.downcast_ref::<InfoForCpp>().unwrap();
+            info_for_cpp.class_name
+        } else {
+            Symbol::intern("")
+        };
+        let is_wrap_ret_for_cpp = wrap_ret_for_cpp.as_str().is_empty();
+
         match method.variant {
             MethodVariant::StaticMethod => {
                 write!(
@@ -481,12 +512,17 @@ public:
 {access}:
     static {ret_type} {method_name}({args_with_types})
     {{
-        return {c_func_name}({args});
+        return {wrap_ret_for_cpp}({c_func_name}({args}));
     }}
 "#,
                     access = method_access,
                     method_name = method_name,
-                    ret_type = f_method.output.as_ref().name,
+                    ret_type = if is_wrap_ret_for_cpp {
+                        f_method.output.as_ref().name
+                    } else {
+                        wrap_ret_for_cpp
+                    },
+                    wrap_ret_for_cpp = wrap_ret_for_cpp,
                     c_func_name = c_func_name,
                     args_with_types = c_args_with_types,
                     args = args_names,
@@ -517,12 +553,17 @@ public:
 {access}:
     {ret_type} {method_name}({args_with_types}) {const_if_readonly}
     {{
-        return {c_func_name}(this->self_{args});
+        return {wrap_ret_for_cpp}({c_func_name}(this->self_{args}));
     }}
 "#,
                     access = method_access,
                     method_name = method_name,
-                    ret_type = f_method.output.as_ref().name,
+                    ret_type = if is_wrap_ret_for_cpp {
+                        f_method.output.as_ref().name
+                    } else {
+                        wrap_ret_for_cpp
+                    },
+                    wrap_ret_for_cpp = wrap_ret_for_cpp,
                     c_func_name = c_func_name,
                     args_with_types = c_args_with_types,
                     args = if args_names.is_empty() {
@@ -632,11 +673,10 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
 public:
     ~{class_name}()
     {{
-        if (this->self_ == nullptr) {{
-            std::abort();
+        if (this->self_ != nullptr) {{
+            {c_destructor_name}(this->self_);
+            this->self_ = nullptr;
         }}
-        {c_destructor_name}(this->self_);
-        this->self_ = nullptr;
     }}
 "#,
             class_name = class.name,

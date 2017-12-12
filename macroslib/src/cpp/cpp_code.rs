@@ -6,7 +6,7 @@ use std::fs::File;
 use std::fmt;
 use std::path::Path;
 
-use {ForeignEnumInfo, ForeignInterface};
+use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo};
 use super::{fmt_write_err_map, CppForeignMethodSignature};
 
 pub(in cpp) fn generate_code_for_enum(
@@ -136,4 +136,8 @@ pub(in cpp) fn generate_args_with_types(
         write!(&mut buf, "{} a_{}", f_type_info.as_ref().name, i).map_err(fmt_write_err_map)?;
     }
     Ok(buf)
+}
+
+pub(in cpp) fn c_class_type(class: &ForeignerClassInfo) -> String {
+    format!("{}Opaque", class.name)
 }

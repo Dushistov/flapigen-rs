@@ -148,3 +148,28 @@ foreigner_class!(class CheckPrimitiveTypesClass {
     static_method test_f32(v: f32) -> f32;
     static_method test_f64(v: f64) -> f64;
 });
+
+pub struct ClassCooperationTest {
+    data: Vec<Foo>,
+}
+
+impl ClassCooperationTest {
+    fn new() -> ClassCooperationTest {
+        ClassCooperationTest {
+            data: vec![Foo::new(5, "5"), Foo::new(6, "7")],
+        }
+    }
+    fn get(&self, idx: u32) -> Foo {
+        self.data[idx as usize].clone()
+    }
+    fn set(&mut self, idx: u32, foo: Foo) {
+        self.data[idx as usize] = foo;
+    }
+}
+
+foreigner_class!(class ClassCooperationTest {
+    self_type ClassCooperationTest;
+    constructor ClassCooperationTest::new() -> ClassCooperationTest;
+    method ClassCooperationTest::get(&self, _: u32) -> Foo;
+    method ClassCooperationTest::set(&mut self, _: u32, _: Foo);
+});
