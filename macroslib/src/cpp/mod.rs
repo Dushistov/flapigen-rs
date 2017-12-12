@@ -606,7 +606,7 @@ public:
             r#"
 #[allow(unused_variables, unused_mut, non_snake_case)]
 #[no_mangle]
-pub fn {c_destructor_name}(this: *mut {this_type}) {{
+pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
 {unpack_code}
     drop(this);
 }}
@@ -748,7 +748,7 @@ fn generate_static_method<'a>(
         r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
 #[no_mangle]
-pub fn {func_name}({decl_func_args}) -> {c_ret_type} {{
+pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
 {convert_input_code}
     let mut ret: {real_output_typename} = {rust_func_name}({args_names});
 {convert_output_code}
@@ -821,7 +821,7 @@ fn generate_method<'a>(
         r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
 #[no_mangle]
-pub fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_ret_type} {{
+pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_ret_type} {{
 {convert_input_code}
     let this: {this_type_ref} = unsafe {{
         this.as_mut().unwrap()
@@ -885,7 +885,7 @@ fn generate_constructor<'a>(
         r#"
 #[no_mangle]
 #[allow(unused_variables, unused_mut, non_snake_case)]
-pub fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void {{
+pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void {{
 {convert_input_code}
     let this: {real_output_typename} = {rust_func_name}({args_names});
 {convert_this}

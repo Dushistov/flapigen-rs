@@ -276,7 +276,7 @@ pub(in java_jni) fn generate_rust_code<'a>(
             r#"
 #[allow(unused_variables, unused_mut, non_snake_case)]
 #[no_mangle]
-pub fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong) {{
+pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong) {{
     let this: *mut {this_type} = unsafe {{
         jlong_to_pointer::<{this_type}>(this).as_mut().unwrap()
     }};
@@ -462,9 +462,7 @@ impl {trait_name} for JavaCallback {{
             .rust_name
             .segments
             .last()
-            .ok_or_else(|| {
-                fatal_error(sess, method.rust_name.span, "Empty trait function name")
-            })?
+            .ok_or_else(|| fatal_error(sess, method.rust_name.span, "Empty trait function name"))?
             .identifier
             .name;
         let rest_args_with_types: String = method
@@ -473,9 +471,7 @@ impl {trait_name} for JavaCallback {{
             .iter()
             .skip(1)
             .enumerate()
-            .map(|(i, v)| {
-                format!("a_{}: {}", i, pprust::ty_to_string(&*v.ty))
-            })
+            .map(|(i, v)| format!("a_{}: {}", i, pprust::ty_to_string(&*v.ty)))
             .fold(String::new(), |mut acc, x| {
                 acc.push_str(", ");
                 acc.push_str(&x);
@@ -675,7 +671,7 @@ fn generate_static_method<'a>(
         r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
 #[no_mangle]
-pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_type} {{
+pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_type} {{
 {convert_input_code}
     let mut ret: {real_output_typename} = {rust_func_name}({args_names});
 {convert_output_code}
@@ -731,7 +727,7 @@ fn generate_constructor<'a>(
         r#"
 #[no_mangle]
 #[allow(unused_variables, unused_mut, non_snake_case)]
-pub fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
+pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
 {convert_input_code}
     let this: {real_output_typename} = {rust_func_name}({args_names});
 {convert_this}
@@ -804,7 +800,8 @@ fn generate_method<'a>(
         r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
 #[no_mangle]
-pub fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -> {jni_ret_type} {{
+pub extern "C"
+ fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -> {jni_ret_type} {{
 {convert_input_code}
     let this: {this_type_ref} = unsafe {{
         jlong_to_pointer::<{this_type}>(this).as_mut().unwrap()
@@ -904,10 +901,8 @@ fn convert_args_for_variadic_function_call(
 
     let mut ret = String::new();
     for (i, arg) in f_method.input.iter().enumerate() {
-        if let Some(conv_type) = JNI_FOR_VARIADIC_C_FUNC_CALL.get(&*arg.as_ref()
-            .correspoding_rust_type
-            .normalized_name
-            .as_str())
+        if let Some(conv_type) = JNI_FOR_VARIADIC_C_FUNC_CALL
+            .get(&*arg.as_ref().correspoding_rust_type.normalized_name.as_str())
         {
             write!(&mut ret, ", a_{} as {}", i, conv_type).unwrap();
         } else {
