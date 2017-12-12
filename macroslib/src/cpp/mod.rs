@@ -339,9 +339,9 @@ public:
     fn c_class_name() -> *const ::std::os::raw::c_char {{
         swig_c_str!("{class_name}")
     }}
-    fn box_object(this: Self) -> *const {class_name} {{
+    fn box_object(this: Self) -> *const ::std::os::raw::c_void {{
 {code_box_this}
-        this
+        this as *const ::std::os::raw::c_void
     }}
 }}"#,
                     lifetimes = lifetimes,
@@ -406,7 +406,6 @@ public:
         } else {
             (dummy_ty.clone().into(), String::new())
         };
-
     let no_this_info = || {
         fatal_error(
             sess,
@@ -572,7 +571,6 @@ public:
                     access = method_access,
                     args = args_names,
                 ).map_err(&map_write_err)?;
-
                 let constructor_ret_type = class
                     .constructor_ret_type
                     .as_ref()
@@ -887,12 +885,12 @@ fn generate_constructor<'a>(
         r#"
 #[no_mangle]
 #[allow(unused_variables, unused_mut, non_snake_case)]
-pub fn {func_name}({decl_func_args}) -> *const {ret_type_name} {{
+pub fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void {{
 {convert_input_code}
     let this: {real_output_typename} = {rust_func_name}({args_names});
 {convert_this}
 {box_this}
-    this
+    this as *const ::std::os::raw::c_void
 }}
 "#,
         func_name = mc.c_func_name,
@@ -902,7 +900,6 @@ pub fn {func_name}({decl_func_args}) -> *const {ret_type_name} {{
         rust_func_name = mc.method.rust_id,
         args_names = mc.args_names,
         box_this = code_box_this,
-        ret_type_name = &ret_type_name,
         real_output_typename = &construct_ret_type.normalized_name.as_str(),
     );
     let mut gen_code = deps_code_in;
@@ -1177,9 +1174,7 @@ impl {trait_name} for {struct_with_funcs} {{
             .rust_name
             .segments
             .last()
-            .ok_or_else(|| {
-                fatal_error(sess, method.rust_name.span, "Empty trait function name")
-            })?
+            .ok_or_else(|| fatal_error(sess, method.rust_name.span, "Empty trait function name"))?
             .identifier
             .name;
         let rest_args_with_types: String = method
@@ -1188,9 +1183,7 @@ impl {trait_name} for {struct_with_funcs} {{
             .iter()
             .skip(1)
             .enumerate()
-            .map(|(i, v)| {
-                format!("a_{}: {}", i, pprust::ty_to_string(&*v.ty))
-            })
+            .map(|(i, v)| format!("a_{}: {}", i, pprust::ty_to_string(&*v.ty)))
             .fold(String::new(), |mut acc, x| {
                 acc.push_str(", ");
                 acc.push_str(&x);

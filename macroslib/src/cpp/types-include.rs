@@ -40,7 +40,7 @@ macro_rules! swig_c_str {
 #[allow(dead_code)]
 trait SwigForeignClass {
     fn c_class_name() -> *const ::std::os::raw::c_char;
-    fn box_object(x: Self) -> *const Self;
+    fn box_object(x: Self) -> *const ::std::os::raw::c_void;
 }
 
 #[allow(dead_code)]
@@ -60,6 +60,13 @@ trait SwigFrom<T> {
 trait SwigDeref {
     type Target: ?Sized;
     fn swig_deref(&self) -> &Self::Target;
+}
+
+#[allow(dead_code)]
+#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_deref_mut();"]
+trait SwigDerefMut {
+    type Target: ?Sized;
+    fn swig_deref_mut(&mut self) -> &mut Self::Target;
 }
 
 impl SwigInto<bool> for ::std::os::raw::c_char {
@@ -106,5 +113,85 @@ impl<'a> SwigFrom<&'a str> for RustStrView {
             data: s.as_ptr() as *const ::std::os::raw::c_char,
             len: s.len() as u32,
         }
+    }
+}
+impl<T> SwigDeref for Arc<Mutex<T>> {
+    type Target = Mutex<T>;
+    fn swig_deref(&self) -> &Mutex<T> {
+        self
+    }
+}
+
+impl<'a, T> SwigFrom<&'a Mutex<T>> for MutexGuard<'a, T> {
+    fn swig_from(m: &'a Mutex<T>) -> MutexGuard<'a, T> {
+        m.lock().unwrap()
+    }
+}
+
+impl<'a, T> SwigDeref for MutexGuard<'a, T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        self
+    }
+}
+
+impl<'a, T> SwigDerefMut for MutexGuard<'a, T> {
+    type Target = T;
+    fn swig_deref_mut(&mut self) -> &mut T {
+        self
+    }
+}
+
+impl<T> SwigDeref for Rc<T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        self
+    }
+}
+
+impl<'a, T> SwigDeref for &'a Rc<T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        self
+    }
+}
+
+impl<'a, T> SwigFrom<&'a RefCell<T>> for Ref<'a, T> {
+    fn swig_from(m: &'a RefCell<T>) -> Ref<'a, T> {
+        m.borrow()
+    }
+}
+
+impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
+    fn swig_from(m: &'a RefCell<T>) -> RefMut<'a, T> {
+        m.borrow_mut()
+    }
+}
+
+impl<'a, T> SwigDeref for Ref<'a, T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        self
+    }
+}
+
+impl<'a, T> SwigDerefMut for RefMut<'a, T> {
+    type Target = T;
+    fn swig_deref_mut(&mut self) -> &mut T {
+        self
+    }
+}
+
+impl<T: SwigForeignClass> SwigDeref for T {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        self
+    }
+}
+
+impl<T: SwigForeignClass> SwigDerefMut for T {
+    type Target = T;
+    fn swig_deref_mut(&mut self) -> &mut T {
+        self
     }
 }

@@ -1,3 +1,6 @@
+use std::rc::Rc;
+use std::cell::{Ref, RefCell, RefMut};
+
 #[derive(Clone)]
 pub struct Foo {
     data: i32,
@@ -18,7 +21,7 @@ impl Foo {
     }
     fn name(&self) -> &str {
         &self.name
-    }   
+    }
     fn set_field(&mut self, v: i32) {
         self.data = v;
     }
@@ -29,7 +32,16 @@ impl Foo {
     fn one_and_half(&self) -> f64 {
         (self.data as f64) * 1.5
     }
+
+    fn f_double(&self, a: f64, b: f64) -> f64 {
+        a.hypot(b) + self.data as f64
+    }
 }
+
+fn f_hypot(a: f64, b: f64) -> f64 {
+    a.hypot(b)
+}
+
 
 trait SomeObserver {
     fn on_state_changed(&self, _: i32, _: bool);
@@ -44,8 +56,95 @@ foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32, _: &str) -> Foo;
     method Foo::f(&self, a: i32, b: i32) -> i32;
+    method Foo::f_double(&self, _: f64, _: f64) -> f64;
     method Foo::name(&self) -> &str; alias getName;
     method Foo::set_field(&mut self, v: i32);
     method Foo::one_and_half(&self) -> f64;
     static_method Foo::call_me(_: Box<SomeObserver>);
+    static_method f_hypot(_: f64, _: f64) -> f64; alias fHypot;
+});
+
+
+pub struct CheckPrimitiveTypesClass {
+    a: i32,
+}
+
+impl CheckPrimitiveTypesClass {
+    fn new() -> CheckPrimitiveTypesClass {
+        CheckPrimitiveTypesClass { a: 17 }
+    }
+    fn test(&self, a: bool) -> f32 {
+        if a {
+            ::std::f32::consts::E
+        } else {
+            ::std::f32::consts::PI
+        }
+    }
+    fn set_a(&mut self, val: i32) {
+        self.a = val;
+    }
+    fn get_a(&self) -> i32 {
+        self.a
+    }
+}
+
+fn create_boo() -> Rc<RefCell<CheckPrimitiveTypesClass>> {
+    Rc::new(RefCell::new(CheckPrimitiveTypesClass::new()))
+}
+
+fn test_u8(v: u8) -> u8 {
+    v + 1
+}
+
+fn test_i8(v: i8) -> i8 {
+    v + 1
+}
+
+fn test_u16(v: u16) -> u16 {
+    v + 1
+}
+
+fn test_i16(v: i16) -> i16 {
+    v + 1
+}
+
+fn test_i32(v: i32) -> i32 {
+    v + 1
+}
+
+fn test_u32(v: u32) -> u32 {
+    v + 1
+}
+
+fn test_u64(v: u64) -> u64 {
+    v + 1
+}
+
+fn test_i64(v: i64) -> i64 {
+    v + 1
+}
+
+fn test_f32(v: f32) -> f32 {
+    v + 1.
+}
+fn test_f64(v: f64) -> f64 {
+    v + 1.
+}
+
+foreigner_class!(class CheckPrimitiveTypesClass {
+    self_type CheckPrimitiveTypesClass;
+    constructor create_boo() -> Rc<RefCell<CheckPrimitiveTypesClass>>;
+    method CheckPrimitiveTypesClass::test(&self, _: bool) -> f32;
+    method CheckPrimitiveTypesClass::set_a(&mut self, _: i32); alias setA;
+    method CheckPrimitiveTypesClass::get_a(&self) -> i32; alias getA;
+    static_method test_u8(v: u8) -> u8;
+    static_method test_i8(v: i8) -> i8;
+    static_method test_u16(v: u16) -> u16;
+    static_method test_i16(v: i16) -> i16;
+    static_method test_i32(v: i32) -> i32;
+    static_method test_u32(v: u32) -> u32;
+    static_method test_u64(v: u64) -> u64;
+    static_method test_i64(v: i64) -> i64;
+    static_method test_f32(v: f32) -> f32;
+    static_method test_f64(v: f64) -> f64;
 });
