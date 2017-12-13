@@ -40,7 +40,7 @@ macro_rules! swig_c_str {
 #[allow(dead_code)]
 trait SwigForeignClass {
     fn c_class_name() -> *const ::std::os::raw::c_char;
-    fn box_object(x: Self) -> *const ::std::os::raw::c_void;
+    fn box_object(x: Self) -> *mut ::std::os::raw::c_void;
 }
 
 #[allow(dead_code)]
@@ -193,5 +193,12 @@ impl<T: SwigForeignClass> SwigDerefMut for T {
     type Target = T;
     fn swig_deref_mut(&mut self) -> &mut T {
         self
+    }
+}
+
+#[swig_to_foreigner_hint = "T"]
+impl<T: SwigForeignClass> SwigFrom<T> for *mut ::std::os::raw::c_void {
+    fn swig_from(x: T) -> Self {
+        <T>::box_object(x)
     }
 }

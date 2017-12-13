@@ -14,6 +14,8 @@
 #include "rust_interface/c_CheckPrimitiveTypesClass.h"
 #include "rust_interface/c_Foo.h"
 #include "rust_interface/c_SomeObserver.h"
+#include "rust_interface/c_ClassCooperationTest.h"
+#include "rust_interface/ClassCooperationTest.hpp"
 #include <gtest/gtest.h>
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
@@ -101,6 +103,23 @@ TEST(CheckPrimitiveTypesClass, smokeTest)
     EXPECT_EQ(0, CheckPrimitiveTypesClass::test_i64(-1));
     EXPECT_NEAR(2.1f, CheckPrimitiveTypesClass::test_f32(1.1), 1e-12);
     EXPECT_NEAR(0., CheckPrimitiveTypesClass::test_f64(-1.0), 1e-12);
+}
+
+TEST(ClassCooperationTest, smokeTest)
+{
+    ClassCooperationTest x;
+    auto f1 = x.get(0);
+    EXPECT_EQ(std::string("5"), f1.getName().as_str());
+    EXPECT_EQ(5, f1.f(0, 0));
+    auto f2 = x.get(1);
+    EXPECT_EQ(std::string("7"), f2.getName().as_str());
+    EXPECT_EQ(6, f2.f(0, 0));
+
+    Foo new_f2{437, "437"};
+    x.set(1, new_f2.release());
+    f2 = x.get(1);
+    EXPECT_EQ(std::string("437"), f2.getName().as_str());
+    EXPECT_EQ(437, f2.f(0, 0));
 }
 
 int main(int argc, char *argv[])
