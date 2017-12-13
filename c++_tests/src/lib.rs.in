@@ -173,3 +173,42 @@ foreigner_class!(class ClassCooperationTest {
     method ClassCooperationTest::get(&self, _: u32) -> Foo;
     method ClassCooperationTest::set(&mut self, _: u32, _: Foo);
 });
+
+trait DummySetterGetter {
+    fn get(&self) -> i32;
+    fn set(&mut self, i32);
+}
+
+pub struct TestObjectLifetime<'a> {
+    data: Box<DummySetterGetter + 'a>,
+}
+
+impl DummySetterGetter for i32 {
+    fn get(&self) -> i32 {
+        *self
+    }
+    fn set(&mut self, x: i32) {
+        *self = x;
+    }
+}
+impl<'a> TestObjectLifetime<'a> {
+    fn set_data(&mut self, v1: i8, v2: i16, v3: i32, v4: f64, v5: f32) {
+        self.data
+            .set(v1 as i32 + v2 as i32 + v3 + v4 as i32 + v5 as i32);
+    }
+
+    fn get_data(&self) -> i32 {
+        self.data.get()
+    }
+}
+
+fn create_test_obj_with_lifetime<'a>() -> TestObjectLifetime<'a> {
+    TestObjectLifetime { data: Box::new(5) }
+}
+
+foreigner_class!(class TestObjectLifetime {
+    self_type TestObjectLifetime<'a>;
+    constructor create_test_obj_with_lifetime() -> TestObjectLifetime<'a>;
+    method TestObjectLifetime::set_data(&mut self, v1: i8, v2: i16, v3: i32, v4: f64, v5: f32);
+    method TestObjectLifetime::get_data(&self) -> i32;
+});
