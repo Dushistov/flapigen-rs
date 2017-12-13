@@ -16,6 +16,8 @@
 #include "rust_interface/c_SomeObserver.h"
 #include "rust_interface/c_ClassCooperationTest.h"
 #include "rust_interface/ClassCooperationTest.hpp"
+#include "rust_interface/c_TestObjectLifetime.h"
+#include "rust_interface/TestObjectLifetime.hpp"
 #include <gtest/gtest.h>
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
@@ -115,11 +117,19 @@ TEST(ClassCooperationTest, smokeTest)
     EXPECT_EQ(std::string("7"), f2.getName().as_str());
     EXPECT_EQ(6, f2.f(0, 0));
 
-    Foo new_f2{437, "437"};
+    Foo new_f2{ 437, "437" };
     x.set(1, new_f2.release());
     f2 = x.get(1);
     EXPECT_EQ(std::string("437"), f2.getName().as_str());
     EXPECT_EQ(437, f2.f(0, 0));
+}
+
+TEST(TestObjectLifetime, smokeTest)
+{
+    TestObjectLifetime x;
+    EXPECT_EQ(5, x.get_data());
+    x.set_data(1, 2, 3, 4., 5.);
+    EXPECT_EQ(15, x.get_data());
 }
 
 int main(int argc, char *argv[])
