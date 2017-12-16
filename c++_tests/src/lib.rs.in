@@ -212,3 +212,30 @@ foreigner_class!(class TestObjectLifetime {
     method TestObjectLifetime::set_data(&mut self, v1: i8, v2: i16, v3: i32, v4: f64, v5: f32);
     method TestObjectLifetime::get_data(&self) -> i32;
 });
+
+pub struct TestWorkWithVec {
+    data_tag: String,
+}
+
+impl TestWorkWithVec {
+    fn new(tag: &str) -> TestWorkWithVec {
+        println!("tag: {}", tag);
+        TestWorkWithVec {
+            data_tag: tag.to_string(),
+        }
+    }
+    fn get_bytes(&self, n: u32) -> Vec<u8> {
+        println!("get_bytes n {}", n);
+        let mut res = String::new();
+        for _ in 0..n {
+            res.push_str(&self.data_tag);
+        }
+        res.into_bytes()
+    }
+}
+
+foreigner_class!(class TestWorkWithVec {
+    self_type TestWorkWithVec;
+    constructor TestWorkWithVec::new(_: &str) -> TestWorkWithVec;
+    method TestWorkWithVec::get_bytes(&self, n: u32) -> Vec<u8>;
+});
