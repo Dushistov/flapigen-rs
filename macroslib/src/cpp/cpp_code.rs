@@ -39,19 +39,14 @@ enum {enum_name} {{
             index = i,
             doc_comments = doc_comments_to_c_comments(&item.doc_comments, false),
             separator = if i == enum_info.items.len() - 1 {
-                '\n'
+                "\n"
             } else {
-                ','
+                ","
             },
         ).map_err(&map_write_err)?;
     }
 
-    write!(
-        file,
-        r#"
-}};
-"#
-    ).map_err(&map_write_err)?;
+    write!(file, "}};\n").map_err(&map_write_err)?;
 
     Ok(())
 }
