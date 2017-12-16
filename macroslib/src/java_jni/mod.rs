@@ -98,7 +98,13 @@ impl LanguageGenerator for JavaConfig {
                 jobject_ty,
                 make_unique_rust_typename(jobject_name, this_type.normalized_name),
             );
-            conv_map.cache_rust_to_foreign_conv(&this_type, (my_jobj_ti, class.name));
+            conv_map.cache_rust_to_foreign_conv(
+                &this_type,
+                ForeignTypeInfo {
+                    correspoding_rust_type: my_jobj_ti,
+                    name: class.name,
+                },
+            );
         }
 
         let f_methods_sign = find_suitable_foreign_types_for_methods(sess, conv_map, class)?;

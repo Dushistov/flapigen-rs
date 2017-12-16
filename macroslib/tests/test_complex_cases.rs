@@ -21,7 +21,7 @@ mod test_helper;
 #[test]
 fn test_foreign_class_as_return_type_simple() {
     // without result Type and without "foreign" args
-    parse_code(
+    let gen_code = parse_code(
         "foreign_class_as_return_type_simple",
         r#"
 foreigner_class!(class Foo {
@@ -40,11 +40,21 @@ foreigner_class!(class Boo {
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
     );
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("Foo get_one_foo() const")
+    );
 }
 
 #[test]
 fn test_foreign_class_as_arg_type_simple() {
-    parse_code(
+    let gen_code = parse_code(
         "test_foreign_class_as_arg_type_simple",
         r#"
 foreigner_class!(class Foo {
@@ -62,6 +72,17 @@ foreigner_class!(class Boo {
 });
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
+    );
+
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("uintptr_t f(Foo a_0) const")
     );
 }
 
@@ -274,7 +295,7 @@ foreigner_class!(class TestPassObjectsAsParams {
 
 #[test]
 fn test_document_generated_code() {
-    parse_code(
+    let gen_code = parse_code(
         "test_document_generated_code",
         r#"
 foreigner_class!(
@@ -288,8 +309,12 @@ class Foo {
     method Foo::f(&self, _: i32, _: i32) -> i32;
 });
 "#,
-        &[ForeignLang::Java],
+        &[ForeignLang::Java, ForeignLang::Cpp],
     );
+    for code in &gen_code {
+        println!("rust_code: {}", code.rust_code);
+        println!("foreign: {}", code.foreign_code);
+    }
 }
 
 #[test]

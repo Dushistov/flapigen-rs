@@ -13,7 +13,7 @@ use syntex_syntax::ptr::P;
 use my_ast::{normalized_ty_string, parse_ty, GenericTypeConv, RustType};
 use super::{validate_code_template, NodeIndex, TypeConvEdge, TypeGraphIdx, TypesConvGraph,
             TypesConvMap};
-use types_conv_map::{make_unique_rust_typename, make_unique_rust_typename_if_need, ForeignTypeData};
+use types_conv_map::{make_unique_rust_typename, make_unique_rust_typename_if_need};
 use errors::fatal_error;
 
 static MOD_NAME_WITH_FOREIGN_TYPES: &'static str = "swig_foreign_types_map";
@@ -79,7 +79,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                     .entry(rust_name)
                     .or_insert_with(|| conv_graph.add_node(RustType::new(rust_ty, rust_name)));
                 assert!(!foreign_names_map.contains_key(&foreign_name));
-                foreign_names_map.insert(foreign_name, ForeignTypeData::new(graph_id));
+                foreign_names_map.insert(foreign_name, graph_id);
             }
             continue;
         }
@@ -473,16 +473,18 @@ fn parse_foreign_types_map_mod<'a>(
     }
 
 
-    Ok(names_map
-        .into_iter()
-        .map(|(k, v)| {
-            TypeNamesMapEntry {
-                foreign_name: k,
-                rust_name: v.0,
-                rust_ty: v.1,
-            }
-        })
-        .collect())
+    Ok(
+        names_map
+            .into_iter()
+            .map(|(k, v)| {
+                TypeNamesMapEntry {
+                    foreign_name: k,
+                    rust_name: v.0,
+                    rust_ty: v.1,
+                }
+            })
+            .collect(),
+    )
 }
 
 
@@ -802,7 +804,7 @@ mod swig_foreign_types_map {
             {
                 let mut set = HashSet::new();
                 for (k, v) in conv_map.foreign_names_map {
-                    set.insert((k, conv_map.conv_graph[v.rust_type_idx].normalized_name));
+                    set.insert((k, conv_map.conv_graph[v].normalized_name));
                 }
                 set
             },

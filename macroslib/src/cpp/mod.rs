@@ -25,10 +25,16 @@ use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
 use {CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
      LanguageGenerator, MethodVariant, SelfTypeVariant, TypesConvMap};
 
+struct CppConverter {
+    typename: Symbol,
+    converter: Symbol,
+}
+
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
-    pub cpp_transition_type: Option<Symbol>,
-    cpp_converter: String,
+    pub(in cpp) c_transition_type: Option<Symbol>,
+    c_converter: String,
+    pub(in cpp) cpp_converter: Option<CppConverter>,
 }
 
 impl AsRef<ForeignTypeInfo> for CppForeignTypeInfo {
@@ -38,8 +44,8 @@ impl AsRef<ForeignTypeInfo> for CppForeignTypeInfo {
 }
 
 impl CppForeignTypeInfo {
-    fn cpp_need_conversation(&self) -> bool {
-        !self.cpp_converter.is_empty()
+    fn c_need_conversation(&self) -> bool {
+        !self.c_converter.is_empty()
     }
 }
 
@@ -55,8 +61,9 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
                 name: x.name,
                 correspoding_rust_type: x.correspoding_rust_type,
             },
-            cpp_transition_type: None,
-            cpp_converter: String::new(),
+            c_transition_type: None,
+            c_converter: String::new(),
+            cpp_converter: None,
         }
     }
 }
@@ -78,10 +85,6 @@ struct MethodContext<'a> {
     decl_func_args: &'a str,
     args_names: &'a str,
     real_output_typename: &'a str,
-}
-
-struct InfoForCpp {
-    class_name: Symbol,
 }
 
 impl LanguageGenerator for CppConfig {
@@ -106,12 +109,12 @@ impl LanguageGenerator for CppConfig {
                 make_unique_rust_typename(void_ptr_typename, this_type.normalized_name),
             );
             let foreign_typename = Symbol::intern(&format!("{} *", cpp_code::c_class_type(class)));
-            conv_map.cache_rust_to_foreign_conv(&this_type, (my_void_ptr_ti, foreign_typename));
-            conv_map.set_generator_data_for_foreign_type(
-                foreign_typename,
-                Box::new(InfoForCpp {
-                    class_name: class.name,
-                }),
+            conv_map.cache_rust_to_foreign_conv(
+                &this_type,
+                ForeignTypeInfo {
+                    correspoding_rust_type: my_void_ptr_ti,
+                    name: foreign_typename,
+                },
             );
         }
 
@@ -194,7 +197,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
         let mut input =
             Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            if let Some(converter) = special_type(conv_map, &arg.ty)? {
+            if let Some(converter) = special_type(sess, conv_map, &arg.ty, true)? {
                 input.push(converter);
                 continue;
             }
@@ -213,11 +216,11 @@ fn find_suitable_foreign_types_for_methods<'a>(
                 })?;
             input.push(f_arg_type.into());
         }
-        let output = match method.variant {
+        let output: CppForeignTypeInfo = match method.variant {
             MethodVariant::Constructor => ForeignTypeInfo {
                 name: empty_symbol,
                 correspoding_rust_type: dummy_ty.clone().into(),
-            },
+            }.into(),
             _ => match method.fn_decl.output {
                 ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
                     name: Symbol::intern("void"),
@@ -226,26 +229,30 @@ fn find_suitable_foreign_types_for_methods<'a>(
                         ty.span = sp;
                         ty.into()
                     },
-                },
-                ast::FunctionRetTy::Ty(ref rt) => conv_map
-                    .map_through_conversation_to_foreign(&*rt, Direction::Outgoing, rt.span)
-                    .ok_or_else(|| {
-                        fatal_error(
-                            sess,
-                            rt.span,
-                            &format!(
-                                "Do not know conversation from \
-                                 such rust type '{}' to foreign",
-                                normalized_ty_string(&*rt)
-                            ),
-                        )
-                    })?,
+                }.into(),
+                ast::FunctionRetTy::Ty(ref rt) => {
+                    if let Some(converter) = special_type(sess, conv_map, &*rt, false)? {
+                        converter
+                    } else {
+                        conv_map
+                            .map_through_conversation_to_foreign(&*rt, Direction::Outgoing, rt.span)
+                            .ok_or_else(|| {
+                                fatal_error(
+                                    sess,
+                                    rt.span,
+                                    &format!(
+                                        "Do not know conversation from \
+                                         such rust type '{}' to foreign",
+                                        normalized_ty_string(&*rt)
+                                    ),
+                                )
+                            })?
+                            .into()
+                    }
+                }
             },
         };
-        ret.push(CppForeignMethodSignature {
-            output: output.into(),
-            input,
-        });
+        ret.push(CppForeignMethodSignature { output, input });
     }
     Ok(ret)
 }
@@ -446,13 +453,19 @@ public:
             "{}",
             cpp_code::doc_comments_to_c_comments(&method.doc_comments, false)
         ).map_err(&map_write_err)?;
+        let method_access = if method.foreigner_private {
+            "private"
+        } else {
+            "public"
+        };
         write!(
             cpp_include_f,
-            "{}",
+            "{}:\n{}",
+            method_access,
             cpp_code::doc_comments_to_c_comments(&method.doc_comments, false)
         ).map_err(&map_write_err)?;
         let c_func_name = c_func_name(class, method, f_method);
-        let c_args_with_types = cpp_code::generate_args_with_types(f_method)
+        let c_args_with_types = cpp_code::c_generate_args_with_types(f_method)
             .map_err(|err| fatal_error(sess, class.span, &err))?;
         let comma_c_args_with_types = if c_args_with_types.is_empty() {
             "".to_string()
@@ -461,6 +474,10 @@ public:
         };
         let args_names = n_arguments_list(f_method.input.len());
 
+        let cpp_args_with_types = cpp_code::cpp_generate_args_with_types(f_method)
+            .map_err(|err| fatal_error(sess, class.span, &err))?;
+        let cpp_args_for_c = cpp_code::cpp_generate_args_to_call_c(f_method)
+            .map_err(|err| fatal_error(sess, class.span, &err))?;
         let real_output_typename = match method.fn_decl.output {
             ast::FunctionRetTy::Default(_) => "()".to_string(),
             ast::FunctionRetTy::Ty(ref t) => normalized_ty_string(&*t),
@@ -478,21 +495,13 @@ public:
         };
 
         let method_name = method.short_name().as_str().to_string();
-        let method_access = if method.foreigner_private {
-            "private"
-        } else {
-            "public"
-        };
-
-        let wrap_ret_for_cpp = if let Some(info_for_cpp) =
-            conv_map.generator_data_for_foreign_type(f_method.output.base.name)
-        {
-            let info_for_cpp: &InfoForCpp = info_for_cpp.downcast_ref::<InfoForCpp>().unwrap();
-            info_for_cpp.class_name
+        let mut is_wrap_ret_for_cpp = false;
+        let wrap_ret_for_cpp = if let Some(cpp_converter) = f_method.output.cpp_converter.as_ref() {
+            is_wrap_ret_for_cpp = true;
+            cpp_converter.converter
         } else {
             Symbol::intern("")
         };
-        let is_wrap_ret_for_cpp = wrap_ret_for_cpp.as_str().is_empty();
 
         match method.variant {
             MethodVariant::StaticMethod => {
@@ -509,23 +518,21 @@ public:
                 write!(
                     cpp_include_f,
                     r#"
-{access}:
-    static {ret_type} {method_name}({args_with_types})
+    static {ret_type} {method_name}({cpp_args_with_types})
     {{
-        return {wrap_ret_for_cpp}({c_func_name}({args}));
+        return {wrap_ret_for_cpp}({c_func_name}({cpp_args_for_c}));
     }}
 "#,
-                    access = method_access,
                     method_name = method_name,
-                    ret_type = if is_wrap_ret_for_cpp {
+                    ret_type = if !is_wrap_ret_for_cpp {
                         f_method.output.as_ref().name
                     } else {
                         wrap_ret_for_cpp
                     },
                     wrap_ret_for_cpp = wrap_ret_for_cpp,
                     c_func_name = c_func_name,
-                    args_with_types = c_args_with_types,
-                    args = args_names,
+                    cpp_args_with_types = cpp_args_with_types,
+                    cpp_args_for_c = cpp_args_for_c,
                 ).map_err(&map_write_err)?;
 
                 gen_code.append(&mut generate_static_method(sess, conv_map, &method_ctx)?);
@@ -550,26 +557,24 @@ public:
                 write!(
                     cpp_include_f,
                     r#"
-{access}:
-    {ret_type} {method_name}({args_with_types}) {const_if_readonly}
+    {ret_type} {method_name}({cpp_args_with_types}) {const_if_readonly}
     {{
-        return {wrap_ret_for_cpp}({c_func_name}(this->self_{args}));
+        return {wrap_ret_for_cpp}({c_func_name}(this->self_{cpp_args_for_c}));
     }}
 "#,
-                    access = method_access,
                     method_name = method_name,
-                    ret_type = if is_wrap_ret_for_cpp {
+                    ret_type = if !is_wrap_ret_for_cpp {
                         f_method.output.as_ref().name
                     } else {
                         wrap_ret_for_cpp
                     },
                     wrap_ret_for_cpp = wrap_ret_for_cpp,
                     c_func_name = c_func_name,
-                    args_with_types = c_args_with_types,
-                    args = if args_names.is_empty() {
+                    cpp_args_with_types = cpp_args_with_types,
+                    cpp_args_for_c = if args_names.is_empty() {
                         "".to_string()
                     } else {
-                        format!(", {}", args_names)
+                        format!(", {}", cpp_args_for_c)
                     },
                     const_if_readonly = const_if_readonly,
                 ).map_err(&map_write_err)?;
@@ -587,17 +592,16 @@ public:
                 write!(
                     c_include_f,
                     r#"
-    {c_class_type} *{func_name}({args_with_types});
+    {c_class_type} *{func_name}({cpp_args_with_types});
 "#,
                     c_class_type = c_class_type,
                     func_name = c_func_name,
-                    args_with_types = c_args_with_types,
+                    cpp_args_with_types = cpp_args_with_types,
                 ).map_err(&map_write_err)?;
 
                 write!(
                     cpp_include_f,
                     r#"
-{access}:
     {class_name}({args_with_types})
     {{
         this->self_ = {c_func_name}({args});
@@ -609,7 +613,6 @@ public:
                     class_name = class.name,
                     c_func_name = c_func_name,
                     args_with_types = c_args_with_types,
-                    access = method_access,
                     args = args_names,
                 ).map_err(&map_write_err)?;
                 let constructor_ret_type = class
@@ -707,11 +710,11 @@ private:
 
 fn need_cpp_helper_for_input_or_output(f_method: &CppForeignMethodSignature) -> bool {
     for ti in &f_method.input {
-        if ti.cpp_need_conversation() {
+        if ti.c_need_conversation() {
             return true;
         }
     }
-    f_method.output.cpp_need_conversation()
+    f_method.output.c_need_conversation()
 }
 
 fn c_func_name(
@@ -949,13 +952,50 @@ pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void
 }
 
 fn special_type<'a>(
+    sess: &'a ParseSess,
     conv_map: &TypesConvMap,
     arg_ty: &ast::Ty,
+    input: bool,
 ) -> PResult<'a, Option<CppForeignTypeInfo>> {
     trace!("Check is arg.ty({:?}) implements exported enum", arg_ty);
     if let Some(foreign_enum) = conv_map.is_this_exported_enum(&arg_ty) {
         let converter = calc_converter_for_enum(foreign_enum);
         return Ok(Some(converter));
+    }
+
+    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty) {
+        let foreign_typename =
+            Symbol::intern(&format!("{} *", cpp_code::c_class_type(foreign_class)));
+        let foreign_info = conv_map
+            .find_foreign_type_info_by_name(foreign_typename)
+            .ok_or_else(|| {
+                fatal_error(
+                    sess,
+                    arg_ty.span,
+                    &format!("type {} unknown", foreign_class.name),
+                )
+            })?;
+        if !input {
+            return Ok(Some(CppForeignTypeInfo {
+                base: foreign_info,
+                c_transition_type: None,
+                c_converter: String::new(),
+                cpp_converter: Some(CppConverter {
+                    typename: foreign_class.name,
+                    converter: foreign_class.name,
+                }),
+            }));
+        } else {
+            return Ok(Some(CppForeignTypeInfo {
+                base: foreign_info,
+                c_transition_type: None,
+                c_converter: String::new(),
+                cpp_converter: Some(CppConverter {
+                    typename: foreign_class.name,
+                    converter: Symbol::intern(&format!("{}.release()", FROM_VAR_TEMPLATE)),
+                }),
+            }));
+        }
     }
 
     trace!("Oridinary type {:?}", arg_ty);
@@ -967,7 +1007,7 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> CppForeignTypeInfo
     let u32_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("u32"))
         .unwrap()
         .into();
-    let cpp_converter: String = r#"
+    let c_converter: String = r#"
         uint32_t {to_var} = {from_var};
 "#.into();
     CppForeignTypeInfo {
@@ -975,8 +1015,9 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> CppForeignTypeInfo
             name: foreign_enum.name,
             correspoding_rust_type: u32_ti,
         },
-        cpp_transition_type: Some(Symbol::intern("uint32_t")),
-        cpp_converter,
+        c_transition_type: Some(Symbol::intern("uint32_t")),
+        c_converter,
+        cpp_converter: None,
     }
 }
 
