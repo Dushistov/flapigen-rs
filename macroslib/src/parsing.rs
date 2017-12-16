@@ -25,8 +25,9 @@ fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>
         _ => unreachable!(),
     };
     let isolated_self = |this: &mut Parser<'a>, n| {
-        this.look_ahead(n, |t| t.is_keyword(keywords::SelfValue))
-            && this.look_ahead(n + 1, |t| t != &token::ModSep)
+        this.look_ahead(n, |t| t.is_keyword(keywords::SelfValue)) && this.look_ahead(n + 1, |t| {
+            t != &token::ModSep
+        })
     };
 
     // Parse optional self parameter of a method.
@@ -369,7 +370,9 @@ pub(crate) fn parse_foreigner_class(
         });
     }
 
-
+    if cx.parse_sess.span_diagnostic.err_count() > 0 {
+        return Err(DUMMY_SP);
+    }
     Ok(ForeignerClassInfo {
         name: class_name_indent.name,
         methods,
