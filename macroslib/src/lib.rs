@@ -261,7 +261,7 @@ impl Generator {
             LanguageConfig::CppConfig(..) => {
                 conv_map_source.push(TypesConvMapCode {
                     id_of_code: "cpp-include.rs".into(),
-                    code: include_str!("cpp/types-include.rs").into(),
+                    code: include_str!("cpp/cpp-include.rs").into(),
                 });
             }
         }
