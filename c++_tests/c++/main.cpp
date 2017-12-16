@@ -5,10 +5,13 @@
 #include <cstdbool>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <functional>
 #include <limits>
+#include <gtest/gtest.h>
 
 #include "rust_interface/RustStrView.h"
+#include "rust_interface/RustVecBytes.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
 #include "rust_interface/c_CheckPrimitiveTypesClass.h"
@@ -18,7 +21,8 @@
 #include "rust_interface/ClassCooperationTest.hpp"
 #include "rust_interface/c_TestObjectLifetime.h"
 #include "rust_interface/TestObjectLifetime.hpp"
-#include <gtest/gtest.h>
+#include "rust_interface/c_TestWorkWithVec.h"
+#include "rust_interface/TestWorkWithVec.hpp"
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 
@@ -130,6 +134,21 @@ TEST(TestObjectLifetime, smokeTest)
     EXPECT_EQ(5, x.get_data());
     x.set_data(1, 2, 3, 4., 5.);
     EXPECT_EQ(15, x.get_data());
+}
+
+TEST(TestWorkWithVec, smokeTest)
+{
+    const char tag[] = "Test data";
+    const size_t tag_len = std::strlen(tag);
+    TestWorkWithVec t(tag);
+    for (uint32_t n : { 0, 1, 2, 3, 5, 10, 100, 1000 }) {
+        RustVec vec{ t.get_bytes(n) };
+        EXPECT_EQ(tag_len * n, vec.size());
+        for (size_t i = 0; i < vec.size(); i += std::strlen(tag)) {
+            EXPECT_TRUE(i + tag_len <= vec.size());
+            EXPECT_EQ(std::string(tag), std::string(reinterpret_cast<const char *>(&vec[i]), tag_len));
+        }
+    }
 }
 
 int main(int argc, char *argv[])

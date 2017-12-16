@@ -27,6 +27,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "*const ::std::os::raw::c_char"]
     #![swig_foreigner_type = "struct RustStrView"]
     #![swig_rust_type = "RustStrView"]
+    #![swig_foreigner_type = "struct RustVecBytes"]
+    #![swig_rust_type = "RustVecBytes"]
 }
 
 #[allow(unused_macros)]
@@ -201,4 +203,36 @@ impl<T: SwigForeignClass> SwigFrom<T> for *mut ::std::os::raw::c_void {
     fn swig_from(x: T) -> Self {
         <T>::box_object(x)
     }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct RustVecBytes {
+    data: *const u8,
+    len: u32,
+    capacity: u32,
+}
+
+impl SwigFrom<Vec<u8>> for RustVecBytes {
+    fn swig_from(mut v: Vec<u8>) -> RustVecBytes {
+        let p = v.as_mut_ptr();
+        let len = v.len();
+        let cap = v.capacity();
+        ::std::mem::forget(v);
+        //todo check that u32 <-> usize safe, or may be use u64?
+        RustVecBytes {
+            data: p,
+            len: len as u32,
+            capacity: cap as u32,
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rust_vec_bytes_free(v: RustVecBytes) {
+    //todo check that u32 <-> usize safe, or may be use u64?
+    let v = unsafe {
+        Vec::from_raw_parts(v.data as *mut u8, v.len as usize, v.capacity as usize)
+    };
+    drop(v);
 }
