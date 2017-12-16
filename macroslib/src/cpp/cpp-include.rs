@@ -228,6 +228,7 @@ impl SwigFrom<Vec<u8>> for RustVecBytes {
     }
 }
 
+#[allow(private_no_mangle_fns)]
 #[no_mangle]
 pub extern "C" fn rust_vec_bytes_free(v: RustVecBytes) {
     //todo check that u32 <-> usize safe, or may be use u64?
