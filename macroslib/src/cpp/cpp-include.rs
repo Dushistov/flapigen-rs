@@ -17,6 +17,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "i64"]
     #![swig_foreigner_type = "uint64_t"]
     #![swig_rust_type = "u64"]
+    #![swig_foreigner_type = "uintptr_t"]
+    #![swig_rust_type = "usize"]
     #![swig_foreigner_type = "float"]
     #![swig_rust_type = "f32"]
     #![swig_foreigner_type = "double"]
