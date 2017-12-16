@@ -18,6 +18,8 @@
 #include "rust_interface/ClassCooperationTest.hpp"
 #include "rust_interface/TestObjectLifetime.hpp"
 #include "rust_interface/TestWorkWithVec.hpp"
+#include "rust_interface/c_MyEnum.h"
+#include "rust_interface/TestEnumClass.hpp"
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 
@@ -144,6 +146,17 @@ TEST(TestWorkWithVec, smokeTest)
             EXPECT_EQ(std::string(tag), std::string(reinterpret_cast<const char *>(&vec[i]), tag_len));
         }
     }
+}
+
+TEST(TestEnumClass, smokeTest)
+{
+    TestEnumClass x;
+    ASSERT_EQ(-5, x.f1(ITEM1));
+    ASSERT_EQ(-5, x.f1(ITEM3));
+    ASSERT_EQ(17, x.f1(ITEM2));
+    ASSERT_EQ(ITEM2, TestEnumClass::next_enum(ITEM1));
+    ASSERT_EQ(ITEM3, TestEnumClass::next_enum(ITEM2));
+    ASSERT_EQ(ITEM1, TestEnumClass::next_enum(ITEM3));
 }
 
 int main(int argc, char *argv[])

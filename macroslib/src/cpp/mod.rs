@@ -1066,7 +1066,7 @@ mod swig_foreign_types_map {{
     #![swig_foreigner_type = "{enum_name}"]
     #![swig_rust_type = "{rust_enum_name}"]
 }}
-#[swig_to_foreigner_hint = "{enum_name}"]
+
 impl SwigFrom<{rust_enum_name}> for u32 {{
    fn swig_from(x: {rust_enum_name}) -> u32 {{
         match x {{

@@ -239,3 +239,44 @@ foreigner_class!(class TestWorkWithVec {
     constructor TestWorkWithVec::new(_: &str) -> TestWorkWithVec;
     method TestWorkWithVec::get_bytes(&self, n: u32) -> Vec<u8>;
 });
+
+enum MyEnum {
+    Item1,
+    Item2,
+    Item3,
+}
+
+foreign_enum!(enum MyEnum {
+  ITEM1 = MyEnum::Item1,
+  ITEM2 = MyEnum::Item2,
+  ITEM3 = MyEnum::Item3,
+});
+
+#[derive(Default)]
+pub struct TestEnumClass;
+
+impl TestEnumClass {
+    fn f1(&mut self, v: MyEnum) -> i32 {
+        if let MyEnum::Item2 = v {
+            17
+        } else {
+            -5
+        }
+    }
+
+    fn next_enum(v: MyEnum) -> MyEnum {
+        use MyEnum::*;
+        match v {
+            Item1 => Item2,
+            Item2 => Item3,
+            Item3 => Item1,
+        }
+    }
+}
+
+foreigner_class!(class TestEnumClass {
+    self_type TestEnumClass;
+    constructor TestEnumClass::default() -> TestEnumClass;
+    method TestEnumClass::f1(&mut self, v: MyEnum) -> i32;
+    static_method TestEnumClass::next_enum(v: MyEnum) -> MyEnum;
+});

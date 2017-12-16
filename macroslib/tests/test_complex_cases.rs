@@ -408,7 +408,7 @@ foreigner_class!(class TestEnumClass {
     static_method Moo::next_enum(v: MyEnum) -> MyEnum;
 });
 "#,
-            &[ForeignLang::Java],
+            &[ForeignLang::Java, ForeignLang::Cpp],
         );
         assert_eq!(ForeignLang::Java, gen_code[0].lang);
         println!("{}", gen_code[0].rust_code);
