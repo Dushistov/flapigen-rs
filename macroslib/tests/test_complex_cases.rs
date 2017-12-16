@@ -7,15 +7,63 @@ extern crate tempdir;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
+use std::path::Path;
 
 use regex::Regex;
 use tempdir::TempDir;
-use rust_swig::{Generator, JavaConfig, LanguageConfig};
+use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
 use syntex::Registry;
 
 #[macro_use]
 #[path = "../src/test_helper.rs"]
 mod test_helper;
+
+#[test]
+fn test_foreign_class_as_return_type_simple() {
+    // without result Type and without "foreign" args
+    parse_code(
+        "foreign_class_as_return_type_simple",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -> Foo;
+    method Foo::f(&self, _: i32, _: i32) -> i32;
+});
+
+foreigner_class!(class Boo {
+    self_type Boo;
+
+    constructor Boo::new(_: i32, _: usize) -> Boo;
+    static_method Boo::factory_method() -> Boo;
+    method Boo::get_one_foo(&self) -> Foo;
+});
+"#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
+    );
+}
+
+#[test]
+fn test_foreign_class_as_arg_type_simple() {
+    parse_code(
+        "test_foreign_class_as_arg_type_simple",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -> Foo;
+    method Foo::f(&self, _: i32, _: i32) -> i32;
+});
+
+foreigner_class!(class Boo {
+    self_type Boo;
+
+    constructor Boo::new(_: i32, _: usize) -> Boo;
+    method Boo::f(&self, foo: Foo) -> usize;
+    static_method Boo::f2(_: f64, foo: Foo) -> i32;
+});
+"#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
+    );
+}
 
 #[test]
 fn test_own_objects_creation() {
@@ -37,6 +85,7 @@ foreigner_class!(class Boo {
     method Boo::get_one_foo(&self) -> Foo;
 });
 "#,
+        &[ForeignLang::Java],
     );
 }
 
@@ -61,6 +110,7 @@ foreigner_class!(class Boo {
     static_method r_test_u8(v: u8) -> Result<u8, &'static str>;
 });
 "#,
+        &[ForeignLang::Java],
     );
 }
 
@@ -74,6 +124,7 @@ foreigner_class!(class Foo {
     constructor Foo::default() -> Foo;
     method Foo::list(&self) -> Vec<String>;
 });"#,
+        &[ForeignLang::Java],
     );
 }
 
@@ -86,6 +137,7 @@ foreigner_class!(class Utils {
     static_method f(_: &[i32]) -> &[i32];
 });
 "#,
+        &[ForeignLang::Java],
     );
 }
 
@@ -101,12 +153,13 @@ foreigner_class!(class Boo {
     method Boo::set_a(&mut self, _: i32);
 });
 "#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
     );
 }
 
 #[test]
 fn test_return_foreign_class() {
-    let (gen_code, _) = parse_code(
+    let gen_code = parse_code(
         "test_work_with_rc",
         r#"
 foreigner_class!(class Boo {
@@ -121,18 +174,20 @@ foreigner_class!(class Moo {
     method TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
 });
 "#,
+        &[ForeignLang::Java],
     );
+    assert_eq!(ForeignLang::Java, gen_code[0].lang);
     let get_boo_re = Regex::new(
         r"fn\s+Java_com_example_Moo_do_1getBoo\([^\)]+\)\s*->\s*([[:alnum:]]+)\s*\{",
     ).expect("wrong regexp");
-    let caps = get_boo_re.captures(&gen_code).unwrap();
+    let caps = get_boo_re.captures(&gen_code[0].rust_code).unwrap();
     println!("{:?}", caps);
     assert_eq!("jobject", caps.get(1).unwrap().as_str());
 }
 
 #[test]
 fn test_return_foreign_class_arc() {
-    let (gen_code, _) = parse_code(
+    let gen_code = parse_code(
         "test_work_with_rc",
         r#"
 foreigner_class!(class Boo {
@@ -147,18 +202,20 @@ foreigner_class!(class Moo {
     method TestPathAndResult::get_boo(&self) -> Arc<Mutex<Boo>>; alias getBoo;
 });
 "#,
+        &[ForeignLang::Java],
     );
+    assert_eq!(ForeignLang::Java, gen_code[0].lang);
     let get_boo_re = Regex::new(
         r"fn\s+Java_com_example_Moo_do_1getBoo\([^\)]+\)\s*->\s*([[:alnum:]]+)\s*\{",
     ).expect("wrong regexp");
-    let caps = get_boo_re.captures(&gen_code).unwrap();
+    let caps = get_boo_re.captures(&gen_code[0].rust_code).unwrap();
     println!("{:?}", caps);
     assert_eq!("jobject", caps.get(1).unwrap().as_str());
 }
 
 #[test]
 fn test_pass_objects_as_param_simple() {
-    let (_, java_code) = parse_code(
+    let gen_code = parse_code(
         "test_pass_objects_as_param_simple",
         r#"
 foreigner_class!(class Foo {
@@ -177,9 +234,19 @@ foreigner_class!(class TestPassObjectsAsParams {
     static_method TestPassObjectsAsParams::f5(_: Foo);
 });
 "#,
+        &[ForeignLang::Java],
     );
-    assert!(java_code.contains("public static void f4(Foo"));
-    assert!(java_code.contains("public static void f5(Foo"));
+    assert_eq!(ForeignLang::Java, gen_code[0].lang);
+    assert!(
+        gen_code[0]
+            .foreign_code
+            .contains("public static void f4(Foo")
+    );
+    assert!(
+        gen_code[0]
+            .foreign_code
+            .contains("public static void f5(Foo")
+    );
 }
 
 #[test]
@@ -201,6 +268,7 @@ foreigner_class!(class TestPassObjectsAsParams {
     method TestPassObjectsAsParams::f3(&self, _: &mut RefCell<Foo>);
 });
 "#,
+        &[ForeignLang::Java],
     );
 }
 
@@ -220,13 +288,14 @@ class Foo {
     method Foo::f(&self, _: i32, _: i32) -> i32;
 });
 "#,
+        &[ForeignLang::Java],
     );
 }
 
 #[test]
 fn test_return_result_type_with_object() {
     for _ in 0..10 {
-        let (_, java_code) = parse_code(
+        let gen_code = parse_code(
             "test_return_result_type_with_object",
             r#"
 foreigner_class!(class Position {
@@ -240,9 +309,15 @@ foreigner_class!(class LocationService {
     static_method LocationService::position() -> Result<GnssInfo, &'static str>;
 });
 "#,
+            &[ForeignLang::Java],
         );
-        println!("{}", java_code);
-        assert!(java_code.contains("public static native Position position() throws Exception;"));
+        assert_eq!(ForeignLang::Java, gen_code[0].lang);
+        println!("{}", gen_code[0].foreign_code);
+        assert!(
+            gen_code[0]
+                .foreign_code
+                .contains("public static native Position position() throws Exception;")
+        );
     }
 }
 
@@ -266,6 +341,7 @@ foreigner_class!(class ClassWithCallbacks {
     method f1(&mut self, cb: Box<SomeTrait>);
 });
 "#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
     );
 }
 
@@ -284,13 +360,14 @@ foreign_interface!(interface ControlStateObserver {
     onSessionUpdate = ControlStateChange::on_state_changed(&self, item: ControlItem, is_ok: bool);
 });
 "#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
     );
 }
 
 #[test]
 fn test_foreign_enum_vs_int() {
     for _ in 0..10 {
-        let (rust_code, java_code) = parse_code(
+        let gen_code = parse_code(
             "test_foreign_enum_vs_int",
             r#"
 foreign_enum!(enum MyEnum {
@@ -306,16 +383,18 @@ foreigner_class!(class TestEnumClass {
     static_method Moo::next_enum(v: MyEnum) -> MyEnum;
 });
 "#,
+            &[ForeignLang::Java],
         );
-        println!("{}", rust_code);
-        println!("{}", java_code);
-        assert!(java_code.contains("int f1(MyEnum"));
+        assert_eq!(ForeignLang::Java, gen_code[0].lang);
+        println!("{}", gen_code[0].rust_code);
+        println!("{}", gen_code[0].foreign_code);
+        assert!(gen_code[0].foreign_code.contains("int f1(MyEnum"));
     }
 }
 
 #[test]
 fn test_static_func_with_foreign_class_as_param() {
-    let (_, java_code) = parse_code(
+    let gen_code = parse_code(
         "static_func_with_foreign_class_as_param",
         r#"
 foreigner_class!(class Boo {
@@ -326,12 +405,18 @@ foreigner_class!(class Foo {
     static_method static_foo(_: &Boo);
 });
 "#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
     );
-    println!("{}", java_code);
-    assert!(java_code.contains("public static void static_foo(Boo"));
+    assert_eq!(ForeignLang::Java, gen_code[0].lang);
+    println!("{}", gen_code[0].foreign_code);
+    assert!(
+        gen_code[0]
+            .foreign_code
+            .contains("public static void static_foo(Boo")
+    );
 
     //add method
-    let (_, java_code) = parse_code(
+    let gen_code = parse_code(
         "static_func_with_foreign_class_as_param",
         r#"
 foreigner_class!(class Boo {
@@ -343,14 +428,20 @@ foreigner_class!(class Foo {
     static_method static_foo(_: &Boo);
 });
 "#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
     );
-    println!("{}", java_code);
-    assert!(java_code.contains("public static void static_foo(Boo"));
+    assert_eq!(ForeignLang::Java, gen_code[0].lang);
+    println!("{}", gen_code[0].foreign_code);
+    assert!(
+        gen_code[0]
+            .foreign_code
+            .contains("public static void static_foo(Boo")
+    );
 }
 
 #[test]
 fn test_lifetime_param_in_result() {
-    let (rust_code, _) = parse_code(
+    let gen_code = parse_code(
         "lifetime_param_in_result",
         r#"
 foreigner_class!(class Foo {
@@ -359,14 +450,20 @@ foreigner_class!(class Foo {
     method Foo::f(&self, _: i32);
 });
 "#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
     );
-    println!("{}", rust_code);
-    assert!(rust_code.contains("impl <'a> SwigForeignClass for Rc<RefCell<Foo<'a>>> {"));
+    assert_eq!(ForeignLang::Java, gen_code[0].lang);
+    println!("{}", gen_code[0].rust_code);
+    assert!(
+        gen_code[0]
+            .rust_code
+            .contains("impl <'a> SwigForeignClass for Rc<RefCell<Foo<'a>>> {")
+    );
 }
 
 #[test]
 fn test_interface_with_str() {
-    let (rust_code, java_code) = parse_code(
+    let gen_code = parse_code(
         "test_interface_with_str",
         r#"
 foreign_interface!(interface SomeObserver {
@@ -380,12 +477,48 @@ foreigner_class!(class ClassWithCallbacks {
     method f1(&mut self, cb: Box<SomeTrait>);
 });
 "#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
     );
-    println!("{}\n{}", rust_code, java_code);
-    assert!(rust_code.contains(r#"swig_c_str!("(Ljava/lang/String;)V")"#));
+    assert_eq!(ForeignLang::Java, gen_code[0].lang);
+    println!("{}\n{}", gen_code[0].rust_code, gen_code[0].foreign_code);
+    assert!(
+        gen_code[0]
+            .rust_code
+            .contains(r#"swig_c_str!("(Ljava/lang/String;)V")"#)
+    );
 }
 
-fn parse_code(test_name: &str, code: &str) -> (String, String) {
+#[derive(PartialEq, Debug, Clone, Copy)]
+enum ForeignLang {
+    Java,
+    Cpp,
+}
+
+struct CodePair {
+    lang: ForeignLang,
+    rust_code: String,
+    foreign_code: String,
+}
+
+fn collect_code_in_dir(dir_with_code: &Path, exts: &[&str]) -> String {
+    let mut java_code = String::new();
+    for path in fs::read_dir(dir_with_code).unwrap() {
+        let path = path.unwrap();
+        if path.file_type().unwrap().is_file()
+            && exts.iter()
+                .any(|ext| path.path().to_str().unwrap().ends_with(ext))
+        {
+            let mut contents = String::new();
+            let mut file = File::open(path.path()).unwrap();
+            file.read_to_string(&mut contents).unwrap();
+            java_code.push_str(&contents);
+            java_code.push('\n');
+        }
+    }
+    java_code
+}
+
+fn parse_code(test_name: &str, code: &str, langs: &[ForeignLang]) -> Vec<CodePair> {
     test_helper::logger_init();
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");
     println!(
@@ -394,26 +527,38 @@ fn parse_code(test_name: &str, code: &str) -> (String, String) {
         test_name,
         tmp_dir.path()
     );
-    let java_path = tmp_dir.path().join("java");
-    fs::create_dir_all(&java_path).unwrap_or_else(|why| {
-        panic!("! {:?}", why.kind());
-    });
-    let mut registry = Registry::new();
-    let swig_gen = Generator::new(LanguageConfig::JavaConfig(
-        JavaConfig::new(tmp_dir.path().into(), "com.example".into()),
-    )).with_pointer_target_width(64);
-    swig_gen.register(&mut registry);
-    let res_code = registry.expand_str(test_name, "use_case", code).unwrap();
-    let mut java_code = String::new();
-    for path in fs::read_dir(tmp_dir.path()).unwrap() {
-        let path = path.unwrap();
-        if path.file_type().unwrap().is_file() && path.path().to_str().unwrap().ends_with(".java") {
-            let mut contents = String::new();
-            let mut file = File::open(path.path()).unwrap();
-            file.read_to_string(&mut contents).unwrap();
-            java_code.push_str(&contents);
-            java_code.push('\n');
-        }
+    let mut ret = vec![];
+    for lang in langs {
+        let mut registry = Registry::new();
+        let (rust_code, foreign_code) = match *lang {
+            ForeignLang::Java => {
+                let swig_gen = Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
+                    tmp_dir.path().into(),
+                    "com.example".into(),
+                ))).with_pointer_target_width(64);
+                swig_gen.register(&mut registry);
+                (
+                    registry.expand_str(test_name, test_name, code).unwrap(),
+                    collect_code_in_dir(tmp_dir.path(), &[".java"]),
+                )
+            }
+            ForeignLang::Cpp => {
+                let swig_gen = Generator::new(LanguageConfig::CppConfig(CppConfig::new(
+                    tmp_dir.path().into(),
+                    "com_examples".into(),
+                ))).with_pointer_target_width(64);
+                swig_gen.register(&mut registry);
+                (
+                    registry.expand_str(test_name, "use_case", code).unwrap(),
+                    collect_code_in_dir(tmp_dir.path(), &[".h", ".hpp"]),
+                )
+            }
+        };
+        ret.push(CodePair {
+            lang: *lang,
+            rust_code,
+            foreign_code,
+        });
     }
-    (res_code, java_code)
+    ret
 }
