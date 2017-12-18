@@ -6,8 +6,9 @@ use std::fs::File;
 use std::fmt;
 use std::path::Path;
 
-use {ForeignEnumInfo, ForeignInterface};
+use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo};
 use super::{fmt_write_err_map, CppForeignMethodSignature};
+use types_conv_map::FROM_VAR_TEMPLATE;
 
 pub(in cpp) fn generate_code_for_enum(
     output_dir: &Path,
@@ -38,19 +39,14 @@ enum {enum_name} {{
             index = i,
             doc_comments = doc_comments_to_c_comments(&item.doc_comments, false),
             separator = if i == enum_info.items.len() - 1 {
-                '\n'
+                "\n"
             } else {
-                ','
+                ","
             },
         ).map_err(&map_write_err)?;
     }
 
-    write!(
-        file,
-        r#"
-}};
-"#
-    ).map_err(&map_write_err)?;
+    write!(file, "}};\n").map_err(&map_write_err)?;
 
     Ok(())
 }
@@ -105,7 +101,7 @@ struct C_{interface_name} {{
 "#,
             method_name = method.name,
             doc_comments = doc_comments_to_c_comments(&method.doc_comments, false),
-            single_args_with_types = generate_args_with_types(f_method)?,
+            single_args_with_types = c_generate_args_with_types(f_method)?,
         ).map_err(&map_write_err)?;
     }
     write!(
@@ -121,19 +117,67 @@ fn map_write_err<Err: fmt::Display>(err: Err) -> String {
     format!("write failed: {}", err)
 }
 
-pub(in cpp) fn generate_args_with_types(
+pub(in cpp) fn c_generate_args_with_types(
     f_method: &CppForeignMethodSignature,
 ) -> Result<String, String> {
     use std::fmt::Write;
 
     let mut buf = String::new();
-    let mut empty = true;
     for (i, f_type_info) in f_method.input.iter().enumerate() {
-        if !empty {
+        if i > 0 {
             write!(&mut buf, ", ").map_err(fmt_write_err_map)?;
         }
-        empty = false;
         write!(&mut buf, "{} a_{}", f_type_info.as_ref().name, i).map_err(fmt_write_err_map)?;
     }
     Ok(buf)
+}
+
+pub(in cpp) fn c_class_type(class: &ForeignerClassInfo) -> String {
+    format!("{}Opaque", class.name)
+}
+
+pub(in cpp) fn cpp_generate_args_with_types(
+    f_method: &CppForeignMethodSignature,
+) -> Result<String, String> {
+    use std::fmt::Write;
+    let mut ret = String::new();
+    for (i, f_type_info) in f_method.input.iter().enumerate() {
+        if i > 0 {
+            write!(&mut ret, ", ").map_err(fmt_write_err_map)?;
+        }
+
+        write!(
+            &mut ret,
+            "{} a_{}",
+            if let Some(conv) = f_type_info.cpp_converter.as_ref() {
+                conv.typename
+            } else {
+                f_type_info.as_ref().name
+            },
+            i
+        ).map_err(fmt_write_err_map)?;
+    }
+    Ok(ret)
+}
+
+pub(in cpp) fn cpp_generate_args_to_call_c(
+    f_method: &CppForeignMethodSignature,
+) -> Result<String, String> {
+    use std::fmt::Write;
+    let mut ret = String::new();
+    for (i, f_type_info) in f_method.input.iter().enumerate() {
+        if i > 0 {
+            write!(&mut ret, ", ").map_err(fmt_write_err_map)?;
+        }
+        if let Some(conv) = f_type_info.cpp_converter.as_ref() {
+            let arg_name = format!("a_{}", i);
+            let conv_arg = conv.converter
+                .as_str()
+                .replace(FROM_VAR_TEMPLATE, &arg_name);
+            write!(&mut ret, "{}", conv_arg)
+        } else {
+            write!(&mut ret, "a_{}", i)
+        }.map_err(fmt_write_err_map)?;
+    }
+    Ok(ret)
 }

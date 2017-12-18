@@ -247,15 +247,19 @@ impl TypesConvMap {
 
         if let Some(from) = self.rust_names_map.get(&norm_rust_typename).cloned() {
             let sess = ParseSess::new();
-            let find_path =
-                |from, to| match find_conversation_path(&sess, &self.conv_graph, from, to, DUMMY_SP)
-                {
-                    Ok(x) => Some(x),
-                    Err(mut err) => {
-                        err.cancel();
-                        None
-                    }
-                };
+            let find_path = |from, to| match find_conversation_path(
+                &sess,
+                &self.conv_graph,
+                from,
+                to,
+                DUMMY_SP,
+            ) {
+                Ok(x) => Some(x),
+                Err(mut err) => {
+                    err.cancel();
+                    None
+                }
+            };
             let mut min_path: Option<(usize, NodeIndex, Symbol)> = None;
             for (foreign_name, graph_idx) in &self.foreign_names_map {
                 let path = match direction {
@@ -308,9 +312,11 @@ impl TypesConvMap {
                                 let foreign_name = to_foreigner_hint
                                     .as_str()
                                     .replace(&*ty_param.as_str(), &*class.name.as_str());
-                                new_foreign_types.insert(
-                                    (edge.to_ty.clone(), suffix, Symbol::intern(&foreign_name)),
-                                );
+                                new_foreign_types.insert((
+                                    edge.to_ty.clone(),
+                                    suffix,
+                                    Symbol::intern(&foreign_name),
+                                ));
                             } else {
                                 warn!("No foreign_class for type '{}'", rust_ty.normalized_name);
                             }
@@ -610,12 +616,24 @@ impl TypesConvMap {
         self.foreign_names_map.insert(foreign_name, idx);
     }
 
-    pub(crate) fn cache_rust_to_foreign_conv(&mut self, from: &RustType, to: (RustType, Symbol)) {
+    pub(crate) fn find_foreign_type_info_by_name(
+        &self,
+        foreign_name: Symbol,
+    ) -> Option<ForeignTypeInfo> {
+        self.foreign_names_map.get(&foreign_name).map(|x| {
+            ForeignTypeInfo {
+                name: foreign_name,
+                correspoding_rust_type: self.conv_graph[*x].clone(),
+            }
+        })
+    }
+
+    pub(crate) fn cache_rust_to_foreign_conv(&mut self, from: &RustType, to: ForeignTypeInfo) {
         self.add_type(from.clone());
-        let to_id = self.add_type(to.0);
+        let to_id = self.add_type(to.correspoding_rust_type);
         self.rust_to_foreign_cache
-            .insert(from.normalized_name, to.1);
-        self.foreign_names_map.insert(to.1, to_id);
+            .insert(from.normalized_name, to.name);
+        self.foreign_names_map.insert(to.name, to_id);
     }
 
     pub(crate) fn convert_to_heap_pointer(from: &RustType, var_name: &str) -> (RustType, String) {
@@ -646,7 +664,7 @@ impl TypesConvMap {
             format!(
                 r#"
     let {var_name}: Box<{inner_ty}> = Box::new({var_name});
-    let {var_name}: *const {inner_ty} = Box::into_raw({var_name});
+    let {var_name}: *mut {inner_ty} = Box::into_raw({var_name});
 "#,
                 var_name = var_name,
                 inner_ty = inner_ty_str

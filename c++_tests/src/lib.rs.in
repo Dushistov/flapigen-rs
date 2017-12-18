@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::path::Path;
 use std::cell::{Ref, RefCell, RefMut};
 
 #[derive(Clone)]
@@ -147,4 +148,157 @@ foreigner_class!(class CheckPrimitiveTypesClass {
     static_method test_i64(v: i64) -> i64;
     static_method test_f32(v: f32) -> f32;
     static_method test_f64(v: f64) -> f64;
+});
+
+pub struct ClassCooperationTest {
+    data: Vec<Foo>,
+}
+
+impl ClassCooperationTest {
+    fn new() -> ClassCooperationTest {
+        ClassCooperationTest {
+            data: vec![Foo::new(5, "5"), Foo::new(6, "7")],
+        }
+    }
+    fn get(&self, idx: u32) -> Foo {
+        self.data[idx as usize].clone()
+    }
+    fn set(&mut self, idx: u32, foo: Foo) {
+        self.data[idx as usize] = foo;
+    }
+}
+
+foreigner_class!(class ClassCooperationTest {
+    self_type ClassCooperationTest;
+    constructor ClassCooperationTest::new() -> ClassCooperationTest;
+    method ClassCooperationTest::get(&self, _: u32) -> Foo;
+    method ClassCooperationTest::set(&mut self, _: u32, _: Foo);
+});
+
+trait DummySetterGetter {
+    fn get(&self) -> i32;
+    fn set(&mut self, i32);
+}
+
+pub struct TestObjectLifetime<'a> {
+    data: Box<DummySetterGetter + 'a>,
+}
+
+impl DummySetterGetter for i32 {
+    fn get(&self) -> i32 {
+        *self
+    }
+    fn set(&mut self, x: i32) {
+        *self = x;
+    }
+}
+impl<'a> TestObjectLifetime<'a> {
+    fn set_data(&mut self, v1: i8, v2: i16, v3: i32, v4: f64, v5: f32) {
+        self.data
+            .set(v1 as i32 + v2 as i32 + v3 + v4 as i32 + v5 as i32);
+    }
+
+    fn get_data(&self) -> i32 {
+        self.data.get()
+    }
+}
+
+fn create_test_obj_with_lifetime<'a>() -> TestObjectLifetime<'a> {
+    TestObjectLifetime { data: Box::new(5) }
+}
+
+foreigner_class!(class TestObjectLifetime {
+    self_type TestObjectLifetime<'a>;
+    constructor create_test_obj_with_lifetime() -> TestObjectLifetime<'a>;
+    method TestObjectLifetime::set_data(&mut self, v1: i8, v2: i16, v3: i32, v4: f64, v5: f32);
+    method TestObjectLifetime::get_data(&self) -> i32;
+});
+
+pub struct TestWorkWithVec {
+    data_tag: String,
+}
+
+impl TestWorkWithVec {
+    fn new(tag: &str) -> TestWorkWithVec {
+        println!("tag: {}", tag);
+        TestWorkWithVec {
+            data_tag: tag.to_string(),
+        }
+    }
+    fn get_bytes(&self, n: u32) -> Vec<u8> {
+        println!("get_bytes n {}", n);
+        let mut res = String::new();
+        for _ in 0..n {
+            res.push_str(&self.data_tag);
+        }
+        res.into_bytes()
+    }
+}
+
+foreigner_class!(class TestWorkWithVec {
+    self_type TestWorkWithVec;
+    constructor TestWorkWithVec::new(_: &str) -> TestWorkWithVec;
+    method TestWorkWithVec::get_bytes(&self, n: u32) -> Vec<u8>;
+});
+
+enum MyEnum {
+    Item1,
+    Item2,
+    Item3,
+}
+
+foreign_enum!(enum MyEnum {
+  ITEM1 = MyEnum::Item1,
+  ITEM2 = MyEnum::Item2,
+  ITEM3 = MyEnum::Item3,
+});
+
+#[derive(Default)]
+pub struct TestEnumClass;
+
+impl TestEnumClass {
+    fn f1(&mut self, v: MyEnum) -> i32 {
+        if let MyEnum::Item2 = v {
+            17
+        } else {
+            -5
+        }
+    }
+
+    fn next_enum(v: MyEnum) -> MyEnum {
+        use MyEnum::*;
+        match v {
+            Item1 => Item2,
+            Item2 => Item3,
+            Item3 => Item1,
+        }
+    }
+}
+
+foreigner_class!(class TestEnumClass {
+    self_type TestEnumClass;
+    constructor TestEnumClass::default() -> TestEnumClass;
+    method TestEnumClass::f1(&mut self, v: MyEnum) -> i32;
+    static_method TestEnumClass::next_enum(v: MyEnum) -> MyEnum;
+});
+
+#[derive(Default)]
+pub struct TestPassPathAsParam {
+    a: String,
+}
+
+impl TestPassPathAsParam {
+    fn set_path(&mut self, p: &Path) {
+        self.a = format!("{:?}", p);
+    }
+    fn path(&self) -> &str {
+        &self.a
+    }
+}
+
+foreigner_class!(class TestPassPathAsParam {
+    self_type TestPassPathAsParam;
+    constructor TestPassPathAsParam::default() -> TestPassPathAsParam;
+    method TestPassPathAsParam::set_path(&mut self, p: &Path);
+    method TestPassPathAsParam::path(&self) -> &str;
 });
