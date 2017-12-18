@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::path::Path;
 use std::cell::{Ref, RefCell, RefMut};
 
 #[derive(Clone)]
@@ -279,4 +280,25 @@ foreigner_class!(class TestEnumClass {
     constructor TestEnumClass::default() -> TestEnumClass;
     method TestEnumClass::f1(&mut self, v: MyEnum) -> i32;
     static_method TestEnumClass::next_enum(v: MyEnum) -> MyEnum;
+});
+
+#[derive(Default)]
+pub struct TestPassPathAsParam {
+    a: String,
+}
+
+impl TestPassPathAsParam {
+    fn set_path(&mut self, p: &Path) {
+        self.a = format!("{:?}", p);
+    }
+    fn path(&self) -> &str {
+        &self.a
+    }
+}
+
+foreigner_class!(class TestPassPathAsParam {
+    self_type TestPassPathAsParam;
+    constructor TestPassPathAsParam::default() -> TestPassPathAsParam;
+    method TestPassPathAsParam::set_path(&mut self, p: &Path);
+    method TestPassPathAsParam::path(&self) -> &str;
 });

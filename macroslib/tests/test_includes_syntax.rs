@@ -18,6 +18,7 @@ mod cpp {
     use std::sync::{Arc, Mutex, MutexGuard};
     use std::rc::Rc;
     use std::cell::{Ref, RefCell, RefMut};
+    use std::path::Path;
     include!(concat!(env!("OUT_DIR"), "/cpp-include.rs"));
 }
 

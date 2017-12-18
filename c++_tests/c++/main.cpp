@@ -20,6 +20,7 @@
 #include "rust_interface/TestWorkWithVec.hpp"
 #include "rust_interface/c_MyEnum.h"
 #include "rust_interface/TestEnumClass.hpp"
+#include "rust_interface/TestPassPathAsParam.hpp"
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 
@@ -157,6 +158,13 @@ TEST(TestEnumClass, smokeTest)
     ASSERT_EQ(ITEM2, TestEnumClass::next_enum(ITEM1));
     ASSERT_EQ(ITEM3, TestEnumClass::next_enum(ITEM2));
     ASSERT_EQ(ITEM1, TestEnumClass::next_enum(ITEM3));
+}
+
+TEST(TestPassPathAsParam, smokeTest)
+{
+    TestPassPathAsParam x;
+    x.set_path("/tmp/a.txt");
+    ASSERT_EQ("\"/tmp/a.txt\"", x.path().as_str());
 }
 
 int main(int argc, char *argv[])

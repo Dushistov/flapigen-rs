@@ -239,3 +239,10 @@ pub extern "C" fn rust_vec_bytes_free(v: RustVecBytes) {
     };
     drop(v);
 }
+
+// &str -> &Path
+impl<'a> SwigInto<&'a Path> for &'a str {
+    fn swig_into(self) -> &'a Path {
+        Path::new(self)
+    }
+}
