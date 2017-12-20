@@ -318,7 +318,7 @@ extern "C" {{
 #include <cstdlib>
 
 #include "c_{class_name}.h"
-
+namespace {namespace} {{
 {doc_comments}
 class {class_name} {{
 public:
@@ -346,6 +346,7 @@ public:
         c_class_type = c_class_type,
         class_name = class.name,
         doc_comments = class_doc_comments,
+        namespace = namespace_name,
     ).map_err(&map_write_err)?;
 
     let dummy_ty = ast::Ty {
@@ -702,8 +703,10 @@ public:
 private:
     {c_class_type} *self_;
 }};
+}}//{namespace} {{
 "#,
-        c_class_type = c_class_type
+        c_class_type = c_class_type,
+        namespace = namespace_name
     ).map_err(&map_write_err)?;
     Ok(gen_code)
 }

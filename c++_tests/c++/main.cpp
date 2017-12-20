@@ -22,6 +22,8 @@
 #include "rust_interface/TestEnumClass.hpp"
 #include "rust_interface/TestPassPathAsParam.hpp"
 
+using namespace rust;
+
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 
 static void c_delete_int(void *opaque)
