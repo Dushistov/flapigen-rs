@@ -70,12 +70,10 @@ fn gen_binding<P: AsRef<Path>>(
     c_file_path: &Path,
     output_rust: &Path,
 ) -> Result<(), String> {
-    let mut bindings: ::bindgen::Builder = bindgen::builder().header(c_file_path.to_str().unwrap());
+    let mut bindings: bindgen::Builder = bindgen::builder().header(c_file_path.to_str().unwrap());
     bindings = include_dirs.iter().fold(bindings, |acc, x| {
         acc.clang_arg("-I".to_string() + x.as_ref().to_str().unwrap())
     });
-
-    bindings = bindings.unstable_rust(false);
 
     let generated_bindings = bindings
         .generate()
