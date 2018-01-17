@@ -6,8 +6,13 @@ import sys
 
 print("Starting build")
 sys.stdout.flush()
+
+has_jdk = "JAVA_HOME" in os.environ
+print("has_jdk %s" % has_jdk)
+
 subprocess.check_call(["cargo", "build"], cwd = "macroslib", shell = False)
-subprocess.check_call(["cargo", "build"], cwd = "jni_tests", shell = False)
+if has_jdk:
+    subprocess.check_call(["cargo", "build"], cwd = "jni_tests", shell = False)
 
 #to create directory target
 subprocess.check_call(["cargo", "check"], cwd = "c++_tests", shell = False)
@@ -24,19 +29,19 @@ skip_cpp_tests = sys.platform == 'win32' and os.getenv("TARGET") == "nightly-x86
 if not skip_cpp_tests:
     if not os.path.exists(cmake_build_dir):
         os.makedirs(cmake_build_dir)
-    subprocess.check_call(["cmake", "-G", cmake_generator, "-DCMAKE_BUILD_TYPE=RelWithDebInfo", ".."], cwd = str(cmake_build_dir), shell = True)
+    subprocess.check_call(["cmake", "-G", cmake_generator, "-DCMAKE_BUILD_TYPE=RelWithDebInfo", ".."], cwd = str(cmake_build_dir))
     subprocess.check_call(["cmake", "--build", "."], cwd = str(cmake_build_dir))
 
     
 print("Starting tests")
 sys.stdout.flush()
 
+subprocess.check_call(["cargo", "test"], cwd = "macroslib", shell = False)
+subprocess.check_call(["cargo", "test", "--release"], cwd = "macroslib", shell = False)
 
-if "JAVA_HOME" in os.environ:
-    print("Machine has java/jdk")
-    subprocess.check_call(["cargo", "test"], cwd = "macroslib", shell = False)
+if has_jdk:
     subprocess.check_call(["cargo", "test"], cwd = "jni_tests", shell = False)
-    subprocess.check_call(["python", "run_tests.py", "--skip-android-test"], cwd = "jni_tests", shell = False)
+    subprocess.check_call(["python", "run_tests.py", "--skip-android-test"], cwd = "jni_tests", shell = False)    
 
 if not skip_cpp_tests:
     if sys.platform == 'win32':

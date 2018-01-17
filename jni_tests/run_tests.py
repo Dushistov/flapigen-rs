@@ -63,9 +63,6 @@ use_shell = os.name == 'nt'
 subprocess.check_call(["cargo", "check"], shell = False)
 jar_dir = build_jar(use_shell)
 
-subprocess.check_call(["cargo", "test"],
-                      cwd = str(os.path.join(os.path.abspath('..'), "macroslib")),
-                      shell=False)
 subprocess.check_call(["cargo", "test"], shell=False)
 subprocess.check_call(["cargo", "build"], shell=False)
 
@@ -77,9 +74,6 @@ if has_option("--debug-only"):
     sys.exit(0)
 
 #rerun in release mode
-subprocess.check_call(["cargo", "test", "--release"],
-                      cwd = str(os.path.join(os.path.abspath('..'), "macroslib")),
-                      shell=False)
 subprocess.check_call(["cargo", "test", "--release"], shell=False)
 subprocess.check_call(["cargo", "build", "--release"], shell=False)
 target_dir = os.path.join(find_dir("target"), "release")
