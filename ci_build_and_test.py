@@ -30,9 +30,13 @@ if not skip_cpp_tests:
     
 print("Starting tests")
 sys.stdout.flush()
-subprocess.check_call(["cargo", "test"], cwd = "macroslib", shell = False)
-subprocess.check_call(["cargo", "test"], cwd = "jni_tests", shell = False)
-subprocess.check_call(["python", "run_tests.py", "--skip-android-test"], cwd = "jni_tests", shell = False)
+
+
+if "JAVA_HOME" in os.environ:
+    print("Machine has java/jdk")
+    subprocess.check_call(["cargo", "test"], cwd = "macroslib", shell = False)
+    subprocess.check_call(["cargo", "test"], cwd = "jni_tests", shell = False)
+    subprocess.check_call(["python", "run_tests.py", "--skip-android-test"], cwd = "jni_tests", shell = False)
 
 if not skip_cpp_tests:
     if sys.platform == 'win32':
