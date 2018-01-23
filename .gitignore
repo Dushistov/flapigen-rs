@@ -3,3 +3,4 @@
 jni_tests/java/com/example/rust
 *.class
 *.jar
+c++_tests/c++/rust_interface

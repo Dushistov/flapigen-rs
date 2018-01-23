@@ -118,6 +118,10 @@ trait LanguageGenerator {
         pointer_target_width: usize,
         interace: &ForeignInterface,
     ) -> PResult<'a, Vec<P<ast::Item>>>;
+
+    fn place_foreign_lang_helpers(&self, _: &[SourceCode]) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// `Generator` is a main point of `rust_swig`.
@@ -133,11 +137,12 @@ struct GeneratorData {
     init_done: bool,
     config: LanguageConfig,
     conv_map: TypesConvMap,
-    conv_map_source: Vec<TypesConvMapCode>,
+    conv_map_source: Vec<SourceCode>,
+    foreign_lang_helpers: Vec<SourceCode>,
     pointer_target_width: usize,
 }
 
-struct TypesConvMapCode {
+struct SourceCode {
     id_of_code: String,
     code: String,
 }
@@ -250,18 +255,27 @@ impl Generator {
     pub fn new(config: LanguageConfig) -> Generator {
         let pointer_target_width = target_pointer_width_from_env();
         let mut conv_map_source = Vec::new();
+        let mut foreign_lang_helpers = Vec::new();
         #[allow(deprecated)]
         match config {
             LanguageConfig::Java { .. } | LanguageConfig::JavaConfig(..) => {
-                conv_map_source.push(TypesConvMapCode {
+                conv_map_source.push(SourceCode {
                     id_of_code: "jni-include.rs".into(),
                     code: include_str!("java_jni/jni-include.rs").into(),
                 });
             }
             LanguageConfig::CppConfig(..) => {
-                conv_map_source.push(TypesConvMapCode {
+                conv_map_source.push(SourceCode {
                     id_of_code: "cpp-include.rs".into(),
                     code: include_str!("cpp/cpp-include.rs").into(),
+                });
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_str.h".into(),
+                    code: include_str!("cpp/rust_str.h").into(),
+                });
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_vec.h".into(),
+                    code: include_str!("cpp/rust_vec.h").into(),
                 });
             }
         }
@@ -272,6 +286,7 @@ impl Generator {
                 config,
                 conv_map: TypesConvMap::default(),
                 conv_map_source,
+                foreign_lang_helpers,
                 pointer_target_width: pointer_target_width.unwrap_or(0),
             })),
         }
@@ -299,13 +314,10 @@ impl Generator {
 
     /// Add new foreign langauge type <-> Rust mapping
     pub fn merge_type_map(self, id_of_code: &str, code: &str) -> Generator {
-        self.data
-            .borrow_mut()
-            .conv_map_source
-            .push(TypesConvMapCode {
-                id_of_code: id_of_code.into(),
-                code: code.into(),
-            });
+        self.data.borrow_mut().conv_map_source.push(SourceCode {
+            id_of_code: id_of_code.into(),
+            code: code.into(),
+        });
         self
     }
 }
@@ -524,6 +536,29 @@ impl GeneratorData {
                 "After merge all types maps with have no convertion code",
             ));
         }
+
+        #[allow(deprecated)]
+        match self.config.clone() {
+            LanguageConfig::Java {
+                ref output_dir,
+                ref package_name,
+            } => {
+                let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
+                java_cfg.place_foreign_lang_helpers(&self.foreign_lang_helpers)
+            }
+            LanguageConfig::JavaConfig(ref java_cfg) => {
+                java_cfg.place_foreign_lang_helpers(&self.foreign_lang_helpers)
+            }
+            LanguageConfig::CppConfig(ref cpp_cfg) => {
+                cpp_cfg.place_foreign_lang_helpers(&self.foreign_lang_helpers)
+            }
+        }.map_err(|err| {
+            fatal_error(
+                sess,
+                DUMMY_SP,
+                &format!("Can not put/generate foreign lang helpers: {}", err),
+            )
+        })?;
 
         Ok(self.conv_map.take_utils_code())
     }

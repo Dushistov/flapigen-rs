@@ -1,3 +1,4 @@
+dist: trusty
 language: rust
 rust:
   - stable
@@ -19,7 +20,6 @@ addons:
       - llvm-3.9-dev
       - libclang-3.9-dev
       - python3
-      - cmake
       - build-essential
 env: # specify the clang path for rust-bindgen
   - LIBCLANG_PATH=/usr/lib/llvm-3.9/lib
@@ -27,7 +27,9 @@ before_script:
     - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
         cargo install -f --vers 0.2.16 rustfmt-nightly;
       fi
+    - cmake --version
 script:
+  - ln -s workspace.Cargo.toml Cargo.toml
   - cd macroslib
   - echo ${TRAVIS_RUST_VERSION}
   - if [ "${TRAVIS_RUST_VERSION}" == "nightly" ]; then
@@ -42,14 +44,5 @@ script:
   - cargo build -v
   - cargo test -v
   - cargo doc
-  - cd ../jni_tests
-  - cargo build -v
-  - python3 run_tests.py --skip-android-test
-  - cd ../c++_tests
-  - cargo check
-  - cd c++
-  - mkdir build
-  - cd build
-  - cmake ..
-  - make -j2 -k VERBOSE=1
-  - ./c++-rust-swig-test
+  - cd ..
+  - python3 ci_build_and_test.py

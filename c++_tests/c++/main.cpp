@@ -10,8 +10,8 @@
 #include <limits>
 #include <gtest/gtest.h>
 
-#include "rust_interface/RustStrView.h"
-#include "rust_interface/RustVecBytes.h"
+#include "rust_interface/rust_str.h"
+#include "rust_interface/rust_vec.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
 #include "rust_interface/c_SomeObserver.h"
@@ -21,6 +21,8 @@
 #include "rust_interface/c_MyEnum.h"
 #include "rust_interface/TestEnumClass.hpp"
 #include "rust_interface/TestPassPathAsParam.hpp"
+
+using namespace rust;
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 
