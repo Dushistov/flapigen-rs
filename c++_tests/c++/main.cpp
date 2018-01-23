@@ -10,8 +10,8 @@
 #include <limits>
 #include <gtest/gtest.h>
 
-#include "rust_interface/RustStrView.h"
-#include "rust_interface/RustVecBytes.h"
+#include "rust_interface/rust_str.h"
+#include "rust_interface/rust_vec.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
 #include "rust_interface/c_SomeObserver.h"

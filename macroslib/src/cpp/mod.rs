@@ -23,7 +23,7 @@ use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
                             foreign_to_rust_convert_method_inputs,
                             rust_to_foreign_convert_method_inputs};
 use {CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
-     LanguageGenerator, MethodVariant, SelfTypeVariant, TypesConvMap};
+     LanguageGenerator, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap};
 
 struct CppConverter {
     typename: Symbol,
@@ -97,8 +97,7 @@ impl LanguageGenerator for CppConfig {
     ) -> PResult<'a, Vec<P<ast::Item>>> {
         debug!(
             "generate: begin for {}, this_type_for_method {:?}",
-            class.name,
-            class.this_type_for_method
+            class.name, class.this_type_for_method
         );
         if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
             let this_type: RustType = this_type_for_method.clone().into();
@@ -171,6 +170,18 @@ impl LanguageGenerator for CppConfig {
         conv_map.add_foreign(rust_ty.into(), c_struct_pointer);
 
         Ok(items)
+    }
+
+    fn place_foreign_lang_helpers(&self, code: &[SourceCode]) -> Result<(), String> {
+        for cu in code {
+            let src_path = self.output_dir.join(&cu.id_of_code);
+            let mut src_file = File::create(&src_path)
+                .map_err(|err| format!("Can not create {}: {}", src_path.display(), err))?;
+            src_file
+                .write_all(cu.code.as_bytes())
+                .map_err(|err| format!("write to {} failed: {}", src_path.display(), err))?;
+        }
+        Ok(())
     }
 }
 
@@ -440,8 +451,7 @@ public:
             class.span,
             &format!(
                 "Class {} (namespace {}) have methods, but there is no constructor",
-                class.name,
-                namespace_name,
+                class.name, namespace_name,
             ),
         )
     };
