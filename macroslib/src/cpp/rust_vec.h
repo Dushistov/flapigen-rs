@@ -35,7 +35,8 @@ public:
         data = o.data;
         len = o.len;
         capacity = o.capacity;
-        o.data = nullptr;
+
+	reset(o);
     }
     RustVec &operator=(RustVec &&o)
     {
@@ -43,16 +44,24 @@ public:
         len = o.len;
         capacity = o.capacity;
 
-        o.data = nullptr;
+	reset(o);
         return *this;
     }
     ~RustVec()
     {
         if (data != nullptr) {
-            rust_vec_bytes_free(std::move(*this));
+            rust_vec_bytes_free(*this);
+	    reset(*this);
         }
     }
     size_t size() const { return len; }
     const uint8_t &operator[](size_t i) const { return data[i]; }
+private:
+    static void reset(RustVec &o)
+    {
+        o.data = nullptr;
+	o.len = 0;
+	o.capacity = 0;
+    }
 };
 #endif

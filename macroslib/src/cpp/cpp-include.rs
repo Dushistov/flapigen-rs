@@ -31,6 +31,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "RustStrView"]
     #![swig_foreigner_type = "struct RustVecBytes"]
     #![swig_rust_type = "RustVecBytes"]
+    #![swig_foreigner_type = "struct CRustString"]
+    #![swig_rust_type = "CRustString"]
 }
 
 #[allow(unused_macros)]
@@ -234,9 +236,7 @@ impl SwigFrom<Vec<u8>> for RustVecBytes {
 #[no_mangle]
 pub extern "C" fn rust_vec_bytes_free(v: RustVecBytes) {
     //todo check that u32 <-> usize safe, or may be use u64?
-    let v = unsafe {
-        Vec::from_raw_parts(v.data as *mut u8, v.len as usize, v.capacity as usize)
-    };
+    let v = unsafe { Vec::from_raw_parts(v.data as *mut u8, v.len as usize, v.capacity as usize) };
     drop(v);
 }
 
@@ -244,5 +244,37 @@ pub extern "C" fn rust_vec_bytes_free(v: RustVecBytes) {
 impl<'a> SwigInto<&'a Path> for &'a str {
     fn swig_into(self) -> &'a Path {
         Path::new(self)
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustString {
+    data: *const ::std::os::raw::c_char,
+    len: u32,
+    capacity: u32,
+}
+
+#[allow(private_no_mangle_fns)]
+#[no_mangle]
+pub extern "C" fn crust_string_free(x: CRustString) {
+    let s =
+        unsafe { String::from_raw_parts(x.data as *mut u8, x.len as usize, x.capacity as usize) };
+    drop(s);
+}
+
+impl SwigFrom<String> for CRustString {
+    fn swig_from(s: String) -> CRustString {
+        let data = s.as_ptr() as *const ::std::os::raw::c_char;
+        assert!((s.len() as u64) <= (::std::u32::MAX as u64));
+        let len = s.len() as u32;
+        assert!((s.capacity() as u64) <= (::std::u32::MAX as u64));
+        let capacity = s.capacity() as u32;
+        ::std::mem::forget(s);
+        CRustString {
+            data,
+            len,
+            capacity,
+        }
     }
 }
