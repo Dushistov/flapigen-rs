@@ -148,7 +148,6 @@ impl GenericTypeConv {
     }
 }
 
-
 /// for example true for Result<T, E> Result<u8, u8>
 fn is_second_subst_of_first(
     ty1: &ast::Ty,
@@ -406,7 +405,6 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
         .map(|x| x.ty)
 }
 
-
 pub(crate) fn self_variant(ty: &ast::Ty) -> Option<SelfTypeVariant> {
     //TODO: it is possible just inspect Ty struct without string conversation
     match &*normalized_ty_string(ty) {
@@ -502,6 +500,39 @@ pub(crate) fn code_to_item<'a>(
     Ok(krate.module.items)
 }
 
+pub(crate) fn if_option_return_some_type(ty: &ast::Ty) -> Option<ast::Ty> {
+    let generic_params = ast::Generics {
+        lifetimes: vec![],
+        ty_params: vec![
+            ast::TyParam {
+                attrs: ast::ThinVec::new(),
+                ident: ast::Ident::from_str("T"),
+                id: ast::DUMMY_NODE_ID,
+                bounds: vec![],
+                default: None,
+                span: DUMMY_SP,
+            },
+        ],
+        where_clause: ast::WhereClause {
+            id: ast::DUMMY_NODE_ID,
+            predicates: vec![],
+        },
+        span: DUMMY_SP,
+    };
+    let sess = ParseSess::new();
+    let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Option<T>")));
+    let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("T")));
+
+    GenericTypeConv {
+        from_ty,
+        to_ty,
+        code_template: Symbol::intern(""),
+        dependency: Rc::new(RefCell::new(None)),
+        generic_params,
+        to_foreigner_hint: None,
+    }.is_conv_possible(&ty.clone().into(), None, |_| None)
+        .map(|x| x.ty)
+}
 
 #[cfg(test)]
 #[macro_use]
@@ -601,7 +632,6 @@ impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
             },
         );
 
-
         check_subst(
             &sess,
             &generic,
@@ -609,10 +639,12 @@ impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
             "jobjectArray",
             "Vec<Foo>",
             "jobjectArray",
-            |name| if name == Symbol::intern("Foo") {
-                Some(&foo_spec)
-            } else {
-                None
+            |name| {
+                if name == Symbol::intern("Foo") {
+                    Some(&foo_spec)
+                } else {
+                    None
+                }
             },
         );
 
@@ -636,7 +668,6 @@ impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
             "RefMut<Foo>",
             |_| None,
         );
-
 
         check_subst(
             &sess,
@@ -748,9 +779,10 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
     fn test_work_with_result() {
         let sess = ParseSess::new();
         assert_eq!(
-            normalized_ty_string(&if_result_return_ok_type(
-                &str_to_ty(&sess, "Result<bool, String>")
-            ).unwrap()),
+            normalized_ty_string(&if_result_return_ok_type(&str_to_ty(
+                &sess,
+                "Result<bool, String>"
+            )).unwrap()),
             "bool".to_string()
         );
     }
@@ -872,4 +904,16 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
             _ => unreachable!(),
         }
     }
+
+    #[test]
+    fn test_work_with_option() {
+        let sess = ParseSess::new();
+        assert_eq!(
+            normalized_ty_string(
+                &if_option_return_some_type(&str_to_ty(&sess, "Option<String>")).unwrap()
+            ),
+            "String".to_string()
+        );
+    }
+
 }

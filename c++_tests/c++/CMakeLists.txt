@@ -1,5 +1,22 @@
 cmake_minimum_required(VERSION 3.2)
 
+include(CheckIncludeFileCXX)
+include(ExternalProject)
+include(CheckCXXCompilerFlag)
+
+option(USE_BOOST "Use boost for types not avaible in c++11" OFF)
+
+if (USE_BOOST)
+  find_package(Boost 1.56.0 REQUIRED)
+  message(STATUS "Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
+  include_directories(${Boost_INCLUDE_DIRS})
+  set(CMAKE_REQUIRED_INCLUDES "${Boost_INCLUDE_DIRS}")
+  check_include_file_cxx(boost/optional.hpp HAVE_BOOST_OPTIONAL_HPP)
+  if (NOT HAVE_BOOST_OPTIONAL_HPP)
+    message(FATAL_ERROR "Can not find boost/optional.hpp")
+  endif ()
+endif()
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/gtest/googletest/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/gtest/googletest)
 add_executable(c++-rust-swig-test
@@ -75,13 +92,17 @@ get_filename_component(RUST_BUILD_CWD ${CMAKE_CURRENT_SOURCE_DIR}  DIRECTORY)
 find_target_directory(TARGET_PATH)
 required_libs_by_rust_library(RUST_LINK_LIBRARIES)
 
+if (USE_BOOST)
+  set(CARGO_ADDON_ARGS "--no-default-features" "--features" "boost")
+  add_definitions(-DUSE_BOOST)
+endif(USE_BOOST)
+
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
-  set(CARGO_BUILD ${CARGO_CMD} "build" "${RUST_TARGET}" "--release")
+  set(CARGO_BUILD ${CARGO_CMD} "build" ${CARGO_ADDON_ARGS} "${RUST_TARGET}" "--release")
 else()
-  set(CARGO_BUILD ${CARGO_CMD} "build" "${RUST_TARGET}")
+  set(CARGO_BUILD ${CARGO_CMD} "build" ${CARGO_ADDON_ARGS} "${RUST_TARGET}")
 endif()
 
-include(ExternalProject)
 
 ExternalProject_Add(
     rust_swig_test
@@ -113,6 +134,16 @@ else()
   target_link_libraries(c++-rust-swig-test "${TARGET_PATH}/debug/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
 endif()
 
-set_target_properties(c++-rust-swig-test PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED ON)
+if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  check_cxx_compiler_flag("-std=c++17" HAS_STDCXX_17)
+  if (HAS_STDCXX_17 AND (NOT USE_BOOST))
+    set_target_properties(c++-rust-swig-test PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+    add_definitions(-DHAS_STDCXX_17)
+  else()
+    set_target_properties(c++-rust-swig-test PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED ON)
+  endif()
+else ()
+  set_target_properties(c++-rust-swig-test PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED ON)
+endif()#compiler switch
 enable_testing()
 add_test(NAME c++-rust-swig-test COMMAND c++-rust-swig-test)

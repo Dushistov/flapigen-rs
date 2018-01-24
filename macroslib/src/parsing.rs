@@ -184,7 +184,6 @@ pub(crate) fn parse_foreigner_class(
     let method_keyword = Symbol::intern("method");
     let static_method_keyword = Symbol::intern("static_method");
 
-
     let mut parser = parse::new_parser_from_tts(cx.parse_sess, tokens.to_vec());
 
     let mut class_doc_comments = vec![];
@@ -339,8 +338,7 @@ pub(crate) fn parse_foreigner_class(
                         parser.span,
                         &format!(
                             "mismatched types of construtors: {:?} {:?}",
-                            constructor_ret_type,
-                            ret_type
+                            constructor_ret_type, ret_type
                         ),
                     );
                     return Err(parser.span);
@@ -348,8 +346,7 @@ pub(crate) fn parse_foreigner_class(
             } else {
                 debug!(
                     "first constructor for {}, ret type {:?}",
-                    class_name_indent,
-                    ret_type
+                    class_name_indent, ret_type
                 );
                 let ret_type = ret_type.unwrap();
                 constructor_ret_type = Some(ret_type.clone());

@@ -315,3 +315,22 @@ foreigner_class!(class TestPassPathAsParam {
     method TestPassPathAsParam::set_path(&mut self, p: &Path);
     method TestPassPathAsParam::path(&self) -> &str;
 });
+
+#[derive(Default)]
+pub struct TestOptional {}
+
+impl TestOptional {
+    fn f1(&self, ret_notnull: bool) -> Option<Foo> {
+        if ret_notnull {
+            Some(Foo::new(17, "17"))
+        } else {
+            None
+        }
+    }
+}
+
+foreigner_class!(class TestOptional {
+    self_type TestOptional;
+    constructor TestOptional::default() -> TestOptional;
+    method TestOptional::f1(&self, _: bool) -> Option<Foo>;
+});

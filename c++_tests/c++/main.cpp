@@ -8,6 +8,13 @@
 #include <cstring>
 #include <functional>
 #include <limits>
+#include <string>
+#ifdef HAS_STDCXX_17
+#include <optional>
+#endif
+#ifdef USE_BOOST
+#include <boost/optional.hpp>
+#endif
 #include <gtest/gtest.h>
 
 #include "rust_interface/rust_str.h"
@@ -21,6 +28,9 @@
 #include "rust_interface/c_MyEnum.h"
 #include "rust_interface/TestEnumClass.hpp"
 #include "rust_interface/TestPassPathAsParam.hpp"
+#if defined(HAS_STDCXX_17) || defined(USE_BOOST)
+#include "rust_interface/TestOptional.hpp"
+#endif
 
 using namespace rust;
 
@@ -193,6 +203,23 @@ TEST(TestRustStringReturn, smokeTest)
 	    try_ret(expect.c_str());
     }
 }
+
+#ifdef HAS_STDCXX_17
+TEST(TestOptional, smokeTest)
+{
+	TestOptional x;
+	{
+		auto foo = x.f1(true);
+		ASSERT_TRUE(!!foo);
+		EXPECT_EQ(17, foo->f(0, 0));
+		EXPECT_EQ(std::string("17"), foo->getName().to_std_string());
+	}
+	{
+		auto foo = x.f1(false);
+		EXPECT_FALSE(!!foo);
+	}
+}
+#endif
 
 int main(int argc, char *argv[])
 {

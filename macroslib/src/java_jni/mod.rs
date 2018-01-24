@@ -86,8 +86,7 @@ impl LanguageGenerator for JavaConfig {
     ) -> PResult<'a, Vec<P<ast::Item>>> {
         debug!(
             "generate: begin for {}, this_type_for_method {:?}",
-            class.name,
-            class.this_type_for_method
+            class.name, class.this_type_for_method
         );
         if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
             let this_type: RustType = this_type_for_method.clone().into();
@@ -340,7 +339,6 @@ fn calc_converter_for_foreign_class_arg(
 ) -> JavaForeignTypeInfo {
     let this_ty = foreigner_class.this_type_for_method.as_ref().unwrap();
     let this_ty: RustType = this_ty.clone().into();
-
 
     let java_converter = if *this_ty.normalized_name.as_str() == *normalized_ty_string(arg_ty) {
         r#"

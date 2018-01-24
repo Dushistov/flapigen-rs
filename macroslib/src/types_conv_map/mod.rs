@@ -30,7 +30,6 @@ pub(crate) static FROM_VAR_TEMPLATE: &'static str = "{from_var}";
 pub(in types_conv_map) static TO_VAR_TYPE_TEMPLATE: &'static str = "{to_var_type}";
 pub(in types_conv_map) static FUNCTION_RETURN_TYPE_TEMPLATE: &'static str = "{function_ret_type}";
 
-
 #[derive(Debug, Clone)]
 pub(crate) struct TypeConvEdge {
     code_template: Symbol,
@@ -138,7 +137,6 @@ impl TypesConvMap {
         ret.append(&mut self.utils_code);
         ret
     }
-
 
     pub(crate) fn merge<'a>(
         &mut self,
@@ -328,9 +326,7 @@ impl TypesConvMap {
         for (ty, suffix, foreign_name) in new_foreign_types {
             debug!(
                 "map foreign: add possible type {:?} {} <-> {}",
-                ty,
-                suffix,
-                foreign_name
+                ty, suffix, foreign_name
             );
             let not_uniq_name = Symbol::intern(&normalized_ty_string(&ty));
             let node = self.add_type(RustType::new(
@@ -441,8 +437,7 @@ impl TypesConvMap {
     ) -> PResult<'a, Vec<EdgeIndex<TypeGraphIdx>>> {
         debug!(
             "find_path: begin {} -> {}",
-            from.normalized_name,
-            to.normalized_name
+            from.normalized_name, to.normalized_name
         );
         if from.normalized_name == to.normalized_name {
             return Ok(vec![]);
@@ -452,8 +447,7 @@ impl TypesConvMap {
                 DUMMY_SP,
                 &format!(
                     "Can not find conversation from {} to {}",
-                    from.normalized_name,
-                    to.normalized_name
+                    from.normalized_name, to.normalized_name
                 ),
             );
             err
@@ -473,8 +467,7 @@ impl TypesConvMap {
     ) -> Option<PossibePath> {
         debug!(
             "try_build_path from {} to {}",
-            start_from.normalized_name,
-            goal_to.normalized_name
+            start_from.normalized_name, goal_to.normalized_name
         );
         let mut possible_ways_graph = self.conv_graph.clone();
         let mut names_to_graph_map = self.rust_names_map.clone();
@@ -491,11 +484,9 @@ impl TypesConvMap {
             (*goal_to).clone(),
         );
 
-
         let mut cur_step = HashSet::new();
         cur_step.insert(start_from_idx);
         let mut next_step = HashSet::new();
-
 
         const MAX_STEPS: usize = 7;
         for step in 0..MAX_STEPS {
@@ -620,12 +611,12 @@ impl TypesConvMap {
         &self,
         foreign_name: Symbol,
     ) -> Option<ForeignTypeInfo> {
-        self.foreign_names_map.get(&foreign_name).map(|x| {
-            ForeignTypeInfo {
+        self.foreign_names_map
+            .get(&foreign_name)
+            .map(|x| ForeignTypeInfo {
                 name: foreign_name,
                 correspoding_rust_type: self.conv_graph[*x].clone(),
-            }
-        })
+            })
     }
 
     pub(crate) fn cache_rust_to_foreign_conv(&mut self, from: &RustType, to: ForeignTypeInfo) {
@@ -862,10 +853,7 @@ pub(in types_conv_map) fn validate_code_template<'a>(
             sp,
             &format!(
                 "{} not contains one of {}, {}, {}",
-                code,
-                TO_VAR_TEMPLATE,
-                FROM_VAR_TEMPLATE,
-                TO_VAR_TYPE_TEMPLATE
+                code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE
             ),
         ))
     }
@@ -887,9 +875,7 @@ pub(crate) fn make_unique_rust_typename(
 ) -> Symbol {
     Symbol::intern(&format!(
         "{}{}{}",
-        not_unique_name,
-        0 as char,
-        suffix_to_make_unique
+        not_unique_name, 0 as char, suffix_to_make_unique
     ))
 }
 
@@ -1191,7 +1177,6 @@ fn helper3() {
 "#.to_string()
         );
 
-
         assert_eq!(
             types_map
                 .convert_rust_types(
@@ -1212,7 +1197,6 @@ fn helper3() {
     let mut a0: &Foo = a0.swig_deref();
 "#.to_string()
         );
-
 
         assert_eq!(
             types_map

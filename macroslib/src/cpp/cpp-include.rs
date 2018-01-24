@@ -278,3 +278,13 @@ impl SwigFrom<String> for CRustString {
         }
     }
 }
+
+#[swig_to_foreigner_hint = "T"]
+impl<T: SwigForeignClass> SwigFrom<Option<T>> for *mut ::std::os::raw::c_void {
+    fn swig_from(x: Option<T>) -> Self {
+        match x {
+            Some(x) => <T>::box_object(x),
+            None => ::std::ptr::null_mut(),
+        }
+    }
+}

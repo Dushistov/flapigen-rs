@@ -103,7 +103,6 @@ pub(in java_jni) fn generate_rust_code<'a>(
             ),
         )?);
 
-
         let jlong_ti: RustType = parse_ty(sess, DUMMY_SP, Symbol::intern("jlong"))?.into();
 
         conv_map.add_conversation_rule(
@@ -160,15 +159,13 @@ pub(in java_jni) fn generate_rust_code<'a>(
         (dummy_ty.clone().into(), String::new())
     };
 
-
     let no_this_info = || {
         fatal_error(
             sess,
             class.span,
             &format!(
                 "Class {} (package {}) have methods, but there is no constructor",
-                class.name,
-                package_name,
+                class.name, package_name,
             ),
         )
     };
@@ -721,7 +718,6 @@ fn generate_constructor<'a>(
         "jlong",
         mc.method.span(),
     )?;
-
 
     let code = format!(
         r#"
