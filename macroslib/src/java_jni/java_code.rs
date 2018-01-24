@@ -135,8 +135,7 @@ pub(in java_jni) fn generate_java_code(
         Box::new(io::stdout())
     } else {
         let path = output_dir.join(format!("{}.java", class.name));
-        Box::new(File::create(&path)
-            .map_err(|err| format!("Couldn't create {:?}: {}", path, err))?)
+        Box::new(File::create(&path).map_err(|err| format!("Couldn't create {:?}: {}", path, err))?)
     };
 
     let imports = get_null_annotation_imports(use_null_annotation, methods_sign);
@@ -300,9 +299,8 @@ public final class {class_name} {{
 
     if have_methods && !have_constructor {
         return Err(format!(
-            "package_name {}, class_name {}, have methods, but no constructor",
-            package_name,
-            class.name
+            "package {}, class {}: has methods, but no constructor",
+            package_name, class.name
         ));
     }
     if have_constructor {
@@ -461,9 +459,10 @@ fn get_null_annotation_imports(
 ) -> String {
     if let Some(import) = use_null_annotation {
         for f_method in methods_sign {
-            let has_annotation = f_method.input.iter().any(|arg| {
-                !gen_annotation_if_need(arg.as_ref().name, "x").is_empty()
-            });
+            let has_annotation = f_method
+                .input
+                .iter()
+                .any(|arg| !gen_annotation_if_need(arg.as_ref().name, "x").is_empty());
             if has_annotation {
                 return format!("import {};", import);
             }

@@ -8,6 +8,7 @@ use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::panic;
 
 use regex::Regex;
 use tempdir::TempDir;
@@ -17,6 +18,44 @@ use syntex::Registry;
 #[macro_use]
 #[path = "../src/test_helper.rs"]
 mod test_helper;
+
+#[test]
+fn test_class_with_methods_without_constructor() {
+    let langs = [ForeignLang::Java, ForeignLang::Cpp];
+    parse_code(
+        "class_with_methods_without_constructor",
+        r#"
+foreigner_class!(class Foo {
+});
+"#,
+        &langs,
+    );
+    parse_code(
+        "class_with_methods_without_constructor",
+        r#"
+foreigner_class!(class Foo {
+   self_type SomeType;
+});
+"#,
+        &langs,
+    );
+
+    for lang in &langs {
+        let result = panic::catch_unwind(|| {
+            parse_code(
+                "class_with_methods_without_constructor",
+                r#"
+foreigner_class!(class Foo {
+   self_type SomeType;
+   method SomeType::f(&self) -> i32;
+});
+"#,
+                &[*lang],
+            );
+        });
+        assert!(result.is_err());
+    }
+}
 
 #[test]
 fn test_foreign_class_as_return_type_simple() {

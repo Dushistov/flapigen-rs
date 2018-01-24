@@ -116,6 +116,25 @@ impl LanguageGenerator for CppConfig {
                 },
             );
         }
+        let has_methods = class.methods.iter().any(|m| match m.variant {
+            MethodVariant::Method(_) => true,
+            _ => false,
+        });
+        let has_constructor = class
+            .methods
+            .iter()
+            .any(|m| m.variant == MethodVariant::Constructor);
+
+        if has_methods && !has_constructor {
+            return Err(fatal_error(
+                sess,
+                class.span,
+                &format!(
+                    "namespace {}, class {}: has methods, but no constructor",
+                    self.namespace_name, class.name
+                ),
+            ));
+        }
 
         let m_sigs = find_suitable_foreign_types_for_methods(sess, conv_map, class)?;
         generate_code(
