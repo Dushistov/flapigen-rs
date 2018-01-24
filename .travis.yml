@@ -9,7 +9,10 @@ matrix:
     - rust: nightly
 os:
   - linux
-cache: cargo
+cache:
+  - cargo
+  - directories:
+     - /home/travis/.cache/sccache
 addons:
   apt:
     sources:
@@ -24,11 +27,17 @@ addons:
 env: # specify the clang path for rust-bindgen
   - LIBCLANG_PATH=/usr/lib/llvm-3.9/lib
 before_script:
+    - wget https://github.com/mozilla/sccache/releases/download/0.2.4/sccache-0.2.4-x86_64-unknown-linux-musl.tar.gz
+    - tar -xzvf sccache-0.2.4-x86_64-unknown-linux-musl.tar.gz
+    - mv sccache-0.2.4-x86_64-unknown-linux-musl/sccache ~/.cargo/bin
+    - sccache --version
+    - export RUSTC_WRAPPER=sccache
     - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
         cargo install -f --vers 0.2.16 rustfmt-nightly;
       fi
     - cmake --version
 script:
+  - echo $RUSTC_WRAPPER
   - ln -s workspace.Cargo.toml Cargo.toml
   - cd macroslib
   - echo ${TRAVIS_RUST_VERSION}

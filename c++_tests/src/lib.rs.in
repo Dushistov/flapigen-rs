@@ -37,12 +37,15 @@ impl Foo {
     fn f_double(&self, a: f64, b: f64) -> f64 {
         a.hypot(b) + self.data as f64
     }
+
+    fn ret_string(&self) -> String {
+        self.name.clone()
+    }
 }
 
 fn f_hypot(a: f64, b: f64) -> f64 {
     a.hypot(b)
 }
-
 
 trait SomeObserver {
     fn on_state_changed(&self, _: i32, _: bool);
@@ -63,8 +66,8 @@ foreigner_class!(class Foo {
     method Foo::one_and_half(&self) -> f64;
     static_method Foo::call_me(_: Box<SomeObserver>);
     static_method f_hypot(_: f64, _: f64) -> f64; alias fHypot;
+    method Foo::ret_string(&self) -> String;
 });
-
 
 pub struct CheckPrimitiveTypesClass {
     a: i32,

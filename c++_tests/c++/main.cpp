@@ -115,16 +115,16 @@ TEST(ClassCooperationTest, smokeTest)
 {
     ClassCooperationTest x;
     auto f1 = x.get(0);
-    EXPECT_EQ(std::string("5"), f1.getName().as_str());
+    EXPECT_EQ(std::string("5"), f1.getName().to_std_string());
     EXPECT_EQ(5, f1.f(0, 0));
     auto f2 = x.get(1);
-    EXPECT_EQ(std::string("7"), f2.getName().as_str());
+    EXPECT_EQ(std::string("7"), f2.getName().to_std_string());
     EXPECT_EQ(6, f2.f(0, 0));
 
     Foo new_f2{ 437, "437" };
     x.set(1, std::move(new_f2));
     f2 = x.get(1);
-    EXPECT_EQ(std::string("437"), f2.getName().as_str());
+    EXPECT_EQ(std::string("437"), f2.getName().to_std_string());
     EXPECT_EQ(437, f2.f(0, 0));
 }
 
@@ -166,7 +166,23 @@ TEST(TestPassPathAsParam, smokeTest)
 {
     TestPassPathAsParam x;
     x.set_path("/tmp/a.txt");
-    ASSERT_EQ("\"/tmp/a.txt\"", x.path().as_str());
+    ASSERT_EQ("\"/tmp/a.txt\"", x.path().to_std_string());
+}
+
+TEST(TestRustStringReturn, smokeTest)
+{
+    auto try_ret = [](const char *word) {
+        Foo foo(1, word);
+        EXPECT_EQ(std::string(word), foo.getName().to_std_string());
+        RustString s{ foo.ret_string() };
+        EXPECT_EQ(std::string(word), s.to_std_string());
+    };
+    try_ret("Word");
+    try_ret("");
+    for (size_t i = 0; i < 100; ++i) {
+	    std::string expect(i, 'A');
+	    try_ret(expect.c_str());
+    }
 }
 
 int main(int argc, char *argv[])
