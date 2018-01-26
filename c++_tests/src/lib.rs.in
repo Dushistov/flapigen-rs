@@ -135,6 +135,14 @@ fn test_f64(v: f64) -> f64 {
     v + 1.
 }
 
+fn invert(v: bool) -> bool {
+    !v
+}
+
+fn xor(x: bool, y: bool) -> bool {
+    x ^ y
+}
+
 foreigner_class!(class CheckPrimitiveTypesClass {
     self_type CheckPrimitiveTypesClass;
     constructor create_boo() -> Rc<RefCell<CheckPrimitiveTypesClass>>;
@@ -151,6 +159,8 @@ foreigner_class!(class CheckPrimitiveTypesClass {
     static_method test_i64(v: i64) -> i64;
     static_method test_f32(v: f32) -> f32;
     static_method test_f64(v: f64) -> f64;
+    static_method invert(_: bool) -> bool;
+    static_method xor(_: bool, _: bool) -> bool; alias Xor;
 });
 
 pub struct ClassCooperationTest {

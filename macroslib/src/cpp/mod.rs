@@ -27,12 +27,12 @@ use {CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, Foreigner
 
 struct CppConverter {
     typename: Symbol,
-    converter: Symbol,
+    output_converter: String,
+    input_converter: String,
 }
 
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
-    pub(in cpp) c_transition_type: Option<Symbol>,
     c_converter: String,
     pub(in cpp) cpp_converter: Option<CppConverter>,
 }
@@ -61,7 +61,6 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
                 name: x.name,
                 correspoding_rust_type: x.correspoding_rust_type,
             },
-            c_transition_type: None,
             c_converter: String::new(),
             cpp_converter: None,
         }
@@ -525,13 +524,17 @@ public:
         };
 
         let method_name = method.short_name().as_str().to_string();
-        let mut is_wrap_ret_for_cpp = false;
-        let wrap_ret_for_cpp = if let Some(cpp_converter) = f_method.output.cpp_converter.as_ref() {
-            is_wrap_ret_for_cpp = true;
-            cpp_converter.converter
-        } else {
-            Symbol::intern("")
-        };
+        let (cpp_ret_type, convert_ret_for_cpp) =
+            if let Some(cpp_converter) = f_method.output.cpp_converter.as_ref() {
+                (
+                    cpp_converter.typename,
+                    cpp_converter
+                        .output_converter
+                        .replace(FROM_VAR_TEMPLATE, "ret"),
+                )
+            } else {
+                (f_method.output.as_ref().name, "ret".to_string())
+            };
 
         match method.variant {
             MethodVariant::StaticMethod => {
@@ -545,26 +548,39 @@ public:
                     args_with_types = c_args_with_types,
                 ).map_err(&map_write_err)?;
 
-                write!(
-                    cpp_include_f,
-                    r#"
-    static {ret_type} {method_name}({cpp_args_with_types})
+                if f_method.output.as_ref().name != "void" {
+                    write!(
+                        cpp_include_f,
+                        r#"
+    static {cpp_ret_type} {method_name}({cpp_args_with_types})
     {{
-        return {wrap_ret_for_cpp}({c_func_name}({cpp_args_for_c}));
+        {c_ret_type} ret = {c_func_name}({cpp_args_for_c});
+        return {convert_ret_for_cpp};
     }}
 "#,
-                    method_name = method_name,
-                    ret_type = if !is_wrap_ret_for_cpp {
-                        f_method.output.as_ref().name
-                    } else {
-                        wrap_ret_for_cpp
-                    },
-                    wrap_ret_for_cpp = wrap_ret_for_cpp,
-                    c_func_name = c_func_name,
-                    cpp_args_with_types = cpp_args_with_types,
-                    cpp_args_for_c = cpp_args_for_c,
-                ).map_err(&map_write_err)?;
-
+                        method_name = method_name,
+                        c_ret_type = f_method.output.as_ref().name,
+                        cpp_ret_type = cpp_ret_type,
+                        convert_ret_for_cpp = convert_ret_for_cpp,
+                        c_func_name = c_func_name,
+                        cpp_args_with_types = cpp_args_with_types,
+                        cpp_args_for_c = cpp_args_for_c,
+                    ).map_err(&map_write_err)?;
+                } else {
+                    write!(
+                        cpp_include_f,
+                        r#"
+    static void {method_name}({cpp_args_with_types})
+    {{
+        {c_func_name}({cpp_args_for_c});
+    }}
+"#,
+                        method_name = method_name,
+                        c_func_name = c_func_name,
+                        cpp_args_with_types = cpp_args_with_types,
+                        cpp_args_for_c = cpp_args_for_c,
+                    ).map_err(&map_write_err)?;
+                }
                 gen_code.append(&mut generate_static_method(sess, conv_map, &method_ctx)?);
             }
             MethodVariant::Method(ref self_variant) => {
@@ -584,30 +600,49 @@ public:
                     args_with_types = comma_c_args_with_types,
                     const_if_readonly = const_if_readonly,
                 ).map_err(&map_write_err)?;
-                write!(
-                    cpp_include_f,
-                    r#"
-    {ret_type} {method_name}({cpp_args_with_types}) {const_if_readonly}
+                if f_method.output.as_ref().name != "void" {
+                    write!(
+                        cpp_include_f,
+                        r#"
+    {cpp_ret_type} {method_name}({cpp_args_with_types}) {const_if_readonly}
     {{
-        return {wrap_ret_for_cpp}({c_func_name}(this->self_{cpp_args_for_c}));
+        {c_ret_type} ret = {c_func_name}(this->self_{cpp_args_for_c});
+        return {convert_ret_for_cpp};
     }}
 "#,
-                    method_name = method_name,
-                    ret_type = if !is_wrap_ret_for_cpp {
-                        f_method.output.as_ref().name
-                    } else {
-                        wrap_ret_for_cpp
-                    },
-                    wrap_ret_for_cpp = wrap_ret_for_cpp,
-                    c_func_name = c_func_name,
-                    cpp_args_with_types = cpp_args_with_types,
-                    cpp_args_for_c = if args_names.is_empty() {
-                        "".to_string()
-                    } else {
-                        format!(", {}", cpp_args_for_c)
-                    },
-                    const_if_readonly = const_if_readonly,
-                ).map_err(&map_write_err)?;
+                        method_name = method_name,
+                        c_ret_type = f_method.output.as_ref().name,
+                        convert_ret_for_cpp = convert_ret_for_cpp,
+                        cpp_ret_type = cpp_ret_type,
+                        c_func_name = c_func_name,
+                        cpp_args_with_types = cpp_args_with_types,
+                        cpp_args_for_c = if args_names.is_empty() {
+                            "".to_string()
+                        } else {
+                            format!(", {}", cpp_args_for_c)
+                        },
+                        const_if_readonly = const_if_readonly,
+                    ).map_err(&map_write_err)?;
+                } else {
+                    write!(
+                        cpp_include_f,
+                        r#"
+    void {method_name}({cpp_args_with_types}) {const_if_readonly}
+    {{
+        {c_func_name}(this->self_{cpp_args_for_c});
+    }}
+"#,
+                        method_name = method_name,
+                        c_func_name = c_func_name,
+                        cpp_args_with_types = cpp_args_with_types,
+                        cpp_args_for_c = if args_names.is_empty() {
+                            "".to_string()
+                        } else {
+                            format!(", {}", cpp_args_for_c)
+                        },
+                        const_if_readonly = const_if_readonly,
+                    ).map_err(&map_write_err)?;
+                }
                 gen_code.append(&mut generate_method(
                     sess,
                     conv_map,
@@ -989,10 +1024,29 @@ fn special_type<'a>(
     arg_ty: &ast::Ty,
     input: bool,
 ) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    trace!("Check is arg.ty({:?}) implements exported enum", arg_ty);
+    trace!(
+        "special_type: check is arg.ty({:?}) implements exported enum",
+        arg_ty
+    );
     if let Some(foreign_enum) = conv_map.is_this_exported_enum(&arg_ty) {
         let converter = calc_converter_for_enum(foreign_enum);
         return Ok(Some(converter));
+    }
+
+    let ty_name = normalized_ty_string(&arg_ty);
+    if ty_name == "bool" {
+        let fti = conv_map
+            .find_foreign_type_info_by_name(Symbol::intern("char"))
+            .expect("expect find char in type map");
+        return Ok(Some(CppForeignTypeInfo {
+            base: fti,
+            c_converter: String::new(),
+            cpp_converter: Some(CppConverter {
+                typename: Symbol::intern("bool"),
+                input_converter: format!("{} ? 1 : 0", FROM_VAR_TEMPLATE),
+                output_converter: format!("{} != 0", FROM_VAR_TEMPLATE),
+            }),
+        }));
     }
 
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty) {
@@ -1007,27 +1061,16 @@ fn special_type<'a>(
                     &format!("type {} unknown", foreign_class.name),
                 )
             })?;
-        if !input {
-            return Ok(Some(CppForeignTypeInfo {
-                base: foreign_info,
-                c_transition_type: None,
-                c_converter: String::new(),
-                cpp_converter: Some(CppConverter {
-                    typename: foreign_class.name,
-                    converter: foreign_class.name,
-                }),
-            }));
-        } else {
-            return Ok(Some(CppForeignTypeInfo {
-                base: foreign_info,
-                c_transition_type: None,
-                c_converter: String::new(),
-                cpp_converter: Some(CppConverter {
-                    typename: foreign_class.name,
-                    converter: Symbol::intern(&format!("{}.release()", FROM_VAR_TEMPLATE)),
-                }),
-            }));
-        }
+
+        return Ok(Some(CppForeignTypeInfo {
+            base: foreign_info,
+            c_converter: String::new(),
+            cpp_converter: Some(CppConverter {
+                typename: foreign_class.name,
+                output_converter: format!("{}({})", foreign_class.name, FROM_VAR_TEMPLATE),
+                input_converter: format!("{}.release()", FROM_VAR_TEMPLATE),
+            }),
+        }));
     }
 
     trace!("Oridinary type {:?}", arg_ty);
@@ -1047,7 +1090,6 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> CppForeignTypeInfo
             name: foreign_enum.name,
             correspoding_rust_type: u32_ti,
         },
-        c_transition_type: Some(Symbol::intern("uint32_t")),
         c_converter,
         cpp_converter: None,
     }

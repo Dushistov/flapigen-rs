@@ -96,6 +96,15 @@ TEST(Foo, Simple)
 TEST(CheckPrimitiveTypesClass, smokeTest)
 {
     CheckPrimitiveTypesClass x;
+
+    EXPECT_TRUE(CheckPrimitiveTypesClass::invert(false));
+    EXPECT_FALSE(CheckPrimitiveTypesClass::invert(true));
+
+    EXPECT_TRUE(CheckPrimitiveTypesClass::Xor(true, false));
+    EXPECT_TRUE(CheckPrimitiveTypesClass::Xor(false, true));
+    EXPECT_FALSE(CheckPrimitiveTypesClass::Xor(true, true));
+    EXPECT_FALSE(CheckPrimitiveTypesClass::Xor(false, false));
+
     EXPECT_NEAR(static_cast<float>(M_E), x.test(true), std::numeric_limits<float>::epsilon());
     EXPECT_NEAR(static_cast<float>(M_PI), x.test(false), std::numeric_limits<float>::epsilon());
     EXPECT_EQ(255, CheckPrimitiveTypesClass::test_u8(254u));

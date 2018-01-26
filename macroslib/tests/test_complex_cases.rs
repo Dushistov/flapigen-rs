@@ -552,6 +552,30 @@ foreigner_class!(class ClassWithCallbacks {
     );
 }
 
+#[test]
+fn test_return_bool() {
+    let gen_code = parse_code(
+        "test_cpp_return_bool",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::default() -> Foo;
+    method f1(&mut self) -> bool;
+});
+"#,
+        &[
+            //ForeignLang::Java,
+            ForeignLang::Cpp,
+        ],
+    );
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(cpp_code_pair.foreign_code.contains("bool f1()"));
+}
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 enum ForeignLang {
     Java,
