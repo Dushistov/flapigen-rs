@@ -8,6 +8,7 @@ use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::panic;
 
 use regex::Regex;
 use tempdir::TempDir;
@@ -17,6 +18,44 @@ use syntex::Registry;
 #[macro_use]
 #[path = "../src/test_helper.rs"]
 mod test_helper;
+
+#[test]
+fn test_class_with_methods_without_constructor() {
+    let langs = [ForeignLang::Java, ForeignLang::Cpp];
+    parse_code(
+        "class_with_methods_without_constructor",
+        r#"
+foreigner_class!(class Foo {
+});
+"#,
+        &langs,
+    );
+    parse_code(
+        "class_with_methods_without_constructor",
+        r#"
+foreigner_class!(class Foo {
+   self_type SomeType;
+});
+"#,
+        &langs,
+    );
+
+    for lang in &langs {
+        let result = panic::catch_unwind(|| {
+            parse_code(
+                "class_with_methods_without_constructor",
+                r#"
+foreigner_class!(class Foo {
+   self_type SomeType;
+   method SomeType::f(&self) -> i32;
+});
+"#,
+                &[*lang],
+            );
+        });
+        assert!(result.is_err());
+    }
+}
 
 #[test]
 fn test_foreign_class_as_return_type_simple() {
@@ -511,6 +550,30 @@ foreigner_class!(class ClassWithCallbacks {
             .rust_code
             .contains(r#"swig_c_str!("(Ljava/lang/String;)V")"#)
     );
+}
+
+#[test]
+fn test_return_bool() {
+    let gen_code = parse_code(
+        "test_cpp_return_bool",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::default() -> Foo;
+    method f1(&mut self) -> bool;
+});
+"#,
+        &[
+            //ForeignLang::Java,
+            ForeignLang::Cpp,
+        ],
+    );
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(cpp_code_pair.foreign_code.contains("bool f1()"));
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]

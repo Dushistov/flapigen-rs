@@ -171,7 +171,7 @@ pub(in cpp) fn cpp_generate_args_to_call_c(
         }
         if let Some(conv) = f_type_info.cpp_converter.as_ref() {
             let arg_name = format!("a_{}", i);
-            let conv_arg = conv.converter
+            let conv_arg = conv.input_converter
                 .as_str()
                 .replace(FROM_VAR_TEMPLATE, &arg_name);
             write!(&mut ret, "{}", conv_arg)
