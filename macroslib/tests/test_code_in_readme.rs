@@ -43,9 +43,10 @@ fn test_code_in_readme() {
                 });
 
                 let mut registry = syntex::Registry::new();
-                let swig_gen = Generator::new(LanguageConfig::JavaConfig(
-                    JavaConfig::new(java_path, "com.example".into()),
-                )).with_pointer_target_width(64);
+                let swig_gen = Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
+                    java_path,
+                    "com.example".into(),
+                ))).with_pointer_target_width(64);
                 swig_gen.register(&mut registry);
                 registry
                     .expand("rust_swig_test_jni", &rust_path_src, &rust_path_dst)
@@ -59,9 +60,10 @@ fn test_code_in_readme() {
                     panic!("! {:?}", why.kind());
                 });
                 let mut registry = syntex::Registry::new();
-                let swig_gen = Generator::new(LanguageConfig::CppConfig(
-                    CppConfig::new(cpp_path, "com_example".into()),
-                )).with_pointer_target_width(64);
+                let swig_gen = Generator::new(LanguageConfig::CppConfig(CppConfig::new(
+                    cpp_path,
+                    "com_example".into(),
+                ))).with_pointer_target_width(64);
                 swig_gen.register(&mut registry);
                 registry
                     .expand("rust_swig_test_c++", &rust_path_src, &rust_path_dst)

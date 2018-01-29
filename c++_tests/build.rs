@@ -5,7 +5,7 @@ extern crate syntex;
 use std::time::Instant;
 use std::env;
 use std::path::Path;
-use rust_swig::{CppConfig, LanguageConfig};
+use rust_swig::{CppConfig, CppOptional, LanguageConfig};
 
 fn main() {
     env_logger::init().unwrap();
@@ -25,15 +25,20 @@ fn main() {
     println!("cargo:rerun-if-changed=src");
     //rebuild if user remove generated code
     println!("cargo:rerun-if-changed={}", out_dir);
+    println!("cargo:rerun-if-changed=c++/rust_interface");
 }
 
 fn rust_swig_expand(from: &Path, out: &Path) -> Result<(), String> {
     println!("Run rust_swig_expand");
     let mut registry = syntex::Registry::new();
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(CppConfig::new(
-        Path::new("c++").join("rust_interface"),
-        "rust".into(),
-    )));
+    let cpp_cfg = CppConfig::new(Path::new("c++").join("rust_interface"), "rust".into())
+        .cpp_optional(if cfg!(feature = "boost") {
+            CppOptional::Boost
+        } else {
+            CppOptional::Std17
+        });
+
+    let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
     swig_gen.register(&mut registry);
     registry
         .expand("rust_swig_test_c++", from, out)

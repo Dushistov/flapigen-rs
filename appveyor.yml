@@ -12,6 +12,7 @@ install:
   - ps: .\rust-install.exe /VERYSILENT /NORESTART /DIR="C:\rust" | Out-Null
   - ps: $env:PATH="C:\Program Files\Java\jdk1.8.0\bin;$env:PATH;C:\rust\bin"
   - ps: $env:JAVA_HOME="C:\Program Files\Java\jdk1.8.0"
+  - ps: $env:BOOST_ROOT="C:\Libraries\boost_1_59_0"
   - cmd: set PATH=%cd%\_ci\cmake\bin;%PATH%
   - cmd: set PATH=%cd%\_ci\ninja;%PATH%
   - rustc -vV

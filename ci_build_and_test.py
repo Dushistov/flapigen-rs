@@ -71,6 +71,24 @@ def run_jni_tests(use_shell, fast_run):
     target_dir = os.path.join(find_dir("target", "jni_tests"), "release")
     run_jar(target_dir, jar_dir, use_shell)
 
+def build_cpp_code_with_cmake(cmake_build_dir, addon_params):
+    if sys.platform == 'win32':
+        cmake_generator = "Visual Studio 14 2015"
+        if os.getenv('platform') == "x64":
+            cmake_generator = "Visual Studio 14 2015 Win64"
+    else:
+        cmake_generator = "Unix Makefiles"
+    cmake_args = ["cmake", "-G", cmake_generator, "-DCMAKE_BUILD_TYPE=RelWithDebInfo"] \
+                                                                       + addon_params + [".."]
+    if not os.path.exists(cmake_build_dir):
+        os.makedirs(cmake_build_dir)
+        subprocess.check_call(cmake_args,
+                              cwd = str(cmake_build_dir))
+    subprocess.check_call(["cmake", "--build", "."], cwd = str(cmake_build_dir))
+    if sys.platform == 'win32':
+        subprocess.check_call(["msbuild", "RUN_TESTS.vcxproj"], cwd = str(cmake_build_dir))
+    else:
+        subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cmake_build_dir))
 
 def main():
     print("Starting build and test")
@@ -111,27 +129,13 @@ def main():
         subprocess.check_call(["cargo", "test"], cwd = "c++_tests", shell = False)
         if not fast_run:
             subprocess.check_call(["cargo", "test", "--release"], cwd = "c++_tests", shell = False)
-        cmake_build_dir = os.path.join("c++_tests", "c++", "build")
-        if sys.platform == 'win32':
-            cmake_generator = "Visual Studio 14 2015"
-            if os.getenv('platform') == "x64":
-                cmake_generator = "Visual Studio 14 2015 Win64"
-        else:
-            cmake_generator = "Unix Makefiles"
-        if not os.path.exists(cmake_build_dir):
-            os.makedirs(cmake_build_dir)
-            subprocess.check_call(["cmake", "-G", cmake_generator, "-DCMAKE_BUILD_TYPE=RelWithDebInfo", ".."],
-                                  cwd = str(cmake_build_dir))
-        subprocess.check_call(["cmake", "--build", "."], cwd = str(cmake_build_dir))
-        if sys.platform == 'win32':
-            subprocess.check_call(["msbuild", "RUN_TESTS.vcxproj"], cwd = str(cmake_build_dir))
-        else:
-            subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cmake_build_dir))
+        build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build"), [])
+        purge(os.path.join("c++_tests", "c++", "rust_interface"), ".*\.h.*$")        
+        build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
+
     if has_android_sdk:
         gradle_cmd = "gradlew.bat" if is_windows else "./gradlew"
         subprocess.check_call([gradle_cmd, "build"], cwd=os.path.join(os.getcwd(), "android-example"))
 
 if __name__ == "__main__":
     main()
-
-

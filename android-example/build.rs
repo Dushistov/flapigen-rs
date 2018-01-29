@@ -88,12 +88,10 @@ fn get_gcc_system_include_dirs(target: &str) -> Result<Vec<PathBuf>, String> {
         .ok_or(format!("No '{}' in output from {}", END_PAT, gcc_cmd).as_str())?
         + start_includes;
 
-    Ok(
-        (&gcc_output[start_includes..end_includes])
-            .split('\n')
-            .map(|s| PathBuf::from(s.trim().to_string()))
-            .collect(),
-    )
+    Ok((&gcc_output[start_includes..end_includes])
+        .split('\n')
+        .map(|s| PathBuf::from(s.trim().to_string()))
+        .collect())
 }
 
 fn search_file_in_directory<P>(dirs: &[P], file: &str) -> Result<PathBuf, ()>
@@ -142,9 +140,10 @@ where
         Ok(bindings),
         |acc: Result<bindgen::Builder, String>, header| {
             let c_file_path = header;
-            let c_file_str = c_file_path.as_ref().to_str().ok_or_else(|| {
-                format!("Invalid unicode in path to {:?}", c_file_path.as_ref())
-            })?;
+            let c_file_str = c_file_path
+                .as_ref()
+                .to_str()
+                .ok_or_else(|| format!("Invalid unicode in path to {:?}", c_file_path.as_ref()))?;
             Ok(acc.unwrap().clang_arg("-include").clang_arg(c_file_str))
         },
     )?;

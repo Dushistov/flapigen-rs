@@ -220,8 +220,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                     .ok_or_else(|| fatal_error(sess, item.span, "No Target associated type"))?;
                 debug!(
                     "parsing swigderef target {:?}, for_type {:?}",
-                    target_ty,
-                    for_type
+                    target_ty, for_type
                 );
                 let deref_target_name = normalized_ty_string(&target_ty);
                 let (deref_trait, to_typename, mutbl) =
@@ -306,8 +305,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                         item.span,
                         &format!(
                             "No {} but there are other attr {:?}",
-                            swig_from_attr_name,
-                            swig_attrs
+                            swig_from_attr_name, swig_attrs
                         ),
                     )
                 })?;
@@ -318,8 +316,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                         item.span,
                         &format!(
                             "No {} but there are other attr {:?}",
-                            swig_to_attr_name,
-                            swig_attrs
+                            swig_to_attr_name, swig_attrs
                         ),
                     )
                 })?;
@@ -472,21 +469,15 @@ fn parse_foreign_types_map_mod<'a>(
         }
     }
 
-
-    Ok(
-        names_map
-            .into_iter()
-            .map(|(k, v)| {
-                TypeNamesMapEntry {
-                    foreign_name: k,
-                    rust_name: v.0,
-                    rust_ty: v.1,
-                }
-            })
-            .collect(),
-    )
+    Ok(names_map
+        .into_iter()
+        .map(|(k, v)| TypeNamesMapEntry {
+            foreign_name: k,
+            rust_name: v.0,
+            rust_ty: v.1,
+        })
+        .collect())
 }
-
 
 fn trait_path_match(path: &ast::Path, type_name: &str) -> bool {
     path.segments.len() == 1
@@ -612,8 +603,7 @@ fn add_conv_code(
     let to = RustType::new(to, to_typename);
     debug!(
         "add conv from {} to {}",
-        from.normalized_name,
-        to.normalized_name
+        from.normalized_name, to.normalized_name
     );
     let from = *rust_names_map
         .entry(from.normalized_name)
@@ -1052,7 +1042,6 @@ macro_rules! jni_unpack_return {
 "#,
             code
         );
-
 
         let (_, code) = unwrap_presult!(conv_map.convert_rust_types(
             &sess,

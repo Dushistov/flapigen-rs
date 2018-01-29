@@ -594,10 +594,20 @@ impl JavaConfig {
     }
 }
 
+/// To which c++ map Option
+#[derive(Clone)]
+pub enum CppOptional {
+    /// `std::optional` from C++17 standard
+    Std17,
+    /// `boost::optional`
+    Boost,
+}
+
 #[derive(Clone)]
 pub struct CppConfig {
     output_dir: PathBuf,
     namespace_name: String,
+    cpp_optional: CppOptional,
 }
 
 impl CppConfig {
@@ -609,6 +619,13 @@ impl CppConfig {
         CppConfig {
             output_dir,
             namespace_name,
+            cpp_optional: CppOptional::Std17,
+        }
+    }
+    pub fn cpp_optional(self, cpp_optional: CppOptional) -> CppConfig {
+        CppConfig {
+            cpp_optional,
+            ..self
         }
     }
 }

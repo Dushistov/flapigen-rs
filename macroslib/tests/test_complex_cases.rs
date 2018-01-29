@@ -576,6 +576,37 @@ foreigner_class!(class Foo {
     assert!(cpp_code_pair.foreign_code.contains("bool f1()"));
 }
 
+#[test]
+fn test_return_option() {
+    let gen_code = parse_code(
+        "test_return_option",
+        r#"
+foreigner_class!(class Boo {
+  self_type Boo;
+  constructor Boo::new() -> Boo;
+  method Boo::something(&self) -> i32;
+});
+
+foreigner_class!(class Foo {
+   self_type Foo;
+   constructor Foo::default() -> Foo;
+   method Foo::f1(&self) -> Option<Boo>;
+});
+"#,
+        &[ForeignLang::Cpp],
+    );
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("std::optional<Boo> f1()")
+    );
+}
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 enum ForeignLang {
     Java,

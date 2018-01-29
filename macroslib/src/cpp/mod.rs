@@ -1,9 +1,10 @@
 mod cpp_code;
+mod special_types;
 
 use std::path::Path;
 use std::fs::File;
 use std::io::Write;
-use std::fmt;
+use std::{fmt, mem};
 
 use petgraph::Direction;
 use syntex_syntax::ptr::P;
@@ -24,6 +25,7 @@ use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
                             rust_to_foreign_convert_method_inputs};
 use {CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
      LanguageGenerator, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap};
+use self::special_types::special_type;
 
 struct CppConverter {
     typename: Symbol,
@@ -135,7 +137,7 @@ impl LanguageGenerator for CppConfig {
             ));
         }
 
-        let m_sigs = find_suitable_foreign_types_for_methods(sess, conv_map, class)?;
+        let m_sigs = find_suitable_foreign_types_for_methods(sess, conv_map, class, self)?;
         generate_code(
             sess,
             conv_map,
@@ -207,6 +209,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
     sess: &'a ParseSess,
     conv_map: &mut TypesConvMap,
     class: &ForeignerClassInfo,
+    cpp_cfg: &CppConfig,
 ) -> PResult<'a, Vec<CppForeignMethodSignature>> {
     let mut ret = Vec::<CppForeignMethodSignature>::with_capacity(class.methods.len());
     let empty_symbol = Symbol::intern("");
@@ -226,7 +229,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
         let mut input =
             Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            if let Some(converter) = special_type(sess, conv_map, &arg.ty, true)? {
+            if let Some(converter) = special_type(sess, conv_map, cpp_cfg, &arg.ty, true)? {
                 input.push(converter);
                 continue;
             }
@@ -260,7 +263,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
                     },
                 }.into(),
                 ast::FunctionRetTy::Ty(ref rt) => {
-                    if let Some(converter) = special_type(sess, conv_map, &*rt, false)? {
+                    if let Some(converter) = special_type(sess, conv_map, cpp_cfg, &*rt, false)? {
                         converter
                     } else {
                         conv_map
@@ -329,6 +332,8 @@ fn generate_code<'a>(
 #include <stdint.h>
 
 #ifdef __cplusplus
+static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * {sizeof_usize},
+   "our conversation usize <-> uintptr_t is wrong");
 extern "C" {{
 #endif
 
@@ -337,6 +342,7 @@ extern "C" {{
 "##,
         doc_comments = class_doc_comments,
         c_class_type = c_class_type,
+        sizeof_usize = mem::size_of::<usize>(),
     ).map_err(&map_write_err)?;
 
     write!(
@@ -1016,83 +1022,6 @@ pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void
     gen_code.append(&mut deps_this);
     gen_code.append(&mut code_to_item(sess, mc.c_func_name, &code)?);
     Ok(gen_code)
-}
-
-fn special_type<'a>(
-    sess: &'a ParseSess,
-    conv_map: &TypesConvMap,
-    arg_ty: &ast::Ty,
-    input: bool,
-) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    trace!(
-        "special_type: check is arg.ty({:?}) implements exported enum",
-        arg_ty
-    );
-    if let Some(foreign_enum) = conv_map.is_this_exported_enum(&arg_ty) {
-        let converter = calc_converter_for_enum(foreign_enum);
-        return Ok(Some(converter));
-    }
-
-    let ty_name = normalized_ty_string(&arg_ty);
-    if ty_name == "bool" {
-        let fti = conv_map
-            .find_foreign_type_info_by_name(Symbol::intern("char"))
-            .expect("expect find char in type map");
-        return Ok(Some(CppForeignTypeInfo {
-            base: fti,
-            c_converter: String::new(),
-            cpp_converter: Some(CppConverter {
-                typename: Symbol::intern("bool"),
-                input_converter: format!("{} ? 1 : 0", FROM_VAR_TEMPLATE),
-                output_converter: format!("{} != 0", FROM_VAR_TEMPLATE),
-            }),
-        }));
-    }
-
-    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty) {
-        let foreign_typename =
-            Symbol::intern(&format!("{} *", cpp_code::c_class_type(foreign_class)));
-        let foreign_info = conv_map
-            .find_foreign_type_info_by_name(foreign_typename)
-            .ok_or_else(|| {
-                fatal_error(
-                    sess,
-                    arg_ty.span,
-                    &format!("type {} unknown", foreign_class.name),
-                )
-            })?;
-
-        return Ok(Some(CppForeignTypeInfo {
-            base: foreign_info,
-            c_converter: String::new(),
-            cpp_converter: Some(CppConverter {
-                typename: foreign_class.name,
-                output_converter: format!("{}({})", foreign_class.name, FROM_VAR_TEMPLATE),
-                input_converter: format!("{}.release()", FROM_VAR_TEMPLATE),
-            }),
-        }));
-    }
-
-    trace!("Oridinary type {:?}", arg_ty);
-    Ok(None)
-}
-
-fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> CppForeignTypeInfo {
-    let sess = ParseSess::new();
-    let u32_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("u32"))
-        .unwrap()
-        .into();
-    let c_converter: String = r#"
-        uint32_t {to_var} = {from_var};
-"#.into();
-    CppForeignTypeInfo {
-        base: ForeignTypeInfo {
-            name: foreign_enum.name,
-            correspoding_rust_type: u32_ti,
-        },
-        c_converter,
-        cpp_converter: None,
-    }
 }
 
 fn generate_rust_code_for_enum<'a>(
