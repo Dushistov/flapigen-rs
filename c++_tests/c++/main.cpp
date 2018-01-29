@@ -126,7 +126,7 @@ TEST(CheckPrimitiveTypesClass, smokeTest)
     EXPECT_EQ(18446744073709551615ull,
               CheckPrimitiveTypesClass::test_u64(18446744073709551615ull - 1));
     EXPECT_EQ(0, CheckPrimitiveTypesClass::test_i64(-1));
-    EXPECT_NEAR(2.1f, CheckPrimitiveTypesClass::test_f32(1.1), 1e-12);
+    EXPECT_NEAR(2.1f, CheckPrimitiveTypesClass::test_f32(1.1f), 1e-12f);
     EXPECT_NEAR(0., CheckPrimitiveTypesClass::test_f64(-1.0), 1e-12);
 }
 
