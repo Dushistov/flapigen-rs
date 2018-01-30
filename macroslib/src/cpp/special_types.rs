@@ -1,13 +1,13 @@
 use syntex_syntax::parse::{PResult, ParseSess};
 use syntex_syntax::ast;
-
-use syntex_pos::DUMMY_SP;
+use syntex_pos::{Span, DUMMY_SP};
 use syntex_syntax::symbol::Symbol;
 
-use my_ast::{if_option_return_some_type, normalized_ty_string, parse_ty, RustType};
+use my_ast::{if_option_return_some_type, if_result_return_ok_err_types, normalized_ty_string,
+             parse_ty, RustType};
 use errors::fatal_error;
 use types_conv_map::{ForeignTypeInfo, FROM_VAR_TEMPLATE};
-use {CppConfig, CppOptional, ForeignEnumInfo, TypesConvMap};
+use {CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypesConvMap};
 use cpp::{CppConverter, CppForeignTypeInfo};
 use cpp::cpp_code::c_class_type;
 
@@ -44,17 +44,7 @@ pub(in cpp) fn special_type<'a>(
     }
 
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty) {
-        let foreign_typename = Symbol::intern(&format!("{} *", c_class_type(foreign_class)));
-        let foreign_info = conv_map
-            .find_foreign_type_info_by_name(foreign_typename)
-            .ok_or_else(|| {
-                fatal_error(
-                    sess,
-                    arg_ty.span,
-                    &format!("type {} unknown", foreign_class.name),
-                )
-            })?;
-
+        let foreign_info = foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span)?;
         return Ok(Some(CppForeignTypeInfo {
             base: foreign_info,
             c_converter: String::new(),
@@ -67,19 +57,58 @@ pub(in cpp) fn special_type<'a>(
     }
 
     if !input {
+        if let Some((ok_ty, err_ty)) = if_result_return_ok_err_types(arg_ty) {
+            trace!(
+                "special_type: return type is Result<{:?}, {:?}>",
+                ok_ty,
+                err_ty
+            );
+            if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&ok_ty) {
+                let foreign_info = conv_map
+                    .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectString"))
+                    .expect("Can not find info about struct CResultObjectString");
+                let err_ty_name = normalized_ty_string(&err_ty);
+                if err_ty_name == "String" {
+                    let c_class = c_class_type(foreign_class);
+                    let typename = match cpp_cfg.cpp_variant {
+                        CppVariant::Std17 => Symbol::intern(&format!(
+                            "std::variant<{}, RustString>",
+                            foreign_class.name
+                        )),
+                        CppVariant::Boost => Symbol::intern(&format!(
+                            "boost::variant<{}, RustString>",
+                            foreign_class.name
+                        )),
+                    };
+                    let output_converter = format!(
+                        "{var}.is_ok != 0 ?
+ {VarType}{{{Type}(static_cast<{C_Type} *>({var}.data.ok))}} :
+ {VarType}{{RustString{{{var}.data.err}}}}",
+                        VarType = typename,
+                        Type = foreign_class.name,
+                        C_Type = c_class,
+                        var = FROM_VAR_TEMPLATE,
+                    );
+                    return Ok(Some(CppForeignTypeInfo {
+                        base: foreign_info,
+                        c_converter: String::new(),
+                        cpp_converter: Some(CppConverter {
+                            typename,
+                            output_converter,
+                            input_converter: String::new(),
+                        }),
+                    }));
+                } else {
+                    unimplemented!();
+                }
+            } else {
+                unimplemented!();
+            }
+        }
         if let Some(ty) = if_option_return_some_type(arg_ty) {
             if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&ty) {
-                let foreign_typename =
-                    Symbol::intern(&format!("{} *", c_class_type(foreign_class)));
-                let foreign_info = conv_map
-                    .find_foreign_type_info_by_name(foreign_typename)
-                    .ok_or_else(|| {
-                        fatal_error(
-                            sess,
-                            arg_ty.span,
-                            &format!("type {} unknown", foreign_class.name),
-                        )
-                    })?;
+                let foreign_info =
+                    foreign_class_foreign_name(sess, conv_map, foreign_class, ty.span)?;
                 let (typename, output_converter) = match cpp_cfg.cpp_optional {
                     CppOptional::Std17 => (
                         Symbol::intern(&format!("std::optional<{}>", foreign_class.name)),
@@ -115,6 +144,24 @@ pub(in cpp) fn special_type<'a>(
 
     trace!("Oridinary type {:?}", arg_ty);
     Ok(None)
+}
+
+fn foreign_class_foreign_name<'a>(
+    sess: &'a ParseSess,
+    conv_map: &TypesConvMap,
+    foreign_class: &ForeignerClassInfo,
+    foreign_class_span: Span,
+) -> PResult<'a, ForeignTypeInfo> {
+    let foreign_typename = Symbol::intern(&format!("{} *", c_class_type(foreign_class)));
+    conv_map
+        .find_foreign_type_info_by_name(foreign_typename)
+        .ok_or_else(|| {
+            fatal_error(
+                sess,
+                foreign_class_span,
+                &format!("type {} unknown", foreign_class.name),
+            )
+        })
 }
 
 fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> CppForeignTypeInfo {

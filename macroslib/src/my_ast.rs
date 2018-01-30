@@ -82,7 +82,7 @@ impl GenericTypeConv {
     {
         let mut subst_map = TyParamsSubstMap::new();
         trace!(
-            "is_ty_substitute_of_me: generic: {:?} => from_ty: {:?} => ty: {}",
+            "is_conv_possible: begin generic: {:?} => from_ty: {:?} => ty: {}",
             self.generic_params,
             self.from_ty,
             ty.normalized_name
@@ -94,7 +94,7 @@ impl GenericTypeConv {
             return None;
         }
         trace!(
-            "{:?} is subst of {:?}, check trait bounds",
+            "is_conv_possible: {:?} is subst of {:?}, check trait bounds",
             ty.ty,
             self.from_ty
         );
@@ -106,7 +106,7 @@ impl GenericTypeConv {
         for (key, val) in &subst_map {
             if let Some(ref val) = *val {
                 trace!(
-                    "is_ty_substitute_of key={:?} val={:?}, trait_bounds {:?}",
+                    "is_conv_possible: key={:?} val={:?}, trait_bounds {:?}",
                     key,
                     val,
                     trait_bounds
@@ -115,7 +115,7 @@ impl GenericTypeConv {
                     let val_name = Symbol::intern(&normalized_ty_string(val));
                     others(val_name).map_or(true, |rt| !requires.is_subset(&rt.implements))
                 }) {
-                    trace!("is_ty_substitute_of trait bounds check failed");
+                    trace!("is_conv_possible: trait bounds check failed");
                     return None;
                 }
             } else {
@@ -123,6 +123,7 @@ impl GenericTypeConv {
             }
         }
         if has_unbinded {
+            trace!("is_conv_possible: has_unbinded: goal_ty {:?}", goal_ty);
             if let Some(goal_ty) = goal_ty {
                 is_second_subst_of_first(&self.to_ty, &goal_ty.ty, &mut subst_map);
             }
@@ -240,13 +241,14 @@ fn is_second_subst_of_first_ppath(
                                     Some(ref x) => (**x).clone(),
                                     None => {
                                         *subst = Some(type_p2.clone());
-                                        return true;
+                                        (**type_p2).clone()
+                                        //return true;
                                     }
                                 }
                             } else {
                                 (**type_p1).clone()
                             };
-                        trace!("is_second_subst_of_first_ppath:  go deeper");
+                        trace!("is_second_subst_of_first_ppath: go deeper");
                         if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
                             return false;
                         }
@@ -322,70 +324,69 @@ pub(crate) fn parse_ty(sess: &ParseSess, sp: Span, type_str: Symbol) -> PResult<
     }
 }
 
-pub(crate) fn if_result_return_ok_type(ty: &ast::Ty) -> Option<ast::Ty> {
-    let generic_params = ast::Generics {
+fn generic_params_new(names: &[&str]) -> ast::Generics {
+    let mut ty_params = vec![];
+    for name in names {
+        ty_params.push(ast::TyParam {
+            attrs: ast::ThinVec::new(),
+            ident: ast::Ident::from_str(name),
+            id: ast::DUMMY_NODE_ID,
+            bounds: vec![],
+            default: None,
+            span: DUMMY_SP,
+        });
+    }
+    ast::Generics {
         lifetimes: vec![],
-        ty_params: vec![
-            ast::TyParam {
-                attrs: ast::ThinVec::new(),
-                ident: ast::Ident::from_str("T"),
-                id: ast::DUMMY_NODE_ID,
-                bounds: vec![],
-                default: None,
-                span: DUMMY_SP,
-            },
-            ast::TyParam {
-                attrs: ast::ThinVec::new(),
-                ident: ast::Ident::from_str("E"),
-                id: ast::DUMMY_NODE_ID,
-                bounds: vec![],
-                default: None,
-                span: DUMMY_SP,
-            },
-        ],
+        ty_params,
         where_clause: ast::WhereClause {
             id: ast::DUMMY_NODE_ID,
             predicates: vec![],
         },
         span: DUMMY_SP,
-    };
-    let sess = ParseSess::new();
-    let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Result<T, E>")));
-    let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("T")));
+    }
+}
 
-    GenericTypeConv {
-        from_ty,
-        to_ty,
-        code_template: Symbol::intern(""),
-        dependency: Rc::new(RefCell::new(None)),
-        generic_params,
-        to_foreigner_hint: None,
-    }.is_conv_possible(&ty.clone().into(), None, |_| None)
-        .map(|x| x.ty)
+pub(crate) fn if_result_return_ok_err_types(ty: &ast::Ty) -> Option<(ast::Ty, ast::Ty)> {
+    let ok_ty = {
+        let sess = ParseSess::new();
+        let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Result<T, E>")));
+        let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("T")));
+
+        GenericTypeConv {
+            from_ty,
+            to_ty,
+            code_template: Symbol::intern(""),
+            dependency: Rc::new(RefCell::new(None)),
+            generic_params: generic_params_new(&["T", "E"]),
+            to_foreigner_hint: None,
+        }.is_conv_possible(&ty.clone().into(), None, |_| None)
+            .map(|x| x.ty)
+    }?;
+
+    let err_ty = {
+        let sess = ParseSess::new();
+        let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Result<T, E>")));
+        let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("E")));
+
+        GenericTypeConv {
+            from_ty,
+            to_ty,
+            code_template: Symbol::intern(""),
+            dependency: Rc::new(RefCell::new(None)),
+            generic_params: generic_params_new(&["T", "E"]),
+            to_foreigner_hint: None,
+        }.is_conv_possible(&ty.clone().into(), None, |_| None)
+            .map(|x| x.ty)
+    }?;
+    Some((ok_ty, err_ty))
 }
 
 pub(crate) fn check_if_smart_pointer_return_inner_type(
     ty: &ast::Ty,
     smart_ptr_name: &str,
 ) -> Option<ast::Ty> {
-    let generic_params = ast::Generics {
-        lifetimes: vec![],
-        ty_params: vec![
-            ast::TyParam {
-                attrs: ast::ThinVec::new(),
-                ident: ast::Ident::from_str("T"),
-                id: ast::DUMMY_NODE_ID,
-                bounds: vec![],
-                default: None,
-                span: DUMMY_SP,
-            },
-        ],
-        where_clause: ast::WhereClause {
-            id: ast::DUMMY_NODE_ID,
-            predicates: vec![],
-        },
-        span: DUMMY_SP,
-    };
+    let generic_params = generic_params_new(&["T"]);
     let sess = ParseSess::new();
     let from_ty = unwrap_presult!(parse_ty(
         &sess,
@@ -501,24 +502,7 @@ pub(crate) fn code_to_item<'a>(
 }
 
 pub(crate) fn if_option_return_some_type(ty: &ast::Ty) -> Option<ast::Ty> {
-    let generic_params = ast::Generics {
-        lifetimes: vec![],
-        ty_params: vec![
-            ast::TyParam {
-                attrs: ast::ThinVec::new(),
-                ident: ast::Ident::from_str("T"),
-                id: ast::DUMMY_NODE_ID,
-                bounds: vec![],
-                default: None,
-                span: DUMMY_SP,
-            },
-        ],
-        where_clause: ast::WhereClause {
-            id: ast::DUMMY_NODE_ID,
-            predicates: vec![],
-        },
-        span: DUMMY_SP,
-    };
+    let generic_params = generic_params_new(&["T"]);
     let sess = ParseSess::new();
     let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Option<T>")));
     let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("T")));
@@ -777,13 +761,13 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
 
     #[test]
     fn test_work_with_result() {
+        logger_init();
         let sess = ParseSess::new();
         assert_eq!(
-            normalized_ty_string(&if_result_return_ok_type(&str_to_ty(
-                &sess,
-                "Result<bool, String>"
-            )).unwrap()),
-            "bool".to_string()
+            if_result_return_ok_err_types(&str_to_ty(&sess, "Result<bool, String>"))
+                .map(|(x, y)| (normalized_ty_string(&x), normalized_ty_string(&y)))
+                .unwrap(),
+            ("bool".to_string(), "String".to_string())
         );
     }
 
@@ -796,24 +780,7 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
                 .unwrap();
         assert_eq!(normalized_ty_string(&ty), "RefCell<bool>".to_string());
 
-        let generic_params = ast::Generics {
-            lifetimes: vec![],
-            ty_params: vec![
-                ast::TyParam {
-                    attrs: ast::ThinVec::new(),
-                    ident: ast::Ident::from_str("T"),
-                    id: ast::DUMMY_NODE_ID,
-                    bounds: vec![],
-                    default: None,
-                    span: DUMMY_SP,
-                },
-            ],
-            where_clause: ast::WhereClause {
-                id: ast::DUMMY_NODE_ID,
-                predicates: vec![],
-            },
-            span: DUMMY_SP,
-        };
+        let generic_params = generic_params_new(&["T"]);
         assert_eq!(
             &*GenericTypeConv {
                 from_ty: str_to_ty(&sess, "RefCell<T>"),

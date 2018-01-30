@@ -74,6 +74,12 @@ public:
         return std::string(data, len);
     }
 
+#if __cplusplus > 201402L
+    std::string_view to_string_view() const
+    {
+        return std::string_view(data, len);
+    }
+#endif
 private:
     static void reset(RustString &o)
     {
@@ -82,4 +88,4 @@ private:
         o.capacity = 0;
     }
 };
-#endif
+#endif //__cplusplus

@@ -294,7 +294,7 @@ foreigner_class!(class TestPassObjectsAsParams {
     static_method TestPassObjectsAsParams::f5(_: Foo);
 });
 "#,
-        &[ForeignLang::Java],
+        &[ForeignLang::Java, ForeignLang::Cpp],
     );
     assert_eq!(ForeignLang::Java, gen_code[0].lang);
     assert!(
@@ -358,29 +358,42 @@ class Foo {
 
 #[test]
 fn test_return_result_type_with_object() {
-    for _ in 0..10 {
+    for i in 0..10 {
+        println!("iter {}", i);
         let gen_code = parse_code(
             "test_return_result_type_with_object",
             r#"
 foreigner_class!(class Position {
     self_type GnssInfo;
     private constructor create_position() -> GnssInfo;
-    method Position::timeStamp(&self) -> SystemTime;
     method Position::getLatitude(&self) -> f64;
 });
 
 foreigner_class!(class LocationService {
-    static_method LocationService::position() -> Result<GnssInfo, &'static str>;
+    static_method LocationService::position() -> Result<GnssInfo, String>;
 });
 "#,
-            &[ForeignLang::Java],
+            &[ForeignLang::Java, ForeignLang::Cpp],
         );
-        assert_eq!(ForeignLang::Java, gen_code[0].lang);
-        println!("{}", gen_code[0].foreign_code);
+        let java_code_pair = gen_code
+            .iter()
+            .find(|x| x.lang == ForeignLang::Java)
+            .unwrap();
+        println!("{}", java_code_pair.foreign_code);
         assert!(
-            gen_code[0]
+            java_code_pair
                 .foreign_code
                 .contains("public static native Position position() throws Exception;")
+        );
+        let cpp_code_pair = gen_code
+            .iter()
+            .find(|x| x.lang == ForeignLang::Cpp)
+            .unwrap();
+        println!("c/c++: {}", cpp_code_pair.foreign_code);
+        assert!(
+            cpp_code_pair
+                .foreign_code
+                .contains("static std::variant<Position, RustString> position()")
         );
     }
 }
@@ -563,10 +576,7 @@ foreigner_class!(class Foo {
     method f1(&mut self) -> bool;
 });
 "#,
-        &[
-            //ForeignLang::Java,
-            ForeignLang::Cpp,
-        ],
+        &[ForeignLang::Java, ForeignLang::Cpp],
     );
     let cpp_code_pair = gen_code
         .iter()

@@ -33,6 +33,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "RustVecBytes"]
     #![swig_foreigner_type = "struct CRustString"]
     #![swig_rust_type = "CRustString"]
+    #![swig_foreigner_type = "struct CResultObjectString"]
+    #![swig_rust_type = "CResultObjectString"]
 }
 
 #[allow(unused_macros)]
@@ -44,7 +46,7 @@ macro_rules! swig_c_str {
 }
 
 #[allow(dead_code)]
-trait SwigForeignClass {
+pub trait SwigForeignClass {
     fn c_class_name() -> *const ::std::os::raw::c_char;
     fn box_object(x: Self) -> *mut ::std::os::raw::c_void;
 }
@@ -249,6 +251,7 @@ impl<'a> SwigInto<&'a Path> for &'a str {
 
 #[allow(dead_code)]
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct CRustString {
     data: *const ::std::os::raw::c_char,
     len: u32,
@@ -285,6 +288,40 @@ impl<T: SwigForeignClass> SwigFrom<Option<T>> for *mut ::std::os::raw::c_void {
         match x {
             Some(x) => <T>::box_object(x),
             None => ::std::ptr::null_mut(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CResultObjectString {
+    is_ok: u8,
+    data: CResultObjectStringUnion,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CResultObjectStringUnion {
+    pub ok: *mut ::std::os::raw::c_void,
+    pub err: CRustString,
+}
+
+impl<T: SwigForeignClass> SwigFrom<Result<T, String>> for CResultObjectString {
+    fn swig_from(x: Result<T, String>) -> Self {
+        match x {
+            Ok(v) => CResultObjectString {
+                is_ok: 1,
+                data: CResultObjectStringUnion {
+                    ok: <T>::box_object(v),
+                },
+            },
+            Err(err) => CResultObjectString {
+                is_ok: 0,
+                data: CResultObjectStringUnion {
+                    err: <CRustString>::swig_from(err),
+                },
+            },
         }
     }
 }

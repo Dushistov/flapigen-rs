@@ -334,3 +334,18 @@ foreigner_class!(class TestOptional {
     constructor TestOptional::default() -> TestOptional;
     method TestOptional::f1(&self, _: bool) -> Option<Foo>;
 });
+
+#[derive(Default)]
+pub struct TestResult {}
+
+impl TestResult {
+    fn new_with_err() -> Result<TestResult, String> {
+        Err("this is error".to_string())
+    }
+}
+
+foreigner_class!(class TestResult {
+    self_type TestResult;
+    private constructor TestResult::default() -> TestResult;
+    static_method TestResult::new_with_err() -> Result<TestResult, String>;
+});
