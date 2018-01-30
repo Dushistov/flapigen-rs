@@ -59,11 +59,11 @@ def run_jni_tests(use_shell, fast_run):
         os.makedirs(java_native_dir)
     else:
         purge(java_native_dir, ".*\.class$")
-        jar_dir = build_jar(java_dir, java_native_dir, use_shell)
-        subprocess.check_call(["cargo", "build"], shell=False,
-                              cwd = "jni_tests")
-        target_dir = os.path.join(find_dir("target", "jni_tests"), "debug")
-        run_jar(target_dir, jar_dir, use_shell)
+    jar_dir = build_jar(java_dir, java_native_dir, use_shell)
+    subprocess.check_call(["cargo", "build"], shell=False,
+                          cwd = "jni_tests")
+    target_dir = os.path.join(find_dir("target", "jni_tests"), "debug")
+    run_jar(target_dir, jar_dir, use_shell)
     if fast_run:
         return
     subprocess.check_call(["cargo", "build", "--release"], shell=False,
@@ -106,6 +106,8 @@ def main():
     print("fast_run %s" % fast_run)
     skip_cpp_tests = sys.platform == 'win32' and os.getenv("TARGET") == "nightly-x86_64-pc-windows-gnu"
     print("skip_cpp_tests %s" % skip_cpp_tests)
+    java_only = has_option("--java-only-tests")
+    print("java_only %s" % java_only)
     sys.stdout.flush()
 
     #fast check
@@ -122,6 +124,8 @@ def main():
         subprocess.check_call(["cargo", "test", "--release"], cwd = "macroslib", shell=False)
     if has_jdk:
         run_jni_tests(use_shell, fast_run)
+        if java_only:
+            return
 
     if not skip_cpp_tests:
         print("Check cmake version")
