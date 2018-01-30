@@ -31,6 +31,13 @@ Foo foo = new Foo(5);
 int res = foo.f(1, 2);
 assert res == 8;
 ```
+or in C++ something like this:
+
+```C++
+Foo foo(5);
+int res = foo.f(1, 2);
+assert(res == 8);
+```
 
 In order to implement it rust_swig suggests the following functionality,
 in Rust project you write (in Rust language):
@@ -46,7 +53,9 @@ foreigner_class!(class Foo {
 ```
 
 and that's all, as a result rust_swig generates JNI wrappers for Rust functions
-and Java code to call these JNI functions.
+and **Java** code to call these **JNI** functions
+or generates **C** compatible wrappers in case of **C++** and
+**C++** code to call these **C** functions.
 
 See [rust_swig tests for jni](https://github.com/Dushistov/rust_swig/tree/master/jni_tests) for more complex examples.
 
