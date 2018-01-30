@@ -11,7 +11,7 @@ import com.example.rust.TestPathAndResult;
 import com.example.rust.TestInner;
 import com.example.rust.Xyz;
 import com.example.rust.TestContainers;
-import com.example.rust.TestIntArrays;
+import com.example.rust.TestArraysWithPrimitiveTypes;
 import com.example.rust.TestPassObjectsAsParams;
 import com.example.rust.MyEnum;
 import com.example.rust.TestEnumClass;
@@ -127,19 +127,7 @@ class Main {
 	    assert foo.getName().equals("");
 	}
 
-	{
-	    //	    TestIntArrays test = new TestIntArrays();
-	    int[] arr1 = {1, 2, 3};
-	    int[] arr2 = TestIntArrays.arr_pass_thorough(arr1);
-	    int []empty = {};
-	    assert Arrays.equals(arr1, arr2);
-	    assert Arrays.equals(new TestIntArrays().get_ref(), empty);
-	    int[] bigArray = new int[20000];
-	    for (int i = 0; i < bigArray.length; ++i) {
-		bigArray[i] = 17;
-	    }
-	    assert Arrays.equals(bigArray, new TestIntArrays(17, bigArray.length).get_ref());
-	}
+        testArraysWithPrimitiveTypes();
 	testPassObjectsAsParams();
 	testTestEnumClass();
 	testCallbacks();
@@ -307,5 +295,18 @@ class Main {
         //check Drop call
         foo = null;
         System.gc();
+    }
+
+    private static void testArraysWithPrimitiveTypes() {
+        int[] arr1 = {1, 2, 3};
+        int[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_thorough(arr1);
+        int []empty = {};
+        assert Arrays.equals(arr1, arr2);
+        assert Arrays.equals(new TestArraysWithPrimitiveTypes().get_ref(), empty);
+        int[] bigArray = new int[20000];
+        for (int i = 0; i < bigArray.length; ++i) {
+            bigArray[i] = 17;
+        }
+        assert Arrays.equals(bigArray, new TestArraysWithPrimitiveTypes(17, bigArray.length).get_ref());
     }
 }

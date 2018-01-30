@@ -2,4 +2,4 @@
 1. You need environment variable JAVA_HOME in such way that
    $JAVA_HOME/include/jni.h exists
 2. cargo build
-3. run tests via `python run_tests.py`
+3. run tests via `cd .. && python ci_build_and_test.py --java-only-tests`

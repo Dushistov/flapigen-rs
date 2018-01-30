@@ -52,6 +52,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src");
     //rebuild if user remove generated code
     println!("cargo:rerun-if-changed={}", out_dir);
+    println!("cargo:rerun-if-changed=java/com/example/rust");
 }
 
 fn search_file_in_directory<P: AsRef<Path>>(dirs: &[P], file: &str) -> Result<PathBuf, ()> {
