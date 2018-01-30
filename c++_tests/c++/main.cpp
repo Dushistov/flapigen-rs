@@ -11,14 +11,17 @@
 #include <string>
 #ifdef HAS_STDCXX_17
 #include <optional>
+#include <variant>
 #endif
 #ifdef USE_BOOST
 #include <boost/optional.hpp>
+#include <boost/variant.hpp>
 #endif
 #include <gtest/gtest.h>
 
 #include "rust_interface/rust_str.h"
 #include "rust_interface/rust_vec.h"
+#include "rust_interface/rust_result.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
 #include "rust_interface/c_SomeObserver.h"
@@ -30,6 +33,7 @@
 #include "rust_interface/TestPassPathAsParam.hpp"
 #if defined(HAS_STDCXX_17) || defined(USE_BOOST)
 #include "rust_interface/TestOptional.hpp"
+#include "rust_interface/TestResult.hpp"
 #endif
 
 using namespace rust;
@@ -199,25 +203,41 @@ TEST(TestRustStringReturn, smokeTest)
     try_ret("Word");
     try_ret("");
     for (size_t i = 0; i < 100; ++i) {
-	    std::string expect(i, 'A');
-	    try_ret(expect.c_str());
+        std::string expect(i, 'A');
+        try_ret(expect.c_str());
     }
 }
 
-#ifdef HAS_STDCXX_17
+#if defined(HAS_STDCXX_17) || defined(USE_BOOST)
 TEST(TestOptional, smokeTest)
 {
-	TestOptional x;
-	{
-		auto foo = x.f1(true);
-		ASSERT_TRUE(!!foo);
-		EXPECT_EQ(17, foo->f(0, 0));
-		EXPECT_EQ(std::string("17"), foo->getName().to_std_string());
-	}
-	{
-		auto foo = x.f1(false);
-		EXPECT_FALSE(!!foo);
-	}
+    TestOptional x;
+    {
+        auto foo = x.f1(true);
+        ASSERT_TRUE(!!foo);
+        EXPECT_EQ(17, foo->f(0, 0));
+        EXPECT_EQ(std::string("17"), foo->getName().to_std_string());
+    }
+    {
+        auto foo = x.f1(false);
+        EXPECT_FALSE(!!foo);
+    }
+}
+
+TEST(TestResult, smokeTest)
+{
+#ifdef HAS_STDCXX_17
+    std::variant<TestResult, RustString> res = TestResult::new_with_err();
+    EXPECT_EQ(nullptr, std::get_if<TestResult>(&res));
+    EXPECT_NE(nullptr, std::get_if<RustString>(&res));
+    EXPECT_EQ(std::string_view("this is error"), std::get<RustString>(res).to_string_view());
+#endif //HAS_STDCXX_17
+#ifdef USE_BOOST
+    boost::variant<TestResult, RustString> res = TestResult::new_with_err();
+    EXPECT_EQ(nullptr, boost::get<TestResult>(&res));
+    EXPECT_NE(nullptr, boost::get<RustString>(&res));
+    EXPECT_EQ(std::string("this is error"), boost::get<RustString>(res).to_std_string());
+#endif //USE_BOOST
 }
 #endif
 

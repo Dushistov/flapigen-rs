@@ -5,7 +5,7 @@ extern crate syntex;
 use std::time::Instant;
 use std::env;
 use std::path::Path;
-use rust_swig::{CppConfig, CppOptional, LanguageConfig};
+use rust_swig::{CppConfig, LanguageConfig};
 
 fn main() {
     env_logger::init().unwrap();
@@ -31,12 +31,11 @@ fn main() {
 fn rust_swig_expand(from: &Path, out: &Path) -> Result<(), String> {
     println!("Run rust_swig_expand");
     let mut registry = syntex::Registry::new();
-    let cpp_cfg = CppConfig::new(Path::new("c++").join("rust_interface"), "rust".into())
-        .cpp_optional(if cfg!(feature = "boost") {
-            CppOptional::Boost
-        } else {
-            CppOptional::Std17
-        });
+    let cpp_cfg = if cfg!(feature = "boost") {
+        CppConfig::new(Path::new("c++").join("rust_interface"), "rust".into()).use_boost()
+    } else {
+        CppConfig::new(Path::new("c++").join("rust_interface"), "rust".into())
+    };
 
     let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
     swig_gen.register(&mut registry);

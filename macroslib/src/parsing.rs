@@ -12,7 +12,7 @@ use syntex_errors::DiagnosticBuilder;
 
 use {ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
      ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
-use my_ast::{if_result_return_ok_type, normalized_ty_string, self_variant};
+use my_ast::{if_result_return_ok_err_types, normalized_ty_string, self_variant};
 
 /// Returns the parsed optional self argument and whether a self shortcut was used.
 fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>> {
@@ -316,7 +316,7 @@ pub(crate) fn parse_foreigner_class(
         let (may_return_error, ret_type) = match func_decl.output {
             ast::FunctionRetTy::Default(_) => (false, None),
             ast::FunctionRetTy::Ty(ref ret_type) => (
-                if_result_return_ok_type(ret_type).is_some(),
+                if_result_return_ok_err_types(ret_type).is_some(),
                 Some(ret_type.clone()),
             ),
         };
@@ -351,8 +351,9 @@ pub(crate) fn parse_foreigner_class(
                 let ret_type = ret_type.unwrap();
                 constructor_ret_type = Some(ret_type.clone());
                 this_type_for_method = Some(
-                    if_result_return_ok_type(constructor_ret_type.as_ref().unwrap())
-                        .unwrap_or_else(|| ret_type),
+                    if_result_return_ok_err_types(constructor_ret_type.as_ref().unwrap())
+                        .unwrap_or_else(|| (ret_type.clone(), ret_type))
+                        .0,
                 );
             }
         }

@@ -277,6 +277,10 @@ impl Generator {
                     id_of_code: "rust_vec.h".into(),
                     code: include_str!("cpp/rust_vec.h").into(),
                 });
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_result.h".into(),
+                    code: include_str!("cpp/rust_result.h").into(),
+                });
             }
         }
         Generator {
@@ -594,7 +598,7 @@ impl JavaConfig {
     }
 }
 
-/// To which c++ map Option
+/// To which `C++` type map `std::option::Option`
 #[derive(Clone)]
 pub enum CppOptional {
     /// `std::optional` from C++17 standard
@@ -603,11 +607,21 @@ pub enum CppOptional {
     Boost,
 }
 
+/// To which `C++` type map `std::result::Result`
+#[derive(Clone)]
+pub enum CppVariant {
+    /// `std::variant` from C++17 standard
+    Std17,
+    /// `boost::variant`
+    Boost,
+}
+
 #[derive(Clone)]
 pub struct CppConfig {
     output_dir: PathBuf,
     namespace_name: String,
     cpp_optional: CppOptional,
+    cpp_variant: CppVariant,
 }
 
 impl CppConfig {
@@ -620,11 +634,25 @@ impl CppConfig {
             output_dir,
             namespace_name,
             cpp_optional: CppOptional::Std17,
+            cpp_variant: CppVariant::Std17,
         }
     }
     pub fn cpp_optional(self, cpp_optional: CppOptional) -> CppConfig {
         CppConfig {
             cpp_optional,
+            ..self
+        }
+    }
+    pub fn cpp_variant(self, cpp_variant: CppVariant) -> CppConfig {
+        CppConfig {
+            cpp_variant,
+            ..self
+        }
+    }
+    pub fn use_boost(self) -> CppConfig {
+        CppConfig {
+            cpp_variant: CppVariant::Boost,
+            cpp_optional: CppOptional::Boost,
             ..self
         }
     }
