@@ -15,7 +15,7 @@ chrono = "0.4.0"
 [build-dependencies]
 syntex = "0.58.1"
 env_logger = "0.4.2"
-bindgen = "0.30"
+bindgen = { git = "https://github.com/rust-lang-nursery/rust-bindgen", rev = "ce7e69bfbc5a6e47eb1d9ee4f0b43a5afeef0f31" }
 log = "0.3"
 rust_swig = { path = "../macroslib" }
 

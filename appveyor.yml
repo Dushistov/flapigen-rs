@@ -1,7 +1,6 @@
 environment:
   matrix:
   - TARGET: nightly-x86_64-pc-windows-msvc
-  - TARGET: nightly-x86_64-pc-windows-gnu
   - TARGET: 1.22.1-x86_64-pc-windows-msvc
 platform:
   - x64
@@ -21,7 +20,6 @@ install:
   - cmake --version
 cache:
   - '%USERPROFILE%\.cargo'
-  - target
 build: off
 test_script:
   - copy /Y workspace.Cargo.toml Cargo.toml
