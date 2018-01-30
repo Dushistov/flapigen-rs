@@ -17,6 +17,10 @@ impl Foo {
     fn f(&self, a: i32, b: i32) -> i32 {
         self.data + a + b
     }
+
+	fn set_field(&mut self, v: i32) {
+	    self.data = v;
+	}
 }
 
 fn f2(a: i32) -> i32 {
@@ -53,9 +57,9 @@ foreigner_class!(class Foo {
 ```
 
 and that's all, as a result rust_swig generates JNI wrappers for Rust functions
-and **Java** code to call these **JNI** functions
-or generates **C** compatible wrappers in case of **C++** and
-**C++** code to call these **C** functions.
+and Java code to call these JNI functions
+or generates C compatible wrappers in case of C++ and
+C++ code to call these C functions.
 
 See [rust_swig tests for jni](https://github.com/Dushistov/rust_swig/tree/master/jni_tests) for more complex examples.
 
