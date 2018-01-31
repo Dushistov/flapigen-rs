@@ -323,8 +323,13 @@ class Main {
             assert Arrays.equals(arr1, arr2);
         }
         {
-            byte[] arr1 = {1, 2, 17, 49};
+            byte[] arr1 = {1, 2, 17, 49, -5};
             byte[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_through_byte(arr1);
+            assert Arrays.equals(arr1, arr2);
+        }
+        {
+            short[] arr1 = {1, 2, 17, 49, 300, -300};
+            short[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_through_short(arr1);
             assert Arrays.equals(arr1, arr2);
         }
     }
