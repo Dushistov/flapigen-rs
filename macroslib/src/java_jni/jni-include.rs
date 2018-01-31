@@ -19,6 +19,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "jdouble"]
     #![swig_foreigner_type = "int []"]
     #![swig_rust_type = "jintArray"]
+    #![swig_foreigner_type = "double []"]
+    #![swig_rust_type = "jdoubleArray"]
     #![swig_foreigner_type = "Object"]
     #![swig_rust_type_not_unique = "jobject"]
     #![swig_foreigner_type = "java.util.Date"]
@@ -79,7 +81,6 @@ macro_rules! swig_assert_eq_size {
         }
     };
 }
-
 
 #[cfg(target_pointer_width = "32")]
 unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
@@ -256,7 +257,6 @@ impl Drop for JavaCallback {
 
 #[allow(dead_code)]
 fn jni_throw(env: *mut JNIEnv, class_name: *const ::std::os::raw::c_char, message: &str) {
-
     let ex_class = unsafe { (**env).FindClass.unwrap()(env, class_name) };
     if ex_class.is_null() {
         error!(
@@ -320,7 +320,6 @@ impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
         vec_of_objects_to_jobject_array(x, <T>::jni_class_name(), env)
     }
 }
-
 
 #[allow(dead_code)]
 fn vec_of_objects_to_jobject_array<T: SwigForeignClass>(
@@ -594,9 +593,9 @@ impl SwigFrom<String> for jstring {
 impl SwigFrom<SystemTime> for jobject {
     fn swig_from(x: SystemTime, env: *mut JNIEnv) -> Self {
         let since_unix_epoch = x.duration_since(::std::time::UNIX_EPOCH).unwrap();
-        let mills: jlong = (since_unix_epoch.as_secs() * 1_000 +
-            (since_unix_epoch.subsec_nanos() / 1_000_000) as u64) as
-            jlong;
+        let mills: jlong = (since_unix_epoch.as_secs() * 1_000
+            + (since_unix_epoch.subsec_nanos() / 1_000_000) as u64)
+            as jlong;
         let date_class: jclass =
             unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/Date")) };
         assert!(
@@ -672,45 +671,97 @@ impl SwigInto<jobjectArray> for Vec<String> {
     }
 }
 
-#[allow(dead_code)]
-struct JavaIntArray {
-    array: jintArray,
-    data: *mut jint,
-    env: *mut JNIEnv,
+macro_rules! define_array_handling_code {
+    ($([jni_arr_type = $jni_arr_type:ident,
+        rust_arr_wrapper = $rust_arr_wrapper:ident,
+        jni_get_array_elements = $jni_get_array_elements:ident,
+        jni_elem_type = $jni_elem_type:ident,
+        rust_elem_type = $rust_elem_type:ident,
+        jni_release_array_elements = $jni_release_array_elements:ident,
+        jni_new_array = $jni_new_array:ident,
+        jni_set_array_region = $jni_set_array_region:ident]),*) => {
+        $(
+            #[allow(dead_code)]
+            struct $rust_arr_wrapper {
+                array: $jni_arr_type,
+                data: *mut $jni_elem_type,
+                env: *mut JNIEnv,
+            }
+            #[allow(dead_code)]
+            impl $rust_arr_wrapper {
+                fn new(env: *mut JNIEnv, array: $jni_arr_type) -> $rust_arr_wrapper {
+                    assert!(!array.is_null());
+                    let data =
+                        unsafe { (**env).$jni_get_array_elements.unwrap()(env, array,
+                                                                          ::std::ptr::null_mut()) };
+                    $rust_arr_wrapper { array, data, env }
+                }
+                fn to_slice(&self) -> &[$rust_elem_type] {
+                    unsafe {
+                        let len: jsize = (**self.env).GetArrayLength.unwrap()(self.env, self.array);
+                        assert!((len as u64) <= (usize::max_value() as u64));
+                        ::std::slice::from_raw_parts(self.data, len as usize)
+                    }
+                }
+                fn from_slice_to_raw(arr: &[$rust_elem_type], env: *mut JNIEnv) -> $jni_arr_type {
+                    assert!((arr.len() as u64) <= (jsize::max_value() as u64));
+                    let jarr: $jni_arr_type = unsafe {
+                        (**env).$jni_new_array.unwrap()(env, arr.len() as jsize)
+                    };
+                    assert!(!jarr.is_null());
+                    unsafe {
+                        (**env).$jni_set_array_region.unwrap()(env, jarr, 0,
+                                                               arr.len() as jsize, arr.as_ptr());
+                        if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                            panic!("{}:{} {} failed", file!(), line!(),
+                                   stringify!($jni_set_array_region));
+                        }
+                    }
+                    jarr
+                }
+            }
+
+            #[allow(dead_code)]
+            impl Drop for $rust_arr_wrapper {
+                fn drop(&mut self) {
+                    assert!(!self.env.is_null());
+                    assert!(!self.array.is_null());
+                    unsafe {
+                        (**self.env).$jni_release_array_elements.unwrap()(
+                            self.env,
+                            self.array,
+                            self.data,
+                            JNI_ABORT as jint,
+                        )
+                    };
+                }
+            }
+        )*
+    }
 }
 
-#[allow(dead_code)]
-impl JavaIntArray {
-    fn new(env: *mut JNIEnv, array: jintArray) -> JavaIntArray {
-        assert!(!array.is_null());
-        let data =
-            unsafe { (**env).GetIntArrayElements.unwrap()(env, array, ::std::ptr::null_mut()) };
-        JavaIntArray { array, data, env }
-    }
-    fn to_slice(&self) -> &[i32] {
-        unsafe {
-            let len = (**self.env).GetArrayLength.unwrap()(self.env, self.array);
-            //TODO: check jsize -> usize conversation safety
-            ::std::slice::from_raw_parts(self.data, len as usize)
-        }
-    }
-}
-
-#[allow(dead_code)]
-impl Drop for JavaIntArray {
-    fn drop(&mut self) {
-        assert!(!self.env.is_null());
-        assert!(!self.array.is_null());
-        unsafe {
-            (**self.env).ReleaseIntArrayElements.unwrap()(
-                self.env,
-                self.array,
-                self.data,
-                JNI_ABORT as jint,
-            )
-        };
-    }
-}
+define_array_handling_code!(
+    [
+        jni_arr_type = jintArray,
+        rust_arr_wrapper = JavaIntArray,
+        jni_get_array_elements = GetIntArrayElements,
+        jni_elem_type = jint,
+        rust_elem_type = i32,
+        jni_release_array_elements = ReleaseIntArrayElements,
+        jni_new_array = NewIntArray,
+        jni_set_array_region = SetIntArrayRegion
+    ],
+    [
+        jni_arr_type = jdoubleArray,
+        rust_arr_wrapper = JavaDoubleArray,
+        jni_get_array_elements = GetDoubleArrayElements,
+        jni_elem_type = jdouble,
+        rust_elem_type = f64,
+        jni_release_array_elements = ReleaseDoubleArrayElements,
+        jni_new_array = NewDoubleArray,
+        jni_set_array_region = SetDoubleArrayRegion
+    ]
+);
 
 impl SwigDeref for JavaIntArray {
     type Target = [i32];
@@ -727,18 +778,26 @@ impl SwigFrom<jintArray> for JavaIntArray {
 
 impl<'a> SwigInto<jintArray> for &'a [i32] {
     fn swig_into(self, env: *mut JNIEnv) -> jintArray {
-        //TODO: check conversation usize <-> jsize in this function
-        let jarr: jintArray = unsafe { (**env).NewIntArray.unwrap()(env, self.len() as jsize) };
-        if jarr.is_null() {
-            panic!("Can not create jintArray");
-        }
-        unsafe {
-            (**env).SetIntArrayRegion.unwrap()(env, jarr, 0, self.len() as jsize, self.as_ptr());
-            if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                panic!("{}:{} SetIntArrayRegion failed", file!(), line!());
-            }
-        }
-        jarr
+        JavaIntArray::from_slice_to_raw(self, env)
+    }
+}
+
+impl SwigDeref for JavaDoubleArray {
+    type Target = [f64];
+    fn swig_deref(&self) -> &Self::Target {
+        self.to_slice()
+    }
+}
+
+impl SwigFrom<jdoubleArray> for JavaDoubleArray {
+    fn swig_from(x: jdoubleArray, env: *mut JNIEnv) -> Self {
+        JavaDoubleArray::new(env, x)
+    }
+}
+
+impl<'a> SwigInto<jdoubleArray> for &'a [f64] {
+    fn swig_into(self, env: *mut JNIEnv) -> jdoubleArray {
+        JavaDoubleArray::from_slice_to_raw(self, env)
     }
 }
 
@@ -755,7 +814,6 @@ impl<T> SwigDeref for Arc<Mutex<T>> {
         self
     }
 }
-
 
 impl<'a, T> SwigFrom<&'a Mutex<T>> for MutexGuard<'a, T> {
     fn swig_from(m: &'a Mutex<T>, _: *mut JNIEnv) -> MutexGuard<'a, T> {

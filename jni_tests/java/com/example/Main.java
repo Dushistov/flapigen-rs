@@ -298,15 +298,22 @@ class Main {
     }
 
     private static void testArraysWithPrimitiveTypes() {
-        int[] arr1 = {1, 2, 3};
-        int[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_thorough(arr1);
-        int []empty = {};
-        assert Arrays.equals(arr1, arr2);
-        assert Arrays.equals(new TestArraysWithPrimitiveTypes().get_ref(), empty);
-        int[] bigArray = new int[20000];
-        for (int i = 0; i < bigArray.length; ++i) {
-            bigArray[i] = 17;
+        {
+            int[] arr1 = {1, 2, 3};
+            int[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_thorough(arr1);
+            assert Arrays.equals(arr1, arr2);
+            int []empty = {};
+            assert Arrays.equals(new TestArraysWithPrimitiveTypes().get_ref(), empty);
+            int[] bigArray = new int[20000];
+            for (int i = 0; i < bigArray.length; ++i) {
+                bigArray[i] = 17;
+            }
+            assert Arrays.equals(bigArray, new TestArraysWithPrimitiveTypes(17, bigArray.length).get_ref());
         }
-        assert Arrays.equals(bigArray, new TestArraysWithPrimitiveTypes(17, bigArray.length).get_ref());
+        {
+            double[] arr1 = {1.1, 2.5, 3.33, 4.9};
+            double[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_through_double(arr1);
+            assert Arrays.equals(arr1, arr2);
+        }
     }
 }
