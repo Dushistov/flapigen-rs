@@ -410,6 +410,10 @@ fn arr_pass_thorough(a: &[i32]) -> &[i32] {
     a
 }
 
+fn arr_pass_through_float(a: &[f32]) -> &[f32] {
+    a
+}
+
 fn arr_pass_through_double(a: &[f64]) -> &[f64] {
     a
 }
@@ -427,6 +431,7 @@ foreigner_class!(class TestArraysWithPrimitiveTypes {
     static_method arr_pass_thorough(_: &[i32]) -> &[i32];
     static_method arr_pass_through_double(a: &[f64]) -> &[f64];
     static_method arr_pass_through_byte(a: &[i8]) -> &[i8];
+    static_method arr_pass_through_float(a: &[f32]) -> &[f32];
 });
 
 #[derive(Default)]
