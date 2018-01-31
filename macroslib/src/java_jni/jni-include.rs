@@ -17,6 +17,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "jfloat"]
     #![swig_foreigner_type = "double"]
     #![swig_rust_type = "jdouble"]
+    #![swig_foreigner_type = "byte []"]
+    #![swig_rust_type = "jbyteArray"]
     #![swig_foreigner_type = "int []"]
     #![swig_rust_type = "jintArray"]
     #![swig_foreigner_type = "double []"]
@@ -742,6 +744,16 @@ macro_rules! define_array_handling_code {
 
 define_array_handling_code!(
     [
+        jni_arr_type = jbyteArray,
+        rust_arr_wrapper = JavaByteArray,
+        jni_get_array_elements = GetByteArrayElements,
+        jni_elem_type = jbyte,
+        rust_elem_type = i8,
+        jni_release_array_elements = ReleaseByteArrayElements,
+        jni_new_array = NewByteArray,
+        jni_set_array_region = SetByteArrayRegion
+    ],
+    [
         jni_arr_type = jintArray,
         rust_arr_wrapper = JavaIntArray,
         jni_get_array_elements = GetIntArrayElements,
@@ -762,6 +774,13 @@ define_array_handling_code!(
         jni_set_array_region = SetDoubleArrayRegion
     ]
 );
+
+impl<T> SwigDeref for Vec<T> {
+    type Target = [T];
+    fn swig_deref(&self) -> &Self::Target {
+        &*self
+    }
+}
 
 impl SwigDeref for JavaIntArray {
     type Target = [i32];
@@ -798,6 +817,25 @@ impl SwigFrom<jdoubleArray> for JavaDoubleArray {
 impl<'a> SwigInto<jdoubleArray> for &'a [f64] {
     fn swig_into(self, env: *mut JNIEnv) -> jdoubleArray {
         JavaDoubleArray::from_slice_to_raw(self, env)
+    }
+}
+
+impl SwigDeref for JavaByteArray {
+    type Target = [i8];
+    fn swig_deref(&self) -> &Self::Target {
+        self.to_slice()
+    }
+}
+
+impl SwigFrom<jbyteArray> for JavaByteArray {
+    fn swig_from(x: jbyteArray, env: *mut JNIEnv) -> Self {
+        JavaByteArray::new(env, x)
+    }
+}
+
+impl<'a> SwigInto<jbyteArray> for &'a [i8] {
+    fn swig_into(self, env: *mut JNIEnv) -> jbyteArray {
+        JavaByteArray::from_slice_to_raw(self, env)
     }
 }
 
