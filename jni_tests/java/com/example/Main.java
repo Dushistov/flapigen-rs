@@ -309,10 +309,17 @@ class Main {
                 bigArray[i] = 17;
             }
             assert Arrays.equals(bigArray, new TestArraysWithPrimitiveTypes(17, bigArray.length).get_ref());
+
+            assert Arrays.equals(bigArray, new TestArraysWithPrimitiveTypes(17, bigArray.length).clone_vec());
         }
         {
             double[] arr1 = {1.1, 2.5, 3.33, 4.9};
             double[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_through_double(arr1);
+            assert Arrays.equals(arr1, arr2);
+        }
+        {
+            byte[] arr1 = {1, 2, 17, 49};
+            byte[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_through_byte(arr1);
             assert Arrays.equals(arr1, arr2);
         }
     }
