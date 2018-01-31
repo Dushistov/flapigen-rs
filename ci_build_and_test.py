@@ -98,6 +98,8 @@ def main():
     print("has_jdk %s" % has_jdk)
     has_android_sdk = ("ANDROID_SDK" in os.environ) or ("ANDROID_HOME" in os.environ)
     print("has_android_sdk %s" % has_android_sdk)
+    skip_android_test = has_option("--skip-android-tests")
+    print("skip_android_test %s" % skip_android_test)
     #becuase of http://bugs.python.org/issue17023
     is_windows = os.name == 'nt'
     use_shell = is_windows
@@ -114,7 +116,7 @@ def main():
     subprocess.check_call(["cargo", "check"], cwd = "macroslib", shell = False)
     if has_jdk:
         subprocess.check_call(["cargo", "check"], cwd = "jni_tests", shell = False)
-    if has_android_sdk:
+    if has_android_sdk and (not skip_android_test):
         subprocess.check_call(["cargo", "check", "--target=arm-linux-androideabi"], shell=False,
                               cwd = "android-example")
         subprocess.check_call(["cargo", "check"], cwd = "c++_tests", shell = False)
@@ -137,7 +139,7 @@ def main():
         purge(os.path.join("c++_tests", "c++", "rust_interface"), ".*\.h.*$")        
         build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
 
-    if has_android_sdk:
+    if has_android_sdk and (not skip_android_test):
         gradle_cmd = "gradlew.bat" if is_windows else "./gradlew"
         subprocess.check_call([gradle_cmd, "build"], cwd=os.path.join(os.getcwd(), "android-example"))
 
