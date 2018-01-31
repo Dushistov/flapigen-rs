@@ -19,6 +19,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "jdouble"]
     #![swig_foreigner_type = "byte []"]
     #![swig_rust_type = "jbyteArray"]
+    #![swig_foreigner_type = "short []"]
+    #![swig_rust_type = "jshortArray"]
     #![swig_foreigner_type = "int []"]
     #![swig_rust_type = "jintArray"]
     #![swig_foreigner_type = "float []"]
@@ -756,6 +758,16 @@ define_array_handling_code!(
         jni_set_array_region = SetByteArrayRegion
     ],
     [
+        jni_arr_type = jshortArray,
+        rust_arr_wrapper = JavaShortArray,
+        jni_get_array_elements = GetShortArrayElements,
+        jni_elem_type = jshort,
+        rust_elem_type = i16,
+        jni_release_array_elements = ReleaseShortArrayElements,
+        jni_new_array = NewShortArray,
+        jni_set_array_region = SetShortArrayRegion
+    ],
+    [
         jni_arr_type = jintArray,
         rust_arr_wrapper = JavaIntArray,
         jni_get_array_elements = GetIntArrayElements,
@@ -867,6 +879,25 @@ impl SwigFrom<jbyteArray> for JavaByteArray {
 impl<'a> SwigInto<jbyteArray> for &'a [i8] {
     fn swig_into(self, env: *mut JNIEnv) -> jbyteArray {
         JavaByteArray::from_slice_to_raw(self, env)
+    }
+}
+
+impl SwigDeref for JavaShortArray {
+    type Target = [i16];
+    fn swig_deref(&self) -> &Self::Target {
+        self.to_slice()
+    }
+}
+
+impl SwigFrom<jshortArray> for JavaShortArray {
+    fn swig_from(x: jshortArray, env: *mut JNIEnv) -> Self {
+        JavaShortArray::new(env, x)
+    }
+}
+
+impl<'a> SwigInto<jshortArray> for &'a [i16] {
+    fn swig_into(self, env: *mut JNIEnv) -> jshortArray {
+        JavaShortArray::from_slice_to_raw(self, env)
     }
 }
 
