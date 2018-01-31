@@ -406,12 +406,17 @@ fn arr_pass_thorough(a: &[i32]) -> &[i32] {
     a
 }
 
+fn arr_pass_through_double(a: &[f64]) -> &[f64] {
+    a
+}
+
 foreigner_class!(class TestArraysWithPrimitiveTypes {
     self_type TestArraysWithPrimitiveTypes;
     constructor TestArraysWithPrimitiveTypes::default() -> TestArraysWithPrimitiveTypes;
     constructor TestArraysWithPrimitiveTypes::new(_: i32, _: usize) -> TestArraysWithPrimitiveTypes;
     method TestArraysWithPrimitiveTypes::get_ref(&self) -> &[i32];
     static_method arr_pass_thorough(_: &[i32]) -> &[i32];
+    static_method arr_pass_through_double(a: &[f64]) -> &[f64];
 });
 
 #[derive(Default)]
