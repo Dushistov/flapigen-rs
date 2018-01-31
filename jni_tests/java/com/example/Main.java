@@ -313,6 +313,11 @@ class Main {
             assert Arrays.equals(bigArray, new TestArraysWithPrimitiveTypes(17, bigArray.length).clone_vec());
         }
         {
+            float[] arr1 = {1.1f, 2.5f, 3.33f, 4.9f};
+            float[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_through_float(arr1);
+            assert Arrays.equals(arr1, arr2);
+        }
+        {
             double[] arr1 = {1.1, 2.5, 3.33, 4.9};
             double[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_through_double(arr1);
             assert Arrays.equals(arr1, arr2);
