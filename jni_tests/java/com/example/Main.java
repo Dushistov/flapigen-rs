@@ -332,5 +332,10 @@ class Main {
             short[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_through_short(arr1);
             assert Arrays.equals(arr1, arr2);
         }
+        {
+            long[] arr1 = {1, 2, 17, 49, 300, -300, 0x12345678910L};
+            long[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_through_long(arr1);
+            assert Arrays.equals(arr1, arr2);
+        }
     }
 }

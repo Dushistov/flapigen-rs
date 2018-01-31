@@ -426,6 +426,10 @@ fn arr_pass_through_short(a: &[i16]) -> &[i16] {
     a
 }
 
+fn arr_pass_through_long(a: &[i64]) -> &[i64] {
+    a
+}
+
 foreigner_class!(class TestArraysWithPrimitiveTypes {
     self_type TestArraysWithPrimitiveTypes;
     constructor TestArraysWithPrimitiveTypes::default() -> TestArraysWithPrimitiveTypes;
@@ -437,6 +441,7 @@ foreigner_class!(class TestArraysWithPrimitiveTypes {
     static_method arr_pass_through_byte(a: &[i8]) -> &[i8];
     static_method arr_pass_through_short(a: &[i16]) -> &[i16];
     static_method arr_pass_thorough(_: &[i32]) -> &[i32];
+    static_method arr_pass_through_long(a: &[i64]) -> &[i64];
 });
 
 #[derive(Default)]
