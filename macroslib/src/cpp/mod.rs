@@ -155,7 +155,7 @@ impl LanguageGenerator for CppConfig {
         pointer_target_width: usize,
         enum_info: &ForeignEnumInfo,
     ) -> PResult<'a, Vec<P<ast::Item>>> {
-        if (enum_info.items.len() as u64) >= (u32::max_value() as u64) {
+        if (enum_info.items.len() as u64) >= u64::from(u32::max_value()) {
             return Err(fatal_error(sess, enum_info.span, "Too many items in enum"));
         }
         cpp_code::generate_code_for_enum(&self.output_dir, enum_info)
@@ -257,7 +257,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
                 ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
                     name: Symbol::intern("void"),
                     correspoding_rust_type: {
-                        let mut ty: ast::Ty = dummy_ty.clone().into();
+                        let mut ty: ast::Ty = dummy_ty.clone();
                         ty.span = sp;
                         ty.into()
                     },
@@ -1141,7 +1141,7 @@ fn find_suitable_ftypes_for_interace_methods<'a>(
             ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
                 name: void_sym,
                 correspoding_rust_type: {
-                    let mut ty: ast::Ty = dummy_ty.clone().into();
+                    let mut ty: ast::Ty = dummy_ty.clone();
                     ty.span = sp;
                     ty.into()
                 },

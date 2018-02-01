@@ -229,7 +229,7 @@ fn find_suitable_ftypes_for_interace_methods<'a>(
             ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
                 name: void_sym,
                 correspoding_rust_type: {
-                    let mut ty: ast::Ty = dummy_ty.clone().into();
+                    let mut ty: ast::Ty = dummy_ty.clone();
                     ty.span = sp;
                     ty.into()
                 },
@@ -293,7 +293,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
                 ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
                     name: Symbol::intern("void"),
                     correspoding_rust_type: {
-                        let mut ty: ast::Ty = dummy_ty.clone().into();
+                        let mut ty: ast::Ty = dummy_ty.clone();
                         ty.span = sp;
                         ty.into()
                     },
@@ -410,11 +410,11 @@ fn special_type<'a>(
                     &format!("Can not find foreigner_class for '{:?}'", arg_ty),
                 )
             })?;
-        let converter = calc_converter_for_foreign_class_arg(foreigner_class, &arg_ty);
+        let converter = calc_converter_for_foreign_class_arg(foreigner_class, arg_ty);
         return Ok(Some(converter));
     }
     trace!("Check is arg.ty({:?}) implements exported enum", arg_ty);
-    if let Some(foreign_enum) = conv_map.is_this_exported_enum(&arg_ty) {
+    if let Some(foreign_enum) = conv_map.is_this_exported_enum(arg_ty) {
         let converter = calc_converter_for_enum(foreign_enum);
         return Ok(Some(converter));
     }

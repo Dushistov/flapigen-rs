@@ -22,12 +22,12 @@ pub(in cpp) fn special_type<'a>(
         "special_type: check is arg.ty({:?}) implements exported enum",
         arg_ty
     );
-    if let Some(foreign_enum) = conv_map.is_this_exported_enum(&arg_ty) {
+    if let Some(foreign_enum) = conv_map.is_this_exported_enum(arg_ty) {
         let converter = calc_converter_for_enum(foreign_enum);
         return Ok(Some(converter));
     }
 
-    let ty_name = normalized_ty_string(&arg_ty);
+    let ty_name = normalized_ty_string(arg_ty);
     if ty_name == "bool" {
         let fti = conv_map
             .find_foreign_type_info_by_name(Symbol::intern("char"))

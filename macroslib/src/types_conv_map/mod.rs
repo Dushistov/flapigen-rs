@@ -711,7 +711,7 @@ impl TypesConvMap {
         }
         if let ast::TyKind::Rptr(_, ref mut_ty) = ty.node {
             let ty_name = Symbol::intern(&normalized_ty_string(&mut_ty.ty));
-            self.rust_names_map.get(&ty_name).map_or(None, |idx| {
+            self.rust_names_map.get(&ty_name).and_then(|idx| {
                 if self.conv_graph[*idx].implements.contains(&trait_name) {
                     Some(self.conv_graph[*idx].clone())
                 } else {
@@ -750,7 +750,7 @@ impl TypesConvMap {
         let type_name = if let ast::TyKind::Rptr(_, ref mut_ty) = may_be_self_ty.node {
             normalized_ty_string(&*mut_ty.ty)
         } else {
-            normalized_ty_string(&may_be_self_ty)
+            normalized_ty_string(may_be_self_ty)
         };
         trace!("find self type: possible name {:?}", type_name);
         for fc in &self.foreign_classes {

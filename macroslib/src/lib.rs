@@ -375,7 +375,7 @@ impl GeneratorData {
                 cx.parse_sess(),
                 &mut self.conv_map,
                 self.pointer_target_width,
-                &foreign_interface
+                foreign_interface
             ),
             self.conv_map
         );
@@ -475,7 +475,7 @@ impl GeneratorData {
                 cx.parse_sess(),
                 &mut self.conv_map,
                 self.pointer_target_width,
-                &foreign_class,
+                foreign_class,
             ),
             self.conv_map
         );
