@@ -32,8 +32,8 @@ before_script:
     - mv sccache-0.2.4-x86_64-unknown-linux-musl/sccache ~/.cargo/bin
     - sccache --version
     - export RUSTC_WRAPPER=sccache
-    - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
-        cargo install -f --vers 0.2.16 rustfmt-nightly;
+    - if [ "$TRAVIS_RUST_VERSION" == "beta" ]; then
+          rustup component add --toolchain beta rustfmt-preview;
       fi
     - cmake --version
     - export TAR="boost_1_56_0.tar.gz"
@@ -45,7 +45,7 @@ script:
   - ln -s workspace.Cargo.toml Cargo.toml
   - cd macroslib
   - echo ${TRAVIS_RUST_VERSION}
-  - if [ "${TRAVIS_RUST_VERSION}" == "nightly" ]; then
+  - if [ "${TRAVIS_RUST_VERSION}" == "beta" ]; then
       echo "check code style";
       cargo fmt -- --write-mode diff;
       cd ../jni_tests;
