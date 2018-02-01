@@ -21,7 +21,7 @@ syntex_pos = "0.58.1"
 syntex_errors = "0.58.1"
 log = "0.3"
 petgraph = "0.4.5"
-lazy_static = "0.2.8"
+lazy_static = "1.0.0"
 bitflags = "1.0"
 
 [dev-dependencies]
