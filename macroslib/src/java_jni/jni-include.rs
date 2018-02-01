@@ -23,6 +23,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "jshortArray"]
     #![swig_foreigner_type = "int []"]
     #![swig_rust_type = "jintArray"]
+    #![swig_foreigner_type = "long []"]
+    #![swig_rust_type = "jlongArray"]
     #![swig_foreigner_type = "float []"]
     #![swig_rust_type = "jfloatArray"]
     #![swig_foreigner_type = "double []"]
@@ -778,6 +780,16 @@ define_array_handling_code!(
         jni_set_array_region = SetIntArrayRegion
     ],
     [
+        jni_arr_type = jlongArray,
+        rust_arr_wrapper = JavaLongArray,
+        jni_get_array_elements = GetLongArrayElements,
+        jni_elem_type = jlong,
+        rust_elem_type = i64,
+        jni_release_array_elements = ReleaseLongArrayElements,
+        jni_new_array = NewLongArray,
+        jni_set_array_region = SetLongArrayRegion
+    ],
+    [
         jni_arr_type = jfloatArray,
         rust_arr_wrapper = JavaFloatArray,
         jni_get_array_elements = GetFloatArrayElements,
@@ -822,6 +834,25 @@ impl SwigFrom<jintArray> for JavaIntArray {
 impl<'a> SwigInto<jintArray> for &'a [i32] {
     fn swig_into(self, env: *mut JNIEnv) -> jintArray {
         JavaIntArray::from_slice_to_raw(self, env)
+    }
+}
+
+impl SwigDeref for JavaLongArray {
+    type Target = [i64];
+    fn swig_deref(&self) -> &Self::Target {
+        self.to_slice()
+    }
+}
+
+impl SwigFrom<jlongArray> for JavaLongArray {
+    fn swig_from(x: jlongArray, env: *mut JNIEnv) -> Self {
+        JavaLongArray::new(env, x)
+    }
+}
+
+impl<'a> SwigInto<jlongArray> for &'a [i64] {
+    fn swig_into(self, env: *mut JNIEnv) -> jlongArray {
+        JavaLongArray::from_slice_to_raw(self, env)
     }
 }
 
