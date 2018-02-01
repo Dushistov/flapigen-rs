@@ -129,7 +129,7 @@ where
     bindings = bindings
         .rust_target(RustTarget::Stable_1_19)
         //long double not supported yet, see https://github.com/servo/rust-bindgen/issues/550
-        .hide_type("max_align_t");
+        .blacklist_type("max_align_t");
     bindings = if target.contains("windows") {
         //see https://github.com/servo/rust-bindgen/issues/578
         bindings.trust_clang_mangling(false)

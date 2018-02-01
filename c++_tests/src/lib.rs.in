@@ -67,6 +67,10 @@ foreigner_class!(class Foo {
     static_method Foo::call_me(_: Box<SomeObserver>);
     static_method f_hypot(_: f64, _: f64) -> f64; alias fHypot;
     method Foo::ret_string(&self) -> String;
+    foreigner_code r#"
+    public:
+        size_t cpp_func(const std::string &s) const { return s.size(); }
+"#;
 });
 
 pub struct CheckPrimitiveTypesClass {
