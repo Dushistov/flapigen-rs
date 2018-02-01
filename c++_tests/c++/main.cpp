@@ -105,6 +105,8 @@ TEST(Foo, Simple)
         auto name = f2.getName();
         EXPECT_EQ(std::string(""), std::string(name.data, name.len));
     }
+
+    EXPECT_EQ(4u, foo.cpp_func(std::string("abcd")));
 }
 
 TEST(CheckPrimitiveTypesClass, smokeTest)

@@ -770,13 +770,15 @@ public:
     write!(
         cpp_include_f,
         r#"
+{foreigner_code}
 private:
     {c_class_type} *self_;
 }};
 }}//{namespace} {{
 "#,
         c_class_type = c_class_type,
-        namespace = namespace_name
+        namespace = namespace_name,
+        foreigner_code = class.foreigner_code,
     ).map_err(&map_write_err)?;
     Ok(gen_code)
 }
