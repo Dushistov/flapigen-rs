@@ -18,9 +18,9 @@ impl Foo {
         self.data + a + b
     }
 
-	fn set_field(&mut self, v: i32) {
-	    self.data = v;
-	}
+    fn set_field(&mut self, v: i32) {
+        self.data = v;
+    }
 }
 
 fn f2(a: i32) -> i32 {
