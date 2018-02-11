@@ -174,6 +174,12 @@ TEST(TestWorkWithVec, smokeTest)
             EXPECT_EQ(std::string(tag), std::string(reinterpret_cast<const char *>(&vec[i]), tag_len));
         }
     }
+
+    auto sp = t.get_u32_slice();
+    ASSERT_EQ(tag_len, sp.len);
+    for (size_t i = 0; i < sp.len; ++i) {
+	    EXPECT_EQ(i, sp.data[i]);
+    }
 }
 
 TEST(TestEnumClass, smokeTest)

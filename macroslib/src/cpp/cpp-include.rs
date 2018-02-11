@@ -35,6 +35,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustString"]
     #![swig_foreigner_type = "struct CResultObjectString"]
     #![swig_rust_type = "CResultObjectString"]
+    #![swig_foreigner_type = "struct CRustSliceU32"]
+    #![swig_rust_type = "CRustSliceU32"]
 }
 
 #[allow(unused_macros)]
@@ -322,6 +324,22 @@ impl<T: SwigForeignClass> SwigFrom<Result<T, String>> for CResultObjectString {
                     err: <CRustString>::swig_from(err),
                 },
             },
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustSliceU32 {
+    data: *const u32,
+    len: usize,
+}
+
+impl<'a> SwigInto<CRustSliceU32> for &'a [u32] {
+    fn swig_into(self) -> CRustSliceU32 {
+        CRustSliceU32 {
+            data: self.as_ptr(),
+            len: self.len(),
         }
     }
 }
