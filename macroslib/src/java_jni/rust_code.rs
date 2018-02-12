@@ -13,7 +13,8 @@ use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, Met
 use super::{fmt_write_err_map, java_class_full_name, java_class_name_to_jni, method_name,
             ForeignTypeInfo, JniForeignMethodSignature};
 use errors::fatal_error;
-use my_ast::{code_to_item, list_lifetimes, normalized_ty_string, parse_ty, self_variant, RustType};
+use my_ast::{code_to_item, get_ref_type, list_lifetimes, normalized_ty_string, parse_ty,
+             self_variant, RustType};
 use types_conv_map::{unpack_unique_typename, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
 use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
                             foreign_from_rust_convert_method_output,
@@ -825,20 +826,6 @@ pub extern "C"
     gen_code.append(&mut deps_this);
     gen_code.append(&mut code_to_item(sess, mc.jni_func_name, &code)?);
     Ok(gen_code)
-}
-
-fn get_ref_type(ty: &ast::Ty, mutbl: ast::Mutability) -> ast::Ty {
-    ast::Ty {
-        id: DUMMY_NODE_ID,
-        span: ty.span,
-        node: ast::TyKind::Rptr(
-            None,
-            ast::MutTy {
-                mutbl: mutbl,
-                ty: P(ty.clone()),
-            },
-        ),
-    }
 }
 
 fn jni_method_signature(

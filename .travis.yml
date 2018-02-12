@@ -24,6 +24,7 @@ addons:
       - libclang-3.9-dev
       - python3
       - build-essential
+      - valgrind
 env: # specify the clang path for rust-bindgen
   - LIBCLANG_PATH=/usr/lib/llvm-3.9/lib
 before_script:

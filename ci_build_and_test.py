@@ -89,6 +89,10 @@ def build_cpp_code_with_cmake(cmake_build_dir, addon_params):
         subprocess.check_call(["msbuild", "RUN_TESTS.vcxproj"], cwd = str(cmake_build_dir))
     else:
         subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cmake_build_dir))
+        subprocess.check_call(["valgrind", "--error-exitcode=1", "--leak-check=full",
+                               "--show-leak-kinds=all", "--errors-for-leak-kinds=all",
+                               "--suppressions=../../valgrind.supp",
+                               "./c++-rust-swig-test"], cwd = str(cmake_build_dir))
 
 def main():
     print("Starting build and test")

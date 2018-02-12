@@ -518,6 +518,20 @@ pub(crate) fn if_option_return_some_type(ty: &ast::Ty) -> Option<ast::Ty> {
         .map(|x| x.ty)
 }
 
+pub(crate) fn get_ref_type(ty: &ast::Ty, mutbl: ast::Mutability) -> ast::Ty {
+    ast::Ty {
+        id: ast::DUMMY_NODE_ID,
+        span: ty.span,
+        node: ast::TyKind::Rptr(
+            None,
+            ast::MutTy {
+                mutbl: mutbl,
+                ty: P(ty.clone()),
+            },
+        ),
+    }
+}
+
 #[cfg(test)]
 #[macro_use]
 #[path = "test_helper.rs"]
