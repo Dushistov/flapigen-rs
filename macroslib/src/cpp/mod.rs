@@ -401,6 +401,7 @@ public:
     {template_class_name} &operator=({template_class_name} &&o)
     {{
         assert(this != &o);
+        free_mem(this->self_);
         self_ = o.self_;
         o.self_ = nullptr;
         return *this;
