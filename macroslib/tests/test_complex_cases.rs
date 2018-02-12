@@ -246,6 +246,37 @@ foreigner_class!(class Moo {
 }
 
 #[test]
+fn test_return_foreign_class_ref() {
+    let gen_code = parse_code(
+        "test_return_foreign_class_ref",
+        r#"
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor create_boo() -> Boo;
+    method Boo::test(&self, _: bool) -> f32;
+    method Boo::set_a(&mut self, _: i32);
+});
+foreigner_class!(class Moo {
+    self_type Moo;
+    constructor TestPathAndResult::default() -> Moo;
+    method TestPathAndResult::get_boo(&self) -> &Boo;
+});
+"#,
+        &[ForeignLang::Cpp],
+    );
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("BooRef get_boo() const")
+    );
+}
+
+#[test]
 fn test_return_foreign_class_arc() {
     let gen_code = parse_code(
         "test_work_with_rc",

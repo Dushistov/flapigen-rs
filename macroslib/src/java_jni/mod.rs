@@ -420,7 +420,7 @@ fn special_type<'a>(
     }
 
     trace!("Check is arg.ty({:?}) self type of foreign class", arg_ty);
-    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty) {
+    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty, true) {
         let sess = ParseSess::new();
         let jlong_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("jlong"))
             .unwrap()

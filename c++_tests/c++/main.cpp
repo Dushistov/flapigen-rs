@@ -35,6 +35,7 @@
 #include "rust_interface/TestOptional.hpp"
 #include "rust_interface/TestResult.hpp"
 #endif
+#include "rust_interface/TestReferences.hpp"
 
 using namespace rust;
 
@@ -178,7 +179,7 @@ TEST(TestWorkWithVec, smokeTest)
     auto sp = t.get_u32_slice();
     ASSERT_EQ(tag_len, sp.len);
     for (size_t i = 0; i < sp.len; ++i) {
-	    EXPECT_EQ(i, sp.data[i]);
+        EXPECT_EQ(i, sp.data[i]);
     }
 }
 
@@ -248,6 +249,14 @@ TEST(TestResult, smokeTest)
 #endif //USE_BOOST
 }
 #endif
+
+TEST(TestReferences, smokeTest)
+{
+    TestReferences tr(500, "bugaga");
+    auto foo = tr.get_foo_ref();
+    EXPECT_EQ(502, foo.f(1, 1));
+    EXPECT_EQ(std::string("bugaga"), foo.getName().to_std_string());
+}
 
 int main(int argc, char *argv[])
 {
