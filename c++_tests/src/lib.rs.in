@@ -10,14 +10,14 @@ pub struct Foo {
 
 impl Foo {
     fn new(data: i32, name: &str) -> Foo {
-        println!("Foo::new name '{}'", name);
+        //println!("Foo::new name '{}'", name);
         Foo {
             data,
             name: name.to_string(),
         }
     }
     fn f(&self, a: i32, b: i32) -> i32 {
-        println!("Foo::f {} {} {}", self.data, a, b);
+        //println!("Foo::f {} {} {}", self.data, a, b);
         self.data + a + b
     }
     fn name(&self) -> &str {
@@ -27,7 +27,7 @@ impl Foo {
         self.data = v;
     }
     fn call_me(cb: Box<SomeObserver>) {
-        println!("call_me begin");
+        //println!("call_me begin");
         cb.on_state_changed(2, false);
     }
     fn one_and_half(&self) -> f64 {
@@ -238,7 +238,7 @@ pub struct TestWorkWithVec {
 
 impl TestWorkWithVec {
     fn new(tag: &str) -> TestWorkWithVec {
-        println!("tag: {}", tag);
+        //println!("tag: {}", tag);
         let n = tag.len();
         let mut vec_u32 = Vec::<u32>::with_capacity(n);
         for i in 0..n {
@@ -250,7 +250,7 @@ impl TestWorkWithVec {
         }
     }
     fn get_bytes(&self, n: u32) -> Vec<u8> {
-        println!("get_bytes n {}", n);
+        //println!("get_bytes n {}", n);
         let mut res = String::new();
         for _ in 0..n {
             res.push_str(&self.data_tag);
