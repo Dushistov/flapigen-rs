@@ -275,8 +275,9 @@ pub extern "C" fn crust_string_free(x: CRustString) {
     drop(s);
 }
 
-impl SwigFrom<String> for CRustString {
-    fn swig_from(s: String) -> CRustString {
+#[allow(dead_code)]
+impl CRustString {
+    pub fn from_string(s: String) -> CRustString {
         let data = s.as_ptr() as *const ::std::os::raw::c_char;
         assert!((s.len() as u64) <= (::std::u32::MAX as u64));
         let len = s.len() as u32;
@@ -288,6 +289,12 @@ impl SwigFrom<String> for CRustString {
             len,
             capacity,
         }
+    }
+}
+
+impl SwigFrom<String> for CRustString {
+    fn swig_from(s: String) -> CRustString {
+        CRustString::from_string(s)
     }
 }
 
@@ -328,7 +335,7 @@ impl<T: SwigForeignClass> SwigFrom<Result<T, String>> for CResultObjectString {
             Err(err) => CResultObjectString {
                 is_ok: 0,
                 data: CResultObjectStringUnion {
-                    err: <CRustString>::swig_from(err),
+                    err: CRustString::from_string(err),
                 },
             },
         }
