@@ -15,7 +15,8 @@ use syntex_pos::DUMMY_SP;
 use syntex_syntax::symbol::Symbol;
 use syntex_syntax::print::pprust;
 
-use my_ast::{code_to_item, list_lifetimes, normalized_ty_string, parse_ty, self_variant, RustType};
+use my_ast::{code_to_item, get_ref_type, list_lifetimes, normalized_ty_string, parse_ty,
+             self_variant, RustType};
 use errors::fatal_error;
 use types_conv_map::{make_unique_rust_typename, unpack_unique_typename, ForeignMethodSignature,
                      ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
@@ -122,6 +123,7 @@ impl LanguageGenerator for CppConfig {
                 parse_ty(sess, DUMMY_SP, const_void_ptr_typename)?,
                 make_unique_rust_typename(const_void_ptr_typename, this_type.normalized_name),
             );
+            let my_const_void_ptr_ti2 = my_const_void_ptr_ti.clone();
             let const_foreign_typename =
                 Symbol::intern(&format!("const {} *", cpp_code::c_class_type(class)));
             conv_map.cache_rust_to_foreign_conv(
@@ -130,6 +132,20 @@ impl LanguageGenerator for CppConfig {
                     correspoding_rust_type: my_const_void_ptr_ti,
                     name: const_foreign_typename,
                 },
+            );
+
+            conv_map.add_conversation_rule(
+                my_const_void_ptr_ti2,
+                get_ref_type(&this_type.ty, ast::Mutability::Immutable).into(),
+                Symbol::intern(&format!(
+                    r#"
+    assert!(!{from_var}.is_null());
+    let {to_var}: &{this_type} = unsafe {{ &*({from_var} as *const {this_type}) }};
+"#,
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE,
+                    this_type = this_type.normalized_name,
+                )).into(),
             );
         }
         let has_methods = class.methods.iter().any(|m| match m.variant {
@@ -396,6 +412,7 @@ public:
         self_ = nullptr;
         return ret;
     }}
+    explicit operator SelfPtrType() const {{ return self_; }}
 "#,
         c_class_type = c_class_type,
         class_name = class.name,

@@ -380,10 +380,15 @@ impl TestReferences {
     fn get_foo_ref(&self) -> &Foo {
         &self.foo
     }
+
+    fn update_foo(&mut self, foo: &Foo) {
+        self.foo = foo.clone();
+    }
 }
 
 foreigner_class!(class TestReferences {
     self_type TestReferences;
     constructor TestReferences::new(foo_data: i32, foo_name: &str) -> TestReferences;
     method TestReferences::get_foo_ref(&self) -> &Foo;
+    method TestReferences::update_foo(&mut self, foo: &Foo);
 });

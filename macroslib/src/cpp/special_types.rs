@@ -18,10 +18,8 @@ pub(in cpp) fn special_type<'a>(
     arg_ty: &ast::Ty,
     input: bool,
 ) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    trace!(
-        "special_type: check is arg.ty({:?}) implements exported enum",
-        arg_ty
-    );
+    trace!("special_type: begin arg.ty({:?}) input {}", arg_ty, input);
+
     if let Some(foreign_enum) = conv_map.is_this_exported_enum(arg_ty) {
         let converter = calc_converter_for_enum(foreign_enum);
         return Ok(Some(converter));
@@ -43,20 +41,20 @@ pub(in cpp) fn special_type<'a>(
         }));
     }
 
-    if !input {
-        if let ast::TyKind::Rptr(
-            _,
-            ast::MutTy {
-                ty: ref ret_ty,
-                mutbl: ast::Mutability::Immutable,
-            },
-        ) = arg_ty.node
+    if let ast::TyKind::Rptr(
+        _,
+        ast::MutTy {
+            ty: ref ret_ty,
+            mutbl: ast::Mutability::Immutable,
+        },
+    ) = arg_ty.node
+    {
+        if let Some(foreign_class) =
+            conv_map.find_foreigner_class_with_such_self_type(ret_ty, false)
         {
-            if let Some(foreign_class) =
-                conv_map.find_foreigner_class_with_such_self_type(ret_ty, false)
-            {
-                let foreign_info =
-                    foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span, true)?;
+            let foreign_info =
+                foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span, true)?;
+            if !input {
                 let cpp_type = Symbol::intern(&format!("{}Ref", foreign_class.name));
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
@@ -64,7 +62,19 @@ pub(in cpp) fn special_type<'a>(
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type,
                         output_converter: format!("{}{{{}}}", cpp_type, FROM_VAR_TEMPLATE),
-                        input_converter: "UNIMPLEMENTED".to_string(),
+                        input_converter: "UNREACHABLE".to_string(),
+                    }),
+                }));
+            } else {
+                let cpp_type = Symbol::intern(&format!("const {} &", foreign_class.name));
+                let c_type = foreign_info.name;
+                return Ok(Some(CppForeignTypeInfo {
+                    base: foreign_info,
+                    c_converter: String::new(),
+                    cpp_converter: Some(CppConverter {
+                        typename: cpp_type,
+                        output_converter: "UNREACHABLE".to_string(),
+                        input_converter: format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE),
                     }),
                 }));
             }

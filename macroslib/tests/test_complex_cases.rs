@@ -247,9 +247,10 @@ foreigner_class!(class Moo {
 
 #[test]
 fn test_return_foreign_class_ref() {
-    let gen_code = parse_code(
-        "test_return_foreign_class_ref",
-        r#"
+    for _ in 0..10 {
+        let gen_code = parse_code(
+            "test_return_foreign_class_ref",
+            r#"
 foreigner_class!(class Boo {
     self_type Boo;
     constructor create_boo() -> Boo;
@@ -260,20 +261,27 @@ foreigner_class!(class Moo {
     self_type Moo;
     constructor TestPathAndResult::default() -> Moo;
     method TestPathAndResult::get_boo(&self) -> &Boo;
+    method TestReferences::update_boo(&mut self, foo: &Boo);
 });
 "#,
-        &[ForeignLang::Cpp],
-    );
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
-    println!("c/c++: {}", cpp_code_pair.foreign_code);
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("BooRef get_boo() const")
-    );
+            &[ForeignLang::Cpp],
+        );
+        let cpp_code_pair = gen_code
+            .iter()
+            .find(|x| x.lang == ForeignLang::Cpp)
+            .unwrap();
+        println!("c/c++: {}", cpp_code_pair.foreign_code);
+        assert!(
+            cpp_code_pair
+                .foreign_code
+                .contains("BooRef get_boo() const")
+        );
+        assert!(
+            cpp_code_pair
+                .foreign_code
+                .contains("void Moo_update_boo(MooOpaque * const self, const BooOpaque * a_0);")
+        );
+    }
 }
 
 #[test]

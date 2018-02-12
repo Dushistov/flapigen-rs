@@ -256,6 +256,12 @@ TEST(TestReferences, smokeTest)
     auto foo = tr.get_foo_ref();
     EXPECT_EQ(502, foo.f(1, 1));
     EXPECT_EQ(std::string("bugaga"), foo.getName().to_std_string());
+
+    Foo new_foo(100, "100");
+    tr.update_foo(new_foo);
+    foo = tr.get_foo_ref();
+    EXPECT_EQ(102, foo.f(1, 1));
+    EXPECT_EQ(std::string("100"), foo.getName().to_std_string());
 }
 
 int main(int argc, char *argv[])
