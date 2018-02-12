@@ -43,8 +43,42 @@ pub(in cpp) fn special_type<'a>(
         }));
     }
 
-    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty) {
-        let foreign_info = foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span)?;
+    if !input {
+        if let ast::TyKind::Rptr(
+            _,
+            ast::MutTy {
+                ty: ref ret_ty,
+                mutbl: ast::Mutability::Immutable,
+            },
+        ) = arg_ty.node
+        {
+            if let Some(foreign_class) =
+                conv_map.find_foreigner_class_with_such_self_type(ret_ty, false)
+            {
+                let foreign_info =
+                    foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span, true)?;
+                let cpp_type = Symbol::intern(&format!("{}Ref", foreign_class.name));
+                return Ok(Some(CppForeignTypeInfo {
+                    base: foreign_info,
+                    c_converter: String::new(),
+                    cpp_converter: Some(CppConverter {
+                        typename: cpp_type,
+                        output_converter: format!("{}{{{}}}", cpp_type, FROM_VAR_TEMPLATE),
+                        input_converter: "UNIMPLEMENTED".to_string(),
+                    }),
+                }));
+            }
+        }
+    }
+
+    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty, false) {
+        trace!(
+            "special_type: {:?} is foreign_class {}",
+            arg_ty,
+            foreign_class.name
+        );
+        let foreign_info =
+            foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span, false)?;
         return Ok(Some(CppForeignTypeInfo {
             base: foreign_info,
             c_converter: String::new(),
@@ -63,7 +97,9 @@ pub(in cpp) fn special_type<'a>(
                 ok_ty,
                 err_ty
             );
-            if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&ok_ty) {
+            if let Some(foreign_class) =
+                conv_map.find_foreigner_class_with_such_self_type(&ok_ty, false)
+            {
                 let foreign_info = conv_map
                     .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectString"))
                     .expect("Can not find info about struct CResultObjectString");
@@ -106,9 +142,11 @@ pub(in cpp) fn special_type<'a>(
             }
         }
         if let Some(ty) = if_option_return_some_type(arg_ty) {
-            if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&ty) {
+            if let Some(foreign_class) =
+                conv_map.find_foreigner_class_with_such_self_type(&ty, false)
+            {
                 let foreign_info =
-                    foreign_class_foreign_name(sess, conv_map, foreign_class, ty.span)?;
+                    foreign_class_foreign_name(sess, conv_map, foreign_class, ty.span, false)?;
                 let (typename, output_converter) = match cpp_cfg.cpp_optional {
                     CppOptional::Std17 => (
                         Symbol::intern(&format!("std::optional<{}>", foreign_class.name)),
@@ -151,8 +189,14 @@ fn foreign_class_foreign_name<'a>(
     conv_map: &TypesConvMap,
     foreign_class: &ForeignerClassInfo,
     foreign_class_span: Span,
+    readonly_fptr: bool,
 ) -> PResult<'a, ForeignTypeInfo> {
-    let foreign_typename = Symbol::intern(&format!("{} *", c_class_type(foreign_class)));
+    let c_type = c_class_type(foreign_class);
+    let foreign_typename = Symbol::intern(&if readonly_fptr {
+        format!("const {} *", c_type)
+    } else {
+        format!("{} *", c_type)
+    });
     conv_map
         .find_foreign_type_info_by_name(foreign_typename)
         .ok_or_else(|| {

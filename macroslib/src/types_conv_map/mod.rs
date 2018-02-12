@@ -100,6 +100,11 @@ impl<'a> fmt::Display for DisplayTypesConvGraph<'a> {
 
 impl fmt::Display for TypesConvMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        writeln!(f, "foreign_names_map begin")?;
+        for (name, idx) in &self.foreign_names_map {
+            writeln!(f, "{} -> {}", name, self.conv_graph[*idx])?;
+        }
+        writeln!(f, "foreign_names_map end")?;
         write!(f, "{}", DisplayTypesConvGraph(&self.conv_graph))
     }
 }
@@ -746,12 +751,15 @@ impl TypesConvMap {
     pub(crate) fn find_foreigner_class_with_such_self_type(
         &self,
         may_be_self_ty: &ast::Ty,
+        if_ref_search_reftype: bool,
     ) -> Option<&ForeignerClassInfo> {
-        let type_name = if let ast::TyKind::Rptr(_, ref mut_ty) = may_be_self_ty.node {
-            normalized_ty_string(&*mut_ty.ty)
-        } else {
-            normalized_ty_string(may_be_self_ty)
+        let type_name = match may_be_self_ty.node {
+            ast::TyKind::Rptr(_, ref mut_ty) if if_ref_search_reftype => {
+                normalized_ty_string(&*mut_ty.ty)
+            }
+            _ => normalized_ty_string(may_be_self_ty),
         };
+
         trace!("find self type: possible name {:?}", type_name);
         for fc in &self.foreign_classes {
             let self_ty = format!("{}", fc.self_type);
