@@ -281,6 +281,11 @@ foreigner_class!(class Moo {
                 .foreign_code
                 .contains("void Moo_update_boo(MooOpaque * const self, const BooOpaque * a_0);")
         );
+        assert!(
+            cpp_code_pair
+                .foreign_code
+                .contains("void update_boo(const Boo & a_0)")
+        );
     }
 }
 
