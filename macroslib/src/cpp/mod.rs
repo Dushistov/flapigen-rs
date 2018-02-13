@@ -1,5 +1,5 @@
 mod cpp_code;
-mod special_types;
+mod map_type;
 
 use std::path::Path;
 use std::fs::File;
@@ -26,7 +26,7 @@ use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
                             rust_to_foreign_convert_method_inputs};
 use {CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
      LanguageGenerator, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap};
-use self::special_types::special_type;
+use self::map_type::map_type;
 
 struct CppConverter {
     typename: Symbol,
@@ -169,7 +169,7 @@ impl LanguageGenerator for CppConfig {
         }
 
         let m_sigs = find_suitable_foreign_types_for_methods(sess, conv_map, class, self)?;
-        generate_code(
+        generate_code_for_class(
             sess,
             conv_map,
             &self.output_dir,
@@ -260,24 +260,13 @@ fn find_suitable_foreign_types_for_methods<'a>(
         let mut input =
             Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            if let Some(converter) = special_type(sess, conv_map, cpp_cfg, &arg.ty, true)? {
-                input.push(converter);
-                continue;
-            }
-            let f_arg_type = conv_map
-                .map_through_conversation_to_foreign(&arg.ty, Direction::Incoming, arg.ty.span)
-                .ok_or_else(|| {
-                    fatal_error(
-                        sess,
-                        arg.ty.span,
-                        &format!(
-                            "Do not know conversation from foreign \
-                             to such rust type '{}'",
-                            normalized_ty_string(&arg.ty)
-                        ),
-                    )
-                })?;
-            input.push(f_arg_type.into());
+            input.push(map_type(
+                sess,
+                conv_map,
+                cpp_cfg,
+                &arg.ty,
+                Direction::Incoming,
+            )?);
         }
         let output: CppForeignTypeInfo = match method.variant {
             MethodVariant::Constructor => ForeignTypeInfo {
@@ -294,24 +283,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
                     },
                 }.into(),
                 ast::FunctionRetTy::Ty(ref rt) => {
-                    if let Some(converter) = special_type(sess, conv_map, cpp_cfg, &*rt, false)? {
-                        converter
-                    } else {
-                        conv_map
-                            .map_through_conversation_to_foreign(&*rt, Direction::Outgoing, rt.span)
-                            .ok_or_else(|| {
-                                fatal_error(
-                                    sess,
-                                    rt.span,
-                                    &format!(
-                                        "Do not know conversation from \
-                                         such rust type '{}' to foreign",
-                                        normalized_ty_string(&*rt)
-                                    ),
-                                )
-                            })?
-                            .into()
-                    }
+                    map_type(sess, conv_map, cpp_cfg, &*rt, Direction::Outgoing)?
                 }
             },
         };
@@ -320,7 +292,7 @@ fn find_suitable_foreign_types_for_methods<'a>(
     Ok(ret)
 }
 
-fn generate_code<'a>(
+fn generate_code_for_class<'a>(
     sess: &'a ParseSess,
     conv_map: &mut TypesConvMap,
     output_dir: &Path,

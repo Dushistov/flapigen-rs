@@ -2,6 +2,7 @@ use syntex_syntax::parse::{PResult, ParseSess};
 use syntex_syntax::ast;
 use syntex_pos::{Span, DUMMY_SP};
 use syntex_syntax::symbol::Symbol;
+use petgraph::Direction;
 
 use my_ast::{if_option_return_some_type, if_result_return_ok_err_types, normalized_ty_string,
              parse_ty, RustType};
@@ -11,14 +12,18 @@ use {CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, Ty
 use cpp::{CppConverter, CppForeignTypeInfo};
 use cpp::cpp_code::c_class_type;
 
-pub(in cpp) fn special_type<'a>(
+fn special_type<'a>(
     sess: &'a ParseSess,
-    conv_map: &TypesConvMap,
+    conv_map: &mut TypesConvMap,
     cpp_cfg: &CppConfig,
     arg_ty: &ast::Ty,
-    input: bool,
+    direction: Direction,
 ) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    trace!("special_type: begin arg.ty({:?}) input {}", arg_ty, input);
+    trace!(
+        "special_type: begin arg.ty({:?}) input {:?}",
+        arg_ty,
+        direction
+    );
 
     if let Some(foreign_enum) = conv_map.is_this_exported_enum(arg_ty) {
         let converter = calc_converter_for_enum(foreign_enum);
@@ -54,7 +59,7 @@ pub(in cpp) fn special_type<'a>(
         {
             let foreign_info =
                 foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span, true)?;
-            if !input {
+            if direction == Direction::Outgoing {
                 let cpp_type = Symbol::intern(&format!("{}Ref", foreign_class.name));
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
@@ -100,7 +105,7 @@ pub(in cpp) fn special_type<'a>(
         }));
     }
 
-    if !input {
+    if direction == Direction::Outgoing {
         if let Some((ok_ty, err_ty)) = if_result_return_ok_err_types(arg_ty) {
             trace!(
                 "special_type: return type is Result<{:?}, {:?}>",
@@ -234,4 +239,59 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> CppForeignTypeInfo
         c_converter,
         cpp_converter: None,
     }
+}
+
+pub(in cpp) fn map_type<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    cpp_cfg: &CppConfig,
+    arg_ty: &ast::Ty,
+    direction: Direction,
+) -> PResult<'a, CppForeignTypeInfo> {
+    let ret: CppForeignTypeInfo = match direction {
+        Direction::Incoming => {
+            if let Some(converter) =
+                special_type(sess, conv_map, cpp_cfg, arg_ty, Direction::Incoming)?
+            {
+                return Ok(converter);
+            }
+            let f_arg_type = conv_map
+                .map_through_conversation_to_foreign(arg_ty, Direction::Incoming, arg_ty.span)
+                .ok_or_else(|| {
+                    fatal_error(
+                        sess,
+                        arg_ty.span,
+                        &format!(
+                            "Do not know conversation from foreign \
+                             to such rust type '{}'",
+                            normalized_ty_string(arg_ty)
+                        ),
+                    )
+                })?;
+            f_arg_type.into()
+        }
+        Direction::Outgoing => {
+            if let Some(converter) =
+                special_type(sess, conv_map, cpp_cfg, arg_ty, Direction::Outgoing)?
+            {
+                converter
+            } else {
+                conv_map
+                    .map_through_conversation_to_foreign(arg_ty, Direction::Outgoing, arg_ty.span)
+                    .ok_or_else(|| {
+                        fatal_error(
+                            sess,
+                            arg_ty.span,
+                            &format!(
+                                "Do not know conversation from \
+                                 such rust type '{}' to foreign",
+                                normalized_ty_string(arg_ty)
+                            ),
+                        )
+                    })?
+                    .into()
+            }
+        }
+    };
+    Ok(ret)
 }
