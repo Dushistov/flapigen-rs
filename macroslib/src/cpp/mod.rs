@@ -833,6 +833,18 @@ public:
             c_destructor_name = c_destructor_name,
             class_name = class.name,
         ).map_err(&map_write_err)?;
+    } else {
+        //need_destructor
+        write!(
+            cpp_include_f,
+            r#"
+private:
+   static void free_mem({c_class_type} *&)
+   {{
+   }}
+"#,
+            c_class_type = c_class_type
+        ).map_err(&map_write_err)?;
     }
 
     write!(

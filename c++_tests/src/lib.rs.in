@@ -392,3 +392,11 @@ foreigner_class!(class TestReferences {
     method TestReferences::get_foo_ref(&self) -> &Foo;
     method TestReferences::update_foo(&mut self, foo: &Foo);
 });
+
+fn add_func(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+foreigner_class!(class TestOnlyStaticMethods {
+    static_method add_func(_: i32, _: i32) -> i32;
+});

@@ -36,6 +36,7 @@
 #include "rust_interface/TestResult.hpp"
 #endif
 #include "rust_interface/TestReferences.hpp"
+#include "rust_interface/TestOnlyStaticMethods.hpp"
 
 using namespace rust;
 
@@ -264,6 +265,11 @@ TEST(TestReferences, smokeTest)
     foo = tr.get_foo_ref();
     EXPECT_EQ(102, foo.f(1, 1));
     EXPECT_EQ(std::string("100"), foo.getName().to_std_string());
+}
+
+TEST(TestOnlyStaticMethods, smokeTest)
+{
+	EXPECT_EQ(4, TestOnlyStaticMethods::add_func(2, 2));
 }
 
 int main(int argc, char *argv[])
