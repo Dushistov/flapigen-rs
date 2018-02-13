@@ -246,9 +246,7 @@ TEST(TestResult, smokeTest)
     boost::variant<TestResult, RustString> res = TestResult::new_with_err();
     EXPECT_EQ(nullptr, boost::get<TestResult>(&res));
     EXPECT_NE(nullptr, boost::get<RustString>(&res));
-    EXPECT_EQ(std::string("this is error"), boost::get<RustString>(res).to_std_string());
-    RustString err_msg = boost::get<RustString>(std::move(res));
-    EXPECT_EQ(std::string("this is error"), err_msg.to_std_string());
+    EXPECT_EQ(std::string("this is error"), boost::get<RustString>(std::move(res)).to_std_string());
 #endif //USE_BOOST
 }
 #endif
