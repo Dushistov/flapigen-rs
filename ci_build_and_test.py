@@ -50,8 +50,9 @@ def has_option(option):
     return any(option == s for s in sys.argv[1:])
 
 def run_jni_tests(use_shell, fast_run):
-    print("run_jni_tests begin")
+    print("run_jni_tests begin: cwd %s" % os.getcwd())
     sys.stdout.flush()
+    subprocess.check_call(["cargo", "build", "--package", "rust_swig_test_jni"], shell=False)
     java_dir = str(os.path.join(os.getcwd(), "jni_tests", "java", "com", "example"))
     purge(java_dir, ".*\.class$")
     java_native_dir = str(os.path.join(os.getcwd(), "jni_tests", "java", "com", "example", "rust"))
@@ -60,14 +61,11 @@ def run_jni_tests(use_shell, fast_run):
     else:
         purge(java_native_dir, ".*\.class$")
     jar_dir = build_jar(java_dir, java_native_dir, use_shell)
-    subprocess.check_call(["cargo", "build"], shell=False,
-                          cwd = "jni_tests")
     target_dir = os.path.join(find_dir("target", "jni_tests"), "debug")
     run_jar(target_dir, jar_dir, use_shell)
     if fast_run:
         return
-    subprocess.check_call(["cargo", "build", "--release"], shell=False,
-                          cwd = "jni_tests")
+    subprocess.check_call(["cargo", "build", "--release", "--package", "rust_swig_test_jni"], shell=False)
     target_dir = os.path.join(find_dir("target", "jni_tests"), "release")
     run_jar(target_dir, jar_dir, use_shell)
 
@@ -116,18 +114,11 @@ def main():
     print("java_only %s" % java_only)
     sys.stdout.flush()
 
-    #fast check
-    subprocess.check_call(["cargo", "check"], cwd = "macroslib", shell = False)
-    if has_jdk:
-        subprocess.check_call(["cargo", "check"], cwd = "jni_tests", shell = False)
-    if has_android_sdk and (not skip_android_test):
-        subprocess.check_call(["cargo", "check", "--target=arm-linux-androideabi"], shell=False,
-                              cwd = "android-example")
-        subprocess.check_call(["cargo", "check"], cwd = "c++_tests", shell = False)
-
-    subprocess.check_call(["cargo", "test"], cwd = "macroslib", shell=False)
+    print("start tests\n macrolib tests")
+    subprocess.check_call(["cargo", "test", "--package", "rust_swig"], shell=False)
     if not fast_run:
-        subprocess.check_call(["cargo", "test", "--release"], cwd = "macroslib", shell=False)
+        print(" macrolib tests release mode")
+        subprocess.check_call(["cargo", "test", "--release", "--package", "rust_swig"], shell=False)
     if has_jdk:
         run_jni_tests(use_shell, fast_run)
         if java_only:
@@ -136,9 +127,9 @@ def main():
     if not skip_cpp_tests:
         print("Check cmake version")
         subprocess.check_call(["cmake", "--version"], shell = False)
-        subprocess.check_call(["cargo", "test"], cwd = "c++_tests", shell = False)
+        subprocess.check_call(["cargo", "test", "--package", "rust_swig_test_cpp"], shell = False)
         if not fast_run:
-            subprocess.check_call(["cargo", "test", "--release"], cwd = "c++_tests", shell = False)
+            subprocess.check_call(["cargo", "test", "--release", "--package", "rust_swig_test_cpp"], shell = False)
         build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build"), [])
         purge(os.path.join("c++_tests", "c++", "rust_interface"), ".*\.h.*$")        
         build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
