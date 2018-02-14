@@ -10,9 +10,10 @@ matrix:
 os:
   - linux
 cache:
-  - cargo
-  - directories:
-     - /home/travis/.cache/sccache
+  timeout: 180
+  directories:
+    - /home/travis/.cargo
+    - /home/travis/.cache/sccache
 addons:
   apt:
     sources:
@@ -28,11 +29,13 @@ addons:
 env: # specify the clang path for rust-bindgen
   - LIBCLANG_PATH=/usr/lib/llvm-3.9/lib
 before_script:
-    - wget https://github.com/mozilla/sccache/releases/download/0.2.4/sccache-0.2.4-x86_64-unknown-linux-musl.tar.gz
-    - tar -xzvf sccache-0.2.4-x86_64-unknown-linux-musl.tar.gz
-    - mv sccache-0.2.4-x86_64-unknown-linux-musl/sccache ~/.cargo/bin
+    - wget https://github.com/mozilla/sccache/releases/download/0.2.5/sccache-0.2.5-x86_64-unknown-linux-musl.tar.gz
+    - tar -xzvf sccache-0.2.5-x86_64-unknown-linux-musl.tar.gz
+    - mv sccache-0.2.5-x86_64-unknown-linux-musl/sccache ~/.cargo/bin
     - sccache --version
+    - du -s -c -h /home/travis/.cache/sccache
     - export RUSTC_WRAPPER=sccache
+    - export SCCACHE_CACHE_SIZE=500M
     - if [ "$TRAVIS_RUST_VERSION" == "beta" ]; then
           rustup component add --toolchain beta rustfmt-preview;
       fi
@@ -44,19 +47,13 @@ before_script:
 script:
   - echo $RUSTC_WRAPPER
   - ln -s workspace.Cargo.toml Cargo.toml
-  - cd macroslib
   - echo ${TRAVIS_RUST_VERSION}
   - if [ "${TRAVIS_RUST_VERSION}" == "beta" ]; then
       echo "check code style";
-      cargo fmt -- --write-mode diff;
-      cd ../jni_tests;
-      cargo fmt -- --write-mode diff;
-      cd ../android-example;
-      cargo fmt -- --write-mode diff;
-      cd ../macroslib;
+      cargo fmt --package rust_swig -- --write-mode diff;
     fi
-  - cargo build -v
-  - cargo test -v
-  - cargo doc
-  - cd ..
+  - time cargo build --package rust_swig
+  - time cargo test --package rust_swig
+  - time cargo doc --package rust_swig
   - python3 ci_build_and_test.py
+  - du -s -c -h /home/travis/.cache/sccache
