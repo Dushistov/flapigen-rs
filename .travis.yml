@@ -35,7 +35,7 @@ before_script:
     - sccache --version
     - du -s -c -h /home/travis/.cache/sccache
     - export RUSTC_WRAPPER=sccache
-    - export SCCACHE_CACHE_SIZE=500M
+    - export SCCACHE_CACHE_SIZE=1G
     - if [ "$TRAVIS_RUST_VERSION" == "beta" ]; then
           rustup component add --toolchain beta rustfmt-preview;
       fi
