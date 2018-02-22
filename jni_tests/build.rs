@@ -18,6 +18,8 @@ fn main() {
     let target = env::var("TARGET").expect("target env var not setted");
     let java_sys_include_dir = java_include_dir.join(if target.contains("windows") {
         "win32"
+    } else if target.contains("darwin") {
+        "darwin"
     } else {
         "linux"
     });
