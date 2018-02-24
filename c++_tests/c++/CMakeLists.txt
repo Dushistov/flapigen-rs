@@ -159,7 +159,14 @@ else()
 endif()
 
 if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  message(STATUS "Compiler is gcc or clang")
   check_cxx_compiler_flag("-std=c++17" HAS_STDCXX_17)
+  if (UNIX AND NOT APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # clang can not handle libstd++ in c++17 mode
+    # see https://bugs.llvm.org/show_bug.cgi?id=33222
+    message(STATUS "clang is used on linux, disable c++17 mode")
+    set(HAS_STDCXX_17 FALSE)
+  endif ()
   if (HAS_STDCXX_17 AND (NOT USE_BOOST))
     set_target_properties(c++-rust-swig-test PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
     add_definitions(-DHAS_STDCXX_17)
