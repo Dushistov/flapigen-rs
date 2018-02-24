@@ -97,11 +97,11 @@ struct C_{interface_name} {{
             file,
             r#"
 {doc_comments}
-    void (*{method_name})({single_args_with_types}, void *opaque);
+    void (*{method_name})({single_args_with_types}void *opaque);
 "#,
             method_name = method.name,
             doc_comments = doc_comments_to_c_comments(&method.doc_comments, false),
-            single_args_with_types = c_generate_args_with_types(f_method)?,
+            single_args_with_types = c_generate_args_with_types(f_method, true)?,
         ).map_err(&map_write_err)?;
     }
     write!(
@@ -119,6 +119,7 @@ fn map_write_err<Err: fmt::Display>(err: Err) -> String {
 
 pub(in cpp) fn c_generate_args_with_types(
     f_method: &CppForeignMethodSignature,
+    append_comma_if_not_empty: bool,
 ) -> Result<String, String> {
     use std::fmt::Write;
 
@@ -128,6 +129,9 @@ pub(in cpp) fn c_generate_args_with_types(
             write!(&mut buf, ", ").map_err(fmt_write_err_map)?;
         }
         write!(&mut buf, "{} a_{}", f_type_info.as_ref().name, i).map_err(fmt_write_err_map)?;
+    }
+    if !buf.is_empty() && append_comma_if_not_empty {
+        write!(&mut buf, ", ").map_err(fmt_write_err_map)?;
     }
     Ok(buf)
 }

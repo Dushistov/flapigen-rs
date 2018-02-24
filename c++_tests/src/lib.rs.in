@@ -29,6 +29,7 @@ impl Foo {
     fn call_me(cb: Box<SomeObserver>) {
         //println!("call_me begin");
         cb.on_state_changed(2, false);
+        cb.on_state_changed_without_args();
     }
     fn one_and_half(&self) -> f64 {
         (self.data as f64) * 1.5
@@ -49,11 +50,13 @@ fn f_hypot(a: f64, b: f64) -> f64 {
 
 trait SomeObserver {
     fn on_state_changed(&self, _: i32, _: bool);
+    fn on_state_changed_without_args(&self);
 }
 
 foreign_interface!(interface SomeObserver {
     self_type SomeObserver;
     onStateChanged = SomeObserver::on_state_changed(&self, _: i32, _: bool);
+    onStateChangedWithoutArgs = SomeObserver::on_state_changed_without_args(&self);
 });
 
 foreigner_class!(class Foo {
