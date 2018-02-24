@@ -9,6 +9,7 @@
 #include <functional>
 #include <limits>
 #include <string>
+#include <iostream>
 #ifdef HAS_STDCXX_17
 #include <optional>
 #include <variant>
@@ -25,6 +26,7 @@
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
 #include "rust_interface/c_SomeObserver.h"
+#include "rust_interface/SomeObserver.hpp"
 #include "rust_interface/ClassCooperationTest.hpp"
 #include "rust_interface/TestObjectLifetime.hpp"
 #include "rust_interface/TestWorkWithVec.hpp"
@@ -126,6 +128,54 @@ TEST(Foo, Simple)
     }
 
     EXPECT_EQ(4u, foo.cpp_func(std::string("abcd")));
+}
+
+namespace {
+struct MySomeObserver final : public SomeObserver {
+    static size_t f1_call;
+    static size_t f2_call;
+    static size_t deleted;
+
+    MySomeObserver()
+    {
+        f1_call = 0;
+        f2_call = 0;
+        deleted = 0;
+    }
+    ~MySomeObserver()
+    {
+        ++deleted;
+    }
+    void onStateChanged(int32_t a, char b) override
+    {
+        std::cout << "onStateChanged: a: " << a << ", b: " << b << "\n";
+        ASSERT_EQ(2, a);
+        ASSERT_FALSE(!!b);
+        ++f1_call;
+    }
+    void onStateChangedWithoutArgs(void) override
+    {
+        std::cout << "onStateChangedWithoutArgs\n";
+        ++f2_call;
+    }
+};
+
+size_t MySomeObserver::f1_call = 0;
+size_t MySomeObserver::f2_call = 0;
+size_t MySomeObserver::deleted = 0;
+} // namespace
+
+TEST(Foo, CppSomeObserver)
+{
+    Foo foo(17, "CppSomeObserver");
+    auto obs = new MySomeObserver;
+    ASSERT_EQ(0u, obs->f1_call);
+    ASSERT_EQ(0u, obs->f2_call);
+    auto c_class = SomeObserver::to_c_interface(obs);
+    Foo::call_me(&c_class);
+    EXPECT_EQ(1u, MySomeObserver::f1_call);
+    EXPECT_EQ(1u, MySomeObserver::f2_call);
+    EXPECT_EQ(1u, MySomeObserver::deleted);
 }
 
 TEST(CheckPrimitiveTypesClass, smokeTest)
