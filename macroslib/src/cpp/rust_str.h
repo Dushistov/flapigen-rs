@@ -34,6 +34,7 @@ void crust_string_free(struct CRustString str);
 
 static_assert(sizeof(uint8_t) == sizeof(char), "for simplicity assume so");
 
+namespace {namespace_name} {
 class RustString final : public CRustString {
 public:
     explicit RustString(const CRustString &o)
@@ -88,4 +89,6 @@ private:
         o.capacity = 0;
     }
 };
+
+} // namespace {namespace_name}
 #endif //__cplusplus

@@ -72,6 +72,7 @@ pub(in cpp) fn doc_comments_to_c_comments(doc_comments: &[Symbol], class_comment
 
 pub(in cpp) fn generate_for_interface(
     output_dir: &Path,
+    namespace_name: &str,
     interface: &ForeignInterface,
     f_methods: &[CppForeignMethodSignature],
 ) -> Result<(), String> {
@@ -176,6 +177,7 @@ struct C_{interface_name} {{
 #include <cassert>
 #include "{c_interface_struct_header}"
 
+namespace {namespace_name} {{
 {doc_comments}
 class {interface_name} {{
 public:
@@ -193,6 +195,7 @@ public:
 private:
 {static_reroute_methods}
 }};
+}} // namespace {namespace_name}
 "##,
         interface_name = interface.name,
         doc_comments = interface_comments,
@@ -200,6 +203,7 @@ private:
         virtual_methods = cpp_virtual_methods,
         static_reroute_methods = cpp_static_reroute_methods,
         cpp_fill_c_interface_struct = cpp_fill_c_interface_struct,
+        namespace_name = namespace_name,
     ).map_err(&map_write_err)?;
 
     Ok(())

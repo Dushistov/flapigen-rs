@@ -10,7 +10,3 @@ struct CResultObjectString {
         struct CRustString err;
     } data;
 };
-
-#ifdef __cplusplus
-
-#endif //__cplusplus

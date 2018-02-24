@@ -28,6 +28,7 @@ struct CRustSliceU32 {
 #ifdef __cplusplus
 #include <stddef.h>
 
+namespace {namespace_name} {
 class RustVec final : public RustVecBytes {
 public:
     RustVec(const RustVecBytes &o)
@@ -74,4 +75,5 @@ private:
         o.capacity = 0;
     }
 };
+} // namespace {namespace_name}
 #endif
