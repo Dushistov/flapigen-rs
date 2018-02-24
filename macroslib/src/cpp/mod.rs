@@ -202,8 +202,12 @@ impl LanguageGenerator for CppConfig {
         interface: &ForeignInterface,
     ) -> PResult<'a, Vec<P<ast::Item>>> {
         let f_methods = find_suitable_ftypes_for_interace_methods(sess, conv_map, interface)?;
-        cpp_code::generate_for_interface(&self.output_dir, interface, &f_methods)
-            .map_err(|err| fatal_error(sess, interface.span, &err))?;
+        cpp_code::generate_for_interface(
+            &self.output_dir,
+            &self.namespace_name,
+            interface,
+            &f_methods,
+        ).map_err(|err| fatal_error(sess, interface.span, &err))?;
 
         let items = rust_code_generate_interface(
             sess,
@@ -229,7 +233,11 @@ impl LanguageGenerator for CppConfig {
             let mut src_file = File::create(&src_path)
                 .map_err(|err| format!("Can not create {}: {}", src_path.display(), err))?;
             src_file
-                .write_all(cu.code.as_bytes())
+                .write_all(
+                    cu.code
+                        .replace("{namespace_name}", &self.namespace_name)
+                        .as_bytes(),
+                )
                 .map_err(|err| format!("write to {} failed: {}", src_path.display(), err))?;
         }
         Ok(())
