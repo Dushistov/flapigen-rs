@@ -9,6 +9,7 @@ matrix:
     - rust: nightly
 os:
   - linux
+  - osx
 cache: cargo
 addons:
   apt:
@@ -27,7 +28,12 @@ before_script:
     - if [ "$TRAVIS_RUST_VERSION" == "beta" ]; then
           rustup component add --toolchain beta rustfmt-preview;
       fi
+    - if [ "$TRAVIS_OS_NAME" == "osx" ]; then
+         export JAVA_HOME=$(/usr/libexec/java_home);
+      fi
+    - echo $JAVA_HOME
     - cmake --version
+    - python --version
     - export TAR="boost_1_56_0.tar.gz"
     - curl -L -o $TAR http://sourceforge.net/projects/boost/files/boost/1.56.0/$TAR/download
     - tar -xzf $TAR
@@ -43,4 +49,4 @@ script:
   - time cargo build -v --package rust_swig
   - time cargo test -v --package rust_swig
   - time cargo doc -v --package rust_swig
-  - python3 ci_build_and_test.py
+  - python ci_build_and_test.py
