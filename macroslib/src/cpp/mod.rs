@@ -533,7 +533,7 @@ public:
         let cpp_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false);
         write!(cpp_include_f, "{}:\n{}", method_access, cpp_comments,).map_err(&map_write_err)?;
         let c_func_name = c_func_name(class, method, f_method);
-        let c_args_with_types = cpp_code::c_generate_args_with_types(f_method)
+        let c_args_with_types = cpp_code::c_generate_args_with_types(f_method, false)
             .map_err(|err| fatal_error(sess, class.span, &err))?;
         let comma_c_args_with_types = if c_args_with_types.is_empty() {
             "".to_string()
@@ -1376,14 +1376,18 @@ impl {trait_name} for {struct_with_funcs} {{
     #[allow(unused_mut)]
     fn {func_name}({args_with_types}) {{
 {convert_args}
-        (self.{method_name})({args}, self.opaque);
+        (self.{method_name})({args}self.opaque);
     }}
 "#,
             func_name = func_name,
             convert_args = convert_args,
             method_name = method.name,
             args_with_types = args_with_types,
-            args = n_arguments_list(n_args),
+            args = if n_args == 0 {
+                "".to_string()
+            } else {
+                n_arguments_list(n_args) + ","
+            },
         ).unwrap();
     }
     write!(

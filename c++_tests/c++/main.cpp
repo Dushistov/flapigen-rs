@@ -41,6 +41,7 @@
 using namespace rust;
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
+static std::atomic<uint32_t> c_simple_cb_counter_without_args{ 0 };
 
 static void c_delete_int(void *opaque)
 {
@@ -59,6 +60,14 @@ static void c_simple_cb(int32_t a, char b, void *opaque)
     ++c_simple_cb_counter;
 }
 
+static void c_simple_cb_without_args(void *opaque)
+{
+    assert(opaque != nullptr);
+    const int tag = *static_cast<int *>(opaque);
+    ASSERT_EQ(17, tag);
+    ++c_simple_cb_counter_without_args;
+}
+
 TEST(c_Foo, Simple)
 {
     auto foo = Foo_new(1, "a");
@@ -74,10 +83,13 @@ TEST(c_Foo, Simple)
         new int(17),
         c_delete_int,
         c_simple_cb,
+        c_simple_cb_without_args,
     };
     c_simple_cb_counter = 0;
+    c_simple_cb_counter_without_args = 0;
     Foo_call_me(&obs);
-    EXPECT_EQ(1, c_simple_cb_counter.load());
+    EXPECT_EQ(1u, c_simple_cb_counter.load());
+    EXPECT_EQ(1u, c_simple_cb_counter_without_args.load());
     Foo_delete(foo);
 }
 
@@ -85,8 +97,10 @@ TEST(Foo, Simple)
 {
     Foo foo(1, "b");
     EXPECT_EQ(3, foo.f(1, 1));
-    RustStrView name = foo.getName();
-    EXPECT_EQ(std::string("b"), std::string(name.data, name.len));
+    {
+        RustStrView name = foo.getName();
+        EXPECT_EQ(std::string("b"), std::string(name.data, name.len));
+    }
     EXPECT_NEAR(std::hypot(1., 1.) + 1., foo.f_double(1., 1.), 1e-10);
     EXPECT_NEAR(std::hypot(1.0, 1.0), Foo::fHypot(1.0, 1.0), 1e-10);
     foo.set_field(5);
@@ -95,10 +109,13 @@ TEST(Foo, Simple)
         new int(17),
         c_delete_int,
         c_simple_cb,
+        c_simple_cb_without_args,
     };
     c_simple_cb_counter = 0;
+    c_simple_cb_counter_without_args = 0;
     Foo::call_me(&obs);
-    EXPECT_EQ(1, c_simple_cb_counter.load());
+    EXPECT_EQ(1u, c_simple_cb_counter.load());
+    EXPECT_EQ(1u, c_simple_cb_counter_without_args.load());
 
     EXPECT_NEAR(7.5, foo.one_and_half(), 1e-16);
     {
@@ -267,7 +284,7 @@ TEST(TestReferences, smokeTest)
 
 TEST(TestOnlyStaticMethods, smokeTest)
 {
-	EXPECT_EQ(4, TestOnlyStaticMethods::add_func(2, 2));
+    EXPECT_EQ(4, TestOnlyStaticMethods::add_func(2, 2));
 }
 
 int main(int argc, char *argv[])
