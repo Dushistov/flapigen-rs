@@ -323,6 +323,25 @@ pub union CResultObjectStringUnion {
     pub err: CRustString,
 }
 
+impl SwigFrom<Result<(), String>> for CResultObjectString {
+    fn swig_from(x: Result<(), String>) -> Self {
+        match x {
+            Ok(_) => CResultObjectString {
+                is_ok: 1,
+                data: CResultObjectStringUnion {
+                    ok: ::std::ptr::null_mut(),
+                },
+            },
+            Err(err) => CResultObjectString {
+                is_ok: 0,
+                data: CResultObjectStringUnion {
+                    err: CRustString::from_string(err),
+                },
+            },
+        }
+    }
+}
+
 impl<T: SwigForeignClass> SwigFrom<Result<T, String>> for CResultObjectString {
     fn swig_from(x: Result<T, String>) -> Self {
         match x {

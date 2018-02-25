@@ -308,12 +308,27 @@ TEST(TestResult, smokeTest)
     EXPECT_EQ(nullptr, std::get_if<TestResult>(&res));
     EXPECT_NE(nullptr, std::get_if<RustString>(&res));
     EXPECT_EQ(std::string_view("this is error"), std::get<RustString>(res).to_string_view());
+    auto res2 = TestResult::f(true);
+    EXPECT_EQ(nullptr, std::get_if<RustString>(&res2));
+    EXPECT_NE(nullptr, std::get_if<void *>(&res2));
+    auto res3 = TestResult::f(false);
+    EXPECT_NE(nullptr, std::get_if<RustString>(&res3));
+    EXPECT_EQ(nullptr, std::get_if<void *>(&res3));
+    EXPECT_EQ(std::string_view("Not ok"), std::get<RustString>(res3).to_string_view());
 #endif //HAS_STDCXX_17
 #ifdef USE_BOOST
     boost::variant<TestResult, RustString> res = TestResult::new_with_err();
     EXPECT_EQ(nullptr, boost::get<TestResult>(&res));
     EXPECT_NE(nullptr, boost::get<RustString>(&res));
     EXPECT_EQ(std::string("this is error"), boost::get<RustString>(std::move(res)).to_std_string());
+
+    auto res2 = TestResult::f(true);
+    EXPECT_EQ(nullptr, boost::get<RustString>(&res2));
+    EXPECT_NE(nullptr, boost::get<void *>(&res2));
+    auto res3 = TestResult::f(false);
+    EXPECT_NE(nullptr, boost::get<RustString>(&res3));
+    EXPECT_EQ(nullptr, boost::get<void *>(&res3));
+    EXPECT_EQ(std::string("Not ok"), boost::get<RustString>(std::move(res3)).to_std_string());
 #endif //USE_BOOST
 }
 #endif

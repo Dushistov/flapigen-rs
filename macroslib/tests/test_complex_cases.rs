@@ -415,6 +415,7 @@ foreigner_class!(class Position {
 
 foreigner_class!(class LocationService {
     static_method LocationService::position() -> Result<GnssInfo, String>;
+    static_method LocationService::do_something() -> Result<(), String>;
 });
 "#,
             &[ForeignLang::Java, ForeignLang::Cpp],

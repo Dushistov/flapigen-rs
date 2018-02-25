@@ -361,12 +361,20 @@ impl TestResult {
     fn new_with_err() -> Result<TestResult, String> {
         Err("this is error".to_string())
     }
+    fn f(is_ok: bool) -> Result<(), String> {
+        if is_ok {
+            Ok(())
+        } else {
+            Err("Not ok".to_string())
+        }
+    }
 }
 
 foreigner_class!(class TestResult {
     self_type TestResult;
     private constructor TestResult::default() -> TestResult;
     static_method TestResult::new_with_err() -> Result<TestResult, String>;
+    static_method TestResult::f(_: bool) -> Result<(), String>;
 });
 
 pub struct TestReferences {

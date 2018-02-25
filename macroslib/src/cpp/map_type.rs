@@ -152,8 +152,49 @@ fn special_type<'a>(
                 } else {
                     unimplemented!();
                 }
+            //if let Some(foreign_class)
             } else {
-                unimplemented!();
+                trace!("return result, but not foreign_class");
+                match ok_ty.node {
+                    //Result<(), err_ty>
+                    ast::TyKind::Tup(ref tup_types) if tup_types.is_empty() => {
+                        let err_ty_name = normalized_ty_string(&err_ty);
+                        if err_ty_name == "String" {
+                            let typename = match cpp_cfg.cpp_variant {
+                                CppVariant::Std17 => {
+                                    Symbol::intern("std::variant<void *, RustString>")
+                                }
+                                CppVariant::Boost => {
+                                    Symbol::intern("boost::variant<void *, RustString>")
+                                }
+                            };
+                            let output_converter = format!(
+                                "{var}.is_ok != 0 ?
+ {VarType}{{{var}.data.ok}} :
+ {VarType}{{RustString{{{var}.data.err}}}}",
+                                VarType = typename,
+                                var = FROM_VAR_TEMPLATE
+                            );
+                            let foreign_info = conv_map
+                                .find_foreign_type_info_by_name(Symbol::intern(
+                                    "struct CResultObjectString",
+                                ))
+                                .expect("Can not find struct CResultObjectString");
+                            return Ok(Some(CppForeignTypeInfo {
+                                base: foreign_info,
+                                c_converter: String::new(),
+                                cpp_converter: Some(CppConverter {
+                                    typename,
+                                    output_converter,
+                                    input_converter: String::new(),
+                                }),
+                            }));
+                        } else {
+                            unimplemented!();
+                        }
+                    }
+                    _ => unimplemented!(),
+                }
             }
         }
         if let Some(ty) = if_option_return_some_type(arg_ty) {
