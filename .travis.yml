@@ -34,9 +34,9 @@ before_script:
     - echo $JAVA_HOME
     - cmake --version
     - python --version
-    - export TAR="boost_1_56_0.tar.gz"
-    - curl -L -o $TAR http://sourceforge.net/projects/boost/files/boost/1.56.0/$TAR/download
-    - tar -xzf $TAR
+    - export TAR="boost_1_56_0.tar.bz2"
+    - curl -L -o $TAR https://github.com/janelia-flyem/janelia-flyem.github.com/raw/master/downloads/boost_1_56_0.tar.bz2
+    - tar -xjf $TAR
     - export BOOST_ROOT=$PWD/boost_1_56_0
 script:
   - echo $RUSTC_WRAPPER

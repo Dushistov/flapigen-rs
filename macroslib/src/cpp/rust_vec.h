@@ -8,13 +8,37 @@
 extern "C" {
 #endif
 
-struct RustVecBytes {
+struct CRustVecU8 {
     const uint8_t *data;
-    uint32_t len;
-    uint32_t capacity;
+    uintptr_t len;
+    uintptr_t capacity;
 };
 
-void rust_vec_bytes_free(struct RustVecBytes vec);
+void CRustVecU8_free(struct CRustVecU8 vec);
+
+struct CRustVecU32 {
+    const uint32_t *data;
+    uintptr_t len;
+    uintptr_t capacity;
+};
+
+void CRustVecU32_free(struct CRustVecU32 vec);
+
+struct CRustVecF32 {
+    const float *data;
+    uintptr_t len;
+    uintptr_t capacity;
+};
+
+void CRustVecF32_free(struct CRustVecF32 vec);
+
+struct CRustVecF64 {
+    const double *data;
+    uintptr_t len;
+    uintptr_t capacity;
+};
+
+void CRustVecF64_free(struct CRustVecF64 vec);
 
 struct CRustSliceU32 {
     const uint32_t *data;
@@ -26,48 +50,64 @@ struct CRustSliceU32 {
 #endif
 
 #ifdef __cplusplus
-#include <stddef.h>
 
-namespace {namespace_name} {
-class RustVec final : public RustVecBytes {
+#include <type_traits>
+
+namespace RUST_SWIG_USER_NAMESPACE {
+
+namespace internal {
+    template <typename T, typename E>
+    E field_type(E T::*);
+}
+
+template <typename CContainerType, void (*FreeFunc)(CContainerType)>
+class RustVec final : public CContainerType {
 public:
-    RustVec(const RustVecBytes &o)
+    using value_type = typename std::remove_const<
+        typename std::remove_reference<decltype(*internal::field_type(&CContainerType::data))>::type>::type;
+
+    explicit RustVec(const CContainerType &o)
     {
-        data = o.data;
-        len = o.len;
-        capacity = o.capacity;
+        this->data = o.data;
+        this->len = o.len;
+        this->capacity = o.capacity;
     }
     RustVec() = delete;
     RustVec(const RustVec &) = delete;
     RustVec &operator=(const RustVec &) = delete;
     RustVec(RustVec &&o)
     {
-        data = o.data;
-        len = o.len;
-        capacity = o.capacity;
+        this->data = o.data;
+        this->len = o.len;
+        this->capacity = o.capacity;
 
         reset(o);
     }
     RustVec &operator=(RustVec &&o)
     {
-        data = o.data;
-        len = o.len;
-        capacity = o.capacity;
+        free_mem();
+        this->data = o.data;
+        this->len = o.len;
+        this->capacity = o.capacity;
 
         reset(o);
         return *this;
     }
     ~RustVec()
     {
-        if (data != nullptr) {
-            rust_vec_bytes_free(*this);
+        free_mem();
+    }
+    size_t size() const { return this->len; }
+    const value_type &operator[](size_t i) const { return this->data[i]; }
+
+private:
+    void free_mem()
+    {
+        if (this->data != nullptr) {
+            FreeFunc(*this);
             reset(*this);
         }
     }
-    size_t size() const { return len; }
-    const uint8_t &operator[](size_t i) const { return data[i]; }
-
-private:
     static void reset(RustVec &o)
     {
         o.data = nullptr;
@@ -75,5 +115,10 @@ private:
         o.capacity = 0;
     }
 };
-} // namespace {namespace_name}
+
+using RustVecU8 = RustVec<CRustVecU8, CRustVecU8_free>;
+using RustVecU32 = RustVec<CRustVecU32, CRustVecU32_free>;
+using RustVecF32 = RustVec<CRustVecF32, CRustVecF32_free>;
+using RustVecF64 = RustVec<CRustVecF64, CRustVecF64_free>;
+} // namespace RUST_SWIG_USER_NAMESPACE
 #endif

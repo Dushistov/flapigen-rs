@@ -29,8 +29,14 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "*const ::std::os::raw::c_char"]
     #![swig_foreigner_type = "struct RustStrView"]
     #![swig_rust_type = "RustStrView"]
-    #![swig_foreigner_type = "struct RustVecBytes"]
-    #![swig_rust_type = "RustVecBytes"]
+    #![swig_foreigner_type = "struct CRustVecU8"]
+    #![swig_rust_type = "CRustVecU8"]
+    #![swig_foreigner_type = "struct CRustVecU32"]
+    #![swig_rust_type = "CRustVecU32"]
+    #![swig_foreigner_type = "struct CRustVecF32"]
+    #![swig_rust_type = "CRustVecF32"]
+    #![swig_foreigner_type = "struct CRustVecF64"]
+    #![swig_rust_type = "CRustVecF64"]
     #![swig_foreigner_type = "struct CRustString"]
     #![swig_rust_type = "CRustString"]
     #![swig_foreigner_type = "struct CResultObjectString"]
@@ -222,32 +228,117 @@ impl<'a, T: SwigForeignClass> SwigFrom<&'a T> for *const ::std::os::raw::c_void 
 
 #[allow(dead_code)]
 #[repr(C)]
-pub struct RustVecBytes {
+pub struct CRustVecU8 {
     data: *const u8,
-    len: u32,
-    capacity: u32,
+    len: usize,
+    capacity: usize,
 }
 
-impl SwigFrom<Vec<u8>> for RustVecBytes {
-    fn swig_from(mut v: Vec<u8>) -> RustVecBytes {
+impl SwigFrom<Vec<u8>> for CRustVecU8 {
+    fn swig_from(mut v: Vec<u8>) -> CRustVecU8 {
         let p = v.as_mut_ptr();
         let len = v.len();
         let cap = v.capacity();
         ::std::mem::forget(v);
-        //todo check that u32 <-> usize safe, or may be use u64?
-        RustVecBytes {
+        CRustVecU8 {
             data: p,
-            len: len as u32,
-            capacity: cap as u32,
+            len: len,
+            capacity: cap,
         }
     }
 }
 
 #[allow(private_no_mangle_fns)]
 #[no_mangle]
-pub extern "C" fn rust_vec_bytes_free(v: RustVecBytes) {
-    //todo check that u32 <-> usize safe, or may be use u64?
-    let v = unsafe { Vec::from_raw_parts(v.data as *mut u8, v.len as usize, v.capacity as usize) };
+pub extern "C" fn CRustVecU8_free(v: CRustVecU8) {
+    let v = unsafe { Vec::from_raw_parts(v.data as *mut u8, v.len, v.capacity) };
+    drop(v);
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustVecU32 {
+    data: *const u32,
+    len: usize,
+    capacity: usize,
+}
+
+impl SwigFrom<Vec<u32>> for CRustVecU32 {
+    fn swig_from(mut v: Vec<u32>) -> CRustVecU32 {
+        let p = v.as_mut_ptr();
+        let len = v.len();
+        let cap = v.capacity();
+        ::std::mem::forget(v);
+        CRustVecU32 {
+            data: p,
+            len: len,
+            capacity: cap,
+        }
+    }
+}
+
+#[allow(private_no_mangle_fns)]
+#[no_mangle]
+pub extern "C" fn CRustVecU32_free(v: CRustVecU32) {
+    let v = unsafe { Vec::from_raw_parts(v.data as *mut u32, v.len, v.capacity) };
+    drop(v);
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustVecF32 {
+    data: *const f32,
+    len: usize,
+    capacity: usize,
+}
+
+impl SwigFrom<Vec<f32>> for CRustVecF32 {
+    fn swig_from(mut v: Vec<f32>) -> CRustVecF32 {
+        let p = v.as_mut_ptr();
+        let len = v.len();
+        let cap = v.capacity();
+        ::std::mem::forget(v);
+        CRustVecF32 {
+            data: p,
+            len: len,
+            capacity: cap,
+        }
+    }
+}
+
+#[allow(private_no_mangle_fns)]
+#[no_mangle]
+pub extern "C" fn CRustVecF32_free(v: CRustVecF32) {
+    let v = unsafe { Vec::from_raw_parts(v.data as *mut f32, v.len, v.capacity) };
+    drop(v);
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustVecF64 {
+    data: *const f64,
+    len: usize,
+    capacity: usize,
+}
+
+impl SwigFrom<Vec<f64>> for CRustVecF64 {
+    fn swig_from(mut v: Vec<f64>) -> CRustVecF64 {
+        let p = v.as_mut_ptr();
+        let len = v.len();
+        let cap = v.capacity();
+        ::std::mem::forget(v);
+        CRustVecF64 {
+            data: p,
+            len: len,
+            capacity: cap,
+        }
+    }
+}
+
+#[allow(private_no_mangle_fns)]
+#[no_mangle]
+pub extern "C" fn CRustVecF64_free(v: CRustVecF64) {
+    let v = unsafe { Vec::from_raw_parts(v.data as *mut f64, v.len, v.capacity) };
     drop(v);
 }
 

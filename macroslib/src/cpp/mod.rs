@@ -235,7 +235,7 @@ impl LanguageGenerator for CppConfig {
             src_file
                 .write_all(
                     cu.code
-                        .replace("{namespace_name}", &self.namespace_name)
+                        .replace("RUST_SWIG_USER_NAMESPACE", &self.namespace_name)
                         .as_bytes(),
                 )
                 .map_err(|err| format!("write to {} failed: {}", src_path.display(), err))?;
