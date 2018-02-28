@@ -236,7 +236,13 @@ TEST(TestWorkWithVec, smokeTest)
     const size_t tag_len = std::strlen(tag);
     TestWorkWithVec t(tag);
     for (uint32_t n : { 0, 1, 2, 3, 5, 10, 100, 1000 }) {
-        RustVec vec{ t.get_bytes(n) };
+        RustVecU8 vec{ t.get_bytes(n) };
+        EXPECT_EQ(tag_len * n, vec.size());
+        for (size_t i = 0; i < vec.size(); i += std::strlen(tag)) {
+            EXPECT_TRUE(i + tag_len <= vec.size());
+            EXPECT_EQ(std::string(tag), std::string(reinterpret_cast<const char *>(&vec[i]), tag_len));
+        }
+        vec = RustVecU8{ t.get_bytes(n) };
         EXPECT_EQ(tag_len * n, vec.size());
         for (size_t i = 0; i < vec.size(); i += std::strlen(tag)) {
             EXPECT_TRUE(i + tag_len <= vec.size());
@@ -245,10 +251,30 @@ TEST(TestWorkWithVec, smokeTest)
     }
 
     auto sp = t.get_u32_slice();
-    ASSERT_EQ(tag_len, sp.len);
-    for (size_t i = 0; i < sp.len; ++i) {
+    ASSERT_EQ(tag_len + 1, sp.len);
+    for (size_t i = 0; i < tag_len; ++i) {
         EXPECT_EQ(i, sp.data[i]);
     }
+    EXPECT_EQ(uint32_t(1) << 30, sp.data[tag_len]);
+
+    static_assert(std::is_same<RustVecU32::value_type, uint32_t>::value,
+                  "RustVecU32::value_type should be uint32_t");
+    RustVecU32 vec_u32{ t.get_vec_u32() };
+    ASSERT_EQ(tag_len + 1, vec_u32.size());
+    for (size_t i = 0; i < tag_len; ++i) {
+        EXPECT_EQ(i, vec_u32[i]);
+    }
+    EXPECT_EQ(uint32_t(1) << 30, vec_u32[tag_len]);
+
+    RustVecF32 vec_f32{ t.get_vec_f32() };
+    ASSERT_EQ(2u, vec_f32.size());
+    EXPECT_NEAR(static_cast<float>(M_E), vec_f32[0], std::numeric_limits<float>::epsilon());
+    EXPECT_NEAR(static_cast<float>(M_PI), vec_f32[1], std::numeric_limits<float>::epsilon());
+
+    RustVecF64 vec_f64{ t.get_vec_f64() };
+    ASSERT_EQ(2u, vec_f64.size());
+    EXPECT_NEAR(static_cast<double>(M_E), vec_f64[0], std::numeric_limits<double>::epsilon());
+    EXPECT_NEAR(static_cast<double>(M_PI), vec_f64[1], std::numeric_limits<double>::epsilon());
 }
 
 TEST(TestEnumClass, smokeTest)

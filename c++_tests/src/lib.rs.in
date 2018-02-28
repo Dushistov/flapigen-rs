@@ -1,6 +1,7 @@
 use std::rc::Rc;
 use std::path::Path;
 use std::cell::{Ref, RefCell, RefMut};
+use std::{f32, f64};
 
 #[derive(Clone)]
 pub struct Foo {
@@ -86,9 +87,9 @@ impl CheckPrimitiveTypesClass {
     }
     fn test(&self, a: bool) -> f32 {
         if a {
-            ::std::f32::consts::E
+            f32::consts::E
         } else {
-            ::std::f32::consts::PI
+            f32::consts::PI
         }
     }
     fn set_a(&mut self, val: i32) {
@@ -247,6 +248,7 @@ impl TestWorkWithVec {
         for i in 0..n {
             vec_u32.push(i as u32);
         }
+        vec_u32.push(1_u32 << 30);
         TestWorkWithVec {
             data_tag: tag.to_string(),
             vec_u32,
@@ -261,8 +263,20 @@ impl TestWorkWithVec {
         res.into_bytes()
     }
 
+    fn get_vec_u32(&self) -> Vec<u32> {
+        self.vec_u32.clone()
+    }
+
     fn get_u32_slice(&self) -> &[u32] {
         &self.vec_u32
+    }
+
+    fn get_vec_f32(&self) -> Vec<f32> {
+        vec![f32::consts::E, f32::consts::PI]
+    }
+
+    fn get_vec_f64(&self) -> Vec<f64> {
+        vec![f64::consts::E, f64::consts::PI]
     }
 }
 
@@ -271,6 +285,9 @@ foreigner_class!(class TestWorkWithVec {
     constructor TestWorkWithVec::new(_: &str) -> TestWorkWithVec;
     method TestWorkWithVec::get_bytes(&self, n: u32) -> Vec<u8>;
     method TestWorkWithVec::get_u32_slice(&self) -> &[u32];
+    method TestWorkWithVec::get_vec_u32(&self) -> Vec<u32>;
+    method TestWorkWithVec::get_vec_f32(&self) -> Vec<f32>;
+    method TestWorkWithVec::get_vec_f64(&self) -> Vec<f64>;
 });
 
 enum MyEnum {

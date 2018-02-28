@@ -34,7 +34,7 @@ void crust_string_free(struct CRustString str);
 
 static_assert(sizeof(uint8_t) == sizeof(char), "for simplicity assume so");
 
-namespace {namespace_name} {
+namespace RUST_SWIG_USER_NAMESPACE {
 class RustString final : public CRustString {
 public:
     explicit RustString(const CRustString &o)
@@ -56,6 +56,7 @@ public:
     }
     RustString &operator=(RustString &&o)
     {
+        free_mem();
         data = o.data;
         len = o.len;
         capacity = o.capacity;
@@ -65,10 +66,7 @@ public:
     }
     ~RustString()
     {
-        if (data != nullptr) {
-            crust_string_free(*this);
-            reset(*this);
-        }
+        free_mem();
     }
     std::string to_std_string() const
     {
@@ -82,6 +80,13 @@ public:
     }
 #endif
 private:
+    void free_mem()
+    {
+        if (data != nullptr) {
+            crust_string_free(*this);
+            reset(*this);
+        }
+    }
     static void reset(RustString &o)
     {
         o.data = nullptr;
@@ -90,5 +95,5 @@ private:
     }
 };
 
-} // namespace {namespace_name}
+} // namespace RUST_SWIG_USER_NAMESPACE
 #endif //__cplusplus
