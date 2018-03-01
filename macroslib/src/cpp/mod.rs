@@ -376,11 +376,11 @@ class {class_name} {{
 public:
     {class_name}(const {class_name}&) = delete;
     {class_name} &operator=(const {class_name}&) = delete;
-    {class_name}({class_name} &&o): self_(o.self_)
+    {class_name}({class_name} &&o) noexcept: self_(o.self_)
     {{
         o.self_ = nullptr;
     }}
-    {class_name} &operator=({class_name} &&o)
+    {class_name} &operator=({class_name} &&o) noexcept
     {{
         assert(this != &o);
         free_mem(this->self_);
@@ -388,14 +388,14 @@ public:
         o.self_ = nullptr;
         return *this;
     }}
-    explicit {class_name}({c_class_type} *o): self_(o) {{}}
-    {c_class_type} *release()
+    explicit {class_name}({c_class_type} *o) noexcept: self_(o) {{}}
+    {c_class_type} *release() noexcept
     {{
         {c_class_type} *ret = self_;
         self_ = nullptr;
         return ret;
     }}
-    explicit operator {c_class_type}*() const {{ return self_; }}
+    explicit operator {c_class_type}*() const noexcept {{ return self_; }}
 "#,
         c_class_type = c_class_type,
         class_name = class.name,
@@ -413,19 +413,19 @@ public:
 
     {class_name}(const {class_name}&) = delete;
     {class_name} &operator=(const {class_name}&) = delete;
-    {class_name}({class_name} &&o): self_(o.self_)
+    {class_name}({class_name} &&o) noexcept: self_(o.self_)
     {{
         o.self_ = nullptr;
     }}
-    {class_name} &operator=({class_name} &&o)
+    {class_name} &operator=({class_name} &&o) noexcept
     {{
         assert(this != &o);
         self_ = o.self_;
         o.self_ = nullptr;
         return *this;
     }}
-    explicit {class_name}(const {c_class_type} *o): self_(o) {{}}
-    explicit operator const {c_class_type}*() const {{ return self_; }}
+    explicit {class_name}(const {c_class_type} *o) noexcept : self_(o) {{}}
+    explicit operator const {c_class_type}*() const noexcept {{ return self_; }}
 "##,
         class_name = class_ref_name,
         c_class_type = c_class_type,
@@ -800,7 +800,7 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
             cpp_include_f,
             r#"
 private:
-   static void free_mem({c_class_type} *&p)
+   static void free_mem({c_class_type} *&p) noexcept
    {{
         if (p != nullptr) {{
             {c_destructor_name}(p);
@@ -808,7 +808,7 @@ private:
         }}
    }}
 public:
-    ~{class_name}()
+    ~{class_name}() noexcept
     {{
         free_mem(this->self_);
     }}
@@ -823,7 +823,7 @@ public:
             cpp_include_f,
             r#"
 private:
-   static void free_mem({c_class_type} *&)
+   static void free_mem({c_class_type} *&) noexcept
    {{
    }}
 "#,
