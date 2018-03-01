@@ -14,7 +14,19 @@ struct RustStrView {
 #ifdef __cplusplus
     std::string to_std_string() const
     {
-        return std::string(data, len);
+        return std::string{ data, len };
+    }
+#endif
+#if __cplusplus > 201402L
+    std::string_view to_string_view() const
+    {
+        return std::string_view{ data, len };
+    }
+#endif
+#ifdef BOOST_STRING_VIEW_HPP
+    boost::string_view to_boost_string_view() const
+    {
+        return boost::string_view{ data, len };
     }
 #endif
 };
@@ -77,6 +89,13 @@ public:
     std::string_view to_string_view() const
     {
         return std::string_view(data, len);
+    }
+#endif
+
+#ifdef BOOST_STRING_VIEW_HPP
+    boost::string_view to_boost_string_view() const
+    {
+        return boost::string_view{ data, len };
     }
 #endif
 private:

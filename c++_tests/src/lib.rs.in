@@ -398,6 +398,14 @@ impl TestResult {
             Err("Not ok".to_string())
         }
     }
+
+    fn f_vec(is_ok: bool) -> Result<Vec<Foo>, String> {
+        if is_ok {
+            Ok(vec![Foo::new(15, "15"), Foo::new(13, "13")])
+        } else {
+            Err("Not ok".to_string())
+        }
+    }
 }
 
 foreigner_class!(class TestResult {
@@ -405,6 +413,7 @@ foreigner_class!(class TestResult {
     private constructor TestResult::default() -> TestResult;
     static_method TestResult::new_with_err() -> Result<TestResult, String>;
     static_method TestResult::f(_: bool) -> Result<(), String>;
+    static_method TestResult::f_vec(_: bool) -> Result<Vec<Foo>, String>;
 });
 
 pub struct TestReferences {

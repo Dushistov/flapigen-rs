@@ -43,6 +43,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustString"]
     #![swig_foreigner_type = "struct CResultObjectString"]
     #![swig_rust_type = "CResultObjectString"]
+    #![swig_foreigner_type = "struct CResultCRustForeignVecString"]
+    #![swig_rust_type = "CResultCRustForeignVecString"]
     #![swig_foreigner_type = "struct CRustSliceU32"]
     #![swig_rust_type = "CRustSliceU32"]
 }
@@ -346,6 +348,7 @@ pub extern "C" fn CRustVecF64_free(v: CRustVecF64) {
 
 #[allow(dead_code)]
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct CRustForeignVec {
     data: *const ::std::os::raw::c_void,
     len: usize,
@@ -353,8 +356,9 @@ pub struct CRustForeignVec {
     step: usize,
 }
 
-impl<T: SwigForeignClass> SwigFrom<Vec<T>> for CRustForeignVec {
-    fn swig_from(mut v: Vec<T>) -> Self {
+#[allow(dead_code)]
+impl CRustForeignVec {
+    pub fn from_vec<T: SwigForeignClass>(mut v: Vec<T>) -> CRustForeignVec {
         let data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
         let len = v.len();
         let capacity = v.capacity();
@@ -365,6 +369,12 @@ impl<T: SwigForeignClass> SwigFrom<Vec<T>> for CRustForeignVec {
             capacity,
             step: ::std::mem::size_of::<T>(),
         }
+    }
+}
+
+impl<T: SwigForeignClass> SwigFrom<Vec<T>> for CRustForeignVec {
+    fn swig_from(v: Vec<T>) -> Self {
+        CRustForeignVec::from_vec(v)
     }
 }
 
@@ -496,6 +506,40 @@ impl<'a> SwigInto<CRustSliceU32> for &'a [u32] {
         CRustSliceU32 {
             data: self.as_ptr(),
             len: self.len(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CResultCRustForeignVecString {
+    is_ok: u8,
+    data: CResultCRustForeignVecStringUnion,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CResultCRustForeignVecStringUnion {
+    pub ok: CRustForeignVec,
+    pub err: CRustString,
+}
+
+impl<T: SwigForeignClass> SwigFrom<Result<Vec<T>, String>> for CResultCRustForeignVecString {
+    fn swig_from(x: Result<Vec<T>, String>) -> Self {
+        match x {
+            Ok(v) => CResultCRustForeignVecString {
+                is_ok: 1,
+                data: CResultCRustForeignVecStringUnion {
+                    ok: CRustForeignVec::from_vec(v),
+                },
+            },
+            Err(err) => CResultCRustForeignVecString {
+                is_ok: 0,
+                data: CResultCRustForeignVecStringUnion {
+                    err: CRustString::from_string(err),
+                },
+            },
         }
     }
 }
