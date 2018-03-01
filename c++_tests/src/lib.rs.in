@@ -238,6 +238,7 @@ foreigner_class!(class TestObjectLifetime {
 pub struct TestWorkWithVec {
     data_tag: String,
     vec_u32: Vec<u32>,
+    vec_foo: Vec<Foo>,
 }
 
 impl TestWorkWithVec {
@@ -249,9 +250,16 @@ impl TestWorkWithVec {
             vec_u32.push(i as u32);
         }
         vec_u32.push(1_u32 << 30);
+
+        let mut vec_foo = Vec::<Foo>::with_capacity(n);
+        for i in 0..n {
+            vec_foo.push(Foo::new(i as i32, tag));
+        }
+
         TestWorkWithVec {
             data_tag: tag.to_string(),
             vec_u32,
+            vec_foo,
         }
     }
     fn get_bytes(&self, n: u32) -> Vec<u8> {
@@ -278,6 +286,10 @@ impl TestWorkWithVec {
     fn get_vec_f64(&self) -> Vec<f64> {
         vec![f64::consts::E, f64::consts::PI]
     }
+
+    fn get_vec_foo(&self) -> Vec<Foo> {
+        self.vec_foo.clone()
+    }
 }
 
 foreigner_class!(class TestWorkWithVec {
@@ -288,6 +300,7 @@ foreigner_class!(class TestWorkWithVec {
     method TestWorkWithVec::get_vec_u32(&self) -> Vec<u32>;
     method TestWorkWithVec::get_vec_f32(&self) -> Vec<f32>;
     method TestWorkWithVec::get_vec_f64(&self) -> Vec<f64>;
+    method TestWorkWithVec::get_vec_foo(&self) -> Vec<Foo>;
 });
 
 enum MyEnum {

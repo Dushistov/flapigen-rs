@@ -35,9 +35,9 @@ void crust_string_free(struct CRustString str);
 static_assert(sizeof(uint8_t) == sizeof(char), "for simplicity assume so");
 
 namespace RUST_SWIG_USER_NAMESPACE {
-class RustString final : public CRustString {
+class RustString final : private CRustString {
 public:
-    explicit RustString(const CRustString &o)
+    explicit RustString(const CRustString &o) noexcept
     {
         data = o.data;
         len = o.len;
@@ -46,7 +46,7 @@ public:
     RustString() = delete;
     RustString(const RustString &) = delete;
     RustString &operator=(const RustString &) = delete;
-    RustString(RustString &&o)
+    RustString(RustString &&o) noexcept
     {
         data = o.data;
         len = o.len;
@@ -54,7 +54,7 @@ public:
 
         reset(o);
     }
-    RustString &operator=(RustString &&o)
+    RustString &operator=(RustString &&o) noexcept
     {
         free_mem();
         data = o.data;
@@ -64,7 +64,7 @@ public:
         reset(o);
         return *this;
     }
-    ~RustString()
+    ~RustString() noexcept
     {
         free_mem();
     }
@@ -80,14 +80,14 @@ public:
     }
 #endif
 private:
-    void free_mem()
+    void free_mem() noexcept
     {
         if (data != nullptr) {
             crust_string_free(*this);
             reset(*this);
         }
     }
-    static void reset(RustString &o)
+    static void reset(RustString &o) noexcept
     {
         o.data = nullptr;
         o.len = 0;
