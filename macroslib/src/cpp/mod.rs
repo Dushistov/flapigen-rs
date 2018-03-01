@@ -169,14 +169,16 @@ impl LanguageGenerator for CppConfig {
         }
 
         let m_sigs = find_suitable_foreign_types_for_methods(sess, conv_map, class, self)?;
-        generate_code_for_class(
+        let mut code_items = generate_code_for_class(
             sess,
             conv_map,
             &self.output_dir,
             &self.namespace_name,
             class,
             &m_sigs,
-        )
+        )?;
+        code_items.append(&mut self.to_generate.borrow_mut());
+        Ok(code_items)
     }
 
     fn generate_enum<'a>(
@@ -407,6 +409,8 @@ public:
 {doc_comments}
 class {class_name} {{
 public:
+    using CForeignType = {c_class_type};
+
     {class_name}(const {class_name}&) = delete;
     {class_name} &operator=(const {class_name}&) = delete;
     {class_name}({class_name} &&o): self_(o.self_)

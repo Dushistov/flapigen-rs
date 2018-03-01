@@ -37,6 +37,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustVecF32"]
     #![swig_foreigner_type = "struct CRustVecF64"]
     #![swig_rust_type = "CRustVecF64"]
+    #![swig_foreigner_type = "struct CRustForeignVec"]
+    #![swig_rust_type = "CRustForeignVec"]
     #![swig_foreigner_type = "struct CRustString"]
     #![swig_rust_type = "CRustString"]
     #![swig_foreigner_type = "struct CResultObjectString"]
@@ -339,6 +341,36 @@ impl SwigFrom<Vec<f64>> for CRustVecF64 {
 #[no_mangle]
 pub extern "C" fn CRustVecF64_free(v: CRustVecF64) {
     let v = unsafe { Vec::from_raw_parts(v.data as *mut f64, v.len, v.capacity) };
+    drop(v);
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustForeignVec {
+    data: *const ::std::os::raw::c_void,
+    len: usize,
+    capacity: usize,
+    step: usize,
+}
+
+impl<T: SwigForeignClass> SwigFrom<Vec<T>> for CRustForeignVec {
+    fn swig_from(mut v: Vec<T>) -> Self {
+        let data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
+        let len = v.len();
+        let capacity = v.capacity();
+        ::std::mem::forget(v);
+        CRustForeignVec {
+            data,
+            len,
+            capacity,
+            step: ::std::mem::size_of::<T>(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn drop_foreign_class_vec<T: SwigForeignClass>(data: *mut T, len: usize, cap: usize) {
+    let v = unsafe { Vec::from_raw_parts(data, len, cap) };
     drop(v);
 }
 

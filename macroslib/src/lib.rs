@@ -52,6 +52,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::env;
 use std::str::FromStr;
+use std::collections::HashSet;
 
 use syntex_syntax::parse::ParseSess;
 use syntex_syntax::codemap::Span;
@@ -622,6 +623,8 @@ pub struct CppConfig {
     namespace_name: String,
     cpp_optional: CppOptional,
     cpp_variant: CppVariant,
+    generated_helper_files: RefCell<HashSet<PathBuf>>,
+    to_generate: RefCell<Vec<P<ast::Item>>>,
 }
 
 impl CppConfig {
@@ -635,6 +638,8 @@ impl CppConfig {
             namespace_name,
             cpp_optional: CppOptional::Std17,
             cpp_variant: CppVariant::Std17,
+            generated_helper_files: RefCell::new(HashSet::new()),
+            to_generate: RefCell::new(vec![]),
         }
     }
     pub fn cpp_optional(self, cpp_optional: CppOptional) -> CppConfig {

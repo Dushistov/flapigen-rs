@@ -29,6 +29,7 @@
 #include "rust_interface/SomeObserver.hpp"
 #include "rust_interface/ClassCooperationTest.hpp"
 #include "rust_interface/TestObjectLifetime.hpp"
+#include "rust_interface/RustForeignVecFoo.h"
 #include "rust_interface/TestWorkWithVec.hpp"
 #include "rust_interface/c_MyEnum.h"
 #include "rust_interface/TestEnumClass.hpp"
@@ -275,6 +276,14 @@ TEST(TestWorkWithVec, smokeTest)
     ASSERT_EQ(2u, vec_f64.size());
     EXPECT_NEAR(static_cast<double>(M_E), vec_f64[0], std::numeric_limits<double>::epsilon());
     EXPECT_NEAR(static_cast<double>(M_PI), vec_f64[1], std::numeric_limits<double>::epsilon());
+
+    RustForeignVecFoo vec_foo = t.get_vec_foo();
+    ASSERT_EQ(tag_len, vec_foo.size());
+    for (size_t i = 0; i < vec_foo.size(); ++i) {
+        EXPECT_EQ(std::string(tag), vec_foo[i].getName().to_std_string());
+        EXPECT_TRUE(vec_foo[i].f(0, 0) >= 0);
+        EXPECT_EQ(i, size_t(vec_foo[i].f(0, 0)));
+    }
 }
 
 TEST(TestEnumClass, smokeTest)
