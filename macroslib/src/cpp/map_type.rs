@@ -115,90 +115,7 @@ fn special_type<'a>(
                 ok_ty,
                 err_ty
             );
-            if let Some(foreign_class) =
-                conv_map.find_foreigner_class_with_such_self_type(&ok_ty, false)
-            {
-                let foreign_info = conv_map
-                    .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectString"))
-                    .expect("Can not find info about struct CResultObjectString");
-                let err_ty_name = normalized_ty_string(&err_ty);
-                if err_ty_name == "String" {
-                    let c_class = c_class_type(foreign_class);
-                    let typename = match cpp_cfg.cpp_variant {
-                        CppVariant::Std17 => Symbol::intern(&format!(
-                            "std::variant<{}, RustString>",
-                            foreign_class.name
-                        )),
-                        CppVariant::Boost => Symbol::intern(&format!(
-                            "boost::variant<{}, RustString>",
-                            foreign_class.name
-                        )),
-                    };
-                    let output_converter = format!(
-                        "{var}.is_ok != 0 ?
- {VarType}{{{Type}(static_cast<{C_Type} *>({var}.data.ok))}} :
- {VarType}{{RustString{{{var}.data.err}}}}",
-                        VarType = typename,
-                        Type = foreign_class.name,
-                        C_Type = c_class,
-                        var = FROM_VAR_TEMPLATE,
-                    );
-                    return Ok(Some(CppForeignTypeInfo {
-                        base: foreign_info,
-                        c_converter: String::new(),
-                        cpp_converter: Some(CppConverter {
-                            typename,
-                            output_converter,
-                            input_converter: String::new(),
-                        }),
-                    }));
-                } else {
-                    unimplemented!();
-                }
-            //if let Some(foreign_class)
-            } else {
-                trace!("return result, but not foreign_class");
-                match ok_ty.node {
-                    //Result<(), err_ty>
-                    ast::TyKind::Tup(ref tup_types) if tup_types.is_empty() => {
-                        let err_ty_name = normalized_ty_string(&err_ty);
-                        if err_ty_name == "String" {
-                            let typename = match cpp_cfg.cpp_variant {
-                                CppVariant::Std17 => {
-                                    Symbol::intern("std::variant<void *, RustString>")
-                                }
-                                CppVariant::Boost => {
-                                    Symbol::intern("boost::variant<void *, RustString>")
-                                }
-                            };
-                            let output_converter = format!(
-                                "{var}.is_ok != 0 ?
- {VarType}{{{var}.data.ok}} :
- {VarType}{{RustString{{{var}.data.err}}}}",
-                                VarType = typename,
-                                var = FROM_VAR_TEMPLATE
-                            );
-                            let foreign_info = conv_map
-                                .find_foreign_type_info_by_name(Symbol::intern(
-                                    "struct CResultObjectString",
-                                ))
-                                .expect("Can not find struct CResultObjectString");
-                            return Ok(Some(CppForeignTypeInfo {
-                                base: foreign_info,
-                                c_converter: String::new(),
-                                cpp_converter: Some(CppConverter {
-                                    typename,
-                                    output_converter,
-                                    input_converter: String::new(),
-                                }),
-                            }));
-                        } else {
-                            unimplemented!();
-                        }
-                    }
-                    _ => unimplemented!(),
-                }
-            }
+            return handle_result_as_result_type(sess, conv_map, cpp_cfg, arg_ty, &ok_ty, &err_ty);
         }
         if let Some(ty) = if_option_return_some_type(arg_ty) {
             if let Some(foreign_class) =
@@ -371,6 +288,10 @@ fn map_result_type_vec<'a>(
             .borrow()
             .contains(&fc_vec_path);
         if generate_cpp_part {
+            trace!(
+                "map_result_type_vec: we generate code for {:?}",
+                fc_vec_path
+            );
             let mut c_vec_f = File::create(&fc_vec_path).map_err(|err| {
                 fatal_error(
                     sess,
@@ -463,4 +384,128 @@ pub extern "C" fn {func_name}(v: CRustForeignVec) {{
         input_converter: "#error".to_string(),
     });
     Ok(Some(ftype_info))
+}
+
+fn handle_result_as_result_type<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    cpp_cfg: &CppConfig,
+    arg_ty: &ast::Ty,
+    ok_ty: &ast::Ty,
+    err_ty: &ast::Ty,
+) -> PResult<'a, Option<CppForeignTypeInfo>> {
+    let err_ty_name = normalized_ty_string(&err_ty);
+    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&ok_ty, false) {
+        let foreign_info = conv_map
+            .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectString"))
+            .expect("Can not find info about struct CResultObjectString");
+        if err_ty_name == "String" {
+            let c_class = c_class_type(foreign_class);
+            let typename = match cpp_cfg.cpp_variant {
+                CppVariant::Std17 => {
+                    Symbol::intern(&format!("std::variant<{}, RustString>", foreign_class.name))
+                }
+                CppVariant::Boost => Symbol::intern(&format!(
+                    "boost::variant<{}, RustString>",
+                    foreign_class.name
+                )),
+            };
+            let output_converter = format!(
+                "{var}.is_ok != 0 ?
+ {VarType}{{{Type}(static_cast<{C_Type} *>({var}.data.ok))}} :
+ {VarType}{{RustString{{{var}.data.err}}}}",
+                VarType = typename,
+                Type = foreign_class.name,
+                C_Type = c_class,
+                var = FROM_VAR_TEMPLATE,
+            );
+            return Ok(Some(CppForeignTypeInfo {
+                base: foreign_info,
+                c_converter: String::new(),
+                cpp_converter: Some(CppConverter {
+                    typename,
+                    output_converter,
+                    input_converter: String::new(),
+                }),
+            }));
+        } else {
+            unimplemented!();
+        }
+    }
+
+    if let Some(elem_ty) = if_vec_return_elem_type(ok_ty) {
+        if err_ty_name == "String" {
+            let foreign_name = conv_map
+                .find_foreigner_class_with_such_self_type(&elem_ty, false)
+                .map(|v| v.name);
+            if let Some(foreign_name) = foreign_name {
+                map_type(sess, conv_map, cpp_cfg, ok_ty, Direction::Outgoing)?;
+                let ok_typename = format!("RustForeignVec{}", foreign_name);
+                let typename = match cpp_cfg.cpp_variant {
+                    CppVariant::Std17 => {
+                        Symbol::intern(&format!("std::variant<{}, RustString>", ok_typename))
+                    }
+                    CppVariant::Boost => {
+                        Symbol::intern(&format!("boost::variant<{}, RustString>", ok_typename))
+                    }
+                };
+                let mut f_type_info = map_ordinal_result_type(sess, conv_map, arg_ty)?;
+                f_type_info.cpp_converter = Some(CppConverter {
+                    typename,
+                    output_converter: format!(
+                        "{var}.is_ok != 0 ?
+ {VarType}{{{Type}{{{var}.data.ok}}}} :
+ {VarType}{{RustString{{{var}.data.err}}}}",
+                        VarType = typename,
+                        Type = ok_typename,
+                        var = FROM_VAR_TEMPLATE,
+                    ),
+                    input_converter: "#error".to_string(),
+                });
+                return Ok(Some(f_type_info));
+            } else {
+                unimplemented!();
+            }
+        } else {
+            unimplemented!();
+        }
+    } else {
+        trace!("return result, but not foreign_class / Vec<foreign_class>");
+        match ok_ty.node {
+            //Result<(), err_ty>
+            ast::TyKind::Tup(ref tup_types) if tup_types.is_empty() => {
+                let err_ty_name = normalized_ty_string(&err_ty);
+                if err_ty_name == "String" {
+                    let typename = match cpp_cfg.cpp_variant {
+                        CppVariant::Std17 => Symbol::intern("std::variant<void *, RustString>"),
+                        CppVariant::Boost => Symbol::intern("boost::variant<void *, RustString>"),
+                    };
+                    let output_converter = format!(
+                        "{var}.is_ok != 0 ?
+ {VarType}{{{var}.data.ok}} :
+ {VarType}{{RustString{{{var}.data.err}}}}",
+                        VarType = typename,
+                        var = FROM_VAR_TEMPLATE
+                    );
+                    let foreign_info = conv_map
+                        .find_foreign_type_info_by_name(Symbol::intern(
+                            "struct CResultObjectString",
+                        ))
+                        .expect("Can not find struct CResultObjectString");
+                    return Ok(Some(CppForeignTypeInfo {
+                        base: foreign_info,
+                        c_converter: String::new(),
+                        cpp_converter: Some(CppConverter {
+                            typename,
+                            output_converter,
+                            input_converter: String::new(),
+                        }),
+                    }));
+                } else {
+                    unimplemented!();
+                }
+            }
+            _ => unimplemented!(),
+        }
+    }
 }

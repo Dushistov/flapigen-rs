@@ -680,6 +680,8 @@ foreigner_class!(class Boo {
 
     constructor Boo::new(_: i32, _: usize) -> Boo;
     method Boo::get_foo_arr(&self) -> Vec<Foo>;
+    method Boo::get_foo_with_err(&self) -> Result<Foo, String>;
+    method Boo::get_foo_arr_with_err(&self) -> Result<Vec<Foo>, String>;
 });
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],

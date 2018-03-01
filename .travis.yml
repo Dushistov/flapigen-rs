@@ -34,10 +34,10 @@ before_script:
     - echo $JAVA_HOME
     - cmake --version
     - python --version
-    - export TAR="boost_1_56_0.tar.bz2"
-    - curl -L -o $TAR https://github.com/janelia-flyem/janelia-flyem.github.com/raw/master/downloads/boost_1_56_0.tar.bz2
-    - tar -xjf $TAR
-    - export BOOST_ROOT=$PWD/boost_1_56_0
+    - export TAR="boost_1_66_0.tar.gz"
+    - curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.66.0/source/$TAR
+    - tar -xzf $TAR
+    - export BOOST_ROOT=$PWD/boost_1_66_0
 script:
   - echo $RUSTC_WRAPPER
   - ln -s workspace.Cargo.toml Cargo.toml

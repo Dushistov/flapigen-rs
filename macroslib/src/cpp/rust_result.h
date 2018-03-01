@@ -10,3 +10,11 @@ struct CResultObjectString {
         struct CRustString err;
     } data;
 };
+
+struct CResultCRustForeignVecString {
+    uint8_t is_ok;
+    union {
+        struct CRustForeignVec ok;
+        struct CRustString err;
+    } data;
+};

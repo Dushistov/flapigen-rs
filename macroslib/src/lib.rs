@@ -82,7 +82,6 @@ pub fn target_pointer_width_from_env() -> Option<usize> {
 }
 
 /// `LanguageConfig` contains configuration for specific programming language
-#[derive(Clone)]
 pub enum LanguageConfig {
     #[deprecated(since = "0.1.0", note = "please use `JavaConfig` instead")]
     Java {
@@ -365,8 +364,9 @@ impl TTMacroExpander for InterfaceHandler {
 
 impl GeneratorData {
     fn generate_code_for_foreign_interface<'a>(
-        &mut self,
         cx: &'a mut ExtCtxt,
+        conv_map: &mut TypesConvMap,
+        pointer_target_width: usize,
         foreign_interface: &ForeignInterface,
         lang_gen: &LanguageGenerator,
         mut items: Vec<P<ast::Item>>,
@@ -374,11 +374,11 @@ impl GeneratorData {
         let mut gen_items = unwrap_presult!(
             lang_gen.generate_interface(
                 cx.parse_sess(),
-                &mut self.conv_map,
-                self.pointer_target_width,
+                conv_map,
+                pointer_target_width,
                 foreign_interface
             ),
-            self.conv_map
+            conv_map
         );
         items.append(&mut gen_items);
         MacEager::items(SmallVector::many(items))
@@ -397,26 +397,48 @@ impl GeneratorData {
         let foreign_interface =
             parse_foreign_interface(cx, tokens).expect("Can not parse foreign_interface");
         #[allow(deprecated)]
-        match self.config.clone() {
+        match self.config {
             LanguageConfig::Java {
                 ref output_dir,
                 ref package_name,
             } => {
                 let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
-                self.generate_code_for_foreign_interface(cx, &foreign_interface, &java_cfg, items)
+                GeneratorData::generate_code_for_foreign_interface(
+                    cx,
+                    &mut self.conv_map,
+                    self.pointer_target_width,
+                    &foreign_interface,
+                    &java_cfg,
+                    items,
+                )
             }
             LanguageConfig::JavaConfig(ref java_cfg) => {
-                self.generate_code_for_foreign_interface(cx, &foreign_interface, java_cfg, items)
+                GeneratorData::generate_code_for_foreign_interface(
+                    cx,
+                    &mut self.conv_map,
+                    self.pointer_target_width,
+                    &foreign_interface,
+                    java_cfg,
+                    items,
+                )
             }
             LanguageConfig::CppConfig(ref cpp_cfg) => {
-                self.generate_code_for_foreign_interface(cx, &foreign_interface, cpp_cfg, items)
+                GeneratorData::generate_code_for_foreign_interface(
+                    cx,
+                    &mut self.conv_map,
+                    self.pointer_target_width,
+                    &foreign_interface,
+                    cpp_cfg,
+                    items,
+                )
             }
         }
     }
 
     fn generate_code_for_enum<'a>(
-        &mut self,
         cx: &'a mut ExtCtxt,
+        conv_map: &mut TypesConvMap,
+        pointer_target_width: usize,
         foreign_enum: &ForeignEnumInfo,
         lang_gen: &LanguageGenerator,
         mut items: Vec<P<ast::Item>>,
@@ -424,11 +446,11 @@ impl GeneratorData {
         let mut gen_items = unwrap_presult!(
             lang_gen.generate_enum(
                 cx.parse_sess(),
-                &mut self.conv_map,
-                self.pointer_target_width,
+                conv_map,
+                pointer_target_width,
                 foreign_enum
             ),
-            self.conv_map
+            conv_map
         );
         items.append(&mut gen_items);
         MacEager::items(SmallVector::many(items))
@@ -447,26 +469,44 @@ impl GeneratorData {
         let foreign_enum = parse_foreign_enum(cx, tokens).expect("Can not parse foreign_enum");
 
         #[allow(deprecated)]
-        match self.config.clone() {
+        match self.config {
             LanguageConfig::Java {
                 ref output_dir,
                 ref package_name,
             } => {
                 let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
-                self.generate_code_for_enum(cx, &foreign_enum, &java_cfg, items)
+                GeneratorData::generate_code_for_enum(
+                    cx,
+                    &mut self.conv_map,
+                    self.pointer_target_width,
+                    &foreign_enum,
+                    &java_cfg,
+                    items,
+                )
             }
-            LanguageConfig::JavaConfig(ref java_cfg) => {
-                self.generate_code_for_enum(cx, &foreign_enum, java_cfg, items)
-            }
-            LanguageConfig::CppConfig(ref cpp_cfg) => {
-                self.generate_code_for_enum(cx, &foreign_enum, cpp_cfg, items)
-            }
+            LanguageConfig::JavaConfig(ref java_cfg) => GeneratorData::generate_code_for_enum(
+                cx,
+                &mut self.conv_map,
+                self.pointer_target_width,
+                &foreign_enum,
+                java_cfg,
+                items,
+            ),
+            LanguageConfig::CppConfig(ref cpp_cfg) => GeneratorData::generate_code_for_enum(
+                cx,
+                &mut self.conv_map,
+                self.pointer_target_width,
+                &foreign_enum,
+                cpp_cfg,
+                items,
+            ),
         }
     }
 
     fn generate_code_for_class<'a>(
-        &mut self,
         cx: &'a mut ExtCtxt,
+        conv_map: &mut TypesConvMap,
+        pointer_target_width: usize,
         foreign_class: &ForeignerClassInfo,
         lang_gen: &LanguageGenerator,
         mut items: Vec<P<ast::Item>>,
@@ -474,11 +514,11 @@ impl GeneratorData {
         let mut gen_items = unwrap_presult!(
             lang_gen.generate(
                 cx.parse_sess(),
-                &mut self.conv_map,
-                self.pointer_target_width,
+                conv_map,
+                pointer_target_width,
                 foreign_class,
             ),
-            self.conv_map
+            conv_map
         );
         items.append(&mut gen_items);
         MacEager::items(SmallVector::many(items))
@@ -503,20 +543,37 @@ impl GeneratorData {
         };
         self.conv_map.register_foreigner_class(&foreigner_class);
         #[allow(deprecated)]
-        match self.config.clone() {
+        match self.config {
             LanguageConfig::Java {
                 ref output_dir,
                 ref package_name,
             } => {
                 let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
-                self.generate_code_for_class(cx, &foreigner_class, &java_cfg, items)
+                GeneratorData::generate_code_for_class(
+                    cx,
+                    &mut self.conv_map,
+                    self.pointer_target_width,
+                    &foreigner_class,
+                    &java_cfg,
+                    items,
+                )
             }
-            LanguageConfig::JavaConfig(ref java_cfg) => {
-                self.generate_code_for_class(cx, &foreigner_class, java_cfg, items)
-            }
-            LanguageConfig::CppConfig(ref cpp_cfg) => {
-                self.generate_code_for_class(cx, &foreigner_class, cpp_cfg, items)
-            }
+            LanguageConfig::JavaConfig(ref java_cfg) => GeneratorData::generate_code_for_class(
+                cx,
+                &mut self.conv_map,
+                self.pointer_target_width,
+                &foreigner_class,
+                java_cfg,
+                items,
+            ),
+            LanguageConfig::CppConfig(ref cpp_cfg) => GeneratorData::generate_code_for_class(
+                cx,
+                &mut self.conv_map,
+                self.pointer_target_width,
+                &foreigner_class,
+                cpp_cfg,
+                items,
+            ),
         }
     }
 
@@ -543,7 +600,7 @@ impl GeneratorData {
         }
 
         #[allow(deprecated)]
-        match self.config.clone() {
+        match self.config {
             LanguageConfig::Java {
                 ref output_dir,
                 ref package_name,
@@ -570,7 +627,6 @@ impl GeneratorData {
 }
 
 /// Configuration for Java
-#[derive(Clone)]
 pub struct JavaConfig {
     output_dir: PathBuf,
     package_name: String,
@@ -600,7 +656,6 @@ impl JavaConfig {
 }
 
 /// To which `C++` type map `std::option::Option`
-#[derive(Clone)]
 pub enum CppOptional {
     /// `std::optional` from C++17 standard
     Std17,
@@ -609,7 +664,6 @@ pub enum CppOptional {
 }
 
 /// To which `C++` type map `std::result::Result`
-#[derive(Clone)]
 pub enum CppVariant {
     /// `std::variant` from C++17 standard
     Std17,
@@ -617,7 +671,6 @@ pub enum CppVariant {
     Boost,
 }
 
-#[derive(Clone)]
 pub struct CppConfig {
     output_dir: PathBuf,
     namespace_name: String,
