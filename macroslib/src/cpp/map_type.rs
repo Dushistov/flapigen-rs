@@ -4,8 +4,8 @@ use syntex_pos::{Span, DUMMY_SP};
 use syntex_syntax::symbol::Symbol;
 use petgraph::Direction;
 
-use my_ast::{if_option_return_some_type, if_result_return_ok_err_types, normalized_ty_string,
-             parse_ty, RustType};
+use my_ast::{if_option_return_some_type, if_result_return_ok_err_types, if_vec_return_elem_type,
+             normalized_ty_string, parse_ty, RustType};
 use errors::fatal_error;
 use types_conv_map::{ForeignTypeInfo, FROM_VAR_TEMPLATE};
 use {CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypesConvMap};
@@ -236,6 +236,34 @@ fn special_type<'a>(
         }
     }
 
+    if direction == Direction::Outgoing {
+        if let Some(_) = if_vec_return_elem_type(arg_ty) {
+            let mut ftype_info = map_ordinal_result_type(sess, conv_map, arg_ty)?;
+            let typename = Symbol::intern(match &*ftype_info
+                .base
+                .correspoding_rust_type
+                .normalized_name
+                .as_str()
+            {
+                "CRustVecU8" => "RustVecU8",
+                "CRustVecU32" => "RustVecU32",
+                "CRustVecF32" => "RustVecF32",
+                "CRustVecF64" => "RustVecF64",
+                _ => unimplemented!(),
+            });
+            ftype_info.cpp_converter = Some(CppConverter {
+                typename,
+                output_converter: format!(
+                    "{cpp_type}{{{var}}}",
+                    cpp_type = typename,
+                    var = FROM_VAR_TEMPLATE
+                ),
+                input_converter: "#error".to_string(),
+            });
+            return Ok(Some(ftype_info));
+        }
+    }
+
     trace!("Oridinary type {:?}", arg_ty);
     Ok(None)
 }
@@ -317,22 +345,30 @@ pub(in cpp) fn map_type<'a>(
             {
                 converter
             } else {
-                conv_map
-                    .map_through_conversation_to_foreign(arg_ty, Direction::Outgoing, arg_ty.span)
-                    .ok_or_else(|| {
-                        fatal_error(
-                            sess,
-                            arg_ty.span,
-                            &format!(
-                                "Do not know conversation from \
-                                 such rust type '{}' to foreign",
-                                normalized_ty_string(arg_ty)
-                            ),
-                        )
-                    })?
-                    .into()
+                map_ordinal_result_type(sess, conv_map, arg_ty)?
             }
         }
     };
     Ok(ret)
+}
+
+fn map_ordinal_result_type<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    arg_ty: &ast::Ty,
+) -> PResult<'a, CppForeignTypeInfo> {
+    Ok(conv_map
+        .map_through_conversation_to_foreign(arg_ty, Direction::Outgoing, arg_ty.span)
+        .ok_or_else(|| {
+            fatal_error(
+                sess,
+                arg_ty.span,
+                &format!(
+                    "Do not know conversation from \
+                     such rust type '{}' to foreign",
+                    normalized_ty_string(arg_ty)
+                ),
+            )
+        })?
+        .into())
 }

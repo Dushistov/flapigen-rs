@@ -234,7 +234,7 @@ TEST(TestWorkWithVec, smokeTest)
 {
     const char tag[] = "Test data";
     const size_t tag_len = std::strlen(tag);
-    TestWorkWithVec t(tag);
+    TestWorkWithVec t{ tag };
     for (uint32_t n : { 0, 1, 2, 3, 5, 10, 100, 1000 }) {
         RustVecU8 vec{ t.get_bytes(n) };
         EXPECT_EQ(tag_len * n, vec.size());

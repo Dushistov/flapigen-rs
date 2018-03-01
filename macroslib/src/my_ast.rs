@@ -347,6 +347,22 @@ fn generic_params_new(names: &[&str]) -> ast::Generics {
     }
 }
 
+pub(crate) fn if_vec_return_elem_type(ty: &ast::Ty) -> Option<ast::Ty> {
+    let sess = ParseSess::new();
+    let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Vec<T>")));
+    let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("T")));
+
+    GenericTypeConv {
+        from_ty,
+        to_ty,
+        code_template: Symbol::intern(""),
+        dependency: Rc::new(RefCell::new(None)),
+        generic_params: generic_params_new(&["T"]),
+        to_foreigner_hint: None,
+    }.is_conv_possible(&ty.clone().into(), None, |_| None)
+        .map(|x| x.ty)
+}
+
 pub(crate) fn if_result_return_ok_err_types(ty: &ast::Ty) -> Option<(ast::Ty, ast::Ty)> {
     let ok_ty = {
         let sess = ParseSess::new();
@@ -782,6 +798,18 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
                 .map(|(x, y)| (normalized_ty_string(&x), normalized_ty_string(&y)))
                 .unwrap(),
             ("bool".to_string(), "String".to_string())
+        );
+    }
+
+    #[test]
+    fn test_work_with_vec() {
+        logger_init();
+        let sess = ParseSess::new();
+        assert_eq!(
+            if_vec_return_elem_type(&str_to_ty(&sess, "Vec<bool>"))
+                .map(|x| normalized_ty_string(&x))
+                .unwrap(),
+            ("bool".to_string())
         );
     }
 
