@@ -29,6 +29,12 @@ struct RustStrView {
         return boost::string_view{ data, len };
     }
 #endif
+#if QT_VERSION >= 0x050000 && defined(QSTRING_H)
+    QString to_qstring() const
+    {
+        return QString::fromUtf8(data, len);
+    }
+#endif
 };
 
 struct CRustString {
@@ -96,6 +102,12 @@ public:
     boost::string_view to_boost_string_view() const
     {
         return boost::string_view{ data, len };
+    }
+#endif
+#if QT_VERSION >= 0x050000 && defined(QSTRING_H)
+    QString to_qstring() const
+    {
+        return QString::fromUtf8(data, len);
     }
 #endif
 private:
