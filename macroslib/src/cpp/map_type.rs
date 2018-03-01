@@ -462,5 +462,5 @@ pub extern "C" fn {func_name}(v: CRustForeignVec) {{
         ),
         input_converter: "#error".to_string(),
     });
-    return Ok(Some(ftype_info));
+    Ok(Some(ftype_info))
 }
