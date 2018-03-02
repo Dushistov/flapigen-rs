@@ -140,7 +140,12 @@ Foo foo = new Foo();
 foo.f1(v1);
 ```
 
-Also you can use `trait` to describe callback from Rust to Java:
+or in C++
+```C++
+MyEnum v1 = ITEM1;
+```
+
+Also you can use `trait` to describe callback from Rust to Java/C++:
 
 ```rust
 trait SomeTrait {
@@ -169,4 +174,13 @@ class Boo implements SomeObserver {
 Foo foo = new Foo();
 Boo boo = new Boo();
 foo.f1(boo);//we register callback here
+```
+
+or in C++:
+
+```C++
+class Boo : public SomeObserver {
+public:
+    void onStateChanged(int, bool) override {}
+};
 ```
