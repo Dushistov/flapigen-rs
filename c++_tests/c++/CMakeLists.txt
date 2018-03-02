@@ -117,7 +117,14 @@ function (required_libs_by_rust_library CACHEVAR)
 endfunction ()
 
 get_filename_component(RUST_BUILD_CWD ${CMAKE_CURRENT_SOURCE_DIR}  DIRECTORY)
-
+execute_process(
+  COMMAND ${CARGO_CMD} check ${RUST_TARGET}
+  WORKING_DIRECTORY ${RUST_BUILD_CWD}
+  RESULT_VARIABLE retcode
+  )
+if(NOT "${retcode}" STREQUAL "0")
+  message(FATAL_ERROR "${CARGO_CMD} check ${RUST_TARGET} failed")
+endif()
 find_target_directory(TARGET_PATH)
 required_libs_by_rust_library(RUST_LINK_LIBRARIES)
 
