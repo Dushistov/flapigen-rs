@@ -669,7 +669,7 @@ foreigner_class!(class Foo {
 #[test]
 fn test_foreign_vec_return() {
     parse_code(
-        "test_generic",
+        "test_foreign_vec_return",
         r#"
 foreigner_class!(class Foo {
     self_type Foo;
@@ -687,6 +687,31 @@ foreigner_class!(class Boo {
 });
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
+    );
+}
+
+#[test]
+fn test_string_as_arg() {
+    let gen_code = parse_code(
+        "test_string_as_arg",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -> Foo;
+    method Foo::f(&self, _: i32, _: i32, _: String) -> i32;
+});
+"#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
+    );
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("Rust(c/c++): {}", cpp_code_pair.rust_code);
+    assert!(
+        cpp_code_pair
+            .rust_code
+            .contains("a_2: String = a_2.swig_into();")
     );
 }
 

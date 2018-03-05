@@ -582,3 +582,9 @@ impl SwigFrom<Option<u32>> for CRustOptionU32 {
         }
     }
 }
+
+impl<'a> SwigInto<String> for &'a str {
+    fn swig_into(self) -> String {
+        self.into()
+    }
+}
