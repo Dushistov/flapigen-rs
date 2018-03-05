@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include "rust_str.h"
+#include "rust_vec.h"
 
 struct CResultObjectString {
     uint8_t is_ok;
