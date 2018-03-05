@@ -281,6 +281,10 @@ impl Generator {
                     id_of_code: "rust_result.h".into(),
                     code: include_str!("cpp/rust_result.h").into(),
                 });
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_option.h".into(),
+                    code: include_str!("cpp/rust_option.h").into(),
+                });
             }
         }
         Generator {
@@ -626,7 +630,7 @@ impl GeneratorData {
     }
 }
 
-/// Configuration for Java
+/// Configuration for Java binding generation
 pub struct JavaConfig {
     output_dir: PathBuf,
     package_name: String,
@@ -671,6 +675,7 @@ pub enum CppVariant {
     Boost,
 }
 
+/// Configuration for C++ binding generation
 pub struct CppConfig {
     output_dir: PathBuf,
     namespace_name: String,

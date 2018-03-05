@@ -648,6 +648,8 @@ foreigner_class!(class Foo {
    self_type Foo;
    constructor Foo::default() -> Foo;
    method Foo::f1(&self) -> Option<Boo>;
+   method Foo::f2(&self) -> Option<f64>;
+   method Foo::f2(&self) -> Option<u32>;
 });
 "#,
         &[ForeignLang::Cpp],

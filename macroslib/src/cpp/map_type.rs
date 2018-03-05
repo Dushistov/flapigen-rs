@@ -115,44 +115,10 @@ fn special_type<'a>(
                 ok_ty,
                 err_ty
             );
-            return handle_result_as_result_type(sess, conv_map, cpp_cfg, arg_ty, &ok_ty, &err_ty);
+            return handle_result_type_in_result(sess, conv_map, cpp_cfg, arg_ty, &ok_ty, &err_ty);
         }
         if let Some(ty) = if_option_return_some_type(arg_ty) {
-            if let Some(foreign_class) =
-                conv_map.find_foreigner_class_with_such_self_type(&ty, false)
-            {
-                let foreign_info =
-                    foreign_class_foreign_name(sess, conv_map, foreign_class, ty.span, false)?;
-                let (typename, output_converter) = match cpp_cfg.cpp_optional {
-                    CppOptional::Std17 => (
-                        Symbol::intern(&format!("std::optional<{}>", foreign_class.name)),
-                        format!(
-                            "{var} != nullptr ? {Type}({var}) : std::optional<{Type}>()",
-                            Type = foreign_class.name,
-                            var = FROM_VAR_TEMPLATE,
-                        ),
-                    ),
-                    CppOptional::Boost => (
-                        Symbol::intern(&format!("boost::optional<{}>", foreign_class.name)),
-                        format!(
-                            "{var} != nullptr ? {Type}({var}) : boost::optional<{Type}>()",
-                            Type = foreign_class.name,
-                            var = FROM_VAR_TEMPLATE,
-                        ),
-                    ),
-                };
-                return Ok(Some(CppForeignTypeInfo {
-                    base: foreign_info,
-                    c_converter: String::new(),
-                    cpp_converter: Some(CppConverter {
-                        typename,
-                        output_converter,
-                        input_converter: String::new(),
-                    }),
-                }));
-            } else {
-                unimplemented!();
-            }
+            return handle_option_type_in_result(sess, conv_map, cpp_cfg, arg_ty, &ty);
         }
     }
 
@@ -386,7 +352,7 @@ pub extern "C" fn {func_name}(v: CRustForeignVec) {{
     Ok(Some(ftype_info))
 }
 
-fn handle_result_as_result_type<'a>(
+fn handle_result_type_in_result<'a>(
     sess: &'a ParseSess,
     conv_map: &mut TypesConvMap,
     cpp_cfg: &CppConfig,
@@ -508,4 +474,71 @@ fn handle_result_as_result_type<'a>(
             _ => unimplemented!(),
         }
     }
+}
+
+fn handle_option_type_in_result<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    cpp_cfg: &CppConfig,
+    arg_ty: &ast::Ty,
+    opt_ty: &ast::Ty,
+) -> PResult<'a, Option<CppForeignTypeInfo>> {
+    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(opt_ty, false) {
+        let foreign_info =
+            foreign_class_foreign_name(sess, conv_map, foreign_class, opt_ty.span, false)?;
+        let (typename, output_converter) = match cpp_cfg.cpp_optional {
+            CppOptional::Std17 => (
+                Symbol::intern(&format!("std::optional<{}>", foreign_class.name)),
+                format!(
+                    "{var} != nullptr ? {Type}({var}) : std::optional<{Type}>()",
+                    Type = foreign_class.name,
+                    var = FROM_VAR_TEMPLATE,
+                ),
+            ),
+            CppOptional::Boost => (
+                Symbol::intern(&format!("boost::optional<{}>", foreign_class.name)),
+                format!(
+                    "{var} != nullptr ? {Type}({var}) : boost::optional<{Type}>()",
+                    Type = foreign_class.name,
+                    var = FROM_VAR_TEMPLATE,
+                ),
+            ),
+        };
+        return Ok(Some(CppForeignTypeInfo {
+            base: foreign_info,
+            c_converter: String::new(),
+            cpp_converter: Some(CppConverter {
+                typename,
+                output_converter,
+                input_converter: "#error".to_string(),
+            }),
+        }));
+    }
+    let mut cpp_info_opt = map_ordinal_result_type(sess, conv_map, arg_ty)?;
+    let cpp_info_ty = map_ordinal_result_type(sess, conv_map, opt_ty)?;
+    let f_opt_ty = cpp_info_ty.base.name;
+    let (typename, output_converter) = match cpp_cfg.cpp_optional {
+        CppOptional::Std17 => (
+            Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
+            format!(
+                "{var}.is_some ? {var}.val : std::optional<{Type}>()",
+                Type = f_opt_ty,
+                var = FROM_VAR_TEMPLATE,
+            ),
+        ),
+        CppOptional::Boost => (
+            Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
+            format!(
+                "{var}.is_some ? {var}.val : boost::optional<{Type}>()",
+                Type = f_opt_ty,
+                var = FROM_VAR_TEMPLATE,
+            ),
+        ),
+    };
+    cpp_info_opt.cpp_converter = Some(CppConverter {
+        typename,
+        output_converter,
+        input_converter: "#error".to_string(),
+    });
+    Ok(Some(cpp_info_opt))
 }
