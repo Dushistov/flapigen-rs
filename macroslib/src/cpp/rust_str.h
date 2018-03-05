@@ -10,7 +10,7 @@ extern "C" {
 
 struct RustStrView {
     const char *const data;
-    uint32_t len;
+    uintptr_t len;
 #ifdef __cplusplus
     std::string to_std_string() const
     {
@@ -39,8 +39,8 @@ struct RustStrView {
 
 struct CRustString {
     const char *data;
-    uint32_t len;
-    uint32_t capacity;
+    uintptr_t len;
+    uintptr_t capacity;
 };
 
 void crust_string_free(struct CRustString str);

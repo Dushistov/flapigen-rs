@@ -47,6 +47,10 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CResultCRustForeignVecString"]
     #![swig_foreigner_type = "struct CRustSliceU32"]
     #![swig_rust_type = "CRustSliceU32"]
+    #![swig_foreigner_type = "struct CRustOptionF64"]
+    #![swig_rust_type = "CRustOptionF64"]
+    #![swig_foreigner_type = "struct CRustOptionU32"]
+    #![swig_rust_type = "CRustOptionU32"]
 }
 
 #[allow(unused_macros)]
@@ -123,15 +127,14 @@ impl<'a> SwigDeref for &'a ::std::ffi::CStr {
 #[repr(C)]
 pub struct RustStrView {
     data: *const ::std::os::raw::c_char,
-    len: u32,
+    len: usize,
 }
 
 impl<'a> SwigFrom<&'a str> for RustStrView {
     fn swig_from(s: &'a str) -> RustStrView {
-        assert!((s.len() as u64) <= (::std::u32::MAX as u64));
         RustStrView {
             data: s.as_ptr() as *const ::std::os::raw::c_char,
-            len: s.len() as u32,
+            len: s.len(),
         }
     }
 }
@@ -396,15 +399,14 @@ impl<'a> SwigInto<&'a Path> for &'a str {
 #[derive(Copy, Clone)]
 pub struct CRustString {
     data: *const ::std::os::raw::c_char,
-    len: u32,
-    capacity: u32,
+    len: usize,
+    capacity: usize,
 }
 
 #[allow(private_no_mangle_fns)]
 #[no_mangle]
 pub extern "C" fn crust_string_free(x: CRustString) {
-    let s =
-        unsafe { String::from_raw_parts(x.data as *mut u8, x.len as usize, x.capacity as usize) };
+    let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
     drop(s);
 }
 
@@ -412,10 +414,8 @@ pub extern "C" fn crust_string_free(x: CRustString) {
 impl CRustString {
     pub fn from_string(s: String) -> CRustString {
         let data = s.as_ptr() as *const ::std::os::raw::c_char;
-        assert!((s.len() as u64) <= (::std::u32::MAX as u64));
-        let len = s.len() as u32;
-        assert!((s.capacity() as u64) <= (::std::u32::MAX as u64));
-        let capacity = s.capacity() as u32;
+        let len = s.len();
+        let capacity = s.capacity();
         ::std::mem::forget(s);
         CRustString {
             data,
@@ -541,5 +541,46 @@ impl<T: SwigForeignClass> SwigFrom<Result<Vec<T>, String>> for CResultCRustForei
                 },
             },
         }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustOptionF64 {
+    val: f64,
+    is_some: u8,
+}
+
+impl SwigFrom<Option<f64>> for CRustOptionF64 {
+    fn swig_from(x: Option<f64>) -> Self {
+        match x {
+            Some(x) => CRustOptionF64 { val: x, is_some: 1 },
+            None => CRustOptionF64 {
+                val: 0.,
+                is_some: 0,
+            },
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustOptionU32 {
+    val: u32,
+    is_some: u8,
+}
+
+impl SwigFrom<Option<u32>> for CRustOptionU32 {
+    fn swig_from(x: Option<u32>) -> Self {
+        match x {
+            Some(x) => CRustOptionU32 { val: x, is_some: 1 },
+            None => CRustOptionU32 { val: 0, is_some: 0 },
+        }
+    }
+}
+
+impl<'a> SwigInto<String> for &'a str {
+    fn swig_into(self) -> String {
+        self.into()
     }
 }

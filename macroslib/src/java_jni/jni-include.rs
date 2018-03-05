@@ -1048,3 +1048,9 @@ impl SwigFrom<usize> for jlong {
         <jlong>::swig_from(x, env)
     }
 }
+
+impl<'a> SwigInto<String> for &'a str {
+    fn swig_into(self, _: *mut JNIEnv) -> String {
+        self.into()
+    }
+}

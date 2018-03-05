@@ -26,6 +26,7 @@
 #include "rust_interface/rust_str.h"
 #include "rust_interface/rust_vec.h"
 #include "rust_interface/rust_result.h"
+#include "rust_interface/rust_option.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
 #include "rust_interface/c_SomeObserver.h"
@@ -336,6 +337,20 @@ TEST(TestOptional, smokeTest)
     {
         auto foo = x.f1(false);
         EXPECT_FALSE(!!foo);
+    }
+    {
+        auto val = x.f2(true);
+        ASSERT_TRUE(!!val);
+        EXPECT_NEAR(static_cast<double>(M_E), *val, std::numeric_limits<double>::epsilon());
+        auto val2 = x.f2(false);
+        ASSERT_FALSE(!!val2);
+    }
+    {
+        auto val = x.f3(true);
+        ASSERT_TRUE(!!val);
+        EXPECT_EQ(17, *val);
+        auto val2 = x.f3(false);
+        ASSERT_FALSE(!!val2);
     }
 }
 
