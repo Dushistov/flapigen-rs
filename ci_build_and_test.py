@@ -52,7 +52,7 @@ def has_option(option):
 def run_jni_tests(use_shell, fast_run):
     print("run_jni_tests begin: cwd %s" % os.getcwd())
     sys.stdout.flush()
-    subprocess.check_call(["cargo", "build", "--package", "rust_swig_test_jni"], shell=False)
+    subprocess.check_call(["cargo", "build", "-v", "--package", "rust_swig_test_jni"], shell=False)
     java_dir = str(os.path.join(os.getcwd(), "jni_tests", "java", "com", "example"))
     purge(java_dir, ".*\.class$")
     java_native_dir = str(os.path.join(os.getcwd(), "jni_tests", "java", "com", "example", "rust"))
@@ -65,7 +65,7 @@ def run_jni_tests(use_shell, fast_run):
     run_jar(target_dir, jar_dir, use_shell)
     if fast_run:
         return
-    subprocess.check_call(["cargo", "build", "--release", "--package", "rust_swig_test_jni"], shell=False)
+    subprocess.check_call(["cargo", "build", "-v", "--release", "--package", "rust_swig_test_jni"], shell=False)
     target_dir = os.path.join(find_dir("target", "jni_tests"), "release")
     run_jar(target_dir, jar_dir, use_shell)
 
@@ -116,10 +116,10 @@ def main():
     sys.stdout.flush()
 
     print("start tests\n macrolib tests")
-    subprocess.check_call(["cargo", "test", "--package", "rust_swig"], shell=False)
+    subprocess.check_call(["cargo", "test", "-v", "--package", "rust_swig"], shell=False)
     if not fast_run:
         print(" macrolib tests release mode")
-        subprocess.check_call(["cargo", "test", "--release", "--package", "rust_swig"], shell=False)
+        subprocess.check_call(["cargo", "test", "-v", "--release", "--package", "rust_swig"], shell=False)
     if has_jdk:
         run_jni_tests(use_shell, fast_run)
         if java_only:
@@ -128,9 +128,9 @@ def main():
     if not skip_cpp_tests:
         print("Check cmake version")
         subprocess.check_call(["cmake", "--version"], shell = False)
-        subprocess.check_call(["cargo", "test", "--package", "rust_swig_test_cpp"], shell = False)
+        subprocess.check_call(["cargo", "test", "-v", "--package", "rust_swig_test_cpp"], shell = False)
         if not fast_run:
-            subprocess.check_call(["cargo", "test", "--release", "--package", "rust_swig_test_cpp"], shell = False)
+            subprocess.check_call(["cargo", "test", "-v", "--release", "--package", "rust_swig_test_cpp"], shell = False)
         build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build"), [])
         purge(os.path.join("c++_tests", "c++", "rust_interface"), ".*\.h.*$")        
         build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
