@@ -348,7 +348,7 @@ TEST(TestOptional, smokeTest)
     {
         auto val = x.f3(true);
         ASSERT_TRUE(!!val);
-        EXPECT_EQ(17, *val);
+        EXPECT_EQ(17u, *val);
         auto val2 = x.f3(false);
         ASSERT_FALSE(!!val2);
     }
