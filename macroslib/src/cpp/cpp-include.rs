@@ -127,15 +127,14 @@ impl<'a> SwigDeref for &'a ::std::ffi::CStr {
 #[repr(C)]
 pub struct RustStrView {
     data: *const ::std::os::raw::c_char,
-    len: u32,
+    len: usize,
 }
 
 impl<'a> SwigFrom<&'a str> for RustStrView {
     fn swig_from(s: &'a str) -> RustStrView {
-        assert!((s.len() as u64) <= (::std::u32::MAX as u64));
         RustStrView {
             data: s.as_ptr() as *const ::std::os::raw::c_char,
-            len: s.len() as u32,
+            len: s.len(),
         }
     }
 }
@@ -400,15 +399,14 @@ impl<'a> SwigInto<&'a Path> for &'a str {
 #[derive(Copy, Clone)]
 pub struct CRustString {
     data: *const ::std::os::raw::c_char,
-    len: u32,
-    capacity: u32,
+    len: usize,
+    capacity: usize,
 }
 
 #[allow(private_no_mangle_fns)]
 #[no_mangle]
 pub extern "C" fn crust_string_free(x: CRustString) {
-    let s =
-        unsafe { String::from_raw_parts(x.data as *mut u8, x.len as usize, x.capacity as usize) };
+    let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
     drop(s);
 }
 
@@ -416,10 +414,8 @@ pub extern "C" fn crust_string_free(x: CRustString) {
 impl CRustString {
     pub fn from_string(s: String) -> CRustString {
         let data = s.as_ptr() as *const ::std::os::raw::c_char;
-        assert!((s.len() as u64) <= (::std::u32::MAX as u64));
-        let len = s.len() as u32;
-        assert!((s.capacity() as u64) <= (::std::u32::MAX as u64));
-        let capacity = s.capacity() as u32;
+        let len = s.len();
+        let capacity = s.capacity();
         ::std::mem::forget(s);
         CRustString {
             data,
