@@ -80,7 +80,7 @@ public:
         this->len = o.len;
         this->capacity = o.capacity;
     }
-    RustVec() = delete;
+    RustVec() noexcept { reset(*this); }
     RustVec(const RustVec &) = delete;
     RustVec &operator=(const RustVec &) = delete;
     RustVec(RustVec &&o) noexcept
@@ -134,6 +134,11 @@ class RustForeignVec final : private CContainerType {
 public:
     using CForeignType = typename ForeignClassRef::CForeignType;
 
+    RustForeignVec() noexcept
+    {
+        this->step = 0;
+        reset(*this);
+    }
     explicit RustForeignVec(const CContainerType &o) noexcept
     {
         this->data = o.data;
