@@ -2,21 +2,20 @@ use syntex_syntax::symbol::Symbol;
 use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
 
 use std::io::Write;
-use std::fs::File;
 use std::fmt;
 use std::path::Path;
 
 use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo};
 use super::{fmt_write_err_map, CppForeignMethodSignature};
 use types_conv_map::FROM_VAR_TEMPLATE;
+use file_cache::FileWriteCache;
 
 pub(in cpp) fn generate_code_for_enum(
     output_dir: &Path,
     enum_info: &ForeignEnumInfo,
 ) -> Result<(), String> {
     let c_path = output_dir.join(format!("c_{}.h", enum_info.name));
-    let mut file =
-        File::create(&c_path).map_err(|err| format!("Couldn't create {:?}: {}", c_path, err))?;
+    let mut file = FileWriteCache::new(&c_path);
     let enum_doc_comments = doc_comments_to_c_comments(&enum_info.doc_comments, true);
 
     write!(
@@ -47,7 +46,7 @@ enum {enum_name} {{
     }
 
     write!(file, "}};\n").map_err(&map_write_err)?;
-
+    file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
 
@@ -80,11 +79,9 @@ pub(in cpp) fn generate_for_interface(
 
     let c_interface_struct_header = format!("c_{}.h", interface.name);
     let c_path = output_dir.join(&c_interface_struct_header);
-    let mut file_c =
-        File::create(&c_path).map_err(|err| format!("Couldn't create {:?}: {}", c_path, err))?;
+    let mut file_c = FileWriteCache::new(&c_path);
     let cpp_path = output_dir.join(format!("{}.hpp", interface.name));
-    let mut file_cpp =
-        File::create(&cpp_path).map_err(|err| format!("Couldn't create {:?}: {}", cpp_path, err))?;
+    let mut file_cpp = FileWriteCache::new(&cpp_path);
     let interface_comments = doc_comments_to_c_comments(&interface.doc_comments, true);
 
     write!(
@@ -205,6 +202,9 @@ private:
         cpp_fill_c_interface_struct = cpp_fill_c_interface_struct,
         namespace_name = namespace_name,
     ).map_err(&map_write_err)?;
+
+    file_c.update_file_if_necessary().map_err(&map_write_err)?;
+    file_cpp.update_file_if_necessary().map_err(&map_write_err)?;
 
     Ok(())
 }

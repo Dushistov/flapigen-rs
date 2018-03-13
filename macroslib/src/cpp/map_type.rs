@@ -1,6 +1,4 @@
-use std::fs::File;
 use std::io::Write;
-
 use syntex_syntax::parse::{PResult, ParseSess};
 use syntex_syntax::ast;
 use syntex_pos::{Span, DUMMY_SP};
@@ -14,6 +12,7 @@ use types_conv_map::{ForeignTypeInfo, FROM_VAR_TEMPLATE};
 use {CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypesConvMap};
 use cpp::{CppConverter, CppForeignTypeInfo};
 use cpp::cpp_code::c_class_type;
+use file_cache::FileWriteCache;
 
 fn special_type<'a>(
     sess: &'a ParseSess,
@@ -258,13 +257,7 @@ fn map_result_type_vec<'a>(
                 "map_result_type_vec: we generate code for {:?}",
                 fc_vec_path
             );
-            let mut c_vec_f = File::create(&fc_vec_path).map_err(|err| {
-                fatal_error(
-                    sess,
-                    arg_ty.span,
-                    &format!("Couldn't create {:?}: {}", fc_vec_path, err),
-                )
-            })?;
+            let mut c_vec_f = FileWriteCache::new(&fc_vec_path);
             let free_mem_func = format!("{}_free", typename);
             write!(
                 c_vec_f,
@@ -294,6 +287,13 @@ using {vec_type} = RustForeignVec<{class}Ref, CRustForeignVec, {free_mem_func}>;
                     sess,
                     arg_ty.span,
                     &format!("write to {:?} failed: {}", fc_vec_path, err),
+                )
+            })?;
+            c_vec_f.update_file_if_necessary().map_err(|err| {
+                fatal_error(
+                    sess,
+                    arg_ty.span,
+                    &format!("update of {:?} failed: {}", fc_vec_path, err),
                 )
             })?;
             cpp_cfg.to_generate.borrow_mut().append(&mut code_to_item(
