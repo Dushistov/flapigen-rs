@@ -31,34 +31,45 @@ endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/gtest/googletest/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/gtest/googletest)
-add_executable(c++-rust-swig-test
-  #not use add_subdirectory(gtest/googletest)
-  #because of strange compiler settings in google's cmake files
-  gtest/googletest/src/gtest-all.cc
-  main.cpp)
 
 set(CARGO_CMD "cargo")
 set(RUST_TARGET "")
 set(RUSTC "rustc")
-
-include(rust_cargo)
-
-get_filename_component(RUST_BUILD_CWD ${CMAKE_CURRENT_SOURCE_DIR}  DIRECTORY)
-execute_process(
-  COMMAND ${CARGO_CMD} check ${RUST_TARGET}
-  WORKING_DIRECTORY ${RUST_BUILD_CWD}
-  RESULT_VARIABLE retcode
-  )
-if(NOT "${retcode}" STREQUAL "0")
-  message(FATAL_ERROR "${CARGO_CMD} check ${RUST_TARGET} failed")
-endif()
-find_target_directory(TARGET_PATH)
-required_libs_by_rust_library(RUST_LINK_LIBRARIES)
-
 if (USE_BOOST)
   set(CARGO_ADDON_ARGS "--no-default-features" "--features" "boost")
   add_definitions(-DUSE_BOOST)
 endif(USE_BOOST)
+
+include(rust_cargo)
+
+get_filename_component(RUST_BUILD_CWD ${CMAKE_CURRENT_SOURCE_DIR}  DIRECTORY)
+#this should create "target" directory if it does not exists
+set(RUST_SWIG_SRCS "${RUST_BUILD_CWD}/src/lib.rs.in")
+configure_file(cmake/rust_swig_gen.cmake.in ${CMAKE_BINARY_DIR}/rust_swig_gen.cmake @ONLY)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/rust_swig_gen)
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/rust_swig_regen_headers.cmake)
+  file(WRITE ${CMAKE_BINARY_DIR}/rust_swig_regen_headers.cmake "")
+endif()
+execute_process(COMMAND ${CMAKE_COMMAND}
+    -DSRCDIR=${CMAKE_SOURCE_DIR}
+    -DBINDIR=${CMAKE_BINARY_DIR}
+    -P ${CMAKE_BINARY_DIR}/rust_swig_gen.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/rust_swig_gen
+    RESULT_VARIABLE retcode)
+if(NOT "${retcode}" STREQUAL "0")
+  message(FATAL_ERROR "run of rust_swig_gen.cmake failed")
+endif()
+
+add_custom_target(rust_swig_gen_headers ${CMAKE_COMMAND}
+    -DSRCDIR=${CMAKE_SOURCE_DIR}
+    -DBINDIR=${CMAKE_BINARY_DIR}
+    -P ${CMAKE_BINARY_DIR}/rust_swig_gen.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/rust_swig_gen)
+include(${CMAKE_BINARY_DIR}/rust_swig_regen_headers.cmake)
+
+find_target_directory(TARGET_PATH)
+required_libs_by_rust_library(RUST_LINK_LIBRARIES)
+
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
   set(CARGO_BUILD ${CARGO_CMD} "build" ${CARGO_ADDON_ARGS} "${RUST_TARGET}" "--release")
@@ -82,9 +93,15 @@ ExternalProject_Add_Step(
   ALWAYS 1
   WORKING_DIRECTORY "${RUST_BUILD_CWD}"
 )
+add_executable(c++-rust-swig-test
+  #not use add_subdirectory(gtest/googletest)
+  #because of strange compiler settings in google's cmake files
+  gtest/googletest/src/gtest-all.cc
+  ${RUST_SWIG_CPP_HEADERS}
+  main.cpp
+  )
 
-add_dependencies(c++-rust-swig-test rust_swig_test)
-
+add_dependencies(c++-rust-swig-test rust_swig_test rust_swig_gen_headers)
 if (WIN32)
   set(LIBRUST_NAME "rust_swig_test.lib")
 else ()
