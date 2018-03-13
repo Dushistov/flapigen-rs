@@ -4,6 +4,7 @@ use std::io;
 use std::io::{Read, Write};
 use std::fs::File;
 
+/// Implement write cache in memory, and update file only if necessary
 pub struct FileWriteCache {
     cnt: Vec<u8>,
     path: PathBuf,

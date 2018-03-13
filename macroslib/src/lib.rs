@@ -46,7 +46,7 @@ mod errors;
 mod parsing;
 mod my_ast;
 mod cpp;
-mod file_cache;
+pub mod file_cache;
 
 use std::path::PathBuf;
 use std::cell::RefCell;
