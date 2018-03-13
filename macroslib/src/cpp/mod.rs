@@ -2,7 +2,6 @@ mod cpp_code;
 mod map_type;
 
 use std::path::Path;
-use std::fs::File;
 use std::io::Write;
 use std::{fmt, mem};
 
@@ -27,6 +26,7 @@ use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
 use {CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
      LanguageGenerator, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap};
 use self::map_type::map_type;
+use file_cache::FileWriteCache;
 
 struct CppConverter {
     typename: Symbol,
@@ -232,8 +232,7 @@ impl LanguageGenerator for CppConfig {
     fn place_foreign_lang_helpers(&self, code: &[SourceCode]) -> Result<(), String> {
         for cu in code {
             let src_path = self.output_dir.join(&cu.id_of_code);
-            let mut src_file = File::create(&src_path)
-                .map_err(|err| format!("Can not create {}: {}", src_path.display(), err))?;
+            let mut src_file = FileWriteCache::new(&src_path);
             src_file
                 .write_all(
                     cu.code
@@ -241,6 +240,9 @@ impl LanguageGenerator for CppConfig {
                         .as_bytes(),
                 )
                 .map_err(|err| format!("write to {} failed: {}", src_path.display(), err))?;
+            src_file
+                .update_file_if_necessary()
+                .map_err(|err| format!("update of {} failed: {}", src_path.display(), err))?;
         }
         Ok(())
     }
@@ -313,21 +315,9 @@ fn generate_code_for_class<'a>(
     use std::fmt::Write;
 
     let c_path = output_dir.join(format!("c_{}.h", class.name));
-    let mut c_include_f = File::create(&c_path).map_err(|err| {
-        fatal_error(
-            sess,
-            class.span,
-            &format!("Couldn't create {:?}: {}", c_path, err),
-        )
-    })?;
+    let mut c_include_f = FileWriteCache::new(&c_path);
     let cpp_path = output_dir.join(format!("{}.hpp", class.name));
-    let mut cpp_include_f = File::create(&cpp_path).map_err(|err| {
-        fatal_error(
-            sess,
-            class.span,
-            &format!("Couldn't create {:?}: {}", cpp_path, err),
-        )
-    })?;
+    let mut cpp_include_f = FileWriteCache::new(&cpp_path);
 
     let map_write_err = |err| {
         fatal_error(
@@ -867,6 +857,13 @@ private:
         foreigner_code = class.foreigner_code,
         cpp_class_ref_code = cpp_class_ref_code,
     ).map_err(&map_write_err)?;
+
+    c_include_f
+        .update_file_if_necessary()
+        .map_err(&map_write_err)?;
+    cpp_include_f
+        .update_file_if_necessary()
+        .map_err(&map_write_err)?;
     Ok(gen_code)
 }
 

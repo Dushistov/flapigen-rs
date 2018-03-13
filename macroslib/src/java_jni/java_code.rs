@@ -1,12 +1,13 @@
 use std::path::Path;
-use std::fs::File;
 use std::io::Write;
-use std::{fmt, io};
+use std::fmt;
+
+use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
+use syntex_syntax::symbol::Symbol;
 
 use super::{fmt_write_err_map, method_name, JniForeignMethodSignature};
 use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodVariant};
-use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
-use syntex_syntax::symbol::Symbol;
+use file_cache::FileWriteCache;
 
 bitflags! {
     struct ArgsFormatFlags: u8 {
@@ -24,8 +25,7 @@ pub(in java_jni) fn generate_java_code_for_enum(
     enum_info: &ForeignEnumInfo,
 ) -> Result<(), String> {
     let path = output_dir.join(format!("{}.java", enum_info.name));
-    let mut file =
-        File::create(&path).map_err(|err| format!("Couldn't create {:?}: {}", path, err))?;
+    let mut file = FileWriteCache::new(&path);
     let enum_doc_comments = doc_comments_to_java_comments(&enum_info.doc_comments, true);
     write!(
         file,
@@ -68,6 +68,7 @@ public enum {enum_name} {{
         enum_name = enum_info.name
     ).map_err(&map_write_err)?;
 
+    file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
 
@@ -79,8 +80,7 @@ pub(in java_jni) fn generate_java_code_for_interface(
     use_null_annotation: Option<&str>,
 ) -> Result<(), String> {
     let path = output_dir.join(format!("{}.java", interface.name));
-    let mut file =
-        File::create(&path).map_err(|err| format!("Couldn't create {:?}: {}", path, err))?;
+    let mut file = FileWriteCache::new(&path);
     let imports = get_null_annotation_imports(use_null_annotation, methods_sign);
     let interface_comments = doc_comments_to_java_comments(&interface.doc_comments, true);
     write!(
@@ -120,7 +120,7 @@ public interface {interface_name} {{
 }}
 "#,
     ).map_err(&map_write_err)?;
-
+    file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
 
@@ -131,12 +131,8 @@ pub(in java_jni) fn generate_java_code(
     methods_sign: &[JniForeignMethodSignature],
     use_null_annotation: Option<&str>,
 ) -> Result<(), String> {
-    let mut file: Box<Write> = if output_dir.to_str() == Some("-") {
-        Box::new(io::stdout())
-    } else {
-        let path = output_dir.join(format!("{}.java", class.name));
-        Box::new(File::create(&path).map_err(|err| format!("Couldn't create {:?}: {}", path, err))?)
-    };
+    let path = output_dir.join(format!("{}.java", class.name));
+    let mut file = FileWriteCache::new(&path);
 
     let imports = get_null_annotation_imports(use_null_annotation, methods_sign);
 
@@ -344,6 +340,7 @@ public final class {class_name} {{
         .map_err(&map_write_err)?;
     write!(file, "}}").map_err(&map_write_err)?;
 
+    file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
 
