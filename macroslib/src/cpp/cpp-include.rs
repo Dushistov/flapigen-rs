@@ -563,6 +563,16 @@ impl SwigFrom<Option<f64>> for CRustOptionF64 {
     }
 }
 
+impl SwigInto<Option<f64>> for CRustOptionF64 {
+    fn swig_into(self) -> Option<f64> {
+        if self.is_some != 0 {
+            Some(self.val)
+        } else {
+            None
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[repr(C)]
 pub struct CRustOptionU32 {
