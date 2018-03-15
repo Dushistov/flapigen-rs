@@ -11,3 +11,13 @@ struct CRustOptionU32 {
     uint32_t val;
     uint8_t is_some;
 };
+
+#ifdef __cplusplus
+template<typename T> 
+inline T c_option_empty()
+{
+    T a;
+    a.is_some = 0;
+    return a;
+}
+#endif
