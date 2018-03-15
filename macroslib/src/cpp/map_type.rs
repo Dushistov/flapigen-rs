@@ -119,6 +119,10 @@ fn special_type<'a>(
         if let Some(ty) = if_option_return_some_type(arg_ty) {
             return handle_option_type_in_result(sess, conv_map, cpp_cfg, arg_ty, &ty);
         }
+    } else {
+        if let Some(ty) = if_option_return_some_type(arg_ty) {
+            return handle_option_type_in_input(sess, conv_map, cpp_cfg, arg_ty, &ty);
+        }
     }
 
     if direction == Direction::Outgoing {
@@ -474,6 +478,50 @@ fn handle_result_type_in_result<'a>(
             _ => unimplemented!(),
         }
     }
+}
+
+fn handle_option_type_in_input<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    cpp_cfg: &CppConfig,
+    arg_ty: &ast::Ty,
+    opt_ty: &ast::Ty,
+) -> PResult<'a, Option<CppForeignTypeInfo>> {
+    if let Some(_) = conv_map.find_foreigner_class_with_such_self_type(opt_ty, false) {
+        unimplemented!();
+    }
+    let mut cpp_info_opt = map_ordinal_result_type(sess, conv_map, arg_ty)?;
+    let cpp_info_ty = map_ordinal_result_type(sess, conv_map, opt_ty)?;
+    let f_opt_ty = cpp_info_ty.base.name;
+    let c_option_name = cpp_info_opt.base.name;
+    let mut c_option_name: &str = &c_option_name.as_str();
+    if c_option_name.starts_with("struct ") {
+        c_option_name = &c_option_name[7..];
+    }
+    let (typename, input_converter) = match cpp_cfg.cpp_optional {
+        CppOptional::Std17 => (
+            Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
+            format!(
+                "!!{var} ? {CType}{{*{var}, 1}} : c_option_empty<{CType}>()",
+                CType = c_option_name,
+                var = FROM_VAR_TEMPLATE,
+            ),
+        ),
+        CppOptional::Boost => (
+            Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
+            format!(
+                "!!{var} ? {CType}{{*{var}, 1}} : c_option_empty<{CType}>()",
+                CType = c_option_name,
+                var = FROM_VAR_TEMPLATE,
+            ),
+        ),
+    };
+    cpp_info_opt.cpp_converter = Some(CppConverter {
+        typename,
+        output_converter: "#error".to_string(),
+        input_converter,
+    });
+    Ok(Some(cpp_info_opt))
 }
 
 fn handle_option_type_in_result<'a>(

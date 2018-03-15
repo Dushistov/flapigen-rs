@@ -667,6 +667,31 @@ foreigner_class!(class Foo {
 }
 
 #[test]
+fn test_option_arg() {
+    let gen_code = parse_code(
+        "test_return_option",
+        r#"
+foreigner_class!(class Foo {
+   self_type Foo;
+   constructor Foo::default() -> Foo;
+   method Foo::f1(&self, _: Option<f64>);
+});
+"#,
+        &[ForeignLang::Cpp],
+    );
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("void f1(std::optional<double>")
+    );
+}
+
+#[test]
 fn test_foreign_vec_return() {
     parse_code(
         "test_foreign_vec_return",

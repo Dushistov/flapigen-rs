@@ -352,6 +352,9 @@ TEST(TestOptional, smokeTest)
         auto val2 = x.f3(false);
         ASSERT_FALSE(!!val2);
     }
+
+    EXPECT_NEAR(10., x.f4({5.}), std::numeric_limits<double>::epsilon());
+    EXPECT_NEAR(-1., x.f4({}), std::numeric_limits<double>::epsilon());
 }
 
 TEST(TestResult, smokeTest)

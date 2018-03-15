@@ -392,6 +392,9 @@ impl TestOptional {
             None
         }
     }
+    fn f4(&self, a: Option<f64>) -> f64 {
+        a.map(|v| v * 2.).unwrap_or(-1.)
+    }
 }
 
 foreigner_class!(class TestOptional {
@@ -400,6 +403,7 @@ foreigner_class!(class TestOptional {
     method TestOptional::f1(&self, _: bool) -> Option<Foo>;
     method TestOptional::f2(&self, ret_notnull: bool) -> Option<f64>;
     method TestOptional::f3(&self, ret_notnull: bool) -> Option<u32>;
+    method TestOptional::f4(&self, _: Option<f64>) -> f64;
 });
 
 #[derive(Default)]
