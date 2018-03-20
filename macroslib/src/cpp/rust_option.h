@@ -12,6 +12,11 @@ struct CRustOptionU32 {
     uint8_t is_some;
 };
 
+struct CRustOptionUSize {
+    uintptr_t val;
+    uint8_t is_some;
+};
+
 #ifdef __cplusplus
 template<typename T> 
 inline T c_option_empty()

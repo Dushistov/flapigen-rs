@@ -51,6 +51,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustOptionF64"]
     #![swig_foreigner_type = "struct CRustOptionU32"]
     #![swig_rust_type = "CRustOptionU32"]
+    #![swig_foreigner_type = "struct CRustOptionUSize"]
+    #![swig_rust_type = "CRustOptionUSize"]
 }
 
 #[allow(unused_macros)]
@@ -585,6 +587,22 @@ impl SwigFrom<Option<u32>> for CRustOptionU32 {
         match x {
             Some(x) => CRustOptionU32 { val: x, is_some: 1 },
             None => CRustOptionU32 { val: 0, is_some: 0 },
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustOptionUSize {
+    val: usize,
+    is_some: u8,
+}
+
+impl SwigFrom<Option<usize>> for CRustOptionUSize {
+    fn swig_from(x: Option<usize>) -> Self {
+        match x {
+            Some(x) => CRustOptionUSize { val: x, is_some: 1 },
+            None => CRustOptionUSize { val: 0, is_some: 0 },
         }
     }
 }

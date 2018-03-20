@@ -649,7 +649,8 @@ foreigner_class!(class Foo {
    constructor Foo::default() -> Foo;
    method Foo::f1(&self) -> Option<Boo>;
    method Foo::f2(&self) -> Option<f64>;
-   method Foo::f2(&self) -> Option<u32>;
+   method Foo::f3(&self) -> Option<u32>;
+   method Foo::f4(&self) -> Option<usize>;
 });
 "#,
         &[ForeignLang::Cpp],
@@ -663,6 +664,22 @@ foreigner_class!(class Foo {
         cpp_code_pair
             .foreign_code
             .contains("std::optional<Boo> f1()")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("std::optional<double> f2()")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("std::optional<uint32_t> f3()")
+    );
+
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("std::optional<uintptr_t> f4()")
     );
 }
 
