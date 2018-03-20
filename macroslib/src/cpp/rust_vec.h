@@ -132,6 +132,7 @@ using RustVecF64 = RustVec<CRustVecF64, CRustVecF64_free>;
 template <class ForeignClassRef, typename CContainerType, void (*FreeFunc)(CContainerType)>
 class RustForeignVec final : private CContainerType {
 public:
+    using const_reference = ForeignClassRef;
     using CForeignType = typename ForeignClassRef::CForeignType;
 
     RustForeignVec() noexcept
