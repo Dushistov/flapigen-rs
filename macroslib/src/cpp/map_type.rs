@@ -191,20 +191,7 @@ pub(in cpp) fn map_type<'a>(
             {
                 return Ok(converter);
             }
-            let f_arg_type = conv_map
-                .map_through_conversation_to_foreign(arg_ty, Direction::Incoming, arg_ty.span)
-                .ok_or_else(|| {
-                    fatal_error(
-                        sess,
-                        arg_ty.span,
-                        &format!(
-                            "Do not know conversation from foreign \
-                             to such rust type '{}'",
-                            normalized_ty_string(arg_ty)
-                        ),
-                    )
-                })?;
-            f_arg_type.into()
+            map_ordinal_input_type(sess, conv_map, arg_ty)?
         }
         Direction::Outgoing => {
             if let Some(converter) =
@@ -233,6 +220,27 @@ fn map_ordinal_result_type<'a>(
                 &format!(
                     "Do not know conversation from \
                      such rust type '{}' to foreign",
+                    normalized_ty_string(arg_ty)
+                ),
+            )
+        })?
+        .into())
+}
+
+fn map_ordinal_input_type<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    arg_ty: &ast::Ty,
+) -> PResult<'a, CppForeignTypeInfo> {
+    Ok(conv_map
+        .map_through_conversation_to_foreign(arg_ty, Direction::Incoming, arg_ty.span)
+        .ok_or_else(|| {
+            fatal_error(
+                sess,
+                arg_ty.span,
+                &format!(
+                    "Do not know conversation from foreign \
+                     to such rust type '{}'",
                     normalized_ty_string(arg_ty)
                 ),
             )
@@ -490,8 +498,9 @@ fn handle_option_type_in_input<'a>(
     if let Some(_) = conv_map.find_foreigner_class_with_such_self_type(opt_ty, false) {
         unimplemented!();
     }
-    let mut cpp_info_opt = map_ordinal_result_type(sess, conv_map, arg_ty)?;
-    let cpp_info_ty = map_ordinal_result_type(sess, conv_map, opt_ty)?;
+    trace!("handle_option_type_in_input arg_ty {:?}", arg_ty);
+    let mut cpp_info_opt = map_ordinal_input_type(sess, conv_map, arg_ty)?;
+    let cpp_info_ty = map_ordinal_input_type(sess, conv_map, opt_ty)?;
     let f_opt_ty = cpp_info_ty.base.name;
     let c_option_name = cpp_info_opt.base.name;
     let mut c_option_name: &str = &c_option_name.as_str();
