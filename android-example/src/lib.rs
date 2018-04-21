@@ -1,11 +1,12 @@
+#[cfg(target_os = "android")]
 extern crate android_logger;
 #[macro_use]
 extern crate log;
 extern crate log_panics;
 
-#[cfg(target_os="android")]
+#[cfg(target_os = "android")]
 pub mod java_glue;
-#[cfg(target_os="android")]
+#[cfg(target_os = "android")]
 mod android_c_headers;
 
 struct Session {
@@ -14,6 +15,7 @@ struct Session {
 
 impl Session {
     pub fn new() -> Session {
+        #[cfg(target_os = "android")]
         android_logger::init_once(log::LogLevel::Debug);
         log_panics::init(); // log panics rather than printing them
         info!("init log system - done");
@@ -25,7 +27,7 @@ impl Session {
     }
 
     // Greeting with full, no-runtime-cost support for newlines and UTF-8
-    pub fn greet(to: &String) -> String {
+    pub fn greet(to: &str) -> String {
         format!("Hello {} ✋\nIt's a pleasure to meet you!", to)
     }
 }
