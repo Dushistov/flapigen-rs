@@ -3,9 +3,13 @@
 buildscript {
     repositories {
         jcenter()
+        maven {
+            url 'https://maven.google.com/'
+            name 'Google'
+        }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.3.3'
+        classpath 'com.android.tools.build:gradle:3.1.1'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -15,9 +19,20 @@ buildscript {
 allprojects {
     repositories {
         jcenter()
+        maven {
+            url 'https://maven.google.com/'
+            name 'Google'
+        }
     }
 }
 
 task clean(type: Delete) {
-    delete rootProject.buildDir
+    delete rootProject.buildDir, 'app/src/main/libs'
+
+    // Optionally run cargo clean - this will result in huge rebuild times
+    // as cargo will redownload and recompile all dependencies
+    /*exec {
+        workingDir '.'
+        commandLine 'cargo', 'clean'
+    }*/
 }

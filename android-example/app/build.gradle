@@ -1,12 +1,13 @@
 apply plugin: 'com.android.application'
+def appId = "net.akaame.myapplication"
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "25.0.3"
+    compileSdkVersion 27
+    buildToolsVersion "27.0.3"
     defaultConfig {
-        applicationId "net.akaame.myapplication"
-        minSdkVersion 16
-        targetSdkVersion 25
+        applicationId appId
+        minSdkVersion 21
+        targetSdkVersion 27
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
@@ -21,42 +22,62 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-    androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    androidTestImplementation('com.android.support.test.espresso:espresso-core:2.2.2', {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
-    compile 'com.android.support:appcompat-v7:25.3.1'
-    compile 'com.android.support.constraint:constraint-layout:1.0.2'
-    compile 'com.android.support:design:25.3.1'
-    testCompile 'junit:junit:4.12'
+    api 'com.android.support:appcompat-v7:27.+'
+    api 'com.android.support.constraint:constraint-layout:1.1.0'
+    api 'com.android.support:design:27.+'
+    testImplementation 'junit:junit:4.12'
 }
 
-def mobcoreLibPath = ".."
-def cargoOutputDir = "../../target"
-def archsInfo = ['armeabi': 'arm-linux-androideabi', 'x86': 'i686-linux-android']
+def rustBasePath = ".."
+def cargoOutputDir = "${rustBasePath}/target"
+def archTriplets = ['armeabi': 'arm-linux-androideabi',
+                    'arm64': 'aarch64-linux-android',
+                    'x86': 'i686-linux-android',
+                    'x86_64': 'x86_64-linux-android']
 
-archsInfo.each { arch_name, target ->
-    tasks.create(name: "mobcoreBuild${arch_name}", type: Exec, description: "Building core for ${arch_name}") {
-        workingDir mobcoreLibPath
+archTriplets.each { arch, target ->
+    // Build with cargo
+    tasks.create(name: "cargo-build-${arch}", type: Exec, description: "Building core for ${arch}") {
+        workingDir rustBasePath
+        environment 'ANDROID_APPLICATION_ID': appId
         commandLine 'cargo', 'build', "--target=${target}", '--release'
     }
-    tasks.create(name: "mobcoreCopy${arch_name}", type: Copy, dependsOn: "mobcoreBuild${arch_name}", description: "Copy core(${arch_name}) to suitable plac") {
-        from "${cargoOutputDir}/${target}/release/libmobcore.so"
-        into "src/main/libs/${arch_name}"
+    // Sync shared native dependencies
+    tasks.create(name: "sync-rust-deps-${arch}", type: Sync, dependsOn: "cargo-build-${arch}") {
+        from "${rustBasePath}/src/libs/${arch}"
+        include "*.so"
+        into "src/main/libs/${arch}"
     }
-    tasks.create(name: "mobcoreSync${arch_name}", type: Sync, dependsOn: "mobcoreCopy${arch_name}") {
-        from "${mobcoreLibPath}/src/libs/${arch_name}"
-        into "src/main/libs/${arch_name}"
+    // Copy build libs into this app's libs directory
+    tasks.create(name: "rust-deploy-${arch}", type: Copy, dependsOn: "sync-rust-deps-${arch}", description: "Copy rust libs for (${arch}) to jniLibs") {
+        from "${cargoOutputDir}/${target}/release"
+        include "*.so"
+        into "src/main/libs/${arch}"
     }
+
+    // Hook up tasks to execute before building java
     tasks.withType(JavaCompile) {
-        compileTask -> compileTask.dependsOn "mobcoreSync${arch_name}"
+        compileTask -> compileTask.dependsOn "rust-deploy-${arch}"
     }
-    preBuild.dependsOn "mobcoreSync${arch_name}"
+    preBuild.dependsOn "rust-deploy-${arch}"
+
+    // Hook up clean tasks
+    tasks.create(name: "clean-${arch}", type: Delete, description: "Deleting built libs for ${arch}") {
+        delete fileTree("${cargoOutputDir}/${target}/release") {
+            include '*.so'
+        }
+    }
+    clean.dependsOn "clean-${arch}"
 }
