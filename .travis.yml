@@ -25,8 +25,8 @@ addons:
       - valgrind
 before_script:
     - export LIBCLANG_PATH=/usr/lib/llvm-3.9/lib
-    - if [ "$TRAVIS_RUST_VERSION" == "beta" ]; then
-          rustup component add --toolchain beta rustfmt-preview;
+    - if [ "$TRAVIS_RUST_VERSION" == "stable" ]; then
+          rustup component add --toolchain $TRAVIS_RUST_VERSION rustfmt-preview;
       fi
     - if [ "$TRAVIS_OS_NAME" == "osx" ]; then
          export JAVA_HOME=$(/usr/libexec/java_home);
@@ -42,7 +42,7 @@ script:
   - echo $RUSTC_WRAPPER
   - ln -s workspace.Cargo.toml Cargo.toml
   - echo ${TRAVIS_RUST_VERSION}
-  - if [ "${TRAVIS_RUST_VERSION}" == "beta" ]; then
+  - if [ "${TRAVIS_RUST_VERSION}" == "stable" ]; then
       echo "check code style";
       cargo fmt --package rust_swig -- --write-mode diff;
     fi
