@@ -75,7 +75,7 @@ fn main() {
 }
 
 fn get_gcc_system_include_dirs() -> Result<Vec<PathBuf>, String> {
-    let gcc_cmd = env::var("LINKER").expect("LINKER not set --
+    let gcc_cmd = env::var("RUSTC_LINKER").expect("RUSTC_LINKER not set --
 Update your version of Cargo or merge PR#5394 from github.com/rust-lang/cargo.");
     println!("Using Android gcc from '{}'", gcc_cmd);
 
