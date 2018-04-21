@@ -26,8 +26,6 @@ use rust_swig::{JavaConfig, LanguageConfig};
 use walkdir::WalkDir;
 
 fn main() {
-    println!("Compiler: {}\nLinker:{}", env::var("RUSTC").unwrap(), env::var("LINKER").unwrap_or(String::new()));
-    
     let target = env::var("TARGET").unwrap();
     assert!(["aarch64-linux-android", "arm-linux-androideabi",
              "i686-linux-android", "x86_64-linux-android"].contains(&target.as_str()));
