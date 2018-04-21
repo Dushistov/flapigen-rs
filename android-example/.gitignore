@@ -9,4 +9,5 @@
 /captures
 .externalNativeBuild
 target/
+app/src/main/libs/
 Cargo.lock
