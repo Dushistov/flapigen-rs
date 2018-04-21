@@ -1,6 +1,11 @@
+[target.aarch64-linux-android]
+linker = "aarch64-linux-android-gcc"
+
 [target.arm-linux-androideabi]
 linker = "arm-linux-androideabi-gcc"
-runner = "./run-on-adroid.sh"
 
 [target.i686-linux-android]
 linker = "i686-linux-android-gcc"
+
+[target.x86_64-linux-android]
+linker = "x86_64-linux-android-gcc"
