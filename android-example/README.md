@@ -43,6 +43,9 @@ $ANDROID_NDK/build/tools/make-standalone-toolchain.sh --platform="android-27" --
 
 Then edit `.cargo/config` to point to the toolchains you just generated.
 
+Finally, wrapping Rust around `jni.h` depends on bindgen, for which you will
+need libclang installed on your machine.
+
 ### Invocation
 
 Gradle will take care of building and deploying the Rust sources. Thus, to build
