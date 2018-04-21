@@ -26,12 +26,24 @@ use rust_swig::{JavaConfig, LanguageConfig};
 use walkdir::WalkDir;
 
 fn main() {
+    // don't simplify this to if the target contains the substring "android" --
+    // these lines also serve as a guard so only true android triples receive
+    // JNI generation.
     let target = env::var("TARGET").unwrap();
-    assert!(["aarch64-linux-android", "arm-linux-androideabi",
-             "i686-linux-android", "x86_64-linux-android"].contains(&target.as_str()));
+    if ["aarch64-linux-android",
+        "arm-linux-androideabi",
+        "i686-linux-android",
+        "x86_64-linux-android"]
+        .contains(&target.as_str()) {
+            gen_for_android();
+        }
+}
+
+fn gen_for_android() {
+    let target = env::var("TARGET").unwrap();
     
     let include_dirs =
-        get_gcc_system_include_dirs().expect("Can't get gcc's system include dirs");
+        get_gcc_system_include_dirs(&target).expect("Can't get NDK's system include dirs");
 
     let include_headers: Vec<_> = INCLUDE_SYS_H.into_iter()
         .map(|h| search_file_in_directory(&include_dirs, h)
@@ -74,9 +86,16 @@ fn main() {
     println!("cargo:rerun-if-changed={}", out_dir);
 }
 
-fn get_gcc_system_include_dirs() -> Result<Vec<PathBuf>, String> {
-    let gcc_cmd = env::var("RUSTC_LINKER").expect("RUSTC_LINKER not set --
-Update your version of Cargo or merge PR#5394 from github.com/rust-lang/cargo.");
+fn get_gcc_system_include_dirs(target: &str) -> Result<Vec<PathBuf>, String> {
+    let gcc_cmd = match env::var("RUSTC_LINKER") {
+        Ok(path) => path,
+        Err(_) => target.to_owned() + "-gcc"
+    };
+
+    assert!(Path::new(&gcc_cmd).exists(),
+            "RUSTC_LINKER not set -- Update your version of Cargo
+or merge PR#5394 from github.com/rust-lang/cargo.");
+
     println!("Using Android gcc from '{}'", gcc_cmd);
 
     let gcc_process = Command::new(&gcc_cmd)
