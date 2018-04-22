@@ -239,7 +239,7 @@ fn write_include_file(source_dir: &Path, swig_file: &Path) -> std::io::Result<()
     }
 
     let mut rs_file = File::create(rs_path)?;
-    rs_file.write_all(format!("include!(concat!(env!(\"OUT_DIR\"), \"/{}\"",
+    rs_file.write_all(format!("include!(concat!(env!(\"OUT_DIR\"), \"/{}\"));",
                               rs_rel_file.to_string_lossy()).as_bytes())?;
 
     return Ok(());
