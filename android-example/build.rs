@@ -5,6 +5,7 @@ static INCLUDE_SYS_H: [&str; 1] = ["jni.h"];
 
 static RUST_SRC_DIR: &str = "src";
 static ANDROID_BASE_DIR: &str = "app";
+static ANDROID_PACKAGE_ID: &str = "net.akaame.myapplication";
 
 // =========================================================
 // This script is portable; copy and paste it into your own
@@ -92,22 +93,23 @@ fn get_gcc_system_include_dirs(target: &str) -> Result<Vec<PathBuf>, String> {
         Err(_) => target.to_owned() + "-gcc"
     };
 
-    let gcc_path = Path::new(&gcc_cmd);
-    assert!(gcc_path.exists() && gcc_path.is_file(), format!(
-            "Could not find a suitable NDK gcc (tried {})
-    You can fix this either by adding the toolchain's bin/ to your $PATH, or by
-    merging PR#5394 form github.com/rust-lang/cargo into your version of Cargo.", &gcc_cmd));
-    // TODO: Remove merge instruction once PR is merged into stable cargo.
+    println!("Trying Android gcc from '{}'", gcc_cmd);
 
-    println!("Using Android gcc from '{}'", gcc_cmd);
-
-    let gcc_process = Command::new(&gcc_cmd)
+    let gcc_process = match Command::new(&gcc_cmd)
         .args(&["-v", "-x", "c", "-E", "-"])
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
         .stdout(Stdio::inherit())
-        .spawn()
-        .map_err(|err| err.to_string())?;
+        .spawn() { // there are more elegant ways to write this, but this works
+            Err(e) => if std::io::ErrorKind::NotFound == e.kind() {
+                panic!("Could not find a suitable NDK gcc (tried {})
+    You can fix this either by adding the toolchain's bin/ to your $PATH, or by
+    merging PR#5394 form github.com/rust-lang/cargo into your version of Cargo.", &gcc_cmd);
+            } else {
+                panic!("Failed to spawn NDK gcc: {}", e);
+            },
+            Ok(p) => p,
+        };
 
     gcc_process
         .stdin
@@ -205,9 +207,6 @@ where
 }
 
 fn rust_swig_expand(source_dir: &Path, file: &Path, out_dir: &Path) -> Result<(), String> {
-    let app_id = env::var("ANDROID_APPLICATION_ID")
-        .expect("You must set ANDROID_APPLICATION_ID to the package name of your android application.");
-    
     let mut registry = syntex::Registry::new();
     let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(
         JavaConfig::new(
@@ -215,8 +214,8 @@ fn rust_swig_expand(source_dir: &Path, file: &Path, out_dir: &Path) -> Result<()
                 .join("src")
                 .join("main")
                 .join("java")
-                .join(app_id.replace(".", "/")),
-            app_id.to_owned() // not sure why it requires ownership...
+                .join(ANDROID_PACKAGE_ID.replace(".", "/")),
+            ANDROID_PACKAGE_ID.to_string()
         ).use_null_annotation("android.support.annotation.NonNull".into()),
     ));
     swig_gen.register(&mut registry);
@@ -225,7 +224,7 @@ fn rust_swig_expand(source_dir: &Path, file: &Path, out_dir: &Path) -> Result<()
                                 .join(file.file_stem().expect("Got invalid file (no filename)")));
     
     registry
-        .expand(app_id.as_ref(), source_dir.join(file), out_file)
+        .expand(ANDROID_PACKAGE_ID.as_ref(), source_dir.join(file), out_file)
         .map_err(|err| format!("Rust-SWIG expansion failed: {}", err))
 }
 

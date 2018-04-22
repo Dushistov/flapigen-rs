@@ -1,11 +1,10 @@
 apply plugin: 'com.android.application'
-def appId = "net.akaame.myapplication"
 
 android {
     compileSdkVersion 27
     buildToolsVersion "27.0.3"
     defaultConfig {
-        applicationId appId
+        applicationId "net.akaame.myapplication"
         minSdkVersion 16
         targetSdkVersion 27
         versionCode 1
@@ -47,11 +46,11 @@ def archTriplets = ['armeabi': 'arm-linux-androideabi',
                     'x86': 'i686-linux-android',
                     'x86_64': 'x86_64-linux-android']
 
+// TODO: only pass --release if buildType is release
 archTriplets.each { arch, target ->
     // Build with cargo
     tasks.create(name: "cargo-build-${arch}", type: Exec, description: "Building core for ${arch}") {
         workingDir rustBasePath
-        environment 'ANDROID_APPLICATION_ID': appId
         commandLine 'cargo', 'build', "--target=${target}", '--release'
     }
     // Sync shared native dependencies
