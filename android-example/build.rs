@@ -92,14 +92,17 @@ fn get_gcc_system_include_dirs(target: &str) -> Result<Vec<PathBuf>, String> {
         Err(_) => target.to_owned() + "-gcc"
     };
 
-    assert!(Path::new(&gcc_cmd).exists(),
-            "RUSTC_LINKER not set -- Update your version of Cargo
-or merge PR#5394 from github.com/rust-lang/cargo.");
+    let gcc_path = Path::new(&gcc_cmd);
+    assert!(gcc_path.exists() && gcc_path.is_file(), format!(
+            "Could not find a suitable NDK gcc (tried {})
+    You can fix this either by adding the toolchain's bin/ to your $PATH, or by
+    merging PR#5394 form github.com/rust-lang/cargo into your version of Cargo.", &gcc_cmd));
+    // TODO: Remove merge instruction once PR is merged into stable cargo.
 
     println!("Using Android gcc from '{}'", gcc_cmd);
 
     let gcc_process = Command::new(&gcc_cmd)
-        .args(&["-v", "-x", "c", "-E", "-" /*, &("--sysroot=".to_owned() + &sysroot)*/])
+        .args(&["-v", "-x", "c", "-E", "-"])
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
         .stdout(Stdio::inherit())
