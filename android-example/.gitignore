@@ -2,12 +2,11 @@
 *.iml
 .gradle
 /local.properties
-/.idea/workspace.xml
-/.idea/libraries
 .DS_Store
 /build
 /captures
 .externalNativeBuild
 target/
 app/src/main/libs/
+app/src/main/java/net/akaame/myapplication/Session.java
 Cargo.lock
