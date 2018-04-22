@@ -51,7 +51,5 @@ need libclang installed on your machine.
 Gradle will take care of building and deploying the Rust sources. Thus, to build
 the project in release mode, simply call `./gradlew androidRelease`.
 
-To build only the rust libraries for a specific target, call cargo as usual ,
-but specify the environment variable `ANDROID_APPLICATION_ID`(e.g.
-`ANDROID_APPLICATION_ID="net.akaame.myapplication" cargo build --target
-arm-linux-androideabi`).
+To build only the rust libraries for a specific target, call cargo as usual, e.g.
+`cargo build --target arm-linux-androideabi`.
