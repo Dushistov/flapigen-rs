@@ -18,3 +18,23 @@ bindgen = "0.33"
 syntex = "0.58"
 walkdir = "2"
 rust_swig = { path = "../macroslib" }
+
+[profile.dev]
+opt-level = 0
+debug = true
+rpath = false
+lto = false
+codegen-units = 8
+panic = 'unwind'
+incremental = true
+overflow-checks = true
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+codegen-units = 1
+panic = 'unwind'
+incremental = false
+overflow-checks = false
