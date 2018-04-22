@@ -4,5 +4,6 @@ use Session;
 foreigner_class!(class Session {
     self_type Session;
     constructor Session::new() -> Session;
-    method Session::test(&self, val: i32) -> i32;
+    method Session::add_and1(&self, val: i32) -> i32;
+    static_method Session::greet(to: &str) -> String;
 });

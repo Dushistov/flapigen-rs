@@ -28,9 +28,12 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        final TextView textView = (TextView) findViewById(R.id.mainLabel);
-        final int res = MyApplication.get().getSession().test(2);
-        textView.setText(getString(R.string.rust_code_return, res));
+        final TextView tv_greet = (TextView) findViewById(R.id.greetingLabel);
+        tv_greet.setText(Session.greet("{Your Name Here}"));
+
+        final TextView tv_number = (TextView) findViewById(R.id.numberLabel);
+        final int res = MyApplication.get().getSession().add_and1(2);
+        tv_number.setText(getString(R.string.rust_add1_text, res));
     }
 
     @Override

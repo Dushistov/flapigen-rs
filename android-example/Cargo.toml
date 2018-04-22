@@ -14,6 +14,27 @@ log-panics = "1.1.0"
 android_logger = "0.3.0"
 
 [build-dependencies]
-bindgen = "0.33.1"
-syntex = "0.58.1"
+bindgen = "0.33"
+syntex = "0.58"
+walkdir = "2"
 rust_swig = { path = "../macroslib" }
+
+[profile.dev]
+opt-level = 0
+debug = true
+rpath = false
+lto = false
+codegen-units = 8
+panic = 'unwind'
+incremental = true
+overflow-checks = true
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+codegen-units = 1
+panic = 'unwind'
+incremental = false
+overflow-checks = false
