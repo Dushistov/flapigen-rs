@@ -715,28 +715,28 @@ public:
                 write!(
                     c_include_f,
                     r#"
-    {c_class_type} *{func_name}({cpp_args_with_types});
+    {c_class_type} *{func_name}({args_with_types});
 "#,
                     c_class_type = c_class_type,
                     func_name = c_func_name,
-                    cpp_args_with_types = cpp_args_with_types,
+                    args_with_types = c_args_with_types,
                 ).map_err(&map_write_err)?;
 
                 write!(
                     cpp_include_f,
                     r#"
-    {class_name}({args_with_types})
+    {class_name}({cpp_args_with_types})
     {{
-        this->self_ = {c_func_name}({args});
+        this->self_ = {c_func_name}({cpp_args_for_c});
         if (this->self_ == nullptr) {{
             std::abort();
         }}
     }}
 "#,
                     c_func_name = c_func_name,
-                    args_with_types = c_args_with_types,
-                    args = args_names,
+                    cpp_args_with_types = cpp_args_with_types,
                     class_name = class.name,
+                    cpp_args_for_c = cpp_args_for_c,
                 ).map_err(&map_write_err)?;
                 let constructor_ret_type = class
                     .constructor_ret_type

@@ -106,6 +106,7 @@ foreigner_class!(class Boo {
     self_type Boo;
 
     constructor Boo::new(_: i32, _: usize) -> Boo;
+    constructor Boo::with_foo(f: Foo) -> Boo;
     method Boo::f(&self, foo: Foo) -> usize;
     static_method Boo::f2(_: f64, foo: Foo) -> i32;
 });
@@ -123,6 +124,12 @@ foreigner_class!(class Boo {
             .foreign_code
             .contains("uintptr_t f(Foo a_0) const")
     );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("BooOpaque *Boo_with_foo(FooOpaque * a_0);")
+    );
+    assert!(cpp_code_pair.foreign_code.contains("Boo(Foo a_0)"));
 }
 
 #[test]
@@ -703,6 +710,7 @@ foreigner_class!(class Boo {
 foreigner_class!(class Foo {
    self_type Foo;
    constructor Foo::default() -> Foo;
+   constructor Foo::new(_: Option<Boo>, _: Option<f64>) -> Foo;
    method Foo::f1(&self, _: Option<f64>);
    method Foo::f2(&mut self, _: Option<Boo>);
 });
