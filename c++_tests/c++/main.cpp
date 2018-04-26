@@ -353,8 +353,20 @@ TEST(TestOptional, smokeTest)
         ASSERT_FALSE(!!val2);
     }
 
-    EXPECT_NEAR(10., x.f4({5.}), std::numeric_limits<double>::epsilon());
+    EXPECT_NEAR(10., x.f4({ 5. }), std::numeric_limits<double>::epsilon());
     EXPECT_NEAR(-1., x.f4({}), std::numeric_limits<double>::epsilon());
+
+    {
+        auto val = x.f5(true);
+        ASSERT_TRUE(!!val);
+        FooRef foo = std::move(*val);
+        EXPECT_EQ(5, foo.f(0, 0));
+        EXPECT_EQ(std::string("aaa"), foo.getName().to_std_string());
+    }
+    {
+        auto foo = x.f5(false);
+        EXPECT_FALSE(!!foo);
+    }
 }
 
 TEST(TestResult, smokeTest)
