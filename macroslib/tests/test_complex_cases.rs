@@ -710,6 +710,7 @@ foreigner_class!(class Boo {
 foreigner_class!(class Foo {
    self_type Foo;
    constructor Foo::default() -> Foo;
+   constructor Foo::new(_: Option<Boo>, _: Option<f64>) -> Foo;
    method Foo::f1(&self, _: Option<f64>);
    method Foo::f2(&mut self, _: Option<Boo>);
 });

@@ -727,7 +727,7 @@ public:
                     r#"
     {class_name}({cpp_args_with_types})
     {{
-        this->self_ = {c_func_name}({args});
+        this->self_ = {c_func_name}({cpp_args_for_c});
         if (this->self_ == nullptr) {{
             std::abort();
         }}
@@ -735,8 +735,8 @@ public:
 "#,
                     c_func_name = c_func_name,
                     cpp_args_with_types = cpp_args_with_types,
-                    args = args_names,
                     class_name = class.name,
+                    cpp_args_for_c = cpp_args_for_c,
                 ).map_err(&map_write_err)?;
                 let constructor_ret_type = class
                     .constructor_ret_type
