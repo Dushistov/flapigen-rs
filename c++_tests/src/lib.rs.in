@@ -365,9 +365,17 @@ foreigner_class!(class TestPassPathAsParam {
     method TestPassPathAsParam::path(&self) -> &str;
 });
 
-#[derive(Default)]
-pub struct TestOptional {}
+pub struct TestOptional {
+    foo: Foo,
+}
 
+impl Default for TestOptional {
+    fn default() -> TestOptional {
+        TestOptional {
+            foo: Foo::new(5, "aaa"),
+        }
+    }
+}
 impl TestOptional {
     fn f1(&self, ret_notnull: bool) -> Option<Foo> {
         if ret_notnull {
@@ -395,6 +403,13 @@ impl TestOptional {
     fn f4(&self, a: Option<f64>) -> f64 {
         a.map(|v| v * 2.).unwrap_or(-1.)
     }
+    fn f5(&self, x: bool) -> Option<&Foo> {
+        if x {
+            Some(&self.foo)
+        } else {
+            None
+        }
+    }
 }
 
 foreigner_class!(class TestOptional {
@@ -404,6 +419,7 @@ foreigner_class!(class TestOptional {
     method TestOptional::f2(&self, ret_notnull: bool) -> Option<f64>;
     method TestOptional::f3(&self, ret_notnull: bool) -> Option<u32>;
     method TestOptional::f4(&self, _: Option<f64>) -> f64;
+    method TestOptional::f5(&self, x: bool) -> Option<&Foo>;
 });
 
 #[derive(Default)]

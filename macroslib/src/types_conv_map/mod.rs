@@ -780,7 +780,7 @@ impl TypesConvMap {
         debug!("TypesConvMap::add_conversation_rule {} -> {}", from, to);
         let from = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, from);
         let to = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, to);
-        self.conv_graph.add_edge(from, to, rule);
+        self.conv_graph.update_edge(from, to, rule);
     }
 
     pub(crate) fn register_exported_enum(&mut self, enum_info: &ForeignEnumInfo) {

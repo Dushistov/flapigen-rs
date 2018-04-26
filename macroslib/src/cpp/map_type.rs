@@ -8,7 +8,8 @@ use petgraph::Direction;
 use my_ast::{code_to_item, if_option_return_some_type, if_result_return_ok_err_types,
              if_vec_return_elem_type, normalized_ty_string, parse_ty, RustType};
 use errors::fatal_error;
-use types_conv_map::{ForeignTypeInfo, FROM_VAR_TEMPLATE};
+use types_conv_map::{make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE,
+                     TO_VAR_TEMPLATE};
 use {CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypesConvMap};
 use cpp::{CppConverter, CppForeignTypeInfo};
 use cpp::cpp_code::c_class_type;
@@ -571,6 +572,86 @@ fn handle_option_type_in_result<'a>(
             }),
         }));
     }
+
+    //handle Option<&ForeignClass> case
+    if let ast::TyKind::Rptr(
+        _,
+        ast::MutTy {
+            ty: ref under_ref_ty,
+            mutbl: ast::Mutability::Immutable,
+        },
+    ) = opt_ty.node
+    {
+        if let Some(fclass) = conv_map
+            .find_foreigner_class_with_such_self_type(under_ref_ty, false)
+            .map(|v| v.clone())
+        {
+            let foreign_info =
+                foreign_class_foreign_name(sess, conv_map, &fclass, under_ref_ty.span, false)?;
+            let this_type_for_method = fclass.this_type_for_method.as_ref().ok_or_else(|| {
+                fatal_error(
+                    sess,
+                    fclass.span,
+                    &format!(
+                        "Class {} (namespace {}) return as reference, but there is no constructor",
+                        fclass.name, cpp_cfg.namespace_name,
+                    ),
+                )
+            })?;
+            let this_type: RustType = this_type_for_method.clone().into();
+            let void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
+            let my_void_ptr_ti = RustType::new(
+                parse_ty(sess, DUMMY_SP, void_ptr_typename)?,
+                make_unique_rust_typename(void_ptr_typename, this_type.normalized_name),
+            );
+            let arg_rust_ty: RustType = arg_ty.clone().into();
+            conv_map.add_type(arg_rust_ty.clone());
+            conv_map.add_conversation_rule(
+                arg_rust_ty,
+                my_void_ptr_ti,
+                Symbol::intern(&format!(
+                    r#"
+    let {to_var}: *mut ::std::os::raw::c_void = match {from_var} {{
+        Some(x) => x as *const {self_type} as *mut ::std::os::raw::c_void,
+        None => ::std::ptr::null_mut(),
+    }};
+"#,
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE,
+                    self_type = this_type.normalized_name,
+                )).into(),
+            );
+
+            let (typename, output_converter) = match cpp_cfg.cpp_optional {
+                CppOptional::Std17 => (
+                    Symbol::intern(&format!("std::optional<{}Ref>", fclass.name)),
+                    format!(
+                        "{var} != nullptr ? {Type}Ref({var}) : std::optional<{Type}Ref>()",
+                        Type = fclass.name,
+                        var = FROM_VAR_TEMPLATE,
+                    ),
+                ),
+                CppOptional::Boost => (
+                    Symbol::intern(&format!("boost::optional<{}Ref>", fclass.name)),
+                    format!(
+                        "{var} != nullptr ? {Type}Ref({var}) : boost::optional<{Type}Ref>()",
+                        Type = fclass.name,
+                        var = FROM_VAR_TEMPLATE,
+                    ),
+                ),
+            };
+            return Ok(Some(CppForeignTypeInfo {
+                base: foreign_info,
+                c_converter: String::new(),
+                cpp_converter: Some(CppConverter {
+                    typename,
+                    output_converter,
+                    input_converter: "#error".to_string(),
+                }),
+            }));
+        }
+    }
+
     let mut cpp_info_opt = map_ordinal_result_type(sess, conv_map, arg_ty)?;
     let cpp_info_ty = map_ordinal_result_type(sess, conv_map, opt_ty)?;
     let f_opt_ty = cpp_info_ty.base.name;
