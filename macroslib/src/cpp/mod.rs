@@ -460,7 +460,7 @@ public:
             }
             ret
         };
-
+        let unpack_code = TypesConvMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
         gen_code.append(&mut code_to_item(
             sess,
             &class.name.as_str(),
@@ -473,21 +473,28 @@ public:
 {code_box_this}
         this as *mut ::std::os::raw::c_void
     }}
+    fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self {{
+        let p = p as *mut {this_type_for_method};
+{unpack_code}
+       p
+    }}
 }}"#,
                 lifetimes = lifetimes,
                 class_name = pprust::ty_to_string(&this_type.ty),
                 code_box_this = code_box_this,
+                unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "p"),
+                this_type_for_method = this_type_for_method.normalized_name
             ),
         )?);
 
+        let unpack_code =
+            TypesConvMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
         let void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
         let my_void_ptr_ti = RustType::new(
             parse_ty(sess, DUMMY_SP, void_ptr_typename)?,
             make_unique_rust_typename(void_ptr_typename, this_type.normalized_name),
         );
 
-        let unpack_code =
-            TypesConvMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
         conv_map.add_conversation_rule(
             my_void_ptr_ti,
             this_type,

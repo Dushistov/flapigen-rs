@@ -367,6 +367,17 @@ TEST(TestOptional, smokeTest)
         auto foo = x.f5(false);
         EXPECT_FALSE(!!foo);
     }
+
+    {
+	    Foo foo(17, "17");
+	    x.f6({std::move(foo)});
+	    auto val = x.f5(true);
+	    ASSERT_TRUE(!!val);
+	    FooRef foor = std::move(*val);
+	    EXPECT_EQ(17, foor.f(0, 0));
+	    EXPECT_EQ(std::string("17"), foor.getName().to_std_string());
+	    x.f6({});
+    }
 }
 
 TEST(TestResult, smokeTest)

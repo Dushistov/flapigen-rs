@@ -518,7 +518,12 @@ impl TypesConvMap {
                     next_step.insert(neighbor);
                 }
                 for edge in &self.generic_edges {
-                    trace!("we check {:?} for {:?}", edge.from_ty, from);
+                    trace!(
+                        "we check edge({:?} -> {:?}) for {:?}",
+                        edge.from_ty,
+                        edge.to_ty,
+                        from
+                    );
                     if let Some(to_ty) = edge.is_conv_possible(&from, Some(goal_to), |name| {
                         names_to_graph_map
                             .get(&name)
