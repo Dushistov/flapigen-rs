@@ -288,6 +288,10 @@ TEST(TestWorkWithVec, smokeTest)
         EXPECT_TRUE(vec_foo[i].f(0, 0) >= 0);
         EXPECT_EQ(i, size_t(vec_foo[i].f(0, 0)));
     }
+    vec_foo.push(Foo{ 57, "boo" });
+    ASSERT_EQ(tag_len + 1, vec_foo.size());
+    EXPECT_EQ(57, vec_foo[vec_foo.size() - 1].f(0, 0));
+    EXPECT_EQ(std::string("boo"), vec_foo[vec_foo.size() - 1].getName().to_std_string());
 }
 
 TEST(TestEnumClass, smokeTest)
@@ -369,14 +373,14 @@ TEST(TestOptional, smokeTest)
     }
 
     {
-	    Foo foo(17, "17");
-	    x.f6({std::move(foo)});
-	    auto val = x.f5(true);
-	    ASSERT_TRUE(!!val);
-	    FooRef foor = std::move(*val);
-	    EXPECT_EQ(17, foor.f(0, 0));
-	    EXPECT_EQ(std::string("17"), foor.getName().to_std_string());
-	    x.f6({});
+        Foo foo(17, "17");
+        x.f6({ std::move(foo) });
+        auto val = x.f5(true);
+        ASSERT_TRUE(!!val);
+        FooRef foor = std::move(*val);
+        EXPECT_EQ(17, foor.f(0, 0));
+        EXPECT_EQ(std::string("17"), foor.getName().to_std_string());
+        x.f6({});
     }
 }
 
