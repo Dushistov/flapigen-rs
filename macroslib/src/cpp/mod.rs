@@ -400,6 +400,7 @@ public:
 class {class_name} {{
 public:
     using CForeignType = {c_class_type};
+    using value_type = {value_class_type};
 
     {class_name}(const {class_name}&) = delete;
     {class_name} &operator=(const {class_name}&) = delete;
@@ -420,6 +421,7 @@ public:
         class_name = class_ref_name,
         c_class_type = c_class_type,
         doc_comments = class_doc_comments,
+        value_class_type = class.name,
     ).unwrap();
 
     let dummy_ty = ast::Ty {

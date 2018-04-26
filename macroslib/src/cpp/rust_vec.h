@@ -129,11 +129,14 @@ using RustVecU32 = RustVec<CRustVecU32, CRustVecU32_free>;
 using RustVecF32 = RustVec<CRustVecF32, CRustVecF32_free>;
 using RustVecF64 = RustVec<CRustVecF64, CRustVecF64_free>;
 
-template <class ForeignClassRef, typename CContainerType, void (*FreeFunc)(CContainerType)>
+template <class ForeignClassRef, typename CContainerType,
+          void (*FreeFunc)(CContainerType),
+          void (*PushFunc)(CContainerType *, void *)>
 class RustForeignVec final : private CContainerType {
 public:
     using const_reference = ForeignClassRef;
     using CForeignType = typename ForeignClassRef::CForeignType;
+    using value_type = typename ForeignClassRef::value_type;
 
     RustForeignVec() noexcept
     {
@@ -181,6 +184,11 @@ public:
         p += this->step * i;
         auto elem_ptr = static_cast<const CForeignType *>(static_cast<const void *>(p));
         return ForeignClassRef{ elem_ptr };
+    }
+
+    void push(value_type o)
+    {
+        PushFunc(this, o.release());
     }
 
 private:
