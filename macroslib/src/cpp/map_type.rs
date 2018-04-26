@@ -118,7 +118,7 @@ fn special_type<'a>(
             return handle_result_type_in_result(sess, conv_map, cpp_cfg, arg_ty, &ok_ty, &err_ty);
         }
         if let Some(ty) = if_option_return_some_type(arg_ty) {
-            return handle_option_type_in_result(sess, conv_map, cpp_cfg, arg_ty, &ty);
+            return handle_option_type_in_return(sess, conv_map, cpp_cfg, arg_ty, &ty);
         }
     } else {
         if let Some(ty) = if_option_return_some_type(arg_ty) {
@@ -496,8 +496,33 @@ fn handle_option_type_in_input<'a>(
     arg_ty: &ast::Ty,
     opt_ty: &ast::Ty,
 ) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    if let Some(_) = conv_map.find_foreigner_class_with_such_self_type(opt_ty, false) {
-        unimplemented!();
+    if let Some(fclass) = conv_map.find_foreigner_class_with_such_self_type(opt_ty, false) {
+        let foreign_info = foreign_class_foreign_name(sess, conv_map, fclass, opt_ty.span, false)?;
+        let (typename, input_converter) = match cpp_cfg.cpp_optional {
+            CppOptional::Std17 => (
+                Symbol::intern(&format!("std::optional<{}>", fclass.name)),
+                format!(
+                    " !!{var} ? {var}->release() : nullptr",
+                    var = FROM_VAR_TEMPLATE,
+                ),
+            ),
+            CppOptional::Boost => (
+                Symbol::intern(&format!("boost::optional<{}>", fclass.name)),
+                format!(
+                    " !!{var} ? {var}->release() : nullptr",
+                    var = FROM_VAR_TEMPLATE,
+                ),
+            ),
+        };
+        return Ok(Some(CppForeignTypeInfo {
+            base: foreign_info,
+            c_converter: String::new(),
+            cpp_converter: Some(CppConverter {
+                typename,
+                output_converter: "#error".to_string(),
+                input_converter,
+            }),
+        }));
     }
     trace!("handle_option_type_in_input arg_ty {:?}", arg_ty);
     let mut cpp_info_opt = map_ordinal_input_type(sess, conv_map, arg_ty)?;
@@ -534,7 +559,7 @@ fn handle_option_type_in_input<'a>(
     Ok(Some(cpp_info_opt))
 }
 
-fn handle_option_type_in_result<'a>(
+fn handle_option_type_in_return<'a>(
     sess: &'a ParseSess,
     conv_map: &mut TypesConvMap,
     cpp_cfg: &CppConfig,

@@ -410,6 +410,11 @@ impl TestOptional {
             None
         }
     }
+    fn f6(&mut self, a: Option<Foo>) {
+        if let Some(x) = a {
+            self.foo = x;
+        }
+    }
 }
 
 foreigner_class!(class TestOptional {
@@ -420,6 +425,7 @@ foreigner_class!(class TestOptional {
     method TestOptional::f3(&self, ret_notnull: bool) -> Option<u32>;
     method TestOptional::f4(&self, _: Option<f64>) -> f64;
     method TestOptional::f5(&self, x: bool) -> Option<&Foo>;
+    method TestOptional::f6(&mut self, a: Option<Foo>);
 });
 
 #[derive(Default)]

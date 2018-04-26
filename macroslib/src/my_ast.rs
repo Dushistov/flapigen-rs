@@ -198,7 +198,8 @@ fn is_second_subst_of_first(
             }
         }
         _ => {
-            let ret = ty1.node == ty2.node;
+            //TODO: more smart way to strip spans in case of pointers
+            let ret = format!("{:?}", ty1.node) == format!("{:?}", ty2.node);
             trace!(
                 "is_second_substitude_of_first just check equal {:?} vs {:?} => {}",
                 ty1.node,

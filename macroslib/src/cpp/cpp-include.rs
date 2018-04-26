@@ -67,6 +67,7 @@ macro_rules! swig_c_str {
 pub trait SwigForeignClass {
     fn c_class_name() -> *const ::std::os::raw::c_char;
     fn box_object(x: Self) -> *mut ::std::os::raw::c_void;
+    fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self;
 }
 
 #[allow(dead_code)]
@@ -439,6 +440,16 @@ impl<T: SwigForeignClass> SwigFrom<Option<T>> for *mut ::std::os::raw::c_void {
         match x {
             Some(x) => <T>::box_object(x),
             None => ::std::ptr::null_mut(),
+        }
+    }
+}
+
+impl<T: SwigForeignClass> SwigInto<Option<T>> for *mut ::std::os::raw::c_void {
+    fn swig_into(self) -> Option<T> {
+        if !self.is_null() {
+            Some(T::unbox_object(self))
+        } else {
+            None
         }
     }
 }

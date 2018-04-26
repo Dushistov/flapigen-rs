@@ -692,12 +692,19 @@ foreigner_class!(class Foo {
 #[test]
 fn test_option_arg() {
     let gen_code = parse_code(
-        "test_return_option",
+        "test_option_arg",
         r#"
+foreigner_class!(class Boo {
+  self_type Boo;
+  constructor Boo::new() -> Boo;
+  method Boo::something(&self) -> i32;
+});
+
 foreigner_class!(class Foo {
    self_type Foo;
    constructor Foo::default() -> Foo;
    method Foo::f1(&self, _: Option<f64>);
+   method Foo::f2(&mut self, _: Option<Boo>);
 });
 "#,
         &[ForeignLang::Cpp],
