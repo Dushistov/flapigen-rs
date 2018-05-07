@@ -10,6 +10,7 @@
 #include <limits>
 #include <string>
 #include <iostream>
+#include <sstream>
 #ifdef HAS_STDCXX_17
 #include <optional>
 #include <variant>
@@ -292,6 +293,24 @@ TEST(TestWorkWithVec, smokeTest)
     ASSERT_EQ(tag_len + 1, vec_foo.size());
     EXPECT_EQ(57, vec_foo[vec_foo.size() - 1].f(0, 0));
     EXPECT_EQ(std::string("boo"), vec_foo[vec_foo.size() - 1].getName().to_std_string());
+}
+
+TEST(TestWorkWithVec, rangeLoop)
+{
+    const size_t N = 2000;
+    auto vec = TestWorkWithVec::create_foo_vec(N);
+    ASSERT_EQ(N, vec.size());
+    size_t i = 0;
+    std::stringstream fmt;
+    for (auto &&elem : vec) {
+        ASSERT_EQ(i, elem.f(0, 0));
+        fmt << i;
+        ASSERT_EQ(fmt.str(), elem.getName().to_std_string());
+        fmt.str(std::string());
+        fmt.clear();
+        ++i;
+    }
+    ASSERT_EQ(N, i);
 }
 
 TEST(TestEnumClass, smokeTest)

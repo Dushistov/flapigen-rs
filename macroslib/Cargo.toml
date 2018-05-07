@@ -1,6 +1,6 @@
 [package]
 name = "rust_swig"
-version = "0.1.2-pre"
+version = "0.1.3-pre"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 description = "Tool for connecting libraries written in Rust with other languages"
 license = "BSD-3-Clause"
