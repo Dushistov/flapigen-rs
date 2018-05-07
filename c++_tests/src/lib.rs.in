@@ -290,6 +290,14 @@ impl TestWorkWithVec {
     fn get_vec_foo(&self) -> Vec<Foo> {
         self.vec_foo.clone()
     }
+
+    fn create_foo_vec(n: usize) -> Vec<Foo> {
+        let mut v = Vec::with_capacity(n);
+        for i in 0..n {
+            v.push(Foo::new(i as i32, &format!("{}", i)));
+        }
+        v
+    }
 }
 
 foreigner_class!(class TestWorkWithVec {
@@ -301,6 +309,7 @@ foreigner_class!(class TestWorkWithVec {
     method TestWorkWithVec::get_vec_f32(&self) -> Vec<f32>;
     method TestWorkWithVec::get_vec_f64(&self) -> Vec<f64>;
     method TestWorkWithVec::get_vec_foo(&self) -> Vec<Foo>;
+    static_method TestWorkWithVec::create_foo_vec(n: usize) -> Vec<Foo>;
 });
 
 enum MyEnum {

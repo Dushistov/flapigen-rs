@@ -129,6 +129,48 @@ using RustVecU32 = RustVec<CRustVecU32, CRustVecU32_free>;
 using RustVecF32 = RustVec<CRustVecF32, CRustVecF32_free>;
 using RustVecF64 = RustVec<CRustVecF64, CRustVecF64_free>;
 
+template <typename T>
+class RustForeignVecIterator final {
+public:
+    using CForeignType = typename T::CForeignType;
+
+    RustForeignVecIterator() noexcept
+        : ptr(nullptr)
+        , step(0)
+    {
+    }
+    RustForeignVecIterator(const void *p, size_t s) noexcept
+        : ptr(p)
+        , step(s)
+    {
+    }
+    RustForeignVecIterator &operator++() noexcept
+    {
+        this->ptr = static_cast<const uint8_t *>(this->ptr) + this->step;
+        return *this;
+    }
+
+    bool operator==(const RustForeignVecIterator<T> &o) const noexcept
+    {
+        assert(this->step == o.step);
+        return this->ptr == o.ptr;
+    }
+    bool operator!=(const RustForeignVecIterator<T> &o) const noexcept
+    {
+        return !operator==(o);
+    }
+
+    T operator*() const noexcept
+    {
+        auto elem_ptr = static_cast<const CForeignType *>(this->ptr);
+        return T{ elem_ptr };
+    }
+
+private:
+    const void *ptr;
+    uintptr_t step;
+};
+
 template <class ForeignClassRef, typename CContainerType,
           void (*FreeFunc)(CContainerType),
           void (*PushFunc)(CContainerType *, void *)>
@@ -137,6 +179,8 @@ public:
     using const_reference = ForeignClassRef;
     using CForeignType = typename ForeignClassRef::CForeignType;
     using value_type = typename ForeignClassRef::value_type;
+    using iterator = RustForeignVecIterator<ForeignClassRef>;
+    using const_iterator = RustForeignVecIterator<ForeignClassRef>;
 
     RustForeignVec() noexcept
     {
@@ -189,6 +233,30 @@ public:
     void push(value_type o)
     {
         PushFunc(this, o.release());
+    }
+
+    iterator begin() noexcept
+    {
+        return iterator{ this->data, this->step };
+    }
+
+    const_iterator begin() const noexcept
+    {
+        return const_iterator{ this->data, this->step };
+    }
+
+    iterator end() noexcept
+    {
+        auto p = static_cast<const uint8_t *>(this->data);
+        p += this->step * this->len;
+        return iterator{ p, this->step };
+    }
+
+    const_iterator end() const noexcept
+    {
+        auto p = static_cast<const uint8_t *>(this->data);
+        p += this->step * this->len;
+        return const_iterator{ p, this->step };
     }
 
 private:
