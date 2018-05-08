@@ -303,7 +303,7 @@ TEST(TestWorkWithVec, rangeLoop)
     size_t i = 0;
     std::stringstream fmt;
     for (auto &&elem : vec) {
-        ASSERT_EQ(i, elem.f(0, 0));
+        ASSERT_EQ(static_cast<int32_t>(i), elem.f(0, 0));
         fmt << i;
         ASSERT_EQ(fmt.str(), elem.getName().to_std_string());
         fmt.str(std::string());
