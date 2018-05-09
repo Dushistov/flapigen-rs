@@ -52,9 +52,8 @@ fn main() {
         expand_time.as_secs() as f64 + (expand_time.subsec_nanos() as f64) / 1_000_000_000.
     );
     println!("cargo:rerun-if-changed=src");
-    //rebuild if user remove generated code
+    //rebuild if user removes generated code
     println!("cargo:rerun-if-changed={}", out_dir);
-    println!("cargo:rerun-if-changed=java/com/example/rust");
 }
 
 fn search_file_in_directory<P: AsRef<Path>>(dirs: &[P], file: &str) -> Result<PathBuf, ()> {
