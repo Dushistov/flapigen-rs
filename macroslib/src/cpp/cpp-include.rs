@@ -53,14 +53,15 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustOptionU32"]
     #![swig_foreigner_type = "struct CRustOptionUSize"]
     #![swig_rust_type = "CRustOptionUSize"]
+    #![swig_foreigner_type = "struct CResultObjectObject"]
+    #![swig_rust_type = "CResultObjectObject"]
 }
 
 #[allow(unused_macros)]
 macro_rules! swig_c_str {
     ($lit:expr) => {
-        concat!($lit, "\0").as_ptr()
-            as *const ::std::os::raw::c_char
-    }
+        concat!($lit, "\0").as_ptr() as *const ::std::os::raw::c_char
+    };
 }
 
 #[allow(dead_code)]
@@ -631,6 +632,61 @@ impl SwigFrom<Option<usize>> for CRustOptionUSize {
         match x {
             Some(x) => CRustOptionUSize { val: x, is_some: 1 },
             None => CRustOptionUSize { val: 0, is_some: 0 },
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CResultObjectObject {
+    is_ok: u8,
+    data: CResultObjectObjectUnion,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CResultObjectObjectUnion {
+    pub ok: *mut ::std::os::raw::c_void,
+    pub err: *mut ::std::os::raw::c_void,
+}
+
+impl<ErrT: SwigForeignClass> SwigFrom<Result<(), ErrT>> for CResultObjectObject {
+    fn swig_from(x: Result<(), ErrT>) -> Self {
+        match x {
+            Ok(_) => CResultObjectObject {
+                is_ok: 1,
+                data: CResultObjectObjectUnion {
+                    ok: ::std::ptr::null_mut(),
+                },
+            },
+            Err(err) => CResultObjectObject {
+                is_ok: 0,
+                data: CResultObjectObjectUnion {
+                    err: <ErrT>::box_object(err),
+                },
+            },
+        }
+    }
+}
+
+impl<T: SwigForeignClass, ErrT: SwigForeignClass> SwigFrom<Result<T, ErrT>>
+    for CResultObjectObject
+{
+    fn swig_from(x: Result<T, ErrT>) -> Self {
+        match x {
+            Ok(v) => CResultObjectObject {
+                is_ok: 1,
+                data: CResultObjectObjectUnion {
+                    ok: <T>::box_object(v),
+                },
+            },
+            Err(err) => CResultObjectObject {
+                is_ok: 0,
+                data: CResultObjectObjectUnion {
+                    err: <ErrT>::box_object(err),
+                },
+            },
         }
     }
 }

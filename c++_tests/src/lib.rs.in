@@ -1,6 +1,6 @@
-use std::rc::Rc;
-use std::path::Path;
 use std::cell::{Ref, RefCell, RefMut};
+use std::path::Path;
+use std::rc::Rc;
 use std::{f32, f64};
 
 #[derive(Clone)]
@@ -319,9 +319,9 @@ enum MyEnum {
 }
 
 foreign_enum!(enum MyEnum {
-  ITEM1 = MyEnum::Item1,
-  ITEM2 = MyEnum::Item2,
-  ITEM3 = MyEnum::Item3,
+    ITEM1 = MyEnum::Item1,
+    ITEM2 = MyEnum::Item2,
+    ITEM3 = MyEnum::Item3,
 });
 
 #[derive(Default)]
@@ -459,7 +459,32 @@ impl TestResult {
             Err("Not ok".to_string())
         }
     }
+    fn f2(is_ok: bool) -> Result<Foo, TestError> {
+        if is_ok {
+            Ok(Foo::new(17, "ok"))
+        } else {
+            Err(TestError {
+                msg: "Not ok".to_string(),
+            })
+        }
+    }
 }
+
+#[derive(Default)]
+pub struct TestError {
+    msg: String,
+}
+impl TestError {
+    fn to_string(&self) -> String {
+        self.msg.clone()
+    }
+}
+
+foreigner_class!(class TestError {
+    self_type TestError;
+    constructor TestError::default() -> TestError;
+    method TestError::to_string(&self) -> String;
+});
 
 foreigner_class!(class TestResult {
     self_type TestResult;
@@ -467,6 +492,7 @@ foreigner_class!(class TestResult {
     static_method TestResult::new_with_err() -> Result<TestResult, String>;
     static_method TestResult::f(_: bool) -> Result<(), String>;
     static_method TestResult::f_vec(_: bool) -> Result<Vec<Foo>, String>;
+    static_method TestResult::f2(_: bool) -> Result<Foo, TestError>;
 });
 
 pub struct TestReferences {

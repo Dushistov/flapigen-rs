@@ -41,6 +41,7 @@
 #include "rust_interface/TestPassPathAsParam.hpp"
 #if defined(HAS_STDCXX_17) || defined(USE_BOOST)
 #include "rust_interface/TestOptional.hpp"
+#include "rust_interface/TestError.hpp"
 #include "rust_interface/TestResult.hpp"
 #endif
 #include "rust_interface/TestReferences.hpp"
@@ -431,6 +432,19 @@ TEST(TestResult, smokeTest)
     EXPECT_NE(nullptr, std::get_if<RustString>(&res_vec));
     EXPECT_EQ(nullptr, std::get_if<RustForeignVecFoo>(&res_vec));
     EXPECT_EQ(std::string_view("Not ok"), std::get<RustString>(res_vec).to_string_view());
+
+    auto f2_ok = TestResult::f2(true);
+    EXPECT_NE(nullptr, std::get_if<Foo>(&f2_ok));
+    EXPECT_EQ(nullptr, std::get_if<TestError>(&f2_ok));
+    Foo f2_ok_ret = std::get<Foo>(std::move(f2_ok));
+    ASSERT_EQ(17, f2_ok_ret.f(0, 0));
+    ASSERT_EQ(std::string_view("ok"), f2_ok_ret.getName().to_string_view());
+
+    auto f2_err = TestResult::f2(false);
+    EXPECT_EQ(nullptr, std::get_if<Foo>(&f2_err));
+    EXPECT_NE(nullptr, std::get_if<TestError>(&f2_err));
+    TestError f2_err_ret = std::get<TestError>(std::move(f2_err));
+    ASSERT_EQ(std::string_view("Not ok"), RustString{f2_err_ret.to_string()}.to_string_view());
 #endif //HAS_STDCXX_17
 #ifdef USE_BOOST
     boost::variant<TestResult, RustString> res = TestResult::new_with_err();

@@ -290,6 +290,13 @@ pub(crate) fn parse_foreigner_class(
             MethodVariant::Method(ref mut self_type) => {
                 let fn_decl =
                     parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).map_err(&map_perror)?;
+                if fn_decl.inputs.is_empty() {
+                    cx.span_err(
+                        parser.span,
+                        "No first argument in method (should be self/&self/&mut self/mut self)",
+                    );
+                    return Err(parser.span);
+                }
                 *self_type = self_variant(&fn_decl.inputs[0].ty).ok_or_else(|| {
                     cx.span_err(
                         parser.span,

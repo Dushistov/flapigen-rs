@@ -393,11 +393,11 @@ fn handle_result_type_in_result<'a>(
 ) -> PResult<'a, Option<CppForeignTypeInfo>> {
     let err_ty_name = normalized_ty_string(&err_ty);
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&ok_ty, false) {
-        let foreign_info = conv_map
-            .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectString"))
-            .expect("Can not find info about struct CResultObjectString");
+        let c_class = c_class_type(foreign_class);
         if err_ty_name == "String" {
-            let c_class = c_class_type(foreign_class);
+            let foreign_info = conv_map
+                .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectString"))
+                .expect("Can not find info about struct CResultObjectString");
             let typename = match cpp_cfg.cpp_variant {
                 CppVariant::Std17 => {
                     Symbol::intern(&format!("std::variant<{}, RustString>", foreign_class.name))
@@ -423,6 +423,43 @@ fn handle_result_type_in_result<'a>(
                     typename,
                     output_converter,
                     input_converter: String::new(),
+                }),
+            }));
+        } else if let Some(err_class) =
+            conv_map.find_foreigner_class_with_such_self_type(&err_ty, false)
+        {
+            let foreign_info = conv_map
+                .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectObject"))
+                .expect("Can not find info about struct CResultObjectObject");
+            let c_err_class = c_class_type(err_class);
+            let typename = match cpp_cfg.cpp_variant {
+                CppVariant::Std17 => Symbol::intern(&format!(
+                    "std::variant<{}, {}>",
+                    foreign_class.name, err_class.name
+                )),
+                CppVariant::Boost => Symbol::intern(&format!(
+                    "boost::variant<{}, {}>",
+                    foreign_class.name, err_class.name
+                )),
+            };
+            let output_converter = format!(
+                "{var}.is_ok != 0 ?
+ {VarType} {{ {Type}(static_cast<{C_Type} *>({var}.data.ok))}} :
+ {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err))}}",
+                VarType = typename,
+                Type = foreign_class.name,
+                C_Type = c_class,
+                var = FROM_VAR_TEMPLATE,
+                ErrType = err_class.name,
+                C_ErrType = c_err_class,
+            );
+            return Ok(Some(CppForeignTypeInfo {
+                base: foreign_info,
+                c_converter: String::new(),
+                cpp_converter: Some(CppConverter {
+                    typename,
+                    output_converter,
+                    input_converter: "#error".into(),
                 }),
             }));
         } else {
@@ -496,6 +533,41 @@ fn handle_result_type_in_result<'a>(
                             typename,
                             output_converter,
                             input_converter: String::new(),
+                        }),
+                    }));
+                } else if let Some(err_class) =
+                    conv_map.find_foreigner_class_with_such_self_type(&err_ty, false)
+                {
+                    let c_err_class = c_class_type(err_class);
+                    let typename = match cpp_cfg.cpp_variant {
+                        CppVariant::Std17 => {
+                            Symbol::intern(&format!("std::variant<void *, {}>", err_class.name))
+                        }
+                        CppVariant::Boost => {
+                            Symbol::intern(&format!("boost::variant<void *, {}>", err_class.name))
+                        }
+                    };
+                    let output_converter = format!(
+                        "{var}.is_ok != 0 ?
+ {VarType} {{ {var}.data.ok }} :
+ {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err)) }}",
+                        VarType = typename,
+                        var = FROM_VAR_TEMPLATE,
+                        ErrType = err_class.name,
+                        C_ErrType = c_err_class,
+                    );
+                    let foreign_info = conv_map
+                        .find_foreign_type_info_by_name(Symbol::intern(
+                            "struct CResultObjectObject",
+                        ))
+                        .expect("Can not find info about struct CResultObjectObject");
+                    return Ok(Some(CppForeignTypeInfo {
+                        base: foreign_info,
+                        c_converter: String::new(),
+                        cpp_converter: Some(CppConverter {
+                            typename,
+                            output_converter,
+                            input_converter: "#error".into(),
                         }),
                     }));
                 } else {

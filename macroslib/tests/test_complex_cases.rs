@@ -408,6 +408,53 @@ class Foo {
 }
 
 #[test]
+fn test_return_result_with_object_as_value_and_err() {
+    let gen_code = parse_code(
+        "test_return_result_type_with_object",
+        r#"
+foreigner_class!(class Position {
+    self_type GnssInfo;
+    private constructor create_position() -> GnssInfo;
+    method Position::getLatitude(&self) -> f64;
+});
+
+foreigner_class!(class PosErr {
+    self_type PosErr;
+    constructor PosErr::new() -> PosErr;
+});
+
+foreigner_class!(class LocationService {
+    self_type LocationService;
+
+    constructor LocationService::new() -> LocationService;
+    static_method LocationService::position() -> Result<GnssInfo, String>;
+    static_method LocationService::do_something() -> Result<(), String>;
+
+    method LocationService::my_position(&self) -> Result<GnssInfo, PosErr>;
+    static_method LocationService::do_something() -> Result<(), PosErr>;
+});
+"#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
+    );
+
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("static std::variant<Position, RustString> position()")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("std::variant<Position, PosErr> my_position()")
+    );
+}
+
+#[test]
 fn test_return_result_type_with_object() {
     for i in 0..10 {
         println!("iter {}", i);
