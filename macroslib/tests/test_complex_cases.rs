@@ -432,6 +432,7 @@ foreigner_class!(class LocationService {
 
     method LocationService::my_position(&self) -> Result<GnssInfo, PosErr>;
     static_method LocationService::do_something() -> Result<(), PosErr>;
+    static_method LocationService::do_something() -> Result<Vec<GnssInfo>, PosErr>;
 });
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],

@@ -468,6 +468,16 @@ impl TestResult {
             })
         }
     }
+
+    fn f3(is_ok: bool) -> Result<Vec<Foo>, TestError> {
+        if is_ok {
+            Ok(vec![Foo::new(40, "40"), Foo::new(60, "")])
+        } else {
+            Err(TestError {
+                msg: "Not ok".to_string(),
+            })
+        }
+    }
 }
 
 #[derive(Default)]
@@ -493,6 +503,7 @@ foreigner_class!(class TestResult {
     static_method TestResult::f(_: bool) -> Result<(), String>;
     static_method TestResult::f_vec(_: bool) -> Result<Vec<Foo>, String>;
     static_method TestResult::f2(_: bool) -> Result<Foo, TestError>;
+    static_method TestResult::f3(_: bool) -> Result<Vec<Foo>, TestError>;
 });
 
 pub struct TestReferences {

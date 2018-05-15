@@ -55,6 +55,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustOptionUSize"]
     #![swig_foreigner_type = "struct CResultObjectObject"]
     #![swig_rust_type = "CResultObjectObject"]
+    #![swig_foreigner_type = "struct CResultVecObjectObject"]
+    #![swig_rust_type = "CResultVecObjectObject"]
 }
 
 #[allow(unused_macros)]
@@ -684,6 +686,42 @@ impl<T: SwigForeignClass, ErrT: SwigForeignClass> SwigFrom<Result<T, ErrT>>
             Err(err) => CResultObjectObject {
                 is_ok: 0,
                 data: CResultObjectObjectUnion {
+                    err: <ErrT>::box_object(err),
+                },
+            },
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CResultVecObjectObject {
+    is_ok: u8,
+    data: CResultVecObjectObjectUnion,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CResultVecObjectObjectUnion {
+    pub ok: CRustForeignVec,
+    pub err: *mut ::std::os::raw::c_void,
+}
+
+impl<T: SwigForeignClass, ErrT: SwigForeignClass> SwigFrom<Result<Vec<T>, ErrT>>
+    for CResultVecObjectObject
+{
+    fn swig_from(x: Result<Vec<T>, ErrT>) -> Self {
+        match x {
+            Ok(v) => CResultVecObjectObject {
+                is_ok: 1,
+                data: CResultVecObjectObjectUnion {
+                    ok: CRustForeignVec::from_vec(v),
+                },
+            },
+            Err(err) => CResultVecObjectObject {
+                is_ok: 0,
+                data: CResultVecObjectObjectUnion {
                     err: <ErrT>::box_object(err),
                 },
             },

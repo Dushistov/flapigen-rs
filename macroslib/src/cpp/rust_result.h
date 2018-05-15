@@ -27,3 +27,11 @@ struct CResultObjectObject {
         void *err;
     } data;
 };
+
+struct CResultVecObjectObject {
+    uint8_t is_ok;
+    union {
+        struct CRustForeignVec ok;
+        void *err;
+    } data;
+};
