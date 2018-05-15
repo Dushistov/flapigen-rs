@@ -40,36 +40,36 @@ macro_rules! unwrap_presult {
     };
 }
 
-mod types_conv_map;
-mod java_jni;
-mod errors;
-mod parsing;
-mod my_ast;
 mod cpp;
+mod errors;
 pub mod file_cache;
+mod java_jni;
+mod my_ast;
+mod parsing;
+mod types_conv_map;
 
-use std::path::PathBuf;
 use std::cell::RefCell;
-use std::rc::Rc;
-use std::env;
-use std::str::FromStr;
 use std::collections::HashSet;
+use std::env;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::str::FromStr;
 
-use syntex_syntax::parse::ParseSess;
-use syntex_syntax::codemap::Span;
 use syntex::Registry;
-use syntex_syntax::tokenstream::TokenTree;
+use syntex_pos::DUMMY_SP;
+use syntex_syntax::ast;
+use syntex_syntax::codemap::Span;
 use syntex_syntax::ext::base::{ExtCtxt, MacEager, MacResult, TTMacroExpander};
 use syntex_syntax::parse::PResult;
+use syntex_syntax::parse::ParseSess;
 use syntex_syntax::ptr::P;
-use syntex_syntax::ast;
-use syntex_pos::DUMMY_SP;
 use syntex_syntax::symbol::Symbol;
+use syntex_syntax::tokenstream::TokenTree;
 use syntex_syntax::util::small_vector::SmallVector;
 
-use types_conv_map::TypesConvMap;
 use errors::fatal_error;
 use parsing::{parse_foreign_enum, parse_foreign_interface, parse_foreigner_class};
+use types_conv_map::TypesConvMap;
 
 /// Calculate target pointer width from environment variable
 /// that `cargo` inserts

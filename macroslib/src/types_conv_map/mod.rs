@@ -2,27 +2,27 @@ mod parsing;
 pub mod utils;
 
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use std::{fmt, mem};
 
-use syntex_syntax::ptr::P;
-use syntex_syntax::symbol::Symbol;
+use syntex_errors::DiagnosticBuilder;
+use syntex_pos::{Span, DUMMY_SP};
 use syntex_syntax::ast;
 use syntex_syntax::parse::{PResult, ParseSess};
-use syntex_pos::{Span, DUMMY_SP};
-use syntex_errors::DiagnosticBuilder;
+use syntex_syntax::ptr::P;
+use syntex_syntax::symbol::Symbol;
 
-use petgraph::Graph;
-use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph;
+use petgraph::Graph;
 use petgraph::algo::dijkstra;
+use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 
+use self::parsing::parse_types_conv_map;
 use errors::fatal_error;
 use my_ast::{check_if_smart_pointer_return_inner_type, get_trait_bounds, normalized_ty_string,
              parse_ty, GenericTypeConv, RustType};
-use self::parsing::parse_types_conv_map;
 use {ForeignEnumInfo, ForeignerClassInfo};
 
 pub(crate) static TO_VAR_TEMPLATE: &'static str = "{to_var}";
@@ -1017,11 +1017,11 @@ mod test_helper;
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-    use super::*;
     use self::test_helper::*;
-    use syntex_pos::DUMMY_SP;
+    use super::*;
     use my_ast::parse_ty;
+    use std::collections::HashSet;
+    use syntex_pos::DUMMY_SP;
 
     #[test]
     fn test_merge() {

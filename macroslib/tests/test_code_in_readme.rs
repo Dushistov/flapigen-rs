@@ -4,14 +4,14 @@ extern crate rust_swig;
 extern crate syntex;
 extern crate tempdir;
 
-use std::path::Path;
+use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::fs;
+use std::path::Path;
 
-use tempdir::TempDir;
 use cmark::{Event, Parser, Tag};
 use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
+use tempdir::TempDir;
 
 #[macro_use]
 #[path = "../src/test_helper.rs"]

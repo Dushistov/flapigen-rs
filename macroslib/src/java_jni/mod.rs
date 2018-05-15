@@ -4,19 +4,19 @@ mod rust_code;
 use std::fmt;
 
 use petgraph::Direction;
-use syntex_syntax::ast;
-use syntex_syntax::ptr::P;
-use syntex_syntax::parse::{PResult, ParseSess};
-use syntex_syntax::symbol::Symbol;
 use syntex_pos::DUMMY_SP;
+use syntex_syntax::ast;
 use syntex_syntax::ast::DUMMY_NODE_ID;
+use syntex_syntax::parse::{PResult, ParseSess};
+use syntex_syntax::ptr::P;
+use syntex_syntax::symbol::Symbol;
 
+use errors::fatal_error;
+use my_ast::{normalized_ty_string, parse_ty, RustType};
 use types_conv_map::{make_unique_rust_typename, ForeignMethodSignature, ForeignTypeInfo,
                      FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
-use errors::fatal_error;
 use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
      LanguageGenerator, MethodVariant, TypesConvMap};
-use my_ast::{normalized_ty_string, parse_ty, RustType};
 
 struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,

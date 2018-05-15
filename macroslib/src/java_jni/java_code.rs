@@ -1,13 +1,13 @@
-use std::path::Path;
-use std::io::Write;
 use std::fmt;
+use std::io::Write;
+use std::path::Path;
 
 use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
 use syntex_syntax::symbol::Symbol;
 
 use super::{fmt_write_err_map, method_name, JniForeignMethodSignature};
-use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodVariant};
 use file_cache::FileWriteCache;
+use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodVariant};
 
 bitflags! {
     struct ArgsFormatFlags: u8 {

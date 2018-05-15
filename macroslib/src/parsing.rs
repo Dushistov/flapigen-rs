@@ -1,18 +1,18 @@
-use syntex_syntax::parse::{parser, token, PResult};
-use syntex_syntax::{ast, codemap, parse};
-use syntex_syntax::ptr::P;
-use syntex_syntax::parse::common::SeqSep;
-use syntex_syntax::symbol::{keywords, Symbol};
-use syntex_syntax::ast::{Arg, FnDecl, Mutability, SelfKind};
-use syntex_pos::{mk_sp, Span, DUMMY_SP};
-use syntex_syntax::parse::parser::Parser;
-use syntex_syntax::ext::base::ExtCtxt;
-use syntex_syntax::tokenstream::TokenTree;
 use syntex_errors::DiagnosticBuilder;
+use syntex_pos::{mk_sp, Span, DUMMY_SP};
+use syntex_syntax::ast::{Arg, FnDecl, Mutability, SelfKind};
+use syntex_syntax::ext::base::ExtCtxt;
+use syntex_syntax::parse::common::SeqSep;
+use syntex_syntax::parse::parser::Parser;
+use syntex_syntax::parse::{parser, token, PResult};
+use syntex_syntax::ptr::P;
+use syntex_syntax::symbol::{keywords, Symbol};
+use syntex_syntax::tokenstream::TokenTree;
+use syntex_syntax::{ast, codemap, parse};
 
+use my_ast::{if_result_return_ok_err_types, normalized_ty_string, self_variant};
 use {ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
      ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
-use my_ast::{if_result_return_ok_err_types, normalized_ty_string, self_variant};
 
 /// Returns the parsed optional self argument and whether a self shortcut was used.
 fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>> {

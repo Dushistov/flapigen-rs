@@ -1,12 +1,12 @@
-use syntex_syntax::parse::{PResult, ParseSess};
-use syntex_syntax::ptr::P;
 use syntex_syntax::ast;
 use syntex_syntax::ast::DUMMY_NODE_ID;
+use syntex_syntax::parse::{PResult, ParseSess};
+use syntex_syntax::ptr::P;
 
-use my_ast::RustType;
-use {ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
 use super::{ForeignMethodSignature, ForeignTypeInfo, TypesConvMap};
 use errors::fatal_error;
+use my_ast::RustType;
+use {ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
 
 pub(crate) fn foreign_from_rust_convert_method_output<'a>(
     sess: &'a ParseSess,

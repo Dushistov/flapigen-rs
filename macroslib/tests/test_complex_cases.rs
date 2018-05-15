@@ -7,13 +7,13 @@ extern crate tempdir;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
 use std::panic;
+use std::path::Path;
 
 use regex::Regex;
-use tempdir::TempDir;
 use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
 use syntex::Registry;
+use tempdir::TempDir;
 
 #[macro_use]
 #[path = "../src/test_helper.rs"]

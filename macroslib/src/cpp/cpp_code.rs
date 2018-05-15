@@ -1,14 +1,14 @@
-use syntex_syntax::symbol::Symbol;
 use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
+use syntex_syntax::symbol::Symbol;
 
-use std::io::Write;
 use std::fmt;
+use std::io::Write;
 use std::path::Path;
 
-use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo};
 use super::{fmt_write_err_map, CppForeignMethodSignature};
-use types_conv_map::FROM_VAR_TEMPLATE;
 use file_cache::FileWriteCache;
+use types_conv_map::FROM_VAR_TEMPLATE;
+use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo};
 
 pub(in cpp) fn generate_code_for_enum(
     output_dir: &Path,

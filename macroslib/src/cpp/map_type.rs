@@ -1,19 +1,19 @@
-use std::io::Write;
-use syntex_syntax::parse::{PResult, ParseSess};
-use syntex_syntax::ast;
-use syntex_pos::{Span, DUMMY_SP};
-use syntex_syntax::symbol::Symbol;
 use petgraph::Direction;
+use std::io::Write;
+use syntex_pos::{Span, DUMMY_SP};
+use syntex_syntax::ast;
+use syntex_syntax::parse::{PResult, ParseSess};
+use syntex_syntax::symbol::Symbol;
 
+use cpp::cpp_code::c_class_type;
+use cpp::{CppConverter, CppForeignTypeInfo};
+use errors::fatal_error;
+use file_cache::FileWriteCache;
 use my_ast::{code_to_item, if_option_return_some_type, if_result_return_ok_err_types,
              if_vec_return_elem_type, normalized_ty_string, parse_ty, RustType};
-use errors::fatal_error;
 use types_conv_map::{make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE,
                      TO_VAR_TEMPLATE};
 use {CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypesConvMap};
-use cpp::{CppConverter, CppForeignTypeInfo};
-use cpp::cpp_code::c_class_type;
-use file_cache::FileWriteCache;
 
 fn special_type<'a>(
     sess: &'a ParseSess,

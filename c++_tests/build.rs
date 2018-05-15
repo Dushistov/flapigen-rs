@@ -2,10 +2,10 @@ extern crate env_logger;
 extern crate rust_swig;
 extern crate syntex;
 
-use std::time::Instant;
+use rust_swig::{CppConfig, LanguageConfig};
 use std::env;
 use std::path::Path;
-use rust_swig::{CppConfig, LanguageConfig};
+use std::time::Instant;
 
 fn main() {
     env_logger::init().unwrap();
