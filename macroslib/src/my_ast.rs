@@ -1,15 +1,15 @@
-use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
-use syntex_syntax::{ast, parse};
+use syntex_pos::{Span, DUMMY_SP};
+use syntex_syntax::fold::{noop_fold_ty, Folder};
+use syntex_syntax::parse::{PResult, ParseSess};
 use syntex_syntax::print::pprust;
 use syntex_syntax::ptr::P;
 use syntex_syntax::symbol::Symbol;
-use syntex_pos::{Span, DUMMY_SP};
-use syntex_syntax::parse::{PResult, ParseSess};
-use syntex_syntax::fold::{noop_fold_ty, Folder};
 use syntex_syntax::visit::{walk_lifetime, walk_ty, Visitor};
+use syntex_syntax::{ast, parse};
 
 use SelfTypeVariant;
 use errors::fatal_error;
@@ -556,8 +556,8 @@ mod test_helper;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use self::test_helper::*;
+    use super::*;
     use syntex_syntax::parse;
     use syntex_syntax::parse::ParseSess;
 

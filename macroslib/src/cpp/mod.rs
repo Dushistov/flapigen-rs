@@ -1,32 +1,32 @@
 mod cpp_code;
 mod map_type;
 
-use std::path::Path;
 use std::io::Write;
+use std::path::Path;
 use std::{fmt, mem};
 
 use petgraph::Direction;
-use syntex_syntax::ptr::P;
-use syntex_syntax::parse::{PResult, ParseSess};
+use syntex_pos::DUMMY_SP;
 use syntex_syntax::ast;
 use syntex_syntax::ast::DUMMY_NODE_ID;
-use syntex_pos::DUMMY_SP;
-use syntex_syntax::symbol::Symbol;
+use syntex_syntax::parse::{PResult, ParseSess};
 use syntex_syntax::print::pprust;
+use syntex_syntax::ptr::P;
+use syntex_syntax::symbol::Symbol;
 
+use self::map_type::map_type;
+use errors::fatal_error;
+use file_cache::FileWriteCache;
 use my_ast::{code_to_item, get_ref_type, list_lifetimes, normalized_ty_string, parse_ty,
              self_variant, RustType};
-use errors::fatal_error;
-use types_conv_map::{make_unique_rust_typename, unpack_unique_typename, ForeignMethodSignature,
-                     ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
 use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
                             foreign_from_rust_convert_method_output,
                             foreign_to_rust_convert_method_inputs,
                             rust_to_foreign_convert_method_inputs};
+use types_conv_map::{make_unique_rust_typename, unpack_unique_typename, ForeignMethodSignature,
+                     ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
 use {CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
      LanguageGenerator, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap};
-use self::map_type::map_type;
-use file_cache::FileWriteCache;
 
 struct CppConverter {
     typename: Symbol,

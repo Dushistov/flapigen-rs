@@ -16,11 +16,11 @@ extern crate rust_swig;
 extern crate syntex;
 extern crate walkdir;
 
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::{env, fmt};
-use std::io::prelude::*;
-use std::fs::File;
-use std::path::{Path, PathBuf};
 
 use bindgen::RustTarget;
 use rust_swig::{JavaConfig, LanguageConfig};
@@ -31,24 +31,29 @@ fn main() {
     // these lines also serve as a guard so only true android triples receive
     // JNI generation.
     let target = env::var("TARGET").unwrap();
-    if ["aarch64-linux-android",
+    if [
+        "aarch64-linux-android",
         "arm-linux-androideabi",
         "i686-linux-android",
-        "x86_64-linux-android"]
-        .contains(&target.as_str()) {
-            gen_for_android();
-        }
+        "x86_64-linux-android",
+    ].contains(&target.as_str())
+    {
+        gen_for_android();
+    }
 }
 
 fn gen_for_android() {
     let target = env::var("TARGET").unwrap();
-    
+
     let include_dirs =
         get_gcc_system_include_dirs(&target).expect("Can't get NDK's system include dirs");
 
-    let include_headers: Vec<_> = INCLUDE_SYS_H.into_iter()
-        .map(|h| search_file_in_directory(&include_dirs, h)
-             .expect(format!("Could not find header {}", h).as_ref()))
+    let include_headers: Vec<_> = INCLUDE_SYS_H
+        .into_iter()
+        .map(|h| {
+            search_file_in_directory(&include_dirs, h)
+                .expect(format!("Could not find header {}", h).as_ref())
+        })
         .collect();
 
     let src_dir = Path::new(RUST_SRC_DIR);
@@ -70,19 +75,17 @@ fn gen_for_android() {
 
         println!("Found SWIG specification: {}", entry.path().display());
         let swigf = entry.path().strip_prefix("src").unwrap();
-        
-        rust_swig_expand(
-            &src_dir,
-            &swigf,
-            Path::new(&out_dir),
-        ).unwrap();
+
+        rust_swig_expand(&src_dir, &swigf, Path::new(&out_dir)).unwrap();
 
         write_include_file(&src_dir, swigf).expect("Failed to write include file.");
     }
 
     // Hook up cargo reruns
     println!("cargo:rerun-if-changed={}", RUST_SRC_DIR);
-    for dir in &include_dirs {println!("cargo:rerun-if-changed={}", dir.display());}
+    for dir in &include_dirs {
+        println!("cargo:rerun-if-changed={}", dir.display());
+    }
     //if the generated files were deleted (e.g by gradle -q clean), regenerate them
     println!("cargo:rerun-if-changed={}", out_dir);
 }
@@ -90,7 +93,7 @@ fn gen_for_android() {
 fn get_gcc_system_include_dirs(target: &str) -> Result<Vec<PathBuf>, String> {
     let gcc_cmd = match env::var("RUSTC_LINKER") {
         Ok(path) => path,
-        Err(_) => target.to_owned() + "-gcc"
+        Err(_) => target.to_owned() + "-gcc",
     };
 
     println!("Trying Android gcc from '{}'", gcc_cmd);
@@ -100,16 +103,21 @@ fn get_gcc_system_include_dirs(target: &str) -> Result<Vec<PathBuf>, String> {
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
         .stdout(Stdio::inherit())
-        .spawn() { // there are more elegant ways to write this, but this works
-            Err(e) => if std::io::ErrorKind::NotFound == e.kind() {
-                panic!("Could not find a suitable NDK gcc (tried {})
+        .spawn()
+    {
+        // there are more elegant ways to write this, but this works
+        Err(e) => if std::io::ErrorKind::NotFound == e.kind() {
+            panic!(
+                "Could not find a suitable NDK gcc (tried {})
     You can fix this either by adding the toolchain's bin/ to your $PATH, or by
-    merging PR#5394 form github.com/rust-lang/cargo into your version of Cargo.", &gcc_cmd);
-            } else {
-                panic!("Failed to spawn NDK gcc: {}", e);
-            },
-            Ok(p) => p,
-        };
+    merging PR#5394 form github.com/rust-lang/cargo into your version of Cargo.",
+                &gcc_cmd
+            );
+        } else {
+            panic!("Failed to spawn NDK gcc: {}", e);
+        },
+        Ok(p) => p,
+    };
 
     gcc_process
         .stdin
@@ -136,9 +144,9 @@ fn get_gcc_system_include_dirs(target: &str) -> Result<Vec<PathBuf>, String> {
         + start_includes;
 
     Ok((&gcc_output[start_includes..end_includes])
-       .split('\n')
-       .map(|s| PathBuf::from(s.trim().to_string()))
-       .collect())
+        .split('\n')
+        .map(|s| PathBuf::from(s.trim().to_string()))
+        .collect())
 }
 
 fn search_file_in_directory<P>(dirs: &[P], file: &str) -> Result<PathBuf, ()>
@@ -215,22 +223,27 @@ fn rust_swig_expand(source_dir: &Path, file: &Path, out_dir: &Path) -> Result<()
                 .join("main")
                 .join("java")
                 .join(ANDROID_PACKAGE_ID.replace(".", "/")),
-            ANDROID_PACKAGE_ID.to_string()
+            ANDROID_PACKAGE_ID.to_string(),
         ).use_null_annotation("android.support.annotation.NonNull".into()),
     ));
     swig_gen.register(&mut registry);
 
-    let out_file = out_dir.join(Path::new(file.parent().unwrap_or(Path::new(".")))
-                                .join(file.file_stem().expect("Got invalid file (no filename)")));
-    
+    let out_file = out_dir.join(
+        Path::new(file.parent().unwrap_or(Path::new(".")))
+            .join(file.file_stem().expect("Got invalid file (no filename)")),
+    );
+
     registry
         .expand(ANDROID_PACKAGE_ID.as_ref(), source_dir.join(file), out_file)
         .map_err(|err| format!("Rust-SWIG expansion failed: {}", err))
 }
 
 fn write_include_file(source_dir: &Path, swig_file: &Path) -> std::io::Result<()> {
-    let rs_rel_file = Path::new(swig_file.parent().unwrap_or(Path::new(".")))
-        .join(swig_file.file_stem().expect("Got invalid file (no filename)"));
+    let rs_rel_file = Path::new(swig_file.parent().unwrap_or(Path::new("."))).join(
+        swig_file
+            .file_stem()
+            .expect("Got invalid file (no filename)"),
+    );
     let rs_path = source_dir.join(&rs_rel_file);
 
     if rs_path.exists() {
@@ -239,11 +252,14 @@ fn write_include_file(source_dir: &Path, swig_file: &Path) -> std::io::Result<()
     }
 
     let mut rs_file = File::create(rs_path)?;
-    rs_file.write_all(format!(
-        r#"// Automatically generated by Rust-SWIG
+    rs_file.write_all(
+        format!(
+            r#"// Automatically generated by Rust-SWIG
 
 include!(concat!(env!("OUT_DIR"), "/{}"));"#,
-        rs_rel_file.to_string_lossy()).as_bytes())?;
+            rs_rel_file.to_string_lossy()
+        ).as_bytes(),
+    )?;
 
     return Ok(());
 }

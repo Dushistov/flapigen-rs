@@ -1,20 +1,20 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::cell::RefCell;
 use std::str::FromStr;
 
-use syntex_syntax::parse::{PResult, ParseSess};
-use syntex_syntax::symbol::Symbol;
-use syntex_syntax::{ast, codemap, parse};
 use syntex_pos::Span;
 use syntex_syntax::codemap::Spanned;
+use syntex_syntax::parse::{PResult, ParseSess};
 use syntex_syntax::ptr::P;
+use syntex_syntax::symbol::Symbol;
+use syntex_syntax::{ast, codemap, parse};
 
-use my_ast::{normalized_ty_string, parse_ty, GenericTypeConv, RustType};
 use super::{validate_code_template, NodeIndex, TypeConvEdge, TypeGraphIdx, TypesConvGraph,
             TypesConvMap};
-use types_conv_map::{make_unique_rust_typename, make_unique_rust_typename_if_need};
 use errors::fatal_error;
+use my_ast::{normalized_ty_string, parse_ty, GenericTypeConv, RustType};
+use types_conv_map::{make_unique_rust_typename, make_unique_rust_typename_if_need};
 
 static MOD_NAME_WITH_FOREIGN_TYPES: &'static str = "swig_foreign_types_map";
 static SWIG_FOREIGNER_TYPE: &'static str = "swig_foreigner_type";
@@ -711,10 +711,10 @@ mod test_helper;
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-    use super::*;
-    use syntex_pos::DUMMY_SP;
     use self::test_helper::*;
+    use super::*;
+    use std::collections::HashSet;
+    use syntex_pos::DUMMY_SP;
 
     #[test]
     fn test_double_map_err() {

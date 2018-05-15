@@ -3,10 +3,10 @@ extern crate env_logger;
 extern crate rust_swig;
 extern crate syntex;
 
-use std::env;
-use std::time::Instant;
-use std::path::{Path, PathBuf};
 use rust_swig::{JavaConfig, LanguageConfig};
+use std::env;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 fn main() {
     env_logger::init().unwrap();

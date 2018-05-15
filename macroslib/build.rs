@@ -1,10 +1,10 @@
 extern crate syntex_syntax;
 
-use std::path::Path;
-use std::fs::File;
 use std::env;
-use syntex_syntax::parse::ParseSess;
+use std::fs::File;
+use std::path::Path;
 use syntex_syntax::parse;
+use syntex_syntax::parse::ParseSess;
 use syntex_syntax::print::{pp, pprust};
 
 fn main() {

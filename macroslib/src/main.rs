@@ -3,11 +3,11 @@
 extern crate rust_swig;
 extern crate syntex;
 
+use rust_swig::{Generator, JavaConfig, LanguageConfig};
+use std::io::Read;
 use std::path::Path;
 use std::{env, fs};
-use rust_swig::{Generator, JavaConfig, LanguageConfig};
 use syntex::Registry;
-use std::io::Read;
 
 fn main() {
     let type_map = if let Some("--type-map") = env::args().nth(1).as_ref().map(String::as_str) {

@@ -5,20 +5,20 @@ extern crate jni_sys;
 extern crate log;
 
 mod jni {
-    use std::time::SystemTime;
-    use std::path::Path;
-    use std::sync::{Arc, Mutex, MutexGuard};
-    use std::rc::Rc;
-    use std::cell::{Ref, RefCell, RefMut};
     use jni_sys::*;
+    use std::cell::{Ref, RefCell, RefMut};
+    use std::path::Path;
+    use std::rc::Rc;
+    use std::sync::{Arc, Mutex, MutexGuard};
+    use std::time::SystemTime;
 
     include!(concat!(env!("OUT_DIR"), "/jni-include.rs"));
 }
 mod cpp {
-    use std::sync::{Arc, Mutex, MutexGuard};
-    use std::rc::Rc;
     use std::cell::{Ref, RefCell, RefMut};
     use std::path::Path;
+    use std::rc::Rc;
+    use std::sync::{Arc, Mutex, MutexGuard};
     include!(concat!(env!("OUT_DIR"), "/cpp-include.rs"));
 }
 
