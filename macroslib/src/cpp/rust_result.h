@@ -19,3 +19,19 @@ struct CResultCRustForeignVecString {
         struct CRustString err;
     } data;
 };
+
+struct CResultObjectObject {
+    uint8_t is_ok;
+    union {
+        void *ok;
+        void *err;
+    } data;
+};
+
+struct CResultVecObjectObject {
+    uint8_t is_ok;
+    union {
+        struct CRustForeignVec ok;
+        void *err;
+    } data;
+};
