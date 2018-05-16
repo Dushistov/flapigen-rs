@@ -402,6 +402,12 @@ TEST(TestOptional, smokeTest)
         EXPECT_EQ(std::string("17"), foor.getName().to_std_string());
         x.f6({});
     }
+
+    {
+        auto val = x.f7();
+        ASSERT_TRUE(!!val);
+        EXPECT_EQ(ITEM1, *val);
+    }
 }
 
 TEST(TestResult, smokeTest)
@@ -444,7 +450,7 @@ TEST(TestResult, smokeTest)
     EXPECT_EQ(nullptr, std::get_if<Foo>(&f2_err));
     EXPECT_NE(nullptr, std::get_if<TestError>(&f2_err));
     TestError f2_err_ret = std::get<TestError>(std::move(f2_err));
-    ASSERT_EQ(std::string_view("Not ok"), RustString{f2_err_ret.to_string()}.to_string_view());
+    ASSERT_EQ(std::string_view("Not ok"), RustString{ f2_err_ret.to_string() }.to_string_view());
 
     auto f3_ok = TestResult::f3(true);
     EXPECT_NE(nullptr, std::get_if<RustForeignVecFoo>(&f3_ok));
@@ -461,7 +467,7 @@ TEST(TestResult, smokeTest)
     EXPECT_EQ(nullptr, std::get_if<RustForeignVecFoo>(&f3_err));
     EXPECT_NE(nullptr, std::get_if<TestError>(&f3_err));
     TestError f3_err_ret = std::get<TestError>(std::move(f3_err));
-    ASSERT_EQ(std::string_view("Not ok"), RustString{f3_err_ret.to_string()}.to_string_view());
+    ASSERT_EQ(std::string_view("Not ok"), RustString{ f3_err_ret.to_string() }.to_string_view());
 #endif //HAS_STDCXX_17
 #ifdef USE_BOOST
     boost::variant<TestResult, RustString> res = TestResult::new_with_err();

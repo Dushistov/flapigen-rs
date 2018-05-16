@@ -804,28 +804,54 @@ fn handle_option_type_in_return<'a>(
             }));
         }
     }
-
     let mut cpp_info_opt = map_ordinal_result_type(sess, conv_map, arg_ty)?;
     let cpp_info_ty = map_ordinal_result_type(sess, conv_map, opt_ty)?;
     let f_opt_ty = cpp_info_ty.base.name;
-    let (typename, output_converter) = match cpp_cfg.cpp_optional {
-        CppOptional::Std17 => (
-            Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
-            format!(
-                "{var}.is_some ? {var}.val : std::optional<{Type}>()",
-                Type = f_opt_ty,
-                var = FROM_VAR_TEMPLATE,
-            ),
-        ),
-        CppOptional::Boost => (
-            Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
-            format!(
-                "{var}.is_some ? {var}.val : boost::optional<{Type}>()",
-                Type = f_opt_ty,
-                var = FROM_VAR_TEMPLATE,
-            ),
-        ),
-    };
+    debug!("is_this_exported_enum {:?}", opt_ty);
+    let (typename, output_converter) =
+        if let Some(foreign_enum) = conv_map.is_this_exported_enum(opt_ty) {
+            match cpp_cfg.cpp_optional {
+                CppOptional::Std17 => (
+                    Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
+                    format!(
+                        "{var}.is_some ? static_cast<{EnumType}>({var}.val)
+ : std::optional<{Type}>()",
+                        Type = f_opt_ty,
+                        var = FROM_VAR_TEMPLATE,
+                        EnumType = foreign_enum.name,
+                    ),
+                ),
+                CppOptional::Boost => (
+                    Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
+                    format!(
+                        "{var}.is_some ? static_cast<{EnumType}>({var}.val)
+ : boost::optional<{Type}>()",
+                        Type = f_opt_ty,
+                        var = FROM_VAR_TEMPLATE,
+                        EnumType = foreign_enum.name,
+                    ),
+                ),
+            }
+        } else {
+            match cpp_cfg.cpp_optional {
+                CppOptional::Std17 => (
+                    Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
+                    format!(
+                        "{var}.is_some ? {var}.val : std::optional<{Type}>()",
+                        Type = f_opt_ty,
+                        var = FROM_VAR_TEMPLATE,
+                    ),
+                ),
+                CppOptional::Boost => (
+                    Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
+                    format!(
+                        "{var}.is_some ? {var}.val : boost::optional<{Type}>()",
+                        Type = f_opt_ty,
+                        var = FROM_VAR_TEMPLATE,
+                    ),
+                ),
+            }
+        };
     cpp_info_opt.cpp_converter = Some(CppConverter {
         typename,
         output_converter,

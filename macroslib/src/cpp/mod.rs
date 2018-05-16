@@ -1160,6 +1160,35 @@ impl SwigFrom<u32> for {rust_enum_name} {{
     write!(
         &mut code,
         r#"
+impl SwigFrom<Option<u32>> for Option<{rust_enum_name}> {{
+    fn swig_from(x: Option<u32>) -> Option<{rust_enum_name}> {{
+        x.map(|v| match v {{
+
+"#,
+        rust_enum_name = rust_enum_name,
+    ).unwrap();
+    for (i, item) in enum_info.items.iter().enumerate() {
+        write!(
+            &mut code,
+            "{index} => {item_name},\n",
+            index = i,
+            item_name = item.rust_name
+        ).unwrap();
+    }
+    write!(
+        &mut code,
+        r#"
+        _ => panic!("{{}} not expected for {rust_enum_name}", x),
+        }})
+    }}
+}}
+"#,
+        rust_enum_name = rust_enum_name,
+    ).unwrap();
+
+    write!(
+        &mut code,
+        r#"
 mod swig_foreign_types_map {{
     #![swig_foreigner_type = "{enum_name}"]
     #![swig_rust_type = "{rust_enum_name}"]
@@ -1191,6 +1220,36 @@ impl SwigFrom<{rust_enum_name}> for u32 {{
 }}
 "#
     ).unwrap();
+
+    write!(
+        &mut code,
+        r#"
+impl SwigFrom<Option<{rust_enum_name}>> for Option<u32> {{
+   fn swig_from(x: Option<{rust_enum_name}>) -> Option<u32> {{
+        x.map(|v| match v {{
+"#,
+        rust_enum_name = rust_enum_name,
+    ).unwrap();
+
+    for (i, item) in enum_info.items.iter().enumerate() {
+        write!(
+            &mut code,
+            r#"
+           {item_name} => {index},
+"#,
+            index = i,
+            item_name = item.rust_name
+        ).unwrap();
+    }
+    write!(
+        &mut code,
+        r#"
+       }})
+    }}
+}}
+"#
+    ).unwrap();
+
     conv_map.register_exported_enum(enum_info);
     conv_map.merge(
         sess,
