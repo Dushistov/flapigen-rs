@@ -10,7 +10,8 @@ use cpp::{CppConverter, CppForeignTypeInfo};
 use errors::fatal_error;
 use file_cache::FileWriteCache;
 use my_ast::{code_to_item, if_option_return_some_type, if_result_return_ok_err_types,
-             if_vec_return_elem_type, normalized_ty_string, parse_ty, RustType};
+             if_type_slice_return_elem_type, if_vec_return_elem_type, normalized_ty_string,
+             parse_ty, RustType};
 use types_conv_map::{make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE,
                      TO_VAR_TEMPLATE};
 use {CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypesConvMap};
@@ -130,6 +131,9 @@ fn special_type<'a>(
         if let Some(elem_ty) = if_vec_return_elem_type(arg_ty) {
             return map_return_type_vec(sess, conv_map, cpp_cfg, arg_ty, elem_ty);
         }
+        if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty) {
+            return map_return_slice_type(sess, conv_map, arg_ty, elem_ty);
+        }
     }
 
     trace!("Oridinary type {:?}", arg_ty);
@@ -247,6 +251,31 @@ fn map_ordinal_input_type<'a>(
             )
         })?
         .into())
+}
+
+fn map_return_slice_type<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    arg_ty: &ast::Ty,
+    elem_ty: ast::Ty,
+) -> PResult<'a, Option<CppForeignTypeInfo>> {
+    let mut ftype_info = map_ordinal_result_type(sess, conv_map, arg_ty)?;
+    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&elem_ty, false)
+    {
+        let typename = Symbol::intern(&format!("RustForeignSlice<{}Ref>", foreign_class.name));
+        ftype_info.cpp_converter = Some(CppConverter {
+            typename,
+            output_converter: format!(
+                "{cpp_type}{{{var}}}",
+                cpp_type = typename,
+                var = FROM_VAR_TEMPLATE
+            ),
+            input_converter: "#error".to_string(),
+        });
+        return Ok(Some(ftype_info));
+    } else {
+        Ok(None)
+    }
 }
 
 fn map_return_type_vec<'a>(

@@ -291,6 +291,10 @@ impl TestWorkWithVec {
         self.vec_foo.clone()
     }
 
+    fn get_slice_foo(&self) -> &[Foo] {
+        &self.vec_foo
+    }
+
     fn create_foo_vec(n: usize) -> Vec<Foo> {
         let mut v = Vec::with_capacity(n);
         for i in 0..n {
@@ -309,6 +313,7 @@ foreigner_class!(class TestWorkWithVec {
     method TestWorkWithVec::get_vec_f32(&self) -> Vec<f32>;
     method TestWorkWithVec::get_vec_f64(&self) -> Vec<f64>;
     method TestWorkWithVec::get_vec_foo(&self) -> Vec<Foo>;
+    method TestWorkWithVec::get_slice_foo(&self) -> &[Foo];
     static_method TestWorkWithVec::create_foo_vec(n: usize) -> Vec<Foo>;
 });
 

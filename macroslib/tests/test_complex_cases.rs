@@ -838,6 +838,44 @@ foreigner_class!(class Boo {
 }
 
 #[test]
+fn test_return_slice() {
+    let gen_code = parse_code(
+        "test_return_slice",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -> Foo;
+    method Foo::f(&self, _: i32, _: i32) -> i32;
+});
+
+foreigner_class!(class Boo {
+    self_type Boo;
+
+    constructor Boo::new(_: i32, _: usize) -> Boo;
+    method Boo::f1(&self) -> &[u32];
+    method Boo::f2(&self) -> &[Foo];
+});
+"#,
+        &[ForeignLang::Cpp],
+    );
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("struct CRustObjectSlice Boo_f2(const BooOpaque *")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("RustForeignSlice<FooRef> f2() const")
+    );
+}
+
+#[test]
 fn test_string_as_arg() {
     let gen_code = parse_code(
         "test_string_as_arg",

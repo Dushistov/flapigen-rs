@@ -197,6 +197,9 @@ fn is_second_subst_of_first(
                 is_second_subst_of_first(&*mut_ty1.ty, &*mut_ty2.ty, subst_map)
             }
         }
+        (&ast::TyKind::Slice(ref ty1), &ast::TyKind::Slice(ref ty2)) => {
+            is_second_subst_of_first(ty1, ty2, subst_map)
+        }
         _ => {
             //TODO: more smart way to strip spans in case of pointers
             let ret = format!("{:?}", ty1.node) == format!("{:?}", ty2.node);
@@ -345,6 +348,26 @@ fn generic_params_new(names: &[&str]) -> ast::Generics {
             predicates: vec![],
         },
         span: DUMMY_SP,
+    }
+}
+
+pub(crate) fn if_type_slice_return_elem_type(ty: &ast::Ty) -> Option<ast::Ty> {
+    if let ast::TyKind::Rptr(
+        _,
+        ast::MutTy {
+            ref ty,
+            mutbl: ast::Mutability::Immutable,
+        },
+    ) = ty.node
+    {
+        if let ast::TyKind::Slice(ref ty) = ty.node {
+            let ty: &ast::Ty = &*ty;
+            Some(ty.clone())
+        } else {
+            None
+        }
+    } else {
+        None
     }
 }
 
