@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::mem;
 use std::rc::Rc;
 
 use syntex_pos::{Span, DUMMY_SP};
@@ -202,6 +203,9 @@ fn is_second_subst_of_first(
         }
         _ => {
             //TODO: more smart way to strip spans in case of pointers
+            if mem::discriminant(&ty1.node) != mem::discriminant(&ty2.node) {
+                return false;
+            }
             let ret = format!("{:?}", ty1.node) == format!("{:?}", ty2.node);
             trace!(
                 "is_second_substitude_of_first just check equal {:?} vs {:?} => {}",
