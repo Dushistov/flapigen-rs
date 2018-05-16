@@ -1178,7 +1178,7 @@ impl SwigFrom<Option<u32>> for Option<{rust_enum_name}> {{
     write!(
         &mut code,
         r#"
-        _ => panic!("{{}} not expected for {rust_enum_name}", x),
+        _ => panic!("{{}} not expected for {rust_enum_name}", v),
         }})
     }}
 }}

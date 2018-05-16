@@ -622,6 +622,16 @@ impl SwigFrom<Option<u32>> for CRustOptionU32 {
     }
 }
 
+impl SwigInto<Option<u32>> for CRustOptionU32 {
+    fn swig_into(self) -> Option<u32> {
+        if self.is_some != 0 {
+            Some(self.val)
+        } else {
+            None
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[repr(C)]
 pub struct CRustOptionUSize {

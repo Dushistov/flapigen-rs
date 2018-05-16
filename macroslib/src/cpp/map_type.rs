@@ -661,21 +661,27 @@ fn handle_option_type_in_input<'a>(
     if c_option_name.starts_with("struct ") {
         c_option_name = &c_option_name[7..];
     }
+    let mut conv: &'static str = "";
+    if conv_map.is_this_exported_enum(opt_ty).is_some() {
+        conv = "static_cast<uint32_t>";
+    }
     let (typename, input_converter) = match cpp_cfg.cpp_optional {
         CppOptional::Std17 => (
             Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
             format!(
-                "!!{var} ? {CType}{{*{var}, 1}} : c_option_empty<{CType}>()",
+                "!!{var} ? {CType}{{{conv}(*{var}), 1}} : c_option_empty<{CType}>()",
                 CType = c_option_name,
                 var = FROM_VAR_TEMPLATE,
+                conv = conv,
             ),
         ),
         CppOptional::Boost => (
             Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
             format!(
-                "!!{var} ? {CType}{{*{var}, 1}} : c_option_empty<{CType}>()",
+                "!!{var} ? {CType}{{{conv}(*{var}), 1}} : c_option_empty<{CType}>()",
                 CType = c_option_name,
                 var = FROM_VAR_TEMPLATE,
+                conv = conv,
             ),
         ),
     };
