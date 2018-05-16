@@ -424,6 +424,9 @@ impl TestOptional {
             self.foo = x;
         }
     }
+    fn f7(&self) -> Option<MyEnum> {
+        Some(MyEnum::Item1)
+    }
 }
 
 foreigner_class!(class TestOptional {
@@ -435,6 +438,7 @@ foreigner_class!(class TestOptional {
     method TestOptional::f4(&self, _: Option<f64>) -> f64;
     method TestOptional::f5(&self, x: bool) -> Option<&Foo>;
     method TestOptional::f6(&mut self, a: Option<Foo>);
+    method TestOptional::f7(&self) -> Option<MyEnum>;
 });
 
 #[derive(Default)]
