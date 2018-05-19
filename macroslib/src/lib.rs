@@ -172,6 +172,13 @@ enum MethodVariant {
     StaticMethod,
 }
 
+#[derive(PartialEq, Clone, Copy, Debug)]
+enum MethodAccess {
+    Private,
+    Public,
+    Protected,
+}
+
 #[derive(Debug, Clone)]
 struct ForeignerMethod {
     variant: MethodVariant,
@@ -180,7 +187,7 @@ struct ForeignerMethod {
     name_alias: Option<Symbol>,
     /// cache if rust_fn_decl.output == Result
     may_return_error: bool,
-    foreigner_private: bool,
+    access: MethodAccess,
     doc_comments: Vec<Symbol>,
 }
 
@@ -539,7 +546,7 @@ impl GeneratorData {
             self.init_types_map(cx.parse_sess(), pointer_target_width),
             self.conv_map
         );
-        let foreigner_class = match parse_foreigner_class(cx, tokens) {
+        let foreigner_class = match parse_foreigner_class(cx, &self.config, tokens) {
             Ok(x) => x,
             Err(_) => {
                 panic!("Can not parse foreigner_class");

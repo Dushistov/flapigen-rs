@@ -26,7 +26,7 @@ use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
 use types_conv_map::{make_unique_rust_typename, unpack_unique_typename, ForeignMethodSignature,
                      ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
 use {CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
-     LanguageGenerator, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap};
+     LanguageGenerator, MethodAccess, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap};
 
 struct CppConverter {
     typename: Symbol,
@@ -536,10 +536,10 @@ public:
             cpp_code::doc_comments_to_c_comments(&method.doc_comments, false)
         ).map_err(&map_write_err)?;
 
-        let method_access = if method.foreigner_private {
-            "private"
-        } else {
-            "public"
+        let method_access = match method.access {
+            MethodAccess::Private => "private",
+            MethodAccess::Public => "public",
+            MethodAccess::Protected => "protected",
         };
         let cpp_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false);
         write!(cpp_include_f, "{}:\n{}", method_access, cpp_comments,).map_err(&map_write_err)?;
@@ -892,10 +892,10 @@ fn c_func_name(
 ) -> String {
     format!(
         "{access}{internal}{class_name}_{func}",
-        access = if method.foreigner_private {
-            "private_"
-        } else {
-            ""
+        access = match method.access {
+            MethodAccess::Private => "private_",
+            MethodAccess::Protected => "protected_",
+            MethodAccess::Public => "",
         },
         internal = if need_cpp_helper_for_input_or_output(f_method) {
             "internal_"

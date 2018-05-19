@@ -7,7 +7,7 @@ use syntex_syntax::symbol::Symbol;
 
 use super::{fmt_write_err_map, method_name, JniForeignMethodSignature};
 use file_cache::FileWriteCache;
-use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodVariant};
+use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant};
 
 bitflags! {
     struct ArgsFormatFlags: u8 {
@@ -166,10 +166,10 @@ public final class {class_name} {{
             ""
         };
 
-        let method_access = if method.foreigner_private {
-            "private"
-        } else {
-            "public"
+        let method_access = match method.access {
+            MethodAccess::Private => "private",
+            MethodAccess::Public => "public",
+            MethodAccess::Protected => unreachable!(),
         };
 
         let convert_code = convert_code_for_method(f_method);
