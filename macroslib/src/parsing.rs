@@ -12,7 +12,8 @@ use syntex_syntax::{ast, codemap, parse};
 
 use my_ast::{if_result_return_ok_err_types, normalized_ty_string, self_variant};
 use {ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
-     ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
+     ForeignerClassInfo, ForeignerMethod, LanguageConfig, MethodAccess, MethodVariant,
+     SelfTypeVariant};
 
 /// Returns the parsed optional self argument and whether a self shortcut was used.
 fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>> {
@@ -174,11 +175,13 @@ where
 
 pub(crate) fn parse_foreigner_class(
     cx: &ExtCtxt,
+    config: &LanguageConfig,
     tokens: &[TokenTree],
 ) -> Result<ForeignerClassInfo, Span> {
     let class_keyword = ast::Ident::from_str("class");
     let alias_keyword = ast::Ident::from_str("alias");
     let private_keyword = ast::Ident::from_str("private");
+    let protected_keyword = ast::Ident::from_str("protected");
 
     let constructor_keyword = Symbol::intern("constructor");
     let method_keyword = Symbol::intern("method");
@@ -229,8 +232,15 @@ pub(crate) fn parse_foreigner_class(
             doc_comments.push(comment);
             parser.bump();
         }
-
-        let private_func = parser.eat_contextual_keyword(private_keyword);
+        let mut access = MethodAccess::Public;
+        if parser.eat_contextual_keyword(private_keyword) {
+            access = MethodAccess::Private;
+        }
+        if let LanguageConfig::CppConfig(_) = *config {
+            if parser.eat_contextual_keyword(protected_keyword) {
+                access = MethodAccess::Protected;
+            }
+        }
         let func_type_name = parser.parse_ident().map_err(&map_perror)?;
         debug!("func_type {:?}", func_type_name);
         if &*func_type_name.name.as_str() == "self_type" {
@@ -370,7 +380,7 @@ pub(crate) fn parse_foreigner_class(
             fn_decl: func_decl,
             name_alias: func_name_alias.map(|v| v.name),
             may_return_error: may_return_error,
-            foreigner_private: private_func,
+            access,
             doc_comments,
         });
     }

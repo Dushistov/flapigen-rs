@@ -876,14 +876,14 @@ foreigner_class!(class Boo {
 }
 
 #[test]
-fn test_string_as_arg() {
+fn test_string_handling() {
     let gen_code = parse_code(
-        "test_string_as_arg",
+        "test_string_handling",
         r#"
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32, _: String) -> i32;
+    method Foo::f(&self, _: i32, _: i32, _: String) -> String;
 });
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
@@ -897,6 +897,12 @@ foreigner_class!(class Foo {
         cpp_code_pair
             .rust_code
             .contains("a_2: String = a_2.swig_into();")
+    );
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("    RustString f(int32_t a_0, int32_t a_1, const char * a_2) const")
     );
 }
 

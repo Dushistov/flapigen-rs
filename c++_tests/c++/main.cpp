@@ -352,8 +352,7 @@ TEST(TestRustStringReturn, smokeTest)
     auto try_ret = [](const char *word) {
         Foo foo(1, word);
         EXPECT_EQ(std::string(word), foo.getName().to_std_string());
-        RustString s{ foo.ret_string() };
-        EXPECT_EQ(std::string(word), s.to_std_string());
+        EXPECT_EQ(std::string(word), foo.ret_string().to_std_string());
     };
     try_ret("Word");
     try_ret("");
