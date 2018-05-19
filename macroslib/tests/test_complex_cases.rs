@@ -713,6 +713,7 @@ foreigner_class!(class Foo {
    method Foo::f4(&self) -> Option<usize>;
    method Foo::f5(&self) -> Option<&Boo>;
    method Foo::f6(&self) -> Option<ControlItem>;
+   method Foo::f7(&self) -> Option<u64>;
 });
 "#,
         &[ForeignLang::Cpp],
@@ -753,6 +754,11 @@ foreigner_class!(class Foo {
         cpp_code_pair
             .foreign_code
             .contains("std::optional<ControlItem> f6()")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("std::optional<uint64_t> f7()")
     );
 }
 

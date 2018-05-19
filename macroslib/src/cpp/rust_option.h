@@ -12,6 +12,11 @@ struct CRustOptionU32 {
     uint8_t is_some;
 };
 
+struct CRustOptionU64 {
+    uint64_t val;
+    uint8_t is_some;
+};
+
 struct CRustOptionUSize {
     uintptr_t val;
     uint8_t is_some;
