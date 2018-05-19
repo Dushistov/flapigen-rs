@@ -38,7 +38,7 @@ fn special_type<'a>(
     if ty_name == "bool" {
         let fti = conv_map
             .find_foreign_type_info_by_name(Symbol::intern("char"))
-            .expect("expect find char in type map");
+            .expect("expect to find `char` in type map");
         return Ok(Some(CppForeignTypeInfo {
             base: fti,
             c_converter: String::new(),
@@ -46,6 +46,21 @@ fn special_type<'a>(
                 typename: Symbol::intern("bool"),
                 input_converter: format!("{} ? 1 : 0", FROM_VAR_TEMPLATE),
                 output_converter: format!("{} != 0", FROM_VAR_TEMPLATE),
+            }),
+        }));
+    }
+
+    if ty_name == "String" && direction == Direction::Outgoing {
+        let fti = conv_map
+            .find_foreign_type_info_by_name(Symbol::intern("struct CRustString"))
+            .expect("expect to find `struct CRustString`  in type map");
+        return Ok(Some(CppForeignTypeInfo {
+            base: fti,
+            c_converter: String::new(),
+            cpp_converter: Some(CppConverter {
+                typename: Symbol::intern("RustString"),
+                input_converter: "#error".into(),
+                output_converter: format!("RustString{{{from_var}}}", from_var = FROM_VAR_TEMPLATE),
             }),
         }));
     }
@@ -121,18 +136,16 @@ fn special_type<'a>(
         if let Some(ty) = if_option_return_some_type(arg_ty) {
             return handle_option_type_in_return(sess, conv_map, cpp_cfg, arg_ty, &ty);
         }
-    } else {
-        if let Some(ty) = if_option_return_some_type(arg_ty) {
-            return handle_option_type_in_input(sess, conv_map, cpp_cfg, arg_ty, &ty);
-        }
-    }
 
-    if direction == Direction::Outgoing {
         if let Some(elem_ty) = if_vec_return_elem_type(arg_ty) {
             return map_return_type_vec(sess, conv_map, cpp_cfg, arg_ty, elem_ty);
         }
         if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty) {
             return map_return_slice_type(sess, conv_map, arg_ty, elem_ty);
+        }
+    } else {
+        if let Some(ty) = if_option_return_some_type(arg_ty) {
+            return handle_option_type_in_input(sess, conv_map, cpp_cfg, arg_ty, &ty);
         }
     }
 
