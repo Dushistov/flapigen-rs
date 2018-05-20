@@ -767,9 +767,9 @@ impl TypesConvMap {
 
         trace!("find self type: possible name {:?}", type_name);
         for fc in &self.foreign_classes {
-            let self_ty = format!("{}", fc.self_type);
-            trace!("self_type {:?}", fc.self_type);
-            if self_ty == type_name {
+            let self_ty = fc.self_type_name();
+            trace!("self_type {}", self_ty);
+            if self_ty == type_name.as_str() {
                 return Some(fc);
             }
         }
@@ -1156,10 +1156,7 @@ fn helper3() {
         types_map.register_foreigner_class(&ForeignerClassInfo {
             name: Symbol::intern("Foo"),
             methods: vec![],
-            self_type: ast::Path {
-                span: DUMMY_SP,
-                segments: vec![],
-            },
+            self_type: None,
             this_type_for_method: Some(foo_rt.ty.clone()),
             foreigner_code: String::new(),
             constructor_ret_type: Some(foo_rt.ty.clone()),

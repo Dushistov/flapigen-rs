@@ -367,7 +367,7 @@ pub extern "C" fn {func_name}(v: CRustForeignVec) {{
 }}
 "#,
                     func_name = free_mem_func,
-                    self_type = foreign_class.self_type
+                    self_type = foreign_class.self_type_name()
                 ),
             )?);
             cpp_cfg.to_generate.borrow_mut().append(&mut code_to_item(
@@ -382,7 +382,7 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, e: *mut ::std::os::raw::c
 }}
 "#,
                     func_name = push_func,
-                    self_type = foreign_class.self_type
+                    self_type = foreign_class.self_type_name()
                 ),
             )?);
             cpp_cfg
@@ -434,6 +434,10 @@ fn handle_result_type_in_result<'a>(
     err_ty: &ast::Ty,
 ) -> PResult<'a, Option<CppForeignTypeInfo>> {
     let err_ty_name = normalized_ty_string(&err_ty);
+    debug!(
+        "handle_result_type_in_result: ok_ty: {}",
+        normalized_ty_string(&ok_ty)
+    );
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&ok_ty, false) {
         let c_class = c_class_type(foreign_class);
         if err_ty_name == "String" {

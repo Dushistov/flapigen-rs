@@ -100,6 +100,7 @@ pub(crate) fn create_suitable_types_for_constructor_and_self(
             } else {
                 ast::Mutability::Mutable
             };
+            let self_type = class.self_type_as_ty();
             (
                 ast::Ty {
                     id: DUMMY_NODE_ID,
@@ -114,16 +115,12 @@ pub(crate) fn create_suitable_types_for_constructor_and_self(
                 },
                 ast::Ty {
                     id: DUMMY_NODE_ID,
-                    span: class.self_type.span,
+                    span: self_type.span.clone(),
                     node: ast::TyKind::Rptr(
                         None,
                         ast::MutTy {
                             mutbl: mutbl,
-                            ty: P(ast::Ty {
-                                id: DUMMY_NODE_ID,
-                                span: class.self_type.span,
-                                node: ast::TyKind::Path(None, class.self_type.clone()),
-                            }),
+                            ty: P(self_type),
                         },
                     ),
                 },
