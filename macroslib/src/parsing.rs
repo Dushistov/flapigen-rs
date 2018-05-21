@@ -218,10 +218,7 @@ pub(crate) fn parse_foreigner_class(
         .expect(&token::Token::OpenDelim(token::DelimToken::Brace))
         .map_err(&map_perror)?;
     let mut methods = Vec::new();
-    let mut rust_self_type = ast::Path {
-        span: parser.span,
-        segments: Vec::new(),
-    };
+    let mut rust_self_type = None;
     let mut constructor_ret_type: Option<ast::Ty> = None;
     let mut this_type_for_method: Option<ast::Ty> = None;
     let mut foreigner_code = String::new();
@@ -244,9 +241,7 @@ pub(crate) fn parse_foreigner_class(
         let func_type_name = parser.parse_ident().map_err(&map_perror)?;
         debug!("func_type {:?}", func_type_name);
         if &*func_type_name.name.as_str() == "self_type" {
-            rust_self_type = parser
-                .parse_path(parser::PathStyle::Type)
-                .map_err(&map_perror)?;
+            rust_self_type = Some(parser.parse_ty().map_err(&map_perror)?);
             debug!("self_type: {:?}", rust_self_type);
             parser.expect(&token::Token::Semi).map_err(&map_perror)?;
             continue;
@@ -391,7 +386,7 @@ pub(crate) fn parse_foreigner_class(
     Ok(ForeignerClassInfo {
         name: class_name_indent.name,
         methods,
-        self_type: rust_self_type,
+        self_type: rust_self_type.map(|x| (*x).clone().into()),
         this_type_for_method,
         foreigner_code,
         constructor_ret_type,

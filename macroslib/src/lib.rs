@@ -58,6 +58,7 @@ use std::str::FromStr;
 use syntex::Registry;
 use syntex_pos::DUMMY_SP;
 use syntex_syntax::ast;
+use syntex_syntax::ast::DUMMY_NODE_ID;
 use syntex_syntax::codemap::Span;
 use syntex_syntax::ext::base::{ExtCtxt, MacEager, MacResult, TTMacroExpander};
 use syntex_syntax::parse::PResult;
@@ -68,6 +69,7 @@ use syntex_syntax::tokenstream::TokenTree;
 use syntex_syntax::util::small_vector::SmallVector;
 
 use errors::fatal_error;
+use my_ast::RustType;
 use parsing::{parse_foreign_enum, parse_foreign_interface, parse_foreigner_class};
 use types_conv_map::TypesConvMap;
 
@@ -212,7 +214,7 @@ impl ForeignerMethod {
 struct ForeignerClassInfo {
     name: Symbol,
     methods: Vec<ForeignerMethod>,
-    self_type: ast::Path,
+    self_type: Option<RustType>,
     /// Not necessarily equal to self_type, may be for example Rc<self_type>
     this_type_for_method: Option<ast::Ty>,
     foreigner_code: String,
@@ -220,6 +222,31 @@ struct ForeignerClassInfo {
     constructor_ret_type: Option<ast::Ty>,
     span: Span,
     doc_comments: Vec<Symbol>,
+}
+
+impl ForeignerClassInfo {
+    fn self_type_name(&self) -> Symbol {
+        self.self_type
+            .as_ref()
+            .map(|x| x.normalized_name)
+            .unwrap_or(Symbol::intern(""))
+    }
+    fn self_type_as_ty(&self) -> ast::Ty {
+        self.self_type
+            .as_ref()
+            .map(|x| x.ty.clone())
+            .unwrap_or_else(|| ast::Ty {
+                id: DUMMY_NODE_ID,
+                span: DUMMY_SP,
+                node: ast::TyKind::Path(
+                    None,
+                    ast::Path {
+                        span: DUMMY_SP,
+                        segments: Vec::new(),
+                    },
+                ),
+            })
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -410,7 +410,7 @@ class Foo {
 #[test]
 fn test_return_result_with_object_as_value_and_err() {
     let gen_code = parse_code(
-        "test_return_result_type_with_object",
+        "test_return_result_with_object_as_value_and_err",
         r#"
 foreigner_class!(class Position {
     self_type GnssInfo;
@@ -427,12 +427,19 @@ foreigner_class!(class LocationService {
     self_type LocationService;
 
     constructor LocationService::new() -> LocationService;
-    static_method LocationService::position() -> Result<GnssInfo, String>;
-    static_method LocationService::do_something() -> Result<(), String>;
+    static_method LocationService::f1() -> Result<GnssInfo, String>;
+    static_method LocationService::f2() -> Result<(), String>;
 
-    method LocationService::my_position(&self) -> Result<GnssInfo, PosErr>;
-    static_method LocationService::do_something() -> Result<(), PosErr>;
-    static_method LocationService::do_something() -> Result<Vec<GnssInfo>, PosErr>;
+    method LocationService::f3(&self) -> Result<GnssInfo, PosErr>;
+    static_method LocationService::f4() -> Result<(), PosErr>;
+    static_method LocationService::f5() -> Result<Vec<GnssInfo>, PosErr>;
+    static_method LocationService::create() -> Result<LocationService, String>;
+});
+
+foreigner_class!(class Foo {
+    self_type Foo<'a>;
+    constructor Foo::create() -> Foo<'a>;
+    static_method Foo::from_string<'a>(_: &str) -> Result<Foo<'a>, String>;
 });
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
@@ -446,12 +453,28 @@ foreigner_class!(class LocationService {
     assert!(
         cpp_code_pair
             .foreign_code
-            .contains("static std::variant<Position, RustString> position()")
+            .contains("static std::variant<Position, RustString> f1()")
     );
     assert!(
         cpp_code_pair
             .foreign_code
-            .contains("std::variant<Position, PosErr> my_position()")
+            .contains("std::variant<void *, RustString> f2()")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("std::variant<Position, PosErr> f3()")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("std::variant<void *, PosErr> f4()")
+    );
+
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("static std::variant<Foo, RustString> from_string(")
     );
 }
 
