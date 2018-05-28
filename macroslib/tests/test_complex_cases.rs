@@ -935,6 +935,37 @@ foreigner_class!(class Foo {
     );
 }
 
+#[test]
+fn test_generated_cpp_ref_classes() {
+    let gen_code = parse_code(
+        "test_generated_cpp_ref_classes",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -> Foo;
+    method Foo::eq(&self, _: &Foo) -> bool;
+    method Foo::f(&self, _: i32, _: i32, _: String) -> String;
+});
+"#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
+    );
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("bool eq(const Foo & a_0) const")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("bool eq(const FooRef & a_0) const")
+    );
+}
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 enum ForeignLang {
     Java,
