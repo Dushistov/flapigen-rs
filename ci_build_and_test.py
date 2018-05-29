@@ -114,12 +114,12 @@ def build_cargo_docs():
 
 @show_timing
 def run_unit_tests(fast_run, has_jdk, skip_cpp_tests):
-    cmd_base = ["cargo", "test", "-v", "--all"]
-    if skip_cpp_tests:
-        cmd_base.append("--exclude")
+    cmd_base = ["cargo", "test", "-v", "-p", "rust_swig"]
+    if not skip_cpp_tests:
+        cmd_base.append("-p")
         cmd_base.append("rust_swig_test_cpp")
-    if not has_jdk:
-        cmd_base.append("--exclude")
+    if has_jdk:
+        cmd_base.append("-p")
         cmd_base.append("rust_swig_test_jni")
     subprocess.check_call(cmd_base)
     if not fast_run:
