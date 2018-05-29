@@ -414,6 +414,24 @@ fn push_foreign_class_to_vec<T: SwigForeignClass>(
     ::std::mem::forget(v);
 }
 
+#[allow(dead_code)]
+#[inline]
+fn remove_foreign_class_from_vec<T: SwigForeignClass>(
+    vec: *mut CRustForeignVec,
+    index: usize,
+) -> *mut ::std::os::raw::c_void {
+    assert!(!vec.is_null());
+    let vec: &mut CRustForeignVec = unsafe { &mut *vec };
+    assert_eq!(::std::mem::size_of::<T>(), vec.step);
+    let mut v = unsafe { Vec::from_raw_parts(vec.data as *mut T, vec.len, vec.capacity) };
+    let elem: T = v.remove(index);
+    vec.data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
+    vec.len = v.len();
+    vec.capacity = v.capacity();
+    ::std::mem::forget(v);
+    T::box_object(elem)
+}
+
 // &str -> &Path
 impl<'a> SwigInto<&'a Path> for &'a str {
     fn swig_into(self) -> &'a Path {

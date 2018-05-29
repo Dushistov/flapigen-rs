@@ -244,6 +244,7 @@ TEST(TestWorkWithVec, smokeTest)
     TestWorkWithVec t{ tag };
     for (uint32_t n : { 0, 1, 2, 3, 5, 10, 100, 1000 }) {
         RustVecU8 vec{ t.get_bytes(n) };
+        EXPECT_TRUE(n == 0 || !vec.empty());
         EXPECT_EQ(tag_len * n, vec.size());
         for (size_t i = 0; i < vec.size(); i += std::strlen(tag)) {
             EXPECT_TRUE(i + tag_len <= vec.size());
@@ -294,6 +295,17 @@ TEST(TestWorkWithVec, smokeTest)
     ASSERT_EQ(tag_len + 1, vec_foo.size());
     EXPECT_EQ(57, vec_foo[vec_foo.size() - 1].f(0, 0));
     EXPECT_EQ(std::string("boo"), vec_foo[vec_foo.size() - 1].getName().to_std_string());
+    {
+        auto elem = vec_foo.remove(tag_len);
+        EXPECT_EQ(tag_len, vec_foo.size());
+        EXPECT_EQ(57, elem.f(0, 0));
+        EXPECT_EQ(std::string("boo"), elem.getName().to_std_string());
+        for (size_t i = 0; i < vec_foo.size(); ++i) {
+            EXPECT_EQ(std::string(tag), vec_foo[i].getName().to_std_string());
+            EXPECT_TRUE(vec_foo[i].f(0, 0) >= 0);
+            EXPECT_EQ(i, size_t(vec_foo[i].f(0, 0)));
+        }
+    }
 
     auto slice_foo = t.get_slice_foo();
     ASSERT_EQ(tag_len, slice_foo.size());
@@ -307,7 +319,7 @@ TEST(TestWorkWithVec, smokeTest)
         EXPECT_EQ(std::string(tag), foo.getName().to_std_string());
         EXPECT_TRUE(foo.f(0, 0) >= 0);
         EXPECT_EQ(i, size_t(foo.f(0, 0)));
-	++i;
+        ++i;
     }
 }
 

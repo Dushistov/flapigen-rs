@@ -112,6 +112,7 @@ public:
         free_mem();
     }
     size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
     const value_type &operator[](size_t i) const noexcept { return this->data[i]; }
 
 private:
@@ -179,7 +180,8 @@ private:
 
 template <class ForeignClassRef, typename CContainerType,
           void (*FreeFunc)(CContainerType),
-          void (*PushFunc)(CContainerType *, void *)>
+          void (*PushFunc)(CContainerType *, void *),
+          void *(*RemoveFunc)(CContainerType *, uintptr_t)>
 class RustForeignVec final : private CContainerType {
 public:
     using const_reference = ForeignClassRef;
@@ -226,6 +228,7 @@ public:
     }
 
     size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
 
     ForeignClassRef operator[](size_t i) const noexcept
     {
@@ -236,9 +239,15 @@ public:
         return ForeignClassRef{ elem_ptr };
     }
 
-    void push(value_type o)
+    void push(value_type o) noexcept
     {
         PushFunc(this, o.release());
+    }
+
+    value_type remove(size_t idx) noexcept
+    {
+        auto p = static_cast<CForeignType *>(RemoveFunc(this, idx));
+        return value_type{ p };
     }
 
     iterator begin() noexcept
@@ -319,6 +328,7 @@ public:
     }
     ~RustForeignSlice() noexcept {}
     size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
     ForeignClassRef operator[](size_t i) const noexcept
     {
         assert(i < this->len);
