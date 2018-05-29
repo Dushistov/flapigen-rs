@@ -295,6 +295,17 @@ TEST(TestWorkWithVec, smokeTest)
     ASSERT_EQ(tag_len + 1, vec_foo.size());
     EXPECT_EQ(57, vec_foo[vec_foo.size() - 1].f(0, 0));
     EXPECT_EQ(std::string("boo"), vec_foo[vec_foo.size() - 1].getName().to_std_string());
+    {
+        auto elem = vec_foo.remove(tag_len);
+        EXPECT_EQ(tag_len, vec_foo.size());
+        EXPECT_EQ(57, elem.f(0, 0));
+        EXPECT_EQ(std::string("boo"), elem.getName().to_std_string());
+        for (size_t i = 0; i < vec_foo.size(); ++i) {
+            EXPECT_EQ(std::string(tag), vec_foo[i].getName().to_std_string());
+            EXPECT_TRUE(vec_foo[i].f(0, 0) >= 0);
+            EXPECT_EQ(i, size_t(vec_foo[i].f(0, 0)));
+        }
+    }
 
     auto slice_foo = t.get_slice_foo();
     ASSERT_EQ(tag_len, slice_foo.size());
