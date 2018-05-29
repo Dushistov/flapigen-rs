@@ -46,7 +46,4 @@ script:
       echo "check code style";
       cargo fmt --package rust_swig -- --write-mode diff;
     fi
-  - time cargo build -v --package rust_swig
-  - time cargo test -v --package rust_swig
-  - time cargo doc -v --package rust_swig
   - python ci_build_and_test.py
