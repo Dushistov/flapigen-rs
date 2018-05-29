@@ -4,6 +4,16 @@ import subprocess
 import os
 import sys
 import re
+import time
+
+def show_timing(function):
+    def _wrapper(*args, **kwargs):
+        start = time.time()
+        ret = function(*args, **kwargs)
+        elapsed = (time.time() - start)
+        print("%s elapsed time: %f" % (function.__name__, elapsed))
+        return ret
+    return _wrapper
 
 def purge(dir, pattern):
     for f in os.listdir(dir):
@@ -27,11 +37,13 @@ def find_dir(dir_name, start_dir):
     os.chdir(origin_cwd)
     raise Exception("Can not find %s" % dir_name)
 
+@show_timing
 def run_jar(target_dir, jar_dir, use_shell):
     subprocess.check_call(["java", "-Xcheck:jni", "-verbose:jni", "-ea", "-Djava.library.path=" + target_dir,
                            "-cp", "Test.jar", "com.example.Main"],
                           cwd=jar_dir, shell=use_shell)
 
+@show_timing
 def build_jar(java_dir, java_native_dir, use_shell):
     generated_java = [os.path.join("rust", f) for f in os.listdir(java_native_dir)
                       if os.path.isfile(os.path.join(java_native_dir, f)) and f.endswith(".java")]
@@ -49,6 +61,7 @@ def build_jar(java_dir, java_native_dir, use_shell):
 def has_option(option):
     return any(option == s for s in sys.argv[1:])
 
+@show_timing
 def run_jni_tests(use_shell, fast_run):
     print("run_jni_tests begin: cwd %s" % os.getcwd())
     sys.stdout.flush()
@@ -69,6 +82,7 @@ def run_jni_tests(use_shell, fast_run):
     target_dir = os.path.join(find_dir("target", "jni_tests"), "release")
     run_jar(target_dir, jar_dir, use_shell)
 
+@show_timing
 def build_cpp_code_with_cmake(cmake_build_dir, addon_params):
     if sys.platform == 'win32':
         cmake_generator = "Visual Studio 14 2015"
@@ -93,6 +107,26 @@ def build_cpp_code_with_cmake(cmake_build_dir, addon_params):
                                    "--suppressions=../../valgrind.supp",
                                    "./c++-rust-swig-test"], cwd = str(cmake_build_dir))
 
+@show_timing
+def build_cargo_docs():
+    print("build docs")
+    subprocess.check_call(["cargo", "doc", "-v", "--package", "rust_swig"])
+
+@show_timing
+def run_unit_tests(fast_run, has_jdk, skip_cpp_tests):
+    cmd_base = ["cargo", "test", "-v", "--all"]
+    if skip_cpp_tests:
+        cmd_base.append("--exclude")
+        cmd_base.append("rust_swig_test_cpp")
+    if not has_jdk:
+        cmd_base.append("--exclude")
+        cmd_base.append("rust_swig_test_jni")
+    subprocess.check_call(cmd_base)
+    if not fast_run:
+        cmd_base.append("--release")
+        subprocess.check_call(cmd_base)
+
+@show_timing
 def main():
     print("Starting build and test")
     sys.stdout.flush()
@@ -115,11 +149,9 @@ def main():
     print("java_only %s" % java_only)
     sys.stdout.flush()
 
+    build_cargo_docs()
     print("start tests\n macrolib tests")
-    subprocess.check_call(["cargo", "test", "-v", "--package", "rust_swig"], shell=False)
-    if not fast_run:
-        print(" macrolib tests release mode")
-        subprocess.check_call(["cargo", "test", "-v", "--release", "--package", "rust_swig"], shell=False)
+    run_unit_tests(fast_run, has_jdk, skip_cpp_tests)
     if has_jdk:
         run_jni_tests(use_shell, fast_run)
         if java_only:
@@ -132,7 +164,7 @@ def main():
         if not fast_run:
             subprocess.check_call(["cargo", "test", "-v", "--release", "--package", "rust_swig_test_cpp"], shell = False)
         build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build"), [])
-        purge(os.path.join("c++_tests", "c++", "rust_interface"), ".*\.h.*$")        
+        purge(os.path.join("c++_tests", "c++", "rust_interface"), ".*\.h.*$")
         build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
 
     if has_android_sdk and (not skip_android_test):
