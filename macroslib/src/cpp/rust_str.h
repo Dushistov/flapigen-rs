@@ -12,6 +12,14 @@ struct RustStrView {
     const char *const data;
     uintptr_t len;
 #ifdef __cplusplus
+    size_t size() const noexcept
+    {
+        return this->len;
+    }
+    bool empty() const noexcept
+    {
+        return this->len == 0;
+    }
     std::string to_std_string() const
     {
         return std::string{ data, len };
@@ -90,7 +98,8 @@ public:
     {
         return std::string(data, len);
     }
-
+    size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
 #if __cplusplus > 201402L
     std::string_view to_string_view() const
     {

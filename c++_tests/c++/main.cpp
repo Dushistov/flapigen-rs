@@ -244,6 +244,7 @@ TEST(TestWorkWithVec, smokeTest)
     TestWorkWithVec t{ tag };
     for (uint32_t n : { 0, 1, 2, 3, 5, 10, 100, 1000 }) {
         RustVecU8 vec{ t.get_bytes(n) };
+        EXPECT_TRUE(n == 0 || !vec.empty());
         EXPECT_EQ(tag_len * n, vec.size());
         for (size_t i = 0; i < vec.size(); i += std::strlen(tag)) {
             EXPECT_TRUE(i + tag_len <= vec.size());
@@ -307,7 +308,7 @@ TEST(TestWorkWithVec, smokeTest)
         EXPECT_EQ(std::string(tag), foo.getName().to_std_string());
         EXPECT_TRUE(foo.f(0, 0) >= 0);
         EXPECT_EQ(i, size_t(foo.f(0, 0)));
-	++i;
+        ++i;
     }
 }
 

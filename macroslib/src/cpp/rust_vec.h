@@ -112,6 +112,7 @@ public:
         free_mem();
     }
     size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
     const value_type &operator[](size_t i) const noexcept { return this->data[i]; }
 
 private:
@@ -226,6 +227,7 @@ public:
     }
 
     size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
 
     ForeignClassRef operator[](size_t i) const noexcept
     {
@@ -319,6 +321,7 @@ public:
     }
     ~RustForeignSlice() noexcept {}
     size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
     ForeignClassRef operator[](size_t i) const noexcept
     {
         assert(i < this->len);
