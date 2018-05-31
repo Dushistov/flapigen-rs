@@ -33,6 +33,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustVecU8"]
     #![swig_foreigner_type = "struct CRustVecU32"]
     #![swig_rust_type = "CRustVecU32"]
+    #![swig_foreigner_type = "struct CRustVecUsize"]
+    #![swig_rust_type = "CRustVecUsize"]
     #![swig_foreigner_type = "struct CRustVecF32"]
     #![swig_rust_type = "CRustVecF32"]
     #![swig_foreigner_type = "struct CRustVecF64"]
@@ -47,6 +49,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CResultCRustForeignVecString"]
     #![swig_foreigner_type = "struct CRustSliceU32"]
     #![swig_rust_type = "CRustSliceU32"]
+    #![swig_foreigner_type = "struct CRustSliceUsize"]
+    #![swig_rust_type = "CRustSliceUsize"]
     #![swig_foreigner_type = "struct CRustOptionF64"]
     #![swig_rust_type = "CRustOptionF64"]
     #![swig_foreigner_type = "struct CRustOptionU32"]
@@ -298,6 +302,35 @@ impl SwigFrom<Vec<u32>> for CRustVecU32 {
 #[no_mangle]
 pub extern "C" fn CRustVecU32_free(v: CRustVecU32) {
     let v = unsafe { Vec::from_raw_parts(v.data as *mut u32, v.len, v.capacity) };
+    drop(v);
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustVecUsize {
+    data: *const usize,
+    len: usize,
+    capacity: usize,
+}
+
+impl SwigFrom<Vec<usize>> for CRustVecUsize {
+    fn swig_from(mut v: Vec<usize>) -> CRustVecUsize {
+        let p = v.as_mut_ptr();
+        let len = v.len();
+        let cap = v.capacity();
+        ::std::mem::forget(v);
+        CRustVecUsize {
+            data: p,
+            len: len,
+            capacity: cap,
+        }
+    }
+}
+
+#[allow(private_no_mangle_fns)]
+#[no_mangle]
+pub extern "C" fn CRustVecUsize_free(v: CRustVecUsize) {
+    let v = unsafe { Vec::from_raw_parts(v.data as *mut usize, v.len, v.capacity) };
     drop(v);
 }
 
@@ -564,6 +597,21 @@ impl<'a> SwigInto<CRustSliceU32> for &'a [u32] {
         }
     }
 }
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustSliceUsize {
+    data: *const usize,
+    len: usize,
+}
+
+impl<'a> SwigInto<CRustSliceUsize> for &'a [usize] {
+    fn swig_into(self) -> CRustSliceUsize {
+        CRustSliceUsize {
+            data: self.as_ptr(),
+            len: self.len(),
+        }
+    }
+}
 
 #[allow(dead_code)]
 #[repr(C)]
@@ -580,6 +628,12 @@ impl<'a, T: SwigForeignClass> SwigInto<CRustObjectSlice> for &'a [T] {
             len: self.len(),
             step: ::std::mem::size_of::<T>(),
         }
+    }
+}
+
+impl<'a, T: SwigForeignClass> SwigFrom<CRustObjectSlice> for &'a mut [T] {
+    fn swig_from(x: CRustObjectSlice) -> &'a mut [T] {
+        unsafe { ::std::slice::from_raw_parts_mut(x.data as *mut T, x.len) }
     }
 }
 

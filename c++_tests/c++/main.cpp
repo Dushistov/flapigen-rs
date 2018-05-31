@@ -321,6 +321,37 @@ TEST(TestWorkWithVec, smokeTest)
         EXPECT_EQ(i, size_t(foo.f(0, 0)));
         ++i;
     }
+
+    {
+        auto v = TestWorkWithVec::create_foo_vec(30);
+        auto v1 = TestWorkWithVec::create_foo_vec(0);
+        while (!v.empty()) {
+            v1.push(v.remove(v.size() - 1));
+        }
+        size_t i = v1.size() - 1;
+        for (const auto &elem : v1) {
+            EXPECT_EQ(i, static_cast<size_t>(elem.f(0, 0)));
+            --i;
+        }
+        TestWorkWithVec::sort_foo_slice(v1.as_slice());
+        i = 0;
+        for (const auto &elem : v1) {
+            EXPECT_EQ(i, static_cast<size_t>(elem.f(0, 0)));
+            ++i;
+        }
+    }
+
+    {
+        auto sl = RustSlice<CRustSliceUsize>{ t.return_usize_slice() };
+        ASSERT_EQ(2u, sl.size());
+        EXPECT_EQ(17, sl[0]);
+        EXPECT_EQ(18, sl[1]);
+
+        auto v = t.return_usize_vec();
+        ASSERT_EQ(2u, v.size());
+        EXPECT_EQ(17, v[0]);
+        EXPECT_EQ(18, v[1]);
+    }
 }
 
 TEST(TestWorkWithVec, rangeLoop)

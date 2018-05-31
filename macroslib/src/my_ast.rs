@@ -355,15 +355,19 @@ fn generic_params_new(names: &[&str]) -> ast::Generics {
     }
 }
 
-pub(crate) fn if_type_slice_return_elem_type(ty: &ast::Ty) -> Option<ast::Ty> {
-    if let ast::TyKind::Rptr(
-        _,
-        ast::MutTy {
-            ref ty,
-            mutbl: ast::Mutability::Immutable,
-        },
-    ) = ty.node
-    {
+pub(crate) fn if_type_slice_return_elem_type(
+    ty: &ast::Ty,
+    accept_mutbl_slice: bool,
+) -> Option<ast::Ty> {
+    if let ast::TyKind::Rptr(_, ast::MutTy { ref ty, mutbl }) = ty.node {
+        match mutbl {
+            ast::Mutability::Immutable => {}
+            ast::Mutability::Mutable => {
+                if !accept_mutbl_slice {
+                    return None;
+                }
+            }
+        }
         if let ast::TyKind::Slice(ref ty) = ty.node {
             let ty: &ast::Ty = &*ty;
             Some(ty.clone())

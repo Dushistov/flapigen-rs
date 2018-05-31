@@ -24,6 +24,14 @@ struct CRustVecU32 {
 
 void CRustVecU32_free(struct CRustVecU32 vec);
 
+struct CRustVecUsize {
+    const uintptr_t *data;
+    uintptr_t len;
+    uintptr_t capacity;
+};
+
+void CRustVecUsize_free(struct CRustVecUsize vec);
+
 struct CRustVecF32 {
     const float *data;
     uintptr_t len;
@@ -52,6 +60,11 @@ struct CRustSliceU32 {
     uintptr_t len;
 };
 
+struct CRustSliceUsize {
+    const uintptr_t *data;
+    uintptr_t len;
+};
+
 struct CRustObjectSlice {
     const void *data;
     uintptr_t len;
@@ -74,11 +87,70 @@ namespace internal {
     E field_type(E T::*);
 }
 
+template <typename CContainerType>
+class RustSlice final : private CContainerType {
+public:
+    using value_type = typename std::remove_const<
+        typename std::remove_reference<decltype(*internal::field_type(&CContainerType::data))>::type>::type;
+    using iterator = value_type *;
+    using const_iterator = const value_type *;
+    explicit RustSlice(const CContainerType &o) noexcept
+    {
+        this->data = o.data;
+        this->len = o.len;
+    }
+    RustSlice(const RustSlice &) = delete;
+    RustSlice &operator=(const RustSlice &) = delete;
+    RustSlice(RustSlice &&o) noexcept
+    {
+        this->data = o.data;
+        this->len = o.len;
+
+        reset(o);
+    }
+    RustSlice &operator=(RustSlice &&o) noexcept
+    {
+        this->data = o.data;
+        this->len = o.len;
+
+        reset(o);
+        return *this;
+    }
+    size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
+    const value_type &operator[](size_t i) const noexcept { return this->data[i]; }
+    iterator begin() noexcept
+    {
+        return this->data;
+    }
+    const_iterator begin() const noexcept
+    {
+        return this->data;
+    }
+    iterator end() noexcept
+    {
+        return this->data + this->len;
+    }
+    const_iterator end() const noexcept
+    {
+        return this->data + this->len;
+    }
+
+private:
+    static void reset(RustSlice &o) noexcept
+    {
+        o.data = nullptr;
+        o.len = 0;
+    }
+};
+
 template <typename CContainerType, void (*FreeFunc)(CContainerType)>
 class RustVec final : private CContainerType {
 public:
     using value_type = typename std::remove_const<
         typename std::remove_reference<decltype(*internal::field_type(&CContainerType::data))>::type>::type;
+    using iterator = value_type *;
+    using const_iterator = const value_type *;
 
     explicit RustVec(const CContainerType &o) noexcept
     {
@@ -114,6 +186,22 @@ public:
     size_t size() const noexcept { return this->len; }
     bool empty() const noexcept { return this->len == 0; }
     const value_type &operator[](size_t i) const noexcept { return this->data[i]; }
+    iterator begin() noexcept
+    {
+        return this->data;
+    }
+    const_iterator begin() const noexcept
+    {
+        return this->data;
+    }
+    iterator end() noexcept
+    {
+        return this->data + this->len;
+    }
+    const_iterator end() const noexcept
+    {
+        return this->data + this->len;
+    }
 
 private:
     void free_mem() noexcept
@@ -133,6 +221,7 @@ private:
 
 using RustVecU8 = RustVec<CRustVecU8, CRustVecU8_free>;
 using RustVecU32 = RustVec<CRustVecU32, CRustVecU32_free>;
+using RustVecUsize = RustVec<CRustVecUsize, CRustVecUsize_free>;
 using RustVecF32 = RustVec<CRustVecF32, CRustVecF32_free>;
 using RustVecF64 = RustVec<CRustVecF64, CRustVecF64_free>;
 
@@ -176,6 +265,86 @@ public:
 private:
     const void *ptr;
     uintptr_t step;
+};
+
+template <class ForeignClassRef>
+class RustForeignSlice final : public CRustObjectSlice {
+public:
+    using const_reference = ForeignClassRef;
+    using CForeignType = typename ForeignClassRef::CForeignType;
+    using value_type = typename ForeignClassRef::value_type;
+    using iterator = RustForeignVecIterator<ForeignClassRef>;
+    using const_iterator = RustForeignVecIterator<ForeignClassRef>;
+
+    RustForeignSlice() noexcept
+    {
+        reset();
+    }
+    explicit RustForeignSlice(const CRustObjectSlice &o) noexcept
+    {
+        this->data = o.data;
+        this->len = o.len;
+        this->step = o.step;
+    }
+    RustForeignSlice(const RustForeignSlice &) = delete;
+    RustForeignSlice &operator=(const RustForeignSlice &) = delete;
+    RustForeignSlice(RustForeignSlice &&o) noexcept
+    {
+        this->data = o.data;
+        this->len = o.len;
+        this->step = o.step;
+        o.reset();
+    }
+    RustForeignSlice &operator=(RustForeignSlice &&o) noexcept
+    {
+        this->data = o.data;
+        this->len = o.len;
+        this->step = o.step;
+        o.reset();
+        return *this;
+    }
+    ~RustForeignSlice() noexcept {}
+    size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
+    ForeignClassRef operator[](size_t i) const noexcept
+    {
+        assert(i < this->len);
+        auto p = static_cast<const uint8_t *>(this->data);
+        p += this->step * i;
+        auto elem_ptr = static_cast<const CForeignType *>(static_cast<const void *>(p));
+        return ForeignClassRef{ elem_ptr };
+    }
+    iterator begin() noexcept
+    {
+        return iterator{ this->data, this->step };
+    }
+
+    const_iterator begin() const noexcept
+    {
+        return const_iterator{ this->data, this->step };
+    }
+
+    iterator end() noexcept
+    {
+        auto p = static_cast<const uint8_t *>(this->data);
+        p += this->step * this->len;
+        return iterator{ p, this->step };
+    }
+
+    const_iterator end() const noexcept
+    {
+        auto p = static_cast<const uint8_t *>(this->data);
+        p += this->step * this->len;
+        return const_iterator{ p, this->step };
+    }
+
+private:
+    void reset()
+    {
+        this->step = 0;
+        this->len = 0;
+        this->data = nullptr;
+    }
 };
 
 template <class ForeignClassRef, typename CContainerType,
@@ -274,6 +443,11 @@ public:
         return const_iterator{ p, this->step };
     }
 
+    RustForeignSlice<ForeignClassRef> as_slice()
+    {
+        return RustForeignSlice<ForeignClassRef>{ CRustObjectSlice{ this->data, this->len, this->step } };
+    }
+
 private:
     void free_mem() noexcept
     {
@@ -287,86 +461,6 @@ private:
         o.data = nullptr;
         o.len = 0;
         o.capacity = 0;
-    }
-};
-
-template <class ForeignClassRef>
-class RustForeignSlice final : private CRustObjectSlice {
-public:
-    using const_reference = ForeignClassRef;
-    using CForeignType = typename ForeignClassRef::CForeignType;
-    using value_type = typename ForeignClassRef::value_type;
-    using iterator = RustForeignVecIterator<ForeignClassRef>;
-    using const_iterator = RustForeignVecIterator<ForeignClassRef>;
-
-    RustForeignSlice() noexcept
-    {
-        reset();
-    }
-    explicit RustForeignSlice(const CRustObjectSlice &o) noexcept
-    {
-        this->data = o.data;
-        this->len = o.len;
-        this->step = o.step;
-    }
-    RustForeignSlice(const RustForeignSlice &) = delete;
-    RustForeignSlice &operator=(const RustForeignSlice &) = delete;
-    RustForeignSlice(RustForeignSlice &&o) noexcept
-    {
-        this->data = o.data;
-        this->len = o.len;
-        this->step = o.step;
-        o.reset();
-    }
-    RustForeignSlice &operator=(RustForeignSlice &&o) noexcept
-    {
-        this->data = o.data;
-        this->len = o.len;
-        this->step = o.step;
-        o.reset();
-        return *this;
-    }
-    ~RustForeignSlice() noexcept {}
-    size_t size() const noexcept { return this->len; }
-    bool empty() const noexcept { return this->len == 0; }
-    ForeignClassRef operator[](size_t i) const noexcept
-    {
-        assert(i < this->len);
-        auto p = static_cast<const uint8_t *>(this->data);
-        p += this->step * i;
-        auto elem_ptr = static_cast<const CForeignType *>(static_cast<const void *>(p));
-        return ForeignClassRef{ elem_ptr };
-    }
-    iterator begin() noexcept
-    {
-        return iterator{ this->data, this->step };
-    }
-
-    const_iterator begin() const noexcept
-    {
-        return const_iterator{ this->data, this->step };
-    }
-
-    iterator end() noexcept
-    {
-        auto p = static_cast<const uint8_t *>(this->data);
-        p += this->step * this->len;
-        return iterator{ p, this->step };
-    }
-
-    const_iterator end() const noexcept
-    {
-        auto p = static_cast<const uint8_t *>(this->data);
-        p += this->step * this->len;
-        return const_iterator{ p, this->step };
-    }
-
-private:
-    void reset()
-    {
-        this->step = 0;
-        this->len = 0;
-        this->data = nullptr;
     }
 };
 } // namespace RUST_SWIG_USER_NAMESPACE
