@@ -33,6 +33,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustVecU8"]
     #![swig_foreigner_type = "struct CRustVecU32"]
     #![swig_rust_type = "CRustVecU32"]
+    #![swig_foreigner_type = "struct CRustVecUsize"]
+    #![swig_rust_type = "CRustVecUsize"]
     #![swig_foreigner_type = "struct CRustVecF32"]
     #![swig_rust_type = "CRustVecF32"]
     #![swig_foreigner_type = "struct CRustVecF64"]
@@ -300,6 +302,35 @@ impl SwigFrom<Vec<u32>> for CRustVecU32 {
 #[no_mangle]
 pub extern "C" fn CRustVecU32_free(v: CRustVecU32) {
     let v = unsafe { Vec::from_raw_parts(v.data as *mut u32, v.len, v.capacity) };
+    drop(v);
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustVecUsize {
+    data: *const usize,
+    len: usize,
+    capacity: usize,
+}
+
+impl SwigFrom<Vec<usize>> for CRustVecUsize {
+    fn swig_from(mut v: Vec<usize>) -> CRustVecUsize {
+        let p = v.as_mut_ptr();
+        let len = v.len();
+        let cap = v.capacity();
+        ::std::mem::forget(v);
+        CRustVecUsize {
+            data: p,
+            len: len,
+            capacity: cap,
+        }
+    }
+}
+
+#[allow(private_no_mangle_fns)]
+#[no_mangle]
+pub extern "C" fn CRustVecUsize_free(v: CRustVecUsize) {
+    let v = unsafe { Vec::from_raw_parts(v.data as *mut usize, v.len, v.capacity) };
     drop(v);
 }
 

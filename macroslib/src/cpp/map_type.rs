@@ -452,6 +452,7 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
     {
         "CRustVecU8" => "RustVecU8",
         "CRustVecU32" => "RustVecU32",
+        "CRustVecUsize" => "RustVecUsize",
         "CRustVecF32" => "RustVecF32",
         "CRustVecF64" => "RustVecF64",
         _ => unimplemented!(),

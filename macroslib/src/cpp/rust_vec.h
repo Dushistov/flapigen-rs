@@ -24,6 +24,14 @@ struct CRustVecU32 {
 
 void CRustVecU32_free(struct CRustVecU32 vec);
 
+struct CRustVecUsize {
+    const uintptr_t *data;
+    uintptr_t len;
+    uintptr_t capacity;
+};
+
+void CRustVecUsize_free(struct CRustVecUsize vec);
+
 struct CRustVecF32 {
     const float *data;
     uintptr_t len;
@@ -78,6 +86,21 @@ namespace internal {
     template <typename T, typename E>
     E field_type(E T::*);
 }
+
+template <typename CContainerType>
+class RustSlice final : private CContainerType {
+public:
+    using value_type = typename std::remove_const<
+        typename std::remove_reference<decltype(*internal::field_type(&CContainerType::data))>::type>::type;
+    explicit RustSlice(const CContainerType &o) noexcept
+    {
+        this->data = o.data;
+        this->len = o.len;
+    }
+    size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
+    const value_type &operator[](size_t i) const noexcept { return this->data[i]; }
+};
 
 template <typename CContainerType, void (*FreeFunc)(CContainerType)>
 class RustVec final : private CContainerType {
@@ -138,6 +161,7 @@ private:
 
 using RustVecU8 = RustVec<CRustVecU8, CRustVecU8_free>;
 using RustVecU32 = RustVec<CRustVecU32, CRustVecU32_free>;
+using RustVecUsize = RustVec<CRustVecUsize, CRustVecUsize_free>;
 using RustVecF32 = RustVec<CRustVecF32, CRustVecF32_free>;
 using RustVecF64 = RustVec<CRustVecF64, CRustVecF64_free>;
 

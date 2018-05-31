@@ -340,6 +340,18 @@ TEST(TestWorkWithVec, smokeTest)
             ++i;
         }
     }
+
+    {
+        auto sl = RustSlice{ t.return_usize_slice() };
+        ASSERT_EQ(2u, sl.size());
+        EXPECT_EQ(17, sl[0]);
+        EXPECT_EQ(18, sl[1]);
+
+        auto v = t.return_usize_vec();
+        ASSERT_EQ(2u, v.size());
+        EXPECT_EQ(17, v[0]);
+        EXPECT_EQ(18, v[1]);
+    }
 }
 
 TEST(TestWorkWithVec, rangeLoop)

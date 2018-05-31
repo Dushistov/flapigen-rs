@@ -239,6 +239,7 @@ pub struct TestWorkWithVec {
     data_tag: String,
     vec_u32: Vec<u32>,
     vec_foo: Vec<Foo>,
+    vec_usize: Vec<usize>,
 }
 
 impl TestWorkWithVec {
@@ -260,6 +261,7 @@ impl TestWorkWithVec {
             data_tag: tag.to_string(),
             vec_u32,
             vec_foo,
+            vec_usize: vec![17, 18],
         }
     }
     fn get_bytes(&self, n: u32) -> Vec<u8> {
@@ -305,6 +307,12 @@ impl TestWorkWithVec {
     fn sort_foo_slice(v: &mut [Foo]) {
         v.sort_by(|ref x, ref y| x.data.cmp(&y.data))
     }
+    fn return_usize_slice(&self) -> &[usize] {
+        &self.vec_usize
+    }
+    fn return_usize_vec(&self) -> Vec<usize> {
+        self.vec_usize.clone()
+    }
 }
 
 foreigner_class!(class TestWorkWithVec {
@@ -319,6 +327,8 @@ foreigner_class!(class TestWorkWithVec {
     method TestWorkWithVec::get_slice_foo(&self) -> &[Foo];
     static_method TestWorkWithVec::create_foo_vec(n: usize) -> Vec<Foo>;
     static_method TestWorkWithVec::sort_foo_slice(v: &mut [Foo]);
+    method TestWorkWithVec::return_usize_slice(&self) -> &[usize];
+    method TestWorkWithVec::return_usize_vec(&self) -> Vec<usize>;
 });
 
 enum MyEnum {
