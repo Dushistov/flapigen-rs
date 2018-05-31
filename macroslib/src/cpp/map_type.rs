@@ -140,12 +140,15 @@ fn special_type<'a>(
         if let Some(elem_ty) = if_vec_return_elem_type(arg_ty) {
             return map_return_type_vec(sess, conv_map, cpp_cfg, arg_ty, elem_ty);
         }
-        if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty) {
+        if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty, false) {
             return map_return_slice_type(sess, conv_map, arg_ty, elem_ty);
         }
     } else {
         if let Some(ty) = if_option_return_some_type(arg_ty) {
             return handle_option_type_in_input(sess, conv_map, cpp_cfg, arg_ty, &ty);
+        }
+        if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty, true) {
+            return map_arg_with_slice_type(sess, conv_map, arg_ty, elem_ty);
         }
     }
 
@@ -264,6 +267,27 @@ fn map_ordinal_input_type<'a>(
             )
         })?
         .into())
+}
+
+fn map_arg_with_slice_type<'a>(
+    sess: &'a ParseSess,
+    conv_map: &mut TypesConvMap,
+    arg_ty: &ast::Ty,
+    elem_ty: ast::Ty,
+) -> PResult<'a, Option<CppForeignTypeInfo>> {
+    let mut ftype_info = map_ordinal_input_type(sess, conv_map, arg_ty)?;
+    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&elem_ty, false)
+    {
+        let typename = Symbol::intern(&format!("RustForeignSlice<{}Ref>", foreign_class.name));
+        ftype_info.cpp_converter = Some(CppConverter {
+            typename,
+            input_converter: format!("{}", FROM_VAR_TEMPLATE),
+            output_converter: "#error".to_string(),
+        });
+        return Ok(Some(ftype_info));
+    } else {
+        Ok(None)
+    }
 }
 
 fn map_return_slice_type<'a>(

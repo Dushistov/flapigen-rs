@@ -302,6 +302,9 @@ impl TestWorkWithVec {
         }
         v
     }
+    fn sort_foo_slice(v: &mut [Foo]) {
+        v.sort_by(|ref x, ref y| x.data.cmp(&y.data))
+    }
 }
 
 foreigner_class!(class TestWorkWithVec {
@@ -315,6 +318,7 @@ foreigner_class!(class TestWorkWithVec {
     method TestWorkWithVec::get_vec_foo(&self) -> Vec<Foo>;
     method TestWorkWithVec::get_slice_foo(&self) -> &[Foo];
     static_method TestWorkWithVec::create_foo_vec(n: usize) -> Vec<Foo>;
+    static_method TestWorkWithVec::sort_foo_slice(v: &mut [Foo]);
 });
 
 enum MyEnum {

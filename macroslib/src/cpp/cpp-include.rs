@@ -583,6 +583,12 @@ impl<'a, T: SwigForeignClass> SwigInto<CRustObjectSlice> for &'a [T] {
     }
 }
 
+impl<'a, T: SwigForeignClass> SwigFrom<CRustObjectSlice> for &'a mut [T] {
+    fn swig_from(x: CRustObjectSlice) -> &'a mut [T] {
+        unsafe { ::std::slice::from_raw_parts_mut(x.data as *mut T, x.len) }
+    }
+}
+
 #[allow(dead_code)]
 #[repr(C)]
 pub struct CResultCRustForeignVecString {

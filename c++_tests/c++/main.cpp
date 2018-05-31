@@ -321,6 +321,25 @@ TEST(TestWorkWithVec, smokeTest)
         EXPECT_EQ(i, size_t(foo.f(0, 0)));
         ++i;
     }
+
+    {
+        auto v = TestWorkWithVec::create_foo_vec(30);
+        auto v1 = TestWorkWithVec::create_foo_vec(0);
+        while (!v.empty()) {
+            v1.push(v.remove(v.size() - 1));
+        }
+        size_t i = v1.size() - 1;
+        for (const auto &elem : v1) {
+            EXPECT_EQ(i, static_cast<size_t>(elem.f(0, 0)));
+            --i;
+        }
+        TestWorkWithVec::sort_foo_slice(v1.as_slice());
+        i = 0;
+        for (const auto &elem : v1) {
+            EXPECT_EQ(i, static_cast<size_t>(elem.f(0, 0)));
+            ++i;
+        }
+    }
 }
 
 TEST(TestWorkWithVec, rangeLoop)
