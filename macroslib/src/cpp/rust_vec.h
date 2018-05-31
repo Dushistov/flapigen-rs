@@ -149,6 +149,8 @@ class RustVec final : private CContainerType {
 public:
     using value_type = typename std::remove_const<
         typename std::remove_reference<decltype(*internal::field_type(&CContainerType::data))>::type>::type;
+    using iterator = value_type *;
+    using const_iterator = const value_type *;
 
     explicit RustVec(const CContainerType &o) noexcept
     {
@@ -184,6 +186,22 @@ public:
     size_t size() const noexcept { return this->len; }
     bool empty() const noexcept { return this->len == 0; }
     const value_type &operator[](size_t i) const noexcept { return this->data[i]; }
+    iterator begin() noexcept
+    {
+        return this->data;
+    }
+    const_iterator begin() const noexcept
+    {
+        return this->data;
+    }
+    iterator end() noexcept
+    {
+        return this->data + this->len;
+    }
+    const_iterator end() const noexcept
+    {
+        return this->data + this->len;
+    }
 
 private:
     void free_mem() noexcept
