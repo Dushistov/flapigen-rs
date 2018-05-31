@@ -342,7 +342,7 @@ TEST(TestWorkWithVec, smokeTest)
     }
 
     {
-        auto sl = RustSlice{ t.return_usize_slice() };
+        auto sl = RustSlice<CRustSliceUsize>{ t.return_usize_slice() };
         ASSERT_EQ(2u, sl.size());
         EXPECT_EQ(17, sl[0]);
         EXPECT_EQ(18, sl[1]);
