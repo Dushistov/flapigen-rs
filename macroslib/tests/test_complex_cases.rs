@@ -883,6 +883,7 @@ foreigner_class!(class Boo {
     constructor Boo::new(_: i32, _: usize) -> Boo;
     method Boo::f1(&self) -> &[u32];
     method Boo::f2(&self) -> &[Foo];
+    method Boo::f3(&self) -> &[usize];
 });
 "#,
         &[ForeignLang::Cpp],

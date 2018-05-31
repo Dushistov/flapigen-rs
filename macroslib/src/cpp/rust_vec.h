@@ -52,6 +52,11 @@ struct CRustSliceU32 {
     uintptr_t len;
 };
 
+struct CRustSliceUsize {
+    const uintptr_t *data;
+    uintptr_t len;
+};
+
 struct CRustObjectSlice {
     const void *data;
     uintptr_t len;
