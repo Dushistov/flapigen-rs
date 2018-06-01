@@ -306,22 +306,22 @@ TEST(TestWorkWithVec, smokeTest)
             EXPECT_EQ(i, size_t(vec_foo[i].f(0, 0)));
         }
     }
-
-    auto slice_foo = t.get_slice_foo();
-    ASSERT_EQ(tag_len, slice_foo.size());
-    for (size_t i = 0; i < slice_foo.size(); ++i) {
-        EXPECT_EQ(std::string(tag), slice_foo[i].getName().to_std_string());
-        EXPECT_TRUE(slice_foo[i].f(0, 0) >= 0);
-        EXPECT_EQ(i, size_t(slice_foo[i].f(0, 0)));
+    {
+        auto slice_foo = t.get_slice_foo();
+        ASSERT_EQ(tag_len, slice_foo.size());
+        for (size_t i = 0; i < slice_foo.size(); ++i) {
+            EXPECT_EQ(std::string(tag), slice_foo[i].getName().to_std_string());
+            EXPECT_TRUE(slice_foo[i].f(0, 0) >= 0);
+            EXPECT_EQ(i, size_t(slice_foo[i].f(0, 0)));
+        }
+        size_t i = 0;
+        for (auto foo : slice_foo) {
+            EXPECT_EQ(std::string(tag), foo.getName().to_std_string());
+            EXPECT_TRUE(foo.f(0, 0) >= 0);
+            EXPECT_EQ(i, size_t(foo.f(0, 0)));
+            ++i;
+        }
     }
-    size_t i = 0;
-    for (auto foo : slice_foo) {
-        EXPECT_EQ(std::string(tag), foo.getName().to_std_string());
-        EXPECT_TRUE(foo.f(0, 0) >= 0);
-        EXPECT_EQ(i, size_t(foo.f(0, 0)));
-        ++i;
-    }
-
     {
         auto v = TestWorkWithVec::create_foo_vec(30);
         auto v1 = TestWorkWithVec::create_foo_vec(0);
