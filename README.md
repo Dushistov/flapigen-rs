@@ -1,5 +1,10 @@
 # rust-swig [![Build status](https://travis-ci.org/Dushistov/rust_swig.svg?branch=master)](https://travis-ci.org/Dushistov/rust_swig) [![Build status](https://ci.appveyor.com/api/projects/status/db4rs7f96iba4bt8/branch/master?svg=true)](https://ci.appveyor.com/project/Dushistov/rust-swig/branch/master) [![License](https://img.shields.io/badge/license-BSD-green.svg)](https://github.com/Dushistov/rust_swig/blob/master/LICENSE)
 
+Tool for connecting programs or libraries written in Rust with other languages.
+Currently implemented support for `C++` and `Java`, but you can write support
+for any language of your choice. For an instruction how to integrate rust_swig with your
+project look [here](#integration-of-rust_swig-with-your-project).
+
 
 ## Getting started
 
@@ -184,3 +189,9 @@ public:
     void onStateChanged(int, bool) override {}
 };
 ```
+
+## Integration of rust_swig with your project
+
+rust_swig is designed to be used from [cargo build scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html).
+Just copy an appropriate code from examples crates: [general java](https://github.com/Dushistov/rust_swig/tree/master/jni_tests),
+[android/java](https://github.com/Dushistov/rust_swig/tree/master/android-example), [c++](https://github.com/Dushistov/rust_swig/tree/master/c%2B%2B_tests) and add rust_swig as `[build-dependencies]` into your `Cargo.toml`.
