@@ -808,6 +808,8 @@ foreigner_class!(class Foo {
    method Foo::f1(&self, _: Option<f64>);
    method Foo::f2(&mut self, _: Option<Boo>);
    method Foo::f3(&mut self, _: Option<ControlItem>);
+   method Foo::f4(&self, x: Option<usize>);
+   static_method Foo::f5(x: Option<f64>, y: Option<usize>);
 });
 "#,
         &[ForeignLang::Cpp],
@@ -816,6 +818,24 @@ foreigner_class!(class Foo {
         .iter()
         .find(|x| x.lang == ForeignLang::Cpp)
         .unwrap();
+
+    println!("rust: {}", cpp_code_pair.rust_code);
+    assert!(
+        cpp_code_pair
+            .rust_code
+            .contains("pub extern \"C\" fn Foo_f3(this: *mut Foo, a_0: CRustOptionU32)")
+    );
+    assert!(
+        cpp_code_pair
+            .rust_code
+            .contains("pub extern \"C\" fn Foo_f4(this: *mut Foo, a_0: CRustOptionUSize)")
+    );
+    assert!(
+        cpp_code_pair
+            .rust_code
+            .contains("pub extern \"C\" fn Foo_f5(a_0: CRustOptionF64, a_1: CRustOptionUSize)")
+    );
+
     println!("c/c++: {}", cpp_code_pair.foreign_code);
     assert!(
         cpp_code_pair
@@ -832,13 +852,6 @@ foreigner_class!(class Foo {
         cpp_code_pair
             .foreign_code
             .contains("void f3(std::optional<ControlItem>")
-    );
-
-    println!("rust: {}", cpp_code_pair.rust_code);
-    assert!(
-        cpp_code_pair
-            .rust_code
-            .contains("pub extern \"C\" fn Foo_f3(this: *mut Foo, a_0: CRustOptionU32)")
     );
 }
 
