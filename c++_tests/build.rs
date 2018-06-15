@@ -14,8 +14,8 @@ fn main() {
 
     let out_dir = env::var("OUT_DIR").unwrap();
     rust_swig_expand(
-        Path::new("src/lib.rs.in"),
-        &Path::new(&out_dir).join("lib.rs"),
+        Path::new("src/cpp_glue.rs.in"),
+        &Path::new(&out_dir).join("cpp_glue.rs"),
     ).unwrap();
     let expand_time = now.elapsed();
     println!(

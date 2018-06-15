@@ -1,1 +1,2 @@
-include!(concat!(env!("OUT_DIR"), "/lib.rs"));
+mod cpp_glue;
+pub use cpp_glue::*;
