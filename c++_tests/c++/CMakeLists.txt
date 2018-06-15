@@ -44,7 +44,7 @@ include(rust_cargo)
 
 get_filename_component(RUST_BUILD_CWD ${CMAKE_CURRENT_SOURCE_DIR}  DIRECTORY)
 #this should create "target" directory if it does not exists
-set(RUST_SWIG_SRCS "${RUST_BUILD_CWD}/src/lib.rs.in")
+set(RUST_SWIG_SRCS "${RUST_BUILD_CWD}/src/cpp_glue.rs.in")
 configure_file(cmake/rust_swig_gen.cmake.in ${CMAKE_BINARY_DIR}/rust_swig_gen.cmake @ONLY)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/rust_swig_gen)
 if (NOT EXISTS ${CMAKE_BINARY_DIR}/rust_swig_regen_headers.cmake)

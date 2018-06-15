@@ -356,7 +356,7 @@ impl TestEnumClass {
     }
 
     fn next_enum(v: MyEnum) -> MyEnum {
-        use MyEnum::*;
+        use self::MyEnum::*;
         match v {
             Item1 => Item2,
             Item2 => Item3,
