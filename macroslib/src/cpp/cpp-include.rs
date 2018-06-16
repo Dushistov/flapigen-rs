@@ -768,6 +768,16 @@ impl SwigFrom<Option<usize>> for CRustOptionUSize {
     }
 }
 
+impl SwigInto<Option<usize>> for CRustOptionUSize {
+    fn swig_into(self) -> Option<usize> {
+        if self.is_some != 0 {
+            Some(self.val)
+        } else {
+            None
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[repr(C)]
 pub struct CResultObjectObject {
