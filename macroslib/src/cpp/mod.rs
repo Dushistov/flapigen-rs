@@ -134,6 +134,7 @@ impl LanguageGenerator for CppConfig {
                 },
             );
 
+            //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 my_const_void_ptr_ti2,
                 get_ref_type(&this_type.ty, ast::Mutability::Immutable).into(),
@@ -141,6 +142,25 @@ impl LanguageGenerator for CppConfig {
                     r#"
     assert!(!{from_var}.is_null());
     let {to_var}: &{this_type} = unsafe {{ &*({from_var} as *const {this_type}) }};
+"#,
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE,
+                    this_type = this_type.normalized_name,
+                )).into(),
+            );
+            let mut_void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
+            let my_mut_void_ptr_ti = RustType::new(
+                parse_ty(sess, DUMMY_SP, mut_void_ptr_typename)?,
+                make_unique_rust_typename(mut_void_ptr_typename, this_type.normalized_name),
+            );
+            //handle foreigner_class as input arg
+            conv_map.add_conversation_rule(
+                my_mut_void_ptr_ti,
+                get_ref_type(&this_type.ty, ast::Mutability::Mutable).into(),
+                Symbol::intern(&format!(
+                    r#"
+    assert!(!{from_var}.is_null());
+    let {to_var}: &mut {this_type} = unsafe {{ &mut *({from_var} as *mut {this_type}) }};
 "#,
                     to_var = TO_VAR_TEMPLATE,
                     from_var = FROM_VAR_TEMPLATE,

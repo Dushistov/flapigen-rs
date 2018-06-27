@@ -1,7 +1,6 @@
 environment:
   matrix:
-  - TARGET: nightly-x86_64-pc-windows-msvc
-  - TARGET: 1.23.0-x86_64-pc-windows-msvc
+  - TARGET: 1.27.0-x86_64-pc-windows-msvc
 platform:
   - x64
 install:        

@@ -551,6 +551,11 @@ impl TestReferences {
     fn update_foo(&mut self, foo: &Foo) {
         self.foo = foo.clone();
     }
+
+    fn update_mut_foo(&mut self, foo: &mut Foo) {
+        self.foo = foo.clone();
+        foo.name.push('A');
+    }
 }
 
 foreigner_class!(class TestReferences {
@@ -558,6 +563,7 @@ foreigner_class!(class TestReferences {
     constructor TestReferences::new(foo_data: i32, foo_name: &str) -> TestReferences;
     method TestReferences::get_foo_ref(&self) -> &Foo;
     method TestReferences::update_foo(&mut self, foo: &Foo);
+    method TestReferences::update_mut_foo(&mut self, foo: &mut Foo);
 });
 
 fn add_func(a: i32, b: i32) -> i32 {

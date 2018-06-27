@@ -76,6 +76,11 @@ fn special_type<'a>(
         if let Some(foreign_class) =
             conv_map.find_foreigner_class_with_such_self_type(ret_ty, false)
         {
+            trace!(
+                "special_type is immutable ref to foreign_class ty {:?}, foreign_class {}",
+                arg_ty,
+                foreign_class.name
+            );
             let foreign_info =
                 foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span, true)?;
             if direction == Direction::Outgoing {
@@ -98,6 +103,57 @@ fn special_type<'a>(
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type,
                         output_converter: "UNREACHABLE".to_string(),
+                        input_converter: format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE),
+                    }),
+                }));
+            }
+        }
+    }
+
+    if let ast::TyKind::Rptr(
+        _,
+        ast::MutTy {
+            ty: ref ret_ty,
+            mutbl: ast::Mutability::Mutable,
+        },
+    ) = arg_ty.node
+    {
+        if let Some(foreign_class) =
+            conv_map.find_foreigner_class_with_such_self_type(ret_ty, false)
+        {
+            trace!(
+                "special_type is mutable ref to foreign_class ty {:?}, foreign_class {}",
+                arg_ty,
+                foreign_class.name
+            );
+            let foreign_info =
+                foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span, true)?;
+            if direction == Direction::Outgoing {
+                return Err(fatal_error(
+                    sess,
+                    arg_ty.span,
+                    &format!(
+                        "Not supported conversation &mut {} as return type to foreign",
+                        foreign_class.name
+                    ),
+                ));
+            } else {
+                let mut_void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
+                let my_mut_void_ptr_ti = RustType::new(
+                    parse_ty(sess, DUMMY_SP, mut_void_ptr_typename)?,
+                    make_unique_rust_typename(mut_void_ptr_typename, foreign_class.name),
+                );
+                let cpp_type = Symbol::intern(&format!("{} &", foreign_class.name));
+                let c_type = foreign_info.name;
+                return Ok(Some(CppForeignTypeInfo {
+                    base: ForeignTypeInfo {
+                        name: foreign_info.name,
+                        correspoding_rust_type: my_mut_void_ptr_ti,
+                    },
+                    c_converter: String::new(),
+                    cpp_converter: Some(CppConverter {
+                        typename: cpp_type,
+                        output_converter: "#error".to_string(),
                         input_converter: format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE),
                     }),
                 }));
