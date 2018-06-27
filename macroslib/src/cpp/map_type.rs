@@ -139,9 +139,24 @@ fn special_type<'a>(
                 ));
             } else {
                 let mut_void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
+                let this_type = if let Some(this_type_for_method) =
+                    foreign_class.this_type_for_method.as_ref()
+                {
+                    let this_type: RustType = this_type_for_method.clone().into();
+                    this_type
+                } else {
+                    return Err(fatal_error(
+                        sess,
+                        arg_ty.span,
+                        &format!(
+                            "Unknown this type for method(s) of class {}",
+                            foreign_class.name
+                        ),
+                    ));
+                };
                 let my_mut_void_ptr_ti = RustType::new(
                     parse_ty(sess, DUMMY_SP, mut_void_ptr_typename)?,
-                    make_unique_rust_typename(mut_void_ptr_typename, foreign_class.name),
+                    make_unique_rust_typename(mut_void_ptr_typename, this_type.normalized_name),
                 );
                 let cpp_type = Symbol::intern(&format!("{} &", foreign_class.name));
                 let c_type = foreign_info.name;
