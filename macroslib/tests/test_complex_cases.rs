@@ -358,6 +358,50 @@ foreigner_class!(class TestPassObjectsAsParams {
             .foreign_code
             .contains("public static void f5(Foo")
     );
+
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("cpp_code_pair.rust_code\n{}", cpp_code_pair.rust_code);
+    assert!(cpp_code_pair.rust_code.contains(
+        r##"#[no_mangle]
+pub extern "C" fn TestPassObjectsAsParams_f1(this:
+                                                 *mut TestPassObjectsAsParams,
+                                             a_0:
+                                                 *const ::std::os::raw::c_void)
+ -> () {
+    assert!(! a_0 . is_null (  ));
+    let a_0: &Foo = unsafe { &*(a_0 as *const Foo) };
+    let this: &TestPassObjectsAsParams = unsafe { this.as_mut().unwrap() };
+    let mut ret: () = TestPassObjectsAsParams::f1(this, a_0);
+    ret
+}"##
+    ));
+    assert!(cpp_code_pair.rust_code.contains(
+        r##"#[no_mangle]
+pub extern "C" fn TestPassObjectsAsParams_f3(this:
+                                                 *mut TestPassObjectsAsParams,
+                                             a_0: *mut ::std::os::raw::c_void)
+ -> () {
+    assert!(! a_0 . is_null (  ));
+    let a_0: &mut Foo = unsafe { &mut *(a_0 as *mut Foo) };
+    let this: &TestPassObjectsAsParams = unsafe { this.as_mut().unwrap() };
+    let mut ret: () = TestPassObjectsAsParams::f3(this, a_0);
+    ret
+}"##
+    ));
+    println!("cpp_code_pair.foreign_code {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("void f1(const Foo & a_0) const")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("void f3(Foo & a_0) const")
+    );
 }
 
 #[test]

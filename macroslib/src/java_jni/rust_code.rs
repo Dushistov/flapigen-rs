@@ -106,6 +106,7 @@ pub(in java_jni) fn generate_rust_code<'a>(
 
         let jlong_ti: RustType = parse_ty(sess, DUMMY_SP, Symbol::intern("jlong"))?.into();
 
+        //handle foreigner_class as input arg
         conv_map.add_conversation_rule(
             jlong_ti.clone(),
             get_ref_type(&this_type_for_method.ty, ast::Mutability::Immutable).into(),
@@ -121,6 +122,7 @@ pub(in java_jni) fn generate_rust_code<'a>(
             )).into(),
         );
 
+        //handle foreigner_class as input arg
         conv_map.add_conversation_rule(
             jlong_ti.clone(),
             get_ref_type(&this_type_for_method.ty, ast::Mutability::Mutable).into(),

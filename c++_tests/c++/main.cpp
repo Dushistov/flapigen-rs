@@ -586,6 +586,12 @@ TEST(TestReferences, smokeTest)
     foo = tr.get_foo_ref();
     EXPECT_EQ(102, foo.f(1, 1));
     EXPECT_EQ(std::string("100"), foo.getName().to_std_string());
+
+    Foo foo2(200, "200");
+    tr.update_mut_foo(foo2);
+    foo = tr.get_foo_ref();
+    EXPECT_EQ(202, foo.f(1, 1));
+    EXPECT_EQ(std::string("200A"), foo2.getName().to_std_string());
 }
 
 TEST(TestOnlyStaticMethods, smokeTest)
