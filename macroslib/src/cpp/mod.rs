@@ -223,7 +223,7 @@ impl LanguageGenerator for CppConfig {
         pointer_target_width: usize,
         interface: &ForeignInterface,
     ) -> PResult<'a, Vec<P<ast::Item>>> {
-        let f_methods = find_suitable_ftypes_for_interace_methods(sess, conv_map, interface)?;
+        let f_methods = find_suitable_ftypes_for_interace_methods(sess, conv_map, interface, self)?;
         cpp_code::generate_for_interface(
             &self.output_dir,
             &self.namespace_name,
@@ -580,7 +580,7 @@ public:
 
         let cpp_args_with_types = cpp_code::cpp_generate_args_with_types(f_method)
             .map_err(|err| fatal_error(sess, class.span, &err))?;
-        let cpp_args_for_c = cpp_code::cpp_generate_args_to_call_c(f_method)
+        let cpp_args_for_c = cpp_code::cpp_generate_args_to_call_c(f_method, false)
             .map_err(|err| fatal_error(sess, class.span, &err))?;
         let real_output_typename = match method.fn_decl.output {
             ast::FunctionRetTy::Default(_) => "()".to_string(),
@@ -1299,6 +1299,7 @@ fn find_suitable_ftypes_for_interace_methods<'a>(
     sess: &'a ParseSess,
     conv_map: &mut TypesConvMap,
     interace: &ForeignInterface,
+    cpp_cfg: &CppConfig,
 ) -> PResult<'a, Vec<CppForeignMethodSignature>> {
     let void_sym = Symbol::intern("void");
     let dummy_ty = ast::Ty {
@@ -1311,20 +1312,13 @@ fn find_suitable_ftypes_for_interace_methods<'a>(
     for method in &interace.items {
         let mut input = Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
-            let f_arg_type = conv_map
-                .map_through_conversation_to_foreign(&arg.ty, Direction::Outgoing, arg.ty.span)
-                .ok_or_else(|| {
-                    fatal_error(
-                        sess,
-                        arg.ty.span,
-                        &format!(
-                            "Do not know conversation to foreign \
-                             from such rust type '{}'",
-                            normalized_ty_string(&arg.ty)
-                        ),
-                    )
-                })?;
-            input.push(f_arg_type.into());
+            input.push(map_type(
+                sess,
+                conv_map,
+                cpp_cfg,
+                &arg.ty,
+                Direction::Outgoing,
+            )?);
         }
         let output = match method.fn_decl.output {
             ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
