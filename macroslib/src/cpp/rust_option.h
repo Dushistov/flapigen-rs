@@ -12,6 +12,11 @@ struct CRustOptionU32 {
     uint8_t is_some;
 };
 
+struct CRustOptionI64 {
+    int64_t val;
+    uint8_t is_some;
+};
+
 struct CRustOptionU64 {
     uint64_t val;
     uint8_t is_some;
@@ -25,7 +30,7 @@ struct CRustOptionUSize {
 #ifdef __cplusplus
 #include <cstring>
 
-template<typename T> 
+template <typename T>
 inline T c_option_empty()
 {
     T a;
