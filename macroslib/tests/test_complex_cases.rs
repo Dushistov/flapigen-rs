@@ -1063,6 +1063,61 @@ foreigner_class!(class Foo {
     );
 }
 
+#[test]
+fn test_foreign_interface_cpp() {
+    for _ in 0..100 {
+        let gen_code = parse_code(
+            "test_foreign_interface_cpp",
+            r#"
+foreigner_class!(class Uuid {
+    self_type Uuid;
+    private constructor uuid_private_constructor() -> Uuid;
+    static_method Uuid::new_v4() -> Uuid;
+});
+
+foreign_interface!(interface RepoChangedCallback {
+    self_type RepoChangedCallback;
+    on_save = RepoChangedCallback::on_save(&self, uuid: &Uuid);
+    on_remove = RepoChangedCallback::on_remove(&self, uuid: &Uuid);
+});
+"#,
+            &[ForeignLang::Cpp],
+        );
+        let cpp_code_pair = gen_code
+            .iter()
+            .find(|x| x.lang == ForeignLang::Cpp)
+            .unwrap();
+        println!("c/c++: {}", cpp_code_pair.foreign_code);
+        assert!(
+            cpp_code_pair
+                .foreign_code
+                .contains("virtual void on_save(UuidRef a_0) = 0;")
+        );
+        assert!(
+            cpp_code_pair
+                .foreign_code
+                .contains("virtual void on_remove(UuidRef a_0) = 0;")
+        );
+        assert!(cpp_code_pair.foreign_code.contains(
+            r#"
+   static void c_on_save(const UuidOpaque * a_0, void *opaque)
+   {
+        auto p = static_cast<RepoChangedCallback *>(opaque);
+        assert(p != nullptr);
+        p->on_save(UuidRef{a_0});
+   }
+
+   static void c_on_remove(const UuidOpaque * a_0, void *opaque)
+   {
+        auto p = static_cast<RepoChangedCallback *>(opaque);
+        assert(p != nullptr);
+        p->on_remove(UuidRef{a_0});
+   }
+"#
+        ));
+    }
+}
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 enum ForeignLang {
     Java,

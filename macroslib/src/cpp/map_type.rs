@@ -91,7 +91,7 @@ fn special_type<'a>(
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type,
                         output_converter: format!("{}{{{}}}", cpp_type, FROM_VAR_TEMPLATE),
-                        input_converter: "UNREACHABLE".to_string(),
+                        input_converter: format!("UNREACHABLE {}", line!()),
                     }),
                 }));
             } else {
@@ -102,7 +102,7 @@ fn special_type<'a>(
                     c_converter: String::new(),
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type,
-                        output_converter: "UNREACHABLE".to_string(),
+                        output_converter: format!("UNREACHABLE {}", line!()),
                         input_converter: format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE),
                     }),
                 }));

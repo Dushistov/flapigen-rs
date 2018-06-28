@@ -153,7 +153,7 @@ struct MySomeObserver final : public SomeObserver {
     {
         ++deleted;
     }
-    void onStateChanged(int32_t a, char b) override
+    void onStateChanged(int32_t a, bool b) override
     {
         std::cout << "onStateChanged: a: " << a << ", b: " << b << "\n";
         ASSERT_EQ(2, a);
