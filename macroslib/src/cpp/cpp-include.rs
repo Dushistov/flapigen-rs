@@ -55,6 +55,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustOptionF64"]
     #![swig_foreigner_type = "struct CRustOptionU32"]
     #![swig_rust_type = "CRustOptionU32"]
+    #![swig_foreigner_type = "struct CRustOptionI64"]
+    #![swig_rust_type = "CRustOptionI64"]
     #![swig_foreigner_type = "struct CRustOptionU64"]
     #![swig_rust_type = "CRustOptionU64"]
     #![swig_foreigner_type = "struct CRustOptionUSize"]
@@ -744,6 +746,32 @@ impl SwigFrom<Option<u64>> for CRustOptionU64 {
 
 impl SwigInto<Option<u64>> for CRustOptionU64 {
     fn swig_into(self) -> Option<u64> {
+        if self.is_some != 0 {
+            Some(self.val)
+        } else {
+            None
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustOptionI64 {
+    val: i64,
+    is_some: u8,
+}
+
+impl SwigFrom<Option<i64>> for CRustOptionI64 {
+    fn swig_from(x: Option<i64>) -> Self {
+        match x {
+            Some(x) => CRustOptionI64 { val: x, is_some: 1 },
+            None => CRustOptionI64 { val: 0, is_some: 0 },
+        }
+    }
+}
+
+impl SwigInto<Option<i64>> for CRustOptionI64 {
+    fn swig_into(self) -> Option<i64> {
         if self.is_some != 0 {
             Some(self.val)
         } else {
