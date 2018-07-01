@@ -55,6 +55,11 @@ struct CRustForeignVec {
     uintptr_t step;
 };
 
+struct CRustSliceU8 {
+    const uint8_t *data;
+    uintptr_t len;
+};
+
 struct CRustSliceU32 {
     const uint32_t *data;
     uintptr_t len;

@@ -47,6 +47,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CResultObjectString"]
     #![swig_foreigner_type = "struct CResultCRustForeignVecString"]
     #![swig_rust_type = "CResultCRustForeignVecString"]
+    #![swig_foreigner_type = "struct CRustSliceU8"]
+    #![swig_rust_type = "CRustSliceU8"]
     #![swig_foreigner_type = "struct CRustSliceU32"]
     #![swig_rust_type = "CRustSliceU32"]
     #![swig_foreigner_type = "struct CRustSliceUsize"]
@@ -586,6 +588,22 @@ impl<T: SwigForeignClass> SwigFrom<Result<T, String>> for CResultObjectString {
 
 #[allow(dead_code)]
 #[repr(C)]
+pub struct CRustSliceU8 {
+    data: *const u8,
+    len: usize,
+}
+
+impl<'a> SwigInto<CRustSliceU8> for &'a [u8] {
+    fn swig_into(self) -> CRustSliceU8 {
+        CRustSliceU8 {
+            data: self.as_ptr(),
+            len: self.len(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
 pub struct CRustSliceU32 {
     data: *const u32,
     len: usize,
@@ -599,6 +617,7 @@ impl<'a> SwigInto<CRustSliceU32> for &'a [u32] {
         }
     }
 }
+
 #[allow(dead_code)]
 #[repr(C)]
 pub struct CRustSliceUsize {
