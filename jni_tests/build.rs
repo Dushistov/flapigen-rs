@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     let java_home = env::var("JAVA_HOME").expect("JAVA_HOME env variable not settted");
 

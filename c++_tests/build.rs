@@ -8,7 +8,7 @@ use std::path::Path;
 use std::time::Instant;
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     let now = Instant::now();
 

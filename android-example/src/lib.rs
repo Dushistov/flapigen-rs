@@ -5,9 +5,9 @@ extern crate log;
 extern crate log_panics;
 
 #[cfg(target_os = "android")]
-pub mod java_glue;
-#[cfg(target_os = "android")]
 mod android_c_headers;
+#[cfg(target_os = "android")]
+pub mod java_glue;
 
 struct Session {
     a: i32,
@@ -16,7 +16,7 @@ struct Session {
 impl Session {
     pub fn new() -> Session {
         #[cfg(target_os = "android")]
-        android_logger::init_once(log::LogLevel::Debug);
+        android_logger::init_once(android_logger::Filter::default());
         log_panics::init(); // log panics rather than printing them
         info!("init log system - done");
         Session { a: 2 }
