@@ -9,9 +9,9 @@ name = "mobcore"
 crate-type = ["cdylib"]
 
 [dependencies]
-log = "0.3"
-log-panics = "1.1.0"
-android_logger = "0.3.0"
+log = "0.4"
+log-panics = "2.0"
+android_logger = "0.5"
 
 [build-dependencies]
 bindgen = "0.33"

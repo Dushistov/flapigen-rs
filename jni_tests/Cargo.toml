@@ -9,13 +9,13 @@ name = "rust_swig_test_jni"
 crate-type = ["cdylib"]
 
 [dependencies]
-log = "0.3"
+log = "0.4"
 chrono = "0.4.0"
 
 [build-dependencies]
 syntex = "0.58.1"
-env_logger = "0.4.2"
+env_logger = "0.5"
 bindgen = "0.33.1"
-log = "0.3"
+log = "0.4"
 rust_swig = { path = "../macroslib" }
 
