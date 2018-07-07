@@ -48,6 +48,7 @@
 #endif
 #include "rust_interface/TestReferences.hpp"
 #include "rust_interface/TestOnlyStaticMethods.hpp"
+#include "rust_interface/Interface.hpp"
 
 using namespace rust;
 
@@ -622,6 +623,14 @@ TEST(TestDummyConstructor, smokeTest)
     EXPECT_NEAR(0.1, pos.latitude(), 1e-10);
 }
 #endif
+
+TEST(Interface, smokeTest)
+{
+    Interface x;
+    EXPECT_EQ(18, x.f(1));
+    x.set(0);
+    EXPECT_EQ(1, x.f(1));
+}
 
 int main(int argc, char *argv[])
 {
