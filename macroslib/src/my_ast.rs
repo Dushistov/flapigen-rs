@@ -12,9 +12,9 @@ use syntex_syntax::symbol::Symbol;
 use syntex_syntax::visit::{walk_lifetime, walk_ty, Visitor};
 use syntex_syntax::{ast, parse};
 
-use SelfTypeVariant;
 use errors::fatal_error;
 use types_conv_map::make_unique_rust_typename_if_need;
+use SelfTypeVariant;
 
 pub(crate) fn normalized_ty_string(ty: &ast::Ty) -> String {
     struct StripLifetime;
@@ -887,12 +887,10 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
                 &sess,
                 "impl<T: Moo> Foo for Boo {}"
             )),
-            vec![
-                GenericTraitBound {
-                    ty_param: Symbol::intern("T"),
-                    trait_names: vec![Symbol::intern("Moo")].into_iter().collect(),
-                },
-            ]
+            vec![GenericTraitBound {
+                ty_param: Symbol::intern("T"),
+                trait_names: vec![Symbol::intern("Moo")].into_iter().collect(),
+            }]
         );
 
         assert_eq!(
@@ -900,12 +898,10 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
                 &sess,
                 "impl<T> Foo for Boo where T: Moo {}"
             )),
-            vec![
-                GenericTraitBound {
-                    ty_param: Symbol::intern("T"),
-                    trait_names: vec![Symbol::intern("Moo")].into_iter().collect(),
-                },
-            ]
+            vec![GenericTraitBound {
+                ty_param: Symbol::intern("T"),
+                trait_names: vec![Symbol::intern("Moo")].into_iter().collect(),
+            }]
         );
     }
 

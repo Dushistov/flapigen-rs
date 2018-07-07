@@ -10,8 +10,9 @@ use syntex_syntax::ptr::P;
 use syntex_syntax::symbol::Symbol;
 use syntex_syntax::{ast, codemap, parse};
 
-use super::{validate_code_template, NodeIndex, TypeConvEdge, TypeGraphIdx, TypesConvGraph,
-            TypesConvMap};
+use super::{
+    validate_code_template, NodeIndex, TypeConvEdge, TypeGraphIdx, TypesConvGraph, TypesConvMap,
+};
 use errors::fatal_error;
 use my_ast::{normalized_ty_string, parse_ty, GenericTypeConv, RustType};
 use types_conv_map::{make_unique_rust_typename, make_unique_rust_typename_if_need};

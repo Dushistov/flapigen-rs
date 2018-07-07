@@ -17,16 +17,22 @@ use syntex_syntax::symbol::Symbol;
 use self::map_type::map_type;
 use errors::fatal_error;
 use file_cache::FileWriteCache;
-use my_ast::{code_to_item, get_ref_type, list_lifetimes, normalized_ty_string, parse_ty,
-             self_variant, RustType};
-use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
-                            foreign_from_rust_convert_method_output,
-                            foreign_to_rust_convert_method_inputs,
-                            rust_to_foreign_convert_method_inputs};
-use types_conv_map::{make_unique_rust_typename, unpack_unique_typename, ForeignMethodSignature,
-                     ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
-use {CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
-     LanguageGenerator, MethodAccess, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap};
+use my_ast::{
+    code_to_item, get_ref_type, list_lifetimes, normalized_ty_string, parse_ty, self_variant,
+    RustType,
+};
+use types_conv_map::utils::{
+    create_suitable_types_for_constructor_and_self, foreign_from_rust_convert_method_output,
+    foreign_to_rust_convert_method_inputs, rust_to_foreign_convert_method_inputs,
+};
+use types_conv_map::{
+    make_unique_rust_typename, unpack_unique_typename, ForeignMethodSignature, ForeignTypeInfo,
+    FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+};
+use {
+    CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
+    LanguageGenerator, MethodAccess, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap,
+};
 
 struct CppConverter {
     typename: Symbol,

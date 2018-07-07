@@ -9,11 +9,14 @@ use cpp::cpp_code::c_class_type;
 use cpp::{CppConverter, CppForeignTypeInfo};
 use errors::fatal_error;
 use file_cache::FileWriteCache;
-use my_ast::{code_to_item, if_option_return_some_type, if_result_return_ok_err_types,
-             if_type_slice_return_elem_type, if_vec_return_elem_type, normalized_ty_string,
-             parse_ty, RustType};
-use types_conv_map::{make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE,
-                     TO_VAR_TEMPLATE};
+use my_ast::{
+    code_to_item, if_option_return_some_type, if_result_return_ok_err_types,
+    if_type_slice_return_elem_type, if_vec_return_elem_type, normalized_ty_string, parse_ty,
+    RustType,
+};
+use types_conv_map::{
+    make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+};
 use {CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypesConvMap};
 
 fn special_type<'a>(

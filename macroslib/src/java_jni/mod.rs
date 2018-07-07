@@ -13,10 +13,14 @@ use syntex_syntax::symbol::Symbol;
 
 use errors::fatal_error;
 use my_ast::{normalized_ty_string, parse_ty, RustType};
-use types_conv_map::{make_unique_rust_typename, ForeignMethodSignature, ForeignTypeInfo,
-                     FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
-use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
-     LanguageGenerator, MethodVariant, TypesConvMap};
+use types_conv_map::{
+    make_unique_rust_typename, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE,
+    TO_VAR_TEMPLATE,
+};
+use {
+    ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
+    LanguageGenerator, MethodVariant, TypesConvMap,
+};
 
 struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,

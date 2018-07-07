@@ -8,18 +8,24 @@ use syntex_syntax::print::pprust;
 use syntex_syntax::ptr::P;
 use syntex_syntax::symbol::Symbol;
 
-use super::{fmt_write_err_map, java_class_full_name, java_class_name_to_jni, method_name,
-            ForeignTypeInfo, JniForeignMethodSignature};
+use super::{
+    fmt_write_err_map, java_class_full_name, java_class_name_to_jni, method_name, ForeignTypeInfo,
+    JniForeignMethodSignature,
+};
 use errors::fatal_error;
-use my_ast::{code_to_item, get_ref_type, list_lifetimes, normalized_ty_string, parse_ty,
-             self_variant, RustType};
-use types_conv_map::utils::{create_suitable_types_for_constructor_and_self,
-                            foreign_from_rust_convert_method_output,
-                            foreign_to_rust_convert_method_inputs,
-                            rust_to_foreign_convert_method_inputs};
+use my_ast::{
+    code_to_item, get_ref_type, list_lifetimes, normalized_ty_string, parse_ty, self_variant,
+    RustType,
+};
+use types_conv_map::utils::{
+    create_suitable_types_for_constructor_and_self, foreign_from_rust_convert_method_output,
+    foreign_to_rust_convert_method_inputs, rust_to_foreign_convert_method_inputs,
+};
 use types_conv_map::{unpack_unique_typename, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE};
-use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
-     SelfTypeVariant, TypesConvMap};
+use {
+    ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
+    SelfTypeVariant, TypesConvMap,
+};
 
 struct MethodContext<'a> {
     method: &'a ForeignerMethod,

@@ -1,7 +1,8 @@
-use std::rc::Rc;
 use std::cell::{Ref, RefCell, RefMut};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::SystemTime;
+
 use chrono::{DateTime, Utc};
 
 use jni_c_header::*;
@@ -572,9 +573,9 @@ enum MyEnum {
 }
 
 foreign_enum!(enum MyEnum {
-  ITEM1 = MyEnum::Item1,
-  ITEM2 = MyEnum::Item2,
-  ITEM3 = MyEnum::Item3,
+    ITEM1 = MyEnum::Item1,
+    ITEM2 = MyEnum::Item2,
+    ITEM3 = MyEnum::Item3,
 });
 
 #[derive(Default)]

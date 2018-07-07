@@ -11,9 +11,10 @@ use syntex_syntax::tokenstream::TokenTree;
 use syntex_syntax::{ast, codemap, parse};
 
 use my_ast::{if_result_return_ok_err_types, normalized_ty_string, self_variant};
-use {ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
-     ForeignerClassInfo, ForeignerMethod, LanguageConfig, MethodAccess, MethodVariant,
-     SelfTypeVariant};
+use {
+    ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod, ForeignerClassInfo,
+    ForeignerMethod, LanguageConfig, MethodAccess, MethodVariant, SelfTypeVariant,
+};
 
 /// Returns the parsed optional self argument and whether a self shortcut was used.
 fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>> {
@@ -26,9 +27,8 @@ fn parse_self_arg<'a>(parser: &mut Parser<'a>) -> parse::PResult<'a, Option<Arg>
         _ => unreachable!(),
     };
     let isolated_self = |this: &mut Parser<'a>, n| {
-        this.look_ahead(n, |t| t.is_keyword(keywords::SelfValue)) && this.look_ahead(n + 1, |t| {
-            t != &token::ModSep
-        })
+        this.look_ahead(n, |t| t.is_keyword(keywords::SelfValue))
+            && this.look_ahead(n + 1, |t| t != &token::ModSep)
     };
 
     // Parse optional self parameter of a method.

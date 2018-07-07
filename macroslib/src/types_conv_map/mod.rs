@@ -14,15 +14,17 @@ use syntex_syntax::ptr::P;
 use syntex_syntax::symbol::Symbol;
 
 use petgraph;
-use petgraph::Graph;
 use petgraph::algo::dijkstra;
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
+use petgraph::Graph;
 
 use self::parsing::parse_types_conv_map;
 use errors::fatal_error;
-use my_ast::{check_if_smart_pointer_return_inner_type, get_trait_bounds, normalized_ty_string,
-             parse_ty, GenericTypeConv, RustType};
+use my_ast::{
+    check_if_smart_pointer_return_inner_type, get_trait_bounds, normalized_ty_string, parse_ty,
+    GenericTypeConv, RustType,
+};
 use {ForeignEnumInfo, ForeignerClassInfo};
 
 pub(crate) static TO_VAR_TEMPLATE: &'static str = "{to_var}";
@@ -856,7 +858,8 @@ pub(in types_conv_map) fn validate_code_template<'a>(
     sp: Span,
     code: &str,
 ) -> PResult<'a, ()> {
-    if code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE)
+    if code.contains(TO_VAR_TEMPLATE)
+        && code.contains(FROM_VAR_TEMPLATE)
         && code.contains(TO_VAR_TYPE_TEMPLATE)
     {
         Ok(())
@@ -936,16 +939,14 @@ impl Default for TypesConvMap {
     fn default() -> TypesConvMap {
         let generic_params = ast::Generics {
             lifetimes: vec![],
-            ty_params: vec![
-                ast::TyParam {
-                    attrs: ast::ThinVec::new(),
-                    ident: ast::Ident::from_str("T"),
-                    id: ast::DUMMY_NODE_ID,
-                    bounds: vec![],
-                    default: None,
-                    span: DUMMY_SP,
-                },
-            ],
+            ty_params: vec![ast::TyParam {
+                attrs: ast::ThinVec::new(),
+                ident: ast::Ident::from_str("T"),
+                id: ast::DUMMY_NODE_ID,
+                bounds: vec![],
+                default: None,
+                span: DUMMY_SP,
+            }],
             where_clause: ast::WhereClause {
                 id: ast::DUMMY_NODE_ID,
                 predicates: vec![],
