@@ -58,37 +58,6 @@ foreigner_class!(class Foo {
 }
 
 #[test]
-fn test_class_with_dummy_constructor() {
-    let gen_code = parse_code(
-        "test_class_with_dummy_constructor",
-        r#"
-foreigner_class!(class Foo {
-   self_type SomeType;
-   private constructor = empty;
-   method SomeType::f(&self);
-});
-"#,
-        &[ForeignLang::Java, ForeignLang::Cpp],
-    );
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
-    println!("c/c++: {}", cpp_code_pair.foreign_code);
-    assert!(cpp_code_pair.foreign_code.contains(
-        r#"private:
-
-    Foo() noexcept {}"#
-    ));
-    let java_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Java)
-        .unwrap();
-    println!("Java: {}", java_code_pair.foreign_code);
-    assert!(java_code_pair.foreign_code.contains("private Foo() {}"));
-}
-
-#[test]
 fn test_foreign_class_as_return_type_simple() {
     // without result Type and without "foreign" args
     let gen_code = parse_code(
