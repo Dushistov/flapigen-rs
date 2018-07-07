@@ -188,7 +188,8 @@ impl LanguageGenerator for CppConfig {
                 sess,
                 class.span,
                 &format!(
-                    "namespace {}, class {}: has methods, but no constructor",
+                    "namespace {}, class {}: has methods, but no constructor\n
+May be you need to use `private constructor = empty;` syntax?",
                     self.namespace_name, class.name
                 ),
             ));
@@ -552,7 +553,8 @@ public:
             sess,
             class.span,
             &format!(
-                "Class {} (namespace {}) have methods, but there is no constructor",
+                "Class {} (namespace {}) has methods, but there is no constructor\n
+May be you need to use `private constructor = empty;` syntax?",
                 class.name, namespace_name,
             ),
         )
@@ -748,19 +750,28 @@ public:
             }
             MethodVariant::Constructor => {
                 need_destructor = true;
-                write!(
-                    c_include_f,
-                    r#"
+                if method.is_dummy_constructor() {
+                    write!(
+                        cpp_include_f,
+                        r#"
+    {class_name}() noexcept {{}}
+"#,
+                        class_name = class.name,
+                    ).map_err(&map_write_err)?;
+                } else {
+                    write!(
+                        c_include_f,
+                        r#"
     {c_class_type} *{func_name}({args_with_types});
 "#,
-                    c_class_type = c_class_type,
-                    func_name = c_func_name,
-                    args_with_types = c_args_with_types,
-                ).map_err(&map_write_err)?;
+                        c_class_type = c_class_type,
+                        func_name = c_func_name,
+                        args_with_types = c_args_with_types,
+                    ).map_err(&map_write_err)?;
 
-                write!(
-                    cpp_include_f,
-                    r#"
+                    write!(
+                        cpp_include_f,
+                        r#"
     {class_name}({cpp_args_with_types})
     {{
         this->self_ = {c_func_name}({cpp_args_for_c});
@@ -769,29 +780,31 @@ public:
         }}
     }}
 "#,
-                    c_func_name = c_func_name,
-                    cpp_args_with_types = cpp_args_with_types,
-                    class_name = class.name,
-                    cpp_args_for_c = cpp_args_for_c,
-                ).map_err(&map_write_err)?;
-                let constructor_ret_type = class
-                    .constructor_ret_type
-                    .as_ref()
-                    .ok_or_else(&no_this_info)?
-                    .clone();
-                let this_type = class
-                    .this_type_for_method
-                    .as_ref()
-                    .ok_or_else(&no_this_info)?
-                    .clone();
-                gen_code.append(&mut generate_constructor(
-                    sess,
-                    conv_map,
-                    &method_ctx,
-                    constructor_ret_type,
-                    this_type,
-                    &code_box_this,
-                )?);
+                        c_func_name = c_func_name,
+                        cpp_args_with_types = cpp_args_with_types,
+                        class_name = class.name,
+                        cpp_args_for_c = cpp_args_for_c,
+                    ).map_err(&map_write_err)?;
+
+                    let constructor_ret_type = class
+                        .constructor_ret_type
+                        .as_ref()
+                        .ok_or_else(&no_this_info)?
+                        .clone();
+                    let this_type = class
+                        .this_type_for_method
+                        .as_ref()
+                        .ok_or_else(&no_this_info)?
+                        .clone();
+                    gen_code.append(&mut generate_constructor(
+                        sess,
+                        conv_map,
+                        &method_ctx,
+                        constructor_ret_type,
+                        this_type,
+                        &code_box_this,
+                    )?);
+                }
             }
         }
     }

@@ -43,6 +43,8 @@
 #include "rust_interface/TestOptional.hpp"
 #include "rust_interface/TestError.hpp"
 #include "rust_interface/TestResult.hpp"
+#include "rust_interface/Position.hpp"
+#include "rust_interface/LocationService.hpp"
 #endif
 #include "rust_interface/TestReferences.hpp"
 #include "rust_interface/TestOnlyStaticMethods.hpp"
@@ -344,13 +346,13 @@ TEST(TestWorkWithVec, smokeTest)
     {
         auto sl = RustSlice<CRustSliceUsize>{ t.return_usize_slice() };
         ASSERT_EQ(2u, sl.size());
-        EXPECT_EQ(17, sl[0]);
-        EXPECT_EQ(18, sl[1]);
+        EXPECT_EQ(17u, sl[0]);
+        EXPECT_EQ(18u, sl[1]);
 
         auto v = t.return_usize_vec();
         ASSERT_EQ(2u, v.size());
-        EXPECT_EQ(17, v[0]);
-        EXPECT_EQ(18, v[1]);
+        EXPECT_EQ(17u, v[0]);
+        EXPECT_EQ(18u, v[1]);
     }
 }
 
@@ -464,6 +466,12 @@ TEST(TestOptional, smokeTest)
         auto val = x.f7();
         ASSERT_TRUE(!!val);
         EXPECT_EQ(ITEM1, *val);
+    }
+    {
+        auto val = x.f9({ "aaa" });
+        EXPECT_EQ(std::string("your name is aaa"), val.to_std_string());
+        auto val2 = x.f9({});
+        EXPECT_EQ(std::string("None"), val2.to_std_string());
     }
 }
 
@@ -598,6 +606,22 @@ TEST(TestOnlyStaticMethods, smokeTest)
 {
     EXPECT_EQ(4, TestOnlyStaticMethods::add_func(2, 2));
 }
+
+#if defined(HAS_STDCXX_17) || defined(USE_BOOST)
+TEST(TestDummyConstructor, smokeTest)
+{
+    auto res = LocationService::position();
+#ifdef HAS_STDCXX_17
+    ASSERT_NE(nullptr, std::get_if<Position>(&res));
+    auto pos = std::get<Position>(std::move(res));
+#endif //HAS_STDCXX_17
+#ifdef USE_BOOST
+    ASSERT_NE(nullptr, boost::get<Position>(&res));
+    auto pos = boost::get<Position>(std::move(res));
+#endif //USE_BOOST
+    EXPECT_NEAR(0.1, pos.latitude(), 1e-10);
+}
+#endif
 
 int main(int argc, char *argv[])
 {
