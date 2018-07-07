@@ -816,6 +816,40 @@ fn handle_option_type_in_input<'a>(
             }),
         }));
     }
+
+    if let ast::TyKind::Rptr(
+        _,
+        ast::MutTy {
+            ty: ref ref_ty,
+            mutbl: ast::Mutability::Immutable,
+        },
+    ) = opt_ty.node
+    {
+        if let ast::TyKind::Path(_, ref path) = ref_ty.node {
+            if path.segments.len() == 1 && path.segments[0].identifier.name == "str" {
+                trace!("Catch Option<&str>");
+                let mut cpp_info_opt = map_ordinal_input_type(sess, conv_map, arg_ty)?;
+                let cpp_info_ty = map_ordinal_input_type(sess, conv_map, opt_ty)?;
+                let f_opt_ty = cpp_info_ty.base.name;
+                let (typename, input_converter) = match cpp_cfg.cpp_optional {
+                    CppOptional::Std17 => (
+                        Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
+                        format!("!!{var} ? *{var} : nullptr", var = FROM_VAR_TEMPLATE,),
+                    ),
+                    CppOptional::Boost => (
+                        Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
+                        format!("!!{var} ? *{var} : nullptr", var = FROM_VAR_TEMPLATE,),
+                    ),
+                };
+                cpp_info_opt.cpp_converter = Some(CppConverter {
+                    typename,
+                    output_converter: "#error".to_string(),
+                    input_converter,
+                });
+                return Ok(Some(cpp_info_opt));
+            }
+        }
+    }
     trace!("handle_option_type_in_input arg_ty {:?}", arg_ty);
     let mut cpp_info_opt = map_ordinal_input_type(sess, conv_map, arg_ty)?;
     let cpp_info_ty = map_ordinal_input_type(sess, conv_map, opt_ty)?;

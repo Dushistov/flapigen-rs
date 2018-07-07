@@ -141,6 +141,22 @@ impl<'a> SwigDeref for &'a ::std::ffi::CStr {
     }
 }
 
+impl<'a> SwigInto<Option<&'a str>> for *const ::std::os::raw::c_char {
+    fn swig_into(self) -> Option<&'a str> {
+        if !self.is_null() {
+            let n = {
+                //strlen not avaiable, so
+                let cstr = unsafe { ::std::ffi::CStr::from_ptr(self) };
+                cstr.to_bytes().len()
+            };
+            let bytes = unsafe { ::std::slice::from_raw_parts(self as *const u8, n) };
+            Some(::std::str::from_utf8(bytes).expect("wrong utf-8"))
+        } else {
+            None
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[repr(C)]
 pub struct RustStrView {

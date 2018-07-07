@@ -449,6 +449,10 @@ impl TestOptional {
     fn f8(&self, x: Option<MyEnum>) -> Option<MyEnum> {
         x.map(|v| TestEnumClass::next_enum(v))
     }
+    fn f9(&self, x: Option<&str>) -> String {
+        x.map(|x| format!("your name is {}", x))
+            .unwrap_or("None".to_string())
+    }
 }
 
 foreigner_class!(class TestOptional {
@@ -462,6 +466,7 @@ foreigner_class!(class TestOptional {
     method TestOptional::f6(&mut self, a: Option<Foo>);
     method TestOptional::f7(&self) -> Option<MyEnum>;
     method TestOptional::f8(&self, x: Option<MyEnum>) -> Option<MyEnum>;
+    method TestOptional::f9(&self, x: Option<&str>) -> String;
 });
 
 #[derive(Default)]

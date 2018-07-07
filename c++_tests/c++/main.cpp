@@ -465,6 +465,12 @@ TEST(TestOptional, smokeTest)
         ASSERT_TRUE(!!val);
         EXPECT_EQ(ITEM1, *val);
     }
+    {
+        auto val = x.f9({ "aaa" });
+        EXPECT_EQ(std::string("your name is aaa"), val.to_std_string());
+        auto val2 = x.f9({});
+        EXPECT_EQ(std::string("None"), val2.to_std_string());
+    }
 }
 
 TEST(TestResult, smokeTest)
