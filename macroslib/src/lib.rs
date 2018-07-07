@@ -210,6 +210,10 @@ impl ForeignerMethod {
     fn span(&self) -> Span {
         self.rust_id.span
     }
+
+    fn is_dummy_constructor(&self) -> bool {
+        self.rust_id.segments.is_empty()
+    }
 }
 
 #[derive(Debug, Clone)]

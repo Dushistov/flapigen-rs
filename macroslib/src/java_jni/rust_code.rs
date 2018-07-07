@@ -173,7 +173,8 @@ pub(in java_jni) fn generate_rust_code<'a>(
             sess,
             class.span,
             &format!(
-                "Class {} (package {}) have methods, but there is no constructor",
+                "Class {} (package {}) has methods, but there is no constructor\n
+May be you need to use `private constructor = empty;` syntax?",
                 class.name, package_name,
             ),
         )
@@ -233,24 +234,26 @@ pub(in java_jni) fn generate_rust_code<'a>(
             }
             MethodVariant::Constructor => {
                 have_constructor = true;
-                let constructor_ret_type = class
-                    .constructor_ret_type
-                    .as_ref()
-                    .ok_or_else(&no_this_info)?
-                    .clone();
-                let this_type = class
-                    .this_type_for_method
-                    .as_ref()
-                    .ok_or_else(&no_this_info)?
-                    .clone();
-                gen_code.append(&mut generate_constructor(
-                    sess,
-                    conv_map,
-                    &method_ctx,
-                    constructor_ret_type,
-                    this_type,
-                    &code_box_this,
-                )?);
+                if !method.is_dummy_constructor() {
+                    let constructor_ret_type = class
+                        .constructor_ret_type
+                        .as_ref()
+                        .ok_or_else(&no_this_info)?
+                        .clone();
+                    let this_type = class
+                        .this_type_for_method
+                        .as_ref()
+                        .ok_or_else(&no_this_info)?
+                        .clone();
+                    gen_code.append(&mut generate_constructor(
+                        sess,
+                        conv_map,
+                        &method_ctx,
+                        constructor_ret_type,
+                        this_type,
+                        &code_box_this,
+                    )?);
+                }
             }
         }
     }

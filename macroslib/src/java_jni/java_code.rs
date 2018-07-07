@@ -263,39 +263,51 @@ public final class {class_name} {{
             MethodVariant::Constructor => {
                 have_constructor = true;
 
-                write!(
-                    file,
-                    "
+                if method.is_dummy_constructor() {
+                    write!(
+                        file,
+                        "
+    {method_access} {class_name}() {{}}
+",
+                        method_access = method_access,
+                        class_name = class.name,
+                    ).map_err(&map_write_err)?;
+                } else {
+                    write!(
+                        file,
+                        "
     {method_access} {class_name}({ext_args_with_types}) {exception_spec} {{
 {convert_code}
         mNativeObj = init({args});
     }}
     private static native long {func_name}({args_with_types}) {exception_spec};
 ",
-                    method_access = method_access,
-                    class_name = class.name,
-                    exception_spec = exception_spec,
-                    func_name = func_name,
-                    ext_args_with_types = args_with_java_types(
-                        f_method,
-                        ArgsFormatFlags::EXTERNAL,
-                        use_null_annotation.is_some()
-                    )?,
-                    args_with_types = args_with_java_types(
-                        f_method,
-                        ArgsFormatFlags::INTERNAL,
-                        use_null_annotation.is_some()
-                    )?,
-                    convert_code = convert_code,
-                    args = list_of_args_for_call_method(f_method, ArgsFormatFlags::INTERNAL)?
-                ).map_err(&map_write_err)?;
+                        method_access = method_access,
+                        class_name = class.name,
+                        exception_spec = exception_spec,
+                        func_name = func_name,
+                        ext_args_with_types = args_with_java_types(
+                            f_method,
+                            ArgsFormatFlags::EXTERNAL,
+                            use_null_annotation.is_some()
+                        )?,
+                        args_with_types = args_with_java_types(
+                            f_method,
+                            ArgsFormatFlags::INTERNAL,
+                            use_null_annotation.is_some()
+                        )?,
+                        convert_code = convert_code,
+                        args = list_of_args_for_call_method(f_method, ArgsFormatFlags::INTERNAL)?
+                    ).map_err(&map_write_err)?;
+                }
             }
         }
     }
 
     if have_methods && !have_constructor {
         return Err(format!(
-            "package {}, class {}: has methods, but no constructor",
+            "package {}, class {}: has methods, but no constructor\n
+May be you need to use `private constructor = empty;` syntax?",
             package_name, class.name
         ));
     }

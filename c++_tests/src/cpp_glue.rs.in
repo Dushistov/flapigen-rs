@@ -578,3 +578,31 @@ fn add_func(a: i32, b: i32) -> i32 {
 foreigner_class!(class TestOnlyStaticMethods {
     static_method add_func(_: i32, _: i32) -> i32;
 });
+
+pub struct GnssInfo {
+    lat: f64,
+}
+
+impl GnssInfo {
+    fn latitude(&self) -> f64 {
+        self.lat
+    }
+}
+
+foreigner_class!(class Position {
+    self_type GnssInfo;
+    private constructor = empty;
+    method GnssInfo::latitude(&self) -> f64;
+});
+
+struct LocationService;
+
+impl LocationService {
+    fn position() -> Result<GnssInfo, String> {
+        Ok(GnssInfo { lat: 0.1 })
+    }
+}
+
+foreigner_class!(class LocationService {
+    static_method LocationService::position() -> Result<GnssInfo, String>;
+});

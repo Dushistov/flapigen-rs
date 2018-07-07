@@ -543,13 +543,9 @@ mod Position {
     }
 }
 
-fn create_position() -> GnssInfo {
-    unreachable!();
-}
-
 foreigner_class!(class Position {
     self_type GnssInfo;
-    private constructor create_position() -> GnssInfo;
+    private constructor = empty;
     method Position::timeStamp(&self) -> SystemTime;
     method Position::getLatitude(&self) -> f64;
 });

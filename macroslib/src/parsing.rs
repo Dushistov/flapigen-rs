@@ -182,6 +182,7 @@ pub(crate) fn parse_foreigner_class(
     let alias_keyword = ast::Ident::from_str("alias");
     let private_keyword = ast::Ident::from_str("private");
     let protected_keyword = ast::Ident::from_str("protected");
+    let empty_keyword = ast::Ident::from_str("empty");
 
     let constructor_keyword = Symbol::intern("constructor");
     let method_keyword = Symbol::intern("method");
@@ -222,6 +223,7 @@ pub(crate) fn parse_foreigner_class(
     let mut constructor_ret_type: Option<ast::Ty> = None;
     let mut this_type_for_method: Option<ast::Ty> = None;
     let mut foreigner_code = String::new();
+    let mut has_dummy_constructor = false;
     while !parser.eat(&token::Token::CloseDelim(token::DelimToken::Brace)) {
         let mut doc_comments = vec![];
         while let token::Token::DocComment(comment) = parser.token {
@@ -262,9 +264,17 @@ pub(crate) fn parse_foreigner_class(
             parser.expect(&token::Token::Semi).map_err(&map_perror)?;
             continue;
         }
-
         let mut func_type = match func_type_name.name {
-            _ if func_type_name.name == constructor_keyword => MethodVariant::Constructor,
+            _ if func_type_name.name == constructor_keyword => {
+                if has_dummy_constructor {
+                    cx.span_err(
+                        parser.span,
+                        "You defined dummy constructor for this, but have not dummy constructor",
+                    );
+                    return Err(parser.span);
+                }
+                MethodVariant::Constructor
+            }
             _ if func_type_name.name == static_method_keyword => MethodVariant::StaticMethod,
             _ if func_type_name.name == method_keyword => {
                 MethodVariant::Method(SelfTypeVariant::Default)
@@ -281,6 +291,49 @@ pub(crate) fn parse_foreigner_class(
                 return Err(parser.span);
             }
         };
+        if func_type == MethodVariant::Constructor
+            && parser.eat(&token::Token::Eq)
+            && parser.eat_contextual_keyword(empty_keyword)
+        {
+            debug!("class {} has dummy constructor", class_name_indent);
+            parser.expect(&token::Token::Semi).map_err(&map_perror)?;
+
+            if access != MethodAccess::Private {
+                cx.span_err(parser.span, "dummy constructor should be private");
+                return Err(parser.span);
+            }
+
+            if let Some(rust_self_type) = rust_self_type.as_ref() {
+                let self_type: ast::Ty = (**rust_self_type).clone();
+                this_type_for_method = Some(self_type.clone());
+                constructor_ret_type = Some(self_type);
+            } else {
+                cx.span_err(
+                    parser.span,
+                    "class has dummy constructor, but no self_type section",
+                );
+                return Err(parser.span);
+            }
+
+            methods.push(ForeignerMethod {
+                variant: func_type,
+                rust_id: ast::Path {
+                    span: parser.span,
+                    segments: vec![],
+                },
+                fn_decl: P(ast::FnDecl {
+                    inputs: vec![],
+                    output: ast::FunctionRetTy::Default(parser.span),
+                    variadic: false,
+                }),
+                name_alias: None,
+                may_return_error: false,
+                access,
+                doc_comments,
+            });
+            has_dummy_constructor = true;
+            continue;
+        }
         let func_name = parser
             .parse_path(parser::PathStyle::Mod)
             .map_err(&map_perror)?;
