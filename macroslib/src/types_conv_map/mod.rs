@@ -976,6 +976,26 @@ impl Default for TypesConvMap {
                 to_ty: unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("&T"))),
                 dependency: Rc::new(RefCell::new(None)),
                 code_template: Symbol::intern("let mut {to_var}: {to_var_type} = {from_var};"),
+                generic_params: generic_params.clone(),
+                to_foreigner_hint: None,
+            },
+            GenericTypeConv {
+                from_ty: unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("& Box<T>"))),
+                to_ty: unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("&T"))),
+                dependency: Rc::new(RefCell::new(None)),
+                code_template: Symbol::intern(
+                    "let mut {to_var}: {to_var_type} = {from_var}.as_ref();",
+                ),
+                generic_params: generic_params.clone(),
+                to_foreigner_hint: None,
+            },
+            GenericTypeConv {
+                from_ty: unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("& mut Box<T>"))),
+                to_ty: unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("&mut T"))),
+                dependency: Rc::new(RefCell::new(None)),
+                code_template: Symbol::intern(
+                    "let mut {to_var}: {to_var_type} = {from_var}.as_mut();",
+                ),
                 generic_params: generic_params,
                 to_foreigner_hint: None,
             },
