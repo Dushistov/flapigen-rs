@@ -74,9 +74,8 @@ trait SwigForeignClass {
 #[allow(unused_macros)]
 macro_rules! swig_c_str {
     ($lit:expr) => {
-        concat!($lit, "\0").as_ptr()
-            as *const ::std::os::raw::c_char
-    }
+        concat!($lit, "\0").as_ptr() as *const ::std::os::raw::c_char
+    };
 }
 
 #[allow(unused_macros)]
@@ -91,24 +90,24 @@ macro_rules! swig_assert_eq_size {
 }
 
 #[cfg(target_pointer_width = "32")]
-unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
     (val as u32) as *mut T
 }
 
 #[cfg(target_pointer_width = "64")]
-unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
     val as *mut T
 }
 
 #[allow(dead_code)]
-struct JavaString {
+pub struct JavaString {
     string: jstring,
     chars: *const ::std::os::raw::c_char,
     env: *mut JNIEnv,
 }
 #[allow(dead_code)]
 impl JavaString {
-    fn new(env: *mut JNIEnv, js: jstring) -> JavaString {
+    pub fn new(env: *mut JNIEnv, js: jstring) -> JavaString {
         let chars = if !js.is_null() {
             unsafe { (**env).GetStringUTFChars.unwrap()(env, js, ::std::ptr::null_mut()) }
         } else {
@@ -120,7 +119,7 @@ impl JavaString {
             env: env,
         }
     }
-    fn to_str(&self) -> &str {
+    pub fn to_str(&self) -> &str {
         if !self.chars.is_null() {
             let s = unsafe { ::std::ffi::CStr::from_ptr(self.chars) };
             s.to_str().unwrap()
@@ -409,18 +408,16 @@ impl_jni_invalid_value! {
 #[swig_to = "T"]
 #[swig_code = "let mut {to_var}:{to_var_type}=jni_unpack_return!({from_var},{function_ret_type}, env);"]
 macro_rules! jni_unpack_return {
-    ($result_value:expr, $func_ret_type:ty, $env:ident) => {
-        {
-            let ret = match $result_value {
-                Ok(x) => x,
-                Err(msg) => {
-                    jni_throw_exception($env, &msg);
-                    return <$func_ret_type>::invalid_value();
-                }
-            };
-            ret
-        }
-    }
+    ($result_value:expr, $func_ret_type:ty, $env:ident) => {{
+        let ret = match $result_value {
+            Ok(x) => x,
+            Err(msg) => {
+                jni_throw_exception($env, &msg);
+                return <$func_ret_type>::invalid_value();
+            }
+        };
+        ret
+    }};
 }
 
 impl SwigInto<bool> for jboolean {
@@ -453,7 +450,7 @@ impl SwigInto<i8> for jbyte {
 
 impl SwigFrom<u8> for jshort {
     fn swig_from(x: u8, _: *mut JNIEnv) -> Self {
-        x as jshort
+        jshort::from(x)
     }
 }
 
@@ -480,7 +477,7 @@ impl SwigFrom<i16> for jshort {
 
 impl SwigFrom<u16> for jint {
     fn swig_from(x: u16, _: *mut JNIEnv) -> Self {
-        x as jint
+        jint::from(x)
     }
 }
 
@@ -507,7 +504,7 @@ impl SwigFrom<i32> for jint {
 
 impl SwigFrom<u32> for jlong {
     fn swig_from(x: u32, _: *mut JNIEnv) -> Self {
-        x as jlong
+        jlong::from(x)
     }
 }
 
