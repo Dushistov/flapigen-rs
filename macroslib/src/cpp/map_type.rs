@@ -179,7 +179,17 @@ fn special_type<'a>(
         }
     }
 
-    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty, false) {
+    let foreign_class_trait = Symbol::intern("SwigForeignClass");
+    if let Some(foreign_class_this_ty) = conv_map.is_ty_implements(arg_ty, foreign_class_trait) {
+        let foreign_class = conv_map
+            .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
+            .ok_or_else(|| {
+                fatal_error(
+                    sess,
+                    arg_ty.span,
+                    &format!("Can not find foreigner_class for '{:?}'", arg_ty),
+                )
+            })?;
         trace!(
             "special_type: {:?} is foreign_class {}",
             arg_ty,

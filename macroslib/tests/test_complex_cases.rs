@@ -264,7 +264,41 @@ foreigner_class!(class Boo {
 #[test]
 fn test_return_foreign_class() {
     let gen_code = parse_code(
-        "test_work_with_rc",
+        "test_return_foreign_class1",
+        r#"
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor create_boo() -> Rc<RefCell<Boo>>;
+    method Boo::test(&self, _: bool) -> f32;
+    method Boo::set_a(&mut self, _: i32);
+});
+foreigner_class!(class Moo {
+    self_type Moo;
+    constructor Moo::empty() -> Moo;
+    method Moo::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
+});
+"#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
+    );
+    let java_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Java)
+        .unwrap();
+    println!("java: {}", java_code_pair.foreign_code);
+    assert!(
+        java_code_pair
+            .foreign_code
+            .contains("public final Boo getBoo()")
+    );
+    let cpp_code_pair = gen_code
+        .iter()
+        .find(|x| x.lang == ForeignLang::Cpp)
+        .unwrap();
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(cpp_code_pair.foreign_code.contains("Boo getBoo() const"));
+
+    let gen_code = parse_code(
+        "test_return_foreign_class2",
         r#"
 foreigner_class!(class Boo {
     self_type Boo;
