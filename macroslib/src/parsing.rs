@@ -296,23 +296,35 @@ pub(crate) fn parse_foreigner_class(
             && parser.eat_contextual_keyword(empty_keyword)
         {
             debug!("class {} has dummy constructor", class_name_indent);
+            if parser.eat(&token::Token::RArrow) {
+                let ret_type = parser.parse_ty().map_err(&map_perror)?;
+                let ret_type = (*ret_type).clone();
+                debug!("constructor ret_ty {:?}", ret_type);
+                constructor_ret_type = Some(ret_type.clone());
+                this_type_for_method = Some(
+                    if_result_return_ok_err_types(constructor_ret_type.as_ref().unwrap())
+                        .unwrap_or_else(|| (ret_type.clone(), ret_type))
+                        .0,
+                );
+            }
             parser.expect(&token::Token::Semi).map_err(&map_perror)?;
 
             if access != MethodAccess::Private {
                 cx.span_err(parser.span, "dummy constructor should be private");
                 return Err(parser.span);
             }
-
-            if let Some(rust_self_type) = rust_self_type.as_ref() {
-                let self_type: ast::Ty = (**rust_self_type).clone();
-                this_type_for_method = Some(self_type.clone());
-                constructor_ret_type = Some(self_type);
-            } else {
-                cx.span_err(
-                    parser.span,
-                    "class has dummy constructor, but no self_type section",
-                );
-                return Err(parser.span);
+            if this_type_for_method.is_none() {
+                if let Some(rust_self_type) = rust_self_type.as_ref() {
+                    let self_type: ast::Ty = (**rust_self_type).clone();
+                    this_type_for_method = Some(self_type.clone());
+                    constructor_ret_type = Some(self_type);
+                } else {
+                    cx.span_err(
+                        parser.span,
+                        "class has dummy constructor, but no self_type section",
+                    );
+                    return Err(parser.span);
+                }
             }
 
             methods.push(ForeignerMethod {

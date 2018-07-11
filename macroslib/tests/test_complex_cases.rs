@@ -67,6 +67,12 @@ foreigner_class!(class Foo {
    private constructor = empty;
    method SomeType::f(&self);
 });
+
+foreigner_class!(class Boo {
+   self_type OtherType;
+   private constructor = empty -> Box<OtherType>;
+   method OtherType::f(&self);
+});
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
     );
