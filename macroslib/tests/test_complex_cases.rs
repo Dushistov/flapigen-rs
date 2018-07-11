@@ -455,17 +455,9 @@ foreigner_class!(class TestPassObjectsAsParams {
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
     );
-    assert_eq!(ForeignLang::Java, gen_code[0].lang);
-    assert!(
-        gen_code[0]
-            .foreign_code
-            .contains("public static void f4(Foo")
-    );
-    assert!(
-        gen_code[0]
-            .foreign_code
-            .contains("public static void f5(Foo")
-    );
+    let java_code = code_for(&gen_code, ForeignLang::Java);
+    assert!(java_code.foreign_code.contains("public static void f4(Foo"));
+    assert!(java_code.foreign_code.contains("public static void f5(Foo"));
 
     let cpp_code_pair = gen_code
         .iter()
@@ -739,10 +731,10 @@ foreigner_class!(class TestEnumClass {
 "#,
             &[ForeignLang::Java, ForeignLang::Cpp],
         );
-        assert_eq!(ForeignLang::Java, gen_code[0].lang);
-        println!("{}", gen_code[0].rust_code);
-        println!("{}", gen_code[0].foreign_code);
-        assert!(gen_code[0].foreign_code.contains("int f1(MyEnum"));
+        let java_code = code_for(&gen_code, ForeignLang::Java);
+        println!("{}", java_code.rust_code);
+        println!("{}", java_code.foreign_code);
+        assert!(java_code.foreign_code.contains("int f1(MyEnum"));
     }
 }
 
@@ -761,10 +753,10 @@ foreigner_class!(class Foo {
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
     );
-    assert_eq!(ForeignLang::Java, gen_code[0].lang);
-    println!("{}", gen_code[0].foreign_code);
+    let java_code = code_for(&gen_code, ForeignLang::Java);
+    println!("{}", java_code.foreign_code);
     assert!(
-        gen_code[0]
+        java_code
             .foreign_code
             .contains("public static void static_foo(Boo")
     );
@@ -784,10 +776,10 @@ foreigner_class!(class Foo {
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
     );
-    assert_eq!(ForeignLang::Java, gen_code[0].lang);
-    println!("{}", gen_code[0].foreign_code);
+    let java_code = code_for(&gen_code, ForeignLang::Java);
+    println!("{}", java_code.foreign_code);
     assert!(
-        gen_code[0]
+        java_code
             .foreign_code
             .contains("public static void static_foo(Boo")
     );
@@ -806,10 +798,10 @@ foreigner_class!(class Foo {
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
     );
-    assert_eq!(ForeignLang::Java, gen_code[0].lang);
-    println!("{}", gen_code[0].rust_code);
+    let java_code = code_for(&gen_code, ForeignLang::Java);
+    println!("{}", java_code.rust_code);
     assert!(
-        gen_code[0]
+        java_code
             .rust_code
             .contains("impl <'a> SwigForeignClass for Rc<RefCell<Foo<'a>>> {")
     );
@@ -833,10 +825,10 @@ foreigner_class!(class ClassWithCallbacks {
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
     );
-    assert_eq!(ForeignLang::Java, gen_code[0].lang);
-    println!("{}\n{}", gen_code[0].rust_code, gen_code[0].foreign_code);
+    let java_code = code_for(&gen_code, ForeignLang::Java);
+    println!("{}\n{}", java_code.rust_code, java_code.foreign_code);
     assert!(
-        gen_code[0]
+        java_code
             .rust_code
             .contains(r#"swig_c_str!("(Ljava/lang/String;)V")"#)
     );
