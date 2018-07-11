@@ -98,6 +98,7 @@ def build_cpp_code_with_cmake(cmake_build_dir, addon_params):
                               cwd = str(cmake_build_dir))
     subprocess.check_call(["cmake", "--build", "."], cwd = str(cmake_build_dir))
     if sys.platform == 'win32' or sys.platform == 'win64':
+        os.environ["CTEST_OUTPUT_ON_FAILURE"] = "1"
         subprocess.check_call(["msbuild", "RUN_TESTS.vcxproj"], cwd = str(cmake_build_dir))
     else:
         subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cmake_build_dir))
