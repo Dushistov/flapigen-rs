@@ -321,6 +321,36 @@ foreigner_class!(class Moo {
     let caps = get_boo_re.captures(&gen_code[0].rust_code).unwrap();
     println!("{:?}", caps);
     assert_eq!("jobject", caps.get(1).unwrap().as_str());
+
+    let gen_code = parse_code(
+        "test_return_foreign_class3",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    private constructor = empty -> Box<Box<Foo>>;
+});
+foreigner_class!(class Boo {
+    self_type Boo;
+    private constructor Boo::default() -> Boo;
+    method Boo::f(&mut self) -> Result<Box<Box<Foo>>, String>;
+});
+"#,
+        &[ForeignLang::Java, ForeignLang::Cpp],
+    );
+    let java_code = code_for(&gen_code, ForeignLang::Java);
+    println!("java: {}", java_code.foreign_code);
+    assert!(
+        java_code
+            .foreign_code
+            .contains("public final Foo f() throws Exception")
+    );
+    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
+    println!("c/c++: {}", cpp_code.foreign_code);
+    assert!(
+        cpp_code
+            .foreign_code
+            .contains("std::variant<Foo, RustString> f()")
+    );
 }
 
 #[test]
@@ -1236,6 +1266,10 @@ fn collect_code_in_dir(dir_with_code: &Path, exts: &[&str]) -> String {
         }
     }
     java_code
+}
+
+fn code_for(gen_code: &[CodePair], lang: ForeignLang) -> &CodePair {
+    gen_code.iter().find(|x| x.lang == lang).unwrap()
 }
 
 fn parse_code(test_name: &str, code: &str, langs: &[ForeignLang]) -> Vec<CodePair> {

@@ -179,8 +179,9 @@ fn special_type<'a>(
         }
     }
 
-    let foreign_class_trait = Symbol::intern("SwigForeignClass");
-    if let Some(foreign_class_this_ty) = conv_map.is_ty_implements(arg_ty, foreign_class_trait) {
+    if let Some(foreign_class_this_ty) =
+        conv_map.is_ty_implements(arg_ty, Symbol::intern("SwigForeignClass"))
+    {
         let foreign_class = conv_map
             .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
             .ok_or_else(|| {
@@ -566,7 +567,18 @@ fn handle_result_type_in_result<'a>(
         "handle_result_type_in_result: ok_ty: {}",
         normalized_ty_string(&ok_ty)
     );
-    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&ok_ty, false) {
+    if let Some(foreign_class_this_ty) =
+        conv_map.is_ty_implements(ok_ty, Symbol::intern("SwigForeignClass"))
+    {
+        let foreign_class = conv_map
+            .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
+            .ok_or_else(|| {
+                fatal_error(
+                    sess,
+                    arg_ty.span,
+                    &format!("Can not find foreigner_class for '{:?}'", arg_ty),
+                )
+            })?;
         let c_class = c_class_type(foreign_class);
         if err_ty_name == "String" {
             let foreign_info = conv_map
