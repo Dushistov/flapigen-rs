@@ -634,3 +634,18 @@ foreigner_class!(class Interface {
     method Interface::f(&self, _: i32) -> i32;
     method Interface::set(&mut self, x: i32);
 });
+
+#[derive(Default)]
+pub struct TestPassInterface;
+
+impl TestPassInterface {
+    fn use_interface(a: Box<Box<Interface>>, b: i32) -> i32 {
+        (**a).f(b)
+    }
+}
+
+foreigner_class!(class TestPassInterface {
+    self_type TestPassInterface;
+    constructor TestPassInterface::default() -> TestPassInterface;
+    static_method TestPassInterface::use_interface(a: Box<Box<Interface>>, b: i32) -> i32;
+});

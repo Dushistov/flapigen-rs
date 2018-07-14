@@ -49,6 +49,7 @@
 #include "rust_interface/TestReferences.hpp"
 #include "rust_interface/TestOnlyStaticMethods.hpp"
 #include "rust_interface/Interface.hpp"
+#include "rust_interface/TestPassInterface.hpp"
 
 using namespace rust;
 
@@ -630,6 +631,7 @@ TEST(Interface, smokeTest)
     EXPECT_EQ(18, x.f(1));
     x.set(0);
     EXPECT_EQ(1, x.f(1));
+    EXPECT_EQ(17, TestPassInterface::use_interface(std::move(x), 17));
 }
 
 int main(int argc, char *argv[])
