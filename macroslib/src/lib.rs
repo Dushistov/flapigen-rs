@@ -586,6 +586,12 @@ impl GeneratorData {
                 //return DummyResult::any(span);
             }
         };
+        debug!(
+            "expand_foreigner_class: self {:?}, this_for_method {:?}, constructor {:?}",
+            foreigner_class.self_type,
+            foreigner_class.this_type_for_method,
+            foreigner_class.constructor_ret_type
+        );
         self.conv_map.register_foreigner_class(&foreigner_class);
         #[allow(deprecated)]
         match self.config {

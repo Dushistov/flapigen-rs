@@ -520,26 +520,25 @@ public:
                 this_type_for_method = this_type_for_method.normalized_name
             ),
         )?);
-
-        let unpack_code =
-            TypesConvMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
+        let unpack_code = TypesConvMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
         let void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
         let my_void_ptr_ti = RustType::new(
             parse_ty(sess, DUMMY_SP, void_ptr_typename)?,
             make_unique_rust_typename(void_ptr_typename, this_type.normalized_name),
         );
-
+        let this_type_name = this_type_for_method.normalized_name;
         conv_map.add_conversation_rule(
             my_void_ptr_ti,
             this_type,
             Symbol::intern(&format!(
                 r#"
+    assert!(!{from_var}.is_null());
     let {to_var}: *mut {this_type} = {from_var} as *mut {this_type};
 {unpack_code}
 "#,
                 to_var = TO_VAR_TEMPLATE,
                 from_var = FROM_VAR_TEMPLATE,
-                this_type = this_type_for_method.normalized_name,
+                this_type = this_type_name,
                 unpack_code = unpack_code,
             )).into(),
         );

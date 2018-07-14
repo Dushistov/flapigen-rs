@@ -237,7 +237,7 @@ impl TypesConvMap {
         build_for_sp: Span,
     ) -> Option<ForeignTypeInfo> {
         let norm_rust_typename = Symbol::intern(&normalized_ty_string(rust_ty));
-        trace!("map foreign: {:?} {:?}", rust_ty, direction);
+        debug!("map foreign: {:?} {:?}", rust_ty, direction);
         if direction == petgraph::Direction::Outgoing {
             if let Some(foreign_name) = self.rust_to_foreign_cache.get(&norm_rust_typename) {
                 if let Some(to) = self.foreign_names_map.get(foreign_name) {
@@ -460,9 +460,7 @@ impl TypesConvMap {
             err
         };
         let from = self.find_rust_type(sess, from).map_err(&err_add_note)?;
-        debug!("find_path: from {:?}", from);
         let to = self.find_rust_type(sess, to).map_err(&err_add_note)?;
-        debug!("find_path: to {:?}", to);
         find_conversation_path(sess, &self.conv_graph, from, to, build_for_sp)
     }
 
@@ -784,7 +782,10 @@ impl TypesConvMap {
         to: RustType,
         rule: TypeConvEdge,
     ) {
-        debug!("TypesConvMap::add_conversation_rule {} -> {}", from, to);
+        debug!(
+            "TypesConvMap::add_conversation_rule {} -> {}: {:?}",
+            from, to, rule
+        );
         let from = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, from);
         let to = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, to);
         self.conv_graph.update_edge(from, to, rule);
@@ -817,7 +818,11 @@ fn find_conversation_path<'a>(
     to: NodeIndex<TypeGraphIdx>,
     build_for_sp: Span,
 ) -> PResult<'a, Vec<EdgeIndex<TypeGraphIdx>>> {
-    debug!("search {:?} -> {:?}", conv_graph[from], conv_graph[to]);
+    trace!(
+        "find_conversation_path: begin {:?} -> {:?}",
+        conv_graph[from],
+        conv_graph[to]
+    );
 
     let paths_cost = dijkstra(conv_graph, from, Some(to), |_| 1);
 

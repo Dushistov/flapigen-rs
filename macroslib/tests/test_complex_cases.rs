@@ -151,22 +151,37 @@ foreigner_class!(class Boo {
         &[ForeignLang::Java, ForeignLang::Cpp],
     );
 
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
-    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
+    println!("c++/rust {}", cpp_code.rust_code);
+    assert!(cpp_code.rust_code.contains(
+        r#"fn Boo_with_foo(a_0: *mut ::std::os::raw::c_void)
+ -> *const ::std::os::raw::c_void {
+    assert!(! a_0 . is_null (  ));
+    let a_0: *mut Foo = a_0 as *mut Foo;
+    let a_0: Box<Foo> = unsafe { Box::from_raw(a_0) };
+    let a_0: Foo = *a_0;
+    let this: Boo = Boo::with_foo(a_0);
+    let this: Box<Boo> = Box::new(this);
+    let this: *mut Boo = Box::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}"#
+    ));
+    println!("c/c++: {}", cpp_code.foreign_code);
+    assert!(cpp_code.foreign_code.contains(
+        r#"Boo(Foo a_0)
+    {
+        this->self_ = Boo_with_foo(a_0.release());
+        if (this->self_ == nullptr) {
+            std::abort();
+        }
+    }"#
+    ));
+    assert!(cpp_code.foreign_code.contains("uintptr_t f(Foo a_0) const"));
     assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("uintptr_t f(Foo a_0) const")
-    );
-    assert!(
-        cpp_code_pair
+        cpp_code
             .foreign_code
             .contains("BooOpaque *Boo_with_foo(FooOpaque * a_0);")
     );
-    assert!(cpp_code_pair.foreign_code.contains("Boo(Foo a_0)"));
 }
 
 #[test]
@@ -459,12 +474,9 @@ foreigner_class!(class TestPassObjectsAsParams {
     assert!(java_code.foreign_code.contains("public static void f4(Foo"));
     assert!(java_code.foreign_code.contains("public static void f5(Foo"));
 
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
-    println!("cpp_code_pair.rust_code\n{}", cpp_code_pair.rust_code);
-    assert!(cpp_code_pair.rust_code.contains(
+    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
+    println!("cpp_code.rust_code\n{}", cpp_code.rust_code);
+    assert!(cpp_code.rust_code.contains(
         r##"#[no_mangle]
 pub extern "C" fn TestPassObjectsAsParams_f1(this:
                                                  *mut TestPassObjectsAsParams,
@@ -478,7 +490,7 @@ pub extern "C" fn TestPassObjectsAsParams_f1(this:
     ret
 }"##
     ));
-    assert!(cpp_code_pair.rust_code.contains(
+    assert!(cpp_code.rust_code.contains(
         r##"#[no_mangle]
 pub extern "C" fn TestPassObjectsAsParams_f3(this:
                                                  *mut TestPassObjectsAsParams,
@@ -491,17 +503,25 @@ pub extern "C" fn TestPassObjectsAsParams_f3(this:
     ret
 }"##
     ));
-    println!("cpp_code_pair.foreign_code {}", cpp_code_pair.foreign_code);
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("void f1(const Foo & a_0) const")
-    );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("void f3(Foo & a_0) const")
-    );
+    println!("cpp_code.foreign_code {}", cpp_code.foreign_code);
+    assert!(cpp_code.foreign_code.contains(
+        r#"void f1(const Foo & a_0) const 
+    {
+        TestPassObjectsAsParams_f1(this->self_, static_cast<const FooOpaque *>(a_0));
+    }"#
+    ));
+    assert!(cpp_code.foreign_code.contains(
+        r#"void f2(Foo a_0) const 
+    {
+        TestPassObjectsAsParams_f2(this->self_, a_0.release());
+    }"#
+    ));
+    assert!(cpp_code.foreign_code.contains(
+        r#"void f3(Foo & a_0) const 
+    {
+        TestPassObjectsAsParams_f3(this->self_, static_cast<const FooOpaque *>(a_0));
+    }"#
+    ));
 }
 
 #[test]
@@ -1228,6 +1248,54 @@ foreign_interface!(interface RepoChangedCallback {
 "#
         ));
     }
+}
+
+#[test]
+fn test_pass_foreign_trait_cpp() {
+    let gen_code = parse_code(
+        "test_foreign_interface_cpp",
+        r#"
+fn create_interface() -> Box<Box<Interface>> {
+    Box::new(Box::new(InterfaceImpl { base: 17 }))
+}
+
+foreigner_class!(class Interface {
+    self_type Interface;
+    constructor create_interface() -> Box<Box<Interface>>;
+    method Interface::f(&self, _: i32) -> i32;
+    method Interface::set(&mut self, x: i32);
+});
+
+foreigner_class!(class TestPassInterface {
+    self_type TestPassInterface;
+    constructor TestPassInterface::default() -> TestPassInterface;
+    static_method use_interface(a: Box<Box<Interface>>, b: i32) -> i32;
+});
+
+"#,
+        &[ForeignLang::Cpp],
+    );
+    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
+    println!("c++/rust {}", cpp_code.rust_code);
+    assert!(cpp_code.rust_code.contains(
+        r#"pub extern "C" fn TestPassInterface_use_interface(a_0:
+                                                      *mut ::std::os::raw::c_void,
+                                                  a_1: i32) -> i32 {
+    assert!(! a_0 . is_null (  ));
+    let a_0: *mut Box<Interface> = a_0 as *mut Box<Interface>;
+    let a_0: Box<Box<Interface>> = unsafe { Box::from_raw(a_0) };
+    let mut ret: i32 = use_interface(a_0, a_1);
+    ret
+}"#
+    ));
+    println!("c++/c++ {}", cpp_code.foreign_code);
+    assert!(cpp_code.foreign_code.contains(
+        r#"static int32_t use_interface(Interface a_0, int32_t a_1)
+    {
+        int32_t ret = TestPassInterface_use_interface(a_0.release(), a_1);
+        return ret;
+    }"#
+    ));
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
