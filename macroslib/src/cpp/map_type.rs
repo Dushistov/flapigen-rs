@@ -649,7 +649,7 @@ fn handle_result_type_in_result<'a>(
                 }),
             }));
         } else {
-            unimplemented!();
+            return Ok(None);
         }
     }
 
@@ -684,7 +684,7 @@ fn handle_result_type_in_result<'a>(
                 });
                 return Ok(Some(f_type_info));
             } else {
-                unimplemented!();
+                return Ok(None);
             }
         } else if let Some(err_class) =
             conv_map.find_foreigner_class_with_such_self_type(&err_ty, false)
@@ -722,10 +722,10 @@ fn handle_result_type_in_result<'a>(
                 });
                 return Ok(Some(f_type_info));
             } else {
-                unimplemented!();
+                return Ok(None);
             }
         } else {
-            unimplemented!();
+            return Ok(None);
         }
     } else {
         trace!("return result, but not foreign_class / Vec<foreign_class>");
@@ -795,10 +795,10 @@ fn handle_result_type_in_result<'a>(
                         }),
                     }));
                 } else {
-                    unimplemented!();
+                    Ok(None)
                 }
             }
-            _ => unimplemented!(),
+            _ => Ok(None),
         }
     }
 }
