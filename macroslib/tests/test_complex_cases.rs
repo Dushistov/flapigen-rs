@@ -901,14 +901,12 @@ foreigner_class!(class Foo {
    method Foo::f5(&self) -> Option<&Boo>;
    method Foo::f6(&self) -> Option<ControlItem>;
    method Foo::f7(&self) -> Option<u64>;
+   method Foo::f8(&self) -> Option<&str>;
 });
 "#,
         &[ForeignLang::Cpp],
     );
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
+    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
     println!("c/c++: {}", cpp_code_pair.foreign_code);
     assert!(
         cpp_code_pair
@@ -946,6 +944,11 @@ foreigner_class!(class Foo {
         cpp_code_pair
             .foreign_code
             .contains("std::optional<uint64_t> f7()")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("std::optional<struct RustStrView> f8()")
     );
 }
 

@@ -63,6 +63,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustOptionU64"]
     #![swig_foreigner_type = "struct CRustOptionUSize"]
     #![swig_rust_type = "CRustOptionUSize"]
+    #![swig_foreigner_type = "struct CRustOptionStr"]
+    #![swig_rust_type = "CRustOptionStr"]
     #![swig_foreigner_type = "struct CResultObjectObject"]
     #![swig_rust_type = "CResultObjectObject"]
     #![swig_foreigner_type = "struct CResultVecObjectObject"]
@@ -164,14 +166,22 @@ pub struct RustStrView {
     len: usize,
 }
 
-impl<'a> SwigFrom<&'a str> for RustStrView {
-    fn swig_from(s: &'a str) -> RustStrView {
+#[allow(dead_code)]
+impl RustStrView {
+    fn from_str(s: &str) -> RustStrView {
         RustStrView {
             data: s.as_ptr() as *const ::std::os::raw::c_char,
             len: s.len(),
         }
     }
 }
+
+impl<'a> SwigFrom<&'a str> for RustStrView {
+    fn swig_from(s: &'a str) -> RustStrView {
+        RustStrView::from_str(s)
+    }
+}
+
 impl<T> SwigDeref for Arc<Mutex<T>> {
     type Target = Mutex<T>;
     fn swig_deref(&self) -> &Mutex<T> {
@@ -837,6 +847,28 @@ impl SwigInto<Option<usize>> for CRustOptionUSize {
             Some(self.val)
         } else {
             None
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustOptionStr {
+    val: RustStrView,
+    is_some: u8,
+}
+
+impl<'a> SwigFrom<Option<&'a str>> for CRustOptionStr {
+    fn swig_from(x: Option<&'a str>) -> Self {
+        match x {
+            Some(x) => CRustOptionStr {
+                val: RustStrView::from_str(x),
+                is_some: 1,
+            },
+            None => CRustOptionStr {
+                val: unsafe { ::std::mem::uninitialized() },
+                is_some: 0,
+            },
         }
     }
 }
