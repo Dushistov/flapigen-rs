@@ -475,6 +475,14 @@ TEST(TestOptional, smokeTest)
         auto val2 = x.f9({});
         EXPECT_EQ(std::string("None"), val2.to_std_string());
     }
+    {
+        TestOptional y;
+        auto val = y.f10(true);
+        ASSERT_TRUE(!!val);
+        EXPECT_EQ(std::string("aaa"), val->to_std_string());
+        auto val2 = y.f10(false);
+        EXPECT_TRUE(!val2);
+    }
 }
 
 TEST(TestResult, smokeTest)

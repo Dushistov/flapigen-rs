@@ -453,6 +453,13 @@ impl TestOptional {
         x.map(|x| format!("your name is {}", x))
             .unwrap_or("None".to_string())
     }
+    fn f10(&self, is_some: bool) -> Option<&str> {
+        if is_some {
+            Some(self.foo.name())
+        } else {
+            None
+        }
+    }
 }
 
 foreigner_class!(class TestOptional {
@@ -467,6 +474,7 @@ foreigner_class!(class TestOptional {
     method TestOptional::f7(&self) -> Option<MyEnum>;
     method TestOptional::f8(&self, x: Option<MyEnum>) -> Option<MyEnum>;
     method TestOptional::f9(&self, x: Option<&str>) -> String;
+    method TestOptional::f10(&self, is_some: bool) -> Option<&str>;
 });
 
 #[derive(Default)]

@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "rust_str.h"
+
 struct CRustOptionF64 {
     double val;
     uint8_t is_some;
@@ -24,6 +26,11 @@ struct CRustOptionU64 {
 
 struct CRustOptionUSize {
     uintptr_t val;
+    uint8_t is_some;
+};
+
+struct CRustOptionStr {
+    RustStrView val;
     uint8_t is_some;
 };
 
