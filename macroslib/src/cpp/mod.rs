@@ -107,6 +107,9 @@ impl LanguageGenerator for CppConfig {
             "generate: begin for {}, this_type_for_method {:?}",
             class.name, class.this_type_for_method
         );
+        class
+            .validate_class()
+            .map_err(|err| fatal_error(sess, class.span, &err))?;
         if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
             let this_type: RustType = this_type_for_method.clone().into();
             let this_type = this_type.implements("SwigForeignClass");

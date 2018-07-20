@@ -58,6 +58,32 @@ foreigner_class!(class Foo {
 }
 
 #[test]
+fn test_parse_without_self_type_err() {
+    for lang in &[ForeignLang::Java, ForeignLang::Cpp] {
+        eprintln!("test_parse_without_self_type_err: lang {:?}", lang);
+        let result = panic::catch_unwind(|| {
+            parse_code(
+                "test_parse_without_self_type_err",
+                r#"
+foreigner_class!(class DownloadItem {
+    self_type DownloadItem;
+    private constructor = empty;
+    method DownloadItem::total_size(&self) -> u64;
+});
+
+foreigner_class!(class Document {
+    constructor Document::new(remote: DownloadItem) -> Document;
+    method Document::remote(&self) -> bool;
+});
+"#,
+                &[*lang],
+            );
+        });
+        assert!(result.is_err());
+    }
+}
+
+#[test]
 fn test_class_with_dummy_constructor() {
     let gen_code = parse_code(
         "test_class_with_dummy_constructor",

@@ -253,6 +253,31 @@ impl ForeignerClassInfo {
                 ),
             })
     }
+    /// common for several language binding generator code
+    fn validate_class(&self) -> Result<(), String> {
+        let mut has_constructor = false;
+        let mut has_methods = false;
+        for x in &self.methods {
+            match x.variant {
+                MethodVariant::Constructor => has_constructor = true,
+                MethodVariant::Method(_) => has_methods = true,
+                _ => {}
+            }
+        }
+        if self.self_type.is_none() && has_constructor {
+            Err(format!(
+                "class {} has constructor, but no self_type defined",
+                self.name
+            ))
+        } else if self.self_type.is_none() && has_methods {
+            Err(format!(
+                "class {} has methods, but no self_type defined",
+                self.name
+            ))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
