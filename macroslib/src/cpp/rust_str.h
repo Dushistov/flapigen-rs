@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 struct RustStrView {
-    const char *const data;
+    const char *data;
     uintptr_t len;
 #ifdef __cplusplus
     size_t size() const noexcept

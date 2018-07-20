@@ -5,6 +5,7 @@ environment:
     LLVM_VERSION: 5.0.2
 platform:
   - x64
+  - x86
 install:
   - ps: git submodule -q update --init
   - if %PLATFORM% == x86 (set RUST_PLATFORM=i686&set MINGW_BITS=32) else (set RUST_PLATFORM=x86_64&set MINGW_BITS=64)
