@@ -331,6 +331,7 @@ impl Xyz {
 }
 
 foreigner_class!(class Xyz {
+    self_type Xyz;
     constructor Xyz::zero() -> Xyz;
     constructor Xyz::new(_: f64, _: f64, _: f64) -> Xyz;
 });
