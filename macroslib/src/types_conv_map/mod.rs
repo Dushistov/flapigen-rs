@@ -712,24 +712,35 @@ impl TypesConvMap {
         )
     }
 
-    pub(crate) fn is_ty_implements(&self, ty: &ast::Ty, trait_name: Symbol) -> Option<RustType> {
+    pub(crate) fn is_ty_implements_exact(
+        &self,
+        ty: &ast::Ty,
+        trait_name: Symbol,
+    ) -> Option<RustType> {
         let ty_name = Symbol::intern(&normalized_ty_string(ty));
         if let Some(idx) = self.rust_names_map.get(&ty_name) {
             if self.conv_graph[*idx].implements.contains(&trait_name) {
                 return Some(self.conv_graph[*idx].clone());
             }
         }
-        if let ast::TyKind::Rptr(_, ref mut_ty) = ty.node {
-            let ty_name = Symbol::intern(&normalized_ty_string(&mut_ty.ty));
-            self.rust_names_map.get(&ty_name).and_then(|idx| {
-                if self.conv_graph[*idx].implements.contains(&trait_name) {
-                    Some(self.conv_graph[*idx].clone())
-                } else {
-                    None
-                }
-            })
-        } else {
-            None
+        None
+    }
+
+    pub(crate) fn is_ty_implements(&self, ty: &ast::Ty, trait_name: Symbol) -> Option<RustType> {
+        match self.is_ty_implements_exact(ty, trait_name) {
+            Some(x) => Some(x),
+            None => if let ast::TyKind::Rptr(_, ref mut_ty) = ty.node {
+                let ty_name = Symbol::intern(&normalized_ty_string(&mut_ty.ty));
+                self.rust_names_map.get(&ty_name).and_then(|idx| {
+                    if self.conv_graph[*idx].implements.contains(&trait_name) {
+                        Some(self.conv_graph[*idx].clone())
+                    } else {
+                        None
+                    }
+                })
+            } else {
+                None
+            },
         }
     }
 

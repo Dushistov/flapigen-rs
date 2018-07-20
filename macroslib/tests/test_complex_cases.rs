@@ -395,6 +395,50 @@ foreigner_class!(class Boo {
 }
 
 #[test]
+fn test_return_foreign_interface_opt() {
+    let gen_code = parse_code(
+        "test_return_foreign_interface_opt",
+        r#"
+foreigner_class!(class Foo {
+    self_type Foo;
+    private constructor = empty -> Box<Box<Foo>>;
+});
+foreigner_class!(class Boo {
+    self_type Boo;
+    private constructor Boo::default() -> Boo;
+    method Boo::f(&mut self) -> Result<Box<Box<Foo>>, String>;
+    method Boo::f2(&mut self) -> Option<Box<Box<Foo>>>;
+});
+"#,
+        &[ForeignLang::Cpp],
+    );
+    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
+    println!("c++rust: {}", cpp_code.rust_code);
+    cpp_code.rust_code.contains(
+        r#"pub extern "C" fn Boo_f2(this: *mut Boo) -> *mut ::std::os::raw::c_void {
+    let this: &mut Boo = unsafe { this.as_mut().unwrap() };
+    let mut ret: Option<Box<Box<Foo>>> = Boo::f2(this);
+    let mut ret: *mut ::std::os::raw::c_void =
+        <*mut ::std::os::raw::c_void>::swig_from(ret);
+    ret
+}"#,
+    );
+    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
+    println!("c/c++: {}", cpp_code.foreign_code);
+    assert!(
+        cpp_code
+            .foreign_code
+            .contains("std::variant<Foo, RustString> f()")
+    );
+    assert!(cpp_code.foreign_code.contains("std::optional<Foo> f2()"));
+    assert!(
+        cpp_code
+            .foreign_code
+            .contains("FooOpaque * Boo_f2(BooOpaque * const self)")
+    );
+}
+
+#[test]
 fn test_return_foreign_class_ref() {
     for _ in 0..10 {
         let gen_code = parse_code(

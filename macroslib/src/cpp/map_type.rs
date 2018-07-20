@@ -920,7 +920,18 @@ fn handle_option_type_in_return<'a>(
     arg_ty: &ast::Ty,
     opt_ty: &ast::Ty,
 ) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(opt_ty, false) {
+    if let Some(foreign_class_this_ty) =
+        conv_map.is_ty_implements_exact(opt_ty, Symbol::intern("SwigForeignClass"))
+    {
+        let foreign_class = conv_map
+            .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
+            .ok_or_else(|| {
+                fatal_error(
+                    sess,
+                    arg_ty.span,
+                    &format!("Can not find foreigner_class for '{:?}'", arg_ty),
+                )
+            })?;
         let foreign_info =
             foreign_class_foreign_name(sess, conv_map, foreign_class, opt_ty.span, false)?;
         let (typename, output_converter) = match cpp_cfg.cpp_optional {
