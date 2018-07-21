@@ -81,6 +81,14 @@ static void c_simple_cb_without_args(void *opaque)
     ++c_simple_cb_counter_without_args;
 }
 
+static char c_simple_cb_is_odd(int32_t x, void *opaque)
+{
+    assert(opaque != nullptr);
+    const int tag = *static_cast<int *>(opaque);
+    EXPECT_EQ(17, tag);
+    return (x % 2) == 1;
+}
+
 TEST(c_Foo, Simple)
 {
     auto foo = Foo_new(1, "a");
@@ -97,6 +105,7 @@ TEST(c_Foo, Simple)
         c_delete_int,
         c_simple_cb,
         c_simple_cb_without_args,
+        c_simple_cb_is_odd,
     };
     c_simple_cb_counter = 0;
     c_simple_cb_counter_without_args = 0;
@@ -123,6 +132,7 @@ TEST(Foo, Simple)
         c_delete_int,
         c_simple_cb,
         c_simple_cb_without_args,
+        c_simple_cb_is_odd,
     };
     c_simple_cb_counter = 0;
     c_simple_cb_counter_without_args = 0;
@@ -168,6 +178,10 @@ struct MySomeObserver final : public SomeObserver {
     {
         std::cout << "onStateChangedWithoutArgs\n";
         ++f2_call;
+    }
+    bool isOdd(int32_t num) override
+    {
+        return num % 2 == 1;
     }
 };
 

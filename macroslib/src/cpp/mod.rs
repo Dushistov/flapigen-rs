@@ -1349,11 +1349,13 @@ fn find_suitable_ftypes_for_interace_methods<'a>(
                     ty.span = sp;
                     ty.into()
                 },
-            },
-            _ => unimplemented!(),
+            }.into(),
+            ast::FunctionRetTy::Ty(ref ret_ty) => {
+                map_type(sess, conv_map, cpp_cfg, ret_ty, Direction::Incoming)?
+            }
         };
         f_methods.push(CppForeignMethodSignature {
-            output: output.into(),
+            output: output,
             input,
         });
     }
@@ -1406,10 +1408,11 @@ pub struct {struct_with_funcs} {{
         write!(
             &mut code,
             r#"
-{method_name}: extern "C" fn({args}_: *const ::std::os::raw::c_void),
+{method_name}: extern "C" fn({args}_: *const ::std::os::raw::c_void) -> {ret_type},
 "#,
             method_name = method.name,
             args = args,
+            ret_type = pprust::ty_to_string(&f_method.output.base.correspoding_rust_type.ty),
         ).unwrap();
     }
 
@@ -1497,13 +1500,32 @@ impl {trait_name} for {struct_with_funcs} {{
             "()",
         )?;
         gen_items.append(&mut conv_deps);
+        let (real_output_typename, output_conv) = match method.fn_decl.output {
+            ast::FunctionRetTy::Default(_) => ("()".to_string(), String::new()),
+            ast::FunctionRetTy::Ty(ref ret_ty) => {
+                let real_output_type: RustType = (**ret_ty).clone().into();
+                let (mut conv_deps, conv_code) = conv_map.convert_rust_types(
+                    sess,
+                    &f_method.output.base.correspoding_rust_type,
+                    &real_output_type,
+                    "ret",
+                    &real_output_type.normalized_name.as_str(),
+                    ret_ty.span,
+                )?;
+                gen_items.append(&mut conv_deps);
+                (real_output_type.normalized_name.to_string(), conv_code)
+            }
+        };
+        let ret_type = pprust::ty_to_string(&f_method.output.base.correspoding_rust_type.ty);
         write!(
             &mut code,
             r#"
     #[allow(unused_mut)]
-    fn {func_name}({args_with_types}) {{
+    fn {func_name}({args_with_types}) -> {real_ret_type} {{
 {convert_args}
-        (self.{method_name})({args}self.opaque);
+        let ret: {ret_type} = (self.{method_name})({args}self.opaque);
+{output_conv}
+        ret
     }}
 "#,
             func_name = func_name,
@@ -1515,6 +1537,9 @@ impl {trait_name} for {struct_with_funcs} {{
             } else {
                 n_arguments_list(n_args) + ","
             },
+            real_ret_type = real_output_typename,
+            ret_type = ret_type,
+            output_conv = output_conv,
         ).unwrap();
     }
     write!(
