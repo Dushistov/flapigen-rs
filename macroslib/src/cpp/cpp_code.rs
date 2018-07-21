@@ -117,30 +117,44 @@ struct C_{interface_name} {{
     );
 
     for (method, f_method) in interface.items.iter().zip(f_methods) {
+        let c_ret_type = f_method.output.base.name;
+        let (cpp_ret_type, cpp_out_conv) =
+            if let Some(out_conv) = f_method.output.cpp_converter.as_ref() {
+                let conv_code = out_conv
+                    .output_converter
+                    .as_str()
+                    .replace(FROM_VAR_TEMPLATE, "ret");
+                (out_conv.typename, conv_code)
+            } else {
+                (c_ret_type, String::new())
+            };
         write!(
             file_c,
             r#"
 {doc_comments}
-    void (*{method_name})({single_args_with_types}void *opaque);
+    {c_ret_type} (*{method_name})({single_args_with_types}void *opaque);
 "#,
             method_name = method.name,
             doc_comments = doc_comments_to_c_comments(&method.doc_comments, false),
             single_args_with_types = c_generate_args_with_types(f_method, true)?,
+            c_ret_type = c_ret_type,
         ).map_err(&map_write_err)?;
 
         write!(
             &mut cpp_virtual_methods,
             r#"
 {doc_comments}
-    virtual void {method_name}({single_args_with_types}) = 0;
+    virtual {cpp_ret_type} {method_name}({single_args_with_types}) = 0;
 "#,
             method_name = method.name,
             doc_comments = doc_comments_to_c_comments(&method.doc_comments, false),
             single_args_with_types = cpp_generate_args_with_types(f_method)?,
+            cpp_ret_type = cpp_ret_type,
         ).map_err(&map_write_err)?;
-        write!(
-            &mut cpp_static_reroute_methods,
-            r#"
+        if c_ret_type == "void" {
+            write!(
+                &mut cpp_static_reroute_methods,
+                r#"
    static void c_{method_name}({single_args_with_types}void *opaque)
    {{
         auto p = static_cast<{interface_name} *>(opaque);
@@ -148,12 +162,31 @@ struct C_{interface_name} {{
         p->{method_name}({input_args});
    }}
 "#,
-            method_name = method.name,
-            single_args_with_types = c_generate_args_with_types(f_method, true)?,
-            input_args = cpp_generate_args_to_call_c(f_method, true)?,
-            interface_name = interface.name,
-        ).map_err(&map_write_err)?;
-
+                method_name = method.name,
+                single_args_with_types = c_generate_args_with_types(f_method, true)?,
+                input_args = cpp_generate_args_to_call_c(f_method, true)?,
+                interface_name = interface.name,
+            ).map_err(&map_write_err)?;
+        } else {
+            write!(
+                &mut cpp_static_reroute_methods,
+                r#"
+   static {c_ret_type} c_{method_name}({single_args_with_types}void *opaque)
+   {{
+        auto p = static_cast<{interface_name} *>(opaque);
+        assert(p != nullptr);
+        auto ret = p->{method_name}({input_args});
+        return {cpp_out_conv};
+   }}
+"#,
+                method_name = method.name,
+                single_args_with_types = c_generate_args_with_types(f_method, true)?,
+                input_args = cpp_generate_args_to_call_c(f_method, true)?,
+                interface_name = interface.name,
+                c_ret_type = c_ret_type,
+                cpp_out_conv = cpp_out_conv,
+            ).map_err(&map_write_err)?;
+        }
         write!(
             &mut cpp_fill_c_interface_struct,
             "        ret.{method_name} = c_{method_name};\n",

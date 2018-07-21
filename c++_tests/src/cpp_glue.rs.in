@@ -31,6 +31,8 @@ impl Foo {
         //println!("call_me begin");
         cb.on_state_changed(2, false);
         cb.on_state_changed_without_args();
+        assert!(cb.is_odd(1));
+        assert!(!cb.is_odd(2));
     }
     fn one_and_half(&self) -> f64 {
         (self.data as f64) * 1.5
@@ -52,12 +54,14 @@ fn f_hypot(a: f64, b: f64) -> f64 {
 trait SomeObserver {
     fn on_state_changed(&self, _: i32, _: bool);
     fn on_state_changed_without_args(&self);
+    fn is_odd(&self, x: i32) -> bool;
 }
 
 foreign_interface!(interface SomeObserver {
     self_type SomeObserver;
     onStateChanged = SomeObserver::on_state_changed(&self, _: i32, _: bool);
     onStateChangedWithoutArgs = SomeObserver::on_state_changed_without_args(&self);
+    isOdd = SomeObserver::is_odd(&self, x: i32) -> bool;
 });
 
 foreigner_class!(class Foo {
@@ -656,4 +660,9 @@ foreigner_class!(class TestPassInterface {
     self_type TestPassInterface;
     constructor TestPassInterface::default() -> TestPassInterface;
     static_method TestPassInterface::use_interface(a: Box<Box<Interface>>, b: i32) -> i32;
+});
+
+foreign_interface!(interface ToString {
+    self_type ::std::string::ToString;
+    toString = ::std::string::ToString::to_string(&self) -> String;
 });

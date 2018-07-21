@@ -757,7 +757,7 @@ foreigner_class!(class LocationService {
 
 #[test]
 fn test_foreign_interface() {
-    parse_code(
+    let gen_code = parse_code(
         "test_foreign_interface",
         r#"
 trait SomeTrait {
@@ -779,6 +779,84 @@ foreigner_class!(class ClassWithCallbacks {
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
     );
+    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
+    println!("cpp_code/c++: {}", cpp_code.foreign_code);
+    assert!(
+        cpp_code
+            .foreign_code
+            .contains("virtual void onStateChanged(int32_t a_0, bool a_1) = 0;")
+    );
+    assert!(
+        cpp_code
+            .foreign_code
+            .contains("virtual void onStateChangedWithoutArgs() = 0;")
+    );
+    assert!(cpp_code.foreign_code.contains(
+        r#"struct C_SomeObserver {
+    void *opaque;
+    //! call by Rust side when callback not need anymore
+    void (*C_SomeObserver_deref)(void *opaque);
+    
+
+    void (*onStateChanged)(int32_t a_0, char a_1, void *opaque);
+
+
+    void (*onStateChangedWithoutArgs)(void *opaque);
+
+};"#
+    ));
+}
+
+#[test]
+fn test_foreign_interface_cpp_return_not_void() {
+    let gen_code = parse_code(
+        "test_foreign_interface_cpp_return_not_void",
+        r#"
+foreign_interface!(interface SomeObserver {
+    self_type SomeTrait;
+    onStateChanged = SomeTrait::on_state_changed(&self, _: i32, _: bool) -> bool;
+    onStateChangedWithoutArgs = SomeObserver::on_state_changed_without_args(&self);
+});"#,
+        &[ForeignLang::Cpp],
+    );
+    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
+    println!("cpp_code/rust: {}", cpp_code.rust_code);
+    assert!(cpp_code.rust_code.contains(
+        r#"pub struct C_SomeObserver {
+    opaque: *const ::std::os::raw::c_void,
+    C_SomeObserver_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    onStateChanged: extern "C" fn(a_0: i32, a_1: ::std::os::raw::c_char,
+                                  _: *const ::std::os::raw::c_void)
+                        -> ::std::os::raw::c_char,
+    onStateChangedWithoutArgs: extern "C" fn(_: *const ::std::os::raw::c_void)
+                                   -> (),
+}"#
+    ));
+    println!("cpp_code/c++: {}", cpp_code.foreign_code);
+    assert!(
+        cpp_code
+            .foreign_code
+            .contains("virtual bool onStateChanged(int32_t a_0, bool a_1) = 0;")
+    );
+    assert!(
+        cpp_code
+            .foreign_code
+            .contains("virtual void onStateChangedWithoutArgs() = 0;")
+    );
+    assert!(cpp_code.foreign_code.contains(
+        r#"struct C_SomeObserver {
+    void *opaque;
+    //! call by Rust side when callback not need anymore
+    void (*C_SomeObserver_deref)(void *opaque);
+    
+
+    char (*onStateChanged)(int32_t a_0, char a_1, void *opaque);
+
+
+    void (*onStateChangedWithoutArgs)(void *opaque);
+
+};"#
+    ));
 }
 
 #[test]
@@ -1288,10 +1366,7 @@ foreign_interface!(interface RepoChangedCallback {
 "#,
             &[ForeignLang::Cpp],
         );
-        let cpp_code_pair = gen_code
-            .iter()
-            .find(|x| x.lang == ForeignLang::Cpp)
-            .unwrap();
+        let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
         println!("c/c++: {}", cpp_code_pair.foreign_code);
         assert!(
             cpp_code_pair
