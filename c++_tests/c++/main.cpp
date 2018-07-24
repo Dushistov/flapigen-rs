@@ -360,11 +360,10 @@ TEST(TestWorkWithVec, smokeTest)
     }
 }
 
-TEST(TestWorkWithVec, rangeLoop)
+static void validate_create_foo_vec(size_t n, const RustForeignVecFoo &vec)
 {
-    const size_t N = 2000;
-    auto vec = TestWorkWithVec::create_foo_vec(N);
-    ASSERT_EQ(N, vec.size());
+    ASSERT_EQ(n, vec.size());
+
     size_t i = 0;
     std::stringstream fmt;
     for (auto &&elem : vec) {
@@ -375,7 +374,26 @@ TEST(TestWorkWithVec, rangeLoop)
         fmt.clear();
         ++i;
     }
-    ASSERT_EQ(N, i);
+    ASSERT_EQ(n, i);
+}
+
+TEST(TestWorkWithVec, assign)
+{
+    const size_t N = 2000;
+    auto vec = TestWorkWithVec::create_foo_vec(N);
+    validate_create_foo_vec(N, vec);
+
+    RustForeignVecFoo vec2;
+    vec2 = TestWorkWithVec::create_foo_vec(100);
+    validate_create_foo_vec(100, vec2);
+    vec2 = TestWorkWithVec::create_foo_vec(100);
+    validate_create_foo_vec(100, vec2);
+
+    RustForeignVecFoo vec3 = TestWorkWithVec::create_foo_vec(200);
+    validate_create_foo_vec(200, vec3);
+    vec3 = std::move(vec2);
+    validate_create_foo_vec(100, vec3);
+    EXPECT_TRUE(vec2.empty());
 }
 
 TEST(TestEnumClass, smokeTest)

@@ -178,6 +178,7 @@ public:
     const_iterator begin() const noexcept { return this->data; }
     iterator end() noexcept { return this->data + this->len; }
     const_iterator end() const noexcept { return this->data + this->len; }
+    void clear() noexcept { free_mem(); }
 
 private:
     void free_mem() noexcept
@@ -348,7 +349,8 @@ public:
         this->data = o.data;
         this->len = o.len;
         this->capacity = o.capacity;
-        assert(this->step == o.step);
+        assert(this->step == o.step || this->step == 0 || o.step == 0);
+        this->step = o.step;
         reset(o);
         return *this;
     }
@@ -397,6 +399,8 @@ public:
         return RustForeignSlice<ForeignClassRef>{ CRustObjectSlice{ this->data, this->len,
                                                                     this->step } };
     }
+
+    void clear() noexcept { free_mem(); }
 
 private:
     void free_mem() noexcept
