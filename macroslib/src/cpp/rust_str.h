@@ -12,36 +12,18 @@ struct RustStrView {
     const char *data;
     uintptr_t len;
 #ifdef __cplusplus
-    size_t size() const noexcept
-    {
-        return this->len;
-    }
-    bool empty() const noexcept
-    {
-        return this->len == 0;
-    }
-    std::string to_std_string() const
-    {
-        return std::string{ data, len };
-    }
+    size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
+    std::string to_std_string() const { return std::string{ data, len }; }
 #endif
 #if __cplusplus > 201402L
-    std::string_view to_string_view() const
-    {
-        return std::string_view{ data, len };
-    }
+    std::string_view to_string_view() const { return std::string_view{ data, len }; }
 #endif
 #ifdef BOOST_STRING_VIEW_HPP
-    boost::string_view to_boost_string_view() const
-    {
-        return boost::string_view{ data, len };
-    }
+    boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
 #endif
 #if QT_VERSION >= 0x050000 && defined(QSTRING_H)
-    QString to_qstring() const
-    {
-        return QString::fromUtf8(data, len);
-    }
+    QString to_qstring() const { return QString::fromUtf8(data, len); }
 #endif
 };
 
@@ -90,34 +72,19 @@ public:
         reset(o);
         return *this;
     }
-    ~RustString() noexcept
-    {
-        free_mem();
-    }
-    std::string to_std_string() const
-    {
-        return std::string(data, len);
-    }
+    ~RustString() noexcept { free_mem(); }
+    std::string to_std_string() const { return std::string(data, len); }
     size_t size() const noexcept { return this->len; }
     bool empty() const noexcept { return this->len == 0; }
 #if __cplusplus > 201402L
-    std::string_view to_string_view() const
-    {
-        return std::string_view(data, len);
-    }
+    std::string_view to_string_view() const { return std::string_view(data, len); }
 #endif
 
 #ifdef BOOST_STRING_VIEW_HPP
-    boost::string_view to_boost_string_view() const
-    {
-        return boost::string_view{ data, len };
-    }
+    boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
 #endif
 #if QT_VERSION >= 0x050000 && defined(QSTRING_H)
-    QString to_qstring() const
-    {
-        return QString::fromUtf8(data, len);
-    }
+    QString to_qstring() const { return QString::fromUtf8(data, len); }
 #endif
 private:
     void free_mem() noexcept
