@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+
 #include "rust_str.h"
 #include "rust_vec.h"
 

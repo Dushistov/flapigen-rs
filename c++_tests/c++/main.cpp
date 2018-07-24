@@ -101,11 +101,7 @@ TEST(c_Foo, Simple)
     Foo_set_field(foo, 5);
     EXPECT_EQ(7, Foo_f(foo, 1, 1));
     const C_SomeObserver obs = {
-        new int(17),
-        c_delete_int,
-        c_simple_cb,
-        c_simple_cb_without_args,
-        c_simple_cb_is_odd,
+        new int(17), c_delete_int, c_simple_cb, c_simple_cb_without_args, c_simple_cb_is_odd,
     };
     c_simple_cb_counter = 0;
     c_simple_cb_counter_without_args = 0;
@@ -128,11 +124,7 @@ TEST(Foo, Simple)
     foo.set_field(5);
     EXPECT_EQ(7, foo.f(1, 1));
     const C_SomeObserver obs = {
-        new int(17),
-        c_delete_int,
-        c_simple_cb,
-        c_simple_cb_without_args,
-        c_simple_cb_is_odd,
+        new int(17), c_delete_int, c_simple_cb, c_simple_cb_without_args, c_simple_cb_is_odd,
     };
     c_simple_cb_counter = 0;
     c_simple_cb_counter_without_args = 0;
@@ -163,10 +155,7 @@ struct MySomeObserver final : public SomeObserver {
         f2_call = 0;
         deleted = 0;
     }
-    ~MySomeObserver()
-    {
-        ++deleted;
-    }
+    ~MySomeObserver() { ++deleted; }
     void onStateChanged(int32_t a, bool b) override
     {
         std::cout << "onStateChanged: a: " << a << ", b: " << b << "\n";
@@ -179,10 +168,7 @@ struct MySomeObserver final : public SomeObserver {
         std::cout << "onStateChangedWithoutArgs\n";
         ++f2_call;
     }
-    bool isOdd(int32_t num) override
-    {
-        return num % 2 == 1;
-    }
+    bool isOdd(int32_t num) override { return num % 2 == 1; }
 };
 
 size_t MySomeObserver::f1_call = 0;
@@ -266,13 +252,15 @@ TEST(TestWorkWithVec, smokeTest)
         EXPECT_EQ(tag_len * n, vec.size());
         for (size_t i = 0; i < vec.size(); i += std::strlen(tag)) {
             EXPECT_TRUE(i + tag_len <= vec.size());
-            EXPECT_EQ(std::string(tag), std::string(reinterpret_cast<const char *>(&vec[i]), tag_len));
+            EXPECT_EQ(std::string(tag),
+                      std::string(reinterpret_cast<const char *>(&vec[i]), tag_len));
         }
         vec = RustVecU8{ t.get_bytes(n) };
         EXPECT_EQ(tag_len * n, vec.size());
         for (size_t i = 0; i < vec.size(); i += std::strlen(tag)) {
             EXPECT_TRUE(i + tag_len <= vec.size());
-            EXPECT_EQ(std::string(tag), std::string(reinterpret_cast<const char *>(&vec[i]), tag_len));
+            EXPECT_EQ(std::string(tag),
+                      std::string(reinterpret_cast<const char *>(&vec[i]), tag_len));
         }
     }
 
@@ -372,11 +360,10 @@ TEST(TestWorkWithVec, smokeTest)
     }
 }
 
-TEST(TestWorkWithVec, rangeLoop)
+static void validate_create_foo_vec(size_t n, const RustForeignVecFoo &vec)
 {
-    const size_t N = 2000;
-    auto vec = TestWorkWithVec::create_foo_vec(N);
-    ASSERT_EQ(N, vec.size());
+    ASSERT_EQ(n, vec.size());
+
     size_t i = 0;
     std::stringstream fmt;
     for (auto &&elem : vec) {
@@ -387,7 +374,26 @@ TEST(TestWorkWithVec, rangeLoop)
         fmt.clear();
         ++i;
     }
-    ASSERT_EQ(N, i);
+    ASSERT_EQ(n, i);
+}
+
+TEST(TestWorkWithVec, assign)
+{
+    const size_t N = 2000;
+    auto vec = TestWorkWithVec::create_foo_vec(N);
+    validate_create_foo_vec(N, vec);
+
+    RustForeignVecFoo vec2;
+    vec2 = TestWorkWithVec::create_foo_vec(100);
+    validate_create_foo_vec(100, vec2);
+    vec2 = TestWorkWithVec::create_foo_vec(100);
+    validate_create_foo_vec(100, vec2);
+
+    RustForeignVecFoo vec3 = TestWorkWithVec::create_foo_vec(200);
+    validate_create_foo_vec(200, vec3);
+    vec3 = std::move(vec2);
+    validate_create_foo_vec(100, vec3);
+    EXPECT_TRUE(vec2.empty());
 }
 
 TEST(TestEnumClass, smokeTest)
@@ -557,13 +563,14 @@ TEST(TestResult, smokeTest)
     EXPECT_NE(nullptr, std::get_if<TestError>(&f3_err));
     TestError f3_err_ret = std::get<TestError>(std::move(f3_err));
     ASSERT_EQ(std::string_view("Not ok"), RustString{ f3_err_ret.to_string() }.to_string_view());
-#endif //HAS_STDCXX_17
+#endif // HAS_STDCXX_17
 #ifdef USE_BOOST
     boost::variant<TestResult, RustString> res = TestResult::new_with_err();
     EXPECT_EQ(nullptr, boost::get<TestResult>(&res));
     EXPECT_NE(nullptr, boost::get<RustString>(&res));
 #ifdef HAS_BOOST_STRING_VIEW_HPP
-    EXPECT_EQ(boost::string_view("this is error"), boost::get<RustString>(std::move(res)).to_boost_string_view());
+    EXPECT_EQ(boost::string_view("this is error"),
+              boost::get<RustString>(std::move(res)).to_boost_string_view());
 #else
     EXPECT_EQ(std::string("this is error"), boost::get<RustString>(std::move(res)).to_std_string());
 #endif
@@ -574,7 +581,8 @@ TEST(TestResult, smokeTest)
     EXPECT_NE(nullptr, boost::get<RustString>(&res3));
     EXPECT_EQ(nullptr, boost::get<void *>(&res3));
 #ifdef HAS_BOOST_STRING_VIEW_HPP
-    EXPECT_EQ(boost::string_view("Not ok"), boost::get<RustString>(std::move(res3)).to_boost_string_view());
+    EXPECT_EQ(boost::string_view("Not ok"),
+              boost::get<RustString>(std::move(res3)).to_boost_string_view());
 #else
     EXPECT_EQ(std::string("Not ok"), boost::get<RustString>(std::move(res3)).to_std_string());
 #endif
@@ -602,7 +610,7 @@ TEST(TestResult, smokeTest)
 #else
     EXPECT_EQ(std::string("Not ok"), boost::get<RustString>(res_vec).to_std_string());
 #endif
-#endif //USE_BOOST
+#endif // USE_BOOST
 }
 #endif
 
@@ -626,10 +634,7 @@ TEST(TestReferences, smokeTest)
     EXPECT_EQ(std::string("200A"), foo2.getName().to_std_string());
 }
 
-TEST(TestOnlyStaticMethods, smokeTest)
-{
-    EXPECT_EQ(4, TestOnlyStaticMethods::add_func(2, 2));
-}
+TEST(TestOnlyStaticMethods, smokeTest) { EXPECT_EQ(4, TestOnlyStaticMethods::add_func(2, 2)); }
 
 #if defined(HAS_STDCXX_17) || defined(USE_BOOST)
 TEST(TestDummyConstructor, smokeTest)
@@ -638,11 +643,11 @@ TEST(TestDummyConstructor, smokeTest)
 #ifdef HAS_STDCXX_17
     ASSERT_NE(nullptr, std::get_if<Position>(&res));
     auto pos = std::get<Position>(std::move(res));
-#endif //HAS_STDCXX_17
+#endif // HAS_STDCXX_17
 #ifdef USE_BOOST
     ASSERT_NE(nullptr, boost::get<Position>(&res));
     auto pos = boost::get<Position>(std::move(res));
-#endif //USE_BOOST
+#endif // USE_BOOST
     EXPECT_NEAR(0.1, pos.latitude(), 1e-10);
 }
 #endif

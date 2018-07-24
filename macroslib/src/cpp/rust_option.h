@@ -37,8 +37,7 @@ struct CRustOptionStr {
 #ifdef __cplusplus
 #include <cstring>
 
-template <typename T>
-inline T c_option_empty()
+template <typename T> inline T c_option_empty()
 {
     T a;
     std::memset(&a.val, 0, sizeof(a.val));
