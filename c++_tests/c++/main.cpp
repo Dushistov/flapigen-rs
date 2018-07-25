@@ -503,6 +503,18 @@ TEST(TestOptional, smokeTest)
         auto val2 = y.f10(false);
         EXPECT_TRUE(!val2);
     }
+
+    {
+        TestOptional y;
+        auto val = y.f11(17, true);
+        ASSERT_TRUE(!!val);
+        EXPECT_EQ(17, *val);
+        auto val2 = y.f11(0, false);
+        EXPECT_TRUE(!val2);
+        val = y.f11(-17, true);
+        ASSERT_TRUE(!!val);
+        EXPECT_EQ(-17, *val);
+    }
 }
 
 TEST(TestResult, smokeTest)
