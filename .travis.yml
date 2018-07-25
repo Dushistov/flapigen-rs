@@ -28,6 +28,10 @@ before_script:
     - if [ "$TRAVIS_OS_NAME" == "osx" ]; then
          export JAVA_HOME=$(/usr/libexec/java_home);
       fi
+    - if [ "$TRAVIS_RUST_VERSION" == "beta" ]; then
+          rustup update;
+          rustup toolchain add beta;
+      fi
     - echo $JAVA_HOME
     - cmake --version
     - python --version
