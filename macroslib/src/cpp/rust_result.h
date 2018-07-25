@@ -36,3 +36,11 @@ struct CResultVecObjectObject {
         void *err;
     } data;
 };
+
+struct CResultCRustVecU8Object {
+    union {
+        struct CRustVecU8 ok;
+        void *err;
+    } data;
+    uint8_t is_ok;
+};

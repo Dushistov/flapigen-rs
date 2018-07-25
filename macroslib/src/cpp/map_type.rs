@@ -216,7 +216,9 @@ fn special_type<'a>(
                 ok_ty,
                 err_ty
             );
-            return handle_result_type_in_result(sess, conv_map, cpp_cfg, arg_ty, &ok_ty, &err_ty);
+            return handle_result_type_as_return_type(
+                sess, conv_map, cpp_cfg, arg_ty, &ok_ty, &err_ty,
+            );
         }
         if let Some(ty) = if_option_return_some_type(arg_ty) {
             return handle_option_type_in_return(sess, conv_map, cpp_cfg, arg_ty, &ty);
@@ -554,7 +556,7 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
     Ok(Some(ftype_info))
 }
 
-fn handle_result_type_in_result<'a>(
+fn handle_result_type_as_return_type<'a>(
     sess: &'a ParseSess,
     conv_map: &mut TypesConvMap,
     cpp_cfg: &CppConfig,
@@ -564,7 +566,7 @@ fn handle_result_type_in_result<'a>(
 ) -> PResult<'a, Option<CppForeignTypeInfo>> {
     let err_ty_name = normalized_ty_string(&err_ty);
     debug!(
-        "handle_result_type_in_result: ok_ty: {}",
+        "handle_result_type_as_return_type: ok_ty: {}",
         normalized_ty_string(&ok_ty)
     );
     if let Some(foreign_class_this_ty) =
@@ -654,7 +656,11 @@ fn handle_result_type_in_result<'a>(
     }
 
     if let Some(elem_ty) = if_vec_return_elem_type(ok_ty) {
-        map_type(sess, conv_map, cpp_cfg, ok_ty, Direction::Outgoing)?;
+        trace!(
+            "handle_result_type_as_return_type ok_ty is Vec, elem_ty {:?}",
+            elem_ty
+        );
+        let vec_foreign_info = map_type(sess, conv_map, cpp_cfg, ok_ty, Direction::Outgoing)?;
         let mut f_type_info = map_ordinal_result_type(sess, conv_map, arg_ty)?;
         if err_ty_name == "String" {
             let foreign_name = conv_map
@@ -722,6 +728,38 @@ fn handle_result_type_in_result<'a>(
                 });
                 return Ok(Some(f_type_info));
             } else {
+                if let Some(cpp_conv) = vec_foreign_info.cpp_converter.as_ref() {
+                    trace!(
+                        "handle_result_type_as_return_type: Result<Vec<Not class, but C++>, class>"
+                    );
+                    let ok_typename = cpp_conv.typename;
+                    let c_err_class = c_class_type(err_class);
+                    let typename = match cpp_cfg.cpp_variant {
+                        CppVariant::Std17 => Symbol::intern(&format!(
+                            "std::variant<{}, {}>",
+                            ok_typename, err_class.name
+                        )),
+                        CppVariant::Boost => Symbol::intern(&format!(
+                            "boost::variant<{}, {}>",
+                            ok_typename, err_class.name
+                        )),
+                    };
+                    f_type_info.cpp_converter = Some(CppConverter {
+                        typename,
+                        output_converter: format!(
+                            "{var}.is_ok != 0 ?
+ {VarType} {{ {Type}{{{var}.data.ok}} }} :
+ {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err)) }}",
+                            VarType = typename,
+                            Type = ok_typename,
+                            var = FROM_VAR_TEMPLATE,
+                            ErrType = err_class.name,
+                            C_ErrType = c_err_class,
+                        ),
+                        input_converter: "#error".to_string(),
+                    });
+                    return Ok(Some(f_type_info));
+                }
                 return Ok(None);
             }
         } else {

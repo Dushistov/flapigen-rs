@@ -73,6 +73,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CResultObjectObject"]
     #![swig_foreigner_type = "struct CResultVecObjectObject"]
     #![swig_rust_type = "CResultVecObjectObject"]
+    #![swig_foreigner_type = "struct CResultCRustVecU8Object"]
+    #![swig_rust_type = "CResultCRustVecU8Object"]
     #![swig_foreigner_type = "struct CRustObjectSlice"]
     #![swig_rust_type = "CRustObjectSlice"]
 }
@@ -283,14 +285,16 @@ impl<'a, T: SwigForeignClass> SwigFrom<&'a T> for *const ::std::os::raw::c_void 
 
 #[allow(dead_code)]
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct CRustVecU8 {
     data: *const u8,
     len: usize,
     capacity: usize,
 }
 
-impl SwigFrom<Vec<u8>> for CRustVecU8 {
-    fn swig_from(mut v: Vec<u8>) -> CRustVecU8 {
+#[allow(dead_code)]
+impl CRustVecU8 {
+    pub fn from_vec(mut v: Vec<u8>) -> CRustVecU8 {
         let p = v.as_mut_ptr();
         let len = v.len();
         let cap = v.capacity();
@@ -300,6 +304,12 @@ impl SwigFrom<Vec<u8>> for CRustVecU8 {
             len: len,
             capacity: cap,
         }
+    }
+}
+
+impl SwigFrom<Vec<u8>> for CRustVecU8 {
+    fn swig_from(v: Vec<u8>) -> CRustVecU8 {
+        CRustVecU8::from_vec(v)
     }
 }
 
@@ -1016,6 +1026,40 @@ impl<T: SwigForeignClass, ErrT: SwigForeignClass> SwigFrom<Result<Vec<T>, ErrT>>
             Err(err) => CResultVecObjectObject {
                 is_ok: 0,
                 data: CResultVecObjectObjectUnion {
+                    err: <ErrT>::box_object(err),
+                },
+            },
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CResultCRustVecU8Object {
+    data: CRustVecU8ObjectUnion,
+    is_ok: u8,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CRustVecU8ObjectUnion {
+    pub ok: CRustVecU8,
+    pub err: *mut ::std::os::raw::c_void,
+}
+
+impl<ErrT: SwigForeignClass> SwigFrom<Result<Vec<u8>, ErrT>> for CResultCRustVecU8Object {
+    fn swig_from(x: Result<Vec<u8>, ErrT>) -> Self {
+        match x {
+            Ok(v) => CResultCRustVecU8Object {
+                is_ok: 1,
+                data: CRustVecU8ObjectUnion {
+                    ok: CRustVecU8::from_vec(v),
+                },
+            },
+            Err(err) => CResultCRustVecU8Object {
+                is_ok: 0,
+                data: CRustVecU8ObjectUnion {
                     err: <ErrT>::box_object(err),
                 },
             },

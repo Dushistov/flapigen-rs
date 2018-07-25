@@ -586,6 +586,16 @@ TEST(TestResult, smokeTest)
     EXPECT_NE(nullptr, std::get_if<TestError>(&f3_err));
     TestError f3_err_ret = std::get<TestError>(std::move(f3_err));
     ASSERT_EQ(std::string_view("Not ok"), RustString{ f3_err_ret.to_string() }.to_string_view());
+
+    {
+        auto f4_ok = TestResult::f4(true);
+        EXPECT_NE(nullptr, std::get_if<RustVecU8>(&f4_ok));
+        EXPECT_EQ(nullptr, std::get_if<TestError>(&f4_ok));
+        auto f4_vec = std::get<RustVecU8>(std::move(f4_ok));
+        ASSERT_EQ(2u, f4_vec.size());
+        EXPECT_EQ(17, f4_vec[0]);
+        EXPECT_EQ(18, f4_vec[1]);
+    }
 #endif // HAS_STDCXX_17
 #ifdef USE_BOOST
     boost::variant<TestResult, RustString> res = TestResult::new_with_err();

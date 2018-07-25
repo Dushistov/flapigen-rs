@@ -679,10 +679,7 @@ foreigner_class!(class Foo {
         &[ForeignLang::Java, ForeignLang::Cpp],
     );
 
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
+    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
     println!("c/c++: {}", cpp_code_pair.foreign_code);
     assert!(
         cpp_code_pair
@@ -709,6 +706,35 @@ foreigner_class!(class Foo {
         cpp_code_pair
             .foreign_code
             .contains("static std::variant<Foo, RustString> from_string(")
+    );
+}
+
+#[test]
+fn test_return_result_with_vec() {
+    let gen_code = parse_code(
+        "test_return_result_with_vec",
+        r#"
+foreigner_class!(class PosErr {
+    self_type PosErr;
+    constructor PosErr::new() -> PosErr;
+});
+
+foreigner_class!(class LocationService {
+    self_type LocationService;
+
+    constructor LocationService::new() -> LocationService;
+    method f1(&self) -> Result<Vec<u8>, PosErr>;
+});
+
+"#,
+        &[ForeignLang::Cpp],
+    );
+    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains(r#"std::variant<RustVecU8, PosErr> f1() const"#)
     );
 }
 
