@@ -515,6 +515,17 @@ TEST(TestOptional, smokeTest)
         ASSERT_TRUE(!!val);
         EXPECT_EQ(-17, *val);
     }
+    {
+        TestOptional y;
+        auto val = y.f12(17.5, true);
+        ASSERT_TRUE(!!val);
+        EXPECT_NEAR(17.5, *val, 1e-5);
+        auto val2 = y.f12(0., false);
+        EXPECT_TRUE(!val2);
+        val = y.f12(-17.434, true);
+        ASSERT_TRUE(!!val);
+        EXPECT_NEAR(-17.434, *val, 1e-5);
+    }
 }
 
 TEST(TestResult, smokeTest)

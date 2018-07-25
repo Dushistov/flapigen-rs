@@ -471,6 +471,13 @@ impl TestOptional {
             None
         }
     }
+    fn f12(&self, val: f32, is_some: bool) -> Option<f32> {
+        if is_some {
+            Some(val)
+        } else {
+            None
+        }
+    }
 }
 
 foreigner_class!(class TestOptional {
@@ -487,6 +494,7 @@ foreigner_class!(class TestOptional {
     method TestOptional::f9(&self, x: Option<&str>) -> String;
     method TestOptional::f10(&self, is_some: bool) -> Option<&str>;
     method TestOptional::f11(&self, val: i32, is_some: bool) -> Option<i32>;
+    method TestOptional::f12(&self, val: f32, is_some: bool) -> Option<f32>;
 });
 
 #[derive(Default)]

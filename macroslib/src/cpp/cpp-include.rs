@@ -53,6 +53,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustSliceU32"]
     #![swig_foreigner_type = "struct CRustSliceUsize"]
     #![swig_rust_type = "CRustSliceUsize"]
+    #![swig_foreigner_type = "struct CRustOptionF32"]
+    #![swig_rust_type = "CRustOptionF32"]
     #![swig_foreigner_type = "struct CRustOptionF64"]
     #![swig_rust_type = "CRustOptionF64"]
     #![swig_foreigner_type = "struct CRustOptionI32"]
@@ -716,6 +718,35 @@ impl<T: SwigForeignClass> SwigFrom<Result<Vec<T>, String>> for CResultCRustForei
                     err: CRustString::from_string(err),
                 },
             },
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustOptionF32 {
+    val: f32,
+    is_some: u8,
+}
+
+impl SwigFrom<Option<f32>> for CRustOptionF32 {
+    fn swig_from(x: Option<f32>) -> Self {
+        match x {
+            Some(x) => CRustOptionF32 { val: x, is_some: 1 },
+            None => CRustOptionF32 {
+                val: 0.,
+                is_some: 0,
+            },
+        }
+    }
+}
+
+impl SwigInto<Option<f32>> for CRustOptionF32 {
+    fn swig_into(self) -> Option<f32> {
+        if self.is_some != 0 {
+            Some(self.val)
+        } else {
+            None
         }
     }
 }
