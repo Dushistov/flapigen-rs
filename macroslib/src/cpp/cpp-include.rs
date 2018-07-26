@@ -27,6 +27,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "::std::os::raw::c_char"]
     #![swig_foreigner_type = "const char *"]
     #![swig_rust_type = "*const ::std::os::raw::c_char"]
+    #![swig_foreigner_type = "int"]
+    #![swig_rust_type = "::std::os::raw::c_int"]
     #![swig_foreigner_type = "struct RustStrView"]
     #![swig_rust_type = "RustStrView"]
     #![swig_foreigner_type = "struct CRustVecU8"]
