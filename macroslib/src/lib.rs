@@ -446,6 +446,13 @@ impl GeneratorData {
         MacEager::items(SmallVector::many(items))
     }
 
+    fn language_generator(cfg: &LanguageConfig) -> &LanguageGenerator {
+        match cfg {
+            LanguageConfig::JavaConfig(ref java_cfg) => java_cfg,
+            LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,
+        }
+    }
+
     fn expand_foreign_interface<'a>(
         &mut self,
         cx: &'a mut ExtCtxt,
@@ -458,28 +465,14 @@ impl GeneratorData {
         );
         let foreign_interface =
             parse_foreign_interface(cx, tokens).expect("Can not parse foreign_interface");
-        match self.config {
-            LanguageConfig::JavaConfig(ref java_cfg) => {
-                GeneratorData::generate_code_for_foreign_interface(
-                    cx,
-                    &mut self.conv_map,
-                    self.pointer_target_width,
-                    &foreign_interface,
-                    java_cfg,
-                    items,
-                )
-            }
-            LanguageConfig::CppConfig(ref cpp_cfg) => {
-                GeneratorData::generate_code_for_foreign_interface(
-                    cx,
-                    &mut self.conv_map,
-                    self.pointer_target_width,
-                    &foreign_interface,
-                    cpp_cfg,
-                    items,
-                )
-            }
-        }
+        GeneratorData::generate_code_for_foreign_interface(
+            cx,
+            &mut self.conv_map,
+            self.pointer_target_width,
+            &foreign_interface,
+            GeneratorData::language_generator(&self.config),
+            items,
+        )
     }
 
     fn generate_code_for_enum<'a>(
@@ -515,24 +508,14 @@ impl GeneratorData {
         );
         let foreign_enum = parse_foreign_enum(cx, tokens).expect("Can not parse foreign_enum");
 
-        match self.config {
-            LanguageConfig::JavaConfig(ref java_cfg) => GeneratorData::generate_code_for_enum(
-                cx,
-                &mut self.conv_map,
-                self.pointer_target_width,
-                &foreign_enum,
-                java_cfg,
-                items,
-            ),
-            LanguageConfig::CppConfig(ref cpp_cfg) => GeneratorData::generate_code_for_enum(
-                cx,
-                &mut self.conv_map,
-                self.pointer_target_width,
-                &foreign_enum,
-                cpp_cfg,
-                items,
-            ),
-        }
+        GeneratorData::generate_code_for_enum(
+            cx,
+            &mut self.conv_map,
+            self.pointer_target_width,
+            &foreign_enum,
+            GeneratorData::language_generator(&self.config),
+            items,
+        )
     }
 
     fn generate_code_for_class<'a>(
@@ -581,24 +564,14 @@ impl GeneratorData {
         );
         self.conv_map.register_foreigner_class(&foreigner_class);
 
-        match self.config {
-            LanguageConfig::JavaConfig(ref java_cfg) => GeneratorData::generate_code_for_class(
-                cx,
-                &mut self.conv_map,
-                self.pointer_target_width,
-                &foreigner_class,
-                java_cfg,
-                items,
-            ),
-            LanguageConfig::CppConfig(ref cpp_cfg) => GeneratorData::generate_code_for_class(
-                cx,
-                &mut self.conv_map,
-                self.pointer_target_width,
-                &foreigner_class,
-                cpp_cfg,
-                items,
-            ),
-        }
+        GeneratorData::generate_code_for_class(
+            cx,
+            &mut self.conv_map,
+            self.pointer_target_width,
+            &foreigner_class,
+            GeneratorData::language_generator(&self.config),
+            items,
+        )
     }
 
     fn init_types_map<'a>(
@@ -623,20 +596,15 @@ impl GeneratorData {
             ));
         }
 
-        match self.config {
-            LanguageConfig::JavaConfig(ref java_cfg) => {
-                java_cfg.place_foreign_lang_helpers(&self.foreign_lang_helpers)
-            }
-            LanguageConfig::CppConfig(ref cpp_cfg) => {
-                cpp_cfg.place_foreign_lang_helpers(&self.foreign_lang_helpers)
-            }
-        }.map_err(|err| {
-            fatal_error(
-                sess,
-                DUMMY_SP,
-                &format!("Can not put/generate foreign lang helpers: {}", err),
-            )
-        })?;
+        GeneratorData::language_generator(&self.config)
+            .place_foreign_lang_helpers(&self.foreign_lang_helpers)
+            .map_err(|err| {
+                fatal_error(
+                    sess,
+                    DUMMY_SP,
+                    &format!("Can not put/generate foreign lang helpers: {}", err),
+                )
+            })?;
 
         Ok(self.conv_map.take_utils_code())
     }
