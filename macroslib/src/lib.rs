@@ -88,13 +88,6 @@ pub fn target_pointer_width_from_env() -> Option<usize> {
 
 /// `LanguageConfig` contains configuration for specific programming language
 pub enum LanguageConfig {
-    #[deprecated(since = "0.1.0", note = "please use `JavaConfig` instead")]
-    Java {
-        /// directory where place generated java files
-        output_dir: PathBuf,
-        /// package name for generated java files
-        package_name: String,
-    },
     JavaConfig(JavaConfig),
     CppConfig(CppConfig),
 }
@@ -322,9 +315,8 @@ impl Generator {
         let pointer_target_width = target_pointer_width_from_env();
         let mut conv_map_source = Vec::new();
         let mut foreign_lang_helpers = Vec::new();
-        #[allow(deprecated)]
         match config {
-            LanguageConfig::Java { .. } | LanguageConfig::JavaConfig(..) => {
+            LanguageConfig::JavaConfig(..) => {
                 conv_map_source.push(SourceCode {
                     id_of_code: "jni-include.rs".into(),
                     code: include_str!("java_jni/jni-include.rs").into(),
@@ -466,22 +458,7 @@ impl GeneratorData {
         );
         let foreign_interface =
             parse_foreign_interface(cx, tokens).expect("Can not parse foreign_interface");
-        #[allow(deprecated)]
         match self.config {
-            LanguageConfig::Java {
-                ref output_dir,
-                ref package_name,
-            } => {
-                let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
-                GeneratorData::generate_code_for_foreign_interface(
-                    cx,
-                    &mut self.conv_map,
-                    self.pointer_target_width,
-                    &foreign_interface,
-                    &java_cfg,
-                    items,
-                )
-            }
             LanguageConfig::JavaConfig(ref java_cfg) => {
                 GeneratorData::generate_code_for_foreign_interface(
                     cx,
@@ -538,22 +515,7 @@ impl GeneratorData {
         );
         let foreign_enum = parse_foreign_enum(cx, tokens).expect("Can not parse foreign_enum");
 
-        #[allow(deprecated)]
         match self.config {
-            LanguageConfig::Java {
-                ref output_dir,
-                ref package_name,
-            } => {
-                let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
-                GeneratorData::generate_code_for_enum(
-                    cx,
-                    &mut self.conv_map,
-                    self.pointer_target_width,
-                    &foreign_enum,
-                    &java_cfg,
-                    items,
-                )
-            }
             LanguageConfig::JavaConfig(ref java_cfg) => GeneratorData::generate_code_for_enum(
                 cx,
                 &mut self.conv_map,
@@ -618,22 +580,8 @@ impl GeneratorData {
             foreigner_class.constructor_ret_type
         );
         self.conv_map.register_foreigner_class(&foreigner_class);
-        #[allow(deprecated)]
+
         match self.config {
-            LanguageConfig::Java {
-                ref output_dir,
-                ref package_name,
-            } => {
-                let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
-                GeneratorData::generate_code_for_class(
-                    cx,
-                    &mut self.conv_map,
-                    self.pointer_target_width,
-                    &foreigner_class,
-                    &java_cfg,
-                    items,
-                )
-            }
             LanguageConfig::JavaConfig(ref java_cfg) => GeneratorData::generate_code_for_class(
                 cx,
                 &mut self.conv_map,
@@ -675,15 +623,7 @@ impl GeneratorData {
             ));
         }
 
-        #[allow(deprecated)]
         match self.config {
-            LanguageConfig::Java {
-                ref output_dir,
-                ref package_name,
-            } => {
-                let java_cfg = JavaConfig::new(output_dir.clone(), package_name.clone());
-                java_cfg.place_foreign_lang_helpers(&self.foreign_lang_helpers)
-            }
             LanguageConfig::JavaConfig(ref java_cfg) => {
                 java_cfg.place_foreign_lang_helpers(&self.foreign_lang_helpers)
             }
