@@ -44,11 +44,17 @@
 #include "rust_interface/TestEnumClass.hpp"
 #include "rust_interface/TestPassPathAsParam.hpp"
 #if defined(HAS_STDCXX_17) || defined(USE_BOOST)
+#if !defined(NO_HAVE_STD17_OPTIONAL)
 #include "rust_interface/TestOptional.hpp"
+#endif
 #include "rust_interface/TestError.hpp"
+#if !defined(NO_HAVE_STD17_VARIANT)
 #include "rust_interface/TestResult.hpp"
+#endif
 #include "rust_interface/Position.hpp"
+#if !defined(NO_HAVE_STD17_VARIANT)
 #include "rust_interface/LocationService.hpp"
+#endif
 #endif
 #include "rust_interface/TestReferences.hpp"
 #include "rust_interface/TestOnlyStaticMethods.hpp"
