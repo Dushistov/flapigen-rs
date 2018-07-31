@@ -12,7 +12,9 @@
 #include <iostream>
 #include <sstream>
 #ifdef HAS_STDCXX_17
+#ifndef NO_HAVE_STD17_OPTIONAL
 #include <optional>
+#endif
 #include <variant>
 #endif
 #ifdef USE_BOOST
@@ -429,7 +431,7 @@ TEST(TestRustStringReturn, smokeTest)
     }
 }
 
-#if defined(HAS_STDCXX_17) || defined(USE_BOOST)
+#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_OPTIONAL)) || defined(USE_BOOST)
 TEST(TestOptional, smokeTest)
 {
     TestOptional x;

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.10)
 
 include(CheckIncludeFileCXX)
 include(ExternalProject)
@@ -122,6 +122,12 @@ if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     # see https://bugs.llvm.org/show_bug.cgi?id=33222
     message(STATUS "clang is used on linux, disable c++17 mode")
     set(HAS_STDCXX_17 FALSE)
+  else ()
+    check_include_file_cxx(optional HAVE_STD17_OPTIONAL)
+    if (NOT HAVE_STD17_OPTIONAL)
+      message(STATUS "c++ compiler support c++17, but have no optional")      
+      add_definitions(-DNO_HAVE_STD17_OPTIONAL)
+    endif ()
   endif ()
   if (HAS_STDCXX_17 AND (NOT USE_BOOST))
     set_target_properties(c++-rust-swig-test PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
