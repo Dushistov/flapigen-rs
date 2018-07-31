@@ -15,7 +15,9 @@
 #ifndef NO_HAVE_STD17_OPTIONAL
 #include <optional>
 #endif
+#ifndef NO_HAVE_STD17_VARIANT
 #include <variant>
+#endif
 #endif
 #ifdef USE_BOOST
 #include <boost/optional.hpp>
@@ -532,7 +534,7 @@ TEST(TestOptional, smokeTest)
 
 TEST(TestResult, smokeTest)
 {
-#ifdef HAS_STDCXX_17
+#if defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)
     std::variant<TestResult, RustString> res = TestResult::new_with_err();
     EXPECT_EQ(nullptr, std::get_if<TestResult>(&res));
     EXPECT_NE(nullptr, std::get_if<RustString>(&res));
@@ -671,7 +673,7 @@ TEST(TestReferences, smokeTest)
 
 TEST(TestOnlyStaticMethods, smokeTest) { EXPECT_EQ(4, TestOnlyStaticMethods::add_func(2, 2)); }
 
-#if defined(HAS_STDCXX_17) || defined(USE_BOOST)
+#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)) || defined(USE_BOOST)
 TEST(TestDummyConstructor, smokeTest)
 {
     auto res = LocationService::position();
