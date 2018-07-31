@@ -152,7 +152,8 @@ def main():
 
     build_cargo_docs()
     print("start tests\n macrolib tests")
-    run_unit_tests(fast_run, has_jdk, skip_cpp_tests)
+    if not (has_jdk and java_only):
+        run_unit_tests(fast_run, has_jdk, skip_cpp_tests)
     if has_jdk:
         run_jni_tests(use_shell, fast_run)
         if java_only:

@@ -316,10 +316,18 @@ impl Generator {
         let mut conv_map_source = Vec::new();
         let mut foreign_lang_helpers = Vec::new();
         match config {
-            LanguageConfig::JavaConfig(..) => {
+            LanguageConfig::JavaConfig(ref java_cfg) => {
                 conv_map_source.push(SourceCode {
                     id_of_code: "jni-include.rs".into(),
-                    code: include_str!("java_jni/jni-include.rs").into(),
+                    code: include_str!("java_jni/jni-include.rs")
+                        .replace(
+                            "java.util.Optional",
+                            &format!("{}.Optional", java_cfg.optional_package),
+                        )
+                        .replace(
+                            "java/util/Optional",
+                            &format!("{}/Optional", java_cfg.optional_package.replace('.', "/")),
+                        ),
                 });
             }
             LanguageConfig::CppConfig(..) => {
@@ -592,7 +600,7 @@ impl GeneratorData {
             return Err(fatal_error(
                 sess,
                 DUMMY_SP,
-                "After merge all types maps with have no convertion code",
+                "After merge all \"types maps\" have no convertion code",
             ));
         }
 
@@ -615,6 +623,7 @@ pub struct JavaConfig {
     output_dir: PathBuf,
     package_name: String,
     use_null_annotation: Option<String>,
+    optional_package: String,
 }
 
 impl JavaConfig {
@@ -627,6 +636,7 @@ impl JavaConfig {
             output_dir,
             package_name,
             use_null_annotation: None,
+            optional_package: "java.util".to_string(),
         }
     }
     /// Use @NonNull for types where appropriate
@@ -635,6 +645,12 @@ impl JavaConfig {
     ///                         for example android.support.annotation.NonNull
     pub fn use_null_annotation(mut self, import_annotation: String) -> JavaConfig {
         self.use_null_annotation = Some(import_annotation);
+        self
+    }
+    /// If you use JDK without java.util.Optional*, then you can provide
+    /// name of custom package with Optional
+    pub fn use_optional_package(mut self, optional_package: String) -> JavaConfig {
+        self.optional_package = optional_package;
         self
     }
 }

@@ -1127,9 +1127,42 @@ foreigner_class!(class Foo {
 }
 
 #[test]
-fn test_option_arg() {
+fn test_option_arg_java() {
     let gen_code = parse_code(
-        "test_option_arg",
+        "test_option_arg_java",
+        r#"
+foreigner_class!(class Boo {
+  self_type Boo;
+  constructor Boo::new() -> Boo;
+  method Boo::something(&self) -> i32;
+});
+
+foreign_enum!(enum ControlItem {
+    GNSS = ControlItem::GnssWorking,
+    GPS_PROVIDER = ControlItem::AndroidGPSOn,
+});
+
+foreigner_class!(class Foo {
+   self_type Foo;
+   constructor Foo::default() -> Foo;
+   method Foo::f1(&self, _: Option<f64>) -> Option<f64>;
+});
+"#,
+        &[ForeignLang::Java],
+    );
+    let java_code = code_for(&gen_code, ForeignLang::Java);
+    println!("java: {}", java_code.foreign_code);
+    assert!(
+        java_code
+            .foreign_code
+            .contains("public final java.util.OptionalDouble f1(Double a0)")
+    );
+}
+
+#[test]
+fn test_option_arg_cpp() {
+    let gen_code = parse_code(
+        "test_option_arg_cpp",
         r#"
 foreigner_class!(class Boo {
   self_type Boo;
@@ -1156,10 +1189,7 @@ foreigner_class!(class Foo {
 "#,
         &[ForeignLang::Cpp],
     );
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
+    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
 
     println!("rust: {}", cpp_code_pair.rust_code);
 

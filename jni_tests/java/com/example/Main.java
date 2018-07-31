@@ -5,6 +5,7 @@ import java.util.Calendar;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.OptionalDouble;
 import com.example.rust.Foo;
 import com.example.rust.Boo;
 import com.example.rust.TestPathAndResult;
@@ -17,6 +18,7 @@ import com.example.rust.MyEnum;
 import com.example.rust.TestEnumClass;
 import com.example.rust.Observable;
 import com.example.rust.MyObserver;
+import com.example.rust.TestOptional;
 
 class Main {
     private static void testDoubleOverload() {
@@ -134,6 +136,7 @@ class Main {
 	testCallbacksMultiThread();
 	testCallbacksWithException();
 	testReturnOfEnum();
+        testOptional();
 	} catch (Throwable ex) {
 	    ex.printStackTrace();
 	    System.exit(-1);
@@ -337,5 +340,13 @@ class Main {
             long[] arr2 = TestArraysWithPrimitiveTypes.arr_pass_through_long(arr1);
             assert Arrays.equals(arr1, arr2);
         }
+    }
+
+    private static void testOptional() {
+        OptionalDouble d = TestOptional.f1(null);
+        assert !d.isPresent();
+        d = TestOptional.f1(1.7);
+
+        assert Math.abs(d.getAsDouble() - 2.7) < 1e-12;
     }
 }

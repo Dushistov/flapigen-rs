@@ -37,6 +37,10 @@ mod swig_foreign_types_map {
     #![swig_rust_type_not_unique = "jobjectArray"]
     #![swig_foreigner_type = "java.lang.String []"]
     #![swig_rust_type_not_unique = "jobjectArray"]
+    #![swig_foreigner_type = "java.util.OptionalDouble"]
+    #![swig_rust_type_not_unique = "jobject"]
+    #![swig_foreigner_type = "Double"]
+    #![swig_rust_type_not_unique = "jobject"]
 }
 
 #[allow(dead_code)]
@@ -1049,5 +1053,106 @@ impl SwigFrom<usize> for jlong {
 impl<'a> SwigInto<String> for &'a str {
     fn swig_into(self, _: *mut JNIEnv) -> String {
         self.into()
+    }
+}
+
+#[swig_to_foreigner_hint = "java.util.OptionalDouble"]
+impl SwigFrom<Option<f64>> for jobject {
+    fn swig_from(x: Option<f64>, env: *mut JNIEnv) -> Self {
+        let class: jclass =
+            unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/OptionalDouble")) };
+        assert!(
+            !class.is_null(),
+            "FindClass for `java/util/OptionalDouble` failed"
+        );
+        match x {
+            Some(val) => {
+                let of_m: jmethodID = unsafe {
+                    (**env).GetStaticMethodID.unwrap()(
+                        env,
+                        class,
+                        swig_c_str!("of"),
+                        swig_c_str!("(D)Ljava/util/OptionalDouble;"),
+                    )
+                };
+                assert!(
+                    !of_m.is_null(),
+                    "java/util/OptionalDouble GetStaticMethodID for `of` failed"
+                );
+                let ret = unsafe {
+                    let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, of_m, val);
+                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                        panic!("OptionalDouble.of failed: catch exception");
+                    }
+                    ret
+                };
+
+                assert!(!ret.is_null());
+                ret
+            }
+            None => {
+                let empty_m: jmethodID = unsafe {
+                    (**env).GetStaticMethodID.unwrap()(
+                        env,
+                        class,
+                        swig_c_str!("empty"),
+                        swig_c_str!("()Ljava/util/OptionalDouble;"),
+                    )
+                };
+                assert!(
+                    !empty_m.is_null(),
+                    "java/util/OptionalDouble GetStaticMethodID for `empty` failed"
+                );
+                let ret = unsafe {
+                    let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, empty_m);
+                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                        panic!("OptionalDouble.empty failed: catch exception");
+                    }
+                    ret
+                };
+                assert!(!ret.is_null());
+                ret
+            }
+        }
+    }
+}
+
+#[swig_from_foreigner_hint = "Double"]
+impl SwigFrom<jobject> for Option<f64> {
+    fn swig_from(x: jobject, env: *mut JNIEnv) -> Self {
+        if x.is_null() {
+            None
+        } else {
+            let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
+            if x.is_null() {
+                None
+            } else {
+                let class: jclass =
+                    unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Double")) };
+                assert!(!class.is_null(), "FindClass for `java/lang/Double` failed");
+
+                let double_value_m: jmethodID = unsafe {
+                    (**env).GetMethodID.unwrap()(
+                        env,
+                        class,
+                        swig_c_str!("doubleValue"),
+                        swig_c_str!("()D"),
+                    )
+                };
+                assert!(
+                    !double_value_m.is_null(),
+                    "java/lang/Double GetMethodID for doubleValue failed"
+                );
+                let ret: f64 = unsafe {
+                    let ret = (**env).CallDoubleMethod.unwrap()(env, x, double_value_m);
+                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                        panic!("Double.doubleValue failed: catch exception");
+                    }
+                    (**env).DeleteLocalRef.unwrap()(env, x);
+                    ret
+                };
+                Some(ret)
+            }
+        }
     }
 }

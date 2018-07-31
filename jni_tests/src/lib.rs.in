@@ -679,3 +679,20 @@ foreigner_class!(class FooWithLifetime {
     constructor foo_with_lifetime_new() -> Rc<RefCell<FooWithLifetime<'a>>>;
     method FooWithLifetime::set_data(&self, v: i32);
 });
+
+struct TestOptional;
+
+impl TestOptional {
+    fn f1(x: Option<f64>) -> Option<f64> {
+        if let Some(x) = x {
+            Some(x + 1.)
+        } else {
+            None
+        }
+    }
+}
+
+foreigner_class!(class TestOptional {
+    self_type TestOptional;
+    static_method TestOptional::f1(x: Option<f64>) -> Option<f64>;
+});
