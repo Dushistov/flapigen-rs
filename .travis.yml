@@ -36,7 +36,7 @@ before_script:
     - cmake --version
     - python --version
     - export TAR="boost_1_66_0.tar.gz"
-    - curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.66.0/source/$TAR
+    - travis_retry curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.66.0/source/$TAR
     - tar -xzf $TAR
     - export BOOST_ROOT=$PWD/boost_1_66_0
 script:
