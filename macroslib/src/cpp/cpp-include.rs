@@ -470,6 +470,12 @@ impl<T: SwigForeignClass> SwigFrom<Vec<T>> for CRustForeignVec {
     }
 }
 
+impl<T: SwigForeignClass> SwigInto<Vec<T>> for CRustForeignVec {
+    fn swig_into(self) -> Vec<T> {
+        unsafe { Vec::from_raw_parts(self.data as *mut T, self.len, self.capacity) }
+    }
+}
+
 #[allow(dead_code)]
 fn drop_foreign_class_vec<T: SwigForeignClass>(data: *mut T, len: usize, cap: usize) {
     let v = unsafe { Vec::from_raw_parts(data, len, cap) };
@@ -484,7 +490,8 @@ fn push_foreign_class_to_vec<T: SwigForeignClass>(
 ) {
     assert!(!vec.is_null());
     let vec: &mut CRustForeignVec = unsafe { &mut *vec };
-    assert_eq!(::std::mem::size_of::<T>(), vec.step);
+    assert!(vec.len == 0 || ::std::mem::size_of::<T>() == vec.step);
+    vec.step = ::std::mem::size_of::<T>();
     let mut v = unsafe { Vec::from_raw_parts(vec.data as *mut T, vec.len, vec.capacity) };
     v.push(T::unbox_object(elem));
     vec.data = v.as_mut_ptr() as *const ::std::os::raw::c_void;

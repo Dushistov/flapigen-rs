@@ -401,6 +401,12 @@ public:
     }
 
     void clear() noexcept { free_mem(); }
+    CContainerType release() noexcept
+    {
+        CContainerType ret{ this->data, this->len, this->capacity, this->step };
+        reset(*this);
+        return ret;
+    }
 
 private:
     void free_mem() noexcept
