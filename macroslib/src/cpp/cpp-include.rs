@@ -694,6 +694,12 @@ impl<'a, T: SwigForeignClass> SwigInto<CRustObjectSlice> for &'a [T] {
     }
 }
 
+impl<'a, T: SwigForeignClass> SwigFrom<CRustObjectSlice> for &'a [T] {
+    fn swig_from(x: CRustObjectSlice) -> &'a [T] {
+        unsafe { ::std::slice::from_raw_parts(x.data as *const T, x.len) }
+    }
+}
+
 impl<'a, T: SwigForeignClass> SwigFrom<CRustObjectSlice> for &'a mut [T] {
     fn swig_from(x: CRustObjectSlice) -> &'a mut [T] {
         unsafe { ::std::slice::from_raw_parts_mut(x.data as *mut T, x.len) }

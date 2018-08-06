@@ -1324,19 +1324,22 @@ foreigner_class!(class Boo {
 
     constructor Boo::new(_: i32, _: usize) -> Boo;
     method Boo::f1(&self, _: &mut [Foo]) -> &[u32];
+    method Boo::f2(&self, _: &[Foo]) -> &[u32];
 });
 "#,
         &[ForeignLang::Cpp],
     );
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
+    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
     println!("c/c++: {}", cpp_code_pair.foreign_code);
     assert!(
         cpp_code_pair
             .foreign_code
             .contains("CRustSliceU32 f1(RustForeignSlice<FooRef> a_0) const")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("CRustSliceU32 f2(RustForeignSlice<FooRef> a_0) const")
     );
 }
 
@@ -1519,7 +1522,8 @@ fn collect_code_in_dir(dir_with_code: &Path, exts: &[&str]) -> String {
     for path in fs::read_dir(dir_with_code).unwrap() {
         let path = path.unwrap();
         if path.file_type().unwrap().is_file()
-            && exts.iter()
+            && exts
+                .iter()
                 .any(|ext| path.path().to_str().unwrap().ends_with(ext))
         {
             let mut contents = String::new();

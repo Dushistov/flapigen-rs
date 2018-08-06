@@ -251,6 +251,23 @@ TEST(TestObjectLifetime, smokeTest)
     EXPECT_EQ(15, x.get_data());
 }
 
+static void validate_create_foo_vec(size_t n, const RustForeignVecFoo &vec)
+{
+    ASSERT_EQ(n, vec.size());
+
+    size_t i = 0;
+    std::stringstream fmt;
+    for (auto &&elem : vec) {
+        ASSERT_EQ(static_cast<int32_t>(i), elem.f(0, 0));
+        fmt << i;
+        ASSERT_EQ(fmt.str(), elem.getName().to_std_string());
+        fmt.str(std::string());
+        fmt.clear();
+        ++i;
+    }
+    ASSERT_EQ(n, i);
+}
+
 TEST(TestWorkWithVec, smokeTest)
 {
     const char tag[] = "Test data";
@@ -368,23 +385,12 @@ TEST(TestWorkWithVec, smokeTest)
         EXPECT_EQ(17u, v[0]);
         EXPECT_EQ(18u, v[1]);
     }
-}
-
-static void validate_create_foo_vec(size_t n, const RustForeignVecFoo &vec)
-{
-    ASSERT_EQ(n, vec.size());
-
-    size_t i = 0;
-    std::stringstream fmt;
-    for (auto &&elem : vec) {
-        ASSERT_EQ(static_cast<int32_t>(i), elem.f(0, 0));
-        fmt << i;
-        ASSERT_EQ(fmt.str(), elem.getName().to_std_string());
-        fmt.str(std::string());
-        fmt.clear();
-        ++i;
+    {
+        auto v = TestWorkWithVec::create_foo_vec(30);
+        validate_create_foo_vec(30, v);
+        auto v1 = TestWorkWithVec::clone_foo_slice(v.as_slice());
+        validate_create_foo_vec(30, v1);
     }
-    ASSERT_EQ(n, i);
 }
 
 TEST(TestWorkWithVec, assign)
