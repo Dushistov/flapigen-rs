@@ -16,6 +16,14 @@ struct CRustVecU8 {
 
 void CRustVecU8_free(struct CRustVecU8 vec);
 
+struct CRustVecI32 {
+    const int32_t *data;
+    uintptr_t len;
+    uintptr_t capacity;
+};
+
+void CRustVecI32_free(struct CRustVecI32 vec);
+
 struct CRustVecU32 {
     const uint32_t *data;
     uintptr_t len;
@@ -57,6 +65,11 @@ struct CRustForeignVec {
 
 struct CRustSliceU8 {
     const uint8_t *data;
+    uintptr_t len;
+};
+
+struct CRustSliceI32 {
+    const int32_t *data;
     uintptr_t len;
 };
 
@@ -197,6 +210,7 @@ private:
 };
 
 using RustVecU8 = RustVec<CRustVecU8, CRustVecU8_free>;
+using RustVecI32 = RustVec<CRustVecI32, CRustVecI32_free>;
 using RustVecU32 = RustVec<CRustVecU32, CRustVecU32_free>;
 using RustVecUsize = RustVec<CRustVecUsize, CRustVecUsize_free>;
 using RustVecF32 = RustVec<CRustVecF32, CRustVecF32_free>;

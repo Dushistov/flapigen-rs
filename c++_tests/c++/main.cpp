@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <array>
 #include <functional>
 #include <limits>
 #include <string>
@@ -390,6 +391,14 @@ TEST(TestWorkWithVec, smokeTest)
         validate_create_foo_vec(30, v);
         auto v1 = TestWorkWithVec::clone_foo_slice(v.as_slice());
         validate_create_foo_vec(30, v1);
+    }
+    {
+        const std::array<int32_t, 5> a{ { -(int32_t(1) << 29), -10, 0, 17, int32_t(1) << 30 } };
+        auto v = TestWorkWithVec::test_i32_slice({ &a[0], a.size() });
+        ASSERT_EQ(a.size(), v.size());
+        for (size_t i = 0; i < a.size(); ++i) {
+            EXPECT_EQ(a[i] + 1, v[i]);
+        }
     }
 }
 

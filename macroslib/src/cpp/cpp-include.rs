@@ -33,6 +33,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "RustStrView"]
     #![swig_foreigner_type = "struct CRustVecU8"]
     #![swig_rust_type = "CRustVecU8"]
+    #![swig_foreigner_type = "struct CRustVecI32"]
+    #![swig_rust_type = "CRustVecI32"]
     #![swig_foreigner_type = "struct CRustVecU32"]
     #![swig_rust_type = "CRustVecU32"]
     #![swig_foreigner_type = "struct CRustVecUsize"]
@@ -51,6 +53,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CResultCRustForeignVecString"]
     #![swig_foreigner_type = "struct CRustSliceU8"]
     #![swig_rust_type = "CRustSliceU8"]
+    #![swig_foreigner_type = "struct CRustSliceI32"]
+    #![swig_rust_type = "CRustSliceI32"]
     #![swig_foreigner_type = "struct CRustSliceU32"]
     #![swig_rust_type = "CRustSliceU32"]
     #![swig_foreigner_type = "struct CRustSliceUsize"]
@@ -319,6 +323,35 @@ impl SwigFrom<Vec<u8>> for CRustVecU8 {
 #[no_mangle]
 pub extern "C" fn CRustVecU8_free(v: CRustVecU8) {
     let v = unsafe { Vec::from_raw_parts(v.data as *mut u8, v.len, v.capacity) };
+    drop(v);
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustVecI32 {
+    data: *const i32,
+    len: usize,
+    capacity: usize,
+}
+
+impl SwigFrom<Vec<i32>> for CRustVecI32 {
+    fn swig_from(mut v: Vec<i32>) -> CRustVecI32 {
+        let p = v.as_mut_ptr();
+        let len = v.len();
+        let cap = v.capacity();
+        ::std::mem::forget(v);
+        CRustVecI32 {
+            data: p,
+            len: len,
+            capacity: cap,
+        }
+    }
+}
+
+#[allow(private_no_mangle_fns)]
+#[no_mangle]
+pub extern "C" fn CRustVecI32_free(v: CRustVecI32) {
+    let v = unsafe { Vec::from_raw_parts(v.data as *mut i32, v.len, v.capacity) };
     drop(v);
 }
 
@@ -645,6 +678,29 @@ pub struct CRustSliceU8 {
 impl<'a> SwigInto<CRustSliceU8> for &'a [u8] {
     fn swig_into(self) -> CRustSliceU8 {
         CRustSliceU8 {
+            data: self.as_ptr(),
+            len: self.len(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustSliceI32 {
+    data: *const i32,
+    len: usize,
+}
+
+impl<'a> SwigFrom<CRustSliceI32> for &'a [i32] {
+    fn swig_from(s: CRustSliceI32) -> &'a [i32] {
+        assert!(s.len == 0 || !s.data.is_null());
+        unsafe { ::std::slice::from_raw_parts(s.data, s.len) }
+    }
+}
+
+impl<'a> SwigInto<CRustSliceI32> for &'a [i32] {
+    fn swig_into(self) -> CRustSliceI32 {
+        CRustSliceI32 {
             data: self.as_ptr(),
             len: self.len(),
         }

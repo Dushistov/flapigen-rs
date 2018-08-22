@@ -320,6 +320,13 @@ impl TestWorkWithVec {
     fn return_usize_vec(&self) -> Vec<usize> {
         self.vec_usize.clone()
     }
+    fn test_i32_slice(a: &[i32]) -> Vec<i32> {
+        let mut v = Vec::with_capacity(a.len());
+        for x in a {
+            v.push(*x + 1);
+        }
+        v
+    }
 }
 
 foreigner_class!(class TestWorkWithVec {
@@ -337,6 +344,7 @@ foreigner_class!(class TestWorkWithVec {
     method TestWorkWithVec::return_usize_slice(&self) -> &[usize];
     method TestWorkWithVec::return_usize_vec(&self) -> Vec<usize>;
     static_method TestWorkWithVec::clone_foo_slice(v: &[Foo]) -> Vec<Foo>;
+    static_method TestWorkWithVec::test_i32_slice(a: &[i32]) -> Vec<i32>;
 });
 
 enum MyEnum {
