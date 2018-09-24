@@ -400,6 +400,14 @@ TEST(TestWorkWithVec, smokeTest)
             EXPECT_EQ(a[i] + 1, v[i]);
         }
     }
+    {
+        auto v = TestWorkWithVec::create_foo_vec(30);
+        validate_create_foo_vec(30, v);
+        TestWorkWithVec tester{ tag };
+        tester.set_vec_foo(std::move(v));
+        auto v2 = tester.get_vec_foo();
+        validate_create_foo_vec(30, v2);
+    }
 }
 
 TEST(TestWorkWithVec, assign)

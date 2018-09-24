@@ -192,6 +192,12 @@ public:
     iterator end() noexcept { return this->data + this->len; }
     const_iterator end() const noexcept { return this->data + this->len; }
     void clear() noexcept { free_mem(); }
+    CContainerType release() noexcept
+    {
+        CContainerType ret{ this->data, this->len, this->capacity, this->step };
+        reset(*this);
+        return ret;
+    }
 
 private:
     void free_mem() noexcept
@@ -415,6 +421,7 @@ public:
     }
 
     void clear() noexcept { free_mem(); }
+
     CContainerType release() noexcept
     {
         CContainerType ret{ this->data, this->len, this->capacity, this->step };

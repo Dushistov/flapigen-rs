@@ -1270,6 +1270,39 @@ foreigner_class!(class Boo {
 }
 
 #[test]
+fn test_foreign_vec_as_arg() {
+    let gen_code = parse_code(
+        "test_foreign_vec_as_arg",
+        r#"
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor Boo::default() -> Boo;
+});
+foreigner_class!(class FooImpl {
+    self_type Foo<'a>;
+    constructor Foo::create() -> Foo<'a>;
+    method Foo::alternate_boarding(&self) -> &[Boo]; alias alternateBoarding;
+    method Foo::set_alternate_boarding(&mut self, p: Vec<Boo>);
+    alias setAlternateBoarding;
+});
+"#,
+        &[ForeignLang::Cpp],
+    );
+    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
+    println!("c/c++: {}", cpp_code_pair.foreign_code);
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("RustForeignSlice<BooRef> alternateBoarding() const")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("void setAlternateBoarding(RustForeignVecBoo a_0)")
+    );
+}
+
+#[test]
 fn test_return_slice() {
     let gen_code = parse_code(
         "test_return_slice",
@@ -1291,10 +1324,7 @@ foreigner_class!(class Boo {
 "#,
         &[ForeignLang::Cpp],
     );
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
+    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
     println!("c/c++: {}", cpp_code_pair.foreign_code);
     assert!(
         cpp_code_pair
