@@ -209,7 +209,7 @@ fn special_type<'a>(
         }));
     }
     if let Some(elem_ty) = if_vec_return_elem_type(arg_ty) {
-        return map_type_vec(sess, conv_map, cpp_cfg, arg_ty, elem_ty, direction);
+        return map_type_vec(sess, conv_map, cpp_cfg, arg_ty, elem_ty);
     }
     if direction == Direction::Outgoing {
         if let Some((ok_ty, err_ty)) = if_result_return_ok_err_types(arg_ty) {
@@ -234,7 +234,7 @@ fn special_type<'a>(
         }
         if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty, true) {
             return map_arg_with_slice_type(sess, conv_map, arg_ty, elem_ty);
-        }        
+        }
     }
 
     trace!("Oridinary type {:?}", arg_ty);
@@ -406,7 +406,6 @@ fn map_type_vec<'a>(
     cpp_cfg: &CppConfig,
     arg_ty: &ast::Ty,
     elem_ty: ast::Ty,
-    direction: Direction,
 ) -> PResult<'a, Option<CppForeignTypeInfo>> {
     let mut ftype_info = map_ordinal_result_type(sess, conv_map, arg_ty)?;
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&elem_ty, false)
@@ -526,10 +525,7 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
                 cpp_type = typename,
                 var = FROM_VAR_TEMPLATE
             ),
-            input_converter: format!(
-                "{var}.release()",
-                var = FROM_VAR_TEMPLATE
-            ),
+            input_converter: format!("{var}.release()", var = FROM_VAR_TEMPLATE),
         });
         return Ok(Some(ftype_info));
     }
@@ -554,10 +550,7 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
             cpp_type = typename,
             var = FROM_VAR_TEMPLATE
         ),
-        input_converter: format!(
-            "{var}.release()",
-            var = FROM_VAR_TEMPLATE
-        ),
+        input_converter: format!("{var}.release()", var = FROM_VAR_TEMPLATE),
     });
     Ok(Some(ftype_info))
 }

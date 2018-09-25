@@ -37,6 +37,10 @@ mod swig_foreign_types_map {
     #![swig_rust_type_not_unique = "jobjectArray"]
     #![swig_foreigner_type = "java.lang.String []"]
     #![swig_rust_type_not_unique = "jobjectArray"]
+    #![swig_foreigner_type = "java.util.OptionalLong"]
+    #![swig_rust_type_not_unique = "jobject"]
+    #![swig_foreigner_type = "Long"]
+    #![swig_rust_type_not_unique = "jobject"]
     #![swig_foreigner_type = "java.util.OptionalDouble"]
     #![swig_rust_type_not_unique = "jobject"]
     #![swig_foreigner_type = "Double"]
@@ -542,14 +546,19 @@ impl SwigInto<u64> for jlong {
     }
 }
 
+#[allow(dead_code)]
+pub fn u64_to_jlong_checked(x: u64) -> jlong {
+    if x > (::std::i64::MAX as u64) {
+        error!("u64->jlong type overflow: {}", x);
+        ::std::i64::MAX
+    } else {
+        x as i64
+    }
+}
+
 impl SwigFrom<u64> for jlong {
     fn swig_from(x: u64, _: *mut JNIEnv) -> Self {
-        if (::std::i64::MAX as u64) < x {
-            error!("u64->jlong type overflow: {}", x);
-            ::std::i64::MAX
-        } else {
-            x as i64
-        }
+        u64_to_jlong_checked(x)
     }
 }
 
@@ -1044,9 +1053,9 @@ impl SwigFrom<usize> for jlong {
 
 #[cfg(target_pointer_width = "64")]
 impl SwigFrom<usize> for jlong {
-    fn swig_from(x: usize, env: *mut JNIEnv) -> Self {
+    fn swig_from(x: usize, _: *mut JNIEnv) -> Self {
         let x = x as u64;
-        <jlong>::swig_from(x, env)
+        u64_to_jlong_checked(x)
     }
 }
 
@@ -1147,6 +1156,107 @@ impl SwigFrom<jobject> for Option<f64> {
                     let ret = (**env).CallDoubleMethod.unwrap()(env, x, double_value_m);
                     if (**env).ExceptionCheck.unwrap()(env) != 0 {
                         panic!("Double.doubleValue failed: catch exception");
+                    }
+                    (**env).DeleteLocalRef.unwrap()(env, x);
+                    ret
+                };
+                Some(ret)
+            }
+        }
+    }
+}
+
+#[swig_to_foreigner_hint = "java.util.OptionalLong"]
+impl SwigFrom<Option<i64>> for jobject {
+    fn swig_from(x: Option<i64>, env: *mut JNIEnv) -> Self {
+        let class: jclass =
+            unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/OptionalLong")) };
+        assert!(
+            !class.is_null(),
+            "FindClass for `java/util/OptionalLong` failed"
+        );
+        match x {
+            Some(val) => {
+                let of_m: jmethodID = unsafe {
+                    (**env).GetStaticMethodID.unwrap()(
+                        env,
+                        class,
+                        swig_c_str!("of"),
+                        swig_c_str!("(J)Ljava/util/OptionalLong;"),
+                    )
+                };
+                assert!(
+                    !of_m.is_null(),
+                    "java/util/OptionalLong GetStaticMethodID for `of` failed"
+                );
+                let ret = unsafe {
+                    let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, of_m, val);
+                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                        panic!("OptionalLong.of failed: catch exception");
+                    }
+                    ret
+                };
+
+                assert!(!ret.is_null());
+                ret
+            }
+            None => {
+                let empty_m: jmethodID = unsafe {
+                    (**env).GetStaticMethodID.unwrap()(
+                        env,
+                        class,
+                        swig_c_str!("empty"),
+                        swig_c_str!("()Ljava/util/OptionalLong;"),
+                    )
+                };
+                assert!(
+                    !empty_m.is_null(),
+                    "java/util/OptionalLong GetStaticMethodID for `empty` failed"
+                );
+                let ret = unsafe {
+                    let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, empty_m);
+                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                        panic!("OptionalLong.empty failed: catch exception");
+                    }
+                    ret
+                };
+                assert!(!ret.is_null());
+                ret
+            }
+        }
+    }
+}
+
+#[swig_from_foreigner_hint = "Long"]
+impl SwigFrom<jobject> for Option<i64> {
+    fn swig_from(x: jobject, env: *mut JNIEnv) -> Self {
+        if x.is_null() {
+            None
+        } else {
+            let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
+            if x.is_null() {
+                None
+            } else {
+                let class: jclass =
+                    unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Long")) };
+                assert!(!class.is_null(), "FindClass for `java/lang/Long` failed");
+
+                let long_value_m: jmethodID = unsafe {
+                    (**env).GetMethodID.unwrap()(
+                        env,
+                        class,
+                        swig_c_str!("longValue"),
+                        swig_c_str!("()J"),
+                    )
+                };
+                assert!(
+                    !long_value_m.is_null(),
+                    "java/lang/Long GetMethodID for longValue failed"
+                );
+                let ret: i64 = unsafe {
+                    let ret = (**env).CallLongMethod.unwrap()(env, x, long_value_m);
+                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                        panic!("Long.longValue failed: catch exception");
                     }
                     (**env).DeleteLocalRef.unwrap()(env, x);
                     ret
