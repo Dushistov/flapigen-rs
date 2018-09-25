@@ -690,9 +690,17 @@ impl TestOptional {
             None
         }
     }
+    fn f2(x: Option<i64>) -> Option<i64> {
+        if let Some(x) = x {
+            Some(x + 1)
+        } else {
+            None
+        }
+    }
 }
 
 foreigner_class!(class TestOptional {
     self_type TestOptional;
     static_method TestOptional::f1(x: Option<f64>) -> Option<f64>;
+    static_method TestOptional::f2(x: Option<i64>) -> Option<i64>;
 });
