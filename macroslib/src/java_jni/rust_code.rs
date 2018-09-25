@@ -556,6 +556,9 @@ lazy_static! {
     static ref JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
         m.insert("String", "Ljava.lang.String;");
+        m.insert("Integer", "Ljava.lang.Integer");
+        m.insert("Long", "Ljava.lang.Long");
+        m.insert("Double", "Ljava.lang.Double");
         m.insert("boolean", "Z");
         m.insert("byte", "B");
         m.insert("char", "C");
