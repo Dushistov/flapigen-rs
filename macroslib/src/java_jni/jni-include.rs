@@ -546,14 +546,19 @@ impl SwigInto<u64> for jlong {
     }
 }
 
+#[allow(dead_code)]
+pub fn u64_to_jlong_checked(x: u64) -> jlong {
+    if x > (::std::i64::MAX as u64) {
+        error!("u64->jlong type overflow: {}", x);
+        ::std::i64::MAX
+    } else {
+        x as i64
+    }
+}
+
 impl SwigFrom<u64> for jlong {
     fn swig_from(x: u64, _: *mut JNIEnv) -> Self {
-        if (::std::i64::MAX as u64) < x {
-            error!("u64->jlong type overflow: {}", x);
-            ::std::i64::MAX
-        } else {
-            x as i64
-        }
+        u64_to_jlong_checked(x)
     }
 }
 
@@ -1048,9 +1053,9 @@ impl SwigFrom<usize> for jlong {
 
 #[cfg(target_pointer_width = "64")]
 impl SwigFrom<usize> for jlong {
-    fn swig_from(x: usize, env: *mut JNIEnv) -> Self {
+    fn swig_from(x: usize, _: *mut JNIEnv) -> Self {
         let x = x as u64;
-        <jlong>::swig_from(x, env)
+        u64_to_jlong_checked(x)
     }
 }
 
