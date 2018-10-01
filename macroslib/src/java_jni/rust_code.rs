@@ -862,8 +862,7 @@ fn jni_method_signature(
                 } else {
                     None
                 }
-            })
-            .unwrap_or_else(|| {
+            }).unwrap_or_else(|| {
                 panic!(
                     "Unknown type `{}`, can not generate jni signature",
                     arg.as_ref().name

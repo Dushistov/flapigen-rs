@@ -268,8 +268,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     cu.code
                         .replace("RUST_SWIG_USER_NAMESPACE", &self.namespace_name)
                         .as_bytes(),
-                )
-                .map_err(|err| format!("write to {} failed: {}", src_path.display(), err))?;
+                ).map_err(|err| format!("write to {} failed: {}", src_path.display(), err))?;
             src_file
                 .update_file_if_necessary()
                 .map_err(|err| format!("update of {} failed: {}", src_path.display(), err))?;

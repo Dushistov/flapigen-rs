@@ -356,9 +356,9 @@ foreigner_class!(class Moo {
         &[ForeignLang::Java],
     );
     assert_eq!(ForeignLang::Java, gen_code[0].lang);
-    let get_boo_re = Regex::new(
-        r"fn\s+Java_com_example_Moo_do_1getBoo\([^\)]+\)\s*->\s*([[:alnum:]]+)\s*\{",
-    ).expect("wrong regexp");
+    let get_boo_re =
+        Regex::new(r"fn\s+Java_com_example_Moo_do_1getBoo\([^\)]+\)\s*->\s*([[:alnum:]]+)\s*\{")
+            .expect("wrong regexp");
     let caps = get_boo_re.captures(&gen_code[0].rust_code).unwrap();
     println!("{:?}", caps);
     assert_eq!("jobject", caps.get(1).unwrap().as_str());
@@ -502,9 +502,9 @@ foreigner_class!(class Moo {
         &[ForeignLang::Java],
     );
     assert_eq!(ForeignLang::Java, gen_code[0].lang);
-    let get_boo_re = Regex::new(
-        r"fn\s+Java_com_example_Moo_do_1getBoo\([^\)]+\)\s*->\s*([[:alnum:]]+)\s*\{",
-    ).expect("wrong regexp");
+    let get_boo_re =
+        Regex::new(r"fn\s+Java_com_example_Moo_do_1getBoo\([^\)]+\)\s*->\s*([[:alnum:]]+)\s*\{")
+            .expect("wrong regexp");
     let caps = get_boo_re.captures(&gen_code[0].rust_code).unwrap();
     println!("{:?}", caps);
     assert_eq!("jobject", caps.get(1).unwrap().as_str());
@@ -1551,10 +1551,9 @@ fn collect_code_in_dir(dir_with_code: &Path, exts: &[&str]) -> String {
     let mut java_code = String::new();
     for path in fs::read_dir(dir_with_code).unwrap() {
         let path = path.unwrap();
-        if path.file_type().unwrap().is_file()
-            && exts
-                .iter()
-                .any(|ext| path.path().to_str().unwrap().ends_with(ext))
+        if path.file_type().unwrap().is_file() && exts
+            .iter()
+            .any(|ext| path.path().to_str().unwrap().ends_with(ext))
         {
             let mut contents = String::new();
             let mut file = File::open(path.path()).unwrap();

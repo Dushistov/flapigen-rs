@@ -237,7 +237,9 @@ private:
     ).map_err(&map_write_err)?;
 
     file_c.update_file_if_necessary().map_err(&map_write_err)?;
-    file_cpp.update_file_if_necessary().map_err(&map_write_err)?;
+    file_cpp
+        .update_file_if_necessary()
+        .map_err(&map_write_err)?;
 
     Ok(())
 }

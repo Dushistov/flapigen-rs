@@ -298,11 +298,11 @@ impl TypesConvMap {
         let mut new_foreign_types = HashSet::new();
         for edge in &self.generic_edges {
             if let Some(to_foreigner_hint) = edge.to_foreigner_hint {
-                let trait_bounds: HashMap<Symbol, HashSet<Symbol>> = get_trait_bounds(
-                    &edge.generic_params,
-                ).into_iter()
-                    .map(|v| (v.ty_param, v.trait_names))
-                    .collect();
+                let trait_bounds: HashMap<Symbol, HashSet<Symbol>> =
+                    get_trait_bounds(&edge.generic_params)
+                        .into_iter()
+                        .map(|v| (v.ty_param, v.trait_names))
+                        .collect();
                 for graph_idx in self.rust_names_map.values() {
                     for (ty_param, traits) in &trait_bounds {
                         let rust_ty = &self.conv_graph[*graph_idx];
@@ -1135,8 +1135,7 @@ fn helper3() {
                     &parse_ty(&sess, DUMMY_SP, Symbol::intern("i32")).unwrap(),
                     petgraph::Direction::Outgoing,
                     DUMMY_SP
-                )
-                .unwrap()
+                ).unwrap()
                 .name,
             Symbol::intern("int")
         );
@@ -1214,8 +1213,7 @@ fn helper3() {
                     "a0",
                     "jlong",
                     DUMMY_SP
-                )
-                .expect("path from &mut Rc<RefCell<Foo>> to &mut Foo NOT exists")
+                ).expect("path from &mut Rc<RefCell<Foo>> to &mut Foo NOT exists")
                 .1,
             r#"    let mut a0: &Rc<RefCell<Foo>> = a0;
     let mut a0: &RefCell<Foo> = a0.swig_deref();
@@ -1237,8 +1235,7 @@ fn helper3() {
                     "a0",
                     "jlong",
                     DUMMY_SP
-                )
-                .expect("path from &RefCell<Foo> to &Foo NOT exists")
+                ).expect("path from &RefCell<Foo> to &Foo NOT exists")
                 .1,
             r#"    let mut a0: Ref<Foo> = <Ref<Foo>>::swig_from(a0, env);
     let mut a0: &Foo = a0.swig_deref();
@@ -1251,8 +1248,7 @@ fn helper3() {
                     &parse_ty(&sess, DUMMY_SP, Symbol::intern("Vec<Foo>")).unwrap(),
                     petgraph::Direction::Outgoing,
                     DUMMY_SP
-                )
-                .unwrap()
+                ).unwrap()
                 .name,
             Symbol::intern("Foo []")
         );
@@ -1267,8 +1263,7 @@ fn helper3() {
                         .unwrap()
                         .into(),
                     DUMMY_SP
-                )
-                .is_none()
+                ).is_none()
         );
     }
 }

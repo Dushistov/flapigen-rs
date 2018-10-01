@@ -392,7 +392,7 @@ pub(crate) fn if_vec_return_elem_type(ty: &ast::Ty) -> Option<ast::Ty> {
         generic_params: generic_params_new(&["T"]),
         to_foreigner_hint: None,
     }.is_conv_possible(&ty.clone().into(), None, |_| None)
-        .map(|x| x.ty)
+    .map(|x| x.ty)
 }
 
 pub(crate) fn if_result_return_ok_err_types(ty: &ast::Ty) -> Option<(ast::Ty, ast::Ty)> {
@@ -409,7 +409,7 @@ pub(crate) fn if_result_return_ok_err_types(ty: &ast::Ty) -> Option<(ast::Ty, as
             generic_params: generic_params_new(&["T", "E"]),
             to_foreigner_hint: None,
         }.is_conv_possible(&ty.clone().into(), None, |_| None)
-            .map(|x| x.ty)
+        .map(|x| x.ty)
     }?;
 
     let err_ty = {
@@ -425,7 +425,7 @@ pub(crate) fn if_result_return_ok_err_types(ty: &ast::Ty) -> Option<(ast::Ty, as
             generic_params: generic_params_new(&["T", "E"]),
             to_foreigner_hint: None,
         }.is_conv_possible(&ty.clone().into(), None, |_| None)
-            .map(|x| x.ty)
+        .map(|x| x.ty)
     }?;
     Some((ok_ty, err_ty))
 }
@@ -451,7 +451,7 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
         generic_params,
         to_foreigner_hint: None,
     }.is_conv_possible(&ty.clone().into(), None, |_| None)
-        .map(|x| x.ty)
+    .map(|x| x.ty)
 }
 
 pub(crate) fn self_variant(ty: &ast::Ty) -> Option<SelfTypeVariant> {
@@ -563,7 +563,7 @@ pub(crate) fn if_option_return_some_type(ty: &ast::Ty) -> Option<ast::Ty> {
         generic_params,
         to_foreigner_hint: None,
     }.is_conv_possible(&ty.clone().into(), None, |_| None)
-        .map(|x| x.ty)
+    .map(|x| x.ty)
 }
 
 pub(crate) fn get_ref_type(ty: &ast::Ty, mutbl: ast::Mutability) -> ast::Ty {
@@ -644,16 +644,15 @@ impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
                 to_ty_name,
                 ty_check_name
             );
-            let ret_ty: RustType =
-                GenericTypeConv {
-                    from_ty: str_to_ty(sess, from_ty_name),
-                    to_ty: str_to_ty(sess, to_ty_name),
-                    code_template: Symbol::intern(""),
-                    dependency: Rc::new(RefCell::new(None)),
-                    generic_params: generic.clone(),
-                    to_foreigner_hint: None,
-                }.is_conv_possible(&str_to_ty(&sess, ty_check_name).into(), None, map_others)
-                    .expect("check subst failed");
+            let ret_ty: RustType = GenericTypeConv {
+                from_ty: str_to_ty(sess, from_ty_name),
+                to_ty: str_to_ty(sess, to_ty_name),
+                code_template: Symbol::intern(""),
+                dependency: Rc::new(RefCell::new(None)),
+                generic_params: generic.clone(),
+                to_foreigner_hint: None,
+            }.is_conv_possible(&str_to_ty(&sess, ty_check_name).into(), None, map_others)
+            .expect("check subst failed");
             assert_eq!(&*ret_ty.normalized_name.as_str(), expect_to_ty_name);
 
             ret_ty
@@ -758,10 +757,9 @@ impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
                 } else {
                     None
                 }
-            })
-                .unwrap()
-                .normalized_name
-                .as_str(),
+            }).unwrap()
+            .normalized_name
+            .as_str(),
             "&Foo"
         );
 
@@ -776,9 +774,9 @@ impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
                 generic_params: generic,
                 to_foreigner_hint: None,
             }.is_conv_possible(&str_to_ty(&sess, "jlong").into(), Some(&box_foo), |_| None)
-                .unwrap()
-                .normalized_name
-                .as_str(),
+            .unwrap()
+            .normalized_name
+            .as_str(),
             "Box<Foo>"
         );
 
@@ -864,9 +862,9 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
                 generic_params,
                 to_foreigner_hint: None,
             }.is_conv_possible(&ty.into(), None, |_| None)
-                .unwrap()
-                .normalized_name
-                .as_str(),
+            .unwrap()
+            .normalized_name
+            .as_str(),
             "bool"
         );
     }

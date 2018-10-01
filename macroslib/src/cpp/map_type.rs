@@ -329,8 +329,7 @@ fn map_ordinal_result_type<'a>(
                     normalized_ty_string(arg_ty)
                 ),
             )
-        })?
-        .into())
+        })?.into())
 }
 
 fn map_ordinal_input_type<'a>(
@@ -350,8 +349,7 @@ fn map_ordinal_input_type<'a>(
                     normalized_ty_string(arg_ty)
                 ),
             )
-        })?
-        .into())
+        })?.into())
 }
 
 fn map_arg_with_slice_type<'a>(
@@ -785,8 +783,7 @@ fn handle_result_type_as_return_type<'a>(
                     let foreign_info = conv_map
                         .find_foreign_type_info_by_name(Symbol::intern(
                             "struct CResultObjectString",
-                        ))
-                        .expect("Can not find struct CResultObjectString");
+                        )).expect("Can not find struct CResultObjectString");
                     return Ok(Some(CppForeignTypeInfo {
                         base: foreign_info,
                         c_converter: String::new(),
@@ -820,8 +817,7 @@ fn handle_result_type_as_return_type<'a>(
                     let foreign_info = conv_map
                         .find_foreign_type_info_by_name(Symbol::intern(
                             "struct CResultObjectObject",
-                        ))
-                        .expect("Can not find info about struct CResultObjectObject");
+                        )).expect("Can not find info about struct CResultObjectObject");
                     return Ok(Some(CppForeignTypeInfo {
                         base: foreign_info,
                         c_converter: String::new(),
