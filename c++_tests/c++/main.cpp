@@ -49,7 +49,8 @@
 #include "rust_interface/TestOptional.hpp"
 #endif
 #include "rust_interface/TestError.hpp"
-#if !defined(NO_HAVE_STD17_VARIANT)
+#if !defined(NO_HAVE_STD17_VARIANT) || defined(USE_BOOST)
+#include "rust_interface/c_ErrorEnum.h"
 #include "rust_interface/TestResult.hpp"
 #endif
 #include "rust_interface/Position.hpp"
@@ -628,6 +629,19 @@ TEST(TestResult, smokeTest)
         ASSERT_EQ(2u, f4_vec.size());
         EXPECT_EQ(17, f4_vec[0]);
         EXPECT_EQ(18, f4_vec[1]);
+    }
+    {
+        auto f5_ok = TestResult::f5(true);
+        EXPECT_NE(nullptr, std::get_if<Foo>(&f5_ok));
+        EXPECT_EQ(nullptr, std::get_if<ErrorEnum>(&f5_ok));
+        auto f5_ok_ret = std::get<Foo>(std::move(f5_ok));
+        ASSERT_EQ(17, f5_ok_ret.f(0, 0));
+        ASSERT_EQ(std::string_view("ok"), f5_ok_ret.getName().to_string_view());
+        auto f5_err = TestResult::f5(false);
+        EXPECT_EQ(nullptr, std::get_if<Foo>(&f5_err));
+        EXPECT_NE(nullptr, std::get_if<ErrorEnum>(&f5_err));
+        auto f5_err_ret = std::get<ErrorEnum>(std::move(f5_err));
+        EXPECT_EQ(eeB, f5_err_ret);
     }
 #endif // HAS_STDCXX_17
 #ifdef USE_BOOST

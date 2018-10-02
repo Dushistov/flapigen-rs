@@ -439,6 +439,39 @@ foreigner_class!(class Boo {
 }
 
 #[test]
+fn test_return_foreign_enum_as_err() {
+    let gen_code = parse_code(
+        "test_return_foreign_enum_as_err",
+        r#"
+foreign_enum!(enum Foo {
+  cA = Foo::A,
+  cB = Foo::B,
+});
+
+foreigner_class!(class Moo {
+   self_type Moo;
+   private constructor = empty;
+});
+
+foreigner_class!(class Boo {
+   self_type Boo;
+   private constructor Boo::default() -> Boo;
+   method Boo::f(&self) -> Result<Moo, Foo>;
+});
+"#,
+        &[ForeignLang::Cpp],
+    );
+    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
+    println!("rust_code: {}", cpp_code.rust_code);
+    println!("cpp_code: {}", cpp_code.foreign_code);
+    assert!(
+        cpp_code
+            .foreign_code
+            .contains("std::variant<Moo, Foo> f() const")
+    );
+}
+
+#[test]
 fn test_return_foreign_class_ref() {
     for _ in 0..10 {
         let gen_code = parse_code(

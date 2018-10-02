@@ -57,6 +57,13 @@ impl RustType {
         self.implements.insert(Symbol::intern(trait_name));
         self
     }
+    pub(crate) fn merge(&mut self, other: &RustType) {
+        self.ty = other.ty.clone();
+        self.normalized_name = other.normalized_name;
+        for trt in &other.implements {
+            self.implements.insert(*trt);
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -263,12 +270,14 @@ fn is_second_subst_of_first_ppath(
                     }
                     true
                 }
-                _ => if p1 != p2 {
-                    trace!("second_subst_of_first_ppath: p1 != p2 => {:?} {:?}", p1, p2);
-                    false
-                } else {
-                    true
-                },
+                _ => {
+                    if p1 != p2 {
+                        trace!("second_subst_of_first_ppath: p1 != p2 => {:?} {:?}", p1, p2);
+                        false
+                    } else {
+                        true
+                    }
+                }
             }
         }
         _ => {

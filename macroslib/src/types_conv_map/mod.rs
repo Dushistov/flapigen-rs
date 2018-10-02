@@ -177,7 +177,8 @@ impl TypesConvMap {
             let idx = *data_rust_names_map
                 .entry(node.normalized_name)
                 .or_insert_with(|| data_conv_graph.add_node(node2));
-            data_conv_graph[idx] = node.clone();
+
+            data_conv_graph[idx].merge(node);
 
             if let Some((foreign_name, _)) = new_data
                 .foreign_names_map
@@ -729,18 +730,20 @@ impl TypesConvMap {
     pub(crate) fn is_ty_implements(&self, ty: &ast::Ty, trait_name: Symbol) -> Option<RustType> {
         match self.is_ty_implements_exact(ty, trait_name) {
             Some(x) => Some(x),
-            None => if let ast::TyKind::Rptr(_, ref mut_ty) = ty.node {
-                let ty_name = Symbol::intern(&normalized_ty_string(&mut_ty.ty));
-                self.rust_names_map.get(&ty_name).and_then(|idx| {
-                    if self.conv_graph[*idx].implements.contains(&trait_name) {
-                        Some(self.conv_graph[*idx].clone())
-                    } else {
-                        None
-                    }
-                })
-            } else {
-                None
-            },
+            None => {
+                if let ast::TyKind::Rptr(_, ref mut_ty) = ty.node {
+                    let ty_name = Symbol::intern(&normalized_ty_string(&mut_ty.ty));
+                    self.rust_names_map.get(&ty_name).and_then(|idx| {
+                        if self.conv_graph[*idx].implements.contains(&trait_name) {
+                            Some(self.conv_graph[*idx].clone())
+                        } else {
+                            None
+                        }
+                    })
+                } else {
+                    None
+                }
+            }
         }
     }
 

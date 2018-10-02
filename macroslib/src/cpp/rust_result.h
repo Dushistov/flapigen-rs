@@ -44,3 +44,11 @@ struct CResultCRustVecU8Object {
     } data;
     uint8_t is_ok;
 };
+
+struct CResultObjectEnum {
+    union {
+        void *ok;
+        uint32_t err;
+    } data;
+    uint8_t is_ok;
+};

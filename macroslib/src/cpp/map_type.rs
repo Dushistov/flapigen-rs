@@ -647,6 +647,39 @@ fn handle_result_type_as_return_type<'a>(
                     input_converter: "#error".into(),
                 }),
             }));
+        } else if let Some(err_enum) = conv_map.is_this_exported_enum(err_ty) {
+            let foreign_info = conv_map
+                .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectEnum"))
+                .expect("Can not find info about struct CResultObjectEnum");
+            let typename = match cpp_cfg.cpp_variant {
+                CppVariant::Std17 => Symbol::intern(&format!(
+                    "std::variant<{}, {}>",
+                    foreign_class.name, err_enum.name
+                )),
+                CppVariant::Boost => Symbol::intern(&format!(
+                    "boost::variant<{}, {}>",
+                    foreign_class.name, err_enum.name,
+                )),
+            };
+            let output_converter = format!(
+                "{var}.is_ok != 0 ?
+ {VarType}{{{Type}(static_cast<{C_Type} *>({var}.data.ok))}} :
+ {VarType}{{static_cast<{EnumName}>({var}.data.err)}}",
+                VarType = typename,
+                Type = foreign_class.name,
+                C_Type = c_class,
+                var = FROM_VAR_TEMPLATE,
+                EnumName = err_enum.name,
+            );
+            return Ok(Some(CppForeignTypeInfo {
+                base: foreign_info,
+                c_converter: String::new(),
+                cpp_converter: Some(CppConverter {
+                    typename,
+                    output_converter,
+                    input_converter: String::new(),
+                }),
+            }));
         } else {
             return Ok(None);
         }

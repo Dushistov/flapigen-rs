@@ -51,6 +51,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CResultObjectString"]
     #![swig_foreigner_type = "struct CResultCRustForeignVecString"]
     #![swig_rust_type = "CResultCRustForeignVecString"]
+    #![swig_foreigner_type = "struct CResultObjectEnum"]
+    #![swig_rust_type = "CResultObjectEnum"]
     #![swig_foreigner_type = "struct CRustSliceU8"]
     #![swig_rust_type = "CRustSliceU8"]
     #![swig_foreigner_type = "struct CRustSliceI32"]
@@ -97,6 +99,11 @@ pub trait SwigForeignClass {
     fn c_class_name() -> *const ::std::os::raw::c_char;
     fn box_object(x: Self) -> *mut ::std::os::raw::c_void;
     fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self;
+}
+
+#[allow(dead_code)]
+pub trait SwigForeignEnum {
+    fn as_u32(&self) -> u32;
 }
 
 #[allow(dead_code)]
@@ -1133,6 +1140,42 @@ impl<ErrT: SwigForeignClass> SwigFrom<Result<Vec<u8>, ErrT>> for CResultCRustVec
                 data: CRustVecU8ObjectUnion {
                     err: <ErrT>::box_object(err),
                 },
+            },
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CResultObjectEnum {
+    data: CResultObjectEnumUnion,
+    is_ok: u8,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CResultObjectEnumUnion {
+    pub ok: *mut ::std::os::raw::c_void,
+    pub err: u32,
+}
+
+impl<T, ErrT> SwigFrom<Result<T, ErrT>> for CResultObjectEnum
+where
+    T: SwigForeignClass,
+    ErrT: SwigForeignEnum,
+{
+    fn swig_from(x: Result<T, ErrT>) -> Self {
+        match x {
+            Ok(x) => CResultObjectEnum {
+                data: CResultObjectEnumUnion {
+                    ok: <T>::box_object(x),
+                },
+                is_ok: 1,
+            },
+            Err(e) => CResultObjectEnum {
+                data: CResultObjectEnumUnion { err: e.as_u32() },
+                is_ok: 0,
             },
         }
     }
