@@ -323,8 +323,7 @@ impl Generator {
                         .replace(
                             "java.util.Optional",
                             &format!("{}.Optional", java_cfg.optional_package),
-                        )
-                        .replace(
+                        ).replace(
                             "java/util/Optional",
                             &format!("{}/Optional", java_cfg.optional_package.replace('.', "/")),
                         ),

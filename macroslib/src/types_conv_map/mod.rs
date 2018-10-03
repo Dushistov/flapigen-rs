@@ -177,7 +177,8 @@ impl TypesConvMap {
             let idx = *data_rust_names_map
                 .entry(node.normalized_name)
                 .or_insert_with(|| data_conv_graph.add_node(node2));
-            data_conv_graph[idx] = node.clone();
+
+            data_conv_graph[idx].merge(node);
 
             if let Some((foreign_name, _)) = new_data
                 .foreign_names_map
@@ -298,11 +299,11 @@ impl TypesConvMap {
         let mut new_foreign_types = HashSet::new();
         for edge in &self.generic_edges {
             if let Some(to_foreigner_hint) = edge.to_foreigner_hint {
-                let trait_bounds: HashMap<Symbol, HashSet<Symbol>> = get_trait_bounds(
-                    &edge.generic_params,
-                ).into_iter()
-                    .map(|v| (v.ty_param, v.trait_names))
-                    .collect();
+                let trait_bounds: HashMap<Symbol, HashSet<Symbol>> =
+                    get_trait_bounds(&edge.generic_params)
+                        .into_iter()
+                        .map(|v| (v.ty_param, v.trait_names))
+                        .collect();
                 for graph_idx in self.rust_names_map.values() {
                     for (ty_param, traits) in &trait_bounds {
                         let rust_ty = &self.conv_graph[*graph_idx];
@@ -729,18 +730,20 @@ impl TypesConvMap {
     pub(crate) fn is_ty_implements(&self, ty: &ast::Ty, trait_name: Symbol) -> Option<RustType> {
         match self.is_ty_implements_exact(ty, trait_name) {
             Some(x) => Some(x),
-            None => if let ast::TyKind::Rptr(_, ref mut_ty) = ty.node {
-                let ty_name = Symbol::intern(&normalized_ty_string(&mut_ty.ty));
-                self.rust_names_map.get(&ty_name).and_then(|idx| {
-                    if self.conv_graph[*idx].implements.contains(&trait_name) {
-                        Some(self.conv_graph[*idx].clone())
-                    } else {
-                        None
-                    }
-                })
-            } else {
-                None
-            },
+            None => {
+                if let ast::TyKind::Rptr(_, ref mut_ty) = ty.node {
+                    let ty_name = Symbol::intern(&normalized_ty_string(&mut_ty.ty));
+                    self.rust_names_map.get(&ty_name).and_then(|idx| {
+                        if self.conv_graph[*idx].implements.contains(&trait_name) {
+                            Some(self.conv_graph[*idx].clone())
+                        } else {
+                            None
+                        }
+                    })
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -1135,8 +1138,7 @@ fn helper3() {
                     &parse_ty(&sess, DUMMY_SP, Symbol::intern("i32")).unwrap(),
                     petgraph::Direction::Outgoing,
                     DUMMY_SP
-                )
-                .unwrap()
+                ).unwrap()
                 .name,
             Symbol::intern("int")
         );
@@ -1214,8 +1216,7 @@ fn helper3() {
                     "a0",
                     "jlong",
                     DUMMY_SP
-                )
-                .expect("path from &mut Rc<RefCell<Foo>> to &mut Foo NOT exists")
+                ).expect("path from &mut Rc<RefCell<Foo>> to &mut Foo NOT exists")
                 .1,
             r#"    let mut a0: &Rc<RefCell<Foo>> = a0;
     let mut a0: &RefCell<Foo> = a0.swig_deref();
@@ -1237,8 +1238,7 @@ fn helper3() {
                     "a0",
                     "jlong",
                     DUMMY_SP
-                )
-                .expect("path from &RefCell<Foo> to &Foo NOT exists")
+                ).expect("path from &RefCell<Foo> to &Foo NOT exists")
                 .1,
             r#"    let mut a0: Ref<Foo> = <Ref<Foo>>::swig_from(a0, env);
     let mut a0: &Foo = a0.swig_deref();
@@ -1251,8 +1251,7 @@ fn helper3() {
                     &parse_ty(&sess, DUMMY_SP, Symbol::intern("Vec<Foo>")).unwrap(),
                     petgraph::Direction::Outgoing,
                     DUMMY_SP
-                )
-                .unwrap()
+                ).unwrap()
                 .name,
             Symbol::intern("Foo []")
         );
@@ -1267,8 +1266,7 @@ fn helper3() {
                         .unwrap()
                         .into(),
                     DUMMY_SP
-                )
-                .is_none()
+                ).is_none()
         );
     }
 }

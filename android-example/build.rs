@@ -36,7 +36,8 @@ fn main() {
         "arm-linux-androideabi",
         "i686-linux-android",
         "x86_64-linux-android",
-    ].contains(&target.as_str())
+    ]
+        .contains(&target.as_str())
     {
         gen_for_android();
     }
@@ -53,8 +54,7 @@ fn gen_for_android() {
         .map(|h| {
             search_file_in_directory(&include_dirs, h)
                 .expect(format!("Could not find header {}", h).as_ref())
-        })
-        .collect();
+        }).collect();
 
     let src_dir = Path::new(RUST_SRC_DIR);
     let out_dir = env::var("OUT_DIR").unwrap();

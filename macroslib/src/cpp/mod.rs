@@ -221,9 +221,17 @@ May be you need to use `private constructor = empty;` syntax?",
         if (enum_info.items.len() as u64) >= u64::from(u32::max_value()) {
             return Err(fatal_error(sess, enum_info.span, "Too many items in enum"));
         }
+
+        trace!("enum_ti: {}", enum_info.name);
+        let enum_ti = parse_ty(sess, enum_info.span, enum_info.rust_enum_name())?;
+        let enum_ti: RustType = enum_ti.into();
+        let enum_ti = enum_ti.implements("SwigForeignEnum");
+        conv_map.add_type(enum_ti);
+
         cpp_code::generate_code_for_enum(&self.output_dir, enum_info)
             .map_err(|err| fatal_error(sess, enum_info.span, &err))?;
-        generate_rust_code_for_enum(sess, conv_map, pointer_target_width, enum_info)
+        let code = generate_rust_code_for_enum(sess, conv_map, pointer_target_width, enum_info)?;
+        Ok(code)
     }
 
     fn generate_interface<'a>(
@@ -268,8 +276,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     cu.code
                         .replace("RUST_SWIG_USER_NAMESPACE", &self.namespace_name)
                         .as_bytes(),
-                )
-                .map_err(|err| format!("write to {} failed: {}", src_path.display(), err))?;
+                ).map_err(|err| format!("write to {} failed: {}", src_path.display(), err))?;
             src_file
                 .update_file_if_necessary()
                 .map_err(|err| format!("update of {} failed: {}", src_path.display(), err))?;
@@ -1242,6 +1249,39 @@ impl SwigFrom<Option<u32>> for Option<{rust_enum_name}> {{
         rust_enum_name = rust_enum_name,
     ).unwrap();
 
+    let mut trait_impl = format!(
+        r#"
+impl SwigForeignEnum for {rust_enum_name} {{
+    fn as_u32(&self) -> u32 {{
+        match *self {{
+"#,
+        rust_enum_name = rust_enum_name
+    );
+    for (i, item) in enum_info.items.iter().enumerate() {
+        write!(
+            &mut trait_impl,
+            r#"
+            {item_name} => {index},
+"#,
+            index = i,
+            item_name = item.rust_name
+        ).unwrap();
+    }
+    write!(
+        &mut trait_impl,
+        r#"
+        }}
+    }}
+}}
+"#
+    ).unwrap();
+
+    let trait_impl = code_to_item(
+        sess,
+        &format!("SwigForeignEnum for {}", rust_enum_name),
+        &trait_impl,
+    )?;
+
     write!(
         &mut code,
         r#"
@@ -1252,29 +1292,12 @@ mod swig_foreign_types_map {{
 
 impl SwigFrom<{rust_enum_name}> for u32 {{
    fn swig_from(x: {rust_enum_name}) -> u32 {{
-        match x {{
+       x.as_u32()
+   }}
+}}
 "#,
         enum_name = enum_info.name,
         rust_enum_name = rust_enum_name,
-    ).unwrap();
-
-    for (i, item) in enum_info.items.iter().enumerate() {
-        write!(
-            &mut code,
-            r#"
-           {item_name} => {index},
-"#,
-            index = i,
-            item_name = item.rust_name
-        ).unwrap();
-    }
-    write!(
-        &mut code,
-        r#"
-       }}
-    }}
-}}
-"#
     ).unwrap();
 
     write!(
@@ -1313,7 +1336,7 @@ impl SwigFrom<Option<{rust_enum_name}>> for Option<u32> {{
         &code,
         pointer_target_width,
     )?;
-    Ok(vec![])
+    Ok(trait_impl)
 }
 
 fn find_suitable_ftypes_for_interace_methods<'a>(

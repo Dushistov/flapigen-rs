@@ -85,7 +85,8 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
             continue;
         }
 
-        let (swig_attrs, other_attrs): (Vec<ast::Attribute>, Vec<ast::Attribute>) = item.attrs
+        let (swig_attrs, other_attrs): (Vec<ast::Attribute>, Vec<ast::Attribute>) = item
+            .attrs
             .into_iter()
             .partition(|attr| attr.value.name.as_str().starts_with("swig_"));
         let is_wrong_cfg_pointer_width = other_attrs.iter().any(|attr| {
@@ -113,8 +114,9 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                         _,
                     ),
                 ..
-            } if trait_path_match(&trait_type.path, "SwigInto")
-                || trait_path_match(&trait_type.path, "SwigFrom") =>
+            }
+                if trait_path_match(&trait_type.path, "SwigInto")
+                    || trait_path_match(&trait_type.path, "SwigFrom") =>
             {
                 let to_suffix = if !swig_attrs.is_empty()
                     && swig_attrs.contains_key(&swig_to_foreigner_hint)
@@ -214,8 +216,9 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                         ref impl_items,
                     ),
                 ..
-            } if trait_path_match(&trait_type.path, "SwigDeref")
-                || trait_path_match(&trait_type.path, "SwigDerefMut") =>
+            }
+                if trait_path_match(&trait_type.path, "SwigDeref")
+                    || trait_path_match(&trait_type.path, "SwigDerefMut") =>
             {
                 let target_ty = unpack_first_associated_type(impl_items, target_assoc_type)
                     .ok_or_else(|| fatal_error(sess, item.span, "No Target associated type"))?;
@@ -476,16 +479,15 @@ fn parse_foreign_types_map_mod<'a>(
             foreign_name: k,
             rust_name: v.0,
             rust_ty: v.1,
-        })
-        .collect())
+        }).collect())
 }
 
 fn trait_path_match(path: &ast::Path, type_name: &str) -> bool {
-    path.segments.len() == 1
-        && path.segments
-            .last()
-            .map(|v| &*v.identifier.name.as_str() == type_name)
-            .unwrap_or(false)
+    path.segments.len() == 1 && path
+        .segments
+        .last()
+        .map(|v| &*v.identifier.name.as_str() == type_name)
+        .unwrap_or(false)
 }
 
 fn get_to_foreigner_hint_for_generic<'a>(
@@ -561,7 +563,8 @@ fn extract_trait_param_type<'a>(
 ) -> PResult<'a, ast::Ty> {
     assert_eq!(1, trait_ref.path.segments.len());
     let seg = &trait_ref.path.segments[0];
-    let param = seg.parameters
+    let param = seg
+        .parameters
         .as_ref()
         .ok_or_else(|| fatal_error(sess, trait_ref.path.span, "No type param"))?;
     match **param {
@@ -759,14 +762,14 @@ mod swig_foreign_types_map {
                 ("short".to_string(), "jshort".to_string()),
             ],
             {
-                let mut ret = map.into_iter()
+                let mut ret = map
+                    .into_iter()
                     .map(|v| {
                         (
                             v.foreign_name.as_str().to_string(),
                             v.rust_name.as_str().to_string(),
                         )
-                    })
-                    .collect::<Vec<_>>();
+                    }).collect::<Vec<_>>();
                 ret.sort_by(|a, b| a.0.cmp(&b.0));
                 ret
             }

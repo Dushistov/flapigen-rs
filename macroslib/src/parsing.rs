@@ -567,9 +567,11 @@ pub(crate) fn parse_foreign_interface(
         }
         let func_name = parser.parse_ident().map_err(&map_perror)?.name;
         if &*func_name.as_str() == "self_type" {
-            self_type = Some(parser
-                .parse_path(parser::PathStyle::Type)
-                .map_err(&map_perror)?);
+            self_type = Some(
+                parser
+                    .parse_path(parser::PathStyle::Type)
+                    .map_err(&map_perror)?,
+            );
             debug!("self_type: {:?} for {}", self_type, interface_name);
             parser.expect(&token::Token::Semi).map_err(&map_perror)?;
             continue;
@@ -578,7 +580,8 @@ pub(crate) fn parse_foreign_interface(
         let rust_func_name = parser
             .parse_path(parser::PathStyle::Mod)
             .map_err(&map_perror)?;
-        let fn_decl = parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).map_err(&map_perror)?;
+        let fn_decl =
+            parse_fn_decl_with_self(&mut parser, |p| p.parse_arg()).map_err(&map_perror)?;
         parser.expect(&token::Token::Semi).map_err(&map_perror)?;
         items.push(ForeignInterfaceMethod {
             name: func_name,
