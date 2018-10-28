@@ -13,7 +13,7 @@ use syntex_syntax::visit::{walk_lifetime, walk_ty, Visitor};
 use syntex_syntax::{ast, parse};
 
 use errors::fatal_error;
-use types_conv_map::make_unique_rust_typename_if_need;
+use types_conv_map::{make_unique_rust_typename, make_unique_rust_typename_if_need};
 use SelfTypeVariant;
 
 pub(crate) fn normalized_ty_string(ty: &ast::Ty) -> String {
@@ -74,11 +74,27 @@ pub(crate) struct GenericTypeConv {
     pub dependency: Rc<RefCell<Option<ast::Item>>>,
     pub generic_params: ast::Generics,
     pub to_foreigner_hint: Option<Symbol>,
+    pub from_foreigner_hint: Option<Symbol>,
 }
 
 type TyParamsSubstMap = HashMap<Symbol, Option<P<ast::Ty>>>;
 
 impl GenericTypeConv {
+    pub(crate) fn simple_new(
+        from_ty: ast::Ty,
+        to_ty: ast::Ty,
+        generic_params: ast::Generics,
+    ) -> GenericTypeConv {
+        GenericTypeConv {
+            from_ty,
+            to_ty,
+            code_template: Symbol::intern(""),
+            dependency: Rc::new(RefCell::new(None)),
+            generic_params,
+            to_foreigner_hint: None,
+            from_foreigner_hint: None,
+        }
+    }
     pub(crate) fn is_conv_possible<'a, OtherRustTypes>(
         &self,
         ty: &RustType,
@@ -136,8 +152,29 @@ impl GenericTypeConv {
                 is_second_subst_of_first(&self.to_ty, &goal_ty.ty, &mut subst_map);
             }
         }
+
+        /* for example if from type jobjectArray, and we use rule
+        from jobjectArray -> Vec<T> where T: ForeignClass,
+        then we filter jobjectArray^java.lang.String types as input for our rule
+        */
+        if let Some(from_foreigner_hint) = self.from_foreigner_hint {
+            trace!("suffix is_conv_possible has from_foreigner_hint");
+            assert_eq!(subst_map.len(), 1);
+            if let Some(&(key, &Some(ref val))) = subst_map.iter().nth(0).as_ref() {
+                let val_name = normalized_ty_string(val);
+                let foreign_name =
+                    (*from_foreigner_hint.as_str()).replace(&*key.as_str(), &val_name);
+                let foreign_name = Symbol::intern(&foreign_name);
+                let clean_from_ty = Symbol::intern(&normalized_ty_string(&self.from_ty));
+                if ty.normalized_name != make_unique_rust_typename(clean_from_ty, foreign_name) {
+                    trace!("is_conv_possible: check failed by from_foreigner_hint check");
+                    return None;
+                }
+            }
+        }
+
         let to_ty = replace_all_types_with(&self.to_ty, &subst_map);
-        let suffix = if let Some(to_foreigner_hint) = self.to_foreigner_hint {
+        let to_suffix = if let Some(to_foreigner_hint) = self.to_foreigner_hint {
             assert_eq!(subst_map.len(), 1);
             if let Some(&(key, &Some(ref val))) = subst_map.iter().nth(0).as_ref() {
                 let val_name = normalized_ty_string(val);
@@ -151,7 +188,7 @@ impl GenericTypeConv {
         };
         let normalized_name = make_unique_rust_typename_if_need(
             Symbol::intern(&normalized_ty_string(&to_ty)),
-            suffix,
+            to_suffix,
         );
         Some(RustType::new(to_ty, normalized_name))
     }
@@ -393,15 +430,9 @@ pub(crate) fn if_vec_return_elem_type(ty: &ast::Ty) -> Option<ast::Ty> {
     let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Vec<T>")));
     let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("T")));
 
-    GenericTypeConv {
-        from_ty,
-        to_ty,
-        code_template: Symbol::intern(""),
-        dependency: Rc::new(RefCell::new(None)),
-        generic_params: generic_params_new(&["T"]),
-        to_foreigner_hint: None,
-    }.is_conv_possible(&ty.clone().into(), None, |_| None)
-    .map(|x| x.ty)
+    GenericTypeConv::simple_new(from_ty, to_ty, generic_params_new(&["T"]))
+        .is_conv_possible(&ty.clone().into(), None, |_| None)
+        .map(|x| x.ty)
 }
 
 pub(crate) fn if_result_return_ok_err_types(ty: &ast::Ty) -> Option<(ast::Ty, ast::Ty)> {
@@ -410,15 +441,9 @@ pub(crate) fn if_result_return_ok_err_types(ty: &ast::Ty) -> Option<(ast::Ty, as
         let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Result<T, E>")));
         let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("T")));
 
-        GenericTypeConv {
-            from_ty,
-            to_ty,
-            code_template: Symbol::intern(""),
-            dependency: Rc::new(RefCell::new(None)),
-            generic_params: generic_params_new(&["T", "E"]),
-            to_foreigner_hint: None,
-        }.is_conv_possible(&ty.clone().into(), None, |_| None)
-        .map(|x| x.ty)
+        GenericTypeConv::simple_new(from_ty, to_ty, generic_params_new(&["T", "E"]))
+            .is_conv_possible(&ty.clone().into(), None, |_| None)
+            .map(|x| x.ty)
     }?;
 
     let err_ty = {
@@ -426,15 +451,9 @@ pub(crate) fn if_result_return_ok_err_types(ty: &ast::Ty) -> Option<(ast::Ty, as
         let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Result<T, E>")));
         let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("E")));
 
-        GenericTypeConv {
-            from_ty,
-            to_ty,
-            code_template: Symbol::intern(""),
-            dependency: Rc::new(RefCell::new(None)),
-            generic_params: generic_params_new(&["T", "E"]),
-            to_foreigner_hint: None,
-        }.is_conv_possible(&ty.clone().into(), None, |_| None)
-        .map(|x| x.ty)
+        GenericTypeConv::simple_new(from_ty, to_ty, generic_params_new(&["T", "E"]))
+            .is_conv_possible(&ty.clone().into(), None, |_| None)
+            .map(|x| x.ty)
     }?;
     Some((ok_ty, err_ty))
 }
@@ -452,15 +471,9 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
     ));
     let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("T")));
 
-    GenericTypeConv {
-        from_ty,
-        to_ty,
-        code_template: Symbol::intern(""),
-        dependency: Rc::new(RefCell::new(None)),
-        generic_params,
-        to_foreigner_hint: None,
-    }.is_conv_possible(&ty.clone().into(), None, |_| None)
-    .map(|x| x.ty)
+    GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
+        .is_conv_possible(&ty.clone().into(), None, |_| None)
+        .map(|x| x.ty)
 }
 
 pub(crate) fn self_variant(ty: &ast::Ty) -> Option<SelfTypeVariant> {
@@ -564,15 +577,9 @@ pub(crate) fn if_option_return_some_type(ty: &ast::Ty) -> Option<ast::Ty> {
     let from_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("Option<T>")));
     let to_ty = unwrap_presult!(parse_ty(&sess, DUMMY_SP, Symbol::intern("T")));
 
-    GenericTypeConv {
-        from_ty,
-        to_ty,
-        code_template: Symbol::intern(""),
-        dependency: Rc::new(RefCell::new(None)),
-        generic_params,
-        to_foreigner_hint: None,
-    }.is_conv_possible(&ty.clone().into(), None, |_| None)
-    .map(|x| x.ty)
+    GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
+        .is_conv_possible(&ty.clone().into(), None, |_| None)
+        .map(|x| x.ty)
 }
 
 pub(crate) fn get_ref_type(ty: &ast::Ty, mutbl: ast::Mutability) -> ast::Ty {
@@ -653,14 +660,11 @@ impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
                 to_ty_name,
                 ty_check_name
             );
-            let ret_ty: RustType = GenericTypeConv {
-                from_ty: str_to_ty(sess, from_ty_name),
-                to_ty: str_to_ty(sess, to_ty_name),
-                code_template: Symbol::intern(""),
-                dependency: Rc::new(RefCell::new(None)),
-                generic_params: generic.clone(),
-                to_foreigner_hint: None,
-            }.is_conv_possible(&str_to_ty(&sess, ty_check_name).into(), None, map_others)
+            let ret_ty: RustType = GenericTypeConv::simple_new(
+                str_to_ty(sess, from_ty_name),
+                str_to_ty(sess, to_ty_name),
+                generic.clone(),
+            ).is_conv_possible(&str_to_ty(&sess, ty_check_name).into(), None, map_others)
             .expect("check subst failed");
             assert_eq!(&*ret_ty.normalized_name.as_str(), expect_to_ty_name);
 
@@ -753,14 +757,11 @@ impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
             |_| None,
         );
         assert_eq!(
-            &*GenericTypeConv {
-                from_ty: str_to_ty(&sess, "MutexGuard<T>"),
-                to_ty: str_to_ty(&sess, "&T"),
-                code_template: Symbol::intern(""),
-                dependency: Rc::new(RefCell::new(None)),
-                generic_params: generic.clone(),
-                to_foreigner_hint: None,
-            }.is_conv_possible(&mutex_guard_foo, None, |name| {
+            &*GenericTypeConv::simple_new(
+                str_to_ty(&sess, "MutexGuard<T>"),
+                str_to_ty(&sess, "&T"),
+                generic.clone(),
+            ).is_conv_possible(&mutex_guard_foo, None, |name| {
                 if name == Symbol::intern("Foo") {
                     Some(&foo_spec)
                 } else {
@@ -775,14 +776,11 @@ impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
         let box_foo: RustType = str_to_ty(&sess, "Box<Foo>").into();
 
         assert_eq!(
-            &*GenericTypeConv {
-                from_ty: str_to_ty(&sess, "jlong"),
-                to_ty: str_to_ty(&sess, "Box<T>"),
-                code_template: Symbol::intern(""),
-                dependency: Rc::new(RefCell::new(None)),
-                generic_params: generic,
-                to_foreigner_hint: None,
-            }.is_conv_possible(&str_to_ty(&sess, "jlong").into(), Some(&box_foo), |_| None)
+            &*GenericTypeConv::simple_new(
+                str_to_ty(&sess, "jlong"),
+                str_to_ty(&sess, "Box<T>"),
+                generic,
+            ).is_conv_possible(&str_to_ty(&sess, "jlong").into(), Some(&box_foo), |_| None)
             .unwrap()
             .normalized_name
             .as_str(),
@@ -863,14 +861,11 @@ impl<T, E> SwigFrom<Result<T,E>> for T {
 
         let generic_params = generic_params_new(&["T"]);
         assert_eq!(
-            &*GenericTypeConv {
-                from_ty: str_to_ty(&sess, "RefCell<T>"),
-                to_ty: str_to_ty(&sess, "T"),
-                code_template: Symbol::intern(""),
-                dependency: Rc::new(RefCell::new(None)),
+            &*GenericTypeConv::simple_new(
+                str_to_ty(&sess, "RefCell<T>"),
+                str_to_ty(&sess, "T"),
                 generic_params,
-                to_foreigner_hint: None,
-            }.is_conv_possible(&ty.into(), None, |_| None)
+            ).is_conv_possible(&ty.into(), None, |_| None)
             .unwrap()
             .normalized_name
             .as_str(),
