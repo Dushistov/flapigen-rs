@@ -1304,8 +1304,58 @@ foreigner_class!(class Boo {
 
 #[test]
 fn test_foreign_vec_as_arg() {
+    for _ in 0..100 {
+        let gen_code = do_parse_code(
+            "test_foreign_vec_as_arg",
+            r#"
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor Boo::default() -> Boo;
+});
+foreigner_class!(class FooImpl {
+    self_type Foo<'a>;
+    constructor Foo::create() -> Foo<'a>;
+    method Foo::set_alternate_boarding(&mut self, p: Vec<Boo>);
+    alias setAlternateBoarding;
+});
+"#,
+            &[ForeignLang::Cpp, ForeignLang::Java],
+            vec![(
+                ForeignLang::Java,
+                r#"
+mod swig_foreign_types_map {}
+
+#[swig_from_foreigner_hint = "T []"]
+impl<T: SwigForeignClass + Clone> SwigInto<Vec<T>>  for jobjectArray {
+    fn swig_into(self, env: *mut JNIEnv) -> Vec<T> {
+        unimplemented!();
+    }
+}
+"#,
+            )],
+        );
+        let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
+        println!("c/c++: {}", cpp_code_pair.foreign_code);
+        assert!(
+            cpp_code_pair
+                .foreign_code
+                .contains("void setAlternateBoarding(RustForeignVecBoo a_0)")
+        );
+
+        let java_code_pair = code_for(&gen_code, ForeignLang::Java);
+        println!("Java: {}", java_code_pair.foreign_code);
+        assert!(
+            java_code_pair
+                .foreign_code
+                .contains("void setAlternateBoarding(Boo [] a0)")
+        );
+    }
+}
+
+#[test]
+fn test_foreign_vec_as_arg_cpp() {
     let gen_code = parse_code(
-        "test_foreign_vec_as_arg",
+        "test_foreign_vec_as_arg_cpp",
         r#"
 foreigner_class!(class Boo {
     self_type Boo;
@@ -1603,7 +1653,24 @@ fn code_for(gen_code: &[CodePair], lang: ForeignLang) -> &CodePair {
 }
 
 fn parse_code(test_name: &str, code: &str, langs: &[ForeignLang]) -> Vec<CodePair> {
+    do_parse_code(test_name, code, langs, vec![])
+}
+
+fn do_parse_code(
+    test_name: &str,
+    code: &str,
+    langs: &[ForeignLang],
+    addon_type_maps: Vec<(ForeignLang, &str)>,
+) -> Vec<CodePair> {
     test_helper::logger_init();
+
+    fn find_addon_type_map<'a>(
+        addon_type_maps: &'a [(ForeignLang, &'a str)],
+        lang: ForeignLang,
+    ) -> Option<&'a str> {
+        addon_type_maps.iter().find(|x| x.0 == lang).map(|x| x.1)
+    }
+
     let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");
     println!(
         "{}: test name {} tmp_dir {:?}",
@@ -1620,9 +1687,19 @@ fn parse_code(test_name: &str, code: &str, langs: &[ForeignLang]) -> Vec<CodePai
                     tmp_dir.path().into(),
                     "com.example".into(),
                 ))).with_pointer_target_width(64);
+                let swig_gen = if let Some(type_map) =
+                    find_addon_type_map(&addon_type_maps, ForeignLang::Java)
+                {
+                    swig_gen.merge_type_map("addon", type_map)
+                } else {
+                    swig_gen
+                };
+
                 swig_gen.register(&mut registry);
                 (
-                    registry.expand_str(test_name, test_name, code).unwrap(),
+                    registry
+                        .expand_str(test_name, &format!("java {}", test_name), code)
+                        .unwrap(),
                     collect_code_in_dir(tmp_dir.path(), &[".java"]),
                 )
             }
@@ -1633,7 +1710,9 @@ fn parse_code(test_name: &str, code: &str, langs: &[ForeignLang]) -> Vec<CodePai
                 ))).with_pointer_target_width(64);
                 swig_gen.register(&mut registry);
                 (
-                    registry.expand_str(test_name, "use_case", code).unwrap(),
+                    registry
+                        .expand_str(test_name, &format!("c++ {}", test_name), code)
+                        .unwrap(),
                     collect_code_in_dir(tmp_dir.path(), &[".h", ".hpp"]),
                 )
             }

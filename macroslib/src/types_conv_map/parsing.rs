@@ -175,10 +175,17 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                         code_template: conv_code,
                         dependency: Rc::new(RefCell::new(Some(item.clone()))),
                         generic_params: generic.clone(),
-                        to_foreigner_hint: get_to_foreigner_hint_for_generic(
+                        to_foreigner_hint: get_foreigner_hint_for_generic(
                             sess,
                             generic,
                             &swig_attrs,
+                            ForeignHintVariant::To,
+                        )?,
+                        from_foreigner_hint: get_foreigner_hint_for_generic(
+                            sess,
+                            generic,
+                            &swig_attrs,
+                            ForeignHintVariant::From,
                         )?,
                     });
                 } else {
@@ -267,10 +274,17 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                         code_template: conv_code,
                         dependency: Rc::new(RefCell::new(Some(item.clone()))),
                         generic_params: generic.clone(),
-                        to_foreigner_hint: get_to_foreigner_hint_for_generic(
+                        to_foreigner_hint: get_foreigner_hint_for_generic(
                             sess,
                             generic,
                             &swig_attrs,
+                            ForeignHintVariant::To,
+                        )?,
+                        from_foreigner_hint: get_foreigner_hint_for_generic(
+                            sess,
+                            generic,
+                            &swig_attrs,
+                            ForeignHintVariant::From,
                         )?,
                     });
                 } else {
@@ -345,8 +359,18 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                     };
                     let from_ty = parse_ty(sess, from_typename[0].1, from_typename[0].0)?;
                     let to_ty = parse_ty(sess, to_typename[0].1, to_typename[0].0)?;
-                    let to_foreigner_hint =
-                        get_to_foreigner_hint_for_generic(sess, &generic_params, &swig_attrs)?;
+                    let to_foreigner_hint = get_foreigner_hint_for_generic(
+                        sess,
+                        &generic_params,
+                        &swig_attrs,
+                        ForeignHintVariant::To,
+                    )?;
+                    let from_foreigner_hint = get_foreigner_hint_for_generic(
+                        sess,
+                        &generic_params,
+                        &swig_attrs,
+                        ForeignHintVariant::From,
+                    )?;
                     generic_edges.push(GenericTypeConv {
                         from_ty,
                         to_ty,
@@ -354,6 +378,7 @@ pub(in types_conv_map) fn parse_types_conv_map<'a>(
                         dependency: Rc::new(RefCell::new(Some(item.clone()))),
                         generic_params,
                         to_foreigner_hint,
+                        from_foreigner_hint,
                     });
                 } else {
                     unimplemented!();
@@ -490,27 +515,40 @@ fn trait_path_match(path: &ast::Path, type_name: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn get_to_foreigner_hint_for_generic<'a>(
+#[derive(PartialEq, Clone, Copy)]
+enum ForeignHintVariant {
+    From,
+    To,
+}
+
+fn get_foreigner_hint_for_generic<'a>(
     sess: &'a ParseSess,
     generic: &ast::Generics,
     attrs: &HashMap<Symbol, Vec<(Symbol, Span)>>,
+    variant: ForeignHintVariant,
 ) -> PResult<'a, Option<Symbol>> {
-    if let Some(attrs) = attrs.get(&Symbol::intern("swig_to_foreigner_hint")) {
+    let attr_name = Symbol::intern(if variant == ForeignHintVariant::To {
+        "swig_to_foreigner_hint"
+    } else {
+        "swig_from_foreigner_hint"
+    });
+
+    if let Some(attrs) = attrs.get(&attr_name) {
         assert!(!attrs.is_empty());
         if attrs.len() != 1 {
             let mut err = fatal_error(
                 sess,
                 attrs[1].1,
-                "Several swig_to_foreigner_hint attributes",
+                &format!("Several {} attributes", attr_name),
             );
-            err.span_note(attrs[0].1, "First swig_to_foreigner_hint");
+            err.span_note(attrs[0].1, &format!("First {}", attr_name));
             return Err(err);
         }
         if generic.ty_params.len() != 1 {
             return Err(fatal_error(
                 sess,
                 generic.span,
-                "Expect only one generic parameter for swig_to_foreigner_hint",
+                &format!("Expect only one generic parameter for {}", attr_name),
             ));
         }
         if !(*attrs[0].0.as_str()).contains(&*generic.ty_params[0].ident.name.as_str()) {
@@ -518,8 +556,8 @@ fn get_to_foreigner_hint_for_generic<'a>(
                 sess,
                 attrs[0].1,
                 &format!(
-                    "swig_to_foreigner_hint not contains {}",
-                    generic.ty_params[0].ident.name
+                    "{} not contains {}",
+                    attr_name, generic.ty_params[0].ident.name
                 ),
             );
             err.span_note(

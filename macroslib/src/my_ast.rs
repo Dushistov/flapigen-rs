@@ -13,7 +13,7 @@ use syntex_syntax::visit::{walk_lifetime, walk_ty, Visitor};
 use syntex_syntax::{ast, parse};
 
 use errors::fatal_error;
-use types_conv_map::make_unique_rust_typename_if_need;
+use types_conv_map::{make_unique_rust_typename, make_unique_rust_typename_if_need};
 use SelfTypeVariant;
 
 pub(crate) fn normalized_ty_string(ty: &ast::Ty) -> String {
@@ -74,6 +74,7 @@ pub(crate) struct GenericTypeConv {
     pub dependency: Rc<RefCell<Option<ast::Item>>>,
     pub generic_params: ast::Generics,
     pub to_foreigner_hint: Option<Symbol>,
+    pub from_foreigner_hint: Option<Symbol>,
 }
 
 type TyParamsSubstMap = HashMap<Symbol, Option<P<ast::Ty>>>;
@@ -91,6 +92,7 @@ impl GenericTypeConv {
             dependency: Rc::new(RefCell::new(None)),
             generic_params,
             to_foreigner_hint: None,
+            from_foreigner_hint: None,
         }
     }
     pub(crate) fn is_conv_possible<'a, OtherRustTypes>(
@@ -150,8 +152,29 @@ impl GenericTypeConv {
                 is_second_subst_of_first(&self.to_ty, &goal_ty.ty, &mut subst_map);
             }
         }
+
+        /* for example if from type jobjectArray, and we use rule
+        from jobjectArray -> Vec<T> where T: ForeignClass,
+        then we filter jobjectArray^java.lang.String types as input for our rule
+        */
+        if let Some(from_foreigner_hint) = self.from_foreigner_hint {
+            trace!("suffix is_conv_possible has from_foreigner_hint");
+            assert_eq!(subst_map.len(), 1);
+            if let Some(&(key, &Some(ref val))) = subst_map.iter().nth(0).as_ref() {
+                let val_name = normalized_ty_string(val);
+                let foreign_name =
+                    (*from_foreigner_hint.as_str()).replace(&*key.as_str(), &val_name);
+                let foreign_name = Symbol::intern(&foreign_name);
+                let clean_from_ty = Symbol::intern(&normalized_ty_string(&self.from_ty));
+                if ty.normalized_name != make_unique_rust_typename(clean_from_ty, foreign_name) {
+                    trace!("is_conv_possible: check failed by from_foreigner_hint check");
+                    return None;
+                }
+            }
+        }
+
         let to_ty = replace_all_types_with(&self.to_ty, &subst_map);
-        let suffix = if let Some(to_foreigner_hint) = self.to_foreigner_hint {
+        let to_suffix = if let Some(to_foreigner_hint) = self.to_foreigner_hint {
             assert_eq!(subst_map.len(), 1);
             if let Some(&(key, &Some(ref val))) = subst_map.iter().nth(0).as_ref() {
                 let val_name = normalized_ty_string(val);
@@ -165,7 +188,7 @@ impl GenericTypeConv {
         };
         let normalized_name = make_unique_rust_typename_if_need(
             Symbol::intern(&normalized_ty_string(&to_ty)),
-            suffix,
+            to_suffix,
         );
         Some(RustType::new(to_ty, normalized_name))
     }
