@@ -373,6 +373,9 @@ impl TestContainers {
     fn get_string_vec(&self) -> Vec<String> {
         self.string_vec.clone()
     }
+    fn set_struct_vec(&mut self, v: Vec<Foo>) {
+        self.struct_vec = v;
+    }
 }
 
 foreigner_class!(class TestContainers {
@@ -381,6 +384,7 @@ foreigner_class!(class TestContainers {
     method TestContainers::get_struct_vec(&self) -> Vec<Foo>;
     method TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
     method TestContainers::get_string_vec(&self) -> Vec<String>;
+    method TestContainers::set_struct_vec(&mut self, _: Vec<Foo>);
 });
 
 foreigner_class!(class OneStaticFunctionTest {

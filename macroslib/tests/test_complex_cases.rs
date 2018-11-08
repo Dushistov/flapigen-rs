@@ -1311,7 +1311,7 @@ foreigner_class!(class Boo {
 #[test]
 fn test_foreign_vec_as_arg() {
     for _ in 0..100 {
-        let gen_code = do_parse_code(
+        let gen_code = parse_code(
             "test_foreign_vec_as_arg",
             r#"
 foreigner_class!(class Boo {
@@ -1326,19 +1326,6 @@ foreigner_class!(class FooImpl {
 });
 "#,
             &[ForeignLang::Cpp, ForeignLang::Java],
-            vec![(
-                ForeignLang::Java,
-                r#"
-mod swig_foreign_types_map {}
-
-#[swig_from_foreigner_hint = "T []"]
-impl<T: SwigForeignClass + Clone> SwigInto<Vec<T>>  for jobjectArray {
-    fn swig_into(self, env: *mut JNIEnv) -> Vec<T> {
-        unimplemented!();
-    }
-}
-"#,
-            )],
         );
         let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
         println!("c/c++: {}", cpp_code_pair.foreign_code);

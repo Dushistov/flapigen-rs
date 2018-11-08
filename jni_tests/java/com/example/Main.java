@@ -121,6 +121,13 @@ class Main {
 	    assert strv[4].equals("lady");
 	    assert strv[5].equals("whose");
 	    assert strv[6].equals("nose");
+
+        Foo[] owned = {new Foo(17, "")};
+        testContainers.set_struct_vec(owned);
+        Foo[] owned2 = testContainers.get_struct_vec();
+        assert owned2.length == 1;
+        assert owned2[0].calcF(0, 0) == 17;
+        assert owned2[0].getName().equals("");
 	}
 
 	{
