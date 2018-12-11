@@ -111,6 +111,7 @@ impl fmt::Display for TypesConvMap {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct ForeignTypeInfo {
     pub name: Symbol,
     pub correspoding_rust_type: RustType,

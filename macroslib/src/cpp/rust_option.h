@@ -44,6 +44,11 @@ struct CRustOptionStr {
     uint8_t is_some;
 };
 
+struct CRustOptionString {
+    CRustString val;
+    uint8_t is_some;
+};
+
 #ifdef __cplusplus
 #include <cstring>
 

@@ -77,6 +77,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustOptionUSize"]
     #![swig_foreigner_type = "struct CRustOptionStr"]
     #![swig_rust_type = "CRustOptionStr"]
+    #![swig_foreigner_type = "struct CRustOptionString"]
+    #![swig_rust_type = "CRustOptionString"]
     #![swig_foreigner_type = "struct CResultObjectObject"]
     #![swig_rust_type = "CResultObjectObject"]
     #![swig_foreigner_type = "struct CResultVecObjectObject"]
@@ -1013,6 +1015,28 @@ impl<'a> SwigFrom<Option<&'a str>> for CRustOptionStr {
                 is_some: 1,
             },
             None => CRustOptionStr {
+                val: unsafe { ::std::mem::uninitialized() },
+                is_some: 0,
+            },
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustOptionString {
+    val: CRustString,
+    is_some: u8,
+}
+
+impl SwigFrom<Option<String>> for CRustOptionString {
+    fn swig_from(x: Option<String>) -> Self {
+        match x {
+            Some(x) => CRustOptionString {
+                val: CRustString::from_string(x),
+                is_some: 1,
+            },
+            None => CRustOptionString {
                 val: unsafe { ::std::mem::uninitialized() },
                 is_some: 0,
             },

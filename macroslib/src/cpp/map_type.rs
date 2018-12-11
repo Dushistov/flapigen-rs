@@ -1155,6 +1155,41 @@ fn handle_option_type_in_return<'a>(
                 ),
             }
         };
+    if let ast::TyKind::Path(_, ref path) = opt_ty.node {
+        if path.segments.len() == 1 && path.segments[0].identifier.name == "String" {
+            trace!("Catch return of Option<String>");
+            let cpp_info_ty = special_type(sess, conv_map, cpp_cfg, opt_ty, Direction::Outgoing)?;
+            let cpp_typename = cpp_info_ty
+                .expect("We should know how convert String as output type")
+                .cpp_converter
+                .expect("C++ converter from C struct")
+                .typename;
+            let (typename, output_converter) = match cpp_cfg.cpp_optional {
+                CppOptional::Std17 => (
+                    Symbol::intern(&format!("std::optional<{}>", cpp_typename)),
+                    format!(
+                        "{var}.is_some ? {ty}{{{var}.val}} : std::optional<{ty}>()",
+                        var = FROM_VAR_TEMPLATE,
+                        ty = cpp_typename
+                    ),
+                ),
+                CppOptional::Boost => (
+                    Symbol::intern(&format!("boost::optional<{}>", cpp_typename)),
+                    format!(
+                        "{var}.is_some ? {ty}{{{var}.val}} : boost::optional<{ty}>()",
+                        var = FROM_VAR_TEMPLATE,
+                        ty = cpp_typename
+                    ),
+                ),
+            };
+            cpp_info_opt.cpp_converter = Some(CppConverter {
+                typename,
+                output_converter,
+                input_converter: "#error".to_string(),
+            });
+            return Ok(Some(cpp_info_opt));
+        }
+    }
     cpp_info_opt.cpp_converter = Some(CppConverter {
         typename,
         output_converter,

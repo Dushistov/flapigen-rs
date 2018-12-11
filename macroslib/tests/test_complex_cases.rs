@@ -1109,6 +1109,7 @@ foreigner_class!(class Foo {
    method Foo::f6(&self) -> Option<ControlItem>;
    method Foo::f7(&self) -> Option<u64>;
    method Foo::f8(&self) -> Option<&str>;
+   method Foo::f9(&self) -> Option<String>;
 });
 "#,
         &[ForeignLang::Cpp],
@@ -1156,6 +1157,11 @@ foreigner_class!(class Foo {
         cpp_code_pair
             .foreign_code
             .contains("std::optional<struct RustStrView> f8()")
+    );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("std::optional<RustString> f9()")
     );
 }
 

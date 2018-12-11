@@ -20,7 +20,7 @@ syntex_syntax = "0.58.1"
 syntex_pos = "0.58.1"
 syntex_errors = "0.58.1"
 log = "0.4"
-petgraph = "0.4.5"
+petgraph = "0.4.13"
 lazy_static = "1.0.0"
 bitflags = "1.0"
 

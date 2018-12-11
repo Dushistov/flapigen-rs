@@ -493,6 +493,20 @@ impl TestOptional {
             None
         }
     }
+    fn f13(&self, is_some: bool) -> Option<String> {
+        if is_some {
+            Some(
+                r#"There was a Young Lady whose nose,
+Was so long that it reached to her toes;
+So she hired an Old Lady,
+Whose conduct was steady,
+To carry that wonderful nose."#
+                    .into(),
+            )
+        } else {
+            None
+        }
+    }
 }
 
 foreigner_class!(class TestOptional {
@@ -510,6 +524,7 @@ foreigner_class!(class TestOptional {
     method TestOptional::f10(&self, is_some: bool) -> Option<&str>;
     method TestOptional::f11(&self, val: i32, is_some: bool) -> Option<i32>;
     method TestOptional::f12(&self, val: f32, is_some: bool) -> Option<f32>;
+    method TestOptional::f13(&self, is_some: bool) -> Option<String>;
 });
 
 #[derive(Default)]

@@ -560,6 +560,20 @@ TEST(TestOptional, smokeTest)
         ASSERT_TRUE(!!val);
         EXPECT_NEAR(-17.434, *val, 1e-5);
     }
+
+    {
+        TestOptional y;
+        auto val = y.f13(true);
+        ASSERT_TRUE(!!val);
+        const std::string expect(R"(There was a Young Lady whose nose,
+Was so long that it reached to her toes;
+So she hired an Old Lady,
+Whose conduct was steady,
+To carry that wonderful nose.)");
+        EXPECT_EQ(expect, val->to_std_string());
+        auto val2 = y.f13(false);
+        EXPECT_TRUE(!val2);
+    }
 }
 
 TEST(TestResult, smokeTest)
