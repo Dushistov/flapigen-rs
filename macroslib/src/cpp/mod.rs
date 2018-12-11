@@ -34,12 +34,14 @@ use {
     LanguageGenerator, MethodAccess, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap,
 };
 
+#[derive(Debug)]
 struct CppConverter {
     typename: Symbol,
     output_converter: String,
     input_converter: String,
 }
 
+#[derive(Debug)]
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
     c_converter: String,
