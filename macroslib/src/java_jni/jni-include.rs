@@ -353,7 +353,9 @@ impl<T: SwigForeignClass + Clone> SwigInto<Vec<T>>  for jobjectArray {
         for i in 0..length {
             let native: &mut T = unsafe {
                 let obj = (**env).GetObjectArrayElement.unwrap()(env, self, i);
-                // XXX: above can panic
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("Failed to retrieve element {} from this `jobjectArray'", i);
+                }
                 let ptr = (**env).GetLongField.unwrap()(env, obj, field_id);
                 let native = (jlong_to_pointer(ptr) as *mut T).as_mut().unwrap();
                 (**env).DeleteLocalRef.unwrap()(env, obj);
