@@ -62,6 +62,8 @@
 #include "rust_interface/TestOnlyStaticMethods.hpp"
 #include "rust_interface/Interface.hpp"
 #include "rust_interface/TestPassInterface.hpp"
+#include "rust_interface/RecursiveStruct_fwd.hpp"
+#include "rust_interface/RecursiveStruct.hpp"
 
 using namespace rust;
 
@@ -753,6 +755,16 @@ TEST(Interface, smokeTest)
     x.set(0);
     EXPECT_EQ(1, x.f(1));
     EXPECT_EQ(17, TestPassInterface::use_interface(std::move(x), 17));
+}
+
+TEST(RecursiveStruct, smokeTest)
+{
+    RecursiveStruct s{ "aaa", "aaa/bbb", "aaa/ccc" };
+
+    EXPECT_EQ(std::string{ "aaa" }, s.tag().to_std_string());
+    ASSERT_EQ(2u, s.childs().size());
+    EXPECT_EQ(std::string{ "aaa/bbb" }, s.childs()[0].tag().to_std_string());
+    EXPECT_EQ(std::string{ "aaa/ccc" }, s.childs()[1].tag().to_std_string());
 }
 
 int main(int argc, char *argv[])

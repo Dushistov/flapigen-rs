@@ -741,3 +741,47 @@ foreign_interface!(interface ToString {
     self_type ::std::string::ToString;
     toString = ::std::string::ToString::to_string(&self) -> String;
 });
+
+pub struct RecursiveStruct {
+    tag: String,
+    childs: Vec<RecursiveStruct>,
+}
+
+impl RecursiveStruct {
+    pub fn tag(&self) -> &str {
+        &self.tag
+    }
+    pub fn childs(&self) -> &[RecursiveStruct] {
+        &self.childs
+    }
+    pub fn create_with_two_childs(
+        name: String,
+        child1_name: String,
+        child2_name: String,
+    ) -> RecursiveStruct {
+        RecursiveStruct {
+            tag: name,
+            childs: vec![
+                RecursiveStruct {
+                    tag: child1_name,
+                    childs: vec![],
+                },
+                RecursiveStruct {
+                    tag: child2_name,
+                    childs: vec![],
+                },
+            ],
+        }
+    }
+}
+
+foreigner_class!(class RecursiveStruct {
+    self_type RecursiveStruct;
+    constructor RecursiveStruct::create_with_two_childs(
+        name: String,
+        child1_name: String,
+        child2_name: String,
+    ) -> RecursiveStruct;
+    method RecursiveStruct::tag(&self) -> &str;
+    method RecursiveStruct::childs(&self) -> &[RecursiveStruct];
+});

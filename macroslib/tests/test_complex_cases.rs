@@ -110,7 +110,7 @@ foreigner_class!(class Boo {
     assert!(cpp_code_pair.foreign_code.contains(
         r#"private:
 
-    Foo() noexcept {}"#
+    FooWrapper() noexcept {}"#
     ));
     let java_code_pair = gen_code
         .iter()
@@ -194,7 +194,7 @@ foreigner_class!(class Boo {
     ));
     println!("c/c++: {}", cpp_code.foreign_code);
     assert!(cpp_code.foreign_code.contains(
-        r#"Boo(Foo a_0)
+        r#"BooWrapper(Foo a_0) noexcept
     {
         this->self_ = Boo_with_foo(a_0.release());
         if (this->self_ == nullptr) {
@@ -608,19 +608,19 @@ pub extern "C" fn TestPassObjectsAsParams_f3(this:
     ));
     println!("cpp_code.foreign_code {}", cpp_code.foreign_code);
     assert!(cpp_code.foreign_code.contains(
-        r#"void f1(const Foo & a_0) const 
+        r#"inline void TestPassObjectsAsParamsWrapper<OWN_DATA>::f1(const Foo & a_0) const  noexcept
     {
         TestPassObjectsAsParams_f1(this->self_, static_cast<const FooOpaque *>(a_0));
     }"#
     ));
     assert!(cpp_code.foreign_code.contains(
-        r#"void f2(Foo a_0) const 
+        r#"inline void TestPassObjectsAsParamsWrapper<OWN_DATA>::f2(Foo a_0) const  noexcept
     {
         TestPassObjectsAsParams_f2(this->self_, a_0.release());
     }"#
     ));
     assert!(cpp_code.foreign_code.contains(
-        r#"void f3(Foo & a_0) const 
+        r#"inline void TestPassObjectsAsParamsWrapper<OWN_DATA>::f3(Foo & a_0) const  noexcept
     {
         TestPassObjectsAsParams_f3(this->self_, static_cast<const FooOpaque *>(a_0));
     }"#
@@ -1156,7 +1156,7 @@ foreigner_class!(class Foo {
     assert!(
         cpp_code_pair
             .foreign_code
-            .contains("std::optional<struct RustStrView> f8()")
+            .contains("std::optional< RustStrView> f8()")
     );
     assert!(
         cpp_code_pair
@@ -1276,8 +1276,13 @@ foreigner_class!(class Foo {
             .foreign_code
             .contains("void Foo_f6(const char * a_0);")
     );
+    assert!(
+        cpp_code_pair
+            .foreign_code
+            .contains("static void f6(std::optional<const char *> a_0) noexcept;")
+    );
     assert!(cpp_code_pair.foreign_code.contains(
-        r#"static void f6(std::optional<const char *> a_0)
+        r#"inline void FooWrapper<OWN_DATA>::f6(std::optional<const char *> a_0) noexcept
     {
         Foo_f6(!!a_0 ? *a_0 : nullptr);
     }"#
@@ -1517,11 +1522,6 @@ foreigner_class!(class Foo {
             .foreign_code
             .contains("bool eq(const Foo & a_0) const")
     );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("bool eq(const FooRef & a_0) const")
-    );
 }
 
 #[test]
@@ -1616,7 +1616,7 @@ foreigner_class!(class TestPassInterface {
     ));
     println!("c++/c++ {}", cpp_code.foreign_code);
     assert!(cpp_code.foreign_code.contains(
-        r#"static int32_t use_interface(Interface a_0, int32_t a_1)
+        r#"inline int32_t TestPassInterfaceWrapper<OWN_DATA>::use_interface(Interface a_0, int32_t a_1) noexcept
     {
         int32_t ret = TestPassInterface_use_interface(a_0.release(), a_1);
         return ret;
