@@ -336,6 +336,38 @@ impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
     }
 }
 
+#[swig_from_foreigner_hint = "T []"]
+impl<T: SwigForeignClass + Clone> SwigInto<Vec<T>>  for jobjectArray {
+    fn swig_into(self, env: *mut JNIEnv) -> Vec<T> {
+        let class_id = <T>::jni_class_name();
+        let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
+        let field_id = swig_c_str!("mNativeObj");
+        let type_id = swig_c_str!("J");
+        let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id, type_id) };
+        assert!(!field_id.is_null());
+
+        let length = unsafe { (**env).GetArrayLength.unwrap()(env, self) };
+
+        let mut result = Vec::with_capacity(length as usize);
+
+        for i in 0..length {
+            let native: &mut T = unsafe {
+                let obj = (**env).GetObjectArrayElement.unwrap()(env, self, i);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("Failed to retrieve element {} from this `jobjectArray'", i);
+                }
+                let ptr = (**env).GetLongField.unwrap()(env, obj, field_id);
+                let native = (jlong_to_pointer(ptr) as *mut T).as_mut().unwrap();
+                (**env).DeleteLocalRef.unwrap()(env, obj);
+                native
+            };
+            result.push(native.clone());
+        }
+
+        result
+    }
+}
+
 #[allow(dead_code)]
 fn vec_of_objects_to_jobject_array<T: SwigForeignClass>(
     mut arr: Vec<T>,
