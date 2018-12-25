@@ -422,6 +422,8 @@ public:
     using SelfType = typename std::conditional<OWN_DATA, {c_class_type} *, const {c_class_type} *>::type;
     using CForeignType = {c_class_type};
     using value_type = {class_name}<true>;
+    friend class {class_name}<true>;
+    friend class {class_name}<false>;
 
     {class_name}(const {class_name}&) = delete;
     {class_name} &operator=(const {class_name}&) = delete;
