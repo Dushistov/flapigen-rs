@@ -1,3 +1,4 @@
+/*
 #![allow(unused_macros)]
 #![allow(dead_code)]
 extern crate jni_sys;
@@ -24,3 +25,4 @@ mod cpp {
 
 #[test]
 fn test_includes_syntax_ok() {}
+*/

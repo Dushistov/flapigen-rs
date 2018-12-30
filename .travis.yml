@@ -41,6 +41,5 @@ before_script:
     - export BOOST_ROOT=$PWD/boost_1_66_0
 script:
   - echo $RUSTC_WRAPPER
-  - ln -s workspace.Cargo.toml Cargo.toml
   - echo ${TRAVIS_RUST_VERSION}
   - python ci_build_and_test.py

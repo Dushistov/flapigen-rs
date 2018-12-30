@@ -1,0 +1,2 @@
+[workspace]
+members = ["macroslib", "jni_tests", "c++_tests", "android-example"]

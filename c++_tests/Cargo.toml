@@ -12,7 +12,6 @@ crate-type = ["staticlib"]
 env_logger = "0.5"
 log = "0.4"
 rust_swig = { path = "../macroslib" }
-syntex = "0.58.1"
 
 [features]
 default = ["cpp17"]

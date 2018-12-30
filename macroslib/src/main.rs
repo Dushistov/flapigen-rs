@@ -1,3 +1,5 @@
+fn main() {}
+/*
 //extern crate env_logger;
 
 extern crate rust_swig;
@@ -52,3 +54,4 @@ fn main() {
         .unwrap();
     println!("{}", res_code);
 }
+*/

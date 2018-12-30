@@ -1,3 +1,5 @@
+fn main() {}
+/*
 extern crate bindgen;
 extern crate env_logger;
 extern crate rust_swig;
@@ -99,3 +101,4 @@ fn rust_swig_expand(from: &Path, out: &Path) -> Result<(), String> {
         .expand("rust_swig_test_jni", from, out)
         .map_err(|err| format!("rust swig macros expand failed: {}", err))
 }
+*/

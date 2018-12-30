@@ -1,3 +1,4 @@
+/*
 extern crate env_logger;
 extern crate pulldown_cmark as cmark;
 extern crate rust_swig;
@@ -183,3 +184,4 @@ fn parse_code_block_info(info: &str) -> CodeBlockInfo {
 
     info
 }
+*/

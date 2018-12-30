@@ -1,3 +1,4 @@
+/*
 #[cfg(target_os = "android")]
 extern crate android_logger;
 #[macro_use]
@@ -31,3 +32,4 @@ impl Session {
         format!("Hello {} ✋\nIt's a pleasure to meet you!", to)
     }
 }
+*/

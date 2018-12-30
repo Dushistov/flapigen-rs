@@ -1,13 +1,5 @@
-extern crate syntex_syntax;
-
-use std::env;
-use std::fs::File;
-use std::path::Path;
-use syntex_syntax::parse;
-use syntex_syntax::parse::ParseSess;
-use syntex_syntax::print::{pp, pprust};
-
 fn main() {
+    /*
     let out_dir = env::var("OUT_DIR").unwrap();
     for include_path in &[
         Path::new("src/java_jni/jni-include.rs"),
@@ -37,5 +29,5 @@ fn main() {
         println!("cargo:rerun-if-changed={}", include_path.display());
     }
     println!("cargo:rerun-if-changed={}", out_dir);
-    println!("cargo:rerun-if-changed=tests/test_includes_syntax.rs");
+    println!("cargo:rerun-if-changed=tests/test_includes_syntax.rs");*/
 }

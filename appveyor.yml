@@ -37,5 +37,4 @@ cache:
   - '%USERPROFILE%\.cargo'
 build: off
 test_script:
-  - copy /Y workspace.Cargo.toml Cargo.toml
   - python ci_build_and_test.py

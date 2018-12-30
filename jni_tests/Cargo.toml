@@ -13,9 +13,7 @@ log = "0.4"
 chrono = "0.4.0"
 
 [build-dependencies]
-syntex = "0.58.1"
 env_logger = "0.5"
-bindgen = "0.37.4"
 log = "0.4"
 rust_swig = { path = "../macroslib" }
 

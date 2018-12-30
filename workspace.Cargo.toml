@@ -1,5 +1,0 @@
-[workspace]
-members = ["macroslib", "jni_tests", "c++_tests", "android-example"]
-
-# [replace]
-# "syntex_errors:0.58.1" = { path = "/home/evgeniy/projects/rust-infra/syntex_eshell_fix/syntex_errors" }

@@ -6,6 +6,8 @@
 //! For macros expansion it uses [syntex](https://crates.io/crates/syntex).
 //! More details can be found at
 //! [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
+
+/*
 #[macro_use]
 extern crate bitflags;
 #[cfg(test)]
@@ -715,3 +717,4 @@ impl CppConfig {
         }
     }
 }
+*/

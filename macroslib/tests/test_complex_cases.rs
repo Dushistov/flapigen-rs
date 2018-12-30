@@ -1,3 +1,4 @@
+/*
 extern crate env_logger;
 extern crate regex;
 extern crate rust_swig;
@@ -568,7 +569,7 @@ foreigner_class!(class TestPassObjectsAsParams {
     method TestPassObjectsAsParams::f3(&self, _: &mut Foo);
     method TestPassObjectsAsParams::f3_5(&self, _: &mut Moo<'a>);
     static_method TestPassObjectsAsParams::f4(_: &Foo);
-    static_method TestPassObjectsAsParams::f5(_: Foo);    
+    static_method TestPassObjectsAsParams::f5(_: Foo);
 });
 "#,
         &[ForeignLang::Java, ForeignLang::Cpp],
@@ -855,7 +856,7 @@ foreigner_class!(class ClassWithCallbacks {
     void *opaque;
     //! call by Rust side when callback not need anymore
     void (*C_SomeObserver_deref)(void *opaque);
-    
+
 
     void (*onStateChanged)(int32_t a_0, char a_1, void *opaque);
 
@@ -907,7 +908,7 @@ foreign_interface!(interface SomeObserver {
     void *opaque;
     //! call by Rust side when callback not need anymore
     void (*C_SomeObserver_deref)(void *opaque);
-    
+
 
     char (*onStateChanged)(int32_t a_0, char a_1, void *opaque);
 
@@ -1718,3 +1719,4 @@ fn do_parse_code(
     }
     ret
 }
+*/
