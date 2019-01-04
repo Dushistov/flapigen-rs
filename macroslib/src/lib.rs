@@ -7,6 +7,9 @@
 //! More details can be found at
 //! [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
 
+mod ast;
+mod error;
+mod typemap;
 /*
 #[macro_use]
 extern crate bitflags;

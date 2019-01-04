@@ -16,8 +16,14 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
+syn = { version = "0.15.23", features = ["full", "extra-traits", "visit-mut"] }
+quote = "0.6.10"
+proc-macro2 = "0.4.24"
+log = "0.4"
+petgraph = "0.4.13"
 
 [dev-dependencies]
+env_logger = "0.6"
 
 [build-dependencies]
 
