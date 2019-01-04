@@ -8,8 +8,62 @@
 //! [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
 
 mod ast;
+mod code_parse;
 mod error;
+pub mod file_cache;
 mod typemap;
+
+use crate::ast::RustType;
+use proc_macro2::Span;
+use syn::Type;
+
+#[derive(Debug, Clone)]
+struct ForeignerClassInfo {
+    name: String,
+    methods: Vec<ForeignerMethod>,
+    self_type: Option<RustType>,
+    /// Not necessarily equal to self_type, may be for example Rc<self_type>
+    this_type_for_method: Option<Type>,
+    foreigner_code: String,
+    /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
+    constructor_ret_type: Option<Type>,
+    span: Span,
+    doc_comments: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ForeignerMethod {
+    variant: MethodVariant,
+    rust_id: syn::Path,
+    fn_decl: syn::FnDecl,
+    name_alias: Option<String>,
+    /// cache if rust_fn_decl.output == Result
+    may_return_error: bool,
+    access: MethodAccess,
+    doc_comments: Vec<String>,
+}
+
+#[derive(PartialEq, Clone, Copy, Debug)]
+enum MethodAccess {
+    Private,
+    Public,
+    Protected,
+}
+#[derive(PartialEq, Clone, Copy, Debug)]
+enum MethodVariant {
+    Constructor,
+    Method(SelfTypeVariant),
+    StaticMethod,
+}
+
+#[derive(PartialEq, Clone, Copy, Debug)]
+enum SelfTypeVariant {
+    RptrMut,
+    Rptr,
+    Mut,
+    Default,
+}
+
 /*
 #[macro_use]
 extern crate bitflags;
@@ -49,7 +103,6 @@ macro_rules! unwrap_presult {
 
 mod cpp;
 mod errors;
-pub mod file_cache;
 mod java_jni;
 mod my_ast;
 mod parsing;
@@ -150,14 +203,6 @@ struct SourceCode {
     code: String,
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum SelfTypeVariant {
-    RptrMut,
-    Rptr,
-    Mut,
-    Default,
-}
-
 impl SelfTypeVariant {
     fn is_read_only(&self) -> bool {
         match *self {
@@ -167,31 +212,6 @@ impl SelfTypeVariant {
     }
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum MethodVariant {
-    Constructor,
-    Method(SelfTypeVariant),
-    StaticMethod,
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum MethodAccess {
-    Private,
-    Public,
-    Protected,
-}
-
-#[derive(Debug, Clone)]
-struct ForeignerMethod {
-    variant: MethodVariant,
-    rust_id: ast::Path,
-    fn_decl: P<ast::FnDecl>,
-    name_alias: Option<Symbol>,
-    /// cache if rust_fn_decl.output == Result
-    may_return_error: bool,
-    access: MethodAccess,
-    doc_comments: Vec<Symbol>,
-}
 
 impl ForeignerMethod {
     fn short_name(&self) -> Symbol {
@@ -214,20 +234,6 @@ impl ForeignerMethod {
     }
 }
 
-#[derive(Debug, Clone)]
-struct ForeignerClassInfo {
-    name: Symbol,
-    methods: Vec<ForeignerMethod>,
-    self_type: Option<RustType>,
-    /// Not necessarily equal to self_type, may be for example Rc<self_type>
-    this_type_for_method: Option<ast::Ty>,
-    foreigner_code: String,
-    /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
-    constructor_ret_type: Option<ast::Ty>,
-    span: Span,
-    doc_comments: Vec<Symbol>,
-}
-
 impl ForeignerClassInfo {
     fn self_type_name(&self) -> Symbol {
         self.self_type
@@ -235,7 +241,7 @@ impl ForeignerClassInfo {
             .map(|x| x.normalized_name)
             .unwrap_or(Symbol::intern(""))
     }
-    fn self_type_as_ty(&self) -> ast::Ty {
+    fn self_type_as_ty(&self) -> Type {
         self.self_type
             .as_ref()
             .map(|x| x.ty.clone())

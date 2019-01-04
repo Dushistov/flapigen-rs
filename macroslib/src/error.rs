@@ -34,3 +34,36 @@ impl From<syn::Error> for DiagnosticError {
 }
 
 pub(crate) type Result<T> = std::result::Result<T, DiagnosticError>;
+
+#[cfg(procmacro2_semver_exempt)]
+pub(crate) fn report_parse_error(name: &str, code: &str, err: &DiagnosticError) -> ! {
+    let span = err.span();
+    let start = span.start();
+    let end = span.end();
+
+    let mut code_problem = String::new();
+    for (i, line) in code.lines().enumerate() {
+        if i == start.line {
+            code_problem.push_str(if i == end.line {
+                &line[start.column..end.column]
+            } else {
+                &line[start.column..]
+            });
+        } else if i > start.line && i < end.line {
+            code_problem.push_str(line);
+        } else if i == end.line {
+            code_problem.push_str(&line[..end.column]);
+            break;
+        }
+    }
+
+    panic!(
+        "parsing of types map '{}' failed\nerror: {}\n{}",
+        name, err, code_problem
+    );
+}
+
+#[cfg(not(procmacro2_semver_exempt))]
+pub(crate) fn report_parse_error(name: &str, _code: &str, err: &DiagnosticError) -> ! {
+    panic!("parsing of types map '{}' failed\nerror: '{}'", name, err);
+}

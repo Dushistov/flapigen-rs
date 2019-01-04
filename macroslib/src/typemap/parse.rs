@@ -2,21 +2,22 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, quote_spanned, ToTokens};
+use quote::{quote, ToTokens};
 use syn::{parse_quote, punctuated::Punctuated, spanned::Spanned, Item, ItemMod, Token, Type};
 
 use crate::{
-    ast::{normalize_ty_lifetimes, GenericTypeConv, RustType},
+    ast::{normalize_ty_lifetimes, GenericTypeConv, RustType, TypeName},
     error::{DiagnosticError, Result},
     typemap::{
-        make_unique_rust_typename_if_need, validate_code_template, TypeConvEdge, TypeMap,
-        TypesConvGraph,
+        make_unique_rust_typename, make_unique_rust_typename_if_need, validate_code_template,
+        TypeConvEdge, TypeMap, TypesConvGraph,
     },
 };
 
 static MOD_NAME_WITH_FOREIGN_TYPES: &str = "swig_foreign_types_map";
 static SWIG_FOREIGNER_TYPE: &str = "swig_foreigner_type";
 static SWIG_RUST_TYPE: &str = "swig_rust_type";
+static SWIG_RUST_TYPE_NOT_UNIQUE: &str = "swig_rust_type_not_unique";
 
 static SWIG_TO_FOREIGNER_HINT: &str = "swig_to_foreigner_hint";
 static SWIG_FROM_FOREIGNER_HINT: &str = "swig_from_foreigner_hint";
@@ -33,55 +34,8 @@ static TARGET_ASSOC_TYPE: &str = "Target";
 
 type MyAttrs = HashMap<String, Vec<(String, Span)>>;
 
-/// # Panics
-///
-/// Panics if parse failed
 pub(in crate::typemap) fn parse(
-    name: &str,
-    code: &str,
-    target_pointer_width: usize,
-    traits_usage_code: HashMap<Ident, String>,
-) -> TypeMap {
-    do_parse(name, code, target_pointer_width, traits_usage_code).unwrap_or_else(|err| {
-        report_parse_error(name, code, &err);
-    })
-}
-
-#[cfg(procmacro2_semver_exempt)]
-fn report_parse_error(name: &str, code: &str, err: &DiagnosticError) -> ! {
-    let span = err.span();
-    let start = span.start();
-    let end = span.end();
-
-    let mut code_problem = String::new();
-    for (i, line) in code.lines().enumerate() {
-        if i == start.line {
-            code_problem.push_str(if i == end.line {
-                &line[start.column..end.column]
-            } else {
-                &line[start.column..]
-            });
-        } else if i > start.line && i < end.line {
-            code_problem.push_str(line);
-        } else if i == end.line {
-            code_problem.push_str(&line[..end.column]);
-            break;
-        }
-    }
-
-    panic!(
-        "parsing of types map '{}' failed\nerror: {}\n{}",
-        name, err, code_problem
-    );
-}
-
-#[cfg(not(procmacro2_semver_exempt))]
-fn report_parse_error(name: &str, _code: &str, err: &DiagnosticError) -> ! {
-    panic!("parsing of types map '{}' failed\nerror: '{}'", name, err);
-}
-
-fn do_parse(
-    name: &str,
+    _name: &str,
     code: &str,
     target_pointer_width: usize,
     traits_usage_code: HashMap<Ident, String>,
@@ -99,7 +53,7 @@ fn do_parse(
         utils_code: Vec::with_capacity(file.items.len()),
         generic_edges: Vec::<GenericTypeConv>::new(),
         rust_to_foreign_cache: HashMap::new(),
-        //foreign_classes: Vec::new(),
+        foreign_classes: Vec::new(),
         //exported_enums: HashMap::new(),
         traits_usage_code,
     };
@@ -194,13 +148,13 @@ fn fill_foreign_types_map(item_mod: &syn::ItemMod, ret: &mut TypeMap) -> Result<
             rust_name,
             rust_ty,
         } = entry;
-        let rust_name = rust_name.to_string();
+        let rust_name = rust_name.typename;
         let rust_names_map = &mut ret.rust_names_map;
         let conv_graph = &mut ret.conv_graph;
         let graph_id = *rust_names_map
             .entry(rust_name.clone())
             .or_insert_with(|| conv_graph.add_node(RustType::new(rust_ty, rust_name)));
-        let foreign_name = foreign_name.to_string();
+        let foreign_name = foreign_name.typename;
         assert!(!ret.foreign_names_map.contains_key(&foreign_name));
         ret.foreign_names_map.insert(foreign_name, graph_id);
     }
@@ -209,15 +163,15 @@ fn fill_foreign_types_map(item_mod: &syn::ItemMod, ret: &mut TypeMap) -> Result<
 
 #[derive(Debug)]
 struct TypeNamesMapEntry {
-    foreign_name: Ident,
-    rust_name: Ident,
+    foreign_name: TypeName,
+    rust_name: TypeName,
     rust_ty: Type,
 }
 
 fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>> {
-    let mut ftype: Option<Ident> = None;
+    let mut ftype: Option<TypeName> = None;
 
-    let mut names_map = HashMap::<Ident, (Ident, Type)>::new();
+    let mut names_map = HashMap::<TypeName, (TypeName, Type)>::new();
 
     for a in &item.attrs {
         if a.path.is_ident(SWIG_FOREIGNER_TYPE) {
@@ -227,7 +181,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                 ..
             }) = meta_attr
             {
-                ftype = Some(Ident::new(&value.value(), value.span()));
+                ftype = Some(TypeName::new(value.value(), value.span()));
             } else {
                 return Err(DiagnosticError::new(
                     meta_attr.span(),
@@ -250,14 +204,48 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     ));
                 };
                 let span = attr_value.span();
-                let attr_value_ident = Ident::new(&attr_value.value(), span);
+                let attr_value_tn = TypeName::new(attr_value.value(), span);
 
-                let rust_ty = syn::parse2::<Type>(quote_spanned!(span=> #attr_value_ident))?;
-                names_map.insert(ftype, (attr_value_ident, rust_ty));
+                let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
+                names_map.insert(ftype, (attr_value_tn, rust_ty));
             } else {
                 return Err(DiagnosticError::new(
                     a.span(),
                     format!("No {} for {}", SWIG_FOREIGNER_TYPE, SWIG_RUST_TYPE),
+                ));
+            }
+        } else if a.path.is_ident(SWIG_RUST_TYPE_NOT_UNIQUE) {
+            let meta_attr = a.parse_meta()?;
+
+            if let Some(ftype) = ftype.take() {
+                let attr_value = if let syn::Meta::NameValue(syn::MetaNameValue {
+                    lit: syn::Lit::Str(value),
+                    ..
+                }) = meta_attr
+                {
+                    value
+                } else {
+                    return Err(DiagnosticError::new(
+                        meta_attr.span(),
+                        "Expect name value attribute",
+                    ));
+                };
+                let span = attr_value.span();
+                let attr_value_tn = TypeName::new(attr_value.value(), span);
+                let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
+                let unique_name =
+                    make_unique_rust_typename(attr_value_tn.typename, ftype.typename.clone());
+                names_map.insert(
+                    ftype,
+                    (TypeName::new(unique_name, Span::call_site()), rust_ty),
+                );
+            } else {
+                return Err(DiagnosticError::new(
+                    a.span(),
+                    &format!(
+                        "No {} for {}",
+                        SWIG_FOREIGNER_TYPE, SWIG_RUST_TYPE_NOT_UNIQUE
+                    ),
                 ));
             }
         } else {
@@ -480,14 +468,18 @@ fn handle_deref_impl(
     let (deref_trait, to_ref_ty) = if is_ident_ignore_params(trait_path, SWIG_DEREF_TRAIT) {
         (
             SWIG_DEREF_TRAIT,
-            syn::parse2::<Type>(quote_spanned!(item_impl.span() =>
-                                   & #target_ty))?,
+            parse_ty_with_given_span(
+                &format!("&{}", deref_target_name.as_str()),
+                item_impl.span(),
+            )?,
         )
     } else {
         (
             SWIG_DEREF_MUT_TRAIT,
-            syn::parse2::<Type>(quote_spanned!(item_impl.span() =>
-                                   & mut #target_ty))?,
+            parse_ty_with_given_span(
+                &format!("&mut {}", deref_target_name.as_str()),
+                item_impl.span(),
+            )?,
         )
     };
 
@@ -574,9 +566,7 @@ fn handle_macro(swig_attrs: &MyAttrs, item_macro: syn::ItemMacro, ret: &mut Type
         let mut types_list = Punctuated::<Type, Token![,]>::new();
 
         fn spanned_str_to_type((name, span): &(String, Span)) -> Result<Type> {
-            let ty: Type = syn::parse_str(name)?;
-
-            let ty: Type = syn::parse2(quote_spanned! { *span => #ty })?;
+            let ty: Type = parse_ty_with_given_span(name, *span)?;
             Ok(ty)
         }
 
@@ -752,6 +742,11 @@ where
         && path.segments[0].ident == ident
 }
 
+fn parse_ty_with_given_span(type_str: &str, span: Span) -> Result<Type> {
+    let ty = syn::LitStr::new(type_str, span).parse::<syn::Type>()?;
+    Ok(ty)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -775,7 +770,8 @@ mod swig_foreign_types_map {
 "#,
             64,
             HashMap::new(),
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             {
@@ -819,7 +815,7 @@ mod swig_foreign_types_map {
             {
                 let mut ret = map
                     .into_iter()
-                    .map(|v| (v.foreign_name.to_string(), v.rust_name.to_string()))
+                    .map(|v| (v.foreign_name.typename, v.rust_name.typename))
                     .collect::<Vec<_>>();
                 ret.sort_by(|a, b| a.0.cmp(&b.0));
                 ret
@@ -829,7 +825,7 @@ mod swig_foreign_types_map {
 
     #[test]
     fn test_double_map_err() {
-        do_parse(
+        parse(
             "double_map_err",
             r#"
 mod swig_foreign_types_map {}
@@ -976,7 +972,7 @@ mod swig_foreign_types_map {}
     #[test]
     fn test_parse_trait_with_code() {
         let _ = env_logger::try_init();
-        let mut conv_map = do_parse(
+        let mut conv_map = parse(
             "trait_with_code",
             r#"
 #[allow(dead_code)]
@@ -1040,7 +1036,7 @@ impl SwigFrom<bool> for jboolean {
 
     #[test]
     fn test_parse_deref() {
-        let mut conv_map = do_parse(
+        let mut conv_map = parse(
             "deref_code",
             r#"
 #[allow(dead_code)]
@@ -1076,7 +1072,7 @@ impl SwigDeref for String {
 
     #[test]
     fn test_parse_conv_impl_with_type_params() {
-        let mut conv_map = do_parse(
+        let mut conv_map = parse(
             "trait_with_type_params_code",
             r#"
 #[allow(dead_code)]
@@ -1146,7 +1142,7 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
 
     #[test]
     fn test_parse_macros_conv() {
-        let mut conv_map = do_parse(
+        let mut conv_map = parse(
             "macros",
             r#"
 mod swig_foreign_types_map {

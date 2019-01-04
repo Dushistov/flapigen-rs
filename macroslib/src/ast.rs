@@ -2,11 +2,12 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     fmt::Display,
+    hash::{Hash, Hasher},
     mem,
     rc::Rc,
 };
 
-use log::trace;
+use log::{log_enabled, trace};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
@@ -19,6 +20,32 @@ use syn::{
 };
 
 use crate::typemap::{make_unique_rust_typename, make_unique_rust_typename_if_need};
+
+#[derive(Debug)]
+pub(crate) struct TypeName {
+    pub typename: String,
+    pub span: Span,
+}
+
+impl PartialEq for TypeName {
+    fn eq(&self, o: &Self) -> bool {
+        self.typename == o.typename
+    }
+}
+
+impl Eq for TypeName {}
+
+impl Hash for TypeName {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.typename.hash(state)
+    }
+}
+
+impl TypeName {
+    pub fn new(typename: String, span: Span) -> Self {
+        TypeName { typename, span }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct RustType {
@@ -156,18 +183,8 @@ impl GenericTypeConv {
             ty.ty,
             self.from_ty
         );
-        let trait_bounds: HashMap<String, HashSet<Ident>> = get_trait_bounds(&self.generic_params)
-            .into_iter()
-            .map(|v| {
-                (
-                    v.ty_param,
-                    v.trait_names
-                        .into_iter()
-                        .map(|x| Ident::new(&x, Span::call_site()))
-                        .collect(),
-                )
-            })
-            .collect();
+        let trait_bounds: HashMap<String, HashSet<Ident>> =
+            get_trait_bounds_as_idents_map(&self.generic_params);
         let mut has_unbinded = false;
         for (key, val) in &subst_map {
             if let Some(ref val) = *val {
@@ -365,42 +382,23 @@ fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
         subst_map: &'a TyParamsSubstMap,
     }
     impl<'a> VisitMut for ReplaceTypes<'a> {
-        /*
-
-            fn fold_angle_bracketed_parameter_data(
-                &mut self,
-                mut p: ast::AngleBracketedParameterData,
-            ) -> ast::AngleBracketedParameterData {
-
-                for i in 0..p.types.len() {
-                    p.types[i] = self.fold_ty(p.types[i].clone());
-                }
-                p
-        }*/
         fn visit_type_mut(&mut self, t: &mut Type) {
-            trace!("ReplaceTypes::visit_type_mut t {:?}", t);
             let ty_name = normalize_ty_lifetimes(t);
             if let Some(&Some(ref subst)) = self.subst_map.get(&ty_name) {
                 *t = subst.clone();
+            } else {
+                visit_type_mut(self, t);
             }
-            visit_type_mut(self, t);
-        }
-
-        fn visit_angle_bracketed_generic_arguments_mut(
-            &mut self,
-            p: &mut syn::AngleBracketedGenericArguments,
-        ) {
-            trace!("ReplaceTypes::fold_angle_bracketed_parameter_data {:?}", p);
-            visit_angle_bracketed_generic_arguments_mut(self, p);
         }
     }
-    trace!(
-        "replace_all_types_with in_ty {:?}, subst_map {:?}",
-        in_ty,
-        subst_map
-    );
+    if log_enabled!(log::Level::Trace) {
+        trace!(
+            "replace_all_types_with in_ty {}, subst_map {:?}",
+            in_ty.into_token_stream().to_string(),
+            subst_map
+        );
+    }
     let mut rt = ReplaceTypes { subst_map };
-    //    rt.fold_ty(P(in_ty.clone())).unwrap()
     let mut new_ty = in_ty.clone();
     rt.visit_type_mut(&mut new_ty);
     new_ty
@@ -410,6 +408,23 @@ fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
 pub(crate) struct GenericTraitBound {
     pub ty_param: String,
     pub trait_names: HashSet<String>,
+}
+
+pub(crate) fn get_trait_bounds_as_idents_map(
+    generic: &syn::Generics,
+) -> HashMap<String, HashSet<Ident>> {
+    get_trait_bounds(generic)
+        .into_iter()
+        .map(|v| {
+            (
+                v.ty_param,
+                v.trait_names
+                    .into_iter()
+                    .map(|x| Ident::new(&x, Span::call_site()))
+                    .collect(),
+            )
+        })
+        .collect()
 }
 
 pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> Vec<GenericTraitBound> {
@@ -837,6 +852,34 @@ mod tests {
                 .is_conv_possible(&ty.into(), None, |_| None)
                 .unwrap()
                 .normalized_name
+        );
+    }
+
+    #[test]
+    fn test_replace_all_types_with() {
+        assert_eq!(
+            {
+                let ty: Type = parse_quote! { & Vec<T> };
+                ty
+            },
+            replace_all_types_with(&parse_quote! { &T }, &{
+                let mut subst_map = TyParamsSubstMap::new();
+                subst_map.insert("T".into(), Some(parse_quote! { Vec<T> }));
+                subst_map
+            })
+        );
+
+        assert_eq!(
+            {
+                let ty: Type = parse_quote! { Result<i32, String> };
+                ty
+            },
+            replace_all_types_with(&parse_quote! { Result<T, E> }, &{
+                let mut subst_map = TyParamsSubstMap::new();
+                subst_map.insert("T".into(), Some(parse_quote! { i32 }));
+                subst_map.insert("E".into(), Some(parse_quote! { String }));
+                subst_map
+            })
         );
     }
 
