@@ -16,6 +16,9 @@ impl DiagnosticError {
     pub fn span_note<T: Display>(&mut self, sp: Span, err: T) {
         self.data.push(syn::Error::new(sp, err));
     }
+    pub fn add(&mut self, mut err: DiagnosticError) {
+        self.data.append(&mut err.data);
+    }
 }
 
 impl Display for DiagnosticError {
@@ -36,31 +39,36 @@ impl From<syn::Error> for DiagnosticError {
 pub(crate) type Result<T> = std::result::Result<T, DiagnosticError>;
 
 #[cfg(procmacro2_semver_exempt)]
-pub(crate) fn report_parse_error(name: &str, code: &str, err: &DiagnosticError) -> ! {
-    let span = err.span();
-    let start = span.start();
-    let end = span.end();
+pub(crate) fn report_parse_error(name: &str, code: &str, main_err: &DiagnosticError) -> ! {
+    for err in &main_err.data {
+        let span = err.span();
+        let start = span.start();
+        let end = span.end();
 
-    let mut code_problem = String::new();
-    for (i, line) in code.lines().enumerate() {
-        if i == start.line {
-            code_problem.push_str(if i == end.line {
-                &line[start.column..end.column]
-            } else {
-                &line[start.column..]
-            });
-        } else if i > start.line && i < end.line {
-            code_problem.push_str(line);
-        } else if i == end.line {
-            code_problem.push_str(&line[..end.column]);
-            break;
+        let mut code_problem = String::new();
+        for (i, line) in code.lines().enumerate() {
+            if i == start.line {
+                code_problem.push_str(if i == end.line {
+                    &line[start.column..end.column]
+                } else {
+                    &line[start.column..]
+                });
+            } else if i > start.line && i < end.line {
+                code_problem.push_str(line);
+            } else if i == end.line {
+                code_problem.push_str(&line[..end.column]);
+                break;
+            }
         }
-    }
 
-    panic!(
-        "parsing of types map '{}' failed\nerror: {}\n{}",
-        name, err, code_problem
-    );
+        eprintln!(
+            "parsing of {name} failed\nerror: {err} at {line_s}:{col_s} - {line_e}:{col_e} \n{code_problem}",
+            name = name, err = err, code_problem = code_problem,
+            line_s = start.line, col_s = start.column,
+            line_e = end.line, col_e = end.column
+        );
+    }
+    panic!();
 }
 
 #[cfg(not(procmacro2_semver_exempt))]

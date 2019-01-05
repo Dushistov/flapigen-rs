@@ -57,7 +57,7 @@ pub(crate) type TypeGraphIdx = u32;
 pub(crate) type TypesConvGraph = Graph<RustType, TypeConvEdge, petgraph::Directed, TypeGraphIdx>;
 
 #[derive(Debug)]
-struct TypeMap {
+pub(crate) struct TypeMap {
     conv_graph: TypesConvGraph,
     foreign_names_map: HashMap<String, NodeIndex<TypeGraphIdx>>,
     rust_names_map: HashMap<String, NodeIndex<TypeGraphIdx>>,
@@ -572,7 +572,7 @@ impl TypeMap {
                                 );
                                 let foreign_name = to_foreigner_hint
                                     .as_str()
-                                    .replace(&*ty_param.as_str(), &*class.name.as_str());
+                                    .replace(&*ty_param.as_str(), &*class.name.to_string());
                                 new_foreign_types.insert((
                                     edge.to_ty.clone(),
                                     suffix,
@@ -929,13 +929,12 @@ fn helper3() {
         let foo_rt = foo_rt.implements("SwigForeignClass");
         types_map.add_type(foo_rt.clone());
         types_map.register_foreigner_class(&ForeignerClassInfo {
-            name: "Foo".into(),
+            name: Ident::new("Foo", Span::call_site()),
             methods: vec![],
             self_type: None,
             this_type_for_method: Some(foo_rt.ty.clone()),
             foreigner_code: String::new(),
             constructor_ret_type: Some(foo_rt.ty.clone()),
-            span: Span::call_site(),
             doc_comments: vec![],
         });
 

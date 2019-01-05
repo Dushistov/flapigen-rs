@@ -13,13 +13,293 @@ mod error;
 pub mod file_cache;
 mod typemap;
 
-use crate::ast::RustType;
-use proc_macro2::Span;
-use syn::Type;
+use std::{
+    cell::RefCell,
+    collections::HashSet,
+    env, mem,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
+use log::trace;
+use proc_macro2::{Ident, Span, TokenStream};
+use quote::{quote, ToTokens};
+use syn::{parse_quote, spanned::Spanned, visit_mut::VisitMut, Token, Type};
+
+use crate::{
+    ast::RustType,
+    error::{report_parse_error, DiagnosticError, Result},
+    typemap::TypeMap,
+};
+
+/// Calculate target pointer width from environment variable
+/// that `cargo` inserts
+pub fn target_pointer_width_from_env() -> Option<usize> {
+    env::var("CARGO_CFG_TARGET_POINTER_WIDTH")
+        .ok()
+        .map(|p_width| {
+            <usize>::from_str(&p_width)
+                .expect("Can not convert CARGO_CFG_TARGET_POINTER_WIDTH to usize")
+        })
+}
+
+/// `LanguageConfig` contains configuration for specific programming language
+pub enum LanguageConfig {
+    JavaConfig(JavaConfig),
+    CppConfig(CppConfig),
+}
+
+/// Configuration for Java binding generation
+pub struct JavaConfig {
+    output_dir: PathBuf,
+    package_name: String,
+    use_null_annotation: Option<String>,
+    optional_package: String,
+}
+
+impl JavaConfig {
+    /// Create `JavaConfig`
+    /// # Arguments
+    /// * `output_dir` - directory where place generated java files
+    /// * `package_name` - package name for generated java files
+    pub fn new(output_dir: PathBuf, package_name: String) -> JavaConfig {
+        JavaConfig {
+            output_dir,
+            package_name,
+            use_null_annotation: None,
+            optional_package: "java.util".to_string(),
+        }
+    }
+    /// Use @NonNull for types where appropriate
+    /// # Arguments
+    /// * `import_annotation` - import statement for @NonNull,
+    ///                         for example android.support.annotation.NonNull
+    pub fn use_null_annotation(mut self, import_annotation: String) -> JavaConfig {
+        self.use_null_annotation = Some(import_annotation);
+        self
+    }
+    /// If you use JDK without java.util.Optional*, then you can provide
+    /// name of custom package with Optional
+    pub fn use_optional_package(mut self, optional_package: String) -> JavaConfig {
+        self.optional_package = optional_package;
+        self
+    }
+}
+
+/// Configuration for C++ binding generation
+pub struct CppConfig {
+    output_dir: PathBuf,
+    namespace_name: String,
+    cpp_optional: CppOptional,
+    cpp_variant: CppVariant,
+    generated_helper_files: RefCell<HashSet<PathBuf>>,
+    to_generate: RefCell<Vec<TokenStream>>,
+}
+
+/// To which `C++` type map `std::option::Option`
+pub enum CppOptional {
+    /// `std::optional` from C++17 standard
+    Std17,
+    /// `boost::optional`
+    Boost,
+}
+
+/// To which `C++` type map `std::result::Result`
+pub enum CppVariant {
+    /// `std::variant` from C++17 standard
+    Std17,
+    /// `boost::variant`
+    Boost,
+}
+
+impl CppConfig {
+    /// Create `CppConfig`
+    /// # Arguments
+    /// * `output_dir` - directory where place generated c++ files
+    /// * `namespace_name` - namespace name for generated c++ classes
+    pub fn new(output_dir: PathBuf, namespace_name: String) -> CppConfig {
+        CppConfig {
+            output_dir,
+            namespace_name,
+            cpp_optional: CppOptional::Std17,
+            cpp_variant: CppVariant::Std17,
+            generated_helper_files: RefCell::new(HashSet::new()),
+            to_generate: RefCell::new(vec![]),
+        }
+    }
+    pub fn cpp_optional(self, cpp_optional: CppOptional) -> CppConfig {
+        CppConfig {
+            cpp_optional,
+            ..self
+        }
+    }
+    pub fn cpp_variant(self, cpp_variant: CppVariant) -> CppConfig {
+        CppConfig {
+            cpp_variant,
+            ..self
+        }
+    }
+    pub fn use_boost(self) -> CppConfig {
+        CppConfig {
+            cpp_variant: CppVariant::Boost,
+            cpp_optional: CppOptional::Boost,
+            ..self
+        }
+    }
+}
+
+/// `Generator` is a main point of `rust_swig`.
+/// It expands rust macroses and generates not rust code.
+/// It designed to use inside `build.rs`.
+pub struct Generator {
+    init_done: bool,
+    config: LanguageConfig,
+    conv_map: TypeMap,
+    conv_map_source: Vec<SourceCode>,
+    foreign_lang_helpers: Vec<SourceCode>,
+    pointer_target_width: usize,
+    visit_error: Option<DiagnosticError>,
+}
+
+struct SourceCode {
+    id_of_code: String,
+    code: String,
+}
+
+impl Generator {
+    pub fn new(config: LanguageConfig) -> Generator {
+        let pointer_target_width = target_pointer_width_from_env();
+        let mut conv_map_source = Vec::new();
+        let mut foreign_lang_helpers = Vec::new();
+        match config {
+            LanguageConfig::JavaConfig(ref java_cfg) => {
+                conv_map_source.push(SourceCode {
+                    id_of_code: "jni-include.rs".into(),
+                    code: include_str!("java_jni/jni-include.rs")
+                        .replace(
+                            "java.util.Optional",
+                            &format!("{}.Optional", java_cfg.optional_package),
+                        )
+                        .replace(
+                            "java/util/Optional",
+                            &format!("{}/Optional", java_cfg.optional_package.replace('.', "/")),
+                        ),
+                });
+            }
+            LanguageConfig::CppConfig(..) => {
+                conv_map_source.push(SourceCode {
+                    id_of_code: "cpp-include.rs".into(),
+                    code: include_str!("cpp/cpp-include.rs").into(),
+                });
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_str.h".into(),
+                    code: include_str!("cpp/rust_str.h").into(),
+                });
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_vec.h".into(),
+                    code: include_str!("cpp/rust_vec.h").into(),
+                });
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_result.h".into(),
+                    code: include_str!("cpp/rust_result.h").into(),
+                });
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_option.h".into(),
+                    code: include_str!("cpp/rust_option.h").into(),
+                });
+            }
+        }
+        Generator {
+            init_done: false,
+            config,
+            conv_map: TypeMap::default(),
+            conv_map_source,
+            foreign_lang_helpers,
+            visit_error: None,
+            pointer_target_width: pointer_target_width.unwrap_or(0),
+        }
+    }
+
+    pub fn with_pointer_target_width(mut self, pointer_target_width: usize) -> Generator {
+        self.pointer_target_width = pointer_target_width;
+        self
+    }
+
+    /// Add new foreign langauge type <-> Rust mapping
+    pub fn merge_type_map(mut self, id_of_code: &str, code: &str) -> Generator {
+        self.conv_map_source.push(SourceCode {
+            id_of_code: id_of_code.into(),
+            code: code.into(),
+        });
+        self
+    }
+
+    /// process `src` and save result of macro expansion to `dst`
+    ///
+    /// # Panics
+    /// Panics on error
+    pub fn expand<S, D>(self, crate_name: &str, src: S, dst: D)
+    where
+        S: AsRef<Path>,
+        D: AsRef<Path>,
+    {
+        let src_cnt = std::fs::read_to_string(src.as_ref()).unwrap_or_else(|err| {
+            panic!(
+                "Error during read for file {}: {}",
+                src.as_ref().display(),
+                err
+            )
+        });
+        if let Err(err) = self.expand_str(crate_name, &src_cnt, dst) {
+            report_parse_error(crate_name, &src_cnt, &err);
+        }
+    }
+
+    fn expand_str<D>(mut self, crate_name: &str, src: &str, dst: D) -> Result<()>
+    where
+        D: AsRef<Path>,
+    {
+        let mut file = syn::parse_file(src)?;
+        self.visit_error = None;
+        self.visit_file_mut(&mut file);
+        if let Some(visit_err) = self.visit_error {
+            return Err(visit_err);
+        }
+        std::fs::write(dst.as_ref(), file.into_token_stream().to_string()).unwrap_or_else(|err| {
+            panic!(
+                "Error during write to file {}: {}",
+                dst.as_ref().display(),
+                err
+            );
+        });
+        Ok(())
+    }
+}
+
+impl syn::visit_mut::VisitMut for Generator {
+    fn visit_macro_mut(&mut self, m: &mut syn::Macro) {
+        trace!("expand {:?}", m.path);
+        if m.path.is_ident("foreigner_class") {
+            let mut tts = TokenStream::new();
+            mem::swap(&mut tts, &mut m.tts);
+            if let Err(err) = code_parse::parse_foreigner_class(&self.config, tts) {
+                if let Some(ref mut visit_err) = self.visit_error {
+                    visit_err.add(err);
+                } else {
+                    self.visit_error = Some(err);
+                }
+            }
+        } else if m.path.is_ident("foreign_enum") {
+        } else if m.path.is_ident("foreign_interface") {
+        } else {
+            syn::visit_mut::visit_macro_mut(self, m)
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct ForeignerClassInfo {
-    name: String,
+    name: Ident,
     methods: Vec<ForeignerMethod>,
     self_type: Option<RustType>,
     /// Not necessarily equal to self_type, may be for example Rc<self_type>
@@ -27,20 +307,101 @@ struct ForeignerClassInfo {
     foreigner_code: String,
     /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
     constructor_ret_type: Option<Type>,
-    span: Span,
     doc_comments: Vec<String>,
+}
+
+impl ForeignerClassInfo {
+    fn span(&self) -> Span {
+        self.name.span()
+    }
+    fn self_type_name(&self) -> &str {
+        self.self_type
+            .as_ref()
+            .map(|x| x.normalized_name.as_str())
+            .unwrap_or("")
+    }
+    fn self_type_as_ty(&self) -> Type {
+        self.self_type
+            .as_ref()
+            .map(|x| x.ty.clone())
+            .unwrap_or_else(|| parse_quote! { () })
+    }
+    /// common for several language binding generator code
+    fn validate_class(&self) -> Result<()> {
+        let mut has_constructor = false;
+        let mut has_methods = false;
+        for x in &self.methods {
+            match x.variant {
+                MethodVariant::Constructor => has_constructor = true,
+                MethodVariant::Method(_) => has_methods = true,
+                _ => {}
+            }
+        }
+        if self.self_type.is_none() && has_constructor {
+            Err(DiagnosticError::new(
+                self.span(),
+                format!(
+                    "class {} has constructor, but no self_type defined",
+                    self.name
+                ),
+            ))
+        } else if self.self_type.is_none() && has_methods {
+            Err(DiagnosticError::new(
+                self.span(),
+                format!("class {} has methods, but no self_type defined", self.name),
+            ))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 struct ForeignerMethod {
     variant: MethodVariant,
     rust_id: syn::Path,
-    fn_decl: syn::FnDecl,
-    name_alias: Option<String>,
+    fn_decl: FnDecl,
+    name_alias: Option<Ident>,
     /// cache if rust_fn_decl.output == Result
     may_return_error: bool,
     access: MethodAccess,
     doc_comments: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct FnDecl {
+    inputs: syn::punctuated::Punctuated<syn::FnArg, Token![,]>,
+    output: syn::ReturnType,
+}
+
+impl From<syn::FnDecl> for crate::FnDecl {
+    fn from(x: syn::FnDecl) -> Self {
+        crate::FnDecl {
+            inputs: x.inputs,
+            output: x.output,
+        }
+    }
+}
+
+impl ForeignerMethod {
+    fn short_name(&self) -> String {
+        if let Some(ref name) = self.name_alias {
+            name.to_string()
+        } else {
+            match self.rust_id.segments.len() {
+                0 => String::new(),
+                n => self.rust_id.segments[n - 1].ident.to_string(),
+            }
+        }
+    }
+
+    fn span(&self) -> Span {
+        self.rust_id.span()
+    }
+
+    fn is_dummy_constructor(&self) -> bool {
+        self.rust_id.segments.is_empty()
+    }
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -62,6 +423,15 @@ enum SelfTypeVariant {
     Rptr,
     Mut,
     Default,
+}
+
+impl SelfTypeVariant {
+    fn is_read_only(&self) -> bool {
+        match *self {
+            SelfTypeVariant::RptrMut | SelfTypeVariant::Mut => false,
+            SelfTypeVariant::Default | SelfTypeVariant::Rptr => true,
+        }
+    }
 }
 
 /*
@@ -133,22 +503,6 @@ use my_ast::RustType;
 use parsing::{parse_foreign_enum, parse_foreign_interface, parse_foreigner_class};
 use types_conv_map::TypesConvMap;
 
-/// Calculate target pointer width from environment variable
-/// that `cargo` inserts
-pub fn target_pointer_width_from_env() -> Option<usize> {
-    env::var("CARGO_CFG_TARGET_POINTER_WIDTH")
-        .ok()
-        .map(|p_width| {
-            <usize>::from_str(&p_width)
-                .expect("Can not convert CARGO_CFG_TARGET_POINTER_WIDTH to usize")
-        })
-}
-
-/// `LanguageConfig` contains configuration for specific programming language
-pub enum LanguageConfig {
-    JavaConfig(JavaConfig),
-    CppConfig(CppConfig),
-}
 
 trait LanguageGenerator {
     fn generate<'a>(
@@ -180,109 +534,9 @@ trait LanguageGenerator {
     }
 }
 
-/// `Generator` is a main point of `rust_swig`.
-/// It expands rust macroses and generates not rust code.
-/// It designed to use inside `build.rs`.
-pub struct Generator {
-    pointer_target_width: Option<usize>,
-    // Because of API of syntex, to register for several macroses
-    data: Rc<RefCell<GeneratorData>>,
-}
-
-struct GeneratorData {
-    init_done: bool,
-    config: LanguageConfig,
-    conv_map: TypesConvMap,
-    conv_map_source: Vec<SourceCode>,
-    foreign_lang_helpers: Vec<SourceCode>,
-    pointer_target_width: usize,
-}
-
-struct SourceCode {
-    id_of_code: String,
-    code: String,
-}
-
-impl SelfTypeVariant {
-    fn is_read_only(&self) -> bool {
-        match *self {
-            SelfTypeVariant::RptrMut | SelfTypeVariant::Mut => false,
-            SelfTypeVariant::Default | SelfTypeVariant::Rptr => true,
-        }
-    }
-}
 
 
-impl ForeignerMethod {
-    fn short_name(&self) -> Symbol {
-        if let Some(name) = self.name_alias {
-            name
-        } else {
-            match self.rust_id.segments.len() {
-                0 => Symbol::intern(""),
-                n => self.rust_id.segments[n - 1].identifier.name,
-            }
-        }
-    }
 
-    fn span(&self) -> Span {
-        self.rust_id.span
-    }
-
-    fn is_dummy_constructor(&self) -> bool {
-        self.rust_id.segments.is_empty()
-    }
-}
-
-impl ForeignerClassInfo {
-    fn self_type_name(&self) -> Symbol {
-        self.self_type
-            .as_ref()
-            .map(|x| x.normalized_name)
-            .unwrap_or(Symbol::intern(""))
-    }
-    fn self_type_as_ty(&self) -> Type {
-        self.self_type
-            .as_ref()
-            .map(|x| x.ty.clone())
-            .unwrap_or_else(|| ast::Ty {
-                id: DUMMY_NODE_ID,
-                span: DUMMY_SP,
-                node: ast::TyKind::Path(
-                    None,
-                    ast::Path {
-                        span: DUMMY_SP,
-                        segments: Vec::new(),
-                    },
-                ),
-            })
-    }
-    /// common for several language binding generator code
-    fn validate_class(&self) -> Result<(), String> {
-        let mut has_constructor = false;
-        let mut has_methods = false;
-        for x in &self.methods {
-            match x.variant {
-                MethodVariant::Constructor => has_constructor = true,
-                MethodVariant::Method(_) => has_methods = true,
-                _ => {}
-            }
-        }
-        if self.self_type.is_none() && has_constructor {
-            Err(format!(
-                "class {} has constructor, but no self_type defined",
-                self.name
-            ))
-        } else if self.self_type.is_none() && has_methods {
-            Err(format!(
-                "class {} has methods, but no self_type defined",
-                self.name
-            ))
-        } else {
-            Ok(())
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 struct ForeignEnumItem {
@@ -322,65 +576,7 @@ struct ForeignInterface {
 }
 
 impl Generator {
-    pub fn new(config: LanguageConfig) -> Generator {
-        let pointer_target_width = target_pointer_width_from_env();
-        let mut conv_map_source = Vec::new();
-        let mut foreign_lang_helpers = Vec::new();
-        match config {
-            LanguageConfig::JavaConfig(ref java_cfg) => {
-                conv_map_source.push(SourceCode {
-                    id_of_code: "jni-include.rs".into(),
-                    code: include_str!("java_jni/jni-include.rs")
-                        .replace(
-                            "java.util.Optional",
-                            &format!("{}.Optional", java_cfg.optional_package),
-                        ).replace(
-                            "java/util/Optional",
-                            &format!("{}/Optional", java_cfg.optional_package.replace('.', "/")),
-                        ),
-                });
-            }
-            LanguageConfig::CppConfig(..) => {
-                conv_map_source.push(SourceCode {
-                    id_of_code: "cpp-include.rs".into(),
-                    code: include_str!("cpp/cpp-include.rs").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_str.h".into(),
-                    code: include_str!("cpp/rust_str.h").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_vec.h".into(),
-                    code: include_str!("cpp/rust_vec.h").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_result.h".into(),
-                    code: include_str!("cpp/rust_result.h").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_option.h".into(),
-                    code: include_str!("cpp/rust_option.h").into(),
-                });
-            }
-        }
-        Generator {
-            pointer_target_width,
-            data: Rc::new(RefCell::new(GeneratorData {
-                init_done: false,
-                config,
-                conv_map: TypesConvMap::default(),
-                conv_map_source,
-                foreign_lang_helpers,
-                pointer_target_width: pointer_target_width.unwrap_or(0),
-            })),
-        }
-    }
 
-    pub fn with_pointer_target_width(mut self, pointer_target_width: usize) -> Generator {
-        self.pointer_target_width = Some(pointer_target_width);
-        self.data.borrow_mut().pointer_target_width = pointer_target_width;
-        self
-    }
 
     pub fn register(self, registry: &mut Registry) {
         self.pointer_target_width.unwrap_or_else(|| {
@@ -396,14 +592,7 @@ impl Generator {
         registry.add_macro("foreigner_class", self);
     }
 
-    /// Add new foreign langauge type <-> Rust mapping
-    pub fn merge_type_map(self, id_of_code: &str, code: &str) -> Generator {
-        self.data.borrow_mut().conv_map_source.push(SourceCode {
-            id_of_code: id_of_code.into(),
-            code: code.into(),
-        });
-        self
-    }
+
 }
 
 impl TTMacroExpander for Generator {
@@ -625,105 +814,6 @@ impl GeneratorData {
             })?;
 
         Ok(self.conv_map.take_utils_code())
-    }
-}
-
-/// Configuration for Java binding generation
-pub struct JavaConfig {
-    output_dir: PathBuf,
-    package_name: String,
-    use_null_annotation: Option<String>,
-    optional_package: String,
-}
-
-impl JavaConfig {
-    /// Create `JavaConfig`
-    /// # Arguments
-    /// * `output_dir` - directory where place generated java files
-    /// * `package_name` - package name for generated java files
-    pub fn new(output_dir: PathBuf, package_name: String) -> JavaConfig {
-        JavaConfig {
-            output_dir,
-            package_name,
-            use_null_annotation: None,
-            optional_package: "java.util".to_string(),
-        }
-    }
-    /// Use @NonNull for types where appropriate
-    /// # Arguments
-    /// * `import_annotation` - import statement for @NonNull,
-    ///                         for example android.support.annotation.NonNull
-    pub fn use_null_annotation(mut self, import_annotation: String) -> JavaConfig {
-        self.use_null_annotation = Some(import_annotation);
-        self
-    }
-    /// If you use JDK without java.util.Optional*, then you can provide
-    /// name of custom package with Optional
-    pub fn use_optional_package(mut self, optional_package: String) -> JavaConfig {
-        self.optional_package = optional_package;
-        self
-    }
-}
-
-/// To which `C++` type map `std::option::Option`
-pub enum CppOptional {
-    /// `std::optional` from C++17 standard
-    Std17,
-    /// `boost::optional`
-    Boost,
-}
-
-/// To which `C++` type map `std::result::Result`
-pub enum CppVariant {
-    /// `std::variant` from C++17 standard
-    Std17,
-    /// `boost::variant`
-    Boost,
-}
-
-/// Configuration for C++ binding generation
-pub struct CppConfig {
-    output_dir: PathBuf,
-    namespace_name: String,
-    cpp_optional: CppOptional,
-    cpp_variant: CppVariant,
-    generated_helper_files: RefCell<HashSet<PathBuf>>,
-    to_generate: RefCell<Vec<P<ast::Item>>>,
-}
-
-impl CppConfig {
-    /// Create `CppConfig`
-    /// # Arguments
-    /// * `output_dir` - directory where place generated c++ files
-    /// * `namespace_name` - namespace name for generated c++ classes
-    pub fn new(output_dir: PathBuf, namespace_name: String) -> CppConfig {
-        CppConfig {
-            output_dir,
-            namespace_name,
-            cpp_optional: CppOptional::Std17,
-            cpp_variant: CppVariant::Std17,
-            generated_helper_files: RefCell::new(HashSet::new()),
-            to_generate: RefCell::new(vec![]),
-        }
-    }
-    pub fn cpp_optional(self, cpp_optional: CppOptional) -> CppConfig {
-        CppConfig {
-            cpp_optional,
-            ..self
-        }
-    }
-    pub fn cpp_variant(self, cpp_variant: CppVariant) -> CppConfig {
-        CppConfig {
-            cpp_variant,
-            ..self
-        }
-    }
-    pub fn use_boost(self) -> CppConfig {
-        CppConfig {
-            cpp_variant: CppVariant::Boost,
-            cpp_optional: CppOptional::Boost,
-            ..self
-        }
     }
 }
 */

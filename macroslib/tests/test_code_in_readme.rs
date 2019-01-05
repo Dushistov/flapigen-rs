@@ -1,36 +1,25 @@
-/*
-extern crate env_logger;
-extern crate pulldown_cmark as cmark;
-extern crate rust_swig;
-extern crate syntex;
-extern crate tempdir;
+use std::{
+    fs,
+    fs::File,
+    io::{Read, Write},
+    path::Path,
+};
 
-use std::fs;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::Path;
-
-use cmark::{Event, Parser, Tag};
+use pulldown_cmark::{Event, Parser, Tag};
 use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
 use tempdir::TempDir;
 
-#[macro_use]
-#[path = "../src/test_helper.rs"]
-mod test_helper;
-
 #[test]
 fn test_code_in_readme() {
-    test_helper::logger_init();
+    let _ = env_logger::try_init();
     let tests = parse_readme();
     let tmp_dir = TempDir::new("readme_test").expect("Can not create tmp dir");
 
-    println!("{}: tmp_dir {:?}", file!(), tmp_dir.path());
+    println!("{}: tmp_dir {}", file!(), tmp_dir.path().display());
     for test in &tests {
         if test.text.contains("foreigner_class!") {
             println!("{} with such code:\n{}", test.name, test.text);
-            fs::create_dir_all(&tmp_dir.path().join(&test.name)).unwrap_or_else(|why| {
-                panic!("! {:?}", why.kind());
-            });
+            fs::create_dir_all(&tmp_dir.path().join(&test.name)).unwrap();
             let rust_path_src = tmp_dir.path().join(&test.name).join("test.rs.in");
             let mut src = File::create(&rust_path_src).expect("can not create test.rs.in");
             src.write_all(test.text.as_bytes()).unwrap();
@@ -39,36 +28,26 @@ fn test_code_in_readme() {
             {
                 let java_path = tmp_dir.path().join(&test.name).join("java");
 
-                fs::create_dir_all(&java_path).unwrap_or_else(|why| {
-                    panic!("! {:?}", why.kind());
-                });
+                fs::create_dir_all(&java_path).unwrap();
 
-                let mut registry = syntex::Registry::new();
                 let swig_gen = Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
                     java_path,
                     "com.example".into(),
-                ))).with_pointer_target_width(64);
-                swig_gen.register(&mut registry);
-                registry
-                    .expand("rust_swig_test_jni", &rust_path_src, &rust_path_dst)
-                    .unwrap();
+                )))
+                .with_pointer_target_width(64);
+                swig_gen.expand("rust_swig_test_jni", &rust_path_src, &rust_path_dst);
             }
 
             {
                 let cpp_path = tmp_dir.path().join(&test.name).join("c++");
 
-                fs::create_dir_all(&cpp_path).unwrap_or_else(|why| {
-                    panic!("! {:?}", why.kind());
-                });
-                let mut registry = syntex::Registry::new();
+                fs::create_dir_all(&cpp_path).unwrap();
                 let swig_gen = Generator::new(LanguageConfig::CppConfig(CppConfig::new(
                     cpp_path,
                     "com_example".into(),
-                ))).with_pointer_target_width(64);
-                swig_gen.register(&mut registry);
-                registry
-                    .expand("rust_swig_test_c++", &rust_path_src, &rust_path_dst)
-                    .unwrap();
+                )))
+                .with_pointer_target_width(64);
+                swig_gen.expand("rust_swig_test_c++", &rust_path_src, &rust_path_dst);
             }
         }
     }
@@ -110,9 +89,11 @@ fn parse_readme() -> Vec<Test> {
                     code_buffer = Some(Vec::new());
                 }
             }
-            Event::Text(text) => if let Some(ref mut buf) = code_buffer {
-                buf.push(text.to_string());
-            },
+            Event::Text(text) => {
+                if let Some(ref mut buf) = code_buffer {
+                    buf.push(text.to_string());
+                }
+            }
             Event::End(Tag::CodeBlock(ref info)) => {
                 let code_block_info = parse_code_block_info(info);
                 if let Some(buf) = code_buffer.take() {
@@ -184,4 +165,3 @@ fn parse_code_block_info(info: &str) -> CodeBlockInfo {
 
     info
 }
-*/
