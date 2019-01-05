@@ -13,25 +13,9 @@ use syn::{
 use crate::{
     ast::{if_result_return_ok_err_types, normalize_ty_lifetimes},
     error::Result,
-    ForeignerClassInfo, ForeignerMethod, LanguageConfig, MethodAccess, MethodVariant,
-    SelfTypeVariant,
+    ForeignEnumInfo, ForeignEnumItem, ForeignerClassInfo, ForeignerMethod, LanguageConfig,
+    MethodAccess, MethodVariant, SelfTypeVariant,
 };
-
-struct CppClass(ForeignerClassInfo);
-
-impl Parse for CppClass {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(CppClass(do_parse_foreigner_class(Language::Cpp, input)?))
-    }
-}
-
-struct JavaClass(ForeignerClassInfo);
-
-impl Parse for JavaClass {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(JavaClass(do_parse_foreigner_class(Language::Java, input)?))
-    }
-}
 
 pub(crate) fn parse_foreigner_class(
     config: &LanguageConfig,
@@ -46,6 +30,27 @@ pub(crate) fn parse_foreigner_class(
             let class: JavaClass = syn::parse2(tokens)?;
             Ok(class.0)
         }
+    }
+}
+
+pub(crate) fn parse_foreign_enum(tokens: TokenStream) -> Result<ForeignEnumInfo> {
+    let f_enum: ForeignEnumInfoParser = syn::parse2(tokens)?;
+    Ok(f_enum.0)
+}
+
+struct CppClass(ForeignerClassInfo);
+
+impl Parse for CppClass {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(CppClass(do_parse_foreigner_class(Language::Cpp, input)?))
+    }
+}
+
+struct JavaClass(ForeignerClassInfo);
+
+impl Parse for JavaClass {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(JavaClass(do_parse_foreigner_class(Language::Java, input)?))
     }
 }
 
@@ -64,7 +69,7 @@ mod kw {
     custom_keyword!(empty);
 }
 
-fn parse_doc_comments(input: &ParseStream) -> syn::Result<Vec<String>> {
+fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
     let mut doc_comments = vec![];
 
     if input.fork().call(syn::Attribute::parse_outer).is_ok() {
@@ -355,6 +360,39 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     })
 }
 
+struct ForeignEnumInfoParser(ForeignEnumInfo);
+
+impl Parse for ForeignEnumInfoParser {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let enum_doc_comments = parse_doc_comments(input)?;
+        input.parse::<Token![enum]>()?;
+        let enum_name = input.parse::<Ident>()?;
+        debug!("ENUM NAME {:?}", enum_name);
+        let item_parser;
+        braced!(item_parser in input);
+        let mut items = vec![];
+        while !item_parser.is_empty() {
+            let doc_comments = parse_doc_comments(&item_parser)?;
+            let f_item_name = item_parser.parse::<Ident>()?;
+            item_parser.parse::<Token![=]>()?;
+            let item_name = item_parser.parse::<syn::Path>()?;
+            item_parser.parse::<Token![,]>()?;
+
+            items.push(ForeignEnumItem {
+                name: f_item_name,
+                rust_name: item_name,
+                doc_comments,
+            });
+        }
+
+        Ok(ForeignEnumInfoParser(ForeignEnumInfo {
+            name: enum_name,
+            items,
+            doc_comments: enum_doc_comments,
+        }))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -406,5 +444,18 @@ mod tests {
             })
         };
         test_parse(mac.tts);
+    }
+
+    #[test]
+    fn test_parse_foreign_enum() {
+        let _ = env_logger::try_init();
+        let mac: syn::Macro = parse_quote! {
+            foreign_enum!(enum MyEnum {
+                ITEM1 = MyEnum::Item1,
+                ITEM2 = MyEnum::Item2,
+                ITEM3 = MyEnum::Item3,
+            })
+        };
+        let _enum = parse_foreign_enum(mac.tts).unwrap();
     }
 }
