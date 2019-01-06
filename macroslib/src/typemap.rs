@@ -17,12 +17,16 @@ use quote::quote;
 use syn::{parse_quote, spanned::Spanned, Ident, Type};
 
 use crate::{
-    ast::{get_trait_bounds_as_idents_map, normalize_ty_lifetimes, GenericTypeConv, RustType},
+    ast::{
+        check_if_smart_pointer_return_inner_type, get_trait_bounds_as_idents_map,
+        normalize_ty_lifetimes, GenericTypeConv, RustType,
+    },
     error::{DiagnosticError, Result},
-    ForeignerClassInfo,
+    ForeignEnumInfo, ForeignerClassInfo,
 };
 
 mod parse;
+pub mod utils;
 
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
@@ -56,25 +60,24 @@ impl TypeConvEdge {
 pub(crate) type TypeGraphIdx = u32;
 pub(crate) type TypesConvGraph = Graph<RustType, TypeConvEdge, petgraph::Directed, TypeGraphIdx>;
 
+pub(crate) trait ForeignMethodSignature {
+    type FI: AsRef<ForeignTypeInfo>;
+    fn output(&self) -> &ForeignTypeInfo;
+    fn input(&self) -> &[Self::FI];
+}
+
 #[derive(Debug)]
 pub(crate) struct TypeMap {
     conv_graph: TypesConvGraph,
     foreign_names_map: HashMap<String, NodeIndex<TypeGraphIdx>>,
     rust_names_map: HashMap<String, NodeIndex<TypeGraphIdx>>,
-    utils_code: Vec<TokenStream>,
+    utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
     rust_to_foreign_cache: HashMap<String, String>,
     foreign_classes: Vec<ForeignerClassInfo>,
-    //    exported_enums: HashMap<String, ForeignEnumInfo>,
+    exported_enums: HashMap<String, ForeignEnumInfo>,
     traits_usage_code: HashMap<Ident, String>,
 }
-
-macro_rules! parse_type {
-        ($($tt:tt)*) => {{
-            let ty: Type = parse_quote! { $($tt)* };
-            ty
-        }}
-    }
 
 impl Default for TypeMap {
     fn default() -> Self {
@@ -129,7 +132,7 @@ impl Default for TypeMap {
             generic_edges: default_rules,
             rust_to_foreign_cache: HashMap::new(),
             foreign_classes: Vec::new(),
-            //exported_enums: HashMap::new(),
+            exported_enums: HashMap::new(),
             traits_usage_code: HashMap::new(),
         }
     }
@@ -175,6 +178,208 @@ impl AsRef<ForeignTypeInfo> for ForeignTypeInfo {
 }
 
 impl TypeMap {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.conv_graph.node_count() == 0
+    }
+
+    pub(crate) fn take_utils_code(&mut self) -> Vec<syn::Item> {
+        let mut ret = Vec::new();
+        ret.append(&mut self.utils_code);
+        ret
+    }
+
+    pub(crate) fn add_foreign(&mut self, correspoding_rty: RustType, foreign_name: String) {
+        let idx = self.add_type(correspoding_rty);
+        self.foreign_names_map.insert(foreign_name, idx);
+    }
+    pub(crate) fn find_foreign_type_info_by_name(
+        &self,
+        foreign_name: &str,
+    ) -> Option<ForeignTypeInfo> {
+        self.foreign_names_map
+            .get(foreign_name)
+            .map(|x| ForeignTypeInfo {
+                name: foreign_name.to_string(),
+                correspoding_rust_type: self.conv_graph[*x].clone(),
+            })
+    }
+
+    pub(crate) fn cache_rust_to_foreign_conv(&mut self, from: &RustType, to: ForeignTypeInfo) {
+        self.add_type(from.clone());
+        let to_id = self.add_type(to.correspoding_rust_type);
+        self.rust_to_foreign_cache
+            .insert(from.normalized_name.clone(), to.name.clone());
+        self.foreign_names_map.insert(to.name, to_id);
+    }
+
+    pub(crate) fn convert_to_heap_pointer(from: &RustType, var_name: &str) -> (RustType, String) {
+        for smart_pointer in &["Box", "Rc", "Arc"] {
+            if let Some(inner_ty) =
+                check_if_smart_pointer_return_inner_type(&from.ty, *smart_pointer)
+            {
+                let inner_ty: RustType = inner_ty.into();
+                let inner_ty_str = normalize_ty_lifetimes(&inner_ty.ty);
+                return (
+                    inner_ty,
+                    format!(
+                        r#"
+    let {var_name}: *const {inner_ty} = {smart_pointer}::into_raw({var_name});
+"#,
+                        var_name = var_name,
+                        inner_ty = inner_ty_str,
+                        smart_pointer = *smart_pointer,
+                    ),
+                );
+            }
+        }
+
+        let inner_ty = from.clone();
+        let inner_ty_str = normalize_ty_lifetimes(&inner_ty.ty);
+        (
+            inner_ty,
+            format!(
+                r#"
+    let {var_name}: Box<{inner_ty}> = Box::new({var_name});
+    let {var_name}: *mut {inner_ty} = Box::into_raw({var_name});
+"#,
+                var_name = var_name,
+                inner_ty = inner_ty_str
+            ),
+        )
+    }
+
+    pub(crate) fn unpack_from_heap_pointer(
+        from: &RustType,
+        var_name: &str,
+        unbox_if_boxed: bool,
+    ) -> String {
+        for smart_pointer in &["Box", "Rc", "Arc"] {
+            if check_if_smart_pointer_return_inner_type(&from.ty, *smart_pointer).is_some() {
+                return format!(
+                    r#"
+    let {var_name}: {rc_type}  = unsafe {{ {smart_pointer}::from_raw({var_name}) }};
+"#,
+                    var_name = var_name,
+                    rc_type = from.normalized_name,
+                    smart_pointer = *smart_pointer,
+                );
+            }
+        }
+        let unbox_code = if unbox_if_boxed {
+            format!(
+                r#"
+    let {var_name}: {inside_box_type} = *{var_name};
+"#,
+                var_name = var_name,
+                inside_box_type = from.normalized_name
+            )
+        } else {
+            String::new()
+        };
+        format!(
+            r#"
+    let {var_name}: Box<{inside_box_type}> = unsafe {{ Box::from_raw({var_name}) }};
+{unbox_code}
+"#,
+            var_name = var_name,
+            inside_box_type = from.normalized_name,
+            unbox_code = unbox_code
+        )
+    }
+
+    pub(crate) fn is_ty_implements_exact(&self, ty: &Type, trait_name: &str) -> Option<RustType> {
+        let ty_name = normalize_ty_lifetimes(ty);
+        if let Some(idx) = self.rust_names_map.get(&ty_name) {
+            if self.conv_graph[*idx]
+                .implements
+                .contains(&Ident::new(trait_name, Span::call_site()))
+            {
+                return Some(self.conv_graph[*idx].clone());
+            }
+        }
+        None
+    }
+
+    pub(crate) fn is_ty_implements(&self, ty: &Type, trait_name: &str) -> Option<RustType> {
+        match self.is_ty_implements_exact(ty, trait_name) {
+            Some(x) => Some(x),
+            None => {
+                if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = ty {
+                    let ty_name = normalize_ty_lifetimes(&*elem);
+                    self.rust_names_map.get(&ty_name).and_then(|idx| {
+                        if self.conv_graph[*idx]
+                            .implements
+                            .contains(&Ident::new(trait_name, Span::call_site()))
+                        {
+                            Some(self.conv_graph[*idx].clone())
+                        } else {
+                            None
+                        }
+                    })
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub(crate) fn find_foreigner_class_with_such_self_type(
+        &self,
+        may_be_self_ty: &Type,
+        if_ref_search_reftype: bool,
+    ) -> Option<&ForeignerClassInfo> {
+        let type_name = match may_be_self_ty {
+            syn::Type::Reference(syn::TypeReference { ref elem, .. }) if if_ref_search_reftype => {
+                normalize_ty_lifetimes(&*elem)
+            }
+            _ => normalize_ty_lifetimes(may_be_self_ty),
+        };
+
+        trace!("find self type: possible name {:?}", type_name);
+        for fc in &self.foreign_classes {
+            let self_ty = fc.self_type_name();
+            trace!("self_type {}", self_ty);
+            if self_ty == type_name.as_str() {
+                return Some(fc);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn add_conversation_rule(
+        &mut self,
+        from: RustType,
+        to: RustType,
+        rule: TypeConvEdge,
+    ) {
+        debug!(
+            "TypesConvMap::add_conversation_rule {} -> {}: {:?}",
+            from, to, rule
+        );
+        let from = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, from);
+        let to = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, to);
+        self.conv_graph.update_edge(from, to, rule);
+    }
+
+    pub(crate) fn register_exported_enum(&mut self, enum_info: &ForeignEnumInfo) {
+        self.exported_enums
+            .insert(enum_info.name.to_string(), enum_info.clone());
+    }
+
+    pub(crate) fn is_this_exported_enum(&self, ty: &Type) -> Option<&ForeignEnumInfo> {
+        let type_name = normalize_ty_lifetimes(ty);
+        self.exported_enums.get(&type_name)
+    }
+
+    pub(crate) fn is_generated_foreign_type(&self, foreign_name: &str) -> bool {
+        if self.exported_enums.contains_key(foreign_name) {
+            return true;
+        }
+        self.foreign_classes
+            .iter()
+            .any(|fc| fc.name == foreign_name)
+    }
+
     pub(crate) fn add_type(&mut self, ty: RustType) -> NodeIndex {
         let rust_names_map = &mut self.rust_names_map;
         let conv_graph = &mut self.conv_graph;
@@ -901,7 +1106,7 @@ fn helper3() {
                 .utils_code
                 .iter()
                 .filter_map(|v| {
-                    let item: syn::Item = syn::parse2(v.clone()).unwrap();
+                    let item: syn::Item = v.clone();
                     match item {
                         syn::Item::Fn(ref fun) => Some(fun.ident.to_string()),
                         syn::Item::Trait(ref trait_) => Some(trait_.ident.to_string()),

@@ -232,7 +232,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             has_dummy_constructor = true;
             continue;
         }
-        let func_name: syn::Path = content.parse()?;
+        let func_name: syn::Path = content.call(syn::Path::parse_mod_style)?;
         debug!("func_name {:?}", func_name);
 
         //just skip <'a,...> section
@@ -341,10 +341,12 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 );
             }
         }
+        let span = func_name.span();
         methods.push(ForeignerMethod {
             variant: func_type,
             rust_id: func_name,
             fn_decl: crate::FnDecl {
+                span,
                 inputs: args_in,
                 output: out_type,
             },
@@ -381,7 +383,7 @@ impl Parse for ForeignEnumInfoParser {
             let doc_comments = parse_doc_comments(&item_parser)?;
             let f_item_name = item_parser.parse::<Ident>()?;
             item_parser.parse::<Token![=]>()?;
-            let item_name = item_parser.parse::<syn::Path>()?;
+            let item_name = item_parser.call(syn::Path::parse_mod_style)?;
             item_parser.parse::<Token![,]>()?;
 
             items.push(ForeignEnumItem {
@@ -418,13 +420,13 @@ impl Parse for ForeignInterfaceParser {
             let doc_comments = parse_doc_comments(&item_parser)?;
             let func_name = item_parser.parse::<Ident>()?;
             if func_name == "self_type" {
-                self_type = Some(item_parser.parse::<syn::Path>()?);
+                self_type = Some(item_parser.call(syn::Path::parse_mod_style)?);
                 debug!("self_type: {:?} for {}", self_type, interface_name);
                 item_parser.parse::<Token![;]>()?;
                 continue;
             }
             item_parser.parse::<Token![=]>()?;
-            let rust_func_name = item_parser.parse::<syn::Path>()?;
+            let rust_func_name = item_parser.call(syn::Path::parse_mod_style)?;
 
             let args_parser;
             parenthesized!(args_parser in item_parser);
@@ -433,10 +435,12 @@ impl Parse for ForeignInterfaceParser {
             debug!("cb func in args {:?}", args_in);
             let out_type: syn::ReturnType = item_parser.parse()?;
             item_parser.parse::<Token![;]>()?;
+            let span = rust_func_name.span();
             items.push(ForeignInterfaceMethod {
                 name: func_name,
                 rust_name: rust_func_name,
                 fn_decl: crate::FnDecl {
+                    span,
                     inputs: args_in,
                     output: out_type,
                 },

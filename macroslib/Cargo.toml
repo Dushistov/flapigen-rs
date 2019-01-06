@@ -16,11 +16,13 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
-syn = { version = "0.15.23", features = ["full", "extra-traits", "visit-mut"] }
+syn = { version = "0.15.23", features = ["full", "extra-traits", "visit-mut", "visit"] }
 quote = "0.6.10"
 proc-macro2 = "0.4.24"
 log = "0.4"
 petgraph = "0.4.13"
+bitflags = "1.0"
+lazy_static = "1.0"
 
 [dev-dependencies]
 env_logger = "0.6"
@@ -29,7 +31,7 @@ tempdir = "0.3.7"
 jni-sys = "0.3.0"
 
 [build-dependencies]
-syn = { version = "0.15.23", features = ["full", "extra-traits", "visit-mut"] }
+syn = { version = "0.15.23", features = ["full", "extra-traits", "visit-mut", "visit"] }
 quote = "0.6.10"
 
 [badges]

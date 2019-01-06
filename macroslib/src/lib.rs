@@ -7,10 +7,19 @@
 //! More details can be found at
 //! [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
 
+macro_rules! parse_type {
+    ($($tt:tt)*) => {{
+        let ty: Type = parse_quote! { $($tt)* };
+        ty
+    }}
+}
+
 mod ast;
 mod code_parse;
+mod comments;
 mod error;
 pub mod file_cache;
+mod java_jni;
 mod typemap;
 
 use std::{
@@ -274,6 +283,13 @@ impl Generator {
         });
         Ok(())
     }
+    /*
+    fn language_generator(cfg: &LanguageConfig) -> &LanguageGenerator {
+        match cfg {
+            LanguageConfig::JavaConfig(ref java_cfg) => java_cfg,
+            LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,
+        }
+    }*/
 }
 
 impl syn::visit_mut::VisitMut for Generator {
@@ -388,13 +404,21 @@ struct ForeignerMethod {
 
 #[derive(Debug, Clone)]
 struct FnDecl {
+    span: Span,
     inputs: syn::punctuated::Punctuated<syn::FnArg, Token![,]>,
     output: syn::ReturnType,
+}
+
+impl FnDecl {
+    fn span(&self) -> Span {
+        self.span
+    }
 }
 
 impl From<syn::FnDecl> for crate::FnDecl {
     fn from(x: syn::FnDecl) -> Self {
         crate::FnDecl {
+            span: x.fn_token.span(),
             inputs: x.inputs,
             output: x.output,
         }
@@ -463,6 +487,9 @@ impl ForeignEnumInfo {
     fn rust_enum_name(&self) -> String {
         self.name.to_string()
     }
+    fn span(&self) -> Span {
+        self.name.span()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -479,11 +506,44 @@ struct ForeignInterface {
     items: Vec<ForeignInterfaceMethod>,
 }
 
+impl ForeignInterface {
+    fn span(&self) -> Span {
+        self.name.span()
+    }
+}
+
 struct ForeignInterfaceMethod {
     name: Ident,
     rust_name: syn::Path,
     fn_decl: FnDecl,
     doc_comments: Vec<String>,
+}
+
+trait LanguageGenerator {
+    fn generate(
+        &self,
+        conv_map: &mut TypeMap,
+        pointer_target_width: usize,
+        class: &ForeignerClassInfo,
+    ) -> Result<Vec<TokenStream>>;
+
+    fn generate_enum(
+        &self,
+        conv_map: &mut TypeMap,
+        pointer_target_width: usize,
+        enum_info: &ForeignEnumInfo,
+    ) -> Result<Vec<TokenStream>>;
+
+    fn generate_interface(
+        &self,
+        conv_map: &mut TypeMap,
+        pointer_target_width: usize,
+        interace: &ForeignInterface,
+    ) -> Result<Vec<TokenStream>>;
+
+    fn place_foreign_lang_helpers(&self, _: &[SourceCode]) -> std::result::Result<(), String> {
+        Ok(())
+    }
 }
 
 /*
@@ -556,35 +616,6 @@ use parsing::{parse_foreign_enum, parse_foreign_interface, parse_foreigner_class
 use types_conv_map::TypesConvMap;
 
 
-trait LanguageGenerator {
-    fn generate<'a>(
-        &self,
-        sess: &'a ParseSess,
-        conv_map: &mut TypesConvMap,
-        pointer_target_width: usize,
-        class: &ForeignerClassInfo,
-    ) -> PResult<'a, Vec<P<ast::Item>>>;
-
-    fn generate_enum<'a>(
-        &self,
-        sess: &'a ParseSess,
-        conv_map: &mut TypesConvMap,
-        pointer_target_width: usize,
-        enum_info: &ForeignEnumInfo,
-    ) -> PResult<'a, Vec<P<ast::Item>>>;
-
-    fn generate_interface<'a>(
-        &self,
-        sess: &'a ParseSess,
-        conv_map: &mut TypesConvMap,
-        pointer_target_width: usize,
-        interace: &ForeignInterface,
-    ) -> PResult<'a, Vec<P<ast::Item>>>;
-
-    fn place_foreign_lang_helpers(&self, _: &[SourceCode]) -> Result<(), String> {
-        Ok(())
-    }
-}
 
 impl Generator {
 
@@ -662,13 +693,6 @@ impl GeneratorData {
         );
         items.append(&mut gen_items);
         MacEager::items(SmallVector::many(items))
-    }
-
-    fn language_generator(cfg: &LanguageConfig) -> &LanguageGenerator {
-        match cfg {
-            LanguageConfig::JavaConfig(ref java_cfg) => java_cfg,
-            LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,
-        }
     }
 
     fn expand_foreign_interface<'a>(

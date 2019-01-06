@@ -12,6 +12,7 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
     parse_quote,
+    visit::{visit_lifetime, Visit},
     visit_mut::{
         visit_angle_bracketed_generic_arguments_mut, visit_type_mut, visit_type_reference_mut,
         VisitMut,
@@ -562,6 +563,53 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
         .map(|x| x.ty)
 }
 
+pub(crate) fn fn_arg_type(a: &syn::FnArg) -> &syn::Type {
+    use syn::FnArg::*;
+    match a {
+        SelfRef(_) | SelfValue(_) => panic!("internal error: fn_arg_type for self type"),
+        Inferred(_) => panic!("internal erorr: fn_arg_type for inferred"),
+        Captured(syn::ArgCaptured { ref ty, .. }) | Ignored(ref ty) => ty,
+    }
+}
+
+pub(crate) fn list_lifetimes(ty: &Type) -> Vec<String> {
+    struct CatchLifetimes(Vec<String>);
+    impl<'ast> Visit<'ast> for CatchLifetimes {
+        fn visit_lifetime(&mut self, lifetime: &syn::Lifetime) {
+            self.0.push(format!("'{}", lifetime.ident.to_string()));
+            visit_lifetime(self, lifetime)
+        }
+    }
+    let mut catch_lifetimes = CatchLifetimes(Vec::new());
+    catch_lifetimes.visit_type(ty);
+    catch_lifetimes.0
+}
+
+pub(crate) fn change_span(ty: &mut Type, sp: Span) {
+    struct ChangeSpan(Option<Span>);
+    impl VisitMut for ChangeSpan {
+        fn visit_span_mut(&mut self, i: &mut Span) {
+            if let Some(sp) = self.0 {
+                *i = sp;
+            }
+            self.0 = None;
+        }
+    }
+    let mut change_span = ChangeSpan(Some(sp));
+    change_span.visit_type_mut(ty);
+}
+
+pub(crate) struct DisplayToTokens<'a, T: ToTokens>(pub &'a T);
+
+impl<T> Display for DisplayToTokens<'_, T>
+where
+    T: ToTokens,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
+        write!(f, "{}", self.0.into_token_stream().to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,6 +929,15 @@ mod tests {
                 subst_map
             })
         );
+    }
+
+    #[test]
+    fn test_list_lifetimes() {
+        let my_list_lifetimes = |code| -> Vec<String> {
+            let ret = list_lifetimes(&str_to_ty(code));
+            ret.iter().map(|v| v.as_str().to_string()).collect()
+        };
+        assert_eq!(vec!["'a"], my_list_lifetimes("Rc<RefCell<Foo<'a>>>"));
     }
 
     fn str_to_ty(code: &str) -> syn::Type {

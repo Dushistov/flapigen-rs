@@ -54,7 +54,7 @@ pub(in crate::typemap) fn parse(
         generic_edges: Vec::<GenericTypeConv>::new(),
         rust_to_foreign_cache: HashMap::new(),
         foreign_classes: Vec::new(),
-        //exported_enums: HashMap::new(),
+        exported_enums: HashMap::new(),
         traits_usage_code,
     };
 
@@ -115,7 +115,7 @@ pub(in crate::typemap) fn parse(
                     ret.traits_usage_code
                         .insert(item_trait.ident.clone(), conv_code_template.to_string());
                 }
-                ret.utils_code.push(item_trait.into_token_stream());
+                ret.utils_code.push(syn::Item::Trait(item_trait));
             }
             Item::Impl(ref item_impl)
                 if item_impl_path_is(item_impl, SWIG_DEREF_TRAIT, SWIG_DEREF_MUT_TRAIT) =>
@@ -126,13 +126,13 @@ pub(in crate::typemap) fn parse(
             Item::Macro(item_macro) => {
                 let swig_attrs = handle_attrs!(item_macro.attrs);
                 if swig_attrs.is_empty() {
-                    ret.utils_code.push(item_macro.into_token_stream());
+                    ret.utils_code.push(Item::Macro(item_macro));
                 } else {
                     handle_macro(&swig_attrs, item_macro, &mut ret)?;
                 }
             }
             _ => {
-                ret.utils_code.push(item.into_token_stream());
+                ret.utils_code.push(item);
             }
         }
     }

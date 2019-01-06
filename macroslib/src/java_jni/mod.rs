@@ -3,28 +3,26 @@ mod rust_code;
 
 use std::fmt;
 
+use log::{debug, trace};
 use petgraph::Direction;
-use syntex_pos::DUMMY_SP;
-use syntex_syntax::ast;
-use syntex_syntax::ast::DUMMY_NODE_ID;
-use syntex_syntax::parse::{PResult, ParseSess};
-use syntex_syntax::ptr::P;
-use syntex_syntax::symbol::Symbol;
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{parse_quote, spanned::Spanned, Type};
 
-use errors::fatal_error;
-use my_ast::{normalized_ty_string, parse_ty, RustType};
-use types_conv_map::{
-    make_unique_rust_typename, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE,
-    TO_VAR_TEMPLATE,
-};
-use {
+use crate::{
+    ast::{change_span, fn_arg_type, normalize_ty_lifetimes, RustType},
+    error::{DiagnosticError, Result},
+    typemap::{
+        make_unique_rust_typename, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE,
+        TO_VAR_TEMPLATE,
+    },
     ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
-    LanguageGenerator, MethodVariant, TypesConvMap,
+    LanguageGenerator, MethodVariant, TypeMap,
 };
 
 struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,
-    pub java_transition_type: Option<Symbol>,
+    pub java_transition_type: Option<String>,
     java_converter: String,
 }
 
@@ -81,74 +79,70 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 }
 
 impl LanguageGenerator for JavaConfig {
-    fn generate<'a>(
+    fn generate(
         &self,
-        sess: &'a ParseSess,
-        conv_map: &mut TypesConvMap,
+        conv_map: &mut TypeMap,
         _: usize,
         class: &ForeignerClassInfo,
-    ) -> PResult<'a, Vec<P<ast::Item>>> {
+    ) -> Result<Vec<TokenStream>> {
         debug!(
             "generate: begin for {}, this_type_for_method {:?}",
             class.name, class.this_type_for_method
         );
         class
             .validate_class()
-            .map_err(|err| fatal_error(sess, class.span, &err))?;
+            .map_err(|err| DiagnosticError::new(class.span(), &err))?;
         if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
             let this_type: RustType = this_type_for_method.clone().into();
             let this_type = this_type.implements("SwigForeignClass");
-            let jobject_name = Symbol::intern("jobject");
-            let jobject_ty = parse_ty(sess, DUMMY_SP, jobject_name)?;
+            let jobject_name = "jobject";
+            let jobject_ty = parse_type! { jobject };
             let my_jobj_ti = RustType::new(
                 jobject_ty,
-                make_unique_rust_typename(jobject_name, this_type.normalized_name),
+                make_unique_rust_typename(jobject_name.into(), this_type.normalized_name.clone()),
             );
             conv_map.cache_rust_to_foreign_conv(
                 &this_type,
                 ForeignTypeInfo {
                     correspoding_rust_type: my_jobj_ti,
-                    name: class.name,
+                    name: class.name.to_string(),
                 },
             );
         }
 
-        let f_methods_sign = find_suitable_foreign_types_for_methods(sess, conv_map, class)?;
+        let f_methods_sign = find_suitable_foreign_types_for_methods(conv_map, class)?;
         java_code::generate_java_code(
             &self.output_dir,
             &self.package_name,
             class,
             &f_methods_sign,
             self.use_null_annotation.as_ref().map(|x| &**x),
-        ).map_err(|err| fatal_error(sess, class.span, &err))?;
+        )
+        .map_err(|err| DiagnosticError::new(class.span(), &err))?;
         debug!("generate: java code done");
-        let ast_items = rust_code::generate_rust_code(
-            sess,
-            conv_map,
-            &self.package_name,
-            class,
-            &f_methods_sign,
-        )?;
+        let ast_items =
+            rust_code::generate_rust_code(conv_map, &self.package_name, class, &f_methods_sign)?;
 
         Ok(ast_items)
     }
 
-    fn generate_enum<'a>(
+    fn generate_enum(
         &self,
-        sess: &'a ParseSess,
-        conv_map: &mut TypesConvMap,
+        conv_map: &mut TypeMap,
         pointer_target_width: usize,
         enum_info: &ForeignEnumInfo,
-    ) -> PResult<'a, Vec<P<ast::Item>>> {
+    ) -> Result<Vec<TokenStream>> {
         if (enum_info.items.len() as u64) >= (i32::max_value() as u64) {
-            return Err(fatal_error(sess, enum_info.span, "Too many items in enum"));
+            return Err(DiagnosticError::new(
+                enum_info.span(),
+                "Too many items in enum",
+            ));
         }
 
         java_code::generate_java_code_for_enum(&self.output_dir, &self.package_name, enum_info)
-            .map_err(|err| fatal_error(sess, enum_info.span, &err))?;
+            .map_err(|err| DiagnosticError::new(enum_info.span(), &err))?;
 
         rust_code::generate_rust_code_for_enum(
-            sess,
             &self.package_name,
             conv_map,
             pointer_target_width,
@@ -156,36 +150,35 @@ impl LanguageGenerator for JavaConfig {
         )
     }
 
-    fn generate_interface<'a>(
+    fn generate_interface(
         &self,
-        sess: &'a ParseSess,
-        conv_map: &mut TypesConvMap,
+        conv_map: &mut TypeMap,
         pointer_target_width: usize,
         interface: &ForeignInterface,
-    ) -> PResult<'a, Vec<P<ast::Item>>> {
-        let f_methods = find_suitable_ftypes_for_interace_methods(sess, conv_map, interface)?;
+    ) -> Result<Vec<TokenStream>> {
+        let f_methods = find_suitable_ftypes_for_interace_methods(conv_map, interface)?;
         java_code::generate_java_code_for_interface(
             &self.output_dir,
             &self.package_name,
             interface,
             &f_methods,
             self.use_null_annotation.as_ref().map(|x| &**x),
-        ).map_err(|err| fatal_error(sess, interface.span, &err))?;
+        )
+        .map_err(|err| DiagnosticError::new(interface.span(), err))?;
         let items = rust_code::generate_interface(
-            sess,
             &self.package_name,
             conv_map,
             pointer_target_width,
             interface,
             &f_methods,
         )?;
-        let jobject_name = Symbol::intern("jobject");
-        let jobject_ty = parse_ty(sess, DUMMY_SP, jobject_name)?;
+        let jobject_name = "jobject";
+        let jobject_ty = parse_type! { jobject };
         let my_jobj_ti = RustType::new(
             jobject_ty,
-            make_unique_rust_typename(jobject_name, interface.name),
+            make_unique_rust_typename(jobject_name.into(), interface.name.to_string()),
         );
-        conv_map.add_foreign(my_jobj_ti, interface.name);
+        conv_map.add_foreign(my_jobj_ti, interface.name.to_string());
         Ok(items)
     }
 }
@@ -201,43 +194,41 @@ fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -
     }
 }
 
-fn find_suitable_ftypes_for_interace_methods<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn find_suitable_ftypes_for_interace_methods(
+    conv_map: &mut TypeMap,
     interace: &ForeignInterface,
-) -> PResult<'a, Vec<JniForeignMethodSignature>> {
-    let void_sym = Symbol::intern("void");
-    let dummy_ty = ast::Ty {
-        id: DUMMY_NODE_ID,
-        span: DUMMY_SP,
-        node: ast::TyKind::Tup(vec![]),
-    };
+) -> Result<Vec<JniForeignMethodSignature>> {
+    let void_sym = "void";
+    let dummy_ty = parse_type! { () };
     let mut f_methods = vec![];
 
     for method in &interace.items {
         let mut input = Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
             let f_arg_type = conv_map
-                .map_through_conversation_to_foreign(&arg.ty, Direction::Outgoing, arg.ty.span)
+                .map_through_conversation_to_foreign(
+                    fn_arg_type(arg),
+                    Direction::Outgoing,
+                    fn_arg_type(arg).span(),
+                )
                 .ok_or_else(|| {
-                    fatal_error(
-                        sess,
-                        arg.ty.span,
-                        &format!(
+                    DiagnosticError::new(
+                        fn_arg_type(arg).span(),
+                        format!(
                             "Do not know conversation to foreign \
                              from such rust type '{}'",
-                            normalized_ty_string(&arg.ty)
+                            normalize_ty_lifetimes(fn_arg_type(arg))
                         ),
                     )
                 })?;
             input.push(f_arg_type.into());
         }
         let output = match method.fn_decl.output {
-            ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
-                name: void_sym,
+            syn::ReturnType::Default => ForeignTypeInfo {
+                name: void_sym.to_string(),
                 correspoding_rust_type: {
-                    let mut ty: ast::Ty = dummy_ty.clone();
-                    ty.span = sp;
+                    let mut ty: Type = dummy_ty.clone();
+                    change_span(&mut ty, method.fn_decl.span());
                     ty.into()
                 },
             },
@@ -248,18 +239,13 @@ fn find_suitable_ftypes_for_interace_methods<'a>(
     Ok(f_methods)
 }
 
-fn find_suitable_foreign_types_for_methods<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn find_suitable_foreign_types_for_methods(
+    conv_map: &mut TypeMap,
     class: &ForeignerClassInfo,
-) -> PResult<'a, Vec<JniForeignMethodSignature>> {
+) -> Result<Vec<JniForeignMethodSignature>> {
     let mut ret = Vec::<JniForeignMethodSignature>::with_capacity(class.methods.len());
-    let empty_symbol = Symbol::intern("");
-    let dummy_ty = ast::Ty {
-        id: DUMMY_NODE_ID,
-        span: DUMMY_SP,
-        node: ast::TyKind::Tup(vec![]),
-    };
+    let empty_symbol = "";
+    let dummy_ty = parse_type! { () };
 
     for method in &class.methods {
         //skip self argument
@@ -271,21 +257,24 @@ fn find_suitable_foreign_types_for_methods<'a>(
         let mut input =
             Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            if let Some(converter) = special_type(sess, conv_map, &arg.ty)? {
+            if let Some(converter) = special_type(conv_map, fn_arg_type(arg))? {
                 input.push(converter);
                 continue;
             }
 
             let f_arg_type = conv_map
-                .map_through_conversation_to_foreign(&arg.ty, Direction::Incoming, arg.ty.span)
+                .map_through_conversation_to_foreign(
+                    fn_arg_type(arg),
+                    Direction::Incoming,
+                    fn_arg_type(arg).span(),
+                )
                 .ok_or_else(|| {
-                    fatal_error(
-                        sess,
-                        arg.ty.span,
-                        &format!(
+                    DiagnosticError::new(
+                        fn_arg_type(arg).span(),
+                        format!(
                             "Do not know conversation from foreign \
                              to such rust type '{}'",
-                            normalized_ty_string(&arg.ty)
+                            normalize_ty_lifetimes(fn_arg_type(arg))
                         ),
                     )
                 })?;
@@ -293,28 +282,27 @@ fn find_suitable_foreign_types_for_methods<'a>(
         }
         let output = match method.variant {
             MethodVariant::Constructor => ForeignTypeInfo {
-                name: empty_symbol,
+                name: empty_symbol.into(),
                 correspoding_rust_type: dummy_ty.clone().into(),
             },
             _ => match method.fn_decl.output {
-                ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
-                    name: Symbol::intern("void"),
+                syn::ReturnType::Default => ForeignTypeInfo {
+                    name: "void".into(),
                     correspoding_rust_type: {
-                        let mut ty: ast::Ty = dummy_ty.clone();
-                        ty.span = sp;
+                        let mut ty: Type = dummy_ty.clone();
+                        change_span(&mut ty, method.fn_decl.output.span());
                         ty.into()
                     },
                 },
-                ast::FunctionRetTy::Ty(ref rt) => conv_map
-                    .map_through_conversation_to_foreign(&*rt, Direction::Outgoing, rt.span)
+                syn::ReturnType::Type(_, ref rt) => conv_map
+                    .map_through_conversation_to_foreign(&*rt, Direction::Outgoing, rt.span())
                     .ok_or_else(|| {
-                        fatal_error(
-                            sess,
-                            rt.span,
-                            &format!(
+                        DiagnosticError::new(
+                            rt.span(),
+                            format!(
                                 "Do not know conversation from \
                                  such rust type '{}' to foreign",
-                                normalized_ty_string(&*rt)
+                                normalize_ty_lifetimes(&*rt)
                             ),
                         )
                     })?,
@@ -342,65 +330,55 @@ fn java_class_name_to_jni(full_name: &str) -> String {
 
 fn calc_converter_for_foreign_class_arg(
     foreigner_class: &ForeignerClassInfo,
-    arg_ty: &ast::Ty,
+    arg_ty: &Type,
 ) -> JavaForeignTypeInfo {
     let this_ty = foreigner_class.this_type_for_method.as_ref().unwrap();
     let this_ty: RustType = this_ty.clone().into();
 
-    let java_converter = if *this_ty.normalized_name.as_str() == *normalized_ty_string(arg_ty) {
+    let java_converter = if this_ty.normalized_name == normalize_ty_lifetimes(arg_ty) {
         r#"
         long {to_var} = {from_var}.mNativeObj;
         {from_var}.mNativeObj = 0;
-"#.to_string()
-    } else if let ast::TyKind::Rptr(_, ref mut_ty) = arg_ty.node {
-        assert_eq!(
-            *normalized_ty_string(&mut_ty.ty),
-            *this_ty.normalized_name.as_str()
-        );
+"#
+        .to_string()
+    } else if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = arg_ty {
+        assert_eq!(normalize_ty_lifetimes(elem), this_ty.normalized_name);
         r#"
         long {to_var} = {from_var}.mNativeObj;
-"#.to_string()
+"#
+        .to_string()
     } else {
         unreachable!();
     };
-    let sess = ParseSess::new();
-    let jlong_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("jlong"))
-        .unwrap()
-        .into();
+    let jlong_ti: RustType = parse_type! { jlong }.into();
     JavaForeignTypeInfo {
         base: ForeignTypeInfo {
-            name: foreigner_class.name,
+            name: foreigner_class.name.to_string(),
             correspoding_rust_type: jlong_ti,
         },
-        java_transition_type: Some(Symbol::intern("long")),
+        java_transition_type: Some("long".into()),
         java_converter,
     }
 }
 
 fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> JavaForeignTypeInfo {
-    let sess = ParseSess::new();
-    let jint_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("jint"))
-        .unwrap()
-        .into();
+    let jint_ti: RustType = parse_type! { jint }.into();
     let java_converter: String = r#"
         int {to_var} = {from_var}.getValue();
-"#.into();
+"#
+    .into();
     JavaForeignTypeInfo {
         base: ForeignTypeInfo {
-            name: foreign_enum.name,
+            name: foreign_enum.name.to_string(),
             correspoding_rust_type: jint_ti,
         },
-        java_transition_type: Some(Symbol::intern("int")),
+        java_transition_type: Some("int".into()),
         java_converter,
     }
 }
 
-fn special_type<'a>(
-    sess: &'a ParseSess,
-    conv_map: &TypesConvMap,
-    arg_ty: &ast::Ty,
-) -> PResult<'a, Option<JavaForeignTypeInfo>> {
-    let foreign_class_trait = Symbol::intern("SwigForeignClass");
+fn special_type(conv_map: &TypeMap, arg_ty: &Type) -> Result<Option<JavaForeignTypeInfo>> {
+    let foreign_class_trait = "SwigForeignClass";
 
     trace!(
         "Check is arg.ty({:?}) implements foreign_class_trait",
@@ -411,10 +389,9 @@ fn special_type<'a>(
         let foreigner_class = conv_map
             .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
             .ok_or_else(|| {
-                fatal_error(
-                    sess,
-                    arg_ty.span,
-                    &format!("Can not find foreigner_class for '{:?}'", arg_ty),
+                DiagnosticError::new(
+                    arg_ty.span(),
+                    format!("Can not find foreigner_class for '{:?}'", arg_ty),
                 )
             })?;
         let converter = calc_converter_for_foreign_class_arg(foreigner_class, arg_ty);
@@ -428,16 +405,13 @@ fn special_type<'a>(
 
     trace!("Check is arg.ty({:?}) self type of foreign class", arg_ty);
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(arg_ty, true) {
-        let sess = ParseSess::new();
-        let jlong_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("jlong"))
-            .unwrap()
-            .into();
+        let jlong_ti: RustType = parse_type! { jlong }.into();
         let converter = JavaForeignTypeInfo {
             base: ForeignTypeInfo {
-                name: foreign_class.name,
+                name: foreign_class.name.to_string(),
                 correspoding_rust_type: jlong_ti,
             },
-            java_transition_type: Some(Symbol::intern("long")),
+            java_transition_type: Some("long".into()),
             java_converter: "        long {to_var} = {from_var}.mNativeObj;".to_string(),
         };
         return Ok(Some(converter));
