@@ -300,6 +300,15 @@ impl syn::visit_mut::VisitMut for Generator {
                 }
             }
         } else if m.path.is_ident("foreign_interface") {
+            let mut tts = TokenStream::new();
+            mem::swap(&mut tts, &mut m.tts);
+            if let Err(err) = code_parse::parse_foreign_interface(tts) {
+                if let Some(ref mut visit_err) = self.visit_error {
+                    visit_err.add(err);
+                } else {
+                    self.visit_error = Some(err);
+                }
+            }
         } else {
             syn::visit_mut::visit_macro_mut(self, m)
         }
@@ -463,6 +472,20 @@ struct ForeignEnumItem {
     doc_comments: Vec<String>,
 }
 
+struct ForeignInterface {
+    name: Ident,
+    self_type: syn::Path,
+    doc_comments: Vec<String>,
+    items: Vec<ForeignInterfaceMethod>,
+}
+
+struct ForeignInterfaceMethod {
+    name: Ident,
+    rust_name: syn::Path,
+    fn_decl: FnDecl,
+    doc_comments: Vec<String>,
+}
+
 /*
 #[macro_use]
 extern crate bitflags;
@@ -561,23 +584,6 @@ trait LanguageGenerator {
     fn place_foreign_lang_helpers(&self, _: &[SourceCode]) -> Result<(), String> {
         Ok(())
     }
-}
-
-
-
-struct ForeignInterfaceMethod {
-    name: Symbol,
-    rust_name: ast::Path,
-    fn_decl: P<ast::FnDecl>,
-    doc_comments: Vec<Symbol>,
-}
-
-struct ForeignInterface {
-    name: Symbol,
-    self_type: ast::Path,
-    doc_comments: Vec<Symbol>,
-    items: Vec<ForeignInterfaceMethod>,
-    span: Span,
 }
 
 impl Generator {

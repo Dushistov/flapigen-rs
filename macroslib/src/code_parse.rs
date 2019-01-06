@@ -13,8 +13,8 @@ use syn::{
 use crate::{
     ast::{if_result_return_ok_err_types, normalize_ty_lifetimes},
     error::Result,
-    ForeignEnumInfo, ForeignEnumItem, ForeignerClassInfo, ForeignerMethod, LanguageConfig,
-    MethodAccess, MethodVariant, SelfTypeVariant,
+    ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod, ForeignerClassInfo,
+    ForeignerMethod, LanguageConfig, MethodAccess, MethodVariant, SelfTypeVariant,
 };
 
 pub(crate) fn parse_foreigner_class(
@@ -36,6 +36,11 @@ pub(crate) fn parse_foreigner_class(
 pub(crate) fn parse_foreign_enum(tokens: TokenStream) -> Result<ForeignEnumInfo> {
     let f_enum: ForeignEnumInfoParser = syn::parse2(tokens)?;
     Ok(f_enum.0)
+}
+
+pub(crate) fn parse_foreign_interface(tokens: TokenStream) -> Result<ForeignInterface> {
+    let f_interface: ForeignInterfaceParser = syn::parse2(tokens)?;
+    Ok(f_interface.0)
 }
 
 struct CppClass(ForeignerClassInfo);
@@ -67,6 +72,7 @@ mod kw {
     custom_keyword!(private);
     custom_keyword!(protected);
     custom_keyword!(empty);
+    custom_keyword!(interface);
 }
 
 fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
@@ -389,6 +395,64 @@ impl Parse for ForeignEnumInfoParser {
             name: enum_name,
             items,
             doc_comments: enum_doc_comments,
+        }))
+    }
+}
+
+struct ForeignInterfaceParser(ForeignInterface);
+
+impl Parse for ForeignInterfaceParser {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let interface_doc_comments = parse_doc_comments(input)?;
+        input.parse::<kw::interface>()?;
+        let interface_name = input.parse::<Ident>()?;
+        debug!("INTERFACE NAME {:?}", interface_name);
+
+        let item_parser;
+        braced!(item_parser in input);
+
+        let mut self_type = None;
+        let mut items = vec![];
+
+        while !item_parser.is_empty() {
+            let doc_comments = parse_doc_comments(&item_parser)?;
+            let func_name = item_parser.parse::<Ident>()?;
+            if func_name == "self_type" {
+                self_type = Some(item_parser.parse::<syn::Path>()?);
+                debug!("self_type: {:?} for {}", self_type, interface_name);
+                item_parser.parse::<Token![;]>()?;
+                continue;
+            }
+            item_parser.parse::<Token![=]>()?;
+            let rust_func_name = item_parser.parse::<syn::Path>()?;
+
+            let args_parser;
+            parenthesized!(args_parser in item_parser);
+            let args_in: Punctuated<syn::FnArg, Token![,]> =
+                args_parser.parse_terminated(syn::FnArg::parse)?;
+            debug!("cb func in args {:?}", args_in);
+            let out_type: syn::ReturnType = item_parser.parse()?;
+            item_parser.parse::<Token![;]>()?;
+            items.push(ForeignInterfaceMethod {
+                name: func_name,
+                rust_name: rust_func_name,
+                fn_decl: crate::FnDecl {
+                    inputs: args_in,
+                    output: out_type,
+                },
+                doc_comments,
+            });
+        }
+
+        let self_type: syn::Path = self_type.ok_or_else(|| {
+            syn::Error::new(interface_name.span(), "No `self_type` in foreign_interface")
+        })?;
+
+        Ok(ForeignInterfaceParser(ForeignInterface {
+            name: interface_name,
+            self_type,
+            doc_comments: interface_doc_comments,
+            items,
         }))
     }
 }
