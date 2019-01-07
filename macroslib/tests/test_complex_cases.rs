@@ -1,71 +1,153 @@
-/*
-extern crate env_logger;
-extern crate regex;
-extern crate rust_swig;
-extern crate syntex;
-extern crate tempdir;
+use std::{
+    ffi::OsString,
+    fs, panic,
+    path::{Path, PathBuf},
+};
 
-use std::fs;
-use std::fs::File;
-use std::io::Read;
-use std::panic;
-use std::path::Path;
-
-use regex::Regex;
 use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
-use syntex::Registry;
+use syn::Token;
 use tempdir::TempDir;
 
-#[macro_use]
-#[path = "../src/test_helper.rs"]
-mod test_helper;
+#[test]
+fn test_complex_cases_main() {
+    let _ = env_logger::try_init();
+
+    let test_cases: Vec<PathBuf> = fs::read_dir(Path::new("tests").join("expectations"))
+        .expect("read_dir failed")
+        .into_iter()
+        .filter_map(|p| {
+            if let Ok(path) = p {
+                if let Ok(ft) = path.file_type() {
+                    if ft.is_file() && path.path().to_str().map_or(false, |x| x.ends_with(".rs")) {
+                        return Some(path.path());
+                    }
+                }
+            }
+            None
+        })
+        .collect();
+
+    let mut ntests = 0_usize;
+
+    fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bool {
+        let (main_ext, rust_ext) = match lang {
+            ForeignLang::Cpp => (".cpp", ".cpp_rs"),
+            ForeignLang::Java => (".java", ".java_rs"),
+        };
+        let main_expectation = new_path(test_case, main_ext);
+        if main_expectation.exists() {
+            let code_pair =
+                parse_code(&test_name, Source::Path(&test_case), lang).expect("parse_code failed");
+            let pats =
+                parse_code_expectation(&main_expectation).expect("parsing of patterns failed");
+            println!(
+                "foreign_code({:?}) for '{}': {}",
+                lang, test_name, code_pair.foreign_code
+            );
+            for pat in pats {
+                println!("foreign_code({:?}) search pat '{}'", lang, pat);
+                assert!(code_pair.foreign_code.contains(&pat));
+            }
+
+            let rust_cpp_expectation = new_path(&test_case, rust_ext);
+            if rust_cpp_expectation.exists() {
+                let pats = parse_code_expectation(&rust_cpp_expectation)
+                    .expect("parsing of patterns failed");
+                println!("rust code for '{}': {}", test_name, code_pair.rust_code);
+                for pat in pats {
+                    println!("search pat '{}'", pat);
+                    assert!(code_pair.rust_code.contains(&pat));
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    for test_case in test_cases {
+        let base_name = test_case.file_stem().expect("name without extenstion");
+        let test_name = base_name.to_string_lossy();
+        println!("test_complex_cases test {}", test_name);
+
+        let mut test_something = false;
+        for lang in &[ForeignLang::Cpp, ForeignLang::Java] {
+            if check_expectation(&test_name, &test_case, *lang) {
+                test_something = true;
+            }
+        }
+        if test_something {
+            ntests += 1;
+        }
+    }
+
+    assert_eq!(17, ntests);
+}
 
 #[test]
-fn test_class_with_methods_without_constructor() {
+fn test_complex_cases_class_with_methods_without_constructor() {
     let langs = [ForeignLang::Java, ForeignLang::Cpp];
-    parse_code(
-        "class_with_methods_without_constructor",
-        r#"
+    for lang in &langs {
+        let name = format!("class_with_methods_without_constructor {:?}", lang);
+        parse_code(
+            &name,
+            Source::Str(
+                r#"
 foreigner_class!(class Foo {
 });
 "#,
-        &langs,
-    );
-    parse_code(
-        "class_with_methods_without_constructor",
-        r#"
-foreigner_class!(class Foo {
-   self_type SomeType;
-});
-"#,
-        &langs,
-    );
+            ),
+            *lang,
+        )
+        .expect(&name);
+    }
+    for lang in &langs {
+        let name = format!("class_with_methods_without_constructor {:?}", lang);
+        parse_code(
+            &name,
+            Source::Str(
+                r#"
+    foreigner_class!(class Foo {
+       self_type SomeType;
+    });
+    "#,
+            ),
+            *lang,
+        )
+        .expect(&name);
+    }
 
     for lang in &langs {
         let result = panic::catch_unwind(|| {
+            let name = format!("class_with_methods_without_constructor {:?}", lang);
             parse_code(
-                "class_with_methods_without_constructor",
-                r#"
-foreigner_class!(class Foo {
-   self_type SomeType;
-   method SomeType::f(&self) -> i32;
-});
-"#,
-                &[*lang],
-            );
+                &name,
+                Source::Str(
+                    r#"
+    foreigner_class!(class Foo {
+       self_type SomeType;
+       method SomeType::f(&self) -> i32;
+    });
+    "#,
+                ),
+                *lang,
+            )
+            .expect(&name);
         });
         assert!(result.is_err());
     }
 }
 
 #[test]
-fn test_parse_without_self_type_err() {
+fn test_complex_cases_parse_without_self_type_err() {
     for lang in &[ForeignLang::Java, ForeignLang::Cpp] {
-        eprintln!("test_parse_without_self_type_err: lang {:?}", lang);
+        println!("test_parse_without_self_type_err: lang {:?}", lang);
         let result = panic::catch_unwind(|| {
+            let name = format!("test_parse_without_self_type_err {:?}", lang);
             parse_code(
-                "test_parse_without_self_type_err",
-                r#"
+                &name,
+                Source::Str(
+                    r#"
 foreigner_class!(class DownloadItem {
     self_type DownloadItem;
     private constructor = empty;
@@ -77,231 +159,157 @@ foreigner_class!(class Document {
     method Document::remote(&self) -> bool;
 });
 "#,
-                &[*lang],
-            );
+                ),
+                *lang,
+            )
+            .expect(&name);
         });
         assert!(result.is_err());
     }
 }
 
-#[test]
-fn test_class_with_dummy_constructor() {
-    let gen_code = parse_code(
-        "test_class_with_dummy_constructor",
-        r#"
-foreigner_class!(class Foo {
-   self_type SomeType;
-   private constructor = empty;
-   method SomeType::f(&self);
-});
-
-foreigner_class!(class Boo {
-   self_type OtherType;
-   private constructor = empty -> Box<OtherType>;
-   method OtherType::f(&self);
-});
-"#,
-        &[ForeignLang::Java, ForeignLang::Cpp],
-    );
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
-    println!("c/c++: {}", cpp_code_pair.foreign_code);
-    assert!(cpp_code_pair.foreign_code.contains(
-        r#"private:
-
-    FooWrapper() noexcept {}"#
-    ));
-    let java_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Java)
-        .unwrap();
-    println!("Java: {}", java_code_pair.foreign_code);
-    assert!(java_code_pair.foreign_code.contains("private Foo() {}"));
+#[derive(PartialEq, Debug, Clone, Copy)]
+enum ForeignLang {
+    Java,
+    Cpp,
 }
 
-#[test]
-fn test_foreign_class_as_return_type_simple() {
-    // without result Type and without "foreign" args
-    let gen_code = parse_code(
-        "foreign_class_as_return_type_simple",
-        r#"
-foreigner_class!(class Foo {
-    self_type Foo;
-    constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-});
-
-foreigner_class!(class Boo {
-    self_type Boo;
-
-    constructor Boo::new(_: i32, _: usize) -> Boo;
-    static_method Boo::factory_method() -> Boo;
-    method Boo::get_one_foo(&self) -> Foo;
-});
-"#,
-        &[ForeignLang::Java, ForeignLang::Cpp],
-    );
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
-    println!("c/c++: {}", cpp_code_pair.foreign_code);
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("Foo get_one_foo() const")
-    );
+struct CodePair {
+    rust_code: String,
+    foreign_code: String,
 }
 
-#[test]
-fn test_foreign_class_as_arg_type_simple() {
-    let gen_code = parse_code(
-        "test_foreign_class_as_arg_type_simple",
-        r#"
-foreigner_class!(class Foo {
-    self_type Foo;
-    constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-});
+#[derive(Debug)]
+struct Error {
+    msg: String,
+}
 
-foreigner_class!(class Boo {
-    self_type Boo;
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.msg)
+    }
+}
 
-    constructor Boo::new(_: i32, _: usize) -> Boo;
-    constructor Boo::with_foo(f: Foo) -> Boo;
-    method Boo::f(&self, foo: Foo) -> usize;
-    static_method Boo::f2(_: f64, foo: Foo) -> i32;
-});
-"#,
-        &[ForeignLang::Java, ForeignLang::Cpp],
-    );
-
-    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
-    println!("c++/rust {}", cpp_code.rust_code);
-    assert!(cpp_code.rust_code.contains(
-        r#"fn Boo_with_foo(a_0: *mut ::std::os::raw::c_void)
- -> *const ::std::os::raw::c_void {
-    assert!(! a_0 . is_null (  ));
-    let a_0: *mut Foo = a_0 as *mut Foo;
-    let a_0: Box<Foo> = unsafe { Box::from_raw(a_0) };
-    let a_0: Foo = *a_0;
-    let this: Boo = Boo::with_foo(a_0);
-    let this: Box<Boo> = Box::new(this);
-    let this: *mut Boo = Box::into_raw(this);
-    this as *const ::std::os::raw::c_void
-}"#
-    ));
-    println!("c/c++: {}", cpp_code.foreign_code);
-    assert!(cpp_code.foreign_code.contains(
-        r#"BooWrapper(Foo a_0) noexcept
-    {
-        this->self_ = Boo_with_foo(a_0.release());
-        if (this->self_ == nullptr) {
-            std::abort();
+impl From<std::io::Error> for Error {
+    fn from(x: std::io::Error) -> Self {
+        Error {
+            msg: format!("io: {}", x),
         }
-    }"#
-    ));
-    assert!(cpp_code.foreign_code.contains("uintptr_t f(Foo a_0) const"));
-    assert!(
-        cpp_code
-            .foreign_code
-            .contains("BooOpaque *Boo_with_foo(FooOpaque * a_0);")
-    );
+    }
 }
 
-#[test]
-fn test_own_objects_creation() {
-    parse_code(
-        "own_objects_creation",
-        r#"
-foreigner_class!(class Foo {
-    self_type Foo;
-    constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-});
-
-foreigner_class!(class Boo {
-    self_type Boo;
-
-    constructor Boo::new(_: i32, _: usize) -> Result<Boo, String>;
-    static_method Boo::factory_method() -> Result<Boo, String>;
-    method Boo::boo_as_arg(&self, _: Boo) -> i32;
-    method Boo::get_one_foo(&self) -> Foo;
-});
-"#,
-        &[ForeignLang::Java],
-    );
+impl From<syn::Error> for Error {
+    fn from(x: syn::Error) -> Self {
+        Error {
+            msg: format!("syn: {}", x),
+        }
+    }
 }
 
-#[test]
-fn test_generic() {
-    parse_code(
-        "test_generic",
-        r#"
-foreigner_class!(class Foo {
-    self_type Foo;
-    constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-});
+impl std::error::Error for Error {}
 
-foreigner_class!(class Boo {
-    self_type Boo;
-
-    constructor Boo::new(_: i32, _: usize) -> Result<Boo, String>;
-    method Boo::get_foo_arr(&self) -> Vec<Foo>;
-    method Boo::get_one_foo(&self) -> Result<Foo, String>;
-    static_method now() -> SystemTime;
-    static_method r_test_u8(v: u8) -> Result<u8, &'static str>;
-});
-"#,
-        &[ForeignLang::Java],
-    );
+fn collect_code_in_dir(dir_with_code: &Path, exts: &[&str]) -> Result<String, Error> {
+    let mut code = String::new();
+    for path in fs::read_dir(dir_with_code)? {
+        let path = path?;
+        if path.file_type()?.is_file()
+            && exts
+                .iter()
+                .any(|ext| path.path().to_str().map_or(false, |x| x.ends_with(ext)))
+        {
+            code.push_str(&fs::read_to_string(path.path())?);
+            code.push('\n');
+        }
+    }
+    Ok(code)
 }
 
-#[test]
-fn test_string_containers() {
-    parse_code(
-        "test_string_array",
-        r#"
-foreigner_class!(class Foo {
-    self_type Foo;
-    constructor Foo::default() -> Foo;
-    method Foo::list(&self) -> Vec<String>;
-});"#,
-        &[ForeignLang::Java],
-    );
+enum Source<'a> {
+    Str(&'a str),
+    Path(&'a Path),
 }
 
-#[test]
-fn test_int_array() {
-    parse_code(
-        "test_int_array",
-        r#"
-foreigner_class!(class Utils {
-    static_method f(_: &[i32]) -> &[i32];
-});
-"#,
-        &[ForeignLang::Java],
+fn parse_code(test_name: &str, rust_src: Source, lang: ForeignLang) -> Result<CodePair, Error> {
+    let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");
+    println!(
+        "{}: test name {} tmp_dir {:?}",
+        file!(),
+        test_name,
+        tmp_dir.path()
     );
+
+    let (swig_gen, ext_list): (Generator, &[&'static str]) = match lang {
+        ForeignLang::Java => {
+            let swig_gen = Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
+                tmp_dir.path().into(),
+                "org.example".into(),
+            )))
+            .with_pointer_target_width(64);
+
+            (swig_gen, &[".java"])
+        }
+        ForeignLang::Cpp => {
+            let swig_gen = Generator::new(LanguageConfig::CppConfig(CppConfig::new(
+                tmp_dir.path().into(),
+                "org_examples".into(),
+            )))
+            .with_pointer_target_width(64);
+            (swig_gen, &[".h", ".hpp"])
+        }
+    };
+
+    let rust_code_path = tmp_dir.path().join("test.rs");
+    match rust_src {
+        Source::Path(rust_src_path) => swig_gen.expand(test_name, rust_src_path, &rust_code_path),
+        Source::Str(rust_src) => {
+            let rust_src_path = tmp_dir.path().join("src.rs");
+            fs::write(&rust_src_path, rust_src)?;
+            swig_gen.expand(test_name, rust_src_path, &rust_code_path);
+        }
+    }
+
+    let rust_code = fs::read_to_string(rust_code_path)?;
+    let foreign_code = collect_code_in_dir(tmp_dir.path(), ext_list)?;
+    tmp_dir.close()?;
+
+    Ok(CodePair {
+        rust_code,
+        foreign_code,
+    })
 }
 
-#[test]
-fn test_work_with_rc() {
-    parse_code(
-        "test_work_with_rc",
-        r#"
-foreigner_class!(class Boo {
-    self_type Boo;
-    constructor create_boo() -> Rc<RefCell<Boo>>;
-    method Boo::test(&self, _: bool) -> f32;
-    method Boo::set_a(&mut self, _: i32);
-});
-"#,
-        &[ForeignLang::Java, ForeignLang::Cpp],
-    );
+struct ExpectationPatterns(Vec<String>);
+
+impl syn::parse::Parse for ExpectationPatterns {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let lit_vec: syn::punctuated::Punctuated<syn::LitStr, Token![;]> =
+            syn::punctuated::Punctuated::parse_terminated(input)?;
+        Ok(ExpectationPatterns(
+            lit_vec.into_iter().map(|v| v.value()).collect(),
+        ))
+    }
 }
+
+fn parse_code_expectation(exp_path: &Path) -> Result<Vec<String>, Error> {
+    let patterns_str = fs::read_to_string(exp_path)?;
+    let pats: ExpectationPatterns = syn::parse_str(&patterns_str)?;
+
+    Ok(pats.0)
+}
+
+fn new_path(main_path: &Path, ext: &str) -> PathBuf {
+    let base_name = main_path.file_stem().expect("name without extenstion");
+    let mut new_name: OsString = base_name.into();
+    new_name.push(ext);
+    main_path.with_file_name(new_name)
+}
+
+/*
+
+extern crate regex;
+
+use regex::Regex;
+
 
 #[test]
 fn test_return_foreign_class() {
@@ -436,39 +444,6 @@ foreigner_class!(class Boo {
         cpp_code
             .foreign_code
             .contains("FooOpaque * Boo_f2(BooOpaque * const self)")
-    );
-}
-
-#[test]
-fn test_return_foreign_enum_as_err() {
-    let gen_code = parse_code(
-        "test_return_foreign_enum_as_err",
-        r#"
-foreign_enum!(enum Foo {
-  cA = Foo::A,
-  cB = Foo::B,
-});
-
-foreigner_class!(class Moo {
-   self_type Moo;
-   private constructor = empty;
-});
-
-foreigner_class!(class Boo {
-   self_type Boo;
-   private constructor Boo::default() -> Boo;
-   method Boo::f(&self) -> Result<Moo, Foo>;
-});
-"#,
-        &[ForeignLang::Cpp],
-    );
-    let cpp_code = code_for(&gen_code, ForeignLang::Cpp);
-    println!("rust_code: {}", cpp_code.rust_code);
-    println!("cpp_code: {}", cpp_code.foreign_code);
-    assert!(
-        cpp_code
-            .foreign_code
-            .contains("std::variant<Moo, Foo> f() const")
     );
 }
 
@@ -626,29 +601,6 @@ pub extern "C" fn TestPassObjectsAsParams_f3(this:
         TestPassObjectsAsParams_f3(this->self_, static_cast<const FooOpaque *>(a_0));
     }"#
     ));
-}
-
-#[test]
-fn test_pass_objects_as_param() {
-    parse_code(
-        "test_pass_objects_as_param",
-        r#"
-foreigner_class!(class Foo {
-    self_type Foo;
-    constructor Foo::new(_: i32, _: &str) -> Rc<RefCell<Foo>>;
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-});
-
-foreigner_class!(class TestPassObjectsAsParams {
-    self_type TestPassObjectsAsParams;
-    constructor TestPassObjectsAsParams::default() -> TestPassObjectsAsParams;
-    method TestPassObjectsAsParams::f1(&self, _: &RefCell<Foo>);
-    method TestPassObjectsAsParams::f2(&self, _: Rc<RefCell<Foo>>);
-    method TestPassObjectsAsParams::f3(&self, _: &mut RefCell<Foo>);
-});
-"#,
-        &[ForeignLang::Java],
-    );
 }
 
 #[test]
@@ -1063,143 +1015,6 @@ foreigner_class!(class ClassWithCallbacks {
 }
 
 #[test]
-fn test_return_bool() {
-    let gen_code = parse_code(
-        "test_cpp_return_bool",
-        r#"
-foreigner_class!(class Foo {
-    self_type Foo;
-    constructor Foo::default() -> Foo;
-    method f1(&mut self) -> bool;
-});
-"#,
-        &[ForeignLang::Java, ForeignLang::Cpp],
-    );
-    let cpp_code_pair = gen_code
-        .iter()
-        .find(|x| x.lang == ForeignLang::Cpp)
-        .unwrap();
-    println!("c/c++: {}", cpp_code_pair.foreign_code);
-    assert!(cpp_code_pair.foreign_code.contains("bool f1()"));
-}
-
-#[test]
-fn test_return_option() {
-    let gen_code = parse_code(
-        "test_return_option",
-        r#"
-foreigner_class!(class Boo {
-  self_type Boo;
-  constructor Boo::new() -> Boo;
-  method Boo::something(&self) -> i32;
-});
-
-foreign_enum!(enum ControlItem {
-    GNSS = ControlItem::GnssWorking,
-    GPS_PROVIDER = ControlItem::AndroidGPSOn,
-});
-
-foreigner_class!(class Foo {
-   self_type Foo;
-   constructor Foo::default() -> Foo;
-   method Foo::f1(&self) -> Option<Boo>;
-   method Foo::f2(&self) -> Option<f64>;
-   method Foo::f3(&self) -> Option<u32>;
-   method Foo::f4(&self) -> Option<usize>;
-   method Foo::f5(&self) -> Option<&Boo>;
-   method Foo::f6(&self) -> Option<ControlItem>;
-   method Foo::f7(&self) -> Option<u64>;
-   method Foo::f8(&self) -> Option<&str>;
-   method Foo::f9(&self) -> Option<String>;
-});
-"#,
-        &[ForeignLang::Cpp],
-    );
-    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
-    println!("c/c++: {}", cpp_code_pair.foreign_code);
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("std::optional<Boo> f1()")
-    );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("std::optional<double> f2()")
-    );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("std::optional<uint32_t> f3()")
-    );
-
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("std::optional<uintptr_t> f4()")
-    );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("std::optional<BooRef> f5()")
-    );
-
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("std::optional<ControlItem> f6()")
-    );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("std::optional<uint64_t> f7()")
-    );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("std::optional< RustStrView> f8()")
-    );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("std::optional<RustString> f9()")
-    );
-}
-
-#[test]
-fn test_option_arg_java() {
-    let gen_code = parse_code(
-        "test_option_arg_java",
-        r#"
-foreigner_class!(class Boo {
-  self_type Boo;
-  constructor Boo::new() -> Boo;
-  method Boo::something(&self) -> i32;
-});
-
-foreign_enum!(enum ControlItem {
-    GNSS = ControlItem::GnssWorking,
-    GPS_PROVIDER = ControlItem::AndroidGPSOn,
-});
-
-foreigner_class!(class Foo {
-   self_type Foo;
-   constructor Foo::default() -> Foo;
-   method Foo::f1(&self, _: Option<f64>) -> Option<f64>;
-});
-"#,
-        &[ForeignLang::Java],
-    );
-    let java_code = code_for(&gen_code, ForeignLang::Java);
-    println!("java: {}", java_code.foreign_code);
-    assert!(
-        java_code
-            .foreign_code
-            .contains("public final java.util.OptionalDouble f1(Double a0)")
-    );
-}
-
-#[test]
 fn test_option_arg_cpp() {
     let gen_code = parse_code(
         "test_option_arg_cpp",
@@ -1351,109 +1166,7 @@ foreigner_class!(class FooImpl {
     }
 }
 
-#[test]
-fn test_foreign_vec_as_arg_cpp() {
-    let gen_code = parse_code(
-        "test_foreign_vec_as_arg_cpp",
-        r#"
-foreigner_class!(class Boo {
-    self_type Boo;
-    constructor Boo::default() -> Boo;
-});
-foreigner_class!(class FooImpl {
-    self_type Foo<'a>;
-    constructor Foo::create() -> Foo<'a>;
-    method Foo::alternate_boarding(&self) -> &[Boo]; alias alternateBoarding;
-    method Foo::set_alternate_boarding(&mut self, p: Vec<Boo>);
-    alias setAlternateBoarding;
-});
-"#,
-        &[ForeignLang::Cpp],
-    );
-    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
-    println!("c/c++: {}", cpp_code_pair.foreign_code);
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("RustForeignSlice<BooRef> alternateBoarding() const")
-    );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("void setAlternateBoarding(RustForeignVecBoo a_0)")
-    );
-}
 
-#[test]
-fn test_return_slice() {
-    let gen_code = parse_code(
-        "test_return_slice",
-        r#"
-foreigner_class!(class Foo {
-    self_type Foo;
-    constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-});
-
-foreigner_class!(class Boo {
-    self_type Boo;
-
-    constructor Boo::new(_: i32, _: usize) -> Boo;
-    method Boo::f1(&self) -> &[u32];
-    method Boo::f2(&self) -> &[Foo];
-    method Boo::f3(&self) -> &[usize];
-});
-"#,
-        &[ForeignLang::Cpp],
-    );
-    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
-    println!("c/c++: {}", cpp_code_pair.foreign_code);
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("struct CRustObjectSlice Boo_f2(const BooOpaque *")
-    );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("RustForeignSlice<FooRef> f2() const")
-    );
-}
-
-#[test]
-fn test_pass_slice_as_args() {
-    let gen_code = parse_code(
-        "test_pass_slice_as_args",
-        r#"
-foreigner_class!(class Foo {
-    self_type Foo;
-    constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-});
-
-foreigner_class!(class Boo {
-    self_type Boo;
-
-    constructor Boo::new(_: i32, _: usize) -> Boo;
-    method Boo::f1(&self, _: &mut [Foo]) -> &[u32];
-    method Boo::f2(&self, _: &[Foo]) -> &[u32];
-});
-"#,
-        &[ForeignLang::Cpp],
-    );
-    let cpp_code_pair = code_for(&gen_code, ForeignLang::Cpp);
-    println!("c/c++: {}", cpp_code_pair.foreign_code);
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("CRustSliceU32 f1(RustForeignSlice<FooRef> a_0) const")
-    );
-    assert!(
-        cpp_code_pair
-            .foreign_code
-            .contains("CRustSliceU32 f2(RustForeignSlice<FooRef> a_0) const")
-    );
-}
 
 #[test]
 fn test_string_handling() {
@@ -1612,111 +1325,6 @@ foreigner_class!(class TestPassInterface {
     ));
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
-enum ForeignLang {
-    Java,
-    Cpp,
-}
 
-struct CodePair {
-    lang: ForeignLang,
-    rust_code: String,
-    foreign_code: String,
-}
 
-fn collect_code_in_dir(dir_with_code: &Path, exts: &[&str]) -> String {
-    let mut java_code = String::new();
-    for path in fs::read_dir(dir_with_code).unwrap() {
-        let path = path.unwrap();
-        if path.file_type().unwrap().is_file() && exts
-            .iter()
-            .any(|ext| path.path().to_str().unwrap().ends_with(ext))
-        {
-            let mut contents = String::new();
-            let mut file = File::open(path.path()).unwrap();
-            file.read_to_string(&mut contents).unwrap();
-            java_code.push_str(&contents);
-            java_code.push('\n');
-        }
-    }
-    java_code
-}
-
-fn code_for(gen_code: &[CodePair], lang: ForeignLang) -> &CodePair {
-    gen_code.iter().find(|x| x.lang == lang).unwrap()
-}
-
-fn parse_code(test_name: &str, code: &str, langs: &[ForeignLang]) -> Vec<CodePair> {
-    do_parse_code(test_name, code, langs, vec![])
-}
-
-fn do_parse_code(
-    test_name: &str,
-    code: &str,
-    langs: &[ForeignLang],
-    addon_type_maps: Vec<(ForeignLang, &str)>,
-) -> Vec<CodePair> {
-    test_helper::logger_init();
-
-    fn find_addon_type_map<'a>(
-        addon_type_maps: &'a [(ForeignLang, &'a str)],
-        lang: ForeignLang,
-    ) -> Option<&'a str> {
-        addon_type_maps.iter().find(|x| x.0 == lang).map(|x| x.1)
-    }
-
-    let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");
-    println!(
-        "{}: test name {} tmp_dir {:?}",
-        file!(),
-        test_name,
-        tmp_dir.path()
-    );
-    let mut ret = vec![];
-    for lang in langs {
-        let mut registry = Registry::new();
-        let (rust_code, foreign_code) = match *lang {
-            ForeignLang::Java => {
-                let swig_gen = Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
-                    tmp_dir.path().into(),
-                    "com.example".into(),
-                ))).with_pointer_target_width(64);
-                let swig_gen = if let Some(type_map) =
-                    find_addon_type_map(&addon_type_maps, ForeignLang::Java)
-                {
-                    swig_gen.merge_type_map("addon", type_map)
-                } else {
-                    swig_gen
-                };
-
-                swig_gen.register(&mut registry);
-                (
-                    registry
-                        .expand_str(test_name, &format!("java {}", test_name), code)
-                        .unwrap(),
-                    collect_code_in_dir(tmp_dir.path(), &[".java"]),
-                )
-            }
-            ForeignLang::Cpp => {
-                let swig_gen = Generator::new(LanguageConfig::CppConfig(CppConfig::new(
-                    tmp_dir.path().into(),
-                    "com_examples".into(),
-                ))).with_pointer_target_width(64);
-                swig_gen.register(&mut registry);
-                (
-                    registry
-                        .expand_str(test_name, &format!("c++ {}", test_name), code)
-                        .unwrap(),
-                    collect_code_in_dir(tmp_dir.path(), &[".h", ".hpp"]),
-                )
-            }
-        };
-        ret.push(CodePair {
-            lang: *lang,
-            rust_code,
-            foreign_code,
-        });
-    }
-    ret
-}
 */

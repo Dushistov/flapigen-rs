@@ -1,31 +1,32 @@
-use petgraph::Direction;
 use std::io::Write;
-use syntex_pos::{Span, DUMMY_SP};
-use syntex_syntax::ast;
-use syntex_syntax::parse::{PResult, ParseSess};
-use syntex_syntax::symbol::Symbol;
 
-use cpp::cpp_code::c_class_type;
-use cpp::{CppConverter, CppForeignTypeInfo};
-use errors::fatal_error;
-use file_cache::FileWriteCache;
-use my_ast::{
-    code_to_item, if_option_return_some_type, if_result_return_ok_err_types,
-    if_type_slice_return_elem_type, if_vec_return_elem_type, normalized_ty_string, parse_ty,
-    RustType,
-};
-use types_conv_map::{
-    make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
-};
-use {CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypesConvMap};
+use log::{debug, trace};
+use petgraph::Direction;
+use proc_macro2::Span;
+use quote::quote;
+use syn::{parse_quote, spanned::Spanned, Type};
 
-fn special_type<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+use crate::{
+    ast::{
+        if_option_return_some_type, if_result_return_ok_err_types, if_type_slice_return_elem_type,
+        if_vec_return_elem_type, normalize_ty_lifetimes, DisplayToTokens, RustType,
+    },
+    cpp::{
+        cpp_code::c_class_type,
+        {CppConverter, CppForeignTypeInfo},
+    },
+    error::{DiagnosticError, Result},
+    file_cache::FileWriteCache,
+    typemap::{make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
+    CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypeMap,
+};
+
+fn special_type(
+    conv_map: &mut TypeMap,
     cpp_cfg: &CppConfig,
-    arg_ty: &ast::Ty,
+    arg_ty: &Type,
     direction: Direction,
-) -> PResult<'a, Option<CppForeignTypeInfo>> {
+) -> Result<Option<CppForeignTypeInfo>> {
     trace!(
         "special_type: begin arg.ty({:?}) input {:?}",
         arg_ty,
@@ -37,16 +38,17 @@ fn special_type<'a>(
         return Ok(Some(converter));
     }
 
-    let ty_name = normalized_ty_string(arg_ty);
+    //TODO: no need for normalize_ty_lifetimes
+    let ty_name = normalize_ty_lifetimes(arg_ty);
     if ty_name == "bool" {
         let fti = conv_map
-            .find_foreign_type_info_by_name(Symbol::intern("char"))
+            .find_foreign_type_info_by_name("char")
             .expect("expect to find `char` in type map");
         return Ok(Some(CppForeignTypeInfo {
             base: fti,
             c_converter: String::new(),
             cpp_converter: Some(CppConverter {
-                typename: Symbol::intern("bool"),
+                typename: "bool".into(),
                 input_converter: format!("{} ? 1 : 0", FROM_VAR_TEMPLATE),
                 output_converter: format!("{} != 0", FROM_VAR_TEMPLATE),
             }),
@@ -55,26 +57,24 @@ fn special_type<'a>(
 
     if ty_name == "String" && direction == Direction::Outgoing {
         let fti = conv_map
-            .find_foreign_type_info_by_name(Symbol::intern("struct CRustString"))
+            .find_foreign_type_info_by_name("struct CRustString")
             .expect("expect to find `struct CRustString`  in type map");
         return Ok(Some(CppForeignTypeInfo {
             base: fti,
             c_converter: String::new(),
             cpp_converter: Some(CppConverter {
-                typename: Symbol::intern("RustString"),
+                typename: "RustString".into(),
                 input_converter: "#error".into(),
                 output_converter: format!("RustString{{{from_var}}}", from_var = FROM_VAR_TEMPLATE),
             }),
         }));
     }
 
-    if let ast::TyKind::Rptr(
-        _,
-        ast::MutTy {
-            ty: ref ret_ty,
-            mutbl: ast::Mutability::Immutable,
-        },
-    ) = arg_ty.node
+    if let syn::Type::Reference(syn::TypeReference {
+        elem: ref ret_ty,
+        mutability: None,
+        ..
+    }) = arg_ty
     {
         if let Some(foreign_class) =
             conv_map.find_foreigner_class_with_such_self_type(ret_ty, false)
@@ -85,41 +85,41 @@ fn special_type<'a>(
                 foreign_class.name
             );
             let foreign_info =
-                foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span, true)?;
+                foreign_class_foreign_name(conv_map, foreign_class, arg_ty.span(), true)?;
             if direction == Direction::Outgoing {
-                let cpp_type = Symbol::intern(&format!("{}Ref", foreign_class.name));
+                let cpp_type = format!("{}Ref", foreign_class.name);
+                let output_converter = format!("{}{{{}}}", cpp_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
                     c_converter: String::new(),
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type,
-                        output_converter: format!("{}{{{}}}", cpp_type, FROM_VAR_TEMPLATE),
+                        output_converter,
                         input_converter: format!("UNREACHABLE {}", line!()),
                     }),
                 }));
             } else {
-                let cpp_type = Symbol::intern(&format!("const {} &", foreign_class.name));
-                let c_type = foreign_info.name;
+                let cpp_type = format!("const {} &", foreign_class.name);
+                let c_type = &foreign_info.name;
+                let input_converter = format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
                     c_converter: String::new(),
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type,
                         output_converter: format!("UNREACHABLE {}", line!()),
-                        input_converter: format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE),
+                        input_converter,
                     }),
                 }));
             }
         }
     }
 
-    if let ast::TyKind::Rptr(
-        _,
-        ast::MutTy {
-            ty: ref ret_ty,
-            mutbl: ast::Mutability::Mutable,
-        },
-    ) = arg_ty.node
+    if let syn::Type::Reference(syn::TypeReference {
+        elem: ref ret_ty,
+        mutability: Some(_),
+        ..
+    }) = arg_ty
     {
         if let Some(foreign_class) =
             conv_map.find_foreigner_class_with_such_self_type(ret_ty, false)
@@ -130,39 +130,44 @@ fn special_type<'a>(
                 foreign_class.name
             );
             let foreign_info =
-                foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span, true)?;
+                foreign_class_foreign_name(conv_map, foreign_class, arg_ty.span(), true)?;
             if direction == Direction::Outgoing {
-                return Err(fatal_error(
-                    sess,
-                    arg_ty.span,
-                    &format!(
+                return Err(DiagnosticError::new(
+                    arg_ty.span(),
+                    format!(
                         "Not supported conversation &mut {} as return type to foreign",
                         foreign_class.name
                     ),
                 ));
             } else {
-                let mut_void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
+                let mut_void_ptr_typename = format!(
+                    "{}",
+                    DisplayToTokens(&parse_type! { *mut ::std::os::raw::c_void })
+                );
                 let this_type = if let Some(this_type_for_method) =
                     foreign_class.this_type_for_method.as_ref()
                 {
                     let this_type: RustType = this_type_for_method.clone().into();
                     this_type
                 } else {
-                    return Err(fatal_error(
-                        sess,
-                        arg_ty.span,
-                        &format!(
+                    return Err(DiagnosticError::new(
+                        arg_ty.span(),
+                        format!(
                             "Unknown this type for method(s) of class {}",
                             foreign_class.name
                         ),
                     ));
                 };
                 let my_mut_void_ptr_ti = RustType::new(
-                    parse_ty(sess, DUMMY_SP, mut_void_ptr_typename)?,
-                    make_unique_rust_typename(mut_void_ptr_typename, this_type.normalized_name),
+                    parse_quote! { *mut ::std::os::raw::c_void },
+                    make_unique_rust_typename(
+                        mut_void_ptr_typename.into(),
+                        this_type.normalized_name,
+                    ),
                 );
-                let cpp_type = Symbol::intern(&format!("{} &", foreign_class.name));
-                let c_type = foreign_info.name;
+                let cpp_type = format!("{} &", foreign_class.name);
+                let c_type = &foreign_info.name;
+                let input_converter = format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: ForeignTypeInfo {
                         name: foreign_info.name,
@@ -172,23 +177,20 @@ fn special_type<'a>(
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type,
                         output_converter: "#error".to_string(),
-                        input_converter: format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE),
+                        input_converter,
                     }),
                 }));
             }
         }
     }
 
-    if let Some(foreign_class_this_ty) =
-        conv_map.is_ty_implements(arg_ty, Symbol::intern("SwigForeignClass"))
-    {
+    if let Some(foreign_class_this_ty) = conv_map.is_ty_implements(arg_ty, "SwigForeignClass") {
         let foreign_class = conv_map
             .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
             .ok_or_else(|| {
-                fatal_error(
-                    sess,
-                    arg_ty.span,
-                    &format!("Can not find foreigner_class for '{:?}'", arg_ty),
+                DiagnosticError::new(
+                    arg_ty.span(),
+                    format!("Can not find foreigner_class for '{:?}'", arg_ty),
                 )
             })?;
         trace!(
@@ -197,19 +199,19 @@ fn special_type<'a>(
             foreign_class.name
         );
         let foreign_info =
-            foreign_class_foreign_name(sess, conv_map, foreign_class, arg_ty.span, false)?;
+            foreign_class_foreign_name(conv_map, foreign_class, arg_ty.span(), false)?;
         return Ok(Some(CppForeignTypeInfo {
             base: foreign_info,
             c_converter: String::new(),
             cpp_converter: Some(CppConverter {
-                typename: foreign_class.name,
+                typename: foreign_class.name.to_string(),
                 output_converter: format!("{}({})", foreign_class.name, FROM_VAR_TEMPLATE),
                 input_converter: format!("{}.release()", FROM_VAR_TEMPLATE),
             }),
         }));
     }
     if let Some(elem_ty) = if_vec_return_elem_type(arg_ty) {
-        return map_type_vec(sess, conv_map, cpp_cfg, arg_ty, elem_ty);
+        return map_type_vec(conv_map, cpp_cfg, arg_ty, elem_ty);
     }
     if direction == Direction::Outgoing {
         if let Some((ok_ty, err_ty)) = if_result_return_ok_err_types(arg_ty) {
@@ -218,22 +220,20 @@ fn special_type<'a>(
                 ok_ty,
                 err_ty
             );
-            return handle_result_type_as_return_type(
-                sess, conv_map, cpp_cfg, arg_ty, &ok_ty, &err_ty,
-            );
+            return handle_result_type_as_return_type(conv_map, cpp_cfg, arg_ty, &ok_ty, &err_ty);
         }
         if let Some(ty) = if_option_return_some_type(arg_ty) {
-            return handle_option_type_in_return(sess, conv_map, cpp_cfg, arg_ty, &ty);
+            return handle_option_type_in_return(conv_map, cpp_cfg, arg_ty, &ty);
         }
         if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty, false) {
-            return map_return_slice_type(sess, conv_map, arg_ty, elem_ty);
+            return map_return_slice_type(conv_map, arg_ty, elem_ty.clone());
         }
     } else {
         if let Some(ty) = if_option_return_some_type(arg_ty) {
-            return handle_option_type_in_input(sess, conv_map, cpp_cfg, arg_ty, &ty);
+            return handle_option_type_in_input(conv_map, cpp_cfg, arg_ty, &ty);
         }
         if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty, true) {
-            return map_arg_with_slice_type(sess, conv_map, arg_ty, elem_ty);
+            return map_arg_with_slice_type(conv_map, arg_ty, elem_ty.clone());
         }
     }
 
@@ -241,41 +241,37 @@ fn special_type<'a>(
     Ok(None)
 }
 
-fn foreign_class_foreign_name<'a>(
-    sess: &'a ParseSess,
-    conv_map: &TypesConvMap,
+fn foreign_class_foreign_name(
+    conv_map: &TypeMap,
     foreign_class: &ForeignerClassInfo,
     foreign_class_span: Span,
     readonly_fptr: bool,
-) -> PResult<'a, ForeignTypeInfo> {
+) -> Result<ForeignTypeInfo> {
     let c_type = c_class_type(foreign_class);
-    let foreign_typename = Symbol::intern(&if readonly_fptr {
+    let foreign_typename = if readonly_fptr {
         format!("const {} *", c_type)
     } else {
         format!("{} *", c_type)
-    });
+    };
     conv_map
-        .find_foreign_type_info_by_name(foreign_typename)
+        .find_foreign_type_info_by_name(&foreign_typename)
         .ok_or_else(|| {
-            fatal_error(
-                sess,
+            DiagnosticError::new(
                 foreign_class_span,
-                &format!("type {} unknown", foreign_class.name),
+                format!("type {} unknown", foreign_class.name),
             )
         })
 }
 
 fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> CppForeignTypeInfo {
-    let sess = ParseSess::new();
-    let u32_ti: RustType = parse_ty(&sess, DUMMY_SP, Symbol::intern("u32"))
-        .unwrap()
-        .into();
+    let u32_ti: RustType = parse_type! { u32 }.into();
     let c_converter: String = r#"
         uint32_t {to_var} = {from_var};
-"#.into();
+"#
+    .into();
     CppForeignTypeInfo {
         base: ForeignTypeInfo {
-            name: foreign_enum.name,
+            name: foreign_enum.name.to_string(),
             correspoding_rust_type: u32_ti,
         },
         c_converter,
@@ -283,85 +279,71 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> CppForeignTypeInfo
     }
 }
 
-pub(in cpp) fn map_type<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+pub(in crate::cpp) fn map_type(
+    conv_map: &mut TypeMap,
     cpp_cfg: &CppConfig,
-    arg_ty: &ast::Ty,
+    arg_ty: &Type,
     direction: Direction,
-) -> PResult<'a, CppForeignTypeInfo> {
+) -> Result<CppForeignTypeInfo> {
     let ret: CppForeignTypeInfo = match direction {
         Direction::Incoming => {
-            if let Some(converter) =
-                special_type(sess, conv_map, cpp_cfg, arg_ty, Direction::Incoming)?
-            {
+            if let Some(converter) = special_type(conv_map, cpp_cfg, arg_ty, Direction::Incoming)? {
                 return Ok(converter);
             }
-            map_ordinal_input_type(sess, conv_map, arg_ty)?
+            map_ordinal_input_type(conv_map, arg_ty)?
         }
         Direction::Outgoing => {
-            if let Some(converter) =
-                special_type(sess, conv_map, cpp_cfg, arg_ty, Direction::Outgoing)?
-            {
+            if let Some(converter) = special_type(conv_map, cpp_cfg, arg_ty, Direction::Outgoing)? {
                 converter
             } else {
-                map_ordinal_result_type(sess, conv_map, arg_ty)?
+                map_ordinal_result_type(conv_map, arg_ty)?
             }
         }
     };
     Ok(ret)
 }
 
-fn map_ordinal_result_type<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
-    arg_ty: &ast::Ty,
-) -> PResult<'a, CppForeignTypeInfo> {
+fn map_ordinal_result_type(conv_map: &mut TypeMap, arg_ty: &Type) -> Result<CppForeignTypeInfo> {
     Ok(conv_map
-        .map_through_conversation_to_foreign(arg_ty, Direction::Outgoing, arg_ty.span)
+        .map_through_conversation_to_foreign(arg_ty, Direction::Outgoing, arg_ty.span())
         .ok_or_else(|| {
-            fatal_error(
-                sess,
-                arg_ty.span,
-                &format!(
+            DiagnosticError::new(
+                arg_ty.span(),
+                format!(
                     "Do not know conversation from \
                      such rust type '{}' to foreign",
-                    normalized_ty_string(arg_ty)
+                    normalize_ty_lifetimes(arg_ty)
                 ),
             )
-        })?.into())
+        })?
+        .into())
 }
 
-fn map_ordinal_input_type<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
-    arg_ty: &ast::Ty,
-) -> PResult<'a, CppForeignTypeInfo> {
+fn map_ordinal_input_type(conv_map: &mut TypeMap, arg_ty: &Type) -> Result<CppForeignTypeInfo> {
     Ok(conv_map
-        .map_through_conversation_to_foreign(arg_ty, Direction::Incoming, arg_ty.span)
+        .map_through_conversation_to_foreign(arg_ty, Direction::Incoming, arg_ty.span())
         .ok_or_else(|| {
-            fatal_error(
-                sess,
-                arg_ty.span,
-                &format!(
+            DiagnosticError::new(
+                arg_ty.span(),
+                format!(
                     "Do not know conversation from foreign \
                      to such rust type '{}'",
-                    normalized_ty_string(arg_ty)
+                    normalize_ty_lifetimes(arg_ty)
                 ),
             )
-        })?.into())
+        })?
+        .into())
 }
 
-fn map_arg_with_slice_type<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
-    arg_ty: &ast::Ty,
-    elem_ty: ast::Ty,
-) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    let mut ftype_info = map_ordinal_input_type(sess, conv_map, arg_ty)?;
+fn map_arg_with_slice_type(
+    conv_map: &mut TypeMap,
+    arg_ty: &Type,
+    elem_ty: Type,
+) -> Result<Option<CppForeignTypeInfo>> {
+    let mut ftype_info = map_ordinal_input_type(conv_map, arg_ty)?;
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&elem_ty, false)
     {
-        let typename = Symbol::intern(&format!("RustForeignSlice<{}Ref>", foreign_class.name));
+        let typename = format!("RustForeignSlice<{}Ref>", foreign_class.name);
         ftype_info.cpp_converter = Some(CppConverter {
             typename,
             input_converter: format!("{}", FROM_VAR_TEMPLATE),
@@ -373,23 +355,23 @@ fn map_arg_with_slice_type<'a>(
     }
 }
 
-fn map_return_slice_type<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
-    arg_ty: &ast::Ty,
-    elem_ty: ast::Ty,
-) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    let mut ftype_info = map_ordinal_result_type(sess, conv_map, arg_ty)?;
+fn map_return_slice_type(
+    conv_map: &mut TypeMap,
+    arg_ty: &Type,
+    elem_ty: Type,
+) -> Result<Option<CppForeignTypeInfo>> {
+    let mut ftype_info = map_ordinal_result_type(conv_map, arg_ty)?;
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&elem_ty, false)
     {
-        let typename = Symbol::intern(&format!("RustForeignSlice<{}Ref>", foreign_class.name));
+        let typename = format!("RustForeignSlice<{}Ref>", foreign_class.name);
+        let output_converter = format!(
+            "{cpp_type}{{{var}}}",
+            cpp_type = typename,
+            var = FROM_VAR_TEMPLATE
+        );
         ftype_info.cpp_converter = Some(CppConverter {
             typename,
-            output_converter: format!(
-                "{cpp_type}{{{var}}}",
-                cpp_type = typename,
-                var = FROM_VAR_TEMPLATE
-            ),
+            output_converter,
             input_converter: "#error".to_string(),
         });
         return Ok(Some(ftype_info));
@@ -398,17 +380,16 @@ fn map_return_slice_type<'a>(
     }
 }
 
-fn map_type_vec<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn map_type_vec(
+    conv_map: &mut TypeMap,
     cpp_cfg: &CppConfig,
-    arg_ty: &ast::Ty,
-    elem_ty: ast::Ty,
-) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    let mut ftype_info = map_ordinal_result_type(sess, conv_map, arg_ty)?;
+    arg_ty: &Type,
+    elem_ty: Type,
+) -> Result<Option<CppForeignTypeInfo>> {
+    let mut ftype_info = map_ordinal_result_type(conv_map, arg_ty)?;
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&elem_ty, false)
     {
-        let typename = Symbol::intern(&format!("RustForeignVec{}", foreign_class.name));
+        let typename = format!("RustForeignVec{}", foreign_class.name);
         let fc_vec_path = cpp_cfg.output_dir.join(format!("{}.h", typename));
         let generate_cpp_part = !cpp_cfg
             .generated_helper_files
@@ -451,24 +432,23 @@ using {vec_type} = RustForeignVec<{class}Ref, CRustForeignVec,
                 class = foreign_class.name,
                 push_func = push_func,
                 remove_func = remove_func,
-            ).map_err(|err| {
-                fatal_error(
-                    sess,
-                    arg_ty.span,
-                    &format!("write to {:?} failed: {}", fc_vec_path, err),
+            )
+            .map_err(|err| {
+                DiagnosticError::new(
+                    arg_ty.span(),
+                    format!("write to {:?} failed: {}", fc_vec_path, err),
                 )
             })?;
             c_vec_f.update_file_if_necessary().map_err(|err| {
-                fatal_error(
-                    sess,
-                    arg_ty.span,
-                    &format!("update of {:?} failed: {}", fc_vec_path, err),
+                DiagnosticError::new(
+                    arg_ty.span(),
+                    format!("update of {:?} failed: {}", fc_vec_path, err),
                 )
             })?;
-            cpp_cfg.to_generate.borrow_mut().append(&mut code_to_item(
-                sess,
-                &free_mem_func,
-                &format!(
+            cpp_cfg
+                .to_generate
+                .borrow_mut()
+                .push(syn::parse_str(&format!(
                     r#"
 #[allow(unused_variables, unused_mut, non_snake_case)]
 #[no_mangle]
@@ -479,12 +459,11 @@ pub extern "C" fn {func_name}(v: CRustForeignVec) {{
 "#,
                     func_name = free_mem_func,
                     self_type = foreign_class.self_type_name()
-                ),
-            )?);
-            cpp_cfg.to_generate.borrow_mut().append(&mut code_to_item(
-                sess,
-                &push_func,
-                &format!(
+                ))?);
+            cpp_cfg
+                .to_generate
+                .borrow_mut()
+                .push(syn::parse_str(&format!(
                     r#"
 #[allow(unused_variables, unused_mut, non_snake_case)]
 #[no_mangle]
@@ -494,12 +473,11 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, e: *mut ::std::os::raw::c
 "#,
                     func_name = push_func,
                     self_type = foreign_class.self_type_name()
-                ),
-            )?);
-            cpp_cfg.to_generate.borrow_mut().append(&mut code_to_item(
-                sess,
-                &remove_func,
-                &format!(
+                ))?);
+            cpp_cfg
+                .to_generate
+                .borrow_mut()
+                .push(syn::parse_str(&format!(
                     r#"
 #[allow(unused_variables, unused_mut, non_snake_case)]
 #[no_mangle]
@@ -509,25 +487,25 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
 "#,
                     func_name = remove_func,
                     self_type = foreign_class.self_type_name()
-                ),
-            )?);
+                ))?);
             cpp_cfg
                 .generated_helper_files
                 .borrow_mut()
                 .insert(fc_vec_path);
         }
+        let output_converter = format!(
+            "{cpp_type}{{{var}}}",
+            cpp_type = typename,
+            var = FROM_VAR_TEMPLATE
+        );
         ftype_info.cpp_converter = Some(CppConverter {
             typename,
-            output_converter: format!(
-                "{cpp_type}{{{var}}}",
-                cpp_type = typename,
-                var = FROM_VAR_TEMPLATE
-            ),
+            output_converter,
             input_converter: format!("{var}.release()", var = FROM_VAR_TEMPLATE),
         });
         return Ok(Some(ftype_info));
     }
-    let typename = Symbol::intern(match &*ftype_info
+    let typename = match ftype_info
         .base
         .correspoding_rust_type
         .normalized_name
@@ -540,9 +518,9 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
         "CRustVecF32" => "RustVecF32",
         "CRustVecF64" => "RustVecF64",
         _ => unimplemented!(),
-    });
+    };
     ftype_info.cpp_converter = Some(CppConverter {
-        typename,
+        typename: typename.into(),
         output_converter: format!(
             "{cpp_type}{{{var}}}",
             cpp_type = typename,
@@ -553,44 +531,35 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
     Ok(Some(ftype_info))
 }
 
-fn handle_result_type_as_return_type<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn handle_result_type_as_return_type(
+    conv_map: &mut TypeMap,
     cpp_cfg: &CppConfig,
-    arg_ty: &ast::Ty,
-    ok_ty: &ast::Ty,
-    err_ty: &ast::Ty,
-) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    let err_ty_name = normalized_ty_string(&err_ty);
+    arg_ty: &Type,
+    ok_ty: &Type,
+    err_ty: &Type,
+) -> Result<Option<CppForeignTypeInfo>> {
+    let err_ty_name = normalize_ty_lifetimes(&err_ty);
     debug!(
         "handle_result_type_as_return_type: ok_ty: {}",
-        normalized_ty_string(&ok_ty)
+        normalize_ty_lifetimes(&ok_ty)
     );
-    if let Some(foreign_class_this_ty) =
-        conv_map.is_ty_implements(ok_ty, Symbol::intern("SwigForeignClass"))
-    {
+    if let Some(foreign_class_this_ty) = conv_map.is_ty_implements(ok_ty, "SwigForeignClass") {
         let foreign_class = conv_map
             .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
             .ok_or_else(|| {
-                fatal_error(
-                    sess,
-                    arg_ty.span,
-                    &format!("Can not find foreigner_class for '{:?}'", arg_ty),
+                DiagnosticError::new(
+                    arg_ty.span(),
+                    format!("Can not find foreigner_class for '{:?}'", arg_ty),
                 )
             })?;
         let c_class = c_class_type(foreign_class);
         if err_ty_name == "String" {
             let foreign_info = conv_map
-                .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectString"))
+                .find_foreign_type_info_by_name("struct CResultObjectString")
                 .expect("Can not find info about struct CResultObjectString");
             let typename = match cpp_cfg.cpp_variant {
-                CppVariant::Std17 => {
-                    Symbol::intern(&format!("std::variant<{}, RustString>", foreign_class.name))
-                }
-                CppVariant::Boost => Symbol::intern(&format!(
-                    "boost::variant<{}, RustString>",
-                    foreign_class.name
-                )),
+                CppVariant::Std17 => format!("std::variant<{}, RustString>", foreign_class.name),
+                CppVariant::Boost => format!("boost::variant<{}, RustString>", foreign_class.name),
             };
             let output_converter = format!(
                 "{var}.is_ok != 0 ?
@@ -614,18 +583,16 @@ fn handle_result_type_as_return_type<'a>(
             conv_map.find_foreigner_class_with_such_self_type(&err_ty, false)
         {
             let foreign_info = conv_map
-                .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectObject"))
+                .find_foreign_type_info_by_name("struct CResultObjectObject")
                 .expect("Can not find info about struct CResultObjectObject");
             let c_err_class = c_class_type(err_class);
             let typename = match cpp_cfg.cpp_variant {
-                CppVariant::Std17 => Symbol::intern(&format!(
-                    "std::variant<{}, {}>",
-                    foreign_class.name, err_class.name
-                )),
-                CppVariant::Boost => Symbol::intern(&format!(
-                    "boost::variant<{}, {}>",
-                    foreign_class.name, err_class.name
-                )),
+                CppVariant::Std17 => {
+                    format!("std::variant<{}, {}>", foreign_class.name, err_class.name)
+                }
+                CppVariant::Boost => {
+                    format!("boost::variant<{}, {}>", foreign_class.name, err_class.name)
+                }
             };
             let output_converter = format!(
                 "{var}.is_ok != 0 ?
@@ -649,17 +616,15 @@ fn handle_result_type_as_return_type<'a>(
             }));
         } else if let Some(err_enum) = conv_map.is_this_exported_enum(err_ty) {
             let foreign_info = conv_map
-                .find_foreign_type_info_by_name(Symbol::intern("struct CResultObjectEnum"))
+                .find_foreign_type_info_by_name("struct CResultObjectEnum")
                 .expect("Can not find info about struct CResultObjectEnum");
             let typename = match cpp_cfg.cpp_variant {
-                CppVariant::Std17 => Symbol::intern(&format!(
-                    "std::variant<{}, {}>",
-                    foreign_class.name, err_enum.name
-                )),
-                CppVariant::Boost => Symbol::intern(&format!(
-                    "boost::variant<{}, {}>",
-                    foreign_class.name, err_enum.name,
-                )),
+                CppVariant::Std17 => {
+                    format!("std::variant<{}, {}>", foreign_class.name, err_enum.name)
+                }
+                CppVariant::Boost => {
+                    format!("boost::variant<{}, {}>", foreign_class.name, err_enum.name,)
+                }
             };
             let output_converter = format!(
                 "{var}.is_ok != 0 ?
@@ -690,32 +655,29 @@ fn handle_result_type_as_return_type<'a>(
             "handle_result_type_as_return_type ok_ty is Vec, elem_ty {:?}",
             elem_ty
         );
-        let vec_foreign_info = map_type(sess, conv_map, cpp_cfg, ok_ty, Direction::Outgoing)?;
-        let mut f_type_info = map_ordinal_result_type(sess, conv_map, arg_ty)?;
+        let vec_foreign_info = map_type(conv_map, cpp_cfg, ok_ty, Direction::Outgoing)?;
+        let mut f_type_info = map_ordinal_result_type(conv_map, arg_ty)?;
         if err_ty_name == "String" {
             let foreign_name = conv_map
                 .find_foreigner_class_with_such_self_type(&elem_ty, false)
-                .map(|v| v.name);
+                .map(|v| v.name.clone());
             if let Some(foreign_name) = foreign_name {
                 let ok_typename = format!("RustForeignVec{}", foreign_name);
                 let typename = match cpp_cfg.cpp_variant {
-                    CppVariant::Std17 => {
-                        Symbol::intern(&format!("std::variant<{}, RustString>", ok_typename))
-                    }
-                    CppVariant::Boost => {
-                        Symbol::intern(&format!("boost::variant<{}, RustString>", ok_typename))
-                    }
+                    CppVariant::Std17 => format!("std::variant<{}, RustString>", ok_typename),
+                    CppVariant::Boost => format!("boost::variant<{}, RustString>", ok_typename),
                 };
-                f_type_info.cpp_converter = Some(CppConverter {
-                    typename,
-                    output_converter: format!(
-                        "{var}.is_ok != 0 ?
+                let output_converter = format!(
+                    "{var}.is_ok != 0 ?
  {VarType}{{{Type}{{{var}.data.ok}}}} :
  {VarType}{{RustString{{{var}.data.err}}}}",
-                        VarType = typename,
-                        Type = ok_typename,
-                        var = FROM_VAR_TEMPLATE,
-                    ),
+                    VarType = typename,
+                    Type = ok_typename,
+                    var = FROM_VAR_TEMPLATE,
+                );
+                f_type_info.cpp_converter = Some(CppConverter {
+                    typename,
+                    output_converter,
                     input_converter: "#error".to_string(),
                 });
                 return Ok(Some(f_type_info));
@@ -728,32 +690,31 @@ fn handle_result_type_as_return_type<'a>(
             // Result<Vec<T>, Err>
             let foreign_name = conv_map
                 .find_foreigner_class_with_such_self_type(&elem_ty, false)
-                .map(|v| v.name);
+                .map(|v| v.name.clone());
             if let Some(foreign_name) = foreign_name {
                 let ok_typename = format!("RustForeignVec{}", foreign_name);
                 let c_err_class = c_class_type(err_class);
                 let typename = match cpp_cfg.cpp_variant {
-                    CppVariant::Std17 => Symbol::intern(&format!(
-                        "std::variant<{}, {}>",
-                        ok_typename, err_class.name
-                    )),
-                    CppVariant::Boost => Symbol::intern(&format!(
-                        "boost::variant<{}, {}>",
-                        ok_typename, err_class.name
-                    )),
+                    CppVariant::Std17 => {
+                        format!("std::variant<{}, {}>", ok_typename, err_class.name)
+                    }
+                    CppVariant::Boost => {
+                        format!("boost::variant<{}, {}>", ok_typename, err_class.name)
+                    }
                 };
-                f_type_info.cpp_converter = Some(CppConverter {
-                    typename,
-                    output_converter: format!(
-                        "{var}.is_ok != 0 ?
+                let output_converter = format!(
+                    "{var}.is_ok != 0 ?
  {VarType} {{ {Type}{{{var}.data.ok}} }} :
  {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err)) }}",
-                        VarType = typename,
-                        Type = ok_typename,
-                        var = FROM_VAR_TEMPLATE,
-                        ErrType = err_class.name,
-                        C_ErrType = c_err_class,
-                    ),
+                    VarType = typename,
+                    Type = ok_typename,
+                    var = FROM_VAR_TEMPLATE,
+                    ErrType = err_class.name,
+                    C_ErrType = c_err_class,
+                );
+                f_type_info.cpp_converter = Some(CppConverter {
+                    typename,
+                    output_converter,
                     input_converter: "#error".to_string(),
                 });
                 return Ok(Some(f_type_info));
@@ -762,30 +723,29 @@ fn handle_result_type_as_return_type<'a>(
                     trace!(
                         "handle_result_type_as_return_type: Result<Vec<Not class, but C++>, class>"
                     );
-                    let ok_typename = cpp_conv.typename;
+                    let ok_typename = &cpp_conv.typename;
                     let c_err_class = c_class_type(err_class);
                     let typename = match cpp_cfg.cpp_variant {
-                        CppVariant::Std17 => Symbol::intern(&format!(
-                            "std::variant<{}, {}>",
-                            ok_typename, err_class.name
-                        )),
-                        CppVariant::Boost => Symbol::intern(&format!(
-                            "boost::variant<{}, {}>",
-                            ok_typename, err_class.name
-                        )),
+                        CppVariant::Std17 => {
+                            format!("std::variant<{}, {}>", ok_typename, err_class.name)
+                        }
+                        CppVariant::Boost => {
+                            format!("boost::variant<{}, {}>", ok_typename, err_class.name)
+                        }
                     };
-                    f_type_info.cpp_converter = Some(CppConverter {
-                        typename,
-                        output_converter: format!(
-                            "{var}.is_ok != 0 ?
+                    let output_converter = format!(
+                        "{var}.is_ok != 0 ?
  {VarType} {{ {Type}{{{var}.data.ok}} }} :
  {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err)) }}",
-                            VarType = typename,
-                            Type = ok_typename,
-                            var = FROM_VAR_TEMPLATE,
-                            ErrType = err_class.name,
-                            C_ErrType = c_err_class,
-                        ),
+                        VarType = typename,
+                        Type = ok_typename,
+                        var = FROM_VAR_TEMPLATE,
+                        ErrType = err_class.name,
+                        C_ErrType = c_err_class,
+                    );
+                    f_type_info.cpp_converter = Some(CppConverter {
+                        typename,
+                        output_converter,
                         input_converter: "#error".to_string(),
                     });
                     return Ok(Some(f_type_info));
@@ -797,14 +757,14 @@ fn handle_result_type_as_return_type<'a>(
         }
     } else {
         trace!("return result, but not foreign_class / Vec<foreign_class>");
-        match ok_ty.node {
+        match ok_ty {
             //Result<(), err_ty>
-            ast::TyKind::Tup(ref tup_types) if tup_types.is_empty() => {
-                let err_ty_name = normalized_ty_string(&err_ty);
+            Type::Tuple(ref tup_types) if tup_types.elems.is_empty() => {
+                let err_ty_name = normalize_ty_lifetimes(&err_ty);
                 if err_ty_name == "String" {
                     let typename = match cpp_cfg.cpp_variant {
-                        CppVariant::Std17 => Symbol::intern("std::variant<void *, RustString>"),
-                        CppVariant::Boost => Symbol::intern("boost::variant<void *, RustString>"),
+                        CppVariant::Std17 => "std::variant<void *, RustString>",
+                        CppVariant::Boost => "boost::variant<void *, RustString>",
                     };
                     let output_converter = format!(
                         "{var}.is_ok != 0 ?
@@ -814,14 +774,13 @@ fn handle_result_type_as_return_type<'a>(
                         var = FROM_VAR_TEMPLATE
                     );
                     let foreign_info = conv_map
-                        .find_foreign_type_info_by_name(Symbol::intern(
-                            "struct CResultObjectString",
-                        )).expect("Can not find struct CResultObjectString");
+                        .find_foreign_type_info_by_name("struct CResultObjectString")
+                        .expect("Can not find struct CResultObjectString");
                     return Ok(Some(CppForeignTypeInfo {
                         base: foreign_info,
                         c_converter: String::new(),
                         cpp_converter: Some(CppConverter {
-                            typename,
+                            typename: typename.into(),
                             output_converter,
                             input_converter: String::new(),
                         }),
@@ -831,12 +790,8 @@ fn handle_result_type_as_return_type<'a>(
                 {
                     let c_err_class = c_class_type(err_class);
                     let typename = match cpp_cfg.cpp_variant {
-                        CppVariant::Std17 => {
-                            Symbol::intern(&format!("std::variant<void *, {}>", err_class.name))
-                        }
-                        CppVariant::Boost => {
-                            Symbol::intern(&format!("boost::variant<void *, {}>", err_class.name))
-                        }
+                        CppVariant::Std17 => format!("std::variant<void *, {}>", err_class.name),
+                        CppVariant::Boost => format!("boost::variant<void *, {}>", err_class.name),
                     };
                     let output_converter = format!(
                         "{var}.is_ok != 0 ?
@@ -848,9 +803,8 @@ fn handle_result_type_as_return_type<'a>(
                         C_ErrType = c_err_class,
                     );
                     let foreign_info = conv_map
-                        .find_foreign_type_info_by_name(Symbol::intern(
-                            "struct CResultObjectObject",
-                        )).expect("Can not find info about struct CResultObjectObject");
+                        .find_foreign_type_info_by_name("struct CResultObjectObject")
+                        .expect("Can not find info about struct CResultObjectObject");
                     return Ok(Some(CppForeignTypeInfo {
                         base: foreign_info,
                         c_converter: String::new(),
@@ -869,25 +823,24 @@ fn handle_result_type_as_return_type<'a>(
     }
 }
 
-fn handle_option_type_in_input<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn handle_option_type_in_input(
+    conv_map: &mut TypeMap,
     cpp_cfg: &CppConfig,
-    arg_ty: &ast::Ty,
-    opt_ty: &ast::Ty,
-) -> PResult<'a, Option<CppForeignTypeInfo>> {
+    arg_ty: &Type,
+    opt_ty: &Type,
+) -> Result<Option<CppForeignTypeInfo>> {
     if let Some(fclass) = conv_map.find_foreigner_class_with_such_self_type(opt_ty, false) {
-        let foreign_info = foreign_class_foreign_name(sess, conv_map, fclass, opt_ty.span, false)?;
+        let foreign_info = foreign_class_foreign_name(conv_map, fclass, opt_ty.span(), false)?;
         let (typename, input_converter) = match cpp_cfg.cpp_optional {
             CppOptional::Std17 => (
-                Symbol::intern(&format!("std::optional<{}>", fclass.name)),
+                format!("std::optional<{}>", fclass.name),
                 format!(
                     " !!{var} ? {var}->release() : nullptr",
                     var = FROM_VAR_TEMPLATE,
                 ),
             ),
             CppOptional::Boost => (
-                Symbol::intern(&format!("boost::optional<{}>", fclass.name)),
+                format!("boost::optional<{}>", fclass.name),
                 format!(
                     " !!{var} ? {var}->release() : nullptr",
                     var = FROM_VAR_TEMPLATE,
@@ -905,27 +858,26 @@ fn handle_option_type_in_input<'a>(
         }));
     }
 
-    if let ast::TyKind::Rptr(
-        _,
-        ast::MutTy {
-            ty: ref ref_ty,
-            mutbl: ast::Mutability::Immutable,
-        },
-    ) = opt_ty.node
+    if let Type::Reference(syn::TypeReference {
+        elem: ref ref_ty,
+
+        mutability: None,
+        ..
+    }) = opt_ty
     {
-        if let ast::TyKind::Path(_, ref path) = ref_ty.node {
-            if path.segments.len() == 1 && path.segments[0].identifier.name == "str" {
+        if let Type::Path(syn::TypePath { ref path, .. }) = **ref_ty {
+            if path.segments.len() == 1 && path.segments[0].ident == "str" {
                 trace!("Catch Option<&str>");
-                let mut cpp_info_opt = map_ordinal_input_type(sess, conv_map, arg_ty)?;
-                let cpp_info_ty = map_ordinal_input_type(sess, conv_map, opt_ty)?;
+                let mut cpp_info_opt = map_ordinal_input_type(conv_map, arg_ty)?;
+                let cpp_info_ty = map_ordinal_input_type(conv_map, opt_ty)?;
                 let f_opt_ty = cpp_info_ty.base.name;
                 let (typename, input_converter) = match cpp_cfg.cpp_optional {
                     CppOptional::Std17 => (
-                        Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
+                        format!("std::optional<{}>", f_opt_ty),
                         format!("!!{var} ? *{var} : nullptr", var = FROM_VAR_TEMPLATE,),
                     ),
                     CppOptional::Boost => (
-                        Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
+                        format!("boost::optional<{}>", f_opt_ty),
                         format!("!!{var} ? *{var} : nullptr", var = FROM_VAR_TEMPLATE,),
                     ),
                 };
@@ -939,11 +891,10 @@ fn handle_option_type_in_input<'a>(
         }
     }
     trace!("handle_option_type_in_input arg_ty {:?}", arg_ty);
-    let mut cpp_info_opt = map_ordinal_input_type(sess, conv_map, arg_ty)?;
-    let cpp_info_ty = map_ordinal_input_type(sess, conv_map, opt_ty)?;
+    let mut cpp_info_opt = map_ordinal_input_type(conv_map, arg_ty)?;
+    let cpp_info_ty = map_ordinal_input_type(conv_map, opt_ty)?;
     let f_opt_ty = cpp_info_ty.base.name;
-    let c_option_name = cpp_info_opt.base.name;
-    let mut c_option_name: &str = &c_option_name.as_str();
+    let mut c_option_name: &str = &cpp_info_opt.base.name;
     if c_option_name.starts_with("struct ") {
         c_option_name = &c_option_name[7..];
     }
@@ -953,7 +904,7 @@ fn handle_option_type_in_input<'a>(
     }
     let (typename, input_converter) = match cpp_cfg.cpp_optional {
         CppOptional::Std17 => (
-            Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
+            format!("std::optional<{}>", f_opt_ty),
             format!(
                 "!!{var} ? {CType}{{{conv}(*{var}), 1}} : c_option_empty<{CType}>()",
                 CType = c_option_name,
@@ -962,7 +913,7 @@ fn handle_option_type_in_input<'a>(
             ),
         ),
         CppOptional::Boost => (
-            Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
+            format!("boost::optional<{}>", f_opt_ty),
             format!(
                 "!!{var} ? {CType}{{{conv}(*{var}), 1}} : c_option_empty<{CType}>()",
                 CType = c_option_name,
@@ -979,30 +930,27 @@ fn handle_option_type_in_input<'a>(
     Ok(Some(cpp_info_opt))
 }
 
-fn handle_option_type_in_return<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn handle_option_type_in_return(
+    conv_map: &mut TypeMap,
     cpp_cfg: &CppConfig,
-    arg_ty: &ast::Ty,
-    opt_ty: &ast::Ty,
-) -> PResult<'a, Option<CppForeignTypeInfo>> {
-    if let Some(foreign_class_this_ty) =
-        conv_map.is_ty_implements_exact(opt_ty, Symbol::intern("SwigForeignClass"))
+    arg_ty: &Type,
+    opt_ty: &Type,
+) -> Result<Option<CppForeignTypeInfo>> {
+    if let Some(foreign_class_this_ty) = conv_map.is_ty_implements_exact(opt_ty, "SwigForeignClass")
     {
         let foreign_class = conv_map
             .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
             .ok_or_else(|| {
-                fatal_error(
-                    sess,
-                    arg_ty.span,
-                    &format!("Can not find foreigner_class for '{:?}'", arg_ty),
+                DiagnosticError::new(
+                    arg_ty.span(),
+                    format!("Can not find foreigner_class for '{:?}'", arg_ty),
                 )
             })?;
         let foreign_info =
-            foreign_class_foreign_name(sess, conv_map, foreign_class, opt_ty.span, false)?;
+            foreign_class_foreign_name(conv_map, foreign_class, opt_ty.span(), false)?;
         let (typename, output_converter) = match cpp_cfg.cpp_optional {
             CppOptional::Std17 => (
-                Symbol::intern(&format!("std::optional<{}>", foreign_class.name)),
+                format!("std::optional<{}>", foreign_class.name),
                 format!(
                     "{var} != nullptr ? {Type}({var}) : std::optional<{Type}>()",
                     Type = foreign_class.name,
@@ -1010,7 +958,7 @@ fn handle_option_type_in_return<'a>(
                 ),
             ),
             CppOptional::Boost => (
-                Symbol::intern(&format!("boost::optional<{}>", foreign_class.name)),
+                format!("boost::optional<{}>", foreign_class.name),
                 format!(
                     "{var} != nullptr ? {Type}({var}) : boost::optional<{Type}>()",
                     Type = foreign_class.name,
@@ -1030,42 +978,40 @@ fn handle_option_type_in_return<'a>(
     }
 
     //handle Option<&ForeignClass> case
-    if let ast::TyKind::Rptr(
-        _,
-        ast::MutTy {
-            ty: ref under_ref_ty,
-            mutbl: ast::Mutability::Immutable,
-        },
-    ) = opt_ty.node
+    if let Type::Reference(syn::TypeReference {
+        elem: ref under_ref_ty,
+        mutability: None,
+        ..
+    }) = opt_ty
     {
         if let Some(fclass) = conv_map
             .find_foreigner_class_with_such_self_type(under_ref_ty, false)
             .map(|v| v.clone())
         {
             let foreign_info =
-                foreign_class_foreign_name(sess, conv_map, &fclass, under_ref_ty.span, false)?;
+                foreign_class_foreign_name(conv_map, &fclass, under_ref_ty.span(), false)?;
             let this_type_for_method = fclass.this_type_for_method.as_ref().ok_or_else(|| {
-                fatal_error(
-                    sess,
-                    fclass.span,
-                    &format!(
+                DiagnosticError::new(
+                    fclass.span(),
+                    format!(
                         "Class {} (namespace {}) return as reference, but there is no constructor",
                         fclass.name, cpp_cfg.namespace_name,
                     ),
                 )
             })?;
             let this_type: RustType = this_type_for_method.clone().into();
-            let void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
+            let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
+            let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
             let my_void_ptr_ti = RustType::new(
-                parse_ty(sess, DUMMY_SP, void_ptr_typename)?,
-                make_unique_rust_typename(void_ptr_typename, this_type.normalized_name),
+                void_ptr_ty,
+                make_unique_rust_typename(void_ptr_typename, this_type.normalized_name.clone()),
             );
             let arg_rust_ty: RustType = arg_ty.clone().into();
             conv_map.add_type(arg_rust_ty.clone());
             conv_map.add_conversation_rule(
                 arg_rust_ty,
                 my_void_ptr_ti,
-                Symbol::intern(&format!(
+                format!(
                     r#"
     let {to_var}: *mut ::std::os::raw::c_void = match {from_var} {{
         Some(x) => x as *const {self_type} as *mut ::std::os::raw::c_void,
@@ -1075,12 +1021,13 @@ fn handle_option_type_in_return<'a>(
                     to_var = TO_VAR_TEMPLATE,
                     from_var = FROM_VAR_TEMPLATE,
                     self_type = this_type.normalized_name,
-                )).into(),
+                )
+                .into(),
             );
 
             let (typename, output_converter) = match cpp_cfg.cpp_optional {
                 CppOptional::Std17 => (
-                    Symbol::intern(&format!("std::optional<{}Ref>", fclass.name)),
+                    format!("std::optional<{}Ref>", fclass.name),
                     format!(
                         "{var} != nullptr ? {Type}Ref({var}) : std::optional<{Type}Ref>()",
                         Type = fclass.name,
@@ -1088,7 +1035,7 @@ fn handle_option_type_in_return<'a>(
                     ),
                 ),
                 CppOptional::Boost => (
-                    Symbol::intern(&format!("boost::optional<{}Ref>", fclass.name)),
+                    format!("boost::optional<{}Ref>", fclass.name),
                     format!(
                         "{var} != nullptr ? {Type}Ref({var}) : boost::optional<{Type}Ref>()",
                         Type = fclass.name,
@@ -1107,15 +1054,15 @@ fn handle_option_type_in_return<'a>(
             }));
         }
     }
-    let mut cpp_info_opt = map_ordinal_result_type(sess, conv_map, arg_ty)?;
-    let cpp_info_ty = map_ordinal_result_type(sess, conv_map, opt_ty)?;
+    let mut cpp_info_opt = map_ordinal_result_type(conv_map, arg_ty)?;
+    let cpp_info_ty = map_ordinal_result_type(conv_map, opt_ty)?;
     let f_opt_ty = cpp_info_ty.base.name;
     debug!("is_this_exported_enum {:?}", opt_ty);
     let (typename, output_converter) =
         if let Some(foreign_enum) = conv_map.is_this_exported_enum(opt_ty) {
             match cpp_cfg.cpp_optional {
                 CppOptional::Std17 => (
-                    Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
+                    format!("std::optional<{}>", f_opt_ty),
                     format!(
                         "{var}.is_some ? static_cast<{EnumType}>({var}.val)
  : std::optional<{Type}>()",
@@ -1125,7 +1072,7 @@ fn handle_option_type_in_return<'a>(
                     ),
                 ),
                 CppOptional::Boost => (
-                    Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
+                    format!("boost::optional<{}>", f_opt_ty),
                     format!(
                         "{var}.is_some ? static_cast<{EnumType}>({var}.val)
  : boost::optional<{Type}>()",
@@ -1138,7 +1085,7 @@ fn handle_option_type_in_return<'a>(
         } else {
             match cpp_cfg.cpp_optional {
                 CppOptional::Std17 => (
-                    Symbol::intern(&format!("std::optional<{}>", f_opt_ty)),
+                    format!("std::optional<{}>", f_opt_ty),
                     format!(
                         "{var}.is_some ? {var}.val : std::optional<{Type}>()",
                         Type = f_opt_ty,
@@ -1146,7 +1093,7 @@ fn handle_option_type_in_return<'a>(
                     ),
                 ),
                 CppOptional::Boost => (
-                    Symbol::intern(&format!("boost::optional<{}>", f_opt_ty)),
+                    format!("boost::optional<{}>", f_opt_ty),
                     format!(
                         "{var}.is_some ? {var}.val : boost::optional<{Type}>()",
                         Type = f_opt_ty,
@@ -1155,10 +1102,10 @@ fn handle_option_type_in_return<'a>(
                 ),
             }
         };
-    if let ast::TyKind::Path(_, ref path) = opt_ty.node {
-        if path.segments.len() == 1 && path.segments[0].identifier.name == "String" {
+    if let Type::Path(syn::TypePath { ref path, .. }) = opt_ty {
+        if path.segments.len() == 1 && path.segments[0].ident == "String" {
             trace!("Catch return of Option<String>");
-            let cpp_info_ty = special_type(sess, conv_map, cpp_cfg, opt_ty, Direction::Outgoing)?;
+            let cpp_info_ty = special_type(conv_map, cpp_cfg, opt_ty, Direction::Outgoing)?;
             let cpp_typename = cpp_info_ty
                 .expect("We should know how convert String as output type")
                 .cpp_converter
@@ -1166,7 +1113,7 @@ fn handle_option_type_in_return<'a>(
                 .typename;
             let (typename, output_converter) = match cpp_cfg.cpp_optional {
                 CppOptional::Std17 => (
-                    Symbol::intern(&format!("std::optional<{}>", cpp_typename)),
+                    format!("std::optional<{}>", cpp_typename),
                     format!(
                         "{var}.is_some ? {ty}{{{var}.val}} : std::optional<{ty}>()",
                         var = FROM_VAR_TEMPLATE,
@@ -1174,7 +1121,7 @@ fn handle_option_type_in_return<'a>(
                     ),
                 ),
                 CppOptional::Boost => (
-                    Symbol::intern(&format!("boost::optional<{}>", cpp_typename)),
+                    format!("boost::optional<{}>", cpp_typename),
                     format!(
                         "{var}.is_some ? {ty}{{{var}.val}} : boost::optional<{ty}>()",
                         var = FROM_VAR_TEMPLATE,

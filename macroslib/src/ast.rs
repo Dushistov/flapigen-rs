@@ -214,7 +214,8 @@ impl GenericTypeConv {
             }
         }
 
-        /* for example if from type jobjectArray, and we use rule
+        /*
+        For example if from type jobjectArray, and we use rule
         from jobjectArray -> Vec<T> where T: ForeignClass,
         then we filter jobjectArray^java.lang.String types as input for our rule
         */

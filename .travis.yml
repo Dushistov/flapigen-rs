@@ -14,23 +14,20 @@ cache: cargo
 addons:
   apt:
     sources:
-      - llvm-toolchain-precise-3.9
+      - llvm-toolchain-trusty-5.0
       - ubuntu-toolchain-r-test
     packages:
       - oracle-java8-set-default
-      - llvm-3.9-dev
-      - libclang-3.9-dev
+      - llvm-5.0-dev
+      - libclang-5.0-dev
       - python3
       - build-essential
       - valgrind
 before_script:
-    - export LIBCLANG_PATH=/usr/lib/llvm-3.9/lib
     - if [ "$TRAVIS_OS_NAME" == "osx" ]; then
          export JAVA_HOME=$(/usr/libexec/java_home);
-      fi
-    - if [ "$TRAVIS_RUST_VERSION" == "beta" ]; then
-          rustup update;
-          rustup toolchain add beta;
+      else
+         export LIBCLANG_PATH=/usr/lib/llvm-5.0/lib;
       fi
     - echo $JAVA_HOME
     - cmake --version

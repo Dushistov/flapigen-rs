@@ -13,7 +13,7 @@ impl VisitMut for FilterSwigAttrs {
             .to_string()
             .starts_with("swig_")
         {
-            *i = syn::parse_quote! { #[doc = "swig_ replace"] };
+            *i = parse_quote! { #[doc = "swig_ replace"] };
         }
     }
 }

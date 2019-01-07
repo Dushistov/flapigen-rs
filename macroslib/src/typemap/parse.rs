@@ -3,7 +3,13 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{parse_quote, punctuated::Punctuated, spanned::Spanned, Item, ItemMod, Token, Type};
+use syn::{
+    parse_quote,
+    punctuated::Punctuated,
+    spanned::Spanned,
+    visit_mut::{visit_attribute_mut, VisitMut},
+    Item, ItemMod, Token, Type,
+};
 
 use crate::{
     ast::{normalize_ty_lifetimes, GenericTypeConv, RustType, TypeName},
@@ -35,7 +41,19 @@ static TARGET_ASSOC_TYPE: &str = "Target";
 type MyAttrs = HashMap<String, Vec<(String, Span)>>;
 
 pub(in crate::typemap) fn parse(
-    _name: &str,
+    name: &str,
+    code: &str,
+    target_pointer_width: usize,
+    traits_usage_code: HashMap<Ident, String>,
+) -> Result<TypeMap> {
+    let mut ret = do_parse(code, target_pointer_width, traits_usage_code);
+    if let Err(ref mut err) = ret {
+        err.register_src(name.into(), code.into());
+    }
+    ret
+}
+
+fn do_parse(
     code: &str,
     target_pointer_width: usize,
     traits_usage_code: HashMap<Ident, String>,
@@ -59,11 +77,12 @@ pub(in crate::typemap) fn parse(
     };
 
     macro_rules! handle_attrs {
-        ($attrs:expr) => {{
-            if is_wrong_cfg_pointer_width(&$attrs, target_pointer_width) {
+        ($item:expr) => {{
+            if is_wrong_cfg_pointer_width(&$item.attrs, target_pointer_width) {
                 continue;
             }
-            let my_attrs = my_syn_attrs_to_hashmap(&$attrs)?;
+            let my_attrs = my_syn_attrs_to_hashmap(&$item.attrs)?;
+
             my_attrs
         }};
     }
@@ -80,7 +99,7 @@ pub(in crate::typemap) fn parse(
         }
     }
 
-    for item in file.items {
+    for mut item in file.items {
         match item {
             Item::Mod(ref item_mod) if item_mod.ident == sym_foreign_types_map => {
                 if let Some(span) = types_map_span {
@@ -99,15 +118,18 @@ pub(in crate::typemap) fn parse(
 
                 fill_foreign_types_map(item_mod, &mut ret)?;
             }
-            Item::Impl(ref item_impl)
+            Item::Impl(ref mut item_impl)
                 if item_impl_path_is(item_impl, SWIG_INTO_TRAIT, SWIG_FROM_TRAIT) =>
             {
-                let swig_attrs = handle_attrs!(item_impl.attrs);
+                let swig_attrs = handle_attrs!(item_impl);
+                let mut filter = FilterSwigAttrs;
+                filter.visit_item_impl_mut(item_impl);
                 handle_into_from_impl(&swig_attrs, item_impl, &mut ret)?;
             }
-            syn::Item::Trait(item_trait) => {
-                let swig_attrs = handle_attrs!(item_trait.attrs);
-
+            syn::Item::Trait(mut item_trait) => {
+                let swig_attrs = handle_attrs!(item_trait);
+                let mut filter = FilterSwigAttrs;
+                filter.visit_item_trait_mut(&mut item_trait);
                 if !swig_attrs.is_empty() {
                     let conv_code_template =
                         get_swig_code_from_attrs(item_trait.span(), SWIG_CODE, &swig_attrs)?;
@@ -117,17 +139,21 @@ pub(in crate::typemap) fn parse(
                 }
                 ret.utils_code.push(syn::Item::Trait(item_trait));
             }
-            Item::Impl(ref item_impl)
+            Item::Impl(ref mut item_impl)
                 if item_impl_path_is(item_impl, SWIG_DEREF_TRAIT, SWIG_DEREF_MUT_TRAIT) =>
             {
-                let swig_attrs = handle_attrs!(item_impl.attrs);
+                let swig_attrs = handle_attrs!(item_impl);
+                let mut filter = FilterSwigAttrs;
+                filter.visit_item_impl_mut(item_impl);
                 handle_deref_impl(&swig_attrs, item_impl, &mut ret)?;
             }
-            Item::Macro(item_macro) => {
-                let swig_attrs = handle_attrs!(item_macro.attrs);
+            Item::Macro(mut item_macro) => {
+                let swig_attrs = handle_attrs!(item_macro);
                 if swig_attrs.is_empty() {
                     ret.utils_code.push(Item::Macro(item_macro));
                 } else {
+                    let mut filter = FilterSwigAttrs;
+                    filter.visit_item_macro_mut(&mut item_macro);
                     handle_macro(&swig_attrs, item_macro, &mut ret)?;
                 }
             }
@@ -204,9 +230,10 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     ));
                 };
                 let span = attr_value.span();
-                let attr_value_tn = TypeName::new(attr_value.value(), span);
+                let mut attr_value_tn = TypeName::new(attr_value.value(), span);
 
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
+                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty);
                 names_map.insert(ftype, (attr_value_tn, rust_ty));
             } else {
                 return Err(DiagnosticError::new(
@@ -231,8 +258,9 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     ));
                 };
                 let span = attr_value.span();
-                let attr_value_tn = TypeName::new(attr_value.value(), span);
+                let mut attr_value_tn = TypeName::new(attr_value.value(), span);
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
+                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty);
                 let unique_name =
                     make_unique_rust_typename(attr_value_tn.typename, ftype.typename.clone());
                 names_map.insert(
@@ -494,6 +522,7 @@ fn handle_deref_impl(
         })?;
     let from_ty = (*item_impl.self_ty).clone();
     let item_code = item_impl.into_token_stream();
+
     //for_type -> &Target
     if item_impl.generics.type_params().next().is_some() {
         ret.generic_edges.push(GenericTypeConv {
@@ -736,15 +765,30 @@ fn is_ident_ignore_params<I>(path: &syn::Path, ident: I) -> bool
 where
     syn::Ident: PartialEq<I>,
 {
-    path.leading_colon.is_none()
-        && path.segments.len() == 1
-//        && path.segments[0].arguments.is_none()
-        && path.segments[0].ident == ident
+    // without check path.segments[0].arguments.is_none() like in Path::is_ident
+    path.leading_colon.is_none() && path.segments.len() == 1 && path.segments[0].ident == ident
 }
 
 fn parse_ty_with_given_span(type_str: &str, span: Span) -> Result<Type> {
     let ty = syn::LitStr::new(type_str, span).parse::<syn::Type>()?;
     Ok(ty)
+}
+
+struct FilterSwigAttrs;
+
+impl VisitMut for FilterSwigAttrs {
+    fn visit_attribute_mut(&mut self, i: &mut syn::Attribute) {
+        if i.path
+            .clone()
+            .into_token_stream()
+            .to_string()
+            .starts_with("swig_")
+        {
+            *i = syn::parse_quote! { #[doc = ""] };
+        } else {
+            visit_attribute_mut(self, i);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -792,7 +836,7 @@ mod swig_foreign_types_map {
 
     #[test]
     fn test_parse_foreign_types_map_mod() {
-        let mut mod_item = syn::parse_str::<ItemMod>(
+        let mod_item = syn::parse_str::<ItemMod>(
             r#"
 mod swig_foreign_types_map {
     #![swig_foreigner_type="boolean"]

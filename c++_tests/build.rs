@@ -1,13 +1,6 @@
-fn main() {}
-/*
-extern crate env_logger;
-extern crate rust_swig;
-extern crate syntex;
+use std::{env, path::Path, time::Instant};
 
 use rust_swig::{CppConfig, LanguageConfig};
-use std::env;
-use std::path::Path;
-use std::time::Instant;
 
 fn main() {
     env_logger::init();
@@ -18,7 +11,7 @@ fn main() {
     rust_swig_expand(
         Path::new("src/cpp_glue.rs.in"),
         &Path::new(&out_dir).join("cpp_glue.rs"),
-    ).unwrap();
+    );
     let expand_time = now.elapsed();
     println!(
         "rust swig expand time: {}",
@@ -29,9 +22,8 @@ fn main() {
     println!("cargo:rerun-if-changed={}", out_dir);
 }
 
-fn rust_swig_expand(from: &Path, out: &Path) -> Result<(), String> {
+fn rust_swig_expand(from: &Path, out: &Path) {
     println!("Run rust_swig_expand");
-    let mut registry = syntex::Registry::new();
     let cpp_gen_path = Path::new("c++").join("rust_interface");
     println!("cargo:rerun-if-changed={}", cpp_gen_path.display());
     let cpp_cfg = if cfg!(feature = "boost") {
@@ -41,9 +33,5 @@ fn rust_swig_expand(from: &Path, out: &Path) -> Result<(), String> {
     };
 
     let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
-    swig_gen.register(&mut registry);
-    registry
-        .expand("rust_swig_test_c++", from, out)
-        .map_err(|err| format!("rust swig macros expand failed: {}", err))
+    swig_gen.expand("rust_swig_test_c++", from, out);
 }
-*/

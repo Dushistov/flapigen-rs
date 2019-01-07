@@ -16,7 +16,7 @@ macro_rules! parse_type {
 
 mod ast;
 mod code_parse;
-mod comments;
+mod cpp;
 mod error;
 pub mod file_cache;
 mod java_jni;
@@ -25,19 +25,21 @@ mod typemap;
 use std::{
     cell::RefCell,
     collections::HashSet,
-    env, mem,
+    env,
+    io::Write,
+    mem,
     path::{Path, PathBuf},
     str::FromStr,
 };
 
-use log::trace;
+use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{parse_quote, spanned::Spanned, visit_mut::VisitMut, Token, Type};
+use syn::{parse_quote, spanned::Spanned, Token, Type};
 
 use crate::{
     ast::RustType,
-    error::{report_parse_error, DiagnosticError, Result},
+    error::{panic_on_parse_error, DiagnosticError, Result},
     typemap::TypeMap,
 };
 
@@ -167,13 +169,16 @@ pub struct Generator {
     conv_map_source: Vec<SourceCode>,
     foreign_lang_helpers: Vec<SourceCode>,
     pointer_target_width: usize,
-    visit_error: Option<DiagnosticError>,
 }
 
 struct SourceCode {
     id_of_code: String,
     code: String,
 }
+
+static FOREIGNER_CLASS: &str = "foreigner_class";
+static FOREIGN_ENUM: &str = "foreign_enum";
+static FOREIGN_INTERFACE: &str = "foreign_interface";
 
 impl Generator {
     pub fn new(config: LanguageConfig) -> Generator {
@@ -224,7 +229,6 @@ impl Generator {
             conv_map: TypeMap::default(),
             conv_map_source,
             foreign_lang_helpers,
-            visit_error: None,
             pointer_target_width: pointer_target_width.unwrap_or(0),
         }
     }
@@ -260,21 +264,96 @@ impl Generator {
             )
         });
         if let Err(err) = self.expand_str(crate_name, &src_cnt, dst) {
-            report_parse_error(crate_name, &src_cnt, &err);
+            panic_on_parse_error(&err);
         }
     }
 
+    /// process `src` and save result of macro expansion to `dst`
+    ///
+    /// # Panics
+    /// Panics on I/O errors
     fn expand_str<D>(mut self, crate_name: &str, src: &str, dst: D) -> Result<()>
     where
         D: AsRef<Path>,
     {
-        let mut file = syn::parse_file(src)?;
-        self.visit_error = None;
-        self.visit_file_mut(&mut file);
-        if let Some(visit_err) = self.visit_error {
-            return Err(visit_err);
+        if self.pointer_target_width == 0 {
+            panic!(
+                r#"pointer target width unknown,
+ set env CARGO_CFG_TARGET_POINTER_WIDTH environment variable,
+ or use `with_pointer_target_width` function
+"#
+            );
         }
-        std::fs::write(dst.as_ref(), file.into_token_stream().to_string()).unwrap_or_else(|err| {
+        let items = self.init_types_map(self.pointer_target_width)?;
+
+        let syn_file = match syn::parse_file(src) {
+            Ok(x) => x,
+            Err(err) => {
+                let mut err: DiagnosticError = err.into();
+                err.register_src(crate_name.into(), src.into());
+                return Err(err);
+            }
+        };
+
+        let mut file = file_cache::FileWriteCache::new(dst.as_ref());
+
+        for item in items {
+            write!(&mut file, "{}", item.into_token_stream().to_string()).expect("mem I/O failed");
+        }
+
+        for item in syn_file.items {
+            if let syn::Item::Macro(mut item_macro) = item {
+                let is_our_macro = [FOREIGNER_CLASS, FOREIGN_ENUM, FOREIGN_INTERFACE]
+                    .iter()
+                    .any(|x| item_macro.mac.path.is_ident(x));
+                if !is_our_macro {
+                    writeln!(&mut file, "{}", item_macro.into_token_stream().to_string())
+                        .expect("mem I/O failed");
+                    continue;
+                }
+                trace!("Found {:?}", item_macro.mac.path);
+                let mut tts = TokenStream::new();
+                mem::swap(&mut tts, &mut item_macro.mac.tts);
+                let code;
+                if item_macro.mac.path.is_ident(FOREIGNER_CLASS) {
+                    let fclass = code_parse::parse_foreigner_class(&self.config, tts)?;
+                    debug!(
+                        "expand_foreigner_class: self {:?}, this_for_method {:?}, constructor {:?}",
+                        fclass.self_type, fclass.this_type_for_method, fclass.constructor_ret_type
+                    );
+                    self.conv_map.register_foreigner_class(&fclass);
+                    code = Generator::language_generator(&self.config).generate(
+                        &mut self.conv_map,
+                        self.pointer_target_width,
+                        &fclass,
+                    )?;
+                } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
+                    let fenum = code_parse::parse_foreign_enum(tts)?;
+                    code = Generator::language_generator(&self.config).generate_enum(
+                        &mut self.conv_map,
+                        self.pointer_target_width,
+                        &fenum,
+                    )?;
+                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE) {
+                    let finterface = code_parse::parse_foreign_interface(tts)?;
+                    code = Generator::language_generator(&self.config).generate_interface(
+                        &mut self.conv_map,
+                        self.pointer_target_width,
+                        &finterface,
+                    )?;
+                } else {
+                    unreachable!();
+                }
+                for elem in code {
+                    writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
+                }
+            } else {
+                writeln!(&mut file, "{}", item.into_token_stream().to_string())
+                    .expect("mem I/O failed");
+            }
+        }
+
+        file.update_file_if_necessary().unwrap_or_else(|err| {
             panic!(
                 "Error during write to file {}: {}",
                 dst.as_ref().display(),
@@ -283,50 +362,40 @@ impl Generator {
         });
         Ok(())
     }
-    /*
+
+    fn init_types_map(&mut self, target_pointer_width: usize) -> Result<Vec<syn::Item>> {
+        if self.init_done {
+            return Ok(vec![]);
+        }
+        self.init_done = true;
+        for code in &self.conv_map_source {
+            self.conv_map
+                .merge(&code.id_of_code, &code.code, target_pointer_width)?;
+        }
+
+        if self.conv_map.is_empty() {
+            return Err(DiagnosticError::new(
+                Span::call_site(),
+                "After merge all \"types maps\" have no convertion code",
+            ));
+        }
+
+        Generator::language_generator(&self.config)
+            .place_foreign_lang_helpers(&self.foreign_lang_helpers)
+            .map_err(|err| {
+                DiagnosticError::new(
+                    Span::call_site(),
+                    format!("Can not put/generate foreign lang helpers: {}", err),
+                )
+            })?;
+
+        Ok(self.conv_map.take_utils_code())
+    }
+
     fn language_generator(cfg: &LanguageConfig) -> &LanguageGenerator {
         match cfg {
             LanguageConfig::JavaConfig(ref java_cfg) => java_cfg,
             LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,
-        }
-    }*/
-}
-
-impl syn::visit_mut::VisitMut for Generator {
-    fn visit_macro_mut(&mut self, m: &mut syn::Macro) {
-        trace!("expand {:?}", m.path);
-        if m.path.is_ident("foreigner_class") {
-            let mut tts = TokenStream::new();
-            mem::swap(&mut tts, &mut m.tts);
-            if let Err(err) = code_parse::parse_foreigner_class(&self.config, tts) {
-                if let Some(ref mut visit_err) = self.visit_error {
-                    visit_err.add(err);
-                } else {
-                    self.visit_error = Some(err);
-                }
-            }
-        } else if m.path.is_ident("foreign_enum") {
-            let mut tts = TokenStream::new();
-            mem::swap(&mut tts, &mut m.tts);
-            if let Err(err) = code_parse::parse_foreign_enum(tts) {
-                if let Some(ref mut visit_err) = self.visit_error {
-                    visit_err.add(err);
-                } else {
-                    self.visit_error = Some(err);
-                }
-            }
-        } else if m.path.is_ident("foreign_interface") {
-            let mut tts = TokenStream::new();
-            mem::swap(&mut tts, &mut m.tts);
-            if let Err(err) = code_parse::parse_foreign_interface(tts) {
-                if let Some(ref mut visit_err) = self.visit_error {
-                    visit_err.add(err);
-                } else {
-                    self.visit_error = Some(err);
-                }
-            }
-        } else {
-            syn::visit_mut::visit_macro_mut(self, m)
         }
     }
 }
@@ -545,310 +614,3 @@ trait LanguageGenerator {
         Ok(())
     }
 }
-
-/*
-#[macro_use]
-extern crate bitflags;
-#[cfg(test)]
-extern crate env_logger;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate log;
-extern crate petgraph;
-extern crate syntex;
-extern crate syntex_errors;
-extern crate syntex_pos;
-extern crate syntex_syntax;
-
-macro_rules! unwrap_presult {
-    ($presult_epxr:expr) => {
-        match $presult_epxr {
-            Ok(x) => x,
-            Err(mut err) => {
-                err.emit();
-                panic!("rust_swig fatal error, see above");
-            }
-        }
-    };
-    ($presult_epxr:expr, $conv_map:expr) => {
-        match $presult_epxr {
-            Ok(x) => x,
-            Err(mut err) => {
-                debug!("{}", $conv_map);
-                err.emit();
-                panic!("rust_swig fatal error, see above");
-            }
-        }
-    };
-}
-
-mod cpp;
-mod errors;
-mod java_jni;
-mod my_ast;
-mod parsing;
-mod types_conv_map;
-
-use std::cell::RefCell;
-use std::collections::HashSet;
-use std::env;
-use std::path::PathBuf;
-use std::rc::Rc;
-use std::str::FromStr;
-
-use syntex::Registry;
-use syntex_pos::DUMMY_SP;
-use syntex_syntax::ast;
-use syntex_syntax::ast::DUMMY_NODE_ID;
-use syntex_syntax::codemap::Span;
-use syntex_syntax::ext::base::{ExtCtxt, MacEager, MacResult, TTMacroExpander};
-use syntex_syntax::parse::PResult;
-use syntex_syntax::parse::ParseSess;
-use syntex_syntax::ptr::P;
-use syntex_syntax::symbol::Symbol;
-use syntex_syntax::tokenstream::TokenTree;
-use syntex_syntax::util::small_vector::SmallVector;
-
-use errors::fatal_error;
-use my_ast::RustType;
-use parsing::{parse_foreign_enum, parse_foreign_interface, parse_foreigner_class};
-use types_conv_map::TypesConvMap;
-
-
-
-impl Generator {
-
-
-    pub fn register(self, registry: &mut Registry) {
-        self.pointer_target_width.unwrap_or_else(|| {
-            panic!(
-                r#"pointer target width unknown,
- set env CARGO_CFG_TARGET_POINTER_WIDTH environment variable,
- or use `with_pointer_target_width` function
-"#
-            )
-        });
-        registry.add_macro("foreign_enum", EnumHandler(self.data.clone()));
-        registry.add_macro("foreign_interface", InterfaceHandler(self.data.clone()));
-        registry.add_macro("foreigner_class", self);
-    }
-
-
-}
-
-impl TTMacroExpander for Generator {
-    fn expand<'a>(
-        &self,
-        cx: &'a mut ExtCtxt,
-        _: Span,
-        tokens: &[TokenTree],
-    ) -> Box<MacResult + 'a> {
-        self.data.borrow_mut().expand_foreigner_class(cx, tokens)
-    }
-}
-
-struct EnumHandler(Rc<RefCell<GeneratorData>>);
-
-impl TTMacroExpander for EnumHandler {
-    fn expand<'a>(
-        &self,
-        cx: &'a mut ExtCtxt,
-        _: Span,
-        tokens: &[TokenTree],
-    ) -> Box<MacResult + 'a> {
-        self.0.borrow_mut().expand_foreign_enum(cx, tokens)
-    }
-}
-
-struct InterfaceHandler(Rc<RefCell<GeneratorData>>);
-impl TTMacroExpander for InterfaceHandler {
-    fn expand<'a>(
-        &self,
-        cx: &'a mut ExtCtxt,
-        _: Span,
-        tokens: &[TokenTree],
-    ) -> Box<MacResult + 'a> {
-        self.0.borrow_mut().expand_foreign_interface(cx, tokens)
-    }
-}
-
-impl GeneratorData {
-    fn generate_code_for_foreign_interface<'a>(
-        cx: &'a mut ExtCtxt,
-        conv_map: &mut TypesConvMap,
-        pointer_target_width: usize,
-        foreign_interface: &ForeignInterface,
-        lang_gen: &LanguageGenerator,
-        mut items: Vec<P<ast::Item>>,
-    ) -> Box<MacResult + 'a> {
-        let mut gen_items = unwrap_presult!(
-            lang_gen.generate_interface(
-                cx.parse_sess(),
-                conv_map,
-                pointer_target_width,
-                foreign_interface
-            ),
-            conv_map
-        );
-        items.append(&mut gen_items);
-        MacEager::items(SmallVector::many(items))
-    }
-
-    fn expand_foreign_interface<'a>(
-        &mut self,
-        cx: &'a mut ExtCtxt,
-        tokens: &[TokenTree],
-    ) -> Box<MacResult + 'a> {
-        let pointer_target_width = self.pointer_target_width;
-        let items = unwrap_presult!(
-            self.init_types_map(cx.parse_sess(), pointer_target_width),
-            self.conv_map
-        );
-        let foreign_interface =
-            parse_foreign_interface(cx, tokens).expect("Can not parse foreign_interface");
-        GeneratorData::generate_code_for_foreign_interface(
-            cx,
-            &mut self.conv_map,
-            self.pointer_target_width,
-            &foreign_interface,
-            GeneratorData::language_generator(&self.config),
-            items,
-        )
-    }
-
-    fn generate_code_for_enum<'a>(
-        cx: &'a mut ExtCtxt,
-        conv_map: &mut TypesConvMap,
-        pointer_target_width: usize,
-        foreign_enum: &ForeignEnumInfo,
-        lang_gen: &LanguageGenerator,
-        mut items: Vec<P<ast::Item>>,
-    ) -> Box<MacResult + 'a> {
-        let mut gen_items = unwrap_presult!(
-            lang_gen.generate_enum(
-                cx.parse_sess(),
-                conv_map,
-                pointer_target_width,
-                foreign_enum
-            ),
-            conv_map
-        );
-        items.append(&mut gen_items);
-        MacEager::items(SmallVector::many(items))
-    }
-
-    fn expand_foreign_enum<'a>(
-        &mut self,
-        cx: &'a mut ExtCtxt,
-        tokens: &[TokenTree],
-    ) -> Box<MacResult + 'a> {
-        let pointer_target_width = self.pointer_target_width;
-        let items = unwrap_presult!(
-            self.init_types_map(cx.parse_sess(), pointer_target_width),
-            self.conv_map
-        );
-        let foreign_enum = parse_foreign_enum(cx, tokens).expect("Can not parse foreign_enum");
-
-        GeneratorData::generate_code_for_enum(
-            cx,
-            &mut self.conv_map,
-            self.pointer_target_width,
-            &foreign_enum,
-            GeneratorData::language_generator(&self.config),
-            items,
-        )
-    }
-
-    fn generate_code_for_class<'a>(
-        cx: &'a mut ExtCtxt,
-        conv_map: &mut TypesConvMap,
-        pointer_target_width: usize,
-        foreign_class: &ForeignerClassInfo,
-        lang_gen: &LanguageGenerator,
-        mut items: Vec<P<ast::Item>>,
-    ) -> Box<MacResult + 'a> {
-        let mut gen_items = unwrap_presult!(
-            lang_gen.generate(
-                cx.parse_sess(),
-                conv_map,
-                pointer_target_width,
-                foreign_class,
-            ),
-            conv_map
-        );
-        items.append(&mut gen_items);
-        MacEager::items(SmallVector::many(items))
-    }
-
-    fn expand_foreigner_class<'a>(
-        &mut self,
-        cx: &'a mut ExtCtxt,
-        tokens: &[TokenTree],
-    ) -> Box<MacResult + 'a> {
-        let pointer_target_width = self.pointer_target_width;
-        let items = unwrap_presult!(
-            self.init_types_map(cx.parse_sess(), pointer_target_width),
-            self.conv_map
-        );
-        let foreigner_class = match parse_foreigner_class(cx, &self.config, tokens) {
-            Ok(x) => x,
-            Err(_) => {
-                panic!("Can not parse foreigner_class");
-                //return DummyResult::any(span);
-            }
-        };
-        debug!(
-            "expand_foreigner_class: self {:?}, this_for_method {:?}, constructor {:?}",
-            foreigner_class.self_type,
-            foreigner_class.this_type_for_method,
-            foreigner_class.constructor_ret_type
-        );
-        self.conv_map.register_foreigner_class(&foreigner_class);
-
-        GeneratorData::generate_code_for_class(
-            cx,
-            &mut self.conv_map,
-            self.pointer_target_width,
-            &foreigner_class,
-            GeneratorData::language_generator(&self.config),
-            items,
-        )
-    }
-
-    fn init_types_map<'a>(
-        &mut self,
-        sess: &'a ParseSess,
-        target_pointer_width: usize,
-    ) -> PResult<'a, Vec<P<ast::Item>>> {
-        if self.init_done {
-            return Ok(vec![]);
-        }
-        self.init_done = true;
-        for code in &self.conv_map_source {
-            self.conv_map
-                .merge(sess, &code.id_of_code, &code.code, target_pointer_width)?;
-        }
-
-        if self.conv_map.is_empty() {
-            return Err(fatal_error(
-                sess,
-                DUMMY_SP,
-                "After merge all \"types maps\" have no convertion code",
-            ));
-        }
-
-        GeneratorData::language_generator(&self.config)
-            .place_foreign_lang_helpers(&self.foreign_lang_helpers)
-            .map_err(|err| {
-                fatal_error(
-                    sess,
-                    DUMMY_SP,
-                    &format!("Can not put/generate foreign lang helpers: {}", err),
-                )
-            })?;
-
-        Ok(self.conv_map.take_utils_code())
-    }
-}
-*/

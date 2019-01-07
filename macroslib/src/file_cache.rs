@@ -1,8 +1,10 @@
-use std::fs::File;
-use std::io;
-use std::io::{Read, Write};
 /// To prevent modification time changing
-use std::path::PathBuf;
+use std::{
+    fs::File,
+    io,
+    io::{Read, Write},
+    path::PathBuf,
+};
 
 /// Implement write cache in memory, and update file only if necessary
 pub struct FileWriteCache {

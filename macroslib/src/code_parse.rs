@@ -213,8 +213,16 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                     ));
                 }
             }
-            let dummy_path = syn::LitStr::new(&func_type_name.to_string(), func_type_name.span())
-                .parse::<syn::Path>()?;
+
+            let mut dummy_colon2: Token![::] = parse_quote! { :: };
+            dummy_colon2.spans[0] = func_type_name.span();
+            dummy_colon2.spans[1] = func_type_name.span();
+
+            let dummy_path = syn::Path {
+                leading_colon: Some(dummy_colon2),
+                segments: Punctuated::new(),
+            };
+
             let dummy_func: syn::ItemFn = parse_quote! {
                 fn constructor() {
                 }
@@ -464,7 +472,7 @@ impl Parse for ForeignInterfaceParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::{report_parse_error, DiagnosticError};
+    use crate::error::{panic_on_parse_error, DiagnosticError};
 
     #[test]
     fn test_do_parse_foreigner_class() {
@@ -473,8 +481,9 @@ mod tests {
         let test_parse = |tokens: TokenStream| {
             let code = tokens.to_string();
             let class: JavaClass = syn::parse2(tokens).unwrap_or_else(|err| {
-                let err: DiagnosticError = err.into();
-                report_parse_error("test_do_parse_foreigner_class", &code, &err);
+                let mut err: DiagnosticError = err.into();
+                err.register_src("test_do_parse_foreigner_class".into(), code);
+                panic_on_parse_error(&err);
             });
             class.0
         };

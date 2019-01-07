@@ -3,7 +3,6 @@ use std::{fmt, io::Write, path::Path};
 use bitflags::bitflags;
 
 use crate::{
-    comments::strip_doc_comment_decoration,
     file_cache::FileWriteCache,
     java_jni::{fmt_write_err_map, method_name, JniForeignMethodSignature},
     ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant,
@@ -463,12 +462,7 @@ fn doc_comments_to_java_comments(doc_comments: &[String], class_comments: bool) 
         if !class_comments {
             comments.push_str("    ");
         }
-        write!(
-            &mut comments,
-            "//{}",
-            strip_doc_comment_decoration(&*comment.as_str())
-        )
-        .unwrap();
+        write!(&mut comments, "//{}", comment.trim()).unwrap();
     }
     comments
 }

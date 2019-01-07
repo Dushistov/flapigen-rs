@@ -17,7 +17,6 @@ mod jni {
 }
 
 mod cpp {
-    use super::*;
     use std::{
         cell::{Ref, RefCell, RefMut},
         path::Path,

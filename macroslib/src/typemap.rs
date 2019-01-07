@@ -442,7 +442,7 @@ impl TypeMap {
         let err_add_note = |mut err: DiagnosticError| -> DiagnosticError {
             err.span_note(
                 Span::call_site(),
-                &format!(
+                format!(
                     "Can not find conversation from {} to {}",
                     from.normalized_name, to.normalized_name
                 ),

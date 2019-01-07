@@ -1,42 +1,41 @@
 mod cpp_code;
 mod map_type;
 
-use std::io::Write;
-use std::path::Path;
-use std::{fmt, mem};
+use std::{
+    io::Write,
+    path::Path,
+    {fmt, mem},
+};
 
+use log::{debug, trace};
 use petgraph::Direction;
-use syntex_pos::DUMMY_SP;
-use syntex_syntax::ast;
-use syntex_syntax::ast::DUMMY_NODE_ID;
-use syntex_syntax::parse::{PResult, ParseSess};
-use syntex_syntax::print::pprust;
-use syntex_syntax::ptr::P;
-use syntex_syntax::symbol::Symbol;
+use proc_macro2::TokenStream;
+use quote::{quote, ToTokens};
+use syn::{parse_quote, spanned::Spanned, Type};
 
-use self::map_type::map_type;
-use errors::fatal_error;
-use file_cache::FileWriteCache;
-use my_ast::{
-    code_to_item, get_ref_type, list_lifetimes, normalized_ty_string, parse_ty, self_variant,
-    RustType,
-};
-use types_conv_map::utils::{
-    create_suitable_types_for_constructor_and_self, foreign_from_rust_convert_method_output,
-    foreign_to_rust_convert_method_inputs, rust_to_foreign_convert_method_inputs,
-};
-use types_conv_map::{
-    make_unique_rust_typename, unpack_unique_typename, ForeignMethodSignature, ForeignTypeInfo,
-    FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
-};
-use {
+use crate::{
+    ast::{
+        change_span, fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens, RustType,
+    },
+    cpp::map_type::map_type,
+    error::{DiagnosticError, Result},
+    file_cache::FileWriteCache,
+    typemap::{
+        make_unique_rust_typename, unpack_unique_typename,
+        utils::{
+            create_suitable_types_for_constructor_and_self,
+            foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
+            rust_to_foreign_convert_method_inputs,
+        },
+        ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+    },
     CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
-    LanguageGenerator, MethodAccess, MethodVariant, SelfTypeVariant, SourceCode, TypesConvMap,
+    LanguageGenerator, MethodAccess, MethodVariant, SelfTypeVariant, SourceCode, TypeMap,
 };
 
 #[derive(Debug)]
 struct CppConverter {
-    typename: Symbol,
+    typename: String,
     output_converter: String,
     input_converter: String,
 }
@@ -45,7 +44,7 @@ struct CppConverter {
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
     c_converter: String,
-    pub(in cpp) cpp_converter: Option<CppConverter>,
+    pub(in crate::cpp) cpp_converter: Option<CppConverter>,
 }
 
 impl AsRef<ForeignTypeInfo> for CppForeignTypeInfo {
@@ -98,29 +97,32 @@ struct MethodContext<'a> {
 }
 
 impl LanguageGenerator for CppConfig {
-    fn generate<'a>(
+    fn generate(
         &self,
-        sess: &'a ParseSess,
-        conv_map: &mut TypesConvMap,
+        conv_map: &mut TypeMap,
         _: usize,
         class: &ForeignerClassInfo,
-    ) -> PResult<'a, Vec<P<ast::Item>>> {
+    ) -> Result<Vec<TokenStream>> {
         debug!(
             "generate: begin for {}, this_type_for_method {:?}",
             class.name, class.this_type_for_method
         );
         class
             .validate_class()
-            .map_err(|err| fatal_error(sess, class.span, &err))?;
+            .map_err(|err| DiagnosticError::new(class.span(), err))?;
         if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
             let this_type: RustType = this_type_for_method.clone().into();
             let this_type = this_type.implements("SwigForeignClass");
-            let void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
+            let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
+            let void_ptr_ty_name = format!("{}", DisplayToTokens(&void_ptr_ty));
             let my_void_ptr_ti = RustType::new(
-                parse_ty(sess, DUMMY_SP, void_ptr_typename)?,
-                make_unique_rust_typename(void_ptr_typename, this_type.normalized_name),
+                void_ptr_ty.clone(),
+                make_unique_rust_typename(
+                    void_ptr_ty_name.clone(),
+                    this_type.normalized_name.clone(),
+                ),
             );
-            let foreign_typename = Symbol::intern(&format!("{} *", cpp_code::c_class_type(class)));
+            let foreign_typename = format!("{} *", cpp_code::c_class_type(class));
             conv_map.cache_rust_to_foreign_conv(
                 &this_type,
                 ForeignTypeInfo {
@@ -129,14 +131,18 @@ impl LanguageGenerator for CppConfig {
                 },
             );
 
-            let const_void_ptr_typename = Symbol::intern("*const ::std::os::raw::c_void");
+            let const_void_ptr_ty = parse_type! { *const ::std::os::raw::c_void };
+            let const_void_ptr_typename = format!("{}", DisplayToTokens(&const_void_ptr_ty));
+
             let my_const_void_ptr_ti = RustType::new(
-                parse_ty(sess, DUMMY_SP, const_void_ptr_typename)?,
-                make_unique_rust_typename(const_void_ptr_typename, this_type.normalized_name),
+                const_void_ptr_ty,
+                make_unique_rust_typename(
+                    const_void_ptr_typename,
+                    this_type.normalized_name.clone(),
+                ),
             );
             let my_const_void_ptr_ti2 = my_const_void_ptr_ti.clone();
-            let const_foreign_typename =
-                Symbol::intern(&format!("const {} *", cpp_code::c_class_type(class)));
+            let const_foreign_typename = format!("const {} *", cpp_code::c_class_type(class));
             conv_map.cache_rust_to_foreign_conv(
                 &this_type,
                 ForeignTypeInfo {
@@ -145,30 +151,32 @@ impl LanguageGenerator for CppConfig {
                 },
             );
 
+            let this_type_ty = &this_type.ty;
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 my_const_void_ptr_ti2,
-                get_ref_type(&this_type.ty, ast::Mutability::Immutable).into(),
-                Symbol::intern(&format!(
+                parse_type! { & #this_type_ty }.into(),
+                format!(
                     r#"
     assert!(!{from_var}.is_null());
     let {to_var}: &{this_type} = unsafe {{ &*({from_var} as *const {this_type}) }};
 "#,
                     to_var = TO_VAR_TEMPLATE,
                     from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type.normalized_name,
-                )).into(),
+                    this_type = this_type.normalized_name.clone(),
+                )
+                .into(),
             );
-            let mut_void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
+
             let my_mut_void_ptr_ti = RustType::new(
-                parse_ty(sess, DUMMY_SP, mut_void_ptr_typename)?,
-                make_unique_rust_typename(mut_void_ptr_typename, this_type.normalized_name),
+                void_ptr_ty,
+                make_unique_rust_typename(void_ptr_ty_name, this_type.normalized_name.clone()),
             );
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 my_mut_void_ptr_ti,
-                get_ref_type(&this_type.ty, ast::Mutability::Mutable).into(),
-                Symbol::intern(&format!(
+                parse_type! { &mut #this_type_ty }.into(),
+                format!(
                     r#"
     assert!(!{from_var}.is_null());
     let {to_var}: &mut {this_type} = unsafe {{ &mut *({from_var} as *mut {this_type}) }};
@@ -176,7 +184,8 @@ impl LanguageGenerator for CppConfig {
                     to_var = TO_VAR_TEMPLATE,
                     from_var = FROM_VAR_TEMPLATE,
                     this_type = this_type.normalized_name,
-                )).into(),
+                )
+                .into(),
             );
         }
         let has_methods = class.methods.iter().any(|m| match m.variant {
@@ -189,10 +198,9 @@ impl LanguageGenerator for CppConfig {
             .any(|m| m.variant == MethodVariant::Constructor);
 
         if has_methods && !has_constructor {
-            return Err(fatal_error(
-                sess,
-                class.span,
-                &format!(
+            return Err(DiagnosticError::new(
+                class.span(),
+                format!(
                     "namespace {}, class {}: has methods, but no constructor\n
 May be you need to use `private constructor = empty;` syntax?",
                     self.namespace_name, class.name
@@ -200,9 +208,8 @@ May be you need to use `private constructor = empty;` syntax?",
             ));
         }
 
-        let m_sigs = find_suitable_foreign_types_for_methods(sess, conv_map, class, self)?;
+        let m_sigs = find_suitable_foreign_types_for_methods(conv_map, class, self)?;
         let mut code_items = generate_code_for_class(
-            sess,
             conv_map,
             &self.output_dir,
             &self.namespace_name,
@@ -213,63 +220,60 @@ May be you need to use `private constructor = empty;` syntax?",
         Ok(code_items)
     }
 
-    fn generate_enum<'a>(
+    fn generate_enum(
         &self,
-        sess: &'a ParseSess,
-        conv_map: &mut TypesConvMap,
+        conv_map: &mut TypeMap,
         pointer_target_width: usize,
         enum_info: &ForeignEnumInfo,
-    ) -> PResult<'a, Vec<P<ast::Item>>> {
+    ) -> Result<Vec<TokenStream>> {
         if (enum_info.items.len() as u64) >= u64::from(u32::max_value()) {
-            return Err(fatal_error(sess, enum_info.span, "Too many items in enum"));
+            return Err(DiagnosticError::new(
+                enum_info.span(),
+                "Too many items in enum",
+            ));
         }
 
         trace!("enum_ti: {}", enum_info.name);
-        let enum_ti = parse_ty(sess, enum_info.span, enum_info.rust_enum_name())?;
+        let enum_ti: Type = syn::parse_str(&enum_info.rust_enum_name())?;
         let enum_ti: RustType = enum_ti.into();
         let enum_ti = enum_ti.implements("SwigForeignEnum");
         conv_map.add_type(enum_ti);
 
         cpp_code::generate_code_for_enum(&self.output_dir, enum_info)
-            .map_err(|err| fatal_error(sess, enum_info.span, &err))?;
-        let code = generate_rust_code_for_enum(sess, conv_map, pointer_target_width, enum_info)?;
+            .map_err(|err| DiagnosticError::new(enum_info.span(), err))?;
+        let code = generate_rust_code_for_enum(conv_map, pointer_target_width, enum_info)?;
         Ok(code)
     }
 
-    fn generate_interface<'a>(
+    fn generate_interface(
         &self,
-        sess: &'a ParseSess,
-        conv_map: &mut TypesConvMap,
+        conv_map: &mut TypeMap,
         pointer_target_width: usize,
         interface: &ForeignInterface,
-    ) -> PResult<'a, Vec<P<ast::Item>>> {
-        let f_methods = find_suitable_ftypes_for_interace_methods(sess, conv_map, interface, self)?;
+    ) -> Result<Vec<TokenStream>> {
+        let f_methods = find_suitable_ftypes_for_interace_methods(conv_map, interface, self)?;
         cpp_code::generate_for_interface(
             &self.output_dir,
             &self.namespace_name,
             interface,
             &f_methods,
-        ).map_err(|err| fatal_error(sess, interface.span, &err))?;
+        )
+        .map_err(|err| DiagnosticError::new(interface.span(), err))?;
 
-        let items = rust_code_generate_interface(
-            sess,
-            conv_map,
-            pointer_target_width,
-            interface,
-            &f_methods,
-        )?;
+        let items =
+            rust_code_generate_interface(conv_map, pointer_target_width, interface, &f_methods)?;
 
         let c_struct_name = format!("C_{}", interface.name);
-        let rust_struct_pointer = Symbol::intern(&format!("*const {}", c_struct_name));
-        let rust_ty = parse_ty(sess, DUMMY_SP, rust_struct_pointer)?;
-        let c_struct_pointer = Symbol::intern(&format!("const struct {} * const", c_struct_name));
+        let rust_struct_pointer = format!("*const {}", c_struct_name);
+        let rust_ty: Type = syn::parse_str(&rust_struct_pointer)?;
+        let c_struct_pointer = format!("const struct {} * const", c_struct_name);
 
         conv_map.add_foreign(rust_ty.into(), c_struct_pointer);
 
         Ok(items)
     }
 
-    fn place_foreign_lang_helpers(&self, code: &[SourceCode]) -> Result<(), String> {
+    fn place_foreign_lang_helpers(&self, code: &[SourceCode]) -> std::result::Result<(), String> {
         for cu in code {
             let src_path = self.output_dir.join(&cu.id_of_code);
             let mut src_file = FileWriteCache::new(&src_path);
@@ -278,7 +282,8 @@ May be you need to use `private constructor = empty;` syntax?",
                     cu.code
                         .replace("RUST_SWIG_USER_NAMESPACE", &self.namespace_name)
                         .as_bytes(),
-                ).map_err(|err| format!("write to {} failed: {}", src_path.display(), err))?;
+                )
+                .map_err(|err| format!("write to {} failed: {}", src_path.display(), err))?;
             src_file
                 .update_file_if_necessary()
                 .map_err(|err| format!("update of {} failed: {}", src_path.display(), err))?;
@@ -287,19 +292,13 @@ May be you need to use `private constructor = empty;` syntax?",
     }
 }
 
-fn find_suitable_foreign_types_for_methods<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn find_suitable_foreign_types_for_methods(
+    conv_map: &mut TypeMap,
     class: &ForeignerClassInfo,
     cpp_cfg: &CppConfig,
-) -> PResult<'a, Vec<CppForeignMethodSignature>> {
+) -> Result<Vec<CppForeignMethodSignature>> {
     let mut ret = Vec::<CppForeignMethodSignature>::with_capacity(class.methods.len());
-    let empty_symbol = Symbol::intern("");
-    let dummy_ty = ast::Ty {
-        id: DUMMY_NODE_ID,
-        span: DUMMY_SP,
-        node: ast::TyKind::Tup(vec![]),
-    };
+    let dummy_ty = parse_type! { () };
 
     for method in &class.methods {
         //skip self argument
@@ -312,29 +311,30 @@ fn find_suitable_foreign_types_for_methods<'a>(
             Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
             input.push(map_type(
-                sess,
                 conv_map,
                 cpp_cfg,
-                &arg.ty,
+                fn_arg_type(arg),
                 Direction::Incoming,
             )?);
         }
         let output: CppForeignTypeInfo = match method.variant {
             MethodVariant::Constructor => ForeignTypeInfo {
-                name: empty_symbol,
+                name: String::new(),
                 correspoding_rust_type: dummy_ty.clone().into(),
-            }.into(),
+            }
+            .into(),
             _ => match method.fn_decl.output {
-                ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
-                    name: Symbol::intern("void"),
+                syn::ReturnType::Default => ForeignTypeInfo {
+                    name: "void".into(),
                     correspoding_rust_type: {
-                        let mut ty: ast::Ty = dummy_ty.clone();
-                        ty.span = sp;
+                        let mut ty: Type = dummy_ty.clone();
+                        change_span(&mut ty, method.fn_decl.output.span());
                         ty.into()
                     },
-                }.into(),
-                ast::FunctionRetTy::Ty(ref rt) => {
-                    map_type(sess, conv_map, cpp_cfg, &*rt, Direction::Outgoing)?
+                }
+                .into(),
+                syn::ReturnType::Type(_, ref rt) => {
+                    map_type(conv_map, cpp_cfg, &*rt, Direction::Outgoing)?
                 }
             },
         };
@@ -343,14 +343,13 @@ fn find_suitable_foreign_types_for_methods<'a>(
     Ok(ret)
 }
 
-fn generate_code_for_class<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn generate_code_for_class(
+    conv_map: &mut TypeMap,
     output_dir: &Path,
     namespace_name: &str,
     class: &ForeignerClassInfo,
     methods_sign: &[CppForeignMethodSignature],
-) -> PResult<'a, Vec<P<ast::Item>>> {
+) -> Result<Vec<TokenStream>> {
     use std::fmt::Write;
 
     let c_path = output_dir.join(format!("c_{}.h", class.name));
@@ -361,10 +360,9 @@ fn generate_code_for_class<'a>(
     let mut cpp_fwd_f = FileWriteCache::new(&cpp_fwd_path);
 
     let map_write_err = |err| {
-        fatal_error(
-            sess,
-            class.span,
-            &format!("write to {:?} failed: {}", c_path, err),
+        DiagnosticError::new(
+            class.span(),
+            format!("write to {:?} failed: {}", c_path, err),
         )
     };
     let c_class_type = cpp_code::c_class_type(class);
@@ -391,7 +389,8 @@ extern "C" {{
         doc_comments = class_doc_comments,
         c_class_type = c_class_type,
         sizeof_usize = mem::size_of::<usize>(),
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
     let class_name = format!("{}Wrapper", class.name);
 
     write!(
@@ -457,49 +456,40 @@ public:
         namespace = namespace_name,
     ).map_err(&map_write_err)?;
 
-    let dummy_ty = ast::Ty {
-        id: DUMMY_NODE_ID,
-        node: ast::TyKind::Tup(vec![]),
-        span: DUMMY_SP,
-    };
-    let mut gen_code = Vec::<P<ast::Item>>::new();
+    let dummy_ty = parse_type! { () };
+    let mut gen_code = Vec::new();
 
-    let (this_type_for_method, code_box_this) = if let (
-        Some(this_type),
-        Some(constructor_ret_type),
-    ) = (
-        class.this_type_for_method.as_ref(),
-        class.constructor_ret_type.as_ref(),
-    ) {
-        let this_type: RustType = this_type.clone().into();
-        let this_type = this_type.implements("SwigForeignClass");
-        debug!(
-            "generate_code: add implements SwigForeignClass for {}",
-            this_type.normalized_name
-        );
-        conv_map.add_type(this_type.clone());
+    let (this_type_for_method, code_box_this) =
+        if let (Some(this_type), Some(constructor_ret_type)) = (
+            class.this_type_for_method.as_ref(),
+            class.constructor_ret_type.as_ref(),
+        ) {
+            let this_type: RustType = this_type.clone().into();
+            let this_type = this_type.implements("SwigForeignClass");
+            debug!(
+                "generate_code: add implements SwigForeignClass for {}",
+                this_type.normalized_name
+            );
+            conv_map.add_type(this_type.clone());
 
-        let constructor_ret_type: RustType = constructor_ret_type.clone().into();
-        conv_map.add_type(constructor_ret_type);
+            let constructor_ret_type: RustType = constructor_ret_type.clone().into();
+            conv_map.add_type(constructor_ret_type);
 
-        let (this_type_for_method, code_box_this) =
-            TypesConvMap::convert_to_heap_pointer(&this_type, "this");
-        let lifetimes = {
-            let mut ret = String::new();
-            let lifetimes = list_lifetimes(&this_type.ty);
-            for (i, l) in lifetimes.iter().enumerate() {
-                ret.push_str(&*l.as_str());
-                if i != lifetimes.len() - 1 {
-                    ret.push(',');
+            let (this_type_for_method, code_box_this) =
+                TypeMap::convert_to_heap_pointer(&this_type, "this");
+            let lifetimes = {
+                let mut ret = String::new();
+                let lifetimes = list_lifetimes(&this_type.ty);
+                for (i, l) in lifetimes.iter().enumerate() {
+                    ret.push_str(&*l.as_str());
+                    if i != lifetimes.len() - 1 {
+                        ret.push(',');
+                    }
                 }
-            }
-            ret
-        };
-        let unpack_code = TypesConvMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-        gen_code.append(&mut code_to_item(
-            sess,
-            &class.name.as_str(),
-            &format!(
+                ret
+            };
+            let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+            gen_code.push(syn::parse_str(&format!(
                 r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
     fn c_class_name() -> *const ::std::os::raw::c_char {{
         swig_c_str!("{class_name}")
@@ -515,44 +505,44 @@ public:
     }}
 }}"#,
                 lifetimes = lifetimes,
-                class_name = pprust::ty_to_string(&this_type.ty),
+                class_name = DisplayToTokens(&this_type.ty),
                 code_box_this = code_box_this,
                 unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "p"),
-                this_type_for_method = this_type_for_method.normalized_name
-            ),
-        )?);
-        let unpack_code = TypesConvMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-        let void_ptr_typename = Symbol::intern("*mut ::std::os::raw::c_void");
-        let my_void_ptr_ti = RustType::new(
-            parse_ty(sess, DUMMY_SP, void_ptr_typename)?,
-            make_unique_rust_typename(void_ptr_typename, this_type.normalized_name),
-        );
-        let this_type_name = this_type_for_method.normalized_name;
-        conv_map.add_conversation_rule(
-            my_void_ptr_ti,
-            this_type,
-            Symbol::intern(&format!(
-                r#"
+                this_type_for_method = this_type_for_method.normalized_name.clone()
+            ))?);
+            let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+            let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
+            let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
+            let my_void_ptr_ti = RustType::new(
+                void_ptr_ty,
+                make_unique_rust_typename(void_ptr_typename, this_type.normalized_name.clone()),
+            );
+            let this_type_name = this_type_for_method.normalized_name.clone();
+            conv_map.add_conversation_rule(
+                my_void_ptr_ti,
+                this_type,
+                format!(
+                    r#"
     assert!(!{from_var}.is_null());
     let {to_var}: *mut {this_type} = {from_var} as *mut {this_type};
 {unpack_code}
 "#,
-                to_var = TO_VAR_TEMPLATE,
-                from_var = FROM_VAR_TEMPLATE,
-                this_type = this_type_name,
-                unpack_code = unpack_code,
-            )).into(),
-        );
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE,
+                    this_type = this_type_name,
+                    unpack_code = unpack_code,
+                )
+                .into(),
+            );
 
-        (this_type_for_method, code_box_this)
-    } else {
-        (dummy_ty.clone().into(), String::new())
-    };
+            (this_type_for_method, code_box_this)
+        } else {
+            (dummy_ty.clone().into(), String::new())
+        };
     let no_this_info = || {
-        fatal_error(
-            sess,
-            class.span,
-            &format!(
+        DiagnosticError::new(
+            class.span(),
+            format!(
                 "Class {} (namespace {}) has methods, but there is no constructor\n
 May be you need to use `private constructor = empty;` syntax?",
                 class.name, namespace_name,
@@ -569,7 +559,8 @@ May be you need to use `private constructor = empty;` syntax?",
             c_include_f,
             "{}",
             cpp_code::doc_comments_to_c_comments(&method.doc_comments, false)
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
 
         let method_access = match method.access {
             MethodAccess::Private => "private",
@@ -580,7 +571,7 @@ May be you need to use `private constructor = empty;` syntax?",
         write!(cpp_include_f, "{}:\n{}", method_access, cpp_comments,).map_err(&map_write_err)?;
         let c_func_name = c_func_name(class, method, f_method);
         let c_args_with_types = cpp_code::c_generate_args_with_types(f_method, false)
-            .map_err(|err| fatal_error(sess, class.span, &err))?;
+            .map_err(|err| DiagnosticError::new(class.span(), err))?;
         let comma_c_args_with_types = if c_args_with_types.is_empty() {
             "".to_string()
         } else {
@@ -589,16 +580,16 @@ May be you need to use `private constructor = empty;` syntax?",
         let args_names = n_arguments_list(f_method.input.len());
 
         let cpp_args_with_types = cpp_code::cpp_generate_args_with_types(f_method)
-            .map_err(|err| fatal_error(sess, class.span, &err))?;
+            .map_err(|err| DiagnosticError::new(class.span(), err))?;
         let cpp_args_for_c = cpp_code::cpp_generate_args_to_call_c(f_method, false)
-            .map_err(|err| fatal_error(sess, class.span, &err))?;
+            .map_err(|err| DiagnosticError::new(class.span(), err))?;
         let real_output_typename = match method.fn_decl.output {
-            ast::FunctionRetTy::Default(_) => "()".to_string(),
-            ast::FunctionRetTy::Ty(ref t) => normalized_ty_string(&*t),
+            syn::ReturnType::Default => "()".to_string(),
+            syn::ReturnType::Type(_, ref t) => normalize_ty_lifetimes(&*t),
         };
 
         let rust_args_with_types = rust_generate_args_with_types(f_method)
-            .map_err(|err| fatal_error(sess, class.span, &err))?;
+            .map_err(|err| DiagnosticError::new(class.span(), err))?;
         let method_ctx = MethodContext {
             method,
             f_method,
@@ -612,13 +603,13 @@ May be you need to use `private constructor = empty;` syntax?",
         let (cpp_ret_type, convert_ret_for_cpp) =
             if let Some(cpp_converter) = f_method.output.cpp_converter.as_ref() {
                 (
-                    cpp_converter.typename,
+                    cpp_converter.typename.clone(),
                     cpp_converter
                         .output_converter
                         .replace(FROM_VAR_TEMPLATE, "ret"),
                 )
             } else {
-                (f_method.output.as_ref().name, "ret".to_string())
+                (f_method.output.as_ref().name.clone(), "ret".to_string())
             };
         //rename types like "struct Foo" to "Foo" to make VC++ compiler happy
         let cpp_ret_type = cpp_ret_type.as_str().replace("struct", "");
@@ -633,7 +624,8 @@ May be you need to use `private constructor = empty;` syntax?",
                     ret_type = f_method.output.as_ref().name,
                     c_func_name = c_func_name,
                     args_with_types = c_args_with_types,
-                ).map_err(&map_write_err)?;
+                )
+                .map_err(&map_write_err)?;
 
                 if f_method.output.as_ref().name != "void" {
                     write!(
@@ -644,7 +636,8 @@ May be you need to use `private constructor = empty;` syntax?",
                         method_name = method_name,
                         cpp_ret_type = cpp_ret_type,
                         cpp_args_with_types = cpp_args_with_types,
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
                     write!(
                         &mut inline_impl,
                         r#"
@@ -663,7 +656,8 @@ May be you need to use `private constructor = empty;` syntax?",
                         class_name = class_name,
                         method_name = method_name,
                         cpp_args_with_types = cpp_args_with_types,
-                    ).unwrap();
+                    )
+                    .unwrap();
                 } else {
                     write!(
                         cpp_include_f,
@@ -672,7 +666,8 @@ May be you need to use `private constructor = empty;` syntax?",
 "#,
                         method_name = method_name,
                         cpp_args_with_types = cpp_args_with_types,
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
                     write!(
                         &mut inline_impl,
                         r#"
@@ -687,9 +682,10 @@ May be you need to use `private constructor = empty;` syntax?",
                         method_name = method_name,
                         c_func_name = c_func_name,
                         cpp_args_for_c = cpp_args_for_c,
-                    ).unwrap();
+                    )
+                    .unwrap();
                 }
-                gen_code.append(&mut generate_static_method(sess, conv_map, &method_ctx)?);
+                gen_code.append(&mut generate_static_method(conv_map, &method_ctx)?);
             }
             MethodVariant::Method(ref self_variant) => {
                 let const_if_readonly = if self_variant.is_read_only() {
@@ -707,7 +703,8 @@ May be you need to use `private constructor = empty;` syntax?",
                     func_name = c_func_name,
                     args_with_types = comma_c_args_with_types,
                     const_if_readonly = const_if_readonly,
-                ).map_err(&map_write_err)?;
+                )
+                .map_err(&map_write_err)?;
 
                 if f_method.output.as_ref().name != "void" {
                     write!(
@@ -719,7 +716,8 @@ May be you need to use `private constructor = empty;` syntax?",
                         cpp_ret_type = cpp_ret_type,
                         cpp_args_with_types = cpp_args_with_types,
                         const_if_readonly = const_if_readonly,
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
                     write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
     inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly} noexcept
@@ -751,7 +749,8 @@ May be you need to use `private constructor = empty;` syntax?",
                         method_name = method_name,
                         cpp_args_with_types = cpp_args_with_types,
                         const_if_readonly = const_if_readonly,
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
                     write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
     inline void {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly} noexcept
@@ -773,7 +772,6 @@ May be you need to use `private constructor = empty;` syntax?",
                 }
 
                 gen_code.append(&mut generate_method(
-                    sess,
                     conv_map,
                     &method_ctx,
                     class,
@@ -790,7 +788,8 @@ May be you need to use `private constructor = empty;` syntax?",
     {class_name}() noexcept {{}}
 "#,
                         class_name = class_name,
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
                 } else {
                     write!(
                         c_include_f,
@@ -800,7 +799,8 @@ May be you need to use `private constructor = empty;` syntax?",
                         c_class_type = c_class_type,
                         func_name = c_func_name,
                         args_with_types = c_args_with_types,
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
 
                     write!(
                         cpp_include_f,
@@ -817,7 +817,8 @@ May be you need to use `private constructor = empty;` syntax?",
                         cpp_args_with_types = cpp_args_with_types,
                         class_name = class_name,
                         cpp_args_for_c = cpp_args_for_c,
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
 
                     let constructor_ret_type = class
                         .constructor_ret_type
@@ -830,7 +831,6 @@ May be you need to use `private constructor = empty;` syntax?",
                         .ok_or_else(&no_this_info)?
                         .clone();
                     gen_code.append(&mut generate_constructor(
-                        sess,
                         conv_map,
                         &method_ctx,
                         constructor_ret_type,
@@ -849,7 +849,7 @@ May be you need to use `private constructor = empty;` syntax?",
             .ok_or_else(&no_this_info)?
             .clone()
             .into();
-        let unpack_code = TypesConvMap::unpack_from_heap_pointer(&this_type, "this", false);
+        let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, "this", false);
         let c_destructor_name = format!("{}_delete", class.name);
         let code = format!(
             r#"
@@ -865,7 +865,7 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
             this_type = this_type_for_method.normalized_name,
         );
         debug!("we generate and parse code: {}", code);
-        gen_code.append(&mut code_to_item(sess, &c_destructor_name, &code)?);
+        gen_code.push(syn::parse_str(&code)?);
         write!(
             c_include_f,
             r#"
@@ -873,7 +873,8 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
 "#,
             c_class_type = c_class_type,
             c_destructor_name = c_destructor_name,
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
 
         write!(
             cpp_include_f,
@@ -894,7 +895,8 @@ public:
 "#,
             c_destructor_name = c_destructor_name,
             class_name = class_name,
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
     } else {
         // not need_destructor
         write!(
@@ -905,7 +907,8 @@ private:
    {{
    }}
 "#,
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
     }
 
     write!(
@@ -916,7 +919,8 @@ private:
 #endif
 
 "#
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     write!(
         cpp_include_f,
@@ -933,7 +937,8 @@ private:
         namespace = namespace_name,
         foreigner_code = class.foreigner_code,
         inline_impl = inline_impl,
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     write!(
         cpp_fwd_f,
@@ -950,7 +955,8 @@ using {class_name}Ref = {base_class_name}<false>;
         namespace = namespace_name,
         class_name = class.name,
         base_class_name = class_name
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     cpp_fwd_f
         .update_file_if_necessary()
@@ -995,7 +1001,9 @@ fn c_func_name(
     )
 }
 
-fn rust_generate_args_with_types(f_method: &CppForeignMethodSignature) -> Result<String, String> {
+fn rust_generate_args_with_types(
+    f_method: &CppForeignMethodSignature,
+) -> std::result::Result<String, String> {
     use std::fmt::Write;
 
     let mut buf = String::new();
@@ -1004,8 +1012,9 @@ fn rust_generate_args_with_types(f_method: &CppForeignMethodSignature) -> Result
             &mut buf,
             "a_{}: {}, ",
             i,
-            unpack_unique_typename(f_type_info.as_ref().correspoding_rust_type.normalized_name),
-        ).map_err(fmt_write_err_map)?;
+            unpack_unique_typename(&f_type_info.as_ref().correspoding_rust_type.normalized_name),
+        )
+        .map_err(fmt_write_err_map)?;
     }
     Ok(buf)
 }
@@ -1014,34 +1023,28 @@ fn fmt_write_err_map(err: fmt::Error) -> String {
     format!("fmt write error: {}", err)
 }
 
-fn generate_static_method<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
-    mc: &MethodContext,
-) -> PResult<'a, Vec<P<ast::Item>>> {
+fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<Vec<TokenStream>> {
     let c_ret_type = unpack_unique_typename(
-        mc.f_method
+        &mc.f_method
             .output
             .as_ref()
             .correspoding_rust_type
             .normalized_name,
     );
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
-        sess,
         conv_map,
         &mc.method.fn_decl.output,
         mc.f_method.output.as_ref(),
         "ret",
-        &c_ret_type.as_str(),
+        &c_ret_type,
     )?;
     let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
-        sess,
         conv_map,
         mc.method,
         mc.f_method,
         (0..n_args).map(|v| format!("a_{}", v)),
-        &c_ret_type.as_str(),
+        &c_ret_type,
     )?;
     let code = format!(
         r#"
@@ -1058,27 +1061,26 @@ pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
         decl_func_args = mc.decl_func_args,
         c_ret_type = c_ret_type,
         convert_input_code = convert_input_code,
-        rust_func_name = mc.method.rust_id,
+        rust_func_name = DisplayToTokens(&mc.method.rust_id),
         args_names = mc.args_names,
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
-    gen_code.append(&mut code_to_item(sess, mc.c_func_name, &code)?);
+    gen_code.push(syn::parse_str(&code)?);
     Ok(gen_code)
 }
 
-fn generate_method<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn generate_method(
+    conv_map: &mut TypeMap,
     mc: &MethodContext,
     class: &ForeignerClassInfo,
     self_variant: SelfTypeVariant,
     this_type_for_method: &RustType,
-) -> PResult<'a, Vec<P<ast::Item>>> {
+) -> Result<Vec<TokenStream>> {
     let c_ret_type = unpack_unique_typename(
-        mc.f_method
+        &mc.f_method
             .output
             .as_ref()
             .correspoding_rust_type
@@ -1086,34 +1088,31 @@ fn generate_method<'a>(
     );
     let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
-        sess,
         conv_map,
         mc.method,
         mc.f_method,
         (0..n_args).map(|v| format!("a_{}", v)),
-        &c_ret_type.as_str(),
+        &c_ret_type,
     )?;
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
-        sess,
         conv_map,
         &mc.method.fn_decl.output,
         mc.f_method.output.as_ref(),
         "ret",
-        &c_ret_type.as_str(),
+        &c_ret_type,
     )?;
     //&mut constructor_real_type -> &mut class.self_type
-    let (from_ty, to_ty): (ast::Ty, ast::Ty) = create_suitable_types_for_constructor_and_self(
+    let (from_ty, to_ty): (Type, Type) = create_suitable_types_for_constructor_and_self(
         self_variant,
         class,
         &this_type_for_method.ty,
     );
-    let this_type_ref = normalized_ty_string(&from_ty);
+    let this_type_ref = normalize_ty_lifetimes(&from_ty);
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
-        sess,
         &from_ty.into(),
         &to_ty.into(),
         "this",
-        &c_ret_type.as_str(),
+        &c_ret_type,
         mc.method.span(),
     )?;
     let code = format!(
@@ -1138,7 +1137,7 @@ pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_re
         this_type_ref = this_type_ref,
         this_type = this_type_for_method.normalized_name,
         convert_this = convert_this,
-        rust_func_name = mc.method.rust_id,
+        rust_func_name = DisplayToTokens(&mc.method.rust_id),
         args_names = mc.args_names,
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
@@ -1147,23 +1146,21 @@ pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_re
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
     gen_code.append(&mut deps_this);
-    gen_code.append(&mut code_to_item(sess, mc.c_func_name, &code)?);
+    gen_code.push(syn::parse_str(&code)?);
     Ok(gen_code)
 }
 
-fn generate_constructor<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn generate_constructor(
+    conv_map: &mut TypeMap,
     mc: &MethodContext,
-    construct_ret_type: ast::Ty,
-    this_type: ast::Ty,
+    construct_ret_type: Type,
+    this_type: Type,
     code_box_this: &str,
-) -> PResult<'a, Vec<P<ast::Item>>> {
+) -> Result<Vec<TokenStream>> {
     let n_args = mc.f_method.input.len();
     let this_type: RustType = this_type.into();
     let ret_type_name = this_type.normalized_name.as_str();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
-        sess,
         conv_map,
         mc.method,
         mc.f_method,
@@ -1172,7 +1169,6 @@ fn generate_constructor<'a>(
     )?;
     let construct_ret_type: RustType = construct_ret_type.into();
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
-        sess,
         &construct_ret_type,
         &this_type,
         "this",
@@ -1196,23 +1192,22 @@ pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void
         convert_this = convert_this,
         decl_func_args = mc.decl_func_args,
         convert_input_code = convert_input_code,
-        rust_func_name = mc.method.rust_id,
+        rust_func_name = DisplayToTokens(&mc.method.rust_id),
         args_names = mc.args_names,
         box_this = code_box_this,
         real_output_typename = &construct_ret_type.normalized_name.as_str(),
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_this);
-    gen_code.append(&mut code_to_item(sess, mc.c_func_name, &code)?);
+    gen_code.push(syn::parse_str(&code)?);
     Ok(gen_code)
 }
 
-fn generate_rust_code_for_enum<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn generate_rust_code_for_enum(
+    conv_map: &mut TypeMap,
     pointer_target_width: usize,
     enum_info: &ForeignEnumInfo,
-) -> PResult<'a, Vec<P<ast::Item>>> {
+) -> Result<Vec<TokenStream>> {
     use std::fmt::Write;
 
     let rust_enum_name = enum_info.rust_enum_name();
@@ -1231,8 +1226,9 @@ impl SwigFrom<u32> for {rust_enum_name} {{
             &mut code,
             "{index} => {item_name},\n",
             index = i,
-            item_name = item.rust_name
-        ).unwrap();
+            item_name = DisplayToTokens(&item.rust_name)
+        )
+        .unwrap();
     }
     write!(
         &mut code,
@@ -1243,7 +1239,8 @@ impl SwigFrom<u32> for {rust_enum_name} {{
 }}
 "#,
         rust_enum_name = rust_enum_name,
-    ).unwrap();
+    )
+    .unwrap();
 
     write!(
         &mut code,
@@ -1254,14 +1251,16 @@ impl SwigFrom<Option<u32>> for Option<{rust_enum_name}> {{
 
 "#,
         rust_enum_name = rust_enum_name,
-    ).unwrap();
+    )
+    .unwrap();
     for (i, item) in enum_info.items.iter().enumerate() {
         write!(
             &mut code,
             "{index} => {item_name},\n",
             index = i,
-            item_name = item.rust_name
-        ).unwrap();
+            item_name = DisplayToTokens(&item.rust_name)
+        )
+        .unwrap();
     }
     write!(
         &mut code,
@@ -1272,7 +1271,8 @@ impl SwigFrom<Option<u32>> for Option<{rust_enum_name}> {{
 }}
 "#,
         rust_enum_name = rust_enum_name,
-    ).unwrap();
+    )
+    .unwrap();
 
     let mut trait_impl = format!(
         r#"
@@ -1289,8 +1289,9 @@ impl SwigForeignEnum for {rust_enum_name} {{
             {item_name} => {index},
 "#,
             index = i,
-            item_name = item.rust_name
-        ).unwrap();
+            item_name = DisplayToTokens(&item.rust_name)
+        )
+        .unwrap();
     }
     write!(
         &mut trait_impl,
@@ -1299,13 +1300,10 @@ impl SwigForeignEnum for {rust_enum_name} {{
     }}
 }}
 "#
-    ).unwrap();
+    )
+    .unwrap();
 
-    let trait_impl = code_to_item(
-        sess,
-        &format!("SwigForeignEnum for {}", rust_enum_name),
-        &trait_impl,
-    )?;
+    let trait_impl: syn::Item = syn::parse_str(&trait_impl)?;
 
     write!(
         &mut code,
@@ -1323,7 +1321,8 @@ impl SwigFrom<{rust_enum_name}> for u32 {{
 "#,
         enum_name = enum_info.name,
         rust_enum_name = rust_enum_name,
-    ).unwrap();
+    )
+    .unwrap();
 
     write!(
         &mut code,
@@ -1333,7 +1332,8 @@ impl SwigFrom<Option<{rust_enum_name}>> for Option<u32> {{
         x.map(|v| match v {{
 "#,
         rust_enum_name = rust_enum_name,
-    ).unwrap();
+    )
+    .unwrap();
 
     for (i, item) in enum_info.items.iter().enumerate() {
         write!(
@@ -1342,8 +1342,9 @@ impl SwigFrom<Option<{rust_enum_name}>> for Option<u32> {{
            {item_name} => {index},
 "#,
             index = i,
-            item_name = item.rust_name
-        ).unwrap();
+            item_name = DisplayToTokens(&item.rust_name)
+        )
+        .unwrap();
     }
     write!(
         &mut code,
@@ -1352,54 +1353,49 @@ impl SwigFrom<Option<{rust_enum_name}>> for Option<u32> {{
     }}
 }}
 "#
-    ).unwrap();
+    )
+    .unwrap();
 
     conv_map.register_exported_enum(enum_info);
     conv_map.merge(
-        sess,
         &*enum_info.rust_enum_name().as_str(),
         &code,
         pointer_target_width,
     )?;
-    Ok(trait_impl)
+    Ok(vec![trait_impl.into_token_stream()])
 }
 
-fn find_suitable_ftypes_for_interace_methods<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn find_suitable_ftypes_for_interace_methods(
+    conv_map: &mut TypeMap,
     interace: &ForeignInterface,
     cpp_cfg: &CppConfig,
-) -> PResult<'a, Vec<CppForeignMethodSignature>> {
-    let void_sym = Symbol::intern("void");
-    let dummy_ty = ast::Ty {
-        id: DUMMY_NODE_ID,
-        span: DUMMY_SP,
-        node: ast::TyKind::Tup(vec![]),
-    };
+) -> Result<Vec<CppForeignMethodSignature>> {
+    let void_sym = "void";
+    let dummy_ty = parse_type! { () };
     let mut f_methods = vec![];
 
     for method in &interace.items {
         let mut input = Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
             input.push(map_type(
-                sess,
                 conv_map,
                 cpp_cfg,
-                &arg.ty,
+                fn_arg_type(arg),
                 Direction::Outgoing,
             )?);
         }
         let output = match method.fn_decl.output {
-            ast::FunctionRetTy::Default(sp) => ForeignTypeInfo {
-                name: void_sym,
+            syn::ReturnType::Default => ForeignTypeInfo {
+                name: void_sym.into(),
                 correspoding_rust_type: {
-                    let mut ty: ast::Ty = dummy_ty.clone();
-                    ty.span = sp;
+                    let mut ty: Type = dummy_ty.clone();
+                    change_span(&mut ty, method.fn_decl.output.span());
                     ty.into()
                 },
-            }.into(),
-            ast::FunctionRetTy::Ty(ref ret_ty) => {
-                map_type(sess, conv_map, cpp_cfg, ret_ty, Direction::Incoming)?
+            }
+            .into(),
+            syn::ReturnType::Type(_, ref ret_ty) => {
+                map_type(conv_map, cpp_cfg, ret_ty, Direction::Incoming)?
             }
         };
         f_methods.push(CppForeignMethodSignature {
@@ -1422,13 +1418,12 @@ fn n_arguments_list(n: usize) -> String {
         })
 }
 
-fn rust_code_generate_interface<'a>(
-    sess: &'a ParseSess,
-    conv_map: &mut TypesConvMap,
+fn rust_code_generate_interface(
+    conv_map: &mut TypeMap,
     pointer_target_width: usize,
     interface: &ForeignInterface,
     methods_sign: &[CppForeignMethodSignature],
-) -> PResult<'a, Vec<P<ast::Item>>> {
+) -> Result<Vec<TokenStream>> {
     use std::fmt::Write;
 
     let struct_with_funcs = format!("C_{}", interface.name);
@@ -1447,10 +1442,9 @@ pub struct {struct_with_funcs} {{
     );
     for (method, f_method) in interface.items.iter().zip(methods_sign) {
         let args = rust_generate_args_with_types(f_method).map_err(|err| {
-            fatal_error(
-                sess,
-                interface.span,
-                &format!("gen args with types error: {}", err),
+            DiagnosticError::new(
+                interface.span(),
+                format!("gen args with types error: {}", err),
             )
         })?;
         write!(
@@ -1460,8 +1454,9 @@ pub struct {struct_with_funcs} {{
 "#,
             method_name = method.name,
             args = args,
-            ret_type = pprust::ty_to_string(&f_method.output.base.correspoding_rust_type.ty),
-        ).unwrap();
+            ret_type = DisplayToTokens(&f_method.output.base.correspoding_rust_type.ty),
+        )
+        .unwrap();
     }
 
     write!(
@@ -1469,11 +1464,12 @@ pub struct {struct_with_funcs} {{
         r#"
 }}
 "#
-    ).unwrap();
+    )
+    .unwrap();
 
     let mut gen_items = vec![];
 
-    gen_items.append(&mut code_to_item(sess, &struct_with_funcs, &code)?);
+    gen_items.push(syn::parse_str(&code)?);
 
     code.clear();
     write!(
@@ -1487,12 +1483,12 @@ impl SwigFrom<*const {struct_with_funcs}> for Box<{trait_name}> {{
 }}
 "#,
         struct_with_funcs = struct_with_funcs,
-        trait_name = interface.self_type,
-    ).unwrap();
+        trait_name = DisplayToTokens(&interface.self_type),
+    )
+    .unwrap();
 
     conv_map.merge(
-        sess,
-        &format!("{}", interface.self_type),
+        &format!("{}", DisplayToTokens(&interface.self_type)),
         &code,
         pointer_target_width,
     )?;
@@ -1504,43 +1500,40 @@ impl SwigFrom<*const {struct_with_funcs}> for Box<{trait_name}> {{
         r#"
 impl {trait_name} for {struct_with_funcs} {{
 "#,
-        trait_name = interface.self_type,
+        trait_name = DisplayToTokens(&interface.self_type),
         struct_with_funcs = struct_with_funcs,
-    ).unwrap();
+    )
+    .unwrap();
 
     for (method, f_method) in interface.items.iter().zip(methods_sign) {
         let func_name = method
             .rust_name
             .segments
             .last()
-            .ok_or_else(|| fatal_error(sess, method.rust_name.span, "Empty trait function name"))?
-            .identifier
-            .name;
+            .ok_or_else(|| {
+                DiagnosticError::new(method.rust_name.span(), "Empty trait function name")
+            })?
+            .value()
+            .ident
+            .to_string();
         let rest_args_with_types: String = method
             .fn_decl
             .inputs
             .iter()
             .skip(1)
             .enumerate()
-            .map(|(i, v)| format!("a_{}: {}", i, pprust::ty_to_string(&*v.ty)))
+            .map(|(i, v)| format!("a_{}: {}", i, DisplayToTokens(fn_arg_type(v))))
             .fold(String::new(), |mut acc, x| {
                 acc.push_str(", ");
                 acc.push_str(&x);
                 acc
             });
-        let self_arg = match self_variant(&method.fn_decl.inputs[0].ty)
-            .expect("Expect Self type for first argument")
-        {
-            SelfTypeVariant::Default => "self",
-            SelfTypeVariant::Mut => "mut self",
-            SelfTypeVariant::Rptr => "&self",
-            SelfTypeVariant::RptrMut => "&mut self",
-        };
+        let self_arg = format!("{}", DisplayToTokens(&method.fn_decl.inputs[0]));
+
         let args_with_types: String = [self_arg.to_string(), rest_args_with_types].concat();
         assert!(!method.fn_decl.inputs.is_empty());
         let n_args = method.fn_decl.inputs.len() - 1;
         let (mut conv_deps, convert_args) = rust_to_foreign_convert_method_inputs(
-            sess,
             conv_map,
             method,
             f_method,
@@ -1549,22 +1542,24 @@ impl {trait_name} for {struct_with_funcs} {{
         )?;
         gen_items.append(&mut conv_deps);
         let (real_output_typename, output_conv) = match method.fn_decl.output {
-            ast::FunctionRetTy::Default(_) => ("()".to_string(), String::new()),
-            ast::FunctionRetTy::Ty(ref ret_ty) => {
+            syn::ReturnType::Default => ("()".to_string(), String::new()),
+            syn::ReturnType::Type(_, ref ret_ty) => {
                 let real_output_type: RustType = (**ret_ty).clone().into();
                 let (mut conv_deps, conv_code) = conv_map.convert_rust_types(
-                    sess,
                     &f_method.output.base.correspoding_rust_type,
                     &real_output_type,
                     "ret",
                     &real_output_type.normalized_name.as_str(),
-                    ret_ty.span,
+                    ret_ty.span(),
                 )?;
                 gen_items.append(&mut conv_deps);
                 (real_output_type.normalized_name.to_string(), conv_code)
             }
         };
-        let ret_type = pprust::ty_to_string(&f_method.output.base.correspoding_rust_type.ty);
+        let ret_type = format!(
+            "{}",
+            DisplayToTokens(&f_method.output.base.correspoding_rust_type.ty)
+        );
         write!(
             &mut code,
             r#"
@@ -1588,14 +1583,16 @@ impl {trait_name} for {struct_with_funcs} {{
             real_ret_type = real_output_typename,
             ret_type = ret_type,
             output_conv = output_conv,
-        ).unwrap();
+        )
+        .unwrap();
     }
     write!(
         &mut code,
         r#"
 }}
 "#
-    ).unwrap();
+    )
+    .unwrap();
 
     write!(
         &mut code,
@@ -1607,13 +1604,10 @@ impl Drop for {struct_with_funcs} {{
 }}
 "#,
         struct_with_funcs = struct_with_funcs
-    ).unwrap();
+    )
+    .unwrap();
 
-    gen_items.append(&mut code_to_item(
-        sess,
-        &format!("impl {} for {}", interface.self_type, struct_with_funcs),
-        &code,
-    )?);
+    gen_items.push(syn::parse_str(&code)?);
 
     Ok(gen_items)
 }
