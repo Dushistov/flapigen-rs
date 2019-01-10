@@ -1,0 +1,6 @@
+r#"pub extern "C" fn Boo_f2 ( this : * mut Boo , ) -> * mut :: std :: os :: raw :: c_void {
+ let this : & mut Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : Option < Box < Box < Foo > > > = Boo :: f2 ( this , ) ;
+ let mut ret : * mut :: std :: os :: raw :: c_void = <* mut :: std :: os :: raw :: c_void >:: swig_from ( ret ) ;
+ ret
+ }"#;

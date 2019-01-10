@@ -1,0 +1,1 @@
+"impl <'a > SwigForeignClass for Rc < RefCell < Foo < 'a > > > {";
