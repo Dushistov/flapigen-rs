@@ -227,7 +227,7 @@ impl GenericTypeConv {
                 let foreign_name =
                     (*from_foreigner_hint.as_str()).replace(&*key.as_str(), &val_name);
                 let clean_from_ty = normalize_ty_lifetimes(&self.from_ty);
-                if ty.normalized_name != make_unique_rust_typename(clean_from_ty, foreign_name) {
+                if ty.normalized_name != make_unique_rust_typename(&clean_from_ty, &foreign_name) {
                     trace!("is_conv_possible: check failed by from_foreigner_hint check");
                     return None;
                 }

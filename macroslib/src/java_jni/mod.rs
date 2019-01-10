@@ -99,7 +99,7 @@ impl LanguageGenerator for JavaConfig {
             let jobject_ty = parse_type! { jobject };
             let my_jobj_ti = RustType::new(
                 jobject_ty,
-                make_unique_rust_typename(jobject_name.into(), this_type.normalized_name.clone()),
+                make_unique_rust_typename(jobject_name, &this_type.normalized_name),
             );
             conv_map.cache_rust_to_foreign_conv(
                 &this_type,
@@ -176,7 +176,7 @@ impl LanguageGenerator for JavaConfig {
         let jobject_ty = parse_type! { jobject };
         let my_jobj_ti = RustType::new(
             jobject_ty,
-            make_unique_rust_typename(jobject_name.into(), interface.name.to_string()),
+            make_unique_rust_typename(jobject_name, &interface.name.to_string()),
         );
         conv_map.add_foreign(my_jobj_ti, interface.name.to_string());
         Ok(items)

@@ -152,7 +152,7 @@ impl<'a> fmt::Display for DisplayTypesConvGraph<'a> {
             while let Some((_, target)) = edges.next(conv_graph) {
                 write!(f, "->{}, ", conv_graph[target].normalized_name)?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
         writeln!(f, "conversation graph end").unwrap();
         Ok(())
@@ -799,7 +799,7 @@ impl TypeMap {
             let not_uniq_name = normalize_ty_lifetimes(&ty);
             let node = self.add_type(RustType::new(
                 ty,
-                make_unique_rust_typename(not_uniq_name, suffix),
+                make_unique_rust_typename(&not_uniq_name, &suffix),
             ));
             self.foreign_names_map.insert(foreign_name, node);
         }
@@ -878,8 +878,8 @@ pub(in crate::typemap) fn validate_code_template(sp: Span, code: &str) -> Result
 }
 
 pub(crate) fn make_unique_rust_typename(
-    not_unique_name: String,
-    suffix_to_make_unique: String,
+    not_unique_name: &str,
+    suffix_to_make_unique: &str,
 ) -> String {
     format!("{}{}{}", not_unique_name, 0 as char, suffix_to_make_unique)
 }
@@ -889,7 +889,7 @@ pub(crate) fn make_unique_rust_typename_if_need(
     suffix: Option<String>,
 ) -> String {
     match suffix {
-        Some(s) => make_unique_rust_typename(rust_typename, s),
+        Some(s) => make_unique_rust_typename(&rust_typename, &s),
         None => rust_typename,
     }
 }

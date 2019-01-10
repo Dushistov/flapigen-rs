@@ -117,10 +117,7 @@ impl LanguageGenerator for CppConfig {
             let void_ptr_ty_name = format!("{}", DisplayToTokens(&void_ptr_ty));
             let my_void_ptr_ti = RustType::new(
                 void_ptr_ty.clone(),
-                make_unique_rust_typename(
-                    void_ptr_ty_name.clone(),
-                    this_type.normalized_name.clone(),
-                ),
+                make_unique_rust_typename(&void_ptr_ty_name, &this_type.normalized_name),
             );
             let foreign_typename = format!("{} *", cpp_code::c_class_type(class));
             conv_map.cache_rust_to_foreign_conv(
@@ -136,10 +133,7 @@ impl LanguageGenerator for CppConfig {
 
             let my_const_void_ptr_ti = RustType::new(
                 const_void_ptr_ty,
-                make_unique_rust_typename(
-                    const_void_ptr_typename,
-                    this_type.normalized_name.clone(),
-                ),
+                make_unique_rust_typename(&const_void_ptr_typename, &this_type.normalized_name),
             );
             let my_const_void_ptr_ti2 = my_const_void_ptr_ti.clone();
             let const_foreign_typename = format!("const {} *", cpp_code::c_class_type(class));
@@ -170,7 +164,7 @@ impl LanguageGenerator for CppConfig {
 
             let my_mut_void_ptr_ti = RustType::new(
                 void_ptr_ty,
-                make_unique_rust_typename(void_ptr_ty_name, this_type.normalized_name.clone()),
+                make_unique_rust_typename(&void_ptr_ty_name, &this_type.normalized_name),
             );
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
@@ -515,7 +509,7 @@ public:
             let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
             let my_void_ptr_ti = RustType::new(
                 void_ptr_ty,
-                make_unique_rust_typename(void_ptr_typename, this_type.normalized_name.clone()),
+                make_unique_rust_typename(&void_ptr_typename, &this_type.normalized_name),
             );
             let this_type_name = this_type_for_method.normalized_name.clone();
             conv_map.add_conversation_rule(
@@ -1222,9 +1216,9 @@ impl SwigFrom<u32> for {rust_enum_name} {{
         rust_enum_name = rust_enum_name,
     );
     for (i, item) in enum_info.items.iter().enumerate() {
-        write!(
+        writeln!(
             &mut code,
-            "{index} => {item_name},\n",
+            "{index} => {item_name},",
             index = i,
             item_name = DisplayToTokens(&item.rust_name)
         )
@@ -1254,9 +1248,9 @@ impl SwigFrom<Option<u32>> for Option<{rust_enum_name}> {{
     )
     .unwrap();
     for (i, item) in enum_info.items.iter().enumerate() {
-        write!(
+        writeln!(
             &mut code,
-            "{index} => {item_name},\n",
+            "{index} => {item_name},",
             index = i,
             item_name = DisplayToTokens(&item.rust_name)
         )
@@ -1398,10 +1392,7 @@ fn find_suitable_ftypes_for_interace_methods(
                 map_type(conv_map, cpp_cfg, ret_ty, Direction::Incoming)?
             }
         };
-        f_methods.push(CppForeignMethodSignature {
-            output: output,
-            input,
-        });
+        f_methods.push(CppForeignMethodSignature { output, input });
     }
     Ok(f_methods)
 }

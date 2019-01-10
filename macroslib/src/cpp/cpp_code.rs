@@ -29,9 +29,9 @@ enum {enum_name} {{
     .map_err(&map_write_err)?;
 
     for (i, item) in enum_info.items.iter().enumerate() {
-        write!(
+        writeln!(
             file,
-            "{doc_comments}{item_name} = {index}{separator}\n",
+            "{doc_comments}{item_name} = {index}{separator}",
             item_name = item.name,
             index = i,
             doc_comments = doc_comments_to_c_comments(&item.doc_comments, false),
@@ -44,7 +44,7 @@ enum {enum_name} {{
         .map_err(&map_write_err)?;
     }
 
-    write!(file, "}};\n").map_err(&map_write_err)?;
+    writeln!(file, "}};").map_err(&map_write_err)?;
     file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
@@ -190,9 +190,9 @@ struct C_{interface_name} {{
             )
             .map_err(&map_write_err)?;
         }
-        write!(
+        writeln!(
             &mut cpp_fill_c_interface_struct,
-            "        ret.{method_name} = c_{method_name};\n",
+            "        ret.{method_name} = c_{method_name};",
             method_name = method.name,
         )
         .map_err(&map_write_err)?;

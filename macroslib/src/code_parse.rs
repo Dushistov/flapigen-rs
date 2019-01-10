@@ -59,6 +59,7 @@ impl Parse for JavaClass {
     }
 }
 
+#[derive(Clone, Copy)]
 enum Language {
     Cpp,
     Java,
@@ -128,11 +129,12 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
 
     while !content.is_empty() {
         let doc_comments = parse_doc_comments(&&content)?;
-        let mut access = MethodAccess::Public;
-        if content.peek(kw::private) {
+        let mut access = if content.peek(kw::private) {
             content.parse::<kw::private>()?;
-            access = MethodAccess::Private;
-        }
+            MethodAccess::Private
+        } else {
+            MethodAccess::Public
+        };
         if let Language::Cpp = lang {
             if content.peek(kw::protected) {
                 content.parse::<kw::protected>()?;
@@ -359,7 +361,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 output: out_type,
             },
             name_alias: func_name_alias,
-            may_return_error: may_return_error,
+            may_return_error,
             access,
             doc_comments,
         });

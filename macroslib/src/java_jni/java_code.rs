@@ -41,9 +41,9 @@ public enum {enum_name} {{
     .map_err(&map_write_err)?;
 
     for (i, item) in enum_info.items.iter().enumerate() {
-        write!(
+        writeln!(
             file,
-            "{doc_comments}{item_name}({index}){separator}\n",
+            "{doc_comments}{item_name}({index}){separator}",
             item_name = item.name,
             index = i,
             doc_comments = doc_comments_to_java_comments(&item.doc_comments, false),

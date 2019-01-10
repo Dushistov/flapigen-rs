@@ -160,10 +160,7 @@ fn special_type(
                 };
                 let my_mut_void_ptr_ti = RustType::new(
                     parse_quote! { *mut ::std::os::raw::c_void },
-                    make_unique_rust_typename(
-                        mut_void_ptr_typename.into(),
-                        this_type.normalized_name,
-                    ),
+                    make_unique_rust_typename(&mut_void_ptr_typename, &this_type.normalized_name),
                 );
                 let cpp_type = format!("{} &", foreign_class.name);
                 let c_type = &foreign_info.name;
@@ -211,7 +208,7 @@ fn special_type(
         }));
     }
     if let Some(elem_ty) = if_vec_return_elem_type(arg_ty) {
-        return map_type_vec(conv_map, cpp_cfg, arg_ty, elem_ty);
+        return map_type_vec(conv_map, cpp_cfg, arg_ty, &elem_ty);
     }
     if direction == Direction::Outgoing {
         if let Some((ok_ty, err_ty)) = if_result_return_ok_err_types(arg_ty) {
@@ -226,14 +223,14 @@ fn special_type(
             return handle_option_type_in_return(conv_map, cpp_cfg, arg_ty, &ty);
         }
         if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty, false) {
-            return map_return_slice_type(conv_map, arg_ty, elem_ty.clone());
+            return map_return_slice_type(conv_map, arg_ty, &elem_ty);
         }
     } else {
         if let Some(ty) = if_option_return_some_type(arg_ty) {
             return handle_option_type_in_input(conv_map, cpp_cfg, arg_ty, &ty);
         }
         if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty, true) {
-            return map_arg_with_slice_type(conv_map, arg_ty, elem_ty.clone());
+            return map_arg_with_slice_type(conv_map, arg_ty, &elem_ty);
         }
     }
 
@@ -338,7 +335,7 @@ fn map_ordinal_input_type(conv_map: &mut TypeMap, arg_ty: &Type) -> Result<CppFo
 fn map_arg_with_slice_type(
     conv_map: &mut TypeMap,
     arg_ty: &Type,
-    elem_ty: Type,
+    elem_ty: &Type,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let mut ftype_info = map_ordinal_input_type(conv_map, arg_ty)?;
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&elem_ty, false)
@@ -346,7 +343,7 @@ fn map_arg_with_slice_type(
         let typename = format!("RustForeignSlice<{}Ref>", foreign_class.name);
         ftype_info.cpp_converter = Some(CppConverter {
             typename,
-            input_converter: format!("{}", FROM_VAR_TEMPLATE),
+            input_converter: FROM_VAR_TEMPLATE.to_string(),
             output_converter: "#error".to_string(),
         });
         return Ok(Some(ftype_info));
@@ -358,7 +355,7 @@ fn map_arg_with_slice_type(
 fn map_return_slice_type(
     conv_map: &mut TypeMap,
     arg_ty: &Type,
-    elem_ty: Type,
+    elem_ty: &Type,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let mut ftype_info = map_ordinal_result_type(conv_map, arg_ty)?;
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&elem_ty, false)
@@ -384,7 +381,7 @@ fn map_type_vec(
     conv_map: &mut TypeMap,
     cpp_cfg: &CppConfig,
     arg_ty: &Type,
-    elem_ty: Type,
+    elem_ty: &Type,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let mut ftype_info = map_ordinal_result_type(conv_map, arg_ty)?;
     if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&elem_ty, false)
@@ -898,10 +895,11 @@ fn handle_option_type_in_input(
     if c_option_name.starts_with("struct ") {
         c_option_name = &c_option_name[7..];
     }
-    let mut conv: &'static str = "";
-    if conv_map.is_this_exported_enum(opt_ty).is_some() {
-        conv = "static_cast<uint32_t>";
-    }
+    let conv: &'static str = if conv_map.is_this_exported_enum(opt_ty).is_some() {
+        "static_cast<uint32_t>"
+    } else {
+        ""
+    };
     let (typename, input_converter) = match cpp_cfg.cpp_optional {
         CppOptional::Std17 => (
             format!("std::optional<{}>", f_opt_ty),
@@ -986,7 +984,7 @@ fn handle_option_type_in_return(
     {
         if let Some(fclass) = conv_map
             .find_foreigner_class_with_such_self_type(under_ref_ty, false)
-            .map(|v| v.clone())
+            .cloned()
         {
             let foreign_info =
                 foreign_class_foreign_name(conv_map, &fclass, under_ref_ty.span(), false)?;
@@ -1004,7 +1002,7 @@ fn handle_option_type_in_return(
             let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
             let my_void_ptr_ti = RustType::new(
                 void_ptr_ty,
-                make_unique_rust_typename(void_ptr_typename, this_type.normalized_name.clone()),
+                make_unique_rust_typename(&void_ptr_typename, &this_type.normalized_name),
             );
             let arg_rust_ty: RustType = arg_ty.clone().into();
             conv_map.add_type(arg_rust_ty.clone());

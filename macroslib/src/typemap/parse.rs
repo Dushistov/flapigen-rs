@@ -81,9 +81,7 @@ fn do_parse(
             if is_wrong_cfg_pointer_width(&$item.attrs, target_pointer_width) {
                 continue;
             }
-            let my_attrs = my_syn_attrs_to_hashmap(&$item.attrs)?;
-
-            my_attrs
+            my_syn_attrs_to_hashmap(&$item.attrs)?
         }};
     }
 
@@ -262,7 +260,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
                 attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty);
                 let unique_name =
-                    make_unique_rust_typename(attr_value_tn.typename, ftype.typename.clone());
+                    make_unique_rust_typename(&attr_value_tn.typename, &ftype.typename);
                 names_map.insert(
                     ftype,
                     (TypeName::new(unique_name, Span::call_site()), rust_ty),

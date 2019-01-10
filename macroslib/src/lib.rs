@@ -537,8 +537,8 @@ enum SelfTypeVariant {
 }
 
 impl SelfTypeVariant {
-    fn is_read_only(&self) -> bool {
-        match *self {
+    fn is_read_only(self) -> bool {
+        match self {
             SelfTypeVariant::RptrMut | SelfTypeVariant::Mut => false,
             SelfTypeVariant::Default | SelfTypeVariant::Rptr => true,
         }

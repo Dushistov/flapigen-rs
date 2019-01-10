@@ -310,9 +310,9 @@ impl SwigFrom<jint> for {rust_enum_name} {{
         rust_enum_name = rust_enum_name,
     );
     for (i, item) in enum_info.items.iter().enumerate() {
-        write!(
+        writeln!(
             &mut code,
-            "{index} => {item_name},\n",
+            "{index} => {item_name},",
             index = i,
             item_name = DisplayToTokens(&item.rust_name),
         )
@@ -820,8 +820,8 @@ fn jni_method_signature(
     for arg in &method.input {
         let mut gen_sig = String::new();
         let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-            .get(&*arg.as_ref().name.as_str())
-            .map(|v| *v)
+            .get(&arg.as_ref().name.as_str())
+            .cloned()
             .or_else(|| {
                 if conv_map.is_generated_foreign_type(&arg.as_ref().name) {
                     gen_sig = format!(
