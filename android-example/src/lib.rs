@@ -1,4 +1,3 @@
-/*
 #[cfg(target_os = "android")]
 extern crate android_logger;
 #[macro_use]
@@ -17,7 +16,7 @@ struct Session {
 impl Session {
     pub fn new() -> Session {
         #[cfg(target_os = "android")]
-        android_logger::init_once(android_logger::Filter::default());
+        android_logger::init_once(android_logger::Filter::default(), Some("hello"));
         log_panics::init(); // log panics rather than printing them
         info!("init log system - done");
         Session { a: 2 }
@@ -32,4 +31,3 @@ impl Session {
         format!("Hello {} ✋\nIt's a pleasure to meet you!", to)
     }
 }
-*/

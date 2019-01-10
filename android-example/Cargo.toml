@@ -3,6 +3,7 @@ name = "android"
 version = "0.0.1"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 build = "build.rs"
+edition = "2018"
 
 [lib]
 name = "mobcore"
@@ -11,8 +12,9 @@ crate-type = ["cdylib"]
 [dependencies]
 log = "0.4"
 log-panics = "2.0"
-android_logger = "0.5"
+android_logger = "0.7"
 
 [build-dependencies]
 rust_swig = { path = "../macroslib" }
-
+bindgen = "0.37.4"
+walkdir = "2.2.7"
