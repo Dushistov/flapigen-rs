@@ -1,4 +1,4 @@
-use std::{env, path::Path};
+use std::{env, io::Write, path::Path};
 
 use quote::{quote, ToTokens};
 use syn::{parse_quote, visit_mut::VisitMut};
@@ -18,6 +18,10 @@ impl VisitMut for FilterSwigAttrs {
     }
 }
 
+mod file_cache {
+    include!("src/file_cache.rs");
+}
+
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     for include_path in &[
@@ -33,10 +37,10 @@ fn main() {
         filter_swig_attrs.visit_file_mut(&mut file);
 
         let out_path = Path::new(&out_dir).join(include_path.file_name().expect("No file name"));
-        std::fs::write(&out_path, file.into_token_stream().to_string()).expect(&format!(
-            "Error during write to file {}",
-            out_path.display()
-        ));
+        let mut cache = file_cache::FileWriteCache::new(&out_path);
+        let write_err_msg = format!("Error during write to file {}", out_path.display());
+        write!(&mut cache, "{}", file.into_token_stream().to_string()).expect(&write_err_msg);
+        cache.update_file_if_necessary().expect(&write_err_msg);
         println!("cargo:rerun-if-changed={}", out_path.display());
         println!("cargo:rerun-if-changed={}", include_path.display());
     }
