@@ -39,4 +39,5 @@ before_script:
 script:
   - echo $RUSTC_WRAPPER
   - echo ${TRAVIS_RUST_VERSION}
+  - ln -s workspace.Cargo.toml Cargo.toml
   - python ci_build_and_test.py
