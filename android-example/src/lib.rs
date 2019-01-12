@@ -7,7 +7,9 @@ extern crate log_panics;
 #[cfg(target_os = "android")]
 mod android_c_headers;
 #[cfg(target_os = "android")]
-pub mod java_glue;
+mod java_glue;
+#[cfg(target_os = "android")]
+pub use crate::java_glue::*;
 
 struct Session {
     a: i32,
