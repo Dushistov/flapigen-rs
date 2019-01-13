@@ -1,11 +1,12 @@
-use std::cell::{Ref, RefCell, RefMut};
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
-use std::time::SystemTime;
+use std::{cell::{Ref, RefCell, RefMut},
+          path::{Path, PathBuf},
+          rc::Rc,
+          time::SystemTime};
 
 use chrono::{DateTime, Utc};
+use log::{error, debug};
 
-use jni_c_header::*;
+use crate::jni_c_header::*;
 
 #[derive(Clone)]
 struct Foo {
@@ -592,7 +593,7 @@ impl Moo {
     }
 
     fn next_enum(v: MyEnum) -> MyEnum {
-        use MyEnum::*;
+        use crate::MyEnum::*;
         match v {
             Item1 => Item2,
             Item2 => Item3,

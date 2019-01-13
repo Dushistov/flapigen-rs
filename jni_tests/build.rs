@@ -1,12 +1,10 @@
-extern crate bindgen;
-extern crate env_logger;
-extern crate rust_swig;
-extern crate syntex;
+use std::{
+    env,
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use rust_swig::{JavaConfig, LanguageConfig};
-use std::env;
-use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 fn main() {
     env_logger::init();
@@ -26,26 +24,22 @@ fn main() {
 
     let include_dirs = [java_include_dir, java_sys_include_dir];
     println!("jni include dirs {:?}", include_dirs);
-    for dir in &include_dirs {
-        println!("cargo:rerun-if-changed={}", dir.display());
-    }
 
     let jni_h_path =
         search_file_in_directory(&include_dirs[..], "jni.h").expect("Can not find jni.h");
-
+    println!("cargo:rerun-if-changed={}", jni_h_path.display());
     let out_dir = env::var("OUT_DIR").unwrap();
 
     gen_binding(
         &include_dirs[..],
         &jni_h_path,
         &Path::new(&out_dir).join("jni_c_header.rs"),
-    ).unwrap();
+    )
+    .expect("gen_binding failed");
 
     let now = Instant::now();
-    rust_swig_expand(
-        Path::new("src/lib.rs.in"),
-        &Path::new(&out_dir).join("lib.rs"),
-    ).unwrap();
+    let gen_path = Path::new(&out_dir).join("lib.rs");
+    rust_swig_expand(Path::new("src/lib.rs.in"), &gen_path);
     let expand_time = now.elapsed();
     println!(
         "rust swig expand time: {}",
@@ -53,7 +47,7 @@ fn main() {
     );
     println!("cargo:rerun-if-changed=src");
     //rebuild if user removes generated code
-    println!("cargo:rerun-if-changed={}", out_dir);
+    println!("cargo:rerun-if-changed={}", gen_path.display());
 }
 
 fn search_file_in_directory<P: AsRef<Path>>(dirs: &[P], file: &str) -> Result<PathBuf, ()> {
@@ -87,15 +81,12 @@ fn gen_binding<P: AsRef<Path>>(
     Ok(())
 }
 
-fn rust_swig_expand(from: &Path, out: &Path) -> Result<(), String> {
+fn rust_swig_expand(from: &Path, out: &Path) {
     println!("Run rust_swig_expand");
-    let mut registry = syntex::Registry::new();
     let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
         Path::new("java").join("com").join("example").join("rust"),
         "com.example.rust".into(),
-    ))).merge_type_map("chrono_support", include_str!("src/chrono-include.rs"));
-    swig_gen.register(&mut registry);
-    registry
-        .expand("rust_swig_test_jni", from, out)
-        .map_err(|err| format!("rust swig macros expand failed: {}", err))
+    )))
+    .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"));
+    swig_gen.expand("rust_swig_test_jni", from, out);
 }

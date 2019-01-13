@@ -1,0 +1,16 @@
+r##"# [ allow ( non_snake_case , unused_variables , unused_mut ) ] # [ no_mangle ]
+ pub extern "C" fn TestPassObjectsAsParams_f1 ( this : * mut TestPassObjectsAsParams , a_0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
+ assert ! ( ! a_0 . is_null ( ) ) ;
+ let a_0 : & Foo = unsafe { &* ( a_0 as * const Foo ) } ;
+ let this : & TestPassObjectsAsParams = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : ( ) = TestPassObjectsAsParams :: f1 ( this , a_0 ) ;
+ ret
+ }"##;
+
+r##"# [ allow ( non_snake_case , unused_variables , unused_mut ) ]
+ # [ no_mangle ]
+ pub extern "C" fn TestPassObjectsAsParams_f3 ( this : * mut TestPassObjectsAsParams , a_0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
+ assert ! ( ! a_0 . is_null ( ) ) ; let a_0 : & mut Foo = unsafe { & mut * ( a_0 as * mut Foo ) } ;
+ let this : & TestPassObjectsAsParams = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : ( ) = TestPassObjectsAsParams :: f3 ( this , a_0 ) ;
+ ret }"##;

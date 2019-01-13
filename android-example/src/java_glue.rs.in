@@ -1,5 +1,4 @@
-use android_c_headers::*;
-use Session;
+use crate::{android_c_headers::*, Session};
 
 foreigner_class!(class Session {
     self_type Session;

@@ -1,13 +1,6 @@
-//extern crate env_logger;
-
-extern crate rust_swig;
-extern crate syntex;
+use std::{env, fs, io::Read, path::Path};
 
 use rust_swig::{Generator, JavaConfig, LanguageConfig};
-use std::io::Read;
-use std::path::Path;
-use std::{env, fs};
-use syntex::Registry;
 
 fn main() {
     let type_map = if let Some("--type-map") = env::args().nth(1).as_ref().map(String::as_str) {
@@ -24,11 +17,11 @@ fn main() {
     fs::create_dir_all(&java_path).unwrap_or_else(|why| {
         panic!("! {:?}", why.kind());
     });
-    let mut registry = Registry::new();
     let swig_gen = Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
         java_path,
         "com.example".into(),
-    ))).with_pointer_target_width(64);
+    )))
+    .with_pointer_target_width(64);
 
     let swig_gen = if let Some(type_map) = type_map {
         let mut tm_f = fs::File::open(&type_map)
@@ -40,15 +33,11 @@ fn main() {
     } else {
         swig_gen
     };
-    swig_gen.register(&mut registry);
 
     let mut in_f =
         fs::File::open(in_path).unwrap_or_else(|err| panic!("Can not open {:?}: {}", in_path, err));
     let mut code = String::new();
     in_f.read_to_string(&mut code).unwrap();
 
-    let res_code = registry
-        .expand_str("test", in_path.to_str().unwrap(), &code)
-        .unwrap();
-    println!("{}", res_code);
+    swig_gen.expand("test", in_path.to_str().unwrap(), &code);
 }

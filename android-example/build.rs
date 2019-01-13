@@ -1,5 +1,4 @@
 /* CONFIGURATION */
-
 // add other android system headers to this list as necessary
 static INCLUDE_SYS_H: [&str; 1] = ["jni.h"];
 
@@ -10,11 +9,6 @@ static ANDROID_PACKAGE_ID: &str = "net.akaame.myapplication";
 // =========================================================
 // This script is portable; copy and paste it into your own
 // build files at will.
-
-extern crate bindgen;
-extern crate rust_swig;
-extern crate syntex;
-extern crate walkdir;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -37,7 +31,7 @@ fn main() {
         "i686-linux-android",
         "x86_64-linux-android",
     ]
-        .contains(&target.as_str())
+    .contains(&target.as_str())
     {
         gen_for_android();
     }
@@ -54,7 +48,8 @@ fn gen_for_android() {
         .map(|h| {
             search_file_in_directory(&include_dirs, h)
                 .expect(format!("Could not find header {}", h).as_ref())
-        }).collect();
+        })
+        .collect();
 
     let src_dir = Path::new(RUST_SRC_DIR);
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -64,7 +59,8 @@ fn gen_for_android() {
         &include_dirs,
         &include_headers,
         &Path::new(&out_dir).join("android_c_headers.rs"),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Find files ending in .rs.in and expand them with SWIG
     for _entry in WalkDir::new(RUST_SRC_DIR) {
@@ -76,7 +72,7 @@ fn gen_for_android() {
         println!("Found SWIG specification: {}", entry.path().display());
         let swigf = entry.path().strip_prefix("src").unwrap();
 
-        rust_swig_expand(&src_dir, &swigf, Path::new(&out_dir)).unwrap();
+        rust_swig_expand(&src_dir, &swigf, Path::new(&out_dir));
 
         write_include_file(&src_dir, swigf).expect("Failed to write include file.");
     }
@@ -106,16 +102,18 @@ fn get_gcc_system_include_dirs(target: &str) -> Result<Vec<PathBuf>, String> {
         .spawn()
     {
         // there are more elegant ways to write this, but this works
-        Err(e) => if std::io::ErrorKind::NotFound == e.kind() {
-            panic!(
-                "Could not find a suitable NDK gcc (tried {})
-    You can fix this either by adding the toolchain's bin/ to your $PATH, or by
-    merging PR#5394 form github.com/rust-lang/cargo into your version of Cargo.",
-                &gcc_cmd
-            );
-        } else {
-            panic!("Failed to spawn NDK gcc: {}", e);
-        },
+        Err(e) => {
+            if std::io::ErrorKind::NotFound == e.kind() {
+                panic!(
+                    "Could not find a suitable NDK gcc (tried {})
+You can fix this either by adding the toolchain's bin/ to your $PATH, or by
+merging PR#5394 form github.com/rust-lang/cargo into your version of Cargo.",
+                    &gcc_cmd
+                );
+            } else {
+                panic!("Failed to spawn NDK gcc: {}", e);
+            }
+        }
         Ok(p) => p,
     };
 
@@ -183,7 +181,7 @@ where
     println!("Generate binding for {:?}", c_headers);
     bindings = bindings
         .rust_target(RustTarget::Stable_1_19)
-    //long double not supported yet, see https://github.com/servo/rust-bindgen/issues/550
+        //long double not supported yet, see https://github.com/servo/rust-bindgen/issues/550
         .blacklist_type("max_align_t");
     bindings = if target.contains("windows") {
         //see https://github.com/servo/rust-bindgen/issues/578
@@ -204,7 +202,7 @@ where
     )?;
 
     let generated_bindings = bindings
-    //        .clang_arg(format!("-target {}", target))
+        //        .clang_arg(format!("-target {}", target))
         .generate()
         .map_err(|_| "Failed to generate bindings".to_string())?;
     generated_bindings
@@ -214,8 +212,7 @@ where
     Ok(())
 }
 
-fn rust_swig_expand(source_dir: &Path, file: &Path, out_dir: &Path) -> Result<(), String> {
-    let mut registry = syntex::Registry::new();
+fn rust_swig_expand(source_dir: &Path, file: &Path, out_dir: &Path) {
     let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(
         JavaConfig::new(
             Path::new(ANDROID_BASE_DIR)
@@ -224,18 +221,16 @@ fn rust_swig_expand(source_dir: &Path, file: &Path, out_dir: &Path) -> Result<()
                 .join("java")
                 .join(ANDROID_PACKAGE_ID.replace(".", "/")),
             ANDROID_PACKAGE_ID.to_string(),
-        ).use_null_annotation("android.support.annotation.NonNull".into()),
+        )
+        .use_null_annotation("android.support.annotation.NonNull".into()),
     ));
-    swig_gen.register(&mut registry);
 
     let out_file = out_dir.join(
         Path::new(file.parent().unwrap_or(Path::new(".")))
             .join(file.file_stem().expect("Got invalid file (no filename)")),
     );
 
-    registry
-        .expand(ANDROID_PACKAGE_ID.as_ref(), source_dir.join(file), out_file)
-        .map_err(|err| format!("Rust-SWIG expansion failed: {}", err))
+    swig_gen.expand(ANDROID_PACKAGE_ID.as_ref(), source_dir.join(file), out_file);
 }
 
 fn write_include_file(source_dir: &Path, swig_file: &Path) -> std::io::Result<()> {
@@ -258,7 +253,8 @@ fn write_include_file(source_dir: &Path, swig_file: &Path) -> std::io::Result<()
 
 include!(concat!(env!("OUT_DIR"), "/{}"));"#,
             rs_rel_file.to_string_lossy()
-        ).as_bytes(),
+        )
+        .as_bytes(),
     )?;
 
     return Ok(());

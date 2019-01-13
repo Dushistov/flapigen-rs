@@ -1,7 +1,9 @@
-use std::cell::{Ref, RefCell, RefMut};
-use std::path::Path;
-use std::rc::Rc;
-use std::{f32, f64};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    f32, f64,
+    path::Path,
+    rc::Rc,
+};
 
 #[derive(Clone)]
 pub struct Foo {
@@ -202,7 +204,7 @@ foreigner_class!(class ClassCooperationTest {
 
 trait DummySetterGetter {
     fn get(&self) -> i32;
-    fn set(&mut self, i32);
+    fn set(&mut self, _: i32);
 }
 
 pub struct TestObjectLifetime<'a> {
@@ -356,11 +358,13 @@ enum MyEnum {
     Item3,
 }
 
-foreign_enum!(enum MyEnum {
-    ITEM1 = MyEnum::Item1,
-    ITEM2 = MyEnum::Item2,
-    ITEM3 = MyEnum::Item3,
-});
+foreign_enum!(
+    enum MyEnum {
+        ITEM1 = MyEnum::Item1,
+        ITEM2 = MyEnum::Item2,
+        ITEM3 = MyEnum::Item3,
+    }
+);
 
 #[derive(Default)]
 pub struct TestEnumClass;
@@ -608,10 +612,12 @@ pub enum ErrorEnum {
     B,
 }
 
-foreign_enum!(enum ErrorEnum {
-    eeA = ErrorEnum::A,
-    eeB = ErrorEnum::B,
-});
+foreign_enum!(
+    enum ErrorEnum {
+        eeA = ErrorEnum::A,
+        eeB = ErrorEnum::B,
+    }
+);
 
 foreigner_class!(class TestResult {
     self_type TestResult;

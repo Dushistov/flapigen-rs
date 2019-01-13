@@ -1,13 +1,12 @@
-use std::fmt;
-use std::io::Write;
-use std::path::Path;
+use std::{fmt, io::Write, path::Path};
 
-use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
-use syntex_syntax::symbol::Symbol;
+use bitflags::bitflags;
 
-use super::{fmt_write_err_map, method_name, JniForeignMethodSignature};
-use file_cache::FileWriteCache;
-use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant};
+use crate::{
+    file_cache::FileWriteCache,
+    java_jni::{fmt_write_err_map, method_name, JniForeignMethodSignature},
+    ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant,
+};
 
 bitflags! {
     struct ArgsFormatFlags: u8 {
@@ -19,7 +18,7 @@ bitflags! {
     }
 }
 
-pub(in java_jni) fn generate_java_code_for_enum(
+pub(in crate::java_jni) fn generate_java_code_for_enum(
     output_dir: &Path,
     package_name: &str,
     enum_info: &ForeignEnumInfo,
@@ -38,12 +37,13 @@ public enum {enum_name} {{
         package_name = package_name,
         enum_name = enum_info.name,
         doc_comments = enum_doc_comments,
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     for (i, item) in enum_info.items.iter().enumerate() {
-        write!(
+        writeln!(
             file,
-            "{doc_comments}{item_name}({index}){separator}\n",
+            "{doc_comments}{item_name}({index}){separator}",
             item_name = item.name,
             index = i,
             doc_comments = doc_comments_to_java_comments(&item.doc_comments, false),
@@ -52,7 +52,8 @@ public enum {enum_name} {{
             } else {
                 ','
             },
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
     }
 
     write!(
@@ -66,13 +67,14 @@ public enum {enum_name} {{
 }}
 "#,
         enum_name = enum_info.name
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
 
-pub(in java_jni) fn generate_java_code_for_interface(
+pub(in crate::java_jni) fn generate_java_code_for_interface(
     output_dir: &Path,
     package_name: &str,
     interface: &ForeignInterface,
@@ -95,7 +97,8 @@ public interface {interface_name} {{
         interface_name = interface.name,
         doc_comments = interface_comments,
         imports = imports,
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     for (method, f_method) in interface.items.iter().zip(methods_sign) {
         write!(
@@ -111,7 +114,8 @@ public interface {interface_name} {{
                 ArgsFormatFlags::EXTERNAL,
                 use_null_annotation.is_some()
             )?,
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
     }
 
     write!(
@@ -119,12 +123,13 @@ public interface {interface_name} {{
         r#"
 }}
 "#,
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
     file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
 
-pub(in java_jni) fn generate_java_code(
+pub(in crate::java_jni) fn generate_java_code(
     output_dir: &Path,
     package_name: &str,
     class: &ForeignerClassInfo,
@@ -149,7 +154,8 @@ public final class {class_name} {{
         imports = imports,
         class_name = class.name,
         doc_comments = class_doc_comments,
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     let mut have_methods = false;
     let mut have_constructor = false;
@@ -159,7 +165,8 @@ public final class {class_name} {{
             &mut file,
             "{doc_comments}",
             doc_comments = doc_comments_to_java_comments(&method.doc_comments, false)
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
         let exception_spec = if method.may_return_error {
             "throws Exception"
         } else {
@@ -176,7 +183,7 @@ public final class {class_name} {{
         let func_name = method_name(method, f_method);
         match method.variant {
             MethodVariant::StaticMethod => {
-                let ret_type = f_method.output.name;
+                let ret_type = &f_method.output.name;
 
                 if convert_code.is_empty() {
                     write!(
@@ -193,7 +200,8 @@ public final class {class_name} {{
                             use_null_annotation.is_some()
                         )?,
                         exception_spec = exception_spec,
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
                 } else {
                     write!(
                         file,
@@ -222,12 +230,13 @@ public final class {class_name} {{
                         )?,
                         convert_code = convert_code,
                         args = list_of_args_for_call_method(f_method, ArgsFormatFlags::INTERNAL)?,
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
                 }
             }
             MethodVariant::Method(_) => {
                 have_methods = true;
-                let ret_type = f_method.output.name;
+                let ret_type = &f_method.output.name;
                 write!(
                     file,
                     r#"
@@ -258,7 +267,8 @@ public final class {class_name} {{
                         f_method,
                         ArgsFormatFlags::COMMA_BEFORE | ArgsFormatFlags::INTERNAL
                     )?,
-                ).map_err(&map_write_err)?;
+                )
+                .map_err(&map_write_err)?;
             }
             MethodVariant::Constructor => {
                 have_constructor = true;
@@ -271,7 +281,8 @@ public final class {class_name} {{
 ",
                         method_access = method_access,
                         class_name = class.name,
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
                 } else {
                     write!(
                         file,
@@ -298,7 +309,8 @@ public final class {class_name} {{
                         )?,
                         convert_code = convert_code,
                         args = list_of_args_for_call_method(f_method, ArgsFormatFlags::INTERNAL)?
-                    ).map_err(&map_write_err)?;
+                    )
+                    .map_err(&map_write_err)?;
                 }
             }
         }
@@ -333,7 +345,8 @@ May be you need to use `private constructor = empty;` syntax?",
     private static native void do_delete(long me);
     /*package*/ long mNativeObj;
 "
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
     }
 
     //utility class, so add private constructor
@@ -345,7 +358,8 @@ May be you need to use `private constructor = empty;` syntax?",
     private {class_name}() {{}}
 "#,
             class_name = class.name
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
     }
 
     file.write_all(class.foreigner_code.as_bytes())
@@ -377,16 +391,17 @@ fn args_with_java_types(
     for (i, arg) in method.input.iter().enumerate() {
         let type_name = if flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_need_conversation()
         {
-            arg.java_transition_type.unwrap()
+            arg.java_transition_type.as_ref().unwrap()
         } else {
-            arg.as_ref().name
+            &arg.as_ref().name
         };
-        let annotation = gen_annotation_if_need(type_name, annotation);
+        let annotation = gen_annotation_if_need(&type_name, annotation);
         if i == (method.input.len() - 1) {
             write!(&mut res, "{}{} a{}", annotation, type_name, i)
         } else {
             write!(&mut res, "{}{} a{}, ", annotation, type_name, i)
-        }.map_err(&fmt_write_err_map)?;
+        }
+        .map_err(&fmt_write_err_map)?;
     }
     Ok(res)
 }
@@ -420,7 +435,8 @@ fn list_of_args_for_call_method(
             write!(&mut res, "a{}C0, ", i)
         } else {
             write!(&mut res, "a{}, ", i)
-        }.map_err(|err| format!("write fmt failed: {}", err))?;
+        }
+        .map_err(|err| format!("write fmt failed: {}", err))?;
     }
 
     Ok(res)
@@ -436,7 +452,7 @@ fn convert_code_for_method(f_method: &JniForeignMethodSignature) -> String {
     ret
 }
 
-fn doc_comments_to_java_comments(doc_comments: &[Symbol], class_comments: bool) -> String {
+fn doc_comments_to_java_comments(doc_comments: &[String], class_comments: bool) -> String {
     use std::fmt::Write;
     let mut comments = String::new();
     for (i, comment) in doc_comments.iter().enumerate() {
@@ -446,17 +462,13 @@ fn doc_comments_to_java_comments(doc_comments: &[Symbol], class_comments: bool) 
         if !class_comments {
             comments.push_str("    ");
         }
-        write!(
-            &mut comments,
-            "//{}",
-            strip_doc_comment_decoration(&*comment.as_str())
-        ).unwrap();
+        write!(&mut comments, "//{}", comment.trim()).unwrap();
     }
     comments
 }
 
-fn gen_annotation_if_need(type_name: Symbol, annotation: &'static str) -> &'static str {
-    match &*type_name.as_str() {
+fn gen_annotation_if_need(type_name: &str, annotation: &'static str) -> &'static str {
+    match type_name {
         "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => "",
         _ => annotation,
     }
@@ -471,7 +483,7 @@ fn get_null_annotation_imports(
             let has_annotation = f_method
                 .input
                 .iter()
-                .any(|arg| !gen_annotation_if_need(arg.as_ref().name, "x").is_empty());
+                .any(|arg| !gen_annotation_if_need(&arg.as_ref().name, "x").is_empty());
             if has_annotation {
                 return format!("import {};", import);
             }

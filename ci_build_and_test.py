@@ -114,6 +114,11 @@ def build_cargo_docs():
     subprocess.check_call(["cargo", "doc", "-v", "--package", "rust_swig"])
 
 @show_timing
+def build_for_android(is_windows):
+    gradle_cmd = "gradlew.bat" if is_windows else "./gradlew"
+    subprocess.check_call([gradle_cmd, "build"], cwd=os.path.join(os.getcwd(), "android-example"))
+
+@show_timing
 def run_unit_tests(fast_run, has_jdk, skip_cpp_tests):
     cmd_base = ["cargo", "test", "-v", "-p", "rust_swig"]
     if not skip_cpp_tests:
@@ -170,8 +175,7 @@ def main():
         build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
 
     if has_android_sdk and (not skip_android_test):
-        gradle_cmd = "gradlew.bat" if is_windows else "./gradlew"
-        subprocess.check_call([gradle_cmd, "build"], cwd=os.path.join(os.getcwd(), "android-example"))
+        build_for_android(is_windows)
 
 if __name__ == "__main__":
     main()

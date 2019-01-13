@@ -56,7 +56,7 @@ trait SwigInto<T> {
 #[allow(dead_code)]
 #[swig_code = "let mut {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var}, env);"]
 trait SwigFrom<T> {
-    fn swig_from(T, env: *mut JNIEnv) -> Self;
+    fn swig_from(_: T, env: *mut JNIEnv) -> Self;
 }
 
 #[allow(dead_code)]
@@ -337,13 +337,14 @@ impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
 }
 
 #[swig_from_foreigner_hint = "T []"]
-impl<T: SwigForeignClass + Clone> SwigInto<Vec<T>>  for jobjectArray {
+impl<T: SwigForeignClass + Clone> SwigInto<Vec<T>> for jobjectArray {
     fn swig_into(self, env: *mut JNIEnv) -> Vec<T> {
         let class_id = <T>::jni_class_name();
         let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
         let field_id = swig_c_str!("mNativeObj");
         let type_id = swig_c_str!("J");
-        let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id, type_id) };
+        let field_id: jfieldID =
+            unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id, type_id) };
         assert!(!field_id.is_null());
 
         let length = unsafe { (**env).GetArrayLength.unwrap()(env, self) };

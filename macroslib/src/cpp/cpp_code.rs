@@ -1,16 +1,13 @@
-use syntex_syntax::parse::lexer::comments::strip_doc_comment_decoration;
-use syntex_syntax::symbol::Symbol;
+use std::{fmt, io::Write, path::Path};
 
-use std::fmt;
-use std::io::Write;
-use std::path::Path;
+use crate::{
+    cpp::{fmt_write_err_map, CppForeignMethodSignature},
+    file_cache::FileWriteCache,
+    typemap::FROM_VAR_TEMPLATE,
+    {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo},
+};
 
-use super::{fmt_write_err_map, CppForeignMethodSignature};
-use file_cache::FileWriteCache;
-use types_conv_map::FROM_VAR_TEMPLATE;
-use {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo};
-
-pub(in cpp) fn generate_code_for_enum(
+pub(in crate::cpp) fn generate_code_for_enum(
     output_dir: &Path,
     enum_info: &ForeignEnumInfo,
 ) -> Result<(), String> {
@@ -28,12 +25,13 @@ enum {enum_name} {{
 "#,
         enum_name = enum_info.name,
         doc_comments = enum_doc_comments,
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     for (i, item) in enum_info.items.iter().enumerate() {
-        write!(
+        writeln!(
             file,
-            "{doc_comments}{item_name} = {index}{separator}\n",
+            "{doc_comments}{item_name} = {index}{separator}",
             item_name = item.name,
             index = i,
             doc_comments = doc_comments_to_c_comments(&item.doc_comments, false),
@@ -42,15 +40,19 @@ enum {enum_name} {{
             } else {
                 ","
             },
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
     }
 
-    write!(file, "}};\n").map_err(&map_write_err)?;
+    writeln!(file, "}};").map_err(&map_write_err)?;
     file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
 
-pub(in cpp) fn doc_comments_to_c_comments(doc_comments: &[Symbol], class_comments: bool) -> String {
+pub(in crate::cpp) fn doc_comments_to_c_comments(
+    doc_comments: &[String],
+    class_comments: bool,
+) -> String {
     use std::fmt::Write;
     let mut comments = String::new();
     for (i, comment) in doc_comments.iter().enumerate() {
@@ -60,16 +62,12 @@ pub(in cpp) fn doc_comments_to_c_comments(doc_comments: &[Symbol], class_comment
         if !class_comments {
             comments.push_str("    ");
         }
-        write!(
-            &mut comments,
-            "//{}",
-            strip_doc_comment_decoration(&*comment.as_str())
-        ).unwrap();
+        write!(&mut comments, "//{}", comment.trim()).unwrap();
     }
     comments
 }
 
-pub(in cpp) fn generate_for_interface(
+pub(in crate::cpp) fn generate_for_interface(
     output_dir: &Path,
     namespace_name: &str,
     interface: &ForeignInterface,
@@ -96,7 +94,8 @@ struct C_{interface_name} {{
     "#,
         interface_name = interface.name,
         doc_comments = interface_comments
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     let mut cpp_virtual_methods = String::new();
     let mut cpp_static_reroute_methods = format!(
@@ -117,16 +116,16 @@ struct C_{interface_name} {{
     );
 
     for (method, f_method) in interface.items.iter().zip(f_methods) {
-        let c_ret_type = f_method.output.base.name;
+        let c_ret_type = f_method.output.base.name.clone();
         let (cpp_ret_type, cpp_out_conv) =
             if let Some(out_conv) = f_method.output.cpp_converter.as_ref() {
                 let conv_code = out_conv
                     .output_converter
                     .as_str()
                     .replace(FROM_VAR_TEMPLATE, "ret");
-                (out_conv.typename, conv_code)
+                (out_conv.typename.clone(), conv_code)
             } else {
-                (c_ret_type, String::new())
+                (c_ret_type.clone(), String::new())
             };
         write!(
             file_c,
@@ -138,7 +137,8 @@ struct C_{interface_name} {{
             doc_comments = doc_comments_to_c_comments(&method.doc_comments, false),
             single_args_with_types = c_generate_args_with_types(f_method, true)?,
             c_ret_type = c_ret_type,
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
 
         write!(
             &mut cpp_virtual_methods,
@@ -150,7 +150,8 @@ struct C_{interface_name} {{
             doc_comments = doc_comments_to_c_comments(&method.doc_comments, false),
             single_args_with_types = cpp_generate_args_with_types(f_method)?,
             cpp_ret_type = cpp_ret_type,
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
         if c_ret_type == "void" {
             write!(
                 &mut cpp_static_reroute_methods,
@@ -166,7 +167,8 @@ struct C_{interface_name} {{
                 single_args_with_types = c_generate_args_with_types(f_method, true)?,
                 input_args = cpp_generate_args_to_call_c(f_method, true)?,
                 interface_name = interface.name,
-            ).map_err(&map_write_err)?;
+            )
+            .map_err(&map_write_err)?;
         } else {
             write!(
                 &mut cpp_static_reroute_methods,
@@ -185,20 +187,23 @@ struct C_{interface_name} {{
                 interface_name = interface.name,
                 c_ret_type = c_ret_type,
                 cpp_out_conv = cpp_out_conv,
-            ).map_err(&map_write_err)?;
+            )
+            .map_err(&map_write_err)?;
         }
-        write!(
+        writeln!(
             &mut cpp_fill_c_interface_struct,
-            "        ret.{method_name} = c_{method_name};\n",
+            "        ret.{method_name} = c_{method_name};",
             method_name = method.name,
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
     }
     write!(
         file_c,
         r#"
 }};
 "#
-    ).map_err(map_write_err)?;
+    )
+    .map_err(map_write_err)?;
     write!(
         file_cpp,
         r##"// Automaticaly generated by rust_swig
@@ -234,7 +239,8 @@ private:
         static_reroute_methods = cpp_static_reroute_methods,
         cpp_fill_c_interface_struct = cpp_fill_c_interface_struct,
         namespace_name = namespace_name,
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     file_c.update_file_if_necessary().map_err(&map_write_err)?;
     file_cpp
@@ -248,7 +254,7 @@ fn map_write_err<Err: fmt::Display>(err: Err) -> String {
     format!("write failed: {}", err)
 }
 
-pub(in cpp) fn c_generate_args_with_types(
+pub(in crate::cpp) fn c_generate_args_with_types(
     f_method: &CppForeignMethodSignature,
     append_comma_if_not_empty: bool,
 ) -> Result<String, String> {
@@ -267,11 +273,11 @@ pub(in cpp) fn c_generate_args_with_types(
     Ok(buf)
 }
 
-pub(in cpp) fn c_class_type(class: &ForeignerClassInfo) -> String {
+pub(in crate::cpp) fn c_class_type(class: &ForeignerClassInfo) -> String {
     format!("{}Opaque", class.name)
 }
 
-pub(in cpp) fn cpp_generate_args_with_types(
+pub(in crate::cpp) fn cpp_generate_args_with_types(
     f_method: &CppForeignMethodSignature,
 ) -> Result<String, String> {
     use std::fmt::Write;
@@ -285,17 +291,18 @@ pub(in cpp) fn cpp_generate_args_with_types(
             &mut ret,
             "{} a_{}",
             if let Some(conv) = f_type_info.cpp_converter.as_ref() {
-                conv.typename
+                conv.typename.clone()
             } else {
-                f_type_info.as_ref().name
+                f_type_info.as_ref().name.clone()
             },
             i
-        ).map_err(fmt_write_err_map)?;
+        )
+        .map_err(fmt_write_err_map)?;
     }
     Ok(ret)
 }
 
-pub(in cpp) fn cpp_generate_args_to_call_c(
+pub(in crate::cpp) fn cpp_generate_args_to_call_c(
     f_method: &CppForeignMethodSignature,
     for_callback: bool,
 ) -> Result<String, String> {
@@ -319,7 +326,8 @@ pub(in cpp) fn cpp_generate_args_to_call_c(
             write!(&mut ret, "{}", conv_arg)
         } else {
             write!(&mut ret, "a_{}", i)
-        }.map_err(fmt_write_err_map)?;
+        }
+        .map_err(fmt_write_err_map)?;
     }
     Ok(ret)
 }

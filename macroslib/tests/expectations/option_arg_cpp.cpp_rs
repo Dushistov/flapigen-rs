@@ -1,0 +1,4 @@
+r#"pub extern "C" fn Foo_f3 ( this : * mut Foo , a_0 : CRustOptionU32 , ) -> ( )"#;
+r#"pub extern "C" fn Foo_f4 ( this : * mut Foo , a_0 : CRustOptionUSize , ) -> ( )"#;
+r#"pub extern "C" fn Foo_f5 ( a_0 : CRustOptionF64 , a_1 : CRustOptionUSize , ) -> ( )"#;
+r#"pub extern "C" fn Foo_f6 ( a_0 : * const :: std :: os :: raw :: c_char , ) -> ( )"#;

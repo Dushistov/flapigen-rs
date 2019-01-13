@@ -117,7 +117,7 @@ trait SwigInto<T> {
 #[allow(dead_code)]
 #[swig_code = "let mut {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var});"]
 trait SwigFrom<T> {
-    fn swig_from(T) -> Self;
+    fn swig_from(_: T) -> Self;
 }
 
 #[allow(dead_code)]
