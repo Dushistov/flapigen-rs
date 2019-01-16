@@ -10,7 +10,7 @@ name = "mobcore"
 crate-type = ["cdylib"]
 
 [dependencies]
-log = "0.4"
+log = "0.4.6"
 log-panics = "2.0"
 android_logger = "0.7"
 
