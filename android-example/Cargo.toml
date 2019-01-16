@@ -16,5 +16,5 @@ android_logger = "0.7"
 
 [build-dependencies]
 rust_swig = { path = "../macroslib" }
-bindgen = "0.37.4"
+bindgen = "0.46.0"
 walkdir = "2.2.7"
