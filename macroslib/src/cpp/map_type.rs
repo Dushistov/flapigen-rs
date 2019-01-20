@@ -38,9 +38,7 @@ fn special_type(
         return Ok(Some(converter));
     }
 
-    //TODO: no need for normalize_ty_lifetimes
-    let ty_name = normalize_ty_lifetimes(arg_ty);
-    if ty_name == "bool" {
+    if *arg_ty == parse_type! { bool } {
         let fti = conv_map
             .find_foreign_type_info_by_name("char")
             .expect("expect to find `char` in type map");
@@ -55,7 +53,7 @@ fn special_type(
         }));
     }
 
-    if ty_name == "String" && direction == Direction::Outgoing {
+    if *arg_ty == parse_type! { String } && direction == Direction::Outgoing {
         let fti = conv_map
             .find_foreign_type_info_by_name("struct CRustString")
             .expect("expect to find `struct CRustString`  in type map");
