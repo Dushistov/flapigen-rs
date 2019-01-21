@@ -23,4 +23,5 @@ foreigner_class!(class Foo {
    method Foo::f7(&self) -> Option<u64>;
    method Foo::f8(&self) -> Option<&str>;
    method Foo::f9(&self) -> Option<String>;
+   method Foo::f10(&self) -> Option<bool>;
 });

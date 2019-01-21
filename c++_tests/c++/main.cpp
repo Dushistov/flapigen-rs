@@ -580,6 +580,15 @@ To carry that wonderful nose.)");
         auto val2 = y.f13(false);
         EXPECT_TRUE(!val2);
     }
+
+    {
+        TestOptional y;
+        auto val = y.f14(true);
+        ASSERT_TRUE(!!val);
+        EXPECT_TRUE(*val);
+        auto val2 = y.f14(false);
+        EXPECT_TRUE(!val2);
+    }
 }
 
 TEST(TestResult, smokeTest)

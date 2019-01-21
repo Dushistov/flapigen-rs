@@ -4,6 +4,11 @@
 
 #include "rust_str.h"
 
+struct CRustOptionBool {
+    uint8_t val;
+    uint8_t is_some;
+};
+
 struct CRustOptionF32 {
     float val;
     uint8_t is_some;

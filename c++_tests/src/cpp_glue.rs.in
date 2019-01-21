@@ -511,6 +511,13 @@ To carry that wonderful nose."#
             None
         }
     }
+    fn f14(&self, is_some: bool) -> Option<bool> {
+        if is_some {
+            Some(true)
+        } else {
+            None
+        }
+    }
 }
 
 foreigner_class!(class TestOptional {
@@ -529,6 +536,7 @@ foreigner_class!(class TestOptional {
     method TestOptional::f11(&self, val: i32, is_some: bool) -> Option<i32>;
     method TestOptional::f12(&self, val: f32, is_some: bool) -> Option<f32>;
     method TestOptional::f13(&self, is_some: bool) -> Option<String>;
+    method TestOptional::f14(&self, is_some: bool) -> Option<bool>;
 });
 
 #[derive(Default)]

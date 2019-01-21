@@ -1079,7 +1079,12 @@ fn handle_option_type_in_return(
     }
     let mut cpp_info_opt = map_ordinal_result_type(conv_map, arg_ty)?;
     let cpp_info_ty = map_ordinal_result_type(conv_map, opt_ty)?;
-    let f_opt_ty = cpp_info_ty.base.name;
+
+    let f_opt_ty = if *opt_ty != parse_type! {bool} {
+        cpp_info_ty.base.name
+    } else {
+        "bool".into()
+    };
     debug!("is_this_exported_enum {:?}", opt_ty);
     let (typename, output_converter) =
         if let Some(foreign_enum) = conv_map.is_this_exported_enum(opt_ty) {

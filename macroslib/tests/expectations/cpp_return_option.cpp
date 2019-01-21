@@ -15,3 +15,5 @@
 "std::optional< RustStrView> f8()";
 
 "std::optional<RustString> f9()";
+
+"std::optional<bool> f10()";
