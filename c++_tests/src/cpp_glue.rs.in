@@ -791,3 +791,32 @@ foreigner_class!(class RecursiveStruct {
     method RecursiveStruct::tag(&self) -> &str;
     method RecursiveStruct::childs(&self) -> &[RecursiveStruct];
 });
+
+pub struct Boo {
+    f1: i32,
+}
+
+impl Boo {
+    pub fn f(&self) -> i32 {
+        self.f1
+    }
+    pub fn return_pair() -> (Foo, Boo) {
+        (
+            Foo {
+                data: 5,
+                name: "FooName".into(),
+            },
+            Boo { f1: 17 },
+        )
+    }
+}
+
+foreigner_class!(class Boo {
+    self_type Boo;
+    private constructor = empty;
+    method Boo::f(&self) -> i32;
+});
+
+foreigner_class!(class TestReturnTuple {
+    static_method Boo::return_pair() -> (Foo, Boo);
+});

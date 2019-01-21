@@ -299,6 +299,18 @@ fn is_second_subst_of_first(ty1: &Type, ty2: &Type, subst_map: &mut TyParamsSubs
         (Type::Slice(ref ty1), Type::Slice(ref ty2)) => {
             is_second_subst_of_first(&*ty1.elem, &*ty2.elem, subst_map)
         }
+        (Type::Tuple(ref ty1), Type::Tuple(ref ty2)) => {
+            if ty1.elems.len() != ty2.elems.len() {
+                trace!("is_second_subst_of_first: tuple elems length not match");
+                return false;
+            }
+            for (ty1_e, ty2_e) in ty1.elems.iter().zip(ty2.elems.iter()) {
+                if !is_second_subst_of_first(ty1_e, ty2_e, subst_map) {
+                    return false;
+                }
+            }
+            true
+        }
         _ => {
             let ret = ty1 == ty2;
             trace!(
@@ -677,6 +689,34 @@ mod tests {
 
             ret_ty
         }
+
+        let pair_generic = get_generic_params_from_code! {
+            impl<T1: SwigForeignClass, T2: SwigForeignClass> SwigFrom<(T1, T2)> for CRustObjectPair {
+                fn swig_from((x1, x2): (T1, T2)) -> Self {
+                    unimplemented!();
+                }
+            }
+        };
+
+        let one_spec = RustType::new(str_to_ty("One"), "One").implements("SwigForeignClass");
+        let two_spec = RustType::new(str_to_ty("One"), "One").implements("SwigForeignClass");
+        check_subst(
+            &pair_generic,
+            "(T1, T2)",
+            "CRustObjectPair",
+            "(One, Two)",
+            "CRustObjectPair",
+            |name| {
+                println!("test pair map, check name {:?}", name);
+                if name == "One" {
+                    Some(&one_spec)
+                } else if name == "Two" {
+                    Some(&two_spec)
+                } else {
+                    None
+                }
+            },
+        );
 
         check_subst(
             &generic,

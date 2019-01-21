@@ -38,9 +38,7 @@ fn special_type(
         return Ok(Some(converter));
     }
 
-    //TODO: no need for normalize_ty_lifetimes
-    let ty_name = normalize_ty_lifetimes(arg_ty);
-    if ty_name == "bool" {
+    if *arg_ty == parse_type! { bool } {
         let fti = conv_map
             .find_foreign_type_info_by_name("char")
             .expect("expect to find `char` in type map");
@@ -55,7 +53,7 @@ fn special_type(
         }));
     }
 
-    if ty_name == "String" && direction == Direction::Outgoing {
+    if *arg_ty == parse_type! { String } && direction == Direction::Outgoing {
         let fti = conv_map
             .find_foreign_type_info_by_name("struct CRustString")
             .expect("expect to find `struct CRustString`  in type map");
@@ -231,6 +229,33 @@ fn special_type(
         }
         if let Some(elem_ty) = if_type_slice_return_elem_type(arg_ty, true) {
             return map_arg_with_slice_type(conv_map, arg_ty, &elem_ty);
+        }
+    }
+
+    if direction == Direction::Outgoing {
+        if let syn::Type::Tuple(ref tupple) = arg_ty {
+            if tupple.elems.len() == 2 {
+                let mut ret = map_ordinal_result_type(conv_map, arg_ty)?;
+                if let (Some(fc1), Some(fc2)) = (
+                    conv_map.find_foreigner_class_with_such_this_type(&tupple.elems[0]),
+                    conv_map.find_foreigner_class_with_such_this_type(&tupple.elems[1]),
+                ) {
+                    ret.cpp_converter = Some(CppConverter {
+                        typename: format!("std::pair<{}, {}>", fc1.name, fc2.name),
+                        input_converter: "#error".into(),
+                        output_converter: format!(
+                            "std::make_pair({FirstType}{{static_cast<{CFirstType} *>({from}.first)}},
+ {SecondType}{{static_cast<{CSecondType} *>({from}.second)}})",
+                            FirstType = fc1.name,
+                            SecondType = fc2.name,
+                            from = FROM_VAR_TEMPLATE,
+                            CFirstType = c_class_type(fc1),
+                            CSecondType = c_class_type(fc2)
+                        ),
+                    });
+                    return Ok(Some(ret));
+                }
+            }
         }
     }
 
