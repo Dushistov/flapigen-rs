@@ -232,6 +232,33 @@ fn special_type(
         }
     }
 
+    if direction == Direction::Outgoing {
+        if let syn::Type::Tuple(ref tupple) = arg_ty {
+            if tupple.elems.len() == 2 {
+                let mut ret = map_ordinal_result_type(conv_map, arg_ty)?;
+                if let (Some(fc1), Some(fc2)) = (
+                    conv_map.find_foreigner_class_with_such_this_type(&tupple.elems[0]),
+                    conv_map.find_foreigner_class_with_such_this_type(&tupple.elems[1]),
+                ) {
+                    ret.cpp_converter = Some(CppConverter {
+                        typename: format!("std::pair<{}, {}>", fc1.name, fc2.name),
+                        input_converter: "#error".into(),
+                        output_converter: format!(
+                            "std::make_pair({FirstType}{{static_cast<{CFirstType} *>({from}.first)}},
+ {SecondType}{{static_cast<{CSecondType} *>({from}.second)}})",
+                            FirstType = fc1.name,
+                            SecondType = fc2.name,
+                            from = FROM_VAR_TEMPLATE,
+                            CFirstType = c_class_type(fc1),
+                            CSecondType = c_class_type(fc2)
+                        ),
+                    });
+                    return Ok(Some(ret));
+                }
+            }
+        }
+    }
+
     trace!("Oridinary type {:?}", arg_ty);
     Ok(None)
 }

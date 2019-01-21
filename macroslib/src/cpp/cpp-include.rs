@@ -87,6 +87,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CResultCRustVecU8Object"]
     #![swig_foreigner_type = "struct CRustObjectSlice"]
     #![swig_rust_type = "CRustObjectSlice"]
+    #![swig_foreigner_type = "struct CRustObjectPair"]
+    #![swig_rust_type = "CRustObjectPair"]
 }
 
 #[allow(unused_macros)]
@@ -1208,5 +1210,21 @@ where
 impl<'a> SwigInto<String> for &'a str {
     fn swig_into(self) -> String {
         self.into()
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustObjectPair {
+    pub first: *mut ::std::os::raw::c_void,
+    pub second: *mut ::std::os::raw::c_void,
+}
+
+impl<T1: SwigForeignClass, T2: SwigForeignClass> SwigFrom<(T1, T2)> for CRustObjectPair {
+    fn swig_from((x1, x2): (T1, T2)) -> Self {
+        Self {
+            first: <T1>::box_object(x1),
+            second: <T2>::box_object(x2),
+        }
     }
 }

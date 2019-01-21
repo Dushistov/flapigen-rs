@@ -12,6 +12,7 @@
 #include <string>
 #include <iostream>
 #include <sstream>
+#include <utility>
 #ifdef HAS_STDCXX_17
 #ifndef NO_HAVE_STD17_OPTIONAL
 #include <optional>
@@ -33,6 +34,7 @@
 #include "rust_interface/rust_vec.h"
 #include "rust_interface/rust_result.h"
 #include "rust_interface/rust_option.h"
+#include "rust_interface/rust_tuple.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
 #include "rust_interface/c_SomeObserver.h"
@@ -64,6 +66,8 @@
 #include "rust_interface/TestPassInterface.hpp"
 #include "rust_interface/RecursiveStruct_fwd.hpp"
 #include "rust_interface/RecursiveStruct.hpp"
+#include "rust_interface/Boo.hpp"
+#include "rust_interface/TestReturnTuple.hpp"
 
 using namespace rust;
 
@@ -765,6 +769,14 @@ TEST(RecursiveStruct, smokeTest)
     ASSERT_EQ(2u, s.childs().size());
     EXPECT_EQ(std::string{ "aaa/bbb" }, s.childs()[0].tag().to_std_string());
     EXPECT_EQ(std::string{ "aaa/ccc" }, s.childs()[1].tag().to_std_string());
+}
+
+TEST(TestReturnTuple, smokeTest)
+{
+    const auto pair = TestReturnTuple::return_pair();
+    EXPECT_EQ(17, pair.second.f());
+    EXPECT_EQ(5, pair.first.f(0, 0));
+    EXPECT_EQ(std::string("FooName"), pair.first.getName().to_std_string());
 }
 
 int main(int argc, char *argv[])
