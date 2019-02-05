@@ -418,8 +418,6 @@ public:
     friend class {class_name}<true>;
     friend class {class_name}<false>;
 
-    {class_name}(const {class_name}&) = delete;
-    {class_name} &operator=(const {class_name}&) = delete;
     {class_name}({class_name} &&o) noexcept: self_(o.self_)
     {{
         o.self_ = nullptr;
@@ -449,6 +447,70 @@ public:
         doc_comments = class_doc_comments,
         namespace = namespace_name,
     ).map_err(&map_write_err)?;
+
+    if !class.copy_derived {
+        write!(
+            cpp_include_f,
+            r#"
+    {class_name}(const {class_name}&) = delete;
+    {class_name} &operator=(const {class_name}&) = delete;
+"#,
+            class_name = class_name
+        )
+        .map_err(&map_write_err)?;
+    } else {
+        let pos = class
+            .methods
+            .iter()
+            .position(|m| {
+                if let Some(seg) = m.rust_id.segments.last() {
+                    let seg = seg.into_value();
+                    seg.ident == "clone"
+                } else {
+                    false
+                }
+            })
+            .ok_or_else(|| {
+                DiagnosticError::new(
+                    class.span(),
+                    format!(
+                        "Class {} (namespace {}) has derived Copy attribute, but no clone method",
+                        class.name, namespace_name,
+                    ),
+                )
+            })?;
+        let c_clone_func = c_func_name(class, &class.methods[pos], &methods_sign[pos]);
+
+        write!(
+            cpp_include_f,
+            r#"
+            {class_name}(const {class_name}& o) noexcept {{
+                static_assert(OWN_DATA, "copy possible only if class own data");
+
+                 if (o.self_ != nullptr) {{
+                     self_ = {c_clone_func}(o.self_);
+                 }} else {{
+                     self_ = nullptr;
+                 }}
+            }}
+            {class_name} &operator=(const {class_name}& o) noexcept {{
+                static_assert(OWN_DATA, "copy possible only if class own data");
+                if (this != &o) {{
+                    free_mem(this->self_);
+                    if (o.self_ != nullptr) {{
+                        self_ = {c_clone_func}(o.self_);
+                    }} else {{
+                        self_ = nullptr;
+                    }}
+                }}
+                return *this;
+            }}
+        "#,
+            c_clone_func = c_clone_func,
+            class_name = class_name
+        )
+        .map_err(&map_write_err)?;
+    }
 
     let dummy_ty = parse_type! { () };
     let mut gen_code = Vec::new();
