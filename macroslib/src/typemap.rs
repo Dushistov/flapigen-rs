@@ -1141,6 +1141,7 @@ fn helper3() {
             foreigner_code: String::new(),
             constructor_ret_type: Some(foo_rt.ty.clone()),
             doc_comments: vec![],
+            copy_derived: false,
         });
 
         assert_eq!(

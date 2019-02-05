@@ -59,7 +59,7 @@ impl Parse for JavaClass {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum Language {
     Cpp,
     Java,
@@ -76,8 +76,14 @@ mod kw {
     custom_keyword!(interface);
 }
 
-fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
+struct Attrs {
+    doc_comments: Vec<String>,
+    derive_list: Vec<String>,
+}
+
+fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attrs> {
     let mut doc_comments = vec![];
+    let mut derive_list = vec![];
 
     if input.fork().call(syn::Attribute::parse_outer).is_ok() {
         let attr: Vec<syn::Attribute> = input.call(syn::Attribute::parse_outer)?;
@@ -91,20 +97,47 @@ fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
                 }) if ident == "doc" => {
                     doc_comments.push(lit_str.value());
                 }
+                syn::Meta::List(syn::MetaList {
+                    ref ident,
+                    ref nested,
+                    ..
+                }) if ident == "derive" && parse_derive_attrs => {
+                    for x in nested {
+                        if let syn::NestedMeta::Meta(syn::Meta::Word(ref word)) = x {
+                            derive_list.push(word.to_string());
+                        } else {
+                            return Err(syn::Error::new(x.span(), "Invalid derive format"));
+                        }
+                    }
+                }
                 _ => {
                     return Err(syn::Error::new(
                         a.span(),
-                        "Expect doc attribute or doc comment here",
+                        &format!(
+                            "Expect doc attribute or doc comment or derive here, got {:?}",
+                            meta
+                        ),
                     ));
                 }
             }
         }
     }
+    Ok(Attrs {
+        doc_comments,
+        derive_list,
+    })
+}
+
+fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
+    let Attrs { doc_comments, .. } = parse_attrs(input, false)?;
     Ok(doc_comments)
 }
 
 fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<ForeignerClassInfo> {
-    let class_doc_comments = parse_doc_comments(&input)?;
+    let Attrs {
+        doc_comments: class_doc_comments,
+        derive_list,
+    } = parse_attrs(&input, lang == Language::Cpp)?;
     debug!(
         "parse_foreigner_class: class comment {:?}",
         class_doc_comments
@@ -367,6 +400,23 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         });
     }
 
+    let copy_derived = derive_list.iter().any(|x| x == "Copy");
+    if copy_derived
+        && !methods.iter().any(|m| {
+            if let Some(seg) = m.rust_id.segments.last() {
+                let seg = seg.into_value();
+                seg.ident == "clone"
+            } else {
+                false
+            }
+        })
+    {
+        return Err(syn::Error::new(
+            class_name.span(),
+            "class marked as Copy, but no clone method",
+        ));
+    }
+
     Ok(ForeignerClassInfo {
         name: class_name,
         methods,
@@ -375,6 +425,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         foreigner_code,
         constructor_ret_type,
         doc_comments: class_doc_comments,
+        copy_derived,
     })
 }
 
@@ -480,16 +531,6 @@ mod tests {
     fn test_do_parse_foreigner_class() {
         let _ = env_logger::try_init();
 
-        let test_parse = |tokens: TokenStream| {
-            let code = tokens.to_string();
-            let class: JavaClass = syn::parse2(tokens).unwrap_or_else(|err| {
-                let mut err: DiagnosticError = err.into();
-                err.register_src("test_do_parse_foreigner_class".into(), code);
-                panic_on_parse_error(&err);
-            });
-            class.0
-        };
-
         let mac: syn::Macro = parse_quote! {
             foreigner_class!(
                 /// This is Foo :)
@@ -505,7 +546,8 @@ mod tests {
                     static_method f2(_: i32, String) -> i32;
                 })
         };
-        test_parse(mac.tts);
+        let java_class = test_parse::<JavaClass>(mac.tts);
+        assert!(!java_class.0.copy_derived);
 
         let mac: syn::Macro = parse_quote! {
             foreigner_class!(class Foo {
@@ -514,7 +556,7 @@ mod tests {
                 method SomeType::f(&self);
             })
         };
-        test_parse(mac.tts);
+        test_parse::<JavaClass>(mac.tts);
         let mac: syn::Macro = parse_quote! {
             foreigner_class!(class Foo {
                 self_type SomeType;
@@ -522,7 +564,7 @@ mod tests {
                 method SomeType::f(&self); alias g;
             })
         };
-        test_parse(mac.tts);
+        test_parse::<JavaClass>(mac.tts);
     }
 
     #[test]
@@ -537,4 +579,33 @@ mod tests {
         };
         let _enum = parse_foreign_enum(mac.tts).unwrap();
     }
+
+    #[test]
+    fn test_parse_foreign_class_with_copy_derive() {
+        let _ = env_logger::try_init();
+        let mac: syn::Macro = parse_quote! {
+            foreigner_class!(#[derive(Copy)] class Foo {
+                self_type SomeType;
+                private constructor = empty;
+                method SomeType::f(&self);
+                method SomeType::clone(&self) -> SomeType;
+            })
+        };
+        let class: CppClass = test_parse(mac.tts);
+        assert!(class.0.copy_derived);
+    }
+
+    fn test_parse<T>(tokens: TokenStream) -> T
+    where
+        T: Parse,
+    {
+        let code = tokens.to_string();
+        let class: T = syn::parse2(tokens).unwrap_or_else(|err| {
+            let mut err: DiagnosticError = err.into();
+            err.register_src("test_parse".into(), code);
+            panic_on_parse_error(&err);
+        });
+        class
+    }
+
 }

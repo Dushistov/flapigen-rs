@@ -415,6 +415,7 @@ struct ForeignerClassInfo {
     /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
     constructor_ret_type: Option<Type>,
     doc_comments: Vec<String>,
+    copy_derived: bool,
 }
 
 impl ForeignerClassInfo {

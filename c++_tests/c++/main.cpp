@@ -68,6 +68,7 @@
 #include "rust_interface/RecursiveStruct.hpp"
 #include "rust_interface/Boo.hpp"
 #include "rust_interface/TestReturnTuple.hpp"
+#include "rust_interface/TestCopy.hpp"
 
 using namespace rust;
 
@@ -786,6 +787,27 @@ TEST(TestReturnTuple, smokeTest)
     EXPECT_EQ(17, pair.second.f());
     EXPECT_EQ(5, pair.first.f(0, 0));
     EXPECT_EQ(std::string("FooName"), pair.first.getName().to_std_string());
+}
+
+TEST(TestCopy, smokeTest)
+{
+    TestCopy tst1{ "aaaaB" };
+    EXPECT_EQ(std::string("aaaaB"), tst1.get().to_std_string());
+    TestCopy tst2(tst1);
+
+    EXPECT_EQ(std::string("aaaaB"), tst1.get().to_std_string());
+    EXPECT_EQ(std::string("aaaaB"), tst2.get().to_std_string());
+
+    TestCopy tst3{ "Chuvava" };
+    EXPECT_EQ(std::string("aaaaB"), tst1.get().to_std_string());
+    EXPECT_EQ(std::string("aaaaB"), tst2.get().to_std_string());
+    EXPECT_EQ(std::string("Chuvava"), tst3.get().to_std_string());
+
+    tst2 = tst3;
+
+    EXPECT_EQ(std::string("aaaaB"), tst1.get().to_std_string());
+    EXPECT_EQ(std::string("Chuvava"), tst2.get().to_std_string());
+    EXPECT_EQ(std::string("Chuvava"), tst3.get().to_std_string());
 }
 
 int main(int argc, char *argv[])

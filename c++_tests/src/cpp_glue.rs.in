@@ -828,3 +828,26 @@ foreigner_class!(class Boo {
 foreigner_class!(class TestReturnTuple {
     static_method Boo::return_pair() -> (Foo, Boo);
 });
+
+#[derive(Clone)]
+pub struct TestCopy {
+    s: String,
+}
+
+impl TestCopy {
+    pub fn new(s: &str) -> Self {
+        TestCopy { s: s.into() }
+    }
+    pub fn get(&self) -> &str {
+        &self.s
+    }
+}
+
+foreigner_class!(
+    #[derive(Copy)]
+    class TestCopy {
+        self_type TestCopy;
+        constructor TestCopy::new(s: &str) -> TestCopy;
+        method TestCopy::get(&self) -> &str;
+        method TestCopy::clone(&self) -> TestCopy;
+    });
