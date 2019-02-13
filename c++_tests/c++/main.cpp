@@ -673,6 +673,19 @@ TEST(TestResult, smokeTest)
         auto f5_err_ret = std::get<ErrorEnum>(std::move(f5_err));
         EXPECT_EQ(eeB, f5_err_ret);
     }
+    {
+        auto ok = TestResult::f6(true, 1000 * 1000);
+        EXPECT_NE(nullptr, std::get_if<int64_t>(&ok));
+        EXPECT_EQ(nullptr, std::get_if<TestError>(&ok));
+        auto ok_ret = std::get<int64_t>(std::move(ok));
+        ASSERT_EQ((1000 * 1000 + 1), ok_ret);
+
+        auto err = TestResult::f6(false, -1);
+        EXPECT_EQ(nullptr, std::get_if<int64_t>(&err));
+        EXPECT_NE(nullptr, std::get_if<TestError>(&err));
+        TestError err_ret = std::get<TestError>(std::move(err));
+        ASSERT_EQ(std::string_view("Not ok"), RustString{ err_ret.to_string() }.to_string_view());
+    }
 #endif // HAS_STDCXX_17
 #ifdef USE_BOOST
     boost::variant<TestResult, RustString> res = TestResult::new_with_err();
@@ -720,6 +733,20 @@ TEST(TestResult, smokeTest)
 #else
     EXPECT_EQ(std::string("Not ok"), boost::get<RustString>(res_vec).to_std_string());
 #endif
+
+    {
+        auto ok = TestResult::f6(true, 1000 * 1000);
+        EXPECT_NE(nullptr, boost::get<int64_t>(&ok));
+        EXPECT_EQ(nullptr, boost::get<TestError>(&ok));
+        auto ok_ret = boost::get<int64_t>(std::move(ok));
+        ASSERT_EQ((1000 * 1000 + 1), ok_ret);
+
+        auto err = TestResult::f6(false, -1);
+        EXPECT_EQ(nullptr, boost::get<int64_t>(&err));
+        EXPECT_NE(nullptr, boost::get<TestError>(&err));
+        TestError err_ret = boost::get<TestError>(std::move(err));
+        ASSERT_EQ(std::string("Not ok"), err_ret.to_string().to_std_string());
+    }
 #endif // USE_BOOST
 }
 #endif

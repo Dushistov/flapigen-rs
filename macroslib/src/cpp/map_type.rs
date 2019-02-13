@@ -779,68 +779,10 @@ fn handle_result_type_as_return_type(
         }
     } else {
         trace!("return result, but not foreign_class / Vec<foreign_class>");
-        match ok_ty {
-            //Result<(), err_ty>
-            Type::Tuple(ref tup_types) if tup_types.elems.is_empty() => {
-                let err_ty_name = normalize_ty_lifetimes(&err_ty);
-                if err_ty_name == "String" {
-                    let typename = match cpp_cfg.cpp_variant {
-                        CppVariant::Std17 => "std::variant<void *, RustString>",
-                        CppVariant::Boost => "boost::variant<void *, RustString>",
-                    };
-                    let output_converter = format!(
-                        "{var}.is_ok != 0 ?
- {VarType}{{{var}.data.ok}} :
- {VarType}{{RustString{{{var}.data.err}}}}",
-                        VarType = typename,
-                        var = FROM_VAR_TEMPLATE
-                    );
-                    let foreign_info = conv_map
-                        .find_foreign_type_info_by_name("struct CResultObjectString")
-                        .expect("Can not find struct CResultObjectString");
-                    return Ok(Some(CppForeignTypeInfo {
-                        base: foreign_info,
-                        c_converter: String::new(),
-                        cpp_converter: Some(CppConverter {
-                            typename: typename.into(),
-                            output_converter,
-                            input_converter: String::new(),
-                        }),
-                    }));
-                } else if let Some(err_class) =
-                    conv_map.find_foreigner_class_with_such_self_type(&err_ty, false)
-                {
-                    let c_err_class = c_class_type(err_class);
-                    let typename = match cpp_cfg.cpp_variant {
-                        CppVariant::Std17 => format!("std::variant<void *, {}>", err_class.name),
-                        CppVariant::Boost => format!("boost::variant<void *, {}>", err_class.name),
-                    };
-                    let output_converter = format!(
-                        "{var}.is_ok != 0 ?
- {VarType} {{ {var}.data.ok }} :
- {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err)) }}",
-                        VarType = typename,
-                        var = FROM_VAR_TEMPLATE,
-                        ErrType = err_class.name,
-                        C_ErrType = c_err_class,
-                    );
-                    let foreign_info = conv_map
-                        .find_foreign_type_info_by_name("struct CResultObjectObject")
-                        .expect("Can not find info about struct CResultObjectObject");
-                    return Ok(Some(CppForeignTypeInfo {
-                        base: foreign_info,
-                        c_converter: String::new(),
-                        cpp_converter: Some(CppConverter {
-                            typename,
-                            output_converter,
-                            input_converter: "#error".into(),
-                        }),
-                    }));
-                } else {
-                    Ok(None)
-                }
-            }
-            _ => Ok(None),
+        if *ok_ty == parse_type! { () } || *ok_ty == parse_type! { i64 } {
+            handle_result_with_primitive_type_as_ok_ty(conv_map, cpp_cfg, arg_ty, ok_ty, err_ty)
+        } else {
+            Ok(None)
         }
     }
 }
@@ -1171,4 +1113,78 @@ fn handle_option_type_in_return(
         input_converter: "#error".to_string(),
     });
     Ok(Some(cpp_info_opt))
+}
+
+fn handle_result_with_primitive_type_as_ok_ty(
+    conv_map: &mut TypeMap,
+    cpp_cfg: &CppConfig,
+    arg_ty: &Type,
+    ok_ty: &Type,
+    err_ty: &Type,
+) -> Result<Option<CppForeignTypeInfo>> {
+    let empty_ok_ty = *ok_ty == parse_type! { () };
+    let c_ok_type_name: String = if empty_ok_ty {
+        "void *".into()
+    } else {
+        map_ordinal_result_type(conv_map, ok_ty)?.base.name
+    };
+
+    if *err_ty == parse_type! { String } {
+        let typename = match cpp_cfg.cpp_variant {
+            CppVariant::Std17 => format!("std::variant<{}, RustString>", c_ok_type_name),
+            CppVariant::Boost => format!("boost::variant<{}, RustString>", c_ok_type_name),
+        };
+        let output_converter = format!(
+            "{var}.is_ok != 0 ?
+ {VarType}{{{var}.data.ok}} :
+ {VarType}{{RustString{{{var}.data.err}}}}",
+            VarType = typename,
+            var = FROM_VAR_TEMPLATE
+        );
+        let foreign_info = map_ordinal_result_type(conv_map, arg_ty)?;
+        if empty_ok_ty {
+            assert_eq!(foreign_info.base.name, "struct CResultObjectString");
+        }
+        return Ok(Some(CppForeignTypeInfo {
+            base: foreign_info.base,
+            c_converter: String::new(),
+            cpp_converter: Some(CppConverter {
+                typename: typename.into(),
+                output_converter,
+                input_converter: String::new(),
+            }),
+        }));
+    } else if let Some(err_class) =
+        conv_map.find_foreigner_class_with_such_self_type(&err_ty, false)
+    {
+        let c_err_class = c_class_type(err_class);
+        let typename = match cpp_cfg.cpp_variant {
+            CppVariant::Std17 => format!("std::variant<{}, {}>", c_ok_type_name, err_class.name),
+            CppVariant::Boost => format!("boost::variant<{}, {}>", c_ok_type_name, err_class.name),
+        };
+        let output_converter = format!(
+            "{var}.is_ok != 0 ?
+ {VarType} {{ {var}.data.ok }} :
+ {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err)) }}",
+            VarType = typename,
+            var = FROM_VAR_TEMPLATE,
+            ErrType = err_class.name,
+            C_ErrType = c_err_class,
+        );
+        let foreign_info = map_ordinal_result_type(conv_map, arg_ty)?;
+        if empty_ok_ty {
+            assert_eq!(foreign_info.base.name, "struct CResultObjectObject");
+        }
+        return Ok(Some(CppForeignTypeInfo {
+            base: foreign_info.base,
+            c_converter: String::new(),
+            cpp_converter: Some(CppConverter {
+                typename,
+                output_converter,
+                input_converter: "#error".into(),
+            }),
+        }));
+    } else {
+        Ok(None)
+    }
 }
