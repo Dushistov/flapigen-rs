@@ -6,7 +6,7 @@ use std::{
 
 use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
 use syn::Token;
-use tempdir::TempDir;
+use tempfile::tempdir;
 
 #[test]
 fn test_expectations_main() {
@@ -401,7 +401,7 @@ enum Source<'a> {
 }
 
 fn parse_code(test_name: &str, rust_src: Source, lang: ForeignLang) -> Result<CodePair, Error> {
-    let tmp_dir = TempDir::new(test_name).expect("Can not create tmp directory");
+    let tmp_dir = tempdir().expect("Can not create tmp directory");
     println!(
         "{}: test name {} tmp_dir {:?}",
         file!(),

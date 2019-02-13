@@ -7,13 +7,13 @@ use std::{
 
 use pulldown_cmark::{Event, Parser, Tag};
 use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
-use tempdir::TempDir;
+use tempfile::tempdir;
 
 #[test]
 fn test_code_in_readme() {
     let _ = env_logger::try_init();
     let tests = parse_readme();
-    let tmp_dir = TempDir::new("readme_test").expect("Can not create tmp dir");
+    let tmp_dir = tempdir().expect("Can not create tmp dir");
 
     println!("{}: tmp_dir {}", file!(), tmp_dir.path().display());
     for test in &tests {

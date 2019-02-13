@@ -27,7 +27,7 @@ lazy_static = "1.0"
 [dev-dependencies]
 env_logger = "0.6"
 pulldown-cmark = "0.2.0"
-tempdir = "0.3.7"
+tempfile="3.0"
 jni-sys = "0.3.0"
 
 [build-dependencies]
