@@ -52,3 +52,11 @@ struct CResultObjectEnum {
     } data;
     uint8_t is_ok;
 };
+
+struct CResultI64Object {
+	union {
+		int64_t ok;
+		void *err;
+	} data;
+	uint8_t is_ok;
+};

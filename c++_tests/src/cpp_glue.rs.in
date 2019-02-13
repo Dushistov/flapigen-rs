@@ -597,6 +597,15 @@ impl TestResult {
             Err(ErrorEnum::B)
         }
     }
+    fn f6(is_ok: bool, val: i64) -> Result<i64, TestError> {
+        if is_ok {
+            Ok(val + 1)
+        } else {
+            Err(TestError {
+                msg: "Not ok".into(),
+            })
+        }
+    }
 }
 
 #[derive(Default)]
@@ -637,6 +646,7 @@ foreigner_class!(class TestResult {
     static_method TestResult::f3(_: bool) -> Result<Vec<Foo>, TestError>;
     static_method TestResult::f4(is_ok: bool) -> Result<Vec<u8>, TestError>;
     static_method TestResult::f5(is_ok: bool) -> Result<Foo, ErrorEnum>;
+    static_method TestResult::f6(is_ok: bool, val: i64) -> Result<i64, TestError>;
 });
 
 pub struct TestReferences {

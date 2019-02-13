@@ -53,6 +53,14 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CResultCRustForeignVecString"]
     #![swig_foreigner_type = "struct CResultObjectEnum"]
     #![swig_rust_type = "CResultObjectEnum"]
+    #![swig_foreigner_type = "struct CResultObjectObject"]
+    #![swig_rust_type = "CResultObjectObject"]
+    #![swig_foreigner_type = "struct CResultVecObjectObject"]
+    #![swig_rust_type = "CResultVecObjectObject"]
+    #![swig_foreigner_type = "struct CResultCRustVecU8Object"]
+    #![swig_rust_type = "CResultCRustVecU8Object"]
+    #![swig_foreigner_type = "struct CResultI64Object"]
+    #![swig_rust_type = "CResultI64Object"]
     #![swig_foreigner_type = "struct CRustSliceU8"]
     #![swig_rust_type = "CRustSliceU8"]
     #![swig_foreigner_type = "struct CRustSliceI32"]
@@ -81,12 +89,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustOptionStr"]
     #![swig_foreigner_type = "struct CRustOptionString"]
     #![swig_rust_type = "CRustOptionString"]
-    #![swig_foreigner_type = "struct CResultObjectObject"]
-    #![swig_rust_type = "CResultObjectObject"]
-    #![swig_foreigner_type = "struct CResultVecObjectObject"]
-    #![swig_rust_type = "CResultVecObjectObject"]
-    #![swig_foreigner_type = "struct CResultCRustVecU8Object"]
-    #![swig_rust_type = "CResultCRustVecU8Object"]
     #![swig_foreigner_type = "struct CRustObjectSlice"]
     #![swig_rust_type = "CRustObjectSlice"]
     #![swig_foreigner_type = "struct CRustObjectPair"]
@@ -1232,6 +1234,41 @@ where
             },
             Err(e) => CResultObjectEnum {
                 data: CResultObjectEnumUnion { err: e.as_u32() },
+                is_ok: 0,
+            },
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CResultI64Object {
+    data: CResultI64ObjectUnion,
+    is_ok: u8,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CResultI64ObjectUnion {
+    pub ok: i64,
+    pub err: *mut ::std::os::raw::c_void,
+}
+
+impl<ErrT> SwigFrom<Result<i64, ErrT>> for CResultI64Object
+where
+    ErrT: SwigForeignClass,
+{
+    fn swig_from(x: Result<i64, ErrT>) -> Self {
+        match x {
+            Ok(x) => CResultI64Object {
+                data: CResultI64ObjectUnion { ok: x },
+                is_ok: 1,
+            },
+            Err(e) => CResultI64Object {
+                data: CResultI64ObjectUnion {
+                    err: <ErrT>::box_object(e),
+                },
                 is_ok: 0,
             },
         }
