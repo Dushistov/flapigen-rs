@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use log::{debug, trace, warn};
+use log::{debug, log_enabled, trace, warn};
 use petgraph::{
     algo::dijkstra,
     graph::{EdgeIndex, NodeIndex},
@@ -506,7 +506,7 @@ impl TypeMap {
             if cur_step.is_empty() {
                 break;
             }
-            {
+            if log_enabled!(log::Level::Debug) {
                 use std::fmt::Write;
                 let mut step_types = String::new();
                 for from_ty in &cur_step {
@@ -567,15 +567,18 @@ impl TypeMap {
                                 goal_to_idx,
                                 build_for_sp,
                             )
-                            .unwrap();
-                            for edge in &path {
-                                if let Some((from, to)) = possible_ways_graph.edge_endpoints(*edge)
-                                {
-                                    debug!(
-                                        "path: {} -> {}",
-                                        possible_ways_graph[from].normalized_name,
-                                        possible_ways_graph[to].normalized_name
-                                    );
+                            .expect("path must exists");
+                            if log_enabled!(log::Level::Debug) {
+                                for edge in &path {
+                                    if let Some((from, to)) =
+                                        possible_ways_graph.edge_endpoints(*edge)
+                                    {
+                                        debug!(
+                                            "path: {} -> {}",
+                                            possible_ways_graph[from].normalized_name,
+                                            possible_ways_graph[to].normalized_name
+                                        );
+                                    }
                                 }
                             }
                             return Some(PossibePath {
