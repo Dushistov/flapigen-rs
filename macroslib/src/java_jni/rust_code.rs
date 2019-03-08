@@ -195,7 +195,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let decl_func_args = generate_jni_args_with_types(f_method)
             .map_err(|err| DiagnosticError::new(class.span(), &err))?;
         let real_output_typename = match method.fn_decl.output {
-            syn::ReturnType::Default => "()".to_string(),
+            syn::ReturnType::Default => "()",
             syn::ReturnType::Type(_, ref ty) => normalize_ty_lifetimes(&*ty),
         };
 

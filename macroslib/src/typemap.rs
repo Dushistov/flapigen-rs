@@ -289,7 +289,7 @@ impl TypeMap {
 
     pub(crate) fn is_ty_implements_exact(&self, ty: &Type, trait_name: &str) -> Option<RustType> {
         let ty_name = normalize_ty_lifetimes(ty);
-        if let Some(idx) = self.rust_names_map.get(&ty_name) {
+        if let Some(idx) = self.rust_names_map.get(ty_name) {
             if self.conv_graph[*idx].implements.contains(trait_name) {
                 return Some(self.conv_graph[*idx].clone());
             }
@@ -303,7 +303,7 @@ impl TypeMap {
             None => {
                 if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = ty {
                     let ty_name = normalize_ty_lifetimes(&*elem);
-                    self.rust_names_map.get(&ty_name).and_then(|idx| {
+                    self.rust_names_map.get(ty_name).and_then(|idx| {
                         if self.conv_graph[*idx].implements.contains(trait_name) {
                             Some(self.conv_graph[*idx].clone())
                         } else {
@@ -333,7 +333,7 @@ impl TypeMap {
         for fc in &self.foreign_classes {
             let self_ty = fc.self_type_name();
             trace!("self_type {}", self_ty);
-            if self_ty == type_name.as_str() {
+            if self_ty == type_name {
                 return Some(fc);
             }
         }
@@ -362,7 +362,7 @@ impl TypeMap {
 
     pub(crate) fn is_this_exported_enum(&self, ty: &Type) -> Option<&ForeignEnumInfo> {
         let type_name = normalize_ty_lifetimes(ty);
-        self.exported_enums.get(&type_name)
+        self.exported_enums.get(type_name)
     }
 
     pub(crate) fn is_generated_foreign_type(&self, foreign_name: &str) -> bool {
@@ -696,7 +696,7 @@ impl TypeMap {
         let norm_rust_typename = normalize_ty_lifetimes(rust_ty);
         debug!("map foreign: {:?} {:?}", rust_ty, direction);
         if direction == petgraph::Direction::Outgoing {
-            if let Some(foreign_name) = self.rust_to_foreign_cache.get(&norm_rust_typename) {
+            if let Some(foreign_name) = self.rust_to_foreign_cache.get(norm_rust_typename) {
                 if let Some(to) = self.foreign_names_map.get(foreign_name) {
                     let to = &self.conv_graph[*to];
                     return Some(ForeignTypeInfo {
@@ -707,7 +707,7 @@ impl TypeMap {
             }
         }
 
-        if let Some(from) = self.rust_names_map.get(&norm_rust_typename).cloned() {
+        if let Some(from) = self.rust_names_map.get(norm_rust_typename).cloned() {
             let find_path = |from, to| match find_conversation_path(
                 &self.conv_graph,
                 from,

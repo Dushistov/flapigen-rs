@@ -2,6 +2,7 @@ mod collections;
 
 use std::{
     cell::RefCell,
+    collections::HashMap,
     fmt::Display,
     hash::{Hash, Hasher},
     mem,
@@ -94,7 +95,37 @@ impl RustType {
     }
 }
 
-pub(crate) fn normalize_ty_lifetimes(ty: &syn::Type) -> String {
+struct NormalizeTyLifetimesCache {
+    inner: HashMap<syn::Type, Box<str>>,
+}
+
+impl NormalizeTyLifetimesCache {
+    fn new() -> Self {
+        NormalizeTyLifetimesCache {
+            inner: HashMap::with_capacity(100),
+        }
+    }
+    fn insert(&mut self, ty: &syn::Type, val: String) -> &'static str {
+        self.inner.insert(ty.clone(), val.into_boxed_str());
+        self.get(ty).expect("empty after insert")
+    }
+    fn get(&self, ty: &syn::Type) -> Option<&'static str> {
+        self.inner.get(ty).map(|x| unsafe { mem::transmute(&**x) })
+    }
+}
+
+fn with_normalize_ty_lifetimes_cache<T, F: FnOnce(&mut NormalizeTyLifetimesCache) -> T>(f: F) -> T {
+    thread_local!(static INTERNER: RefCell<NormalizeTyLifetimesCache> = {
+        RefCell::new(NormalizeTyLifetimesCache::new())
+    });
+    INTERNER.with(|interner| f(&mut *interner.borrow_mut()))
+}
+
+pub(crate) fn normalize_ty_lifetimes(ty: &syn::Type) -> &'static str {
+    if let Some(cached_str) = with_normalize_ty_lifetimes_cache(|cache| cache.get(ty)) {
+        return cached_str;
+    }
+
     struct StripLifetime;
     impl VisitMut for StripLifetime {
         fn visit_type_reference_mut(&mut self, i: &mut syn::TypeReference) {
@@ -125,7 +156,9 @@ pub(crate) fn normalize_ty_lifetimes(ty: &syn::Type) -> String {
     let mut strip_lifetime = StripLifetime;
     let mut new_ty = ty.clone();
     strip_lifetime.visit_type_mut(&mut new_ty);
-    new_ty.into_token_stream().to_string()
+    let type_str = new_ty.into_token_stream().to_string();
+
+    with_normalize_ty_lifetimes_cache(|cache| cache.insert(ty, type_str))
 }
 
 #[derive(Debug)]
@@ -199,8 +232,7 @@ impl GenericTypeConv {
                         let requires = &trait_bounds[idx].trait_names;
                         let val_name = normalize_ty_lifetimes(val);
 
-                        others(val_name.as_str())
-                            .map_or(true, |rt| !rt.implements.contains_subset(requires))
+                        others(val_name).map_or(true, |rt| !rt.implements.contains_subset(requires))
                     })
                 {
                     trace!("is_conv_possible: trait bounds check failed");
@@ -259,8 +291,10 @@ impl GenericTypeConv {
         } else {
             None
         };
-        let normalized_name =
-            make_unique_rust_typename_if_need(normalize_ty_lifetimes(&to_ty), to_suffix);
+        let normalized_name = make_unique_rust_typename_if_need(
+            normalize_ty_lifetimes(&to_ty).to_string(),
+            to_suffix,
+        );
         Some(RustType::new(to_ty, normalized_name))
     }
 }
@@ -945,7 +979,7 @@ mod tests {
             if_result_return_ok_err_types(&str_to_ty("Result<bool, String>"))
                 .map(|(x, y)| (normalize_ty_lifetimes(&x), normalize_ty_lifetimes(&y)))
                 .unwrap(),
-            ("bool".to_string(), "String".to_string())
+            ("bool", "String")
         );
     }
 

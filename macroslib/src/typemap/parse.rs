@@ -231,7 +231,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                 let mut attr_value_tn = TypeName::new(attr_value.value(), span);
 
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
-                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty);
+                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
                 names_map.insert(ftype, (attr_value_tn, rust_ty));
             } else {
                 return Err(DiagnosticError::new(
@@ -258,7 +258,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                 let span = attr_value.span();
                 let mut attr_value_tn = TypeName::new(attr_value.value(), span);
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
-                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty);
+                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
                 let unique_name =
                     make_unique_rust_typename(&attr_value_tn.typename, &ftype.typename);
                 names_map.insert(
@@ -494,18 +494,12 @@ fn handle_deref_impl(
     let (deref_trait, to_ref_ty) = if is_ident_ignore_params(trait_path, SWIG_DEREF_TRAIT) {
         (
             SWIG_DEREF_TRAIT,
-            parse_ty_with_given_span(
-                &format!("&{}", deref_target_name.as_str()),
-                item_impl.span(),
-            )?,
+            parse_ty_with_given_span(&format!("&{}", deref_target_name), item_impl.span())?,
         )
     } else {
         (
             SWIG_DEREF_MUT_TRAIT,
-            parse_ty_with_given_span(
-                &format!("&mut {}", deref_target_name.as_str()),
-                item_impl.span(),
-            )?,
+            parse_ty_with_given_span(&format!("&mut {}", deref_target_name), item_impl.span())?,
         )
     };
 
@@ -542,7 +536,7 @@ fn handle_deref_impl(
         });
     } else {
         let to_typename = normalize_ty_lifetimes(&to_ref_ty);
-        let to_ty = if let Some(ty_type_idx) = ret.rust_names_map.get(&to_typename) {
+        let to_ty = if let Some(ty_type_idx) = ret.rust_names_map.get(to_typename) {
             ret.conv_graph[*ty_type_idx].ty.clone()
         } else {
             to_ref_ty
@@ -724,10 +718,11 @@ fn add_conv_code(
 ) {
     let (from, from_suffix) = from;
     let from_typename =
-        make_unique_rust_typename_if_need(normalize_ty_lifetimes(&from), from_suffix);
+        make_unique_rust_typename_if_need(normalize_ty_lifetimes(&from).into(), from_suffix);
     let from: RustType = RustType::new(from, from_typename);
     let (to, to_suffix) = to;
-    let to_typename = make_unique_rust_typename_if_need(normalize_ty_lifetimes(&to), to_suffix);
+    let to_typename =
+        make_unique_rust_typename_if_need(normalize_ty_lifetimes(&to).into(), to_suffix);
     let to = RustType::new(to, to_typename);
     debug!(
         "add_conv_code from {} to {}",

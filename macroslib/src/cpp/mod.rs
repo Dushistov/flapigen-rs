@@ -640,7 +640,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let cpp_args_for_c = cpp_code::cpp_generate_args_to_call_c(f_method, false)
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
         let real_output_typename = match method.fn_decl.output {
-            syn::ReturnType::Default => "()".to_string(),
+            syn::ReturnType::Default => "()",
             syn::ReturnType::Type(_, ref t) => normalize_ty_lifetimes(&*t),
         };
 
