@@ -1,6 +1,7 @@
+mod collections;
+
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
     fmt::Display,
     hash::{Hash, Hasher},
     mem,
@@ -10,6 +11,7 @@ use std::{
 use log::{log_enabled, trace};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
+use smallvec::SmallVec;
 use syn::{
     parse_quote,
     visit::{visit_lifetime, Visit},
@@ -20,6 +22,7 @@ use syn::{
     Type,
 };
 
+use self::collections::{ImplementsSet, TraitNamesSet, TyParamsSubstItem, TyParamsSubstMap};
 use crate::typemap::{make_unique_rust_typename, make_unique_rust_typename_if_need};
 
 #[derive(Debug)]
@@ -52,7 +55,7 @@ impl TypeName {
 pub(crate) struct RustType {
     pub ty: syn::Type,
     pub normalized_name: String,
-    pub implements: HashSet<syn::Ident>,
+    pub implements: ImplementsSet,
 }
 
 impl Display for RustType {
@@ -76,20 +79,18 @@ impl RustType {
         RustType {
             ty,
             normalized_name: norm_name.into(),
-            implements: HashSet::new(),
+            implements: ImplementsSet::default(),
         }
     }
     pub(crate) fn implements(mut self, trait_name: &str) -> RustType {
         self.implements
-            .insert(syn::Ident::new(trait_name, Span::call_site()));
+            .insert(Ident::new(trait_name, Span::call_site()));
         self
     }
     pub(crate) fn merge(&mut self, other: &RustType) {
         self.ty = other.ty.clone();
         self.normalized_name = other.normalized_name.clone();
-        for trt in &other.implements {
-            self.implements.insert(trt.clone());
-        }
+        self.implements.insert_set(&other.implements);
     }
 }
 
@@ -126,8 +127,6 @@ pub(crate) fn normalize_ty_lifetimes(ty: &syn::Type) -> String {
     strip_lifetime.visit_type_mut(&mut new_ty);
     new_ty.into_token_stream().to_string()
 }
-
-type TyParamsSubstMap = HashMap<String, Option<Type>>;
 
 #[derive(Debug)]
 pub(crate) struct GenericTypeConv {
@@ -166,7 +165,7 @@ impl GenericTypeConv {
     where
         OtherRustTypes: Fn(&str) -> Option<&'a RustType>,
     {
-        let mut subst_map = TyParamsSubstMap::new();
+        let mut subst_map = TyParamsSubstMap::default();
         trace!(
             "is_conv_possible: begin generic: {:?} => from_ty: {:?} => ty: {}",
             self.generic_params,
@@ -174,7 +173,7 @@ impl GenericTypeConv {
             ty.normalized_name
         );
         for ty_p in self.generic_params.type_params() {
-            subst_map.insert(ty_p.ident.to_string(), None);
+            subst_map.insert(&ty_p.ident, None);
         }
         if !is_second_subst_of_first(&self.from_ty, &ty.ty, &mut subst_map) {
             return None;
@@ -184,22 +183,26 @@ impl GenericTypeConv {
             ty.ty,
             self.from_ty
         );
-        let trait_bounds: HashMap<String, HashSet<Ident>> =
-            get_trait_bounds_as_idents_map(&self.generic_params);
+        let trait_bounds = get_trait_bounds(&self.generic_params);
         let mut has_unbinded = false;
-        for (key, val) in &subst_map {
-            if let Some(ref val) = *val {
+        for subst_it in subst_map.as_slice() {
+            if let Some(ref val) = subst_it.ty {
                 trace!(
-                    "is_conv_possible: key={:?} val={:?}, trait_bounds {:?}",
-                    key,
-                    val,
+                    "is_conv_possible: subst_it={:?}, trait_bounds {:?}",
+                    *subst_it,
                     trait_bounds
                 );
-                if trait_bounds.get(key).map_or(false, |requires| {
-                    let val_name = normalize_ty_lifetimes(val);
+                if trait_bounds
+                    .iter()
+                    .position(|it| it.ty_param.as_ref() == subst_it.ident)
+                    .map_or(false, |idx| {
+                        let requires = &trait_bounds[idx].trait_names;
+                        let val_name = normalize_ty_lifetimes(val);
 
-                    others(val_name.as_str()).map_or(true, |rt| !requires.is_subset(&rt.implements))
-                }) {
+                        others(val_name.as_str())
+                            .map_or(true, |rt| !rt.implements.contains_subset(requires))
+                    })
+                {
                     trace!("is_conv_possible: trait bounds check failed");
                     return None;
                 }
@@ -222,10 +225,14 @@ impl GenericTypeConv {
         if let Some(ref from_foreigner_hint) = self.from_foreigner_hint {
             trace!("suffix is_conv_possible has from_foreigner_hint");
             assert_eq!(subst_map.len(), 1);
-            if let Some(&(key, &Some(ref val))) = subst_map.iter().nth(0).as_ref() {
+            if let Some(TyParamsSubstItem {
+                ident: key,
+                ty: Some(ref val),
+            }) = subst_map.as_slice().iter().nth(0).as_ref()
+            {
                 let val_name = normalize_ty_lifetimes(val);
                 let foreign_name =
-                    (*from_foreigner_hint.as_str()).replace(&*key.as_str(), &val_name);
+                    (*from_foreigner_hint.as_str()).replace(&key.to_string(), &val_name);
                 let clean_from_ty = normalize_ty_lifetimes(&self.from_ty);
                 if ty.normalized_name != make_unique_rust_typename(&clean_from_ty, &foreign_name) {
                     trace!("is_conv_possible: check failed by from_foreigner_hint check");
@@ -237,9 +244,14 @@ impl GenericTypeConv {
         let to_ty = replace_all_types_with(&self.to_ty, &subst_map);
         let to_suffix = if let Some(ref to_foreigner_hint) = self.to_foreigner_hint {
             assert_eq!(subst_map.len(), 1);
-            if let Some(&(key, &Some(ref val))) = subst_map.iter().nth(0).as_ref() {
+            if let Some(TyParamsSubstItem {
+                ident: key,
+                ty: Some(ref val),
+            }) = subst_map.as_slice().iter().nth(0).as_ref()
+            {
                 let val_name = normalize_ty_lifetimes(val);
-                let foreign_name = (*to_foreigner_hint.as_str()).replace(&*key.as_str(), &val_name);
+                let foreign_name =
+                    (*to_foreigner_hint.as_str()).replace(&key.to_string(), &val_name);
                 Some(foreign_name)
             } else {
                 None
@@ -266,7 +278,7 @@ fn is_second_subst_of_first(ty1: &Type, ty2: &Type, subst_map: &mut TyParamsSubs
                 return false;
             }
             if p1.segments.len() == 1 {
-                if let Some(subst) = subst_map.get_mut(&p1.segments[0].ident.to_string()) {
+                if let Some(subst) = subst_map.get_mut(&p1.segments[0].ident) {
                     if subst.is_none() {
                         *subst = Some(ty2.clone());
                         return true;
@@ -361,18 +373,19 @@ fn is_second_subst_of_first_ppath(
                     }
                 };
                 let type_p1_name = normalize_ty_lifetimes(type_p1);
-                let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
-                    match *subst {
-                        Some(ref x) => (*x).clone(),
-                        None => {
-                            *subst = Some(type_p2.clone());
-                            (*type_p2).clone()
-                            //return true;
+                let real_type_p1: Type =
+                    if let Some(subst) = subst_map.get_mut_by_str(&type_p1_name) {
+                        match *subst {
+                            Some(ref x) => (*x).clone(),
+                            None => {
+                                *subst = Some(type_p2.clone());
+                                (*type_p2).clone()
+                                //return true;
+                            }
                         }
-                    }
-                } else {
-                    (*type_p1).clone()
-                };
+                    } else {
+                        (*type_p1).clone()
+                    };
                 trace!("is_second_subst_of_first_ppath: go deeper");
                 if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
                     return false;
@@ -392,10 +405,10 @@ fn is_second_subst_of_first_ppath(
 }
 
 fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
-    struct ReplaceTypes<'a> {
-        subst_map: &'a TyParamsSubstMap,
+    struct ReplaceTypes<'a, 'b> {
+        subst_map: &'a TyParamsSubstMap<'b>,
     }
-    impl<'a> VisitMut for ReplaceTypes<'a> {
+    impl<'a, 'b> VisitMut for ReplaceTypes<'a, 'b> {
         fn visit_type_mut(&mut self, t: &mut Type) {
             let ty_name = normalize_ty_lifetimes(t);
             if let Some(&Some(ref subst)) = self.subst_map.get(&ty_name) {
@@ -418,39 +431,45 @@ fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
     new_ty
 }
 
+#[derive(Debug)]
+pub(crate) enum TyParamRef<'a> {
+    Ref(&'a Ident),
+    Own(Ident),
+}
+
+impl<'a> PartialEq for TyParamRef<'_> {
+    fn eq<'b>(&self, o: &TyParamRef<'b>) -> bool {
+        self.as_ref() == o.as_ref()
+    }
+}
+
+impl<'a> AsRef<Ident> for TyParamRef<'_> {
+    fn as_ref(&self) -> &Ident {
+        match self {
+            TyParamRef::Ref(x) => x,
+            TyParamRef::Own(x) => &x,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
-pub(crate) struct GenericTraitBound {
-    pub ty_param: String,
-    pub trait_names: HashSet<String>,
+pub(crate) struct GenericTraitBound<'a> {
+    pub(crate) ty_param: TyParamRef<'a>,
+    pub(crate) trait_names: TraitNamesSet<'a>,
 }
 
-pub(crate) fn get_trait_bounds_as_idents_map(
-    generic: &syn::Generics,
-) -> HashMap<String, HashSet<Ident>> {
-    get_trait_bounds(generic)
-        .into_iter()
-        .map(|v| {
-            (
-                v.ty_param,
-                v.trait_names
-                    .into_iter()
-                    .map(|x| Ident::new(&x, Span::call_site()))
-                    .collect(),
-            )
-        })
-        .collect()
-}
+pub(crate) type GenericTraitBoundVec<'a> = SmallVec<[GenericTraitBound<'a>; 10]>;
 
-pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> Vec<GenericTraitBound> {
-    let mut ret = Vec::<GenericTraitBound>::new();
+pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> GenericTraitBoundVec {
+    let mut ret = GenericTraitBoundVec::new();
 
     for ty_p in generic.type_params() {
         if ty_p.bounds.is_empty() {
             continue;
         }
         let mut ret_elem = GenericTraitBound {
-            ty_param: ty_p.ident.to_string(),
-            trait_names: HashSet::new(),
+            ty_param: TyParamRef::Ref(&ty_p.ident),
+            trait_names: TraitNamesSet::default(),
         };
 
         for bound in &ty_p.bounds {
@@ -459,9 +478,7 @@ pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> Vec<GenericTraitBound
                 ..
             }) = *bound
             {
-                ret_elem
-                    .trait_names
-                    .insert(trait_path.into_token_stream().to_string());
+                ret_elem.trait_names.insert(&trait_path);
             }
         }
         if !ret_elem.trait_names.is_empty() {
@@ -477,8 +494,11 @@ pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> Vec<GenericTraitBound
             }) = *p
             {
                 let mut ret_elem = GenericTraitBound {
-                    ty_param: normalize_ty_lifetimes(bounded_ty),
-                    trait_names: HashSet::new(),
+                    ty_param: TyParamRef::Own(Ident::new(
+                        &normalize_ty_lifetimes(bounded_ty),
+                        Span::call_site(),
+                    )),
+                    trait_names: TraitNamesSet::default(),
                 };
 
                 for bound in bounds {
@@ -487,9 +507,7 @@ pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> Vec<GenericTraitBound
                         ..
                     }) = *bound
                     {
-                        ret_elem
-                            .trait_names
-                            .insert(trait_path.into_token_stream().to_string());
+                        ret_elem.trait_names.insert(&trait_path);
                     }
                 }
                 if !ret_elem.trait_names.is_empty() {
@@ -626,6 +644,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use smallvec::smallvec;
 
     #[test]
     fn test_normalize_ty() {
@@ -860,27 +879,39 @@ mod tests {
             get_trait_bounds(&get_generic_params_from_code! {
                 impl<T> Foo for Boo {}
             }),
-            vec![]
+            GenericTraitBoundVec::new(),
         );
+
+        let moo_path: syn::Path = parse_quote! { Moo };
 
         assert_eq!(
             get_trait_bounds(&get_generic_params_from_code! {
                 impl<T: Moo> Foo for Boo {}
             }),
-            vec![GenericTraitBound {
-                ty_param: "T".into(),
-                trait_names: vec!["Moo".into()].into_iter().collect(),
-            }]
+            {
+                let mut trait_names = TraitNamesSet::default();
+                trait_names.insert(&moo_path);
+                let v: GenericTraitBoundVec = smallvec![GenericTraitBound {
+                    ty_param: TyParamRef::Own(Ident::new("T", Span::call_site())),
+                    trait_names,
+                }];
+                v
+            }
         );
 
         assert_eq!(
             get_trait_bounds(&get_generic_params_from_code! {
                 impl<T> Foo for Boo where T: Moo {}
             }),
-            vec![GenericTraitBound {
-                ty_param: "T".into(),
-                trait_names: vec!["Moo".into()].into_iter().collect(),
-            }]
+            {
+                let mut trait_names = TraitNamesSet::default();
+                trait_names.insert(&moo_path);
+                let v: GenericTraitBoundVec = smallvec![GenericTraitBound {
+                    ty_param: TyParamRef::Own(Ident::new("T", Span::call_site())),
+                    trait_names,
+                }];
+                v
+            }
         );
     }
 
@@ -946,14 +977,16 @@ mod tests {
 
     #[test]
     fn test_replace_all_types_with() {
+        let t_ident: Ident = parse_quote! { T };
+        let e_ident: Ident = parse_quote! { E };
         assert_eq!(
             {
                 let ty: Type = parse_quote! { & Vec<T> };
                 ty
             },
             replace_all_types_with(&parse_quote! { &T }, &{
-                let mut subst_map = TyParamsSubstMap::new();
-                subst_map.insert("T".into(), Some(parse_quote! { Vec<T> }));
+                let mut subst_map = TyParamsSubstMap::default();
+                subst_map.insert(&t_ident, Some(parse_quote! { Vec<T> }));
                 subst_map
             })
         );
@@ -964,9 +997,9 @@ mod tests {
                 ty
             },
             replace_all_types_with(&parse_quote! { Result<T, E> }, &{
-                let mut subst_map = TyParamsSubstMap::new();
-                subst_map.insert("T".into(), Some(parse_quote! { i32 }));
-                subst_map.insert("E".into(), Some(parse_quote! { String }));
+                let mut subst_map = TyParamsSubstMap::default();
+                subst_map.insert(&t_ident, Some(parse_quote! { i32 }));
+                subst_map.insert(&e_ident, Some(parse_quote! { String }));
                 subst_map
             })
         );

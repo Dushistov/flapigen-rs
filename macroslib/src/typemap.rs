@@ -18,8 +18,8 @@ use syn::{parse_quote, spanned::Spanned, Ident, Type};
 
 use crate::{
     ast::{
-        check_if_smart_pointer_return_inner_type, get_trait_bounds_as_idents_map,
-        normalize_ty_lifetimes, GenericTypeConv, RustType,
+        check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
+        GenericTypeConv, RustType,
     },
     error::{DiagnosticError, Result},
     ForeignEnumInfo, ForeignerClassInfo,
@@ -290,10 +290,7 @@ impl TypeMap {
     pub(crate) fn is_ty_implements_exact(&self, ty: &Type, trait_name: &str) -> Option<RustType> {
         let ty_name = normalize_ty_lifetimes(ty);
         if let Some(idx) = self.rust_names_map.get(&ty_name) {
-            if self.conv_graph[*idx]
-                .implements
-                .contains(&Ident::new(trait_name, Span::call_site()))
-            {
+            if self.conv_graph[*idx].implements.contains(trait_name) {
                 return Some(self.conv_graph[*idx].clone());
             }
         }
@@ -307,10 +304,7 @@ impl TypeMap {
                 if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = ty {
                     let ty_name = normalize_ty_lifetimes(&*elem);
                     self.rust_names_map.get(&ty_name).and_then(|idx| {
-                        if self.conv_graph[*idx]
-                            .implements
-                            .contains(&Ident::new(trait_name, Span::call_site()))
-                        {
+                        if self.conv_graph[*idx].implements.contains(trait_name) {
                             Some(self.conv_graph[*idx].clone())
                         } else {
                             None
@@ -765,22 +759,21 @@ impl TypeMap {
         let mut new_foreign_types = HashSet::new();
         for edge in &self.generic_edges {
             if let Some(ref to_foreigner_hint) = edge.to_foreigner_hint {
-                let trait_bounds: HashMap<String, HashSet<Ident>> =
-                    get_trait_bounds_as_idents_map(&edge.generic_params);
+                let trait_bounds = get_trait_bounds(&edge.generic_params);
                 for graph_idx in self.rust_names_map.values() {
-                    for (ty_param, traits) in &trait_bounds {
+                    for trait_bound in &trait_bounds {
                         let rust_ty = &self.conv_graph[*graph_idx];
-                        if traits.is_subset(&rust_ty.implements) {
+                        if rust_ty.implements.contains_subset(&trait_bound.trait_names) {
                             if let Some(class) =
                                 self.find_foreigner_class_with_such_this_type(&rust_ty.ty)
                             {
-                                let suffix = to_foreigner_hint.as_str().replace(
-                                    &*ty_param.as_str(),
-                                    &*rust_ty.normalized_name.as_str(),
-                                );
+                                let ty_param_name = trait_bound.ty_param.as_ref().to_string();
+                                let suffix = to_foreigner_hint
+                                    .as_str()
+                                    .replace(&ty_param_name, &*rust_ty.normalized_name.as_str());
                                 let foreign_name = to_foreigner_hint
                                     .as_str()
-                                    .replace(&*ty_param.as_str(), &*class.name.to_string());
+                                    .replace(&ty_param_name, &*class.name.to_string());
                                 new_foreign_types.insert((
                                     edge.to_ty.clone(),
                                     suffix,
