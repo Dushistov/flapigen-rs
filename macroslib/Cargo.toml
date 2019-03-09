@@ -24,6 +24,7 @@ petgraph = "0.4.13"
 bitflags = "1.0"
 lazy_static = "1.0"
 smallvec = "0.6.9"
+rustc-hash = "1.0.1"
 
 [dev-dependencies]
 env_logger = "0.6"

@@ -1,9 +1,4 @@
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-    fmt, mem,
-    rc::Rc,
-};
+use std::{cell::RefCell, fmt, mem, rc::Rc};
 
 use log::{debug, log_enabled, trace, warn};
 use petgraph::{
@@ -14,6 +9,7 @@ use petgraph::{
 };
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
+use rustc_hash::{FxHashMap, FxHashSet};
 use syn::{parse_quote, spanned::Spanned, Ident, Type};
 
 use crate::{
@@ -69,14 +65,14 @@ pub(crate) trait ForeignMethodSignature {
 #[derive(Debug)]
 pub(crate) struct TypeMap {
     conv_graph: TypesConvGraph,
-    foreign_names_map: HashMap<String, NodeIndex<TypeGraphIdx>>,
-    rust_names_map: HashMap<String, NodeIndex<TypeGraphIdx>>,
+    foreign_names_map: FxHashMap<String, NodeIndex<TypeGraphIdx>>,
+    rust_names_map: FxHashMap<String, NodeIndex<TypeGraphIdx>>,
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
-    rust_to_foreign_cache: HashMap<String, String>,
+    rust_to_foreign_cache: FxHashMap<String, String>,
     foreign_classes: Vec<ForeignerClassInfo>,
-    exported_enums: HashMap<String, ForeignEnumInfo>,
-    traits_usage_code: HashMap<Ident, String>,
+    exported_enums: FxHashMap<String, ForeignEnumInfo>,
+    traits_usage_code: FxHashMap<Ident, String>,
 }
 
 impl Default for TypeMap {
@@ -126,14 +122,14 @@ impl Default for TypeMap {
         ];
         TypeMap {
             conv_graph: TypesConvGraph::new(),
-            foreign_names_map: HashMap::new(),
-            rust_names_map: HashMap::new(),
+            foreign_names_map: FxHashMap::default(),
+            rust_names_map: FxHashMap::default(),
             utils_code: Vec::new(),
             generic_edges: default_rules,
-            rust_to_foreign_cache: HashMap::new(),
+            rust_to_foreign_cache: FxHashMap::default(),
             foreign_classes: Vec::new(),
-            exported_enums: HashMap::new(),
-            traits_usage_code: HashMap::new(),
+            exported_enums: FxHashMap::default(),
+            traits_usage_code: FxHashMap::default(),
         }
     }
 }
@@ -490,9 +486,9 @@ impl TypeMap {
             (*goal_to).clone(),
         );
 
-        let mut cur_step = HashSet::new();
+        let mut cur_step = FxHashSet::default();
         cur_step.insert(start_from_idx);
-        let mut next_step = HashSet::new();
+        let mut next_step = FxHashSet::default();
 
         const MAX_STEPS: usize = 7;
         for step in 0..MAX_STEPS {
@@ -610,7 +606,7 @@ impl TypeMap {
         target_pointer_width: usize,
     ) -> Result<()> {
         debug!("merging {} with our rules", id_of_code);
-        let mut was_traits_usage_code = HashMap::new();
+        let mut was_traits_usage_code = FxHashMap::default();
         mem::swap(&mut was_traits_usage_code, &mut self.traits_usage_code);
         let mut new_data = parse::parse(
             id_of_code,
@@ -756,7 +752,7 @@ impl TypeMap {
             rust_ty
         );
 
-        let mut new_foreign_types = HashSet::new();
+        let mut new_foreign_types = FxHashSet::default();
         for edge in &self.generic_edges {
             if let Some(ref to_foreigner_hint) = edge.to_foreigner_hint {
                 let trait_bounds = get_trait_bounds(&edge.generic_params);
@@ -983,7 +979,7 @@ fn merge_path_to_conv_map(path: PossibePath, conv_map: &mut TypeMap) {
 
 fn get_graph_node(
     graph: &mut TypesConvGraph,
-    names_to_graph_map: &mut HashMap<String, NodeIndex<TypeGraphIdx>>,
+    names_to_graph_map: &mut FxHashMap<String, NodeIndex<TypeGraphIdx>>,
     rty: RustType,
 ) -> NodeIndex<TypeGraphIdx> {
     *names_to_graph_map
@@ -1050,14 +1046,14 @@ fn helper3() {
             .unwrap();
         assert_eq!(
             {
-                let mut set = HashSet::new();
+                let mut set = FxHashSet::default();
                 for k in types_map.foreign_names_map.keys() {
                     set.insert(k.clone());
                 }
                 set
             },
             {
-                let mut set = HashSet::new();
+                let mut set = FxHashSet::default();
                 set.insert("boolean".to_string());
                 set.insert("int".to_string());
                 set

@@ -24,7 +24,6 @@ mod typemap;
 
 use std::{
     cell::RefCell,
-    collections::HashSet,
     env,
     io::Write,
     mem,
@@ -35,6 +34,7 @@ use std::{
 use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
+use rustc_hash::FxHashSet;
 use syn::{parse_quote, spanned::Spanned, Token, Type};
 
 use crate::{
@@ -103,7 +103,7 @@ pub struct CppConfig {
     namespace_name: String,
     cpp_optional: CppOptional,
     cpp_variant: CppVariant,
-    generated_helper_files: RefCell<HashSet<PathBuf>>,
+    generated_helper_files: RefCell<FxHashSet<PathBuf>>,
     to_generate: RefCell<Vec<TokenStream>>,
 }
 
@@ -134,7 +134,7 @@ impl CppConfig {
             namespace_name,
             cpp_optional: CppOptional::Std17,
             cpp_variant: CppVariant::Std17,
-            generated_helper_files: RefCell::new(HashSet::new()),
+            generated_helper_files: RefCell::new(FxHashSet::default()),
             to_generate: RefCell::new(vec![]),
         }
     }

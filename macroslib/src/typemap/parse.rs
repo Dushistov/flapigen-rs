@@ -1,8 +1,9 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
+use std::{cell::RefCell, rc::Rc, str::FromStr};
 
 use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
+use rustc_hash::FxHashMap;
 use syn::{
     parse_quote,
     punctuated::Punctuated,
@@ -38,13 +39,13 @@ static SWIG_DEREF_TRAIT: &str = "SwigDeref";
 static SWIG_DEREF_MUT_TRAIT: &str = "SwigDerefMut";
 static TARGET_ASSOC_TYPE: &str = "Target";
 
-type MyAttrs = HashMap<String, Vec<(String, Span)>>;
+type MyAttrs = FxHashMap<String, Vec<(String, Span)>>;
 
 pub(in crate::typemap) fn parse(
     name: &str,
     code: &str,
     target_pointer_width: usize,
-    traits_usage_code: HashMap<Ident, String>,
+    traits_usage_code: FxHashMap<Ident, String>,
 ) -> Result<TypeMap> {
     let mut ret = do_parse(code, target_pointer_width, traits_usage_code);
     if let Err(ref mut err) = ret {
@@ -56,7 +57,7 @@ pub(in crate::typemap) fn parse(
 fn do_parse(
     code: &str,
     target_pointer_width: usize,
-    traits_usage_code: HashMap<Ident, String>,
+    traits_usage_code: FxHashMap<Ident, String>,
 ) -> Result<TypeMap> {
     let file = syn::parse_str::<syn::File>(code)?;
 
@@ -66,13 +67,13 @@ fn do_parse(
 
     let mut ret = TypeMap {
         conv_graph: TypesConvGraph::new(),
-        foreign_names_map: HashMap::new(),
-        rust_names_map: HashMap::new(),
+        foreign_names_map: FxHashMap::default(),
+        rust_names_map: FxHashMap::default(),
         utils_code: Vec::with_capacity(file.items.len()),
         generic_edges: Vec::<GenericTypeConv>::new(),
-        rust_to_foreign_cache: HashMap::new(),
+        rust_to_foreign_cache: FxHashMap::default(),
         foreign_classes: Vec::new(),
-        exported_enums: HashMap::new(),
+        exported_enums: FxHashMap::default(),
         traits_usage_code,
     };
 
@@ -195,7 +196,7 @@ struct TypeNamesMapEntry {
 fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>> {
     let mut ftype: Option<TypeName> = None;
 
-    let mut names_map = HashMap::<TypeName, (TypeName, Type)>::new();
+    let mut names_map = FxHashMap::<TypeName, (TypeName, Type)>::default();
 
     for a in &item.attrs {
         if a.path.is_ident(SWIG_FOREIGNER_TYPE) {
@@ -332,7 +333,7 @@ fn my_syn_attrs_to_hashmap(attrs: &[syn::Attribute]) -> Result<MyAttrs> {
         SWIG_FROM_ATTR_NAME,
         SWIG_TO_ATTR_NAME,
     ];
-    let mut ret = HashMap::new();
+    let mut ret = FxHashMap::default();
     for a in attrs {
         if KNOWN_SWIG_ATTRS.iter().any(|x| a.path.is_ident(x)) {
             let meta = a.parse_meta()?;
@@ -787,9 +788,8 @@ impl VisitMut for FilterSwigAttrs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
-
     use quote::quote;
+    use rustc_hash::FxHashSet;
     use syn::parse_quote;
 
     #[test]
@@ -806,19 +806,19 @@ mod swig_foreign_types_map {
 }
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap();
 
         assert_eq!(
             {
-                let mut set = HashSet::new();
+                let mut set = FxHashSet::default();
                 set.insert(("boolean".to_string(), "jboolean"));
                 set.insert(("int".to_string(), "jint"));
                 set
             },
             {
-                let mut set = HashSet::new();
+                let mut set = FxHashSet::default();
                 for (k, v) in types_map.foreign_names_map {
                     set.insert((k, types_map.conv_graph[v].normalized_name.as_str()));
                 }
@@ -869,7 +869,7 @@ mod swig_foreign_types_map {}
 mod swig_foreign_types_map {}
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap_err();
     }
@@ -1040,7 +1040,7 @@ impl SwigFrom<bool> for jboolean {
 }
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap();
 
@@ -1091,7 +1091,7 @@ impl SwigDeref for String {
 }
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap();
 
@@ -1152,7 +1152,7 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
 }
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap();
 
@@ -1223,7 +1223,7 @@ macro_rules! jni_unpack_return {
 }
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap();
 

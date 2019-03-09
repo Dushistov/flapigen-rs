@@ -2,7 +2,6 @@ mod collections;
 
 use std::{
     cell::RefCell,
-    collections::HashMap,
     fmt::Display,
     hash::{Hash, Hasher},
     mem,
@@ -12,6 +11,7 @@ use std::{
 use log::{log_enabled, trace};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
+use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use syn::{
     parse_quote,
@@ -96,13 +96,13 @@ impl RustType {
 }
 
 struct NormalizeTyLifetimesCache {
-    inner: HashMap<syn::Type, Box<str>>,
+    inner: FxHashMap<syn::Type, Box<str>>,
 }
 
 impl NormalizeTyLifetimesCache {
     fn new() -> Self {
         NormalizeTyLifetimesCache {
-            inner: HashMap::with_capacity(100),
+            inner: FxHashMap::default(),
         }
     }
     fn insert(&mut self, ty: &syn::Type, val: String) -> &'static str {
