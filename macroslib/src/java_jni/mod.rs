@@ -7,6 +7,7 @@ use log::{debug, trace};
 use petgraph::Direction;
 use proc_macro2::TokenStream;
 use quote::quote;
+use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
@@ -22,7 +23,7 @@ use crate::{
 
 struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,
-    pub java_transition_type: Option<String>,
+    pub java_transition_type: Option<SmolStr>,
     java_converter: String,
 }
 
