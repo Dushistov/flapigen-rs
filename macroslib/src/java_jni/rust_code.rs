@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use proc_macro2::TokenStream;
 use quote::quote;
+use rustc_hash::FxHashMap;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
@@ -42,7 +41,7 @@ pub(in crate::java_jni) fn generate_rust_code(
     f_methods_sign: &[JniForeignMethodSignature],
 ) -> Result<Vec<TokenStream>> {
     //to handle java method overload
-    let mut gen_fnames = HashMap::<String, usize>::new();
+    let mut gen_fnames = FxHashMap::<String, usize>::default();
     for (method, f_method) in class.methods.iter().zip(f_methods_sign.iter()) {
         let val_ref = gen_fnames.entry(method_name(method, f_method));
         *val_ref.or_insert(0) += 1;
@@ -195,7 +194,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let decl_func_args = generate_jni_args_with_types(f_method)
             .map_err(|err| DiagnosticError::new(class.span(), &err))?;
         let real_output_typename = match method.fn_decl.output {
-            syn::ReturnType::Default => "()".to_string(),
+            syn::ReturnType::Default => "()",
             syn::ReturnType::Type(_, ref ty) => normalize_ty_lifetimes(&*ty),
         };
 
@@ -261,7 +260,7 @@ May be you need to use `private constructor = empty;` syntax?",
             "do_delete",
             &JniForeignMethodSignature {
                 output: ForeignTypeInfo {
-                    name: String::new(),
+                    name: "".into(),
                     correspoding_rust_type: dummy_ty.into(),
                 },
                 input: vec![],
@@ -535,8 +534,8 @@ impl {trait_name} for JavaCallback {{
 }
 
 lazy_static! {
-    static ref JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE: HashMap<&'static str, &'static str> = {
-        let mut m = HashMap::new();
+    static ref JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE: FxHashMap<&'static str, &'static str> = {
+        let mut m = FxHashMap::default();
         m.insert("String", "Ljava.lang.String;");
         m.insert("Integer", "Ljava.lang.Integer");
         m.insert("Long", "Ljava.lang.Long");
@@ -553,8 +552,8 @@ lazy_static! {
         m.insert("void", "V");
         m
     };
-    static ref JNI_FOR_VARIADIC_C_FUNC_CALL: HashMap<&'static str, &'static str> = {
-        let mut m = HashMap::new();
+    static ref JNI_FOR_VARIADIC_C_FUNC_CALL: FxHashMap<&'static str, &'static str> = {
+        let mut m = FxHashMap::default();
         m.insert("jboolean", "::std::os::raw::c_uint");
         m.insert("jbyte", "::std::os::raw::c_int");
         m.insert("jshort", "::std::os::raw::c_int");
@@ -595,10 +594,10 @@ fn generate_jni_func_name(
             let type_name = if arg.java_need_conversation() {
                 arg.java_transition_type.as_ref().unwrap()
             } else {
-                &arg.as_ref().name
+                arg.as_ref().name.as_str()
             };
             let type_name = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-                .get(&*type_name.as_str())
+                .get(type_name)
                 .ok_or_else(|| {
                     DiagnosticError::new(
                         class.span(),

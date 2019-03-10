@@ -1,8 +1,9 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
+use std::{cell::RefCell, rc::Rc, str::FromStr};
 
 use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
+use rustc_hash::FxHashMap;
 use syn::{
     parse_quote,
     punctuated::Punctuated,
@@ -38,13 +39,13 @@ static SWIG_DEREF_TRAIT: &str = "SwigDeref";
 static SWIG_DEREF_MUT_TRAIT: &str = "SwigDerefMut";
 static TARGET_ASSOC_TYPE: &str = "Target";
 
-type MyAttrs = HashMap<String, Vec<(String, Span)>>;
+type MyAttrs = FxHashMap<String, Vec<(String, Span)>>;
 
 pub(in crate::typemap) fn parse(
     name: &str,
     code: &str,
     target_pointer_width: usize,
-    traits_usage_code: HashMap<Ident, String>,
+    traits_usage_code: FxHashMap<Ident, String>,
 ) -> Result<TypeMap> {
     let mut ret = do_parse(code, target_pointer_width, traits_usage_code);
     if let Err(ref mut err) = ret {
@@ -56,7 +57,7 @@ pub(in crate::typemap) fn parse(
 fn do_parse(
     code: &str,
     target_pointer_width: usize,
-    traits_usage_code: HashMap<Ident, String>,
+    traits_usage_code: FxHashMap<Ident, String>,
 ) -> Result<TypeMap> {
     let file = syn::parse_str::<syn::File>(code)?;
 
@@ -66,13 +67,13 @@ fn do_parse(
 
     let mut ret = TypeMap {
         conv_graph: TypesConvGraph::new(),
-        foreign_names_map: HashMap::new(),
-        rust_names_map: HashMap::new(),
+        foreign_names_map: FxHashMap::default(),
+        rust_names_map: FxHashMap::default(),
         utils_code: Vec::with_capacity(file.items.len()),
         generic_edges: Vec::<GenericTypeConv>::new(),
-        rust_to_foreign_cache: HashMap::new(),
+        rust_to_foreign_cache: FxHashMap::default(),
         foreign_classes: Vec::new(),
-        exported_enums: HashMap::new(),
+        exported_enums: FxHashMap::default(),
         traits_usage_code,
     };
 
@@ -195,7 +196,7 @@ struct TypeNamesMapEntry {
 fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>> {
     let mut ftype: Option<TypeName> = None;
 
-    let mut names_map = HashMap::<TypeName, (TypeName, Type)>::new();
+    let mut names_map = FxHashMap::<TypeName, (TypeName, Type)>::default();
 
     for a in &item.attrs {
         if a.path.is_ident(SWIG_FOREIGNER_TYPE) {
@@ -205,7 +206,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                 ..
             }) = meta_attr
             {
-                ftype = Some(TypeName::new(value.value(), value.span()));
+                ftype = Some(TypeName::new(value.value().into(), value.span()));
             } else {
                 return Err(DiagnosticError::new(
                     meta_attr.span(),
@@ -228,10 +229,10 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     ));
                 };
                 let span = attr_value.span();
-                let mut attr_value_tn = TypeName::new(attr_value.value(), span);
+                let mut attr_value_tn = TypeName::new(attr_value.value().into(), span);
 
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
-                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty);
+                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
                 names_map.insert(ftype, (attr_value_tn, rust_ty));
             } else {
                 return Err(DiagnosticError::new(
@@ -256,14 +257,17 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     ));
                 };
                 let span = attr_value.span();
-                let mut attr_value_tn = TypeName::new(attr_value.value(), span);
+                let mut attr_value_tn = TypeName::new(attr_value.value().into(), span);
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
-                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty);
+                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
                 let unique_name =
                     make_unique_rust_typename(&attr_value_tn.typename, &ftype.typename);
                 names_map.insert(
                     ftype,
-                    (TypeName::new(unique_name, Span::call_site()), rust_ty),
+                    (
+                        TypeName::new(unique_name.into(), Span::call_site()),
+                        rust_ty,
+                    ),
                 );
             } else {
                 return Err(DiagnosticError::new(
@@ -332,7 +336,7 @@ fn my_syn_attrs_to_hashmap(attrs: &[syn::Attribute]) -> Result<MyAttrs> {
         SWIG_FROM_ATTR_NAME,
         SWIG_TO_ATTR_NAME,
     ];
-    let mut ret = HashMap::new();
+    let mut ret = FxHashMap::default();
     for a in attrs {
         if KNOWN_SWIG_ATTRS.iter().any(|x| a.path.is_ident(x)) {
             let meta = a.parse_meta()?;
@@ -494,18 +498,12 @@ fn handle_deref_impl(
     let (deref_trait, to_ref_ty) = if is_ident_ignore_params(trait_path, SWIG_DEREF_TRAIT) {
         (
             SWIG_DEREF_TRAIT,
-            parse_ty_with_given_span(
-                &format!("&{}", deref_target_name.as_str()),
-                item_impl.span(),
-            )?,
+            parse_ty_with_given_span(&format!("&{}", deref_target_name), item_impl.span())?,
         )
     } else {
         (
             SWIG_DEREF_MUT_TRAIT,
-            parse_ty_with_given_span(
-                &format!("&mut {}", deref_target_name.as_str()),
-                item_impl.span(),
-            )?,
+            parse_ty_with_given_span(&format!("&mut {}", deref_target_name), item_impl.span())?,
         )
     };
 
@@ -542,7 +540,7 @@ fn handle_deref_impl(
         });
     } else {
         let to_typename = normalize_ty_lifetimes(&to_ref_ty);
-        let to_ty = if let Some(ty_type_idx) = ret.rust_names_map.get(&to_typename) {
+        let to_ty = if let Some(ty_type_idx) = ret.rust_names_map.get(to_typename) {
             ret.conv_graph[*ty_type_idx].ty.clone()
         } else {
             to_ref_ty
@@ -724,10 +722,11 @@ fn add_conv_code(
 ) {
     let (from, from_suffix) = from;
     let from_typename =
-        make_unique_rust_typename_if_need(normalize_ty_lifetimes(&from), from_suffix);
+        make_unique_rust_typename_if_need(normalize_ty_lifetimes(&from).into(), from_suffix);
     let from: RustType = RustType::new(from, from_typename);
     let (to, to_suffix) = to;
-    let to_typename = make_unique_rust_typename_if_need(normalize_ty_lifetimes(&to), to_suffix);
+    let to_typename =
+        make_unique_rust_typename_if_need(normalize_ty_lifetimes(&to).into(), to_suffix);
     let to = RustType::new(to, to_typename);
     debug!(
         "add_conv_code from {} to {}",
@@ -792,9 +791,8 @@ impl VisitMut for FilterSwigAttrs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
-
     use quote::quote;
+    use rustc_hash::FxHashSet;
     use syn::parse_quote;
 
     #[test]
@@ -811,19 +809,19 @@ mod swig_foreign_types_map {
 }
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap();
 
         assert_eq!(
             {
-                let mut set = HashSet::new();
-                set.insert(("boolean".to_string(), "jboolean"));
-                set.insert(("int".to_string(), "jint"));
+                let mut set = FxHashSet::default();
+                set.insert(("boolean".into(), "jboolean"));
+                set.insert(("int".into(), "jint"));
                 set
             },
             {
-                let mut set = HashSet::new();
+                let mut set = FxHashSet::default();
                 for (k, v) in types_map.foreign_names_map {
                     set.insert((k, types_map.conv_graph[v].normalized_name.as_str()));
                 }
@@ -850,9 +848,9 @@ mod swig_foreign_types_map {
         let map = parse_foreign_types_map_mod(&mod_item).unwrap();
         assert_eq!(
             vec![
-                ("boolean".to_string(), "jboolean".to_string()),
-                ("int".to_string(), "jint".to_string()),
-                ("short".to_string(), "jshort".to_string()),
+                ("boolean".into(), "jboolean".into()),
+                ("int".into(), "jint".into()),
+                ("short".into(), "jshort".into()),
             ],
             {
                 let mut ret = map
@@ -874,7 +872,7 @@ mod swig_foreign_types_map {}
 mod swig_foreign_types_map {}
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap_err();
     }
@@ -907,7 +905,7 @@ mod swig_foreign_types_map {}
             }
         };
         assert_eq!(
-            vec![("swig_to_foreigner_hint".to_string(), vec!["T".to_string()])],
+            vec![("swig_to_foreigner_hint".into(), vec!["T".into()])],
             my_syn_attrs_to_hashmap(&item_impl.attrs)
                 .unwrap()
                 .into_iter()
@@ -928,12 +926,12 @@ mod swig_foreign_types_map {}
         assert_eq!(
             {
                 let mut v = vec![
-                    ("swig_to_foreigner_hint".to_string(), vec!["T".to_string()]),
+                    ("swig_to_foreigner_hint".into(), vec!["T".into()]),
                     (
-                        "swig_code".to_string(),
+                        "swig_code".into(),
                         vec![
                         "let mut {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var});"
-                            .to_string()
+                            .into()
                     ],
                     ),
                 ];
@@ -1045,7 +1043,7 @@ impl SwigFrom<bool> for jboolean {
 }
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap();
 
@@ -1096,7 +1094,7 @@ impl SwigDeref for String {
 }
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap();
 
@@ -1157,7 +1155,7 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
 }
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap();
 
@@ -1228,7 +1226,7 @@ macro_rules! jni_unpack_return {
 }
 "#,
             64,
-            HashMap::new(),
+            FxHashMap::default(),
         )
         .unwrap();
 

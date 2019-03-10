@@ -23,6 +23,9 @@ log = "0.4.6"
 petgraph = "0.4.13"
 bitflags = "1.0"
 lazy_static = "1.0"
+smallvec = "0.6.9"
+rustc-hash = "1.0.1"
+smol_str = { git = "https://github.com/Dushistov/smol_str", rev = "ce9802618bf1fa093fcd777a7bac41752cc3e5c9" }
 
 [dev-dependencies]
 env_logger = "0.6"

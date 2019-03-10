@@ -11,6 +11,7 @@ use log::{debug, trace};
 use petgraph::Direction;
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
+use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
@@ -35,7 +36,7 @@ use crate::{
 
 #[derive(Debug)]
 struct CppConverter {
-    typename: String,
+    typename: SmolStr,
     output_converter: String,
     input_converter: String,
 }
@@ -124,7 +125,7 @@ impl LanguageGenerator for CppConfig {
                 &this_type,
                 ForeignTypeInfo {
                     correspoding_rust_type: my_void_ptr_ti,
-                    name: foreign_typename,
+                    name: foreign_typename.into(),
                 },
             );
 
@@ -141,7 +142,7 @@ impl LanguageGenerator for CppConfig {
                 &this_type,
                 ForeignTypeInfo {
                     correspoding_rust_type: my_const_void_ptr_ti,
-                    name: const_foreign_typename,
+                    name: const_foreign_typename.into(),
                 },
             );
 
@@ -262,7 +263,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let rust_ty: Type = syn::parse_str(&rust_struct_pointer)?;
         let c_struct_pointer = format!("const struct {} * const", c_struct_name);
 
-        conv_map.add_foreign(rust_ty.into(), c_struct_pointer);
+        conv_map.add_foreign(rust_ty.into(), c_struct_pointer.into());
 
         Ok(items)
     }
@@ -313,7 +314,7 @@ fn find_suitable_foreign_types_for_methods(
         }
         let output: CppForeignTypeInfo = match method.variant {
             MethodVariant::Constructor => ForeignTypeInfo {
-                name: String::new(),
+                name: "".into(),
                 correspoding_rust_type: dummy_ty.clone().into(),
             }
             .into(),
@@ -640,7 +641,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let cpp_args_for_c = cpp_code::cpp_generate_args_to_call_c(f_method, false)
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
         let real_output_typename = match method.fn_decl.output {
-            syn::ReturnType::Default => "()".to_string(),
+            syn::ReturnType::Default => "()",
             syn::ReturnType::Type(_, ref t) => normalize_ty_lifetimes(&*t),
         };
 

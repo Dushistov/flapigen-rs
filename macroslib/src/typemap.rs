@@ -1,11 +1,9 @@
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-    fmt, mem,
-    rc::Rc,
-};
+mod parse;
+pub mod utils;
 
-use log::{debug, trace, warn};
+use std::{cell::RefCell, fmt, mem, rc::Rc};
+
+use log::{debug, log_enabled, trace, warn};
 use petgraph::{
     algo::dijkstra,
     graph::{EdgeIndex, NodeIndex},
@@ -14,19 +12,19 @@ use petgraph::{
 };
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
+use rustc_hash::{FxHashMap, FxHashSet};
+use smallvec::SmallVec;
+use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Ident, Type};
 
 use crate::{
     ast::{
-        check_if_smart_pointer_return_inner_type, get_trait_bounds_as_idents_map,
-        normalize_ty_lifetimes, GenericTypeConv, RustType,
+        check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
+        GenericTypeConv, RustType,
     },
     error::{DiagnosticError, Result},
     ForeignEnumInfo, ForeignerClassInfo,
 };
-
-mod parse;
-pub mod utils;
 
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
@@ -69,14 +67,14 @@ pub(crate) trait ForeignMethodSignature {
 #[derive(Debug)]
 pub(crate) struct TypeMap {
     conv_graph: TypesConvGraph,
-    foreign_names_map: HashMap<String, NodeIndex<TypeGraphIdx>>,
-    rust_names_map: HashMap<String, NodeIndex<TypeGraphIdx>>,
+    foreign_names_map: FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
+    rust_names_map: FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
-    rust_to_foreign_cache: HashMap<String, String>,
+    rust_to_foreign_cache: FxHashMap<SmolStr, SmolStr>,
     foreign_classes: Vec<ForeignerClassInfo>,
-    exported_enums: HashMap<String, ForeignEnumInfo>,
-    traits_usage_code: HashMap<Ident, String>,
+    exported_enums: FxHashMap<SmolStr, ForeignEnumInfo>,
+    traits_usage_code: FxHashMap<Ident, String>,
 }
 
 impl Default for TypeMap {
@@ -126,14 +124,14 @@ impl Default for TypeMap {
         ];
         TypeMap {
             conv_graph: TypesConvGraph::new(),
-            foreign_names_map: HashMap::new(),
-            rust_names_map: HashMap::new(),
+            foreign_names_map: FxHashMap::default(),
+            rust_names_map: FxHashMap::default(),
             utils_code: Vec::new(),
             generic_edges: default_rules,
-            rust_to_foreign_cache: HashMap::new(),
+            rust_to_foreign_cache: FxHashMap::default(),
             foreign_classes: Vec::new(),
-            exported_enums: HashMap::new(),
-            traits_usage_code: HashMap::new(),
+            exported_enums: FxHashMap::default(),
+            traits_usage_code: FxHashMap::default(),
         }
     }
 }
@@ -167,13 +165,59 @@ struct PossibePath {
 
 #[derive(Debug)]
 pub(crate) struct ForeignTypeInfo {
-    pub name: String,
+    pub name: SmolStr,
     pub correspoding_rust_type: RustType,
 }
 
 impl AsRef<ForeignTypeInfo> for ForeignTypeInfo {
     fn as_ref(&self) -> &ForeignTypeInfo {
         self
+    }
+}
+
+struct TypeGraphSnapshot<'a> {
+    conv_graph: &'a mut TypesConvGraph,
+    new_nodes: SmallVec<[NodeIndex<TypeGraphIdx>; 32]>,
+}
+
+impl<'a> TypeGraphSnapshot<'a> {
+    fn new(conv_graph: &'a mut TypesConvGraph) -> Self {
+        TypeGraphSnapshot {
+            conv_graph,
+            new_nodes: SmallVec::new(),
+        }
+    }
+
+    fn node_for_ty(
+        &mut self,
+        names_to_graph_map: &mut FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
+        rty: &RustType,
+    ) -> NodeIndex<TypeGraphIdx> {
+        let graph = &mut self.conv_graph;
+        let mut new_node = false;
+        let idx = *names_to_graph_map
+            .entry(rty.normalized_name.clone())
+            .or_insert_with(|| {
+                new_node = true;
+                graph.add_node(rty.clone())
+            });
+        if new_node {
+            self.new_nodes.push(idx);
+        }
+        idx
+    }
+
+    fn into_graph(mut self) -> TypesConvGraph {
+        self.new_nodes.clear();
+        self.conv_graph.clone()
+    }
+}
+
+impl<'a> Drop for TypeGraphSnapshot<'a> {
+    fn drop(&mut self) {
+        for idx in self.new_nodes.iter().rev() {
+            self.conv_graph.remove_node(*idx);
+        }
     }
 }
 
@@ -188,7 +232,7 @@ impl TypeMap {
         ret
     }
 
-    pub(crate) fn add_foreign(&mut self, correspoding_rty: RustType, foreign_name: String) {
+    pub(crate) fn add_foreign(&mut self, correspoding_rty: RustType, foreign_name: SmolStr) {
         let idx = self.add_type(correspoding_rty);
         self.foreign_names_map.insert(foreign_name, idx);
     }
@@ -199,7 +243,7 @@ impl TypeMap {
         self.foreign_names_map
             .get(foreign_name)
             .map(|x| ForeignTypeInfo {
-                name: foreign_name.to_string(),
+                name: foreign_name.into(),
                 correspoding_rust_type: self.conv_graph[*x].clone(),
             })
     }
@@ -289,11 +333,8 @@ impl TypeMap {
 
     pub(crate) fn is_ty_implements_exact(&self, ty: &Type, trait_name: &str) -> Option<RustType> {
         let ty_name = normalize_ty_lifetimes(ty);
-        if let Some(idx) = self.rust_names_map.get(&ty_name) {
-            if self.conv_graph[*idx]
-                .implements
-                .contains(&Ident::new(trait_name, Span::call_site()))
-            {
+        if let Some(idx) = self.rust_names_map.get(ty_name) {
+            if self.conv_graph[*idx].implements.contains(trait_name) {
                 return Some(self.conv_graph[*idx].clone());
             }
         }
@@ -306,11 +347,8 @@ impl TypeMap {
             None => {
                 if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = ty {
                     let ty_name = normalize_ty_lifetimes(&*elem);
-                    self.rust_names_map.get(&ty_name).and_then(|idx| {
-                        if self.conv_graph[*idx]
-                            .implements
-                            .contains(&Ident::new(trait_name, Span::call_site()))
-                        {
+                    self.rust_names_map.get(ty_name).and_then(|idx| {
+                        if self.conv_graph[*idx].implements.contains(trait_name) {
                             Some(self.conv_graph[*idx].clone())
                         } else {
                             None
@@ -339,7 +377,7 @@ impl TypeMap {
         for fc in &self.foreign_classes {
             let self_ty = fc.self_type_name();
             trace!("self_type {}", self_ty);
-            if self_ty == type_name.as_str() {
+            if self_ty == type_name {
                 return Some(fc);
             }
         }
@@ -363,12 +401,12 @@ impl TypeMap {
 
     pub(crate) fn register_exported_enum(&mut self, enum_info: &ForeignEnumInfo) {
         self.exported_enums
-            .insert(enum_info.name.to_string(), enum_info.clone());
+            .insert(enum_info.name.to_string().into(), enum_info.clone());
     }
 
     pub(crate) fn is_this_exported_enum(&self, ty: &Type) -> Option<&ForeignEnumInfo> {
         let type_name = normalize_ty_lifetimes(ty);
-        self.exported_enums.get(&type_name)
+        self.exported_enums.get(type_name)
     }
 
     pub(crate) fn is_generated_foreign_type(&self, foreign_name: &str) -> bool {
@@ -466,132 +504,16 @@ impl TypeMap {
             start_from.normalized_name,
             goal_to.normalized_name
         );
-        if let Some(path) = self.try_build_path(start_from, goal_to, build_for_sp) {
+        if let Some(path) = try_build_path(
+            start_from,
+            goal_to,
+            build_for_sp,
+            &mut self.conv_graph,
+            &self.rust_names_map,
+            &self.generic_edges,
+        ) {
             merge_path_to_conv_map(path, self);
         }
-    }
-
-    fn try_build_path(
-        &self,
-        start_from: &RustType,
-        goal_to: &RustType,
-        build_for_sp: Span,
-    ) -> Option<PossibePath> {
-        debug!(
-            "try_build_path from {} to {}",
-            start_from.normalized_name, goal_to.normalized_name
-        );
-        let mut possible_ways_graph = self.conv_graph.clone();
-        let mut names_to_graph_map = self.rust_names_map.clone();
-
-        let start_from_idx = get_graph_node(
-            &mut possible_ways_graph,
-            &mut names_to_graph_map,
-            (*start_from).clone(),
-        );
-
-        let goal_to_idx = get_graph_node(
-            &mut possible_ways_graph,
-            &mut names_to_graph_map,
-            (*goal_to).clone(),
-        );
-
-        let mut cur_step = HashSet::new();
-        cur_step.insert(start_from_idx);
-        let mut next_step = HashSet::new();
-
-        const MAX_STEPS: usize = 7;
-        for step in 0..MAX_STEPS {
-            debug!("try_build_path do step {}", step);
-            if cur_step.is_empty() {
-                break;
-            }
-            {
-                use std::fmt::Write;
-                let mut step_types = String::new();
-                for from_ty in &cur_step {
-                    write!(
-                        step_types,
-                        "{:?} ",
-                        possible_ways_graph[*from_ty].normalized_name
-                    )
-                    .unwrap();
-                }
-                debug!("cur_step {}", step_types);
-            }
-            for from_ty in &cur_step {
-                let from: RustType = possible_ways_graph[*from_ty].clone();
-                for neighbor in possible_ways_graph.neighbors_directed(*from_ty, petgraph::Outgoing)
-                {
-                    next_step.insert(neighbor);
-                }
-                for edge in &self.generic_edges {
-                    trace!(
-                        "we check edge({:?} -> {:?}) for {:?}",
-                        edge.from_ty,
-                        edge.to_ty,
-                        from
-                    );
-                    if let Some(to_ty) = edge.is_conv_possible(&from, Some(goal_to), |name| {
-                        names_to_graph_map
-                            .get(name)
-                            .map(|i| &possible_ways_graph[*i])
-                    }) {
-                        if from.normalized_name == to_ty.normalized_name {
-                            continue;
-                        }
-                        let to = get_graph_node(
-                            &mut possible_ways_graph,
-                            &mut names_to_graph_map,
-                            to_ty,
-                        );
-                        possible_ways_graph.add_edge(
-                            *from_ty,
-                            to,
-                            TypeConvEdge {
-                                code_template: edge.code_template.clone(),
-                                dependency: edge.dependency.clone(),
-                            },
-                        );
-
-                        if petgraph::algo::has_path_connecting(
-                            &possible_ways_graph,
-                            to,
-                            goal_to_idx,
-                            None,
-                        ) {
-                            debug!("NEW ALGO: we found PATH!!!!");
-                            let path = find_conversation_path(
-                                &possible_ways_graph,
-                                start_from_idx,
-                                goal_to_idx,
-                                build_for_sp,
-                            )
-                            .unwrap();
-                            for edge in &path {
-                                if let Some((from, to)) = possible_ways_graph.edge_endpoints(*edge)
-                                {
-                                    debug!(
-                                        "path: {} -> {}",
-                                        possible_ways_graph[from].normalized_name,
-                                        possible_ways_graph[to].normalized_name
-                                    );
-                                }
-                            }
-                            return Some(PossibePath {
-                                tmp_graph: possible_ways_graph,
-                                path,
-                            });
-                        }
-                        next_step.insert(to);
-                    }
-                }
-            }
-            mem::swap(&mut cur_step, &mut next_step);
-            next_step.clear();
-        }
-        debug!("try_build_path: No results");
-        None
     }
 
     fn find_rust_type(&self, ty: &RustType) -> Result<NodeIndex<TypeGraphIdx>> {
@@ -613,7 +535,7 @@ impl TypeMap {
         target_pointer_width: usize,
     ) -> Result<()> {
         debug!("merging {} with our rules", id_of_code);
-        let mut was_traits_usage_code = HashMap::new();
+        let mut was_traits_usage_code = FxHashMap::default();
         mem::swap(&mut was_traits_usage_code, &mut self.traits_usage_code);
         let mut new_data = parse::parse(
             id_of_code,
@@ -699,7 +621,7 @@ impl TypeMap {
         let norm_rust_typename = normalize_ty_lifetimes(rust_ty);
         debug!("map foreign: {:?} {:?}", rust_ty, direction);
         if direction == petgraph::Direction::Outgoing {
-            if let Some(foreign_name) = self.rust_to_foreign_cache.get(&norm_rust_typename) {
+            if let Some(foreign_name) = self.rust_to_foreign_cache.get(norm_rust_typename) {
                 if let Some(to) = self.foreign_names_map.get(foreign_name) {
                     let to = &self.conv_graph[*to];
                     return Some(ForeignTypeInfo {
@@ -710,7 +632,7 @@ impl TypeMap {
             }
         }
 
-        if let Some(from) = self.rust_names_map.get(&norm_rust_typename).cloned() {
+        if let Some(from) = self.rust_names_map.get(norm_rust_typename).cloned() {
             let find_path = |from, to| match find_conversation_path(
                 &self.conv_graph,
                 from,
@@ -720,7 +642,7 @@ impl TypeMap {
                 Ok(x) => Some(x),
                 Err(_) => None,
             };
-            let mut min_path: Option<(usize, NodeIndex, String)> = None;
+            let mut min_path: Option<(usize, NodeIndex, SmolStr)> = None;
             for (foreign_name, graph_idx) in &self.foreign_names_map {
                 let path = match direction {
                     petgraph::Direction::Outgoing => find_path(from, *graph_idx),
@@ -732,7 +654,7 @@ impl TypeMap {
                         foreign_name,
                         self.conv_graph[*graph_idx]
                     );
-                    let cur: (usize, NodeIndex, String) =
+                    let cur: (usize, NodeIndex, SmolStr) =
                         (path.len(), *graph_idx, foreign_name.clone());
                     min_path = Some(if let Some(x) = min_path {
                         if cur.0 < x.0 {
@@ -759,25 +681,24 @@ impl TypeMap {
             rust_ty
         );
 
-        let mut new_foreign_types = HashSet::new();
+        let mut new_foreign_types = FxHashSet::default();
         for edge in &self.generic_edges {
             if let Some(ref to_foreigner_hint) = edge.to_foreigner_hint {
-                let trait_bounds: HashMap<String, HashSet<Ident>> =
-                    get_trait_bounds_as_idents_map(&edge.generic_params);
+                let trait_bounds = get_trait_bounds(&edge.generic_params);
                 for graph_idx in self.rust_names_map.values() {
-                    for (ty_param, traits) in &trait_bounds {
+                    for trait_bound in &trait_bounds {
                         let rust_ty = &self.conv_graph[*graph_idx];
-                        if traits.is_subset(&rust_ty.implements) {
+                        if rust_ty.implements.contains_subset(&trait_bound.trait_names) {
                             if let Some(class) =
                                 self.find_foreigner_class_with_such_this_type(&rust_ty.ty)
                             {
-                                let suffix = to_foreigner_hint.as_str().replace(
-                                    &*ty_param.as_str(),
-                                    &*rust_ty.normalized_name.as_str(),
-                                );
+                                let ty_param_name = trait_bound.ty_param.as_ref().to_string();
+                                let suffix = to_foreigner_hint
+                                    .as_str()
+                                    .replace(&ty_param_name, &*rust_ty.normalized_name.as_str());
                                 let foreign_name = to_foreigner_hint
                                     .as_str()
-                                    .replace(&*ty_param.as_str(), &*class.name.to_string());
+                                    .replace(&ty_param_name, &*class.name.to_string());
                                 new_foreign_types.insert((
                                     edge.to_ty.clone(),
                                     suffix,
@@ -801,19 +722,30 @@ impl TypeMap {
                 ty,
                 make_unique_rust_typename(&not_uniq_name, &suffix),
             ));
-            self.foreign_names_map.insert(foreign_name, node);
+            self.foreign_names_map.insert(foreign_name.into(), node);
         }
 
         let from: RustType = rust_ty.clone().into();
-        let mut possible_paths = Vec::<(PossibePath, String, NodeIndex)>::new();
+        let mut possible_paths = Vec::<(PossibePath, SmolStr, NodeIndex)>::new();
         for (foreign_name, graph_idx) in &self.foreign_names_map {
+            let other = self.conv_graph[*graph_idx].clone();
             let path = match direction {
-                petgraph::Direction::Outgoing => {
-                    self.try_build_path(&from, &self.conv_graph[*graph_idx], build_for_sp)
-                }
-                petgraph::Direction::Incoming => {
-                    self.try_build_path(&self.conv_graph[*graph_idx], &from, build_for_sp)
-                }
+                petgraph::Direction::Outgoing => try_build_path(
+                    &from,
+                    &other,
+                    build_for_sp,
+                    &mut self.conv_graph,
+                    &self.rust_names_map,
+                    &self.generic_edges,
+                ),
+                petgraph::Direction::Incoming => try_build_path(
+                    &other,
+                    &from,
+                    build_for_sp,
+                    &mut self.conv_graph,
+                    &self.rust_names_map,
+                    &self.generic_edges,
+                ),
             };
             if let Some(path) = path {
                 possible_paths.push((path, foreign_name.clone(), *graph_idx));
@@ -987,12 +919,132 @@ fn merge_path_to_conv_map(path: PossibePath, conv_map: &mut TypeMap) {
 
 fn get_graph_node(
     graph: &mut TypesConvGraph,
-    names_to_graph_map: &mut HashMap<String, NodeIndex<TypeGraphIdx>>,
+    names_to_graph_map: &mut FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
     rty: RustType,
 ) -> NodeIndex<TypeGraphIdx> {
     *names_to_graph_map
         .entry(rty.normalized_name.clone())
         .or_insert_with(|| graph.add_node(rty))
+}
+
+fn try_build_path(
+    start_from: &RustType,
+    goal_to: &RustType,
+    build_for_sp: Span,
+    conv_graph: &mut TypesConvGraph,
+    rust_names_map: &FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
+    generic_edges: &[GenericTypeConv],
+) -> Option<PossibePath> {
+    debug!(
+        "try_build_path from {} to {}, ty names len {}, graph nodes {}, edges {}",
+        start_from.normalized_name,
+        goal_to.normalized_name,
+        rust_names_map.len(),
+        conv_graph.node_count(),
+        conv_graph.edge_count()
+    );
+    let mut rust_names_map = rust_names_map.clone();
+    let mut ty_graph = TypeGraphSnapshot::new(conv_graph);
+
+    let start_from_idx = ty_graph.node_for_ty(&mut rust_names_map, start_from);
+
+    let goal_to_idx = ty_graph.node_for_ty(&mut rust_names_map, goal_to);
+
+    let mut cur_step = FxHashSet::default();
+    cur_step.insert(start_from_idx);
+    let mut next_step = FxHashSet::default();
+
+    const MAX_STEPS: usize = 7;
+    for step in 0..MAX_STEPS {
+        debug!("try_build_path do step {}", step);
+        if cur_step.is_empty() {
+            break;
+        }
+        if log_enabled!(log::Level::Debug) {
+            use std::fmt::Write;
+            let mut step_types = String::new();
+            for from_ty in &cur_step {
+                write!(
+                    step_types,
+                    "{:?} ",
+                    ty_graph.conv_graph[*from_ty].normalized_name
+                )
+                .unwrap();
+            }
+            debug!("cur_step {}", step_types);
+        }
+        for from_ty in &cur_step {
+            let from: RustType = ty_graph.conv_graph[*from_ty].clone();
+            for neighbor in ty_graph
+                .conv_graph
+                .neighbors_directed(*from_ty, petgraph::Outgoing)
+            {
+                next_step.insert(neighbor);
+            }
+            for edge in generic_edges {
+                trace!(
+                    "we check edge({:?} -> {:?}) for {:?}",
+                    edge.from_ty,
+                    edge.to_ty,
+                    from
+                );
+                if let Some(to_ty) = edge.is_conv_possible(&from, Some(goal_to), |name| {
+                    rust_names_map.get(name).map(|i| &ty_graph.conv_graph[*i])
+                }) {
+                    if from.normalized_name == to_ty.normalized_name {
+                        continue;
+                    }
+                    let to = ty_graph.node_for_ty(&mut rust_names_map, &to_ty);
+                    ty_graph.conv_graph.add_edge(
+                        *from_ty,
+                        to,
+                        TypeConvEdge {
+                            code_template: edge.code_template.clone(),
+                            dependency: edge.dependency.clone(),
+                        },
+                    );
+
+                    if petgraph::algo::has_path_connecting(
+                        &*ty_graph.conv_graph,
+                        to,
+                        goal_to_idx,
+                        None,
+                    ) {
+                        debug!("NEW ALGO: we found PATH!!!!");
+                        let path = find_conversation_path(
+                            &ty_graph.conv_graph,
+                            start_from_idx,
+                            goal_to_idx,
+                            build_for_sp,
+                        )
+                        .expect("path must exists");
+                        if log_enabled!(log::Level::Debug) {
+                            for edge in &path {
+                                if let Some((from, to)) = ty_graph.conv_graph.edge_endpoints(*edge)
+                                {
+                                    debug!(
+                                        "path: {} -> {}",
+                                        ty_graph.conv_graph[from].normalized_name,
+                                        ty_graph.conv_graph[to].normalized_name
+                                    );
+                                }
+                            }
+                        }
+
+                        return Some(PossibePath {
+                            tmp_graph: ty_graph.into_graph(),
+                            path,
+                        });
+                    }
+                    next_step.insert(to);
+                }
+            }
+        }
+        mem::swap(&mut cur_step, &mut next_step);
+        next_step.clear();
+    }
+    debug!("try_build_path: No results");
+    None
 }
 
 #[cfg(test)]
@@ -1054,16 +1106,16 @@ fn helper3() {
             .unwrap();
         assert_eq!(
             {
-                let mut set = HashSet::new();
+                let mut set = FxHashSet::default();
                 for k in types_map.foreign_names_map.keys() {
                     set.insert(k.clone());
                 }
                 set
             },
             {
-                let mut set = HashSet::new();
-                set.insert("boolean".to_string());
-                set.insert("int".to_string());
+                let mut set = FxHashSet::default();
+                set.insert("boolean".into());
+                set.insert("int".into());
                 set
             }
         );
@@ -1190,12 +1242,14 @@ fn helper3() {
                 .name
         );
 
-        assert!(types_map
-            .try_build_path(
-                &parse_type! { Vec<i32> }.into(),
-                &parse_type! { jlong }.into(),
-                Span::call_site()
-            )
-            .is_none());
+        assert!(try_build_path(
+            &parse_type! { Vec<i32> }.into(),
+            &parse_type! { jlong }.into(),
+            Span::call_site(),
+            &mut types_map.conv_graph,
+            &mut types_map.rust_names_map,
+            &types_map.generic_edges,
+        )
+        .is_none());
     }
 }

@@ -174,6 +174,7 @@ foreigner_class!(class Document {
 
 #[test]
 fn test_expectations_foreign_vec_as_arg() {
+    let _ = env_logger::try_init();
     let name = "foreign_vec_as_arg";
     let src = r#"
 foreigner_class!(class Boo {

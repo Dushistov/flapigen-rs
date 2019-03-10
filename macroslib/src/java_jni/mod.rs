@@ -105,7 +105,7 @@ impl LanguageGenerator for JavaConfig {
                 &this_type,
                 ForeignTypeInfo {
                     correspoding_rust_type: my_jobj_ti,
-                    name: class.name.to_string(),
+                    name: class.name.to_string().into(),
                 },
             );
         }
@@ -178,7 +178,7 @@ impl LanguageGenerator for JavaConfig {
             jobject_ty,
             make_unique_rust_typename(jobject_name, &interface.name.to_string()),
         );
-        conv_map.add_foreign(my_jobj_ti, interface.name.to_string());
+        conv_map.add_foreign(my_jobj_ti, interface.name.to_string().into());
         Ok(items)
     }
 }
@@ -225,7 +225,7 @@ fn find_suitable_ftypes_for_interace_methods(
         }
         let output = match method.fn_decl.output {
             syn::ReturnType::Default => ForeignTypeInfo {
-                name: void_sym.to_string(),
+                name: void_sym.into(),
                 correspoding_rust_type: {
                     let mut ty: Type = dummy_ty.clone();
                     change_span(&mut ty, method.fn_decl.span());
@@ -353,7 +353,7 @@ fn calc_converter_for_foreign_class_arg(
     let jlong_ti: RustType = parse_type! { jlong }.into();
     JavaForeignTypeInfo {
         base: ForeignTypeInfo {
-            name: foreigner_class.name.to_string(),
+            name: foreigner_class.name.to_string().into(),
             correspoding_rust_type: jlong_ti,
         },
         java_transition_type: Some("long".into()),
@@ -369,7 +369,7 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> JavaForeignTypeInf
     .into();
     JavaForeignTypeInfo {
         base: ForeignTypeInfo {
-            name: foreign_enum.name.to_string(),
+            name: foreign_enum.name.to_string().into(),
             correspoding_rust_type: jint_ti,
         },
         java_transition_type: Some("int".into()),
@@ -408,7 +408,7 @@ fn special_type(conv_map: &TypeMap, arg_ty: &Type) -> Result<Option<JavaForeignT
         let jlong_ti: RustType = parse_type! { jlong }.into();
         let converter = JavaForeignTypeInfo {
             base: ForeignTypeInfo {
-                name: foreign_class.name.to_string(),
+                name: foreign_class.name.to_string().into(),
                 correspoding_rust_type: jlong_ti,
             },
             java_transition_type: Some("long".into()),
