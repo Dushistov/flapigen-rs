@@ -13,6 +13,7 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
+use smol_str::SmolStr;
 use syn::{
     parse_quote,
     visit::{visit_lifetime, Visit},
@@ -28,7 +29,7 @@ use crate::typemap::{make_unique_rust_typename, make_unique_rust_typename_if_nee
 
 #[derive(Debug)]
 pub(crate) struct TypeName {
-    pub typename: String,
+    pub typename: SmolStr,
     pub span: Span,
 }
 
@@ -47,7 +48,7 @@ impl Hash for TypeName {
 }
 
 impl TypeName {
-    pub fn new(typename: String, span: Span) -> Self {
+    pub fn new(typename: SmolStr, span: Span) -> Self {
         TypeName { typename, span }
     }
 }
@@ -55,7 +56,7 @@ impl TypeName {
 #[derive(Debug, Clone)]
 pub(crate) struct RustType {
     pub ty: syn::Type,
-    pub normalized_name: String,
+    pub normalized_name: SmolStr,
     pub implements: ImplementsSet,
 }
 
@@ -75,7 +76,7 @@ impl From<syn::Type> for RustType {
 impl RustType {
     pub(crate) fn new<S>(ty: syn::Type, norm_name: S) -> RustType
     where
-        S: Into<String>,
+        S: Into<SmolStr>,
     {
         RustType {
             ty,
@@ -84,8 +85,7 @@ impl RustType {
         }
     }
     pub(crate) fn implements(mut self, trait_name: &str) -> RustType {
-        self.implements
-            .insert(Ident::new(trait_name, Span::call_site()));
+        self.implements.insert(trait_name.into());
         self
     }
     pub(crate) fn merge(&mut self, other: &RustType) {

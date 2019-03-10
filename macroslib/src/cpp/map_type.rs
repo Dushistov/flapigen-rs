@@ -4,6 +4,7 @@ use log::{debug, trace};
 use petgraph::Direction;
 use proc_macro2::Span;
 use quote::quote;
+use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
@@ -91,7 +92,7 @@ fn special_type(
                     base: foreign_info,
                     c_converter: String::new(),
                     cpp_converter: Some(CppConverter {
-                        typename: cpp_type,
+                        typename: cpp_type.into(),
                         output_converter,
                         input_converter: format!("UNREACHABLE {}", line!()),
                     }),
@@ -104,7 +105,7 @@ fn special_type(
                     base: foreign_info,
                     c_converter: String::new(),
                     cpp_converter: Some(CppConverter {
-                        typename: cpp_type,
+                        typename: cpp_type.into(),
                         output_converter: format!("UNREACHABLE {}", line!()),
                         input_converter,
                     }),
@@ -170,7 +171,7 @@ fn special_type(
                     },
                     c_converter: String::new(),
                     cpp_converter: Some(CppConverter {
-                        typename: cpp_type,
+                        typename: cpp_type.into(),
                         output_converter: "#error".to_string(),
                         input_converter,
                     }),
@@ -199,7 +200,7 @@ fn special_type(
             base: foreign_info,
             c_converter: String::new(),
             cpp_converter: Some(CppConverter {
-                typename: foreign_class.name.to_string(),
+                typename: foreign_class.name.to_string().into(),
                 output_converter: format!("{}({})", foreign_class.name, FROM_VAR_TEMPLATE),
                 input_converter: format!("{}.release()", FROM_VAR_TEMPLATE),
             }),
@@ -241,7 +242,7 @@ fn special_type(
                     conv_map.find_foreigner_class_with_such_this_type(&tupple.elems[1]),
                 ) {
                     ret.cpp_converter = Some(CppConverter {
-                        typename: format!("std::pair<{}, {}>", fc1.name, fc2.name),
+                        typename: format!("std::pair<{}, {}>", fc1.name, fc2.name).into(),
                         input_converter: "#error".into(),
                         output_converter: format!(
                             "std::make_pair({FirstType}{{static_cast<{CFirstType} *>({from}.first)}},
@@ -293,7 +294,7 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> CppForeignTypeInfo
     .into();
     CppForeignTypeInfo {
         base: ForeignTypeInfo {
-            name: foreign_enum.name.to_string(),
+            name: foreign_enum.name.to_string().into(),
             correspoding_rust_type: u32_ti,
         },
         c_converter,
@@ -367,7 +368,7 @@ fn map_arg_with_slice_type(
     {
         let typename = format!("RustForeignSlice<{}Ref>", foreign_class.name);
         ftype_info.cpp_converter = Some(CppConverter {
-            typename,
+            typename: typename.into(),
             input_converter: FROM_VAR_TEMPLATE.to_string(),
             output_converter: "#error".to_string(),
         });
@@ -392,7 +393,7 @@ fn map_return_slice_type(
             var = FROM_VAR_TEMPLATE
         );
         ftype_info.cpp_converter = Some(CppConverter {
-            typename,
+            typename: typename.into(),
             output_converter,
             input_converter: "#error".to_string(),
         });
@@ -521,7 +522,7 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
             var = FROM_VAR_TEMPLATE
         );
         ftype_info.cpp_converter = Some(CppConverter {
-            typename,
+            typename: typename.into(),
             output_converter,
             input_converter: format!("{var}.release()", var = FROM_VAR_TEMPLATE),
         });
@@ -596,7 +597,7 @@ fn handle_result_type_as_return_type(
                 base: foreign_info,
                 c_converter: String::new(),
                 cpp_converter: Some(CppConverter {
-                    typename,
+                    typename: typename.into(),
                     output_converter,
                     input_converter: String::new(),
                 }),
@@ -631,7 +632,7 @@ fn handle_result_type_as_return_type(
                 base: foreign_info,
                 c_converter: String::new(),
                 cpp_converter: Some(CppConverter {
-                    typename,
+                    typename: typename.into(),
                     output_converter,
                     input_converter: "#error".into(),
                 }),
@@ -662,7 +663,7 @@ fn handle_result_type_as_return_type(
                 base: foreign_info,
                 c_converter: String::new(),
                 cpp_converter: Some(CppConverter {
-                    typename,
+                    typename: typename.into(),
                     output_converter,
                     input_converter: String::new(),
                 }),
@@ -698,7 +699,7 @@ fn handle_result_type_as_return_type(
                     var = FROM_VAR_TEMPLATE,
                 );
                 f_type_info.cpp_converter = Some(CppConverter {
-                    typename,
+                    typename: typename.into(),
                     output_converter,
                     input_converter: "#error".to_string(),
                 });
@@ -735,7 +736,7 @@ fn handle_result_type_as_return_type(
                     C_ErrType = c_err_class,
                 );
                 f_type_info.cpp_converter = Some(CppConverter {
-                    typename,
+                    typename: typename.into(),
                     output_converter,
                     input_converter: "#error".to_string(),
                 });
@@ -766,7 +767,7 @@ fn handle_result_type_as_return_type(
                         C_ErrType = c_err_class,
                     );
                     f_type_info.cpp_converter = Some(CppConverter {
-                        typename,
+                        typename: typename.into(),
                         output_converter,
                         input_converter: "#error".to_string(),
                     });
@@ -815,7 +816,7 @@ fn handle_option_type_in_input(
             base: foreign_info,
             c_converter: String::new(),
             cpp_converter: Some(CppConverter {
-                typename,
+                typename: typename.into(),
                 output_converter: "#error".to_string(),
                 input_converter,
             }),
@@ -846,7 +847,7 @@ fn handle_option_type_in_input(
                     ),
                 };
                 cpp_info_opt.cpp_converter = Some(CppConverter {
-                    typename,
+                    typename: typename.into(),
                     output_converter: "#error".to_string(),
                     input_converter,
                 });
@@ -888,7 +889,7 @@ fn handle_option_type_in_input(
         ),
     };
     cpp_info_opt.cpp_converter = Some(CppConverter {
-        typename,
+        typename: typename.into(),
         output_converter: "#error".to_string(),
         input_converter,
     });
@@ -935,7 +936,7 @@ fn handle_option_type_in_return(
             base: foreign_info,
             c_converter: String::new(),
             cpp_converter: Some(CppConverter {
-                typename,
+                typename: typename.into(),
                 output_converter,
                 input_converter: "#error".to_string(),
             }),
@@ -1012,7 +1013,7 @@ fn handle_option_type_in_return(
                 base: foreign_info,
                 c_converter: String::new(),
                 cpp_converter: Some(CppConverter {
-                    typename,
+                    typename: typename.into(),
                     output_converter,
                     input_converter: "#error".to_string(),
                 }),
@@ -1100,7 +1101,7 @@ fn handle_option_type_in_return(
                 ),
             };
             cpp_info_opt.cpp_converter = Some(CppConverter {
-                typename,
+                typename: typename.into(),
                 output_converter,
                 input_converter: "#error".to_string(),
             });
@@ -1108,7 +1109,7 @@ fn handle_option_type_in_return(
         }
     }
     cpp_info_opt.cpp_converter = Some(CppConverter {
-        typename,
+        typename: typename.into(),
         output_converter,
         input_converter: "#error".to_string(),
     });
@@ -1123,7 +1124,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
     err_ty: &Type,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let empty_ok_ty = *ok_ty == parse_type! { () };
-    let c_ok_type_name: String = if empty_ok_ty {
+    let c_ok_type_name: SmolStr = if empty_ok_ty {
         "void *".into()
     } else {
         map_ordinal_result_type(conv_map, ok_ty)?.base.name
@@ -1179,7 +1180,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
             base: foreign_info.base,
             c_converter: String::new(),
             cpp_converter: Some(CppConverter {
-                typename,
+                typename: typename.into(),
                 output_converter,
                 input_converter: "#error".into(),
             }),

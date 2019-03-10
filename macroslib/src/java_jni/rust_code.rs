@@ -260,7 +260,7 @@ May be you need to use `private constructor = empty;` syntax?",
             "do_delete",
             &JniForeignMethodSignature {
                 output: ForeignTypeInfo {
-                    name: String::new(),
+                    name: "".into(),
                     correspoding_rust_type: dummy_ty.into(),
                 },
                 input: vec![],
@@ -594,10 +594,10 @@ fn generate_jni_func_name(
             let type_name = if arg.java_need_conversation() {
                 arg.java_transition_type.as_ref().unwrap()
             } else {
-                &arg.as_ref().name
+                arg.as_ref().name.as_str()
             };
             let type_name = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-                .get(&*type_name.as_str())
+                .get(type_name)
                 .ok_or_else(|| {
                     DiagnosticError::new(
                         class.span(),

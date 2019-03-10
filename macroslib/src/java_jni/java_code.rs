@@ -393,7 +393,7 @@ fn args_with_java_types(
         {
             arg.java_transition_type.as_ref().unwrap()
         } else {
-            &arg.as_ref().name
+            arg.as_ref().name.as_str()
         };
         let annotation = gen_annotation_if_need(&type_name, annotation);
         if i == (method.input.len() - 1) {

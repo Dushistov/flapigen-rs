@@ -10,6 +10,7 @@ use petgraph::{
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use rustc_hash::{FxHashMap, FxHashSet};
+use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Ident, Type};
 
 use crate::{
@@ -65,11 +66,11 @@ pub(crate) trait ForeignMethodSignature {
 #[derive(Debug)]
 pub(crate) struct TypeMap {
     conv_graph: TypesConvGraph,
-    foreign_names_map: FxHashMap<String, NodeIndex<TypeGraphIdx>>,
-    rust_names_map: FxHashMap<String, NodeIndex<TypeGraphIdx>>,
+    foreign_names_map: FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
+    rust_names_map: FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
-    rust_to_foreign_cache: FxHashMap<String, String>,
+    rust_to_foreign_cache: FxHashMap<SmolStr, SmolStr>,
     foreign_classes: Vec<ForeignerClassInfo>,
     exported_enums: FxHashMap<String, ForeignEnumInfo>,
     traits_usage_code: FxHashMap<Ident, String>,
@@ -163,7 +164,7 @@ struct PossibePath {
 
 #[derive(Debug)]
 pub(crate) struct ForeignTypeInfo {
-    pub name: String,
+    pub name: SmolStr,
     pub correspoding_rust_type: RustType,
 }
 
@@ -184,7 +185,7 @@ impl TypeMap {
         ret
     }
 
-    pub(crate) fn add_foreign(&mut self, correspoding_rty: RustType, foreign_name: String) {
+    pub(crate) fn add_foreign(&mut self, correspoding_rty: RustType, foreign_name: SmolStr) {
         let idx = self.add_type(correspoding_rty);
         self.foreign_names_map.insert(foreign_name, idx);
     }
@@ -195,7 +196,7 @@ impl TypeMap {
         self.foreign_names_map
             .get(foreign_name)
             .map(|x| ForeignTypeInfo {
-                name: foreign_name.to_string(),
+                name: foreign_name.into(),
                 correspoding_rust_type: self.conv_graph[*x].clone(),
             })
     }
@@ -713,7 +714,7 @@ impl TypeMap {
                 Ok(x) => Some(x),
                 Err(_) => None,
             };
-            let mut min_path: Option<(usize, NodeIndex, String)> = None;
+            let mut min_path: Option<(usize, NodeIndex, SmolStr)> = None;
             for (foreign_name, graph_idx) in &self.foreign_names_map {
                 let path = match direction {
                     petgraph::Direction::Outgoing => find_path(from, *graph_idx),
@@ -725,7 +726,7 @@ impl TypeMap {
                         foreign_name,
                         self.conv_graph[*graph_idx]
                     );
-                    let cur: (usize, NodeIndex, String) =
+                    let cur: (usize, NodeIndex, SmolStr) =
                         (path.len(), *graph_idx, foreign_name.clone());
                     min_path = Some(if let Some(x) = min_path {
                         if cur.0 < x.0 {
@@ -793,11 +794,11 @@ impl TypeMap {
                 ty,
                 make_unique_rust_typename(&not_uniq_name, &suffix),
             ));
-            self.foreign_names_map.insert(foreign_name, node);
+            self.foreign_names_map.insert(foreign_name.into(), node);
         }
 
         let from: RustType = rust_ty.clone().into();
-        let mut possible_paths = Vec::<(PossibePath, String, NodeIndex)>::new();
+        let mut possible_paths = Vec::<(PossibePath, SmolStr, NodeIndex)>::new();
         for (foreign_name, graph_idx) in &self.foreign_names_map {
             let path = match direction {
                 petgraph::Direction::Outgoing => {
@@ -979,7 +980,7 @@ fn merge_path_to_conv_map(path: PossibePath, conv_map: &mut TypeMap) {
 
 fn get_graph_node(
     graph: &mut TypesConvGraph,
-    names_to_graph_map: &mut FxHashMap<String, NodeIndex<TypeGraphIdx>>,
+    names_to_graph_map: &mut FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
     rty: RustType,
 ) -> NodeIndex<TypeGraphIdx> {
     *names_to_graph_map
@@ -1054,8 +1055,8 @@ fn helper3() {
             },
             {
                 let mut set = FxHashSet::default();
-                set.insert("boolean".to_string());
-                set.insert("int".to_string());
+                set.insert("boolean".into());
+                set.insert("int".into());
                 set
             }
         );

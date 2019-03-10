@@ -1,13 +1,15 @@
 use proc_macro2::Ident;
 use smallvec::SmallVec;
+use smol_str::SmolStr;
+
 #[derive(Default, Debug, Clone)]
 pub(crate) struct ImplementsSet {
-    inner: SmallVec<[Ident; 5]>,
+    inner: SmallVec<[SmolStr; 5]>,
 }
 
 impl ImplementsSet {
-    pub(crate) fn insert(&mut self, x: Ident) {
-        if !self.inner.iter().any(|it| *it == x) {
+    pub(crate) fn insert(&mut self, x: SmolStr) {
+        if !self.inner.iter().any(|it| x == *it) {
             self.inner.push(x);
         }
     }
@@ -21,7 +23,7 @@ impl ImplementsSet {
             if !self
                 .inner
                 .iter()
-                .any(|id: &Ident| path.is_ident(IdentRef(id)))
+                .any(|id: &SmolStr| path.is_ident(id.as_str()))
             {
                 return false;
             }
