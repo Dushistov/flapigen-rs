@@ -7,6 +7,7 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.OptionalDouble;
 import java.util.OptionalLong;
+import java.util.Optional;
 import com.example.rust.Foo;
 import com.example.rust.Boo;
 import com.example.rust.TestPathAndResult;
@@ -362,5 +363,13 @@ class Main {
         l = TestOptional.f2(17l);
         assert l.isPresent();
         assert l.getAsLong() == 18;
+
+        Optional<Foo> foo_o = TestOptional.f3(false);
+        assert !foo_o.isPresent();
+        foo_o = TestOptional.f3(true);
+        assert foo_o.isPresent();
+        Foo foo = foo_o.get();
+        assert foo.calcF(0, 0) == 5;
+        assert foo.getName().equals("Some");
     }
 }
