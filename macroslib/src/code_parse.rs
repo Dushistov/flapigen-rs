@@ -401,16 +401,15 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     }
 
     let copy_derived = derive_list.iter().any(|x| x == "Copy");
-    if copy_derived
-        && !methods.iter().any(|m| {
-            if let Some(seg) = m.rust_id.segments.last() {
-                let seg = seg.into_value();
-                seg.ident == "clone"
-            } else {
-                false
-            }
-        })
-    {
+    let has_clone = |m: &ForeignerMethod| {
+        if let Some(seg) = m.rust_id.segments.last() {
+            let seg = seg.into_value();
+            seg.ident == "clone"
+        } else {
+            false
+        }
+    };
+    if copy_derived && !methods.iter().any(has_clone) {
         return Err(syn::Error::new(
             class_name.span(),
             "class marked as Copy, but no clone method",
