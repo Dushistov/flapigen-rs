@@ -1,3 +1,6 @@
+mod parse;
+pub mod utils;
+
 use std::{cell::RefCell, fmt, mem, rc::Rc};
 
 use log::{debug, log_enabled, trace, warn};
@@ -21,9 +24,6 @@ use crate::{
     error::{DiagnosticError, Result},
     ForeignEnumInfo, ForeignerClassInfo,
 };
-
-mod parse;
-pub mod utils;
 
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
@@ -72,7 +72,7 @@ pub(crate) struct TypeMap {
     generic_edges: Vec<GenericTypeConv>,
     rust_to_foreign_cache: FxHashMap<SmolStr, SmolStr>,
     foreign_classes: Vec<ForeignerClassInfo>,
-    exported_enums: FxHashMap<String, ForeignEnumInfo>,
+    exported_enums: FxHashMap<SmolStr, ForeignEnumInfo>,
     traits_usage_code: FxHashMap<Ident, String>,
 }
 
@@ -354,7 +354,7 @@ impl TypeMap {
 
     pub(crate) fn register_exported_enum(&mut self, enum_info: &ForeignEnumInfo) {
         self.exported_enums
-            .insert(enum_info.name.to_string(), enum_info.clone());
+            .insert(enum_info.name.to_string().into(), enum_info.clone());
     }
 
     pub(crate) fn is_this_exported_enum(&self, ty: &Type) -> Option<&ForeignEnumInfo> {
