@@ -40,29 +40,26 @@ fn test_expectations_main() {
                 parse_code(&test_name, Source::Path(&test_case), lang).expect("parse_code failed");
             let pats =
                 parse_code_expectation(&main_expectation).expect("parsing of patterns failed");
-            println!(
-                "foreign_code({:?}) for '{}': {}",
-                lang, test_name, code_pair.foreign_code
-            );
+
+            let mut print_test_info = PrintTestInfo::new(code_pair.clone(), test_name.into(), lang);
             for pat in pats {
-                println!(
-                    "{}: foreign_code({:?}) search pat '{}'",
-                    test_name, lang, pat
-                );
+                print_test_info.foreign_code_search_pattern = pat.clone();
                 assert!(code_pair.foreign_code.contains(&pat));
             }
+            print_test_info.foreign_code_search_pattern.clear();
 
             let rust_cpp_expectation = new_path(&test_case, rust_ext);
             if rust_cpp_expectation.exists() {
                 let pats = parse_code_expectation(&rust_cpp_expectation)
                     .expect("parsing of patterns failed");
                 let pats: Vec<String> = pats.into_iter().map(|v| v.replace("\n", "")).collect();
-                println!("rust code for '{}': {}", test_name, code_pair.rust_code);
                 for pat in pats {
-                    println!("search pat '{}'", pat);
+                    print_test_info.rust_pat = pat.clone();
                     assert!(code_pair.rust_code.contains(&pat));
                 }
+                print_test_info.rust_pat.clear();
             }
+            print_test_info.success();
             true
         } else {
             false
@@ -72,7 +69,6 @@ fn test_expectations_main() {
     for test_case in test_cases {
         let base_name = test_case.file_stem().expect("name without extenstion");
         let test_name = base_name.to_string_lossy();
-        println!("test_expectations test {}", test_name);
 
         let mut test_something = false;
         for lang in &[ForeignLang::Cpp, ForeignLang::Java] {
@@ -90,6 +86,8 @@ fn test_expectations_main() {
 
 #[test]
 fn test_expectations_class_with_methods_without_constructor() {
+    let _ = env_logger::try_init();
+
     let langs = [ForeignLang::Java, ForeignLang::Cpp];
     for lang in &langs {
         let name = format!("class_with_methods_without_constructor {:?}", lang);
@@ -144,6 +142,8 @@ foreigner_class!(class Foo {
 
 #[test]
 fn test_expectations_parse_without_self_type_err() {
+    let _ = env_logger::try_init();
+
     for lang in &[ForeignLang::Java, ForeignLang::Cpp] {
         println!("test_parse_without_self_type_err: lang {:?}", lang);
         let result = panic::catch_unwind(|| {
@@ -175,6 +175,7 @@ foreigner_class!(class Document {
 #[test]
 fn test_expectations_foreign_vec_as_arg() {
     let _ = env_logger::try_init();
+
     let name = "foreign_vec_as_arg";
     let src = r#"
 foreigner_class!(class Boo {
@@ -206,6 +207,8 @@ foreigner_class!(class FooImpl {
 
 #[test]
 fn test_foreign_enum_vs_int() {
+    let _ = env_logger::try_init();
+
     let name = "foreign_enum_vs_int";
     let src = r#"
 foreign_enum!(enum MyEnum {
@@ -232,6 +235,8 @@ foreigner_class!(class TestEnumClass {
 
 #[test]
 fn test_return_result_type_with_object() {
+    let _ = env_logger::try_init();
+
     let name = "return_result_type_with_object";
     let src = r#"
 foreigner_class!(class Position {
@@ -262,6 +267,8 @@ foreigner_class!(class LocationService {
 
 #[test]
 fn test_return_foreign_class_ref() {
+    let _ = env_logger::try_init();
+
     for _ in 0..10 {
         let cpp_code = parse_code(
             "return_foreign_class_ref",
@@ -297,6 +304,8 @@ foreigner_class!(class Moo {
 
 #[test]
 fn test_foreign_interface_cpp() {
+    let _ = env_logger::try_init();
+
     let name = "foreign_interface_cpp";
     let src = r#"
 foreigner_class!(class Uuid {
@@ -346,9 +355,64 @@ enum ForeignLang {
     Cpp,
 }
 
+#[derive(Clone)]
 struct CodePair {
     rust_code: String,
     foreign_code: String,
+}
+
+struct PrintTestInfo {
+    code_pair: CodePair,
+    test_name: String,
+    lang: ForeignLang,
+    print_on_drop: bool,
+    foreign_code_search_pattern: String,
+    rust_pat: String,
+}
+
+impl PrintTestInfo {
+    fn new(code_pair: CodePair, test_name: String, lang: ForeignLang) -> Self {
+        PrintTestInfo {
+            code_pair,
+            test_name,
+            lang,
+            print_on_drop: true,
+            foreign_code_search_pattern: String::new(),
+            rust_pat: String::new(),
+        }
+    }
+    fn success(&mut self) {
+        self.print_on_drop = false;
+    }
+}
+
+impl Drop for PrintTestInfo {
+    fn drop(&mut self) {
+        if self.print_on_drop {
+            if !self.foreign_code_search_pattern.is_empty() {
+                println!(
+                    "{} / {:?}: search foreign pat '{}'",
+                    self.test_name, self.lang, self.foreign_code_search_pattern
+                );
+            }
+
+            if !self.rust_pat.is_empty() {
+                println!(
+                    "{} / {:?}: search rust pat '{}'",
+                    self.test_name, self.lang, self.rust_pat,
+                );
+            }
+
+            println!(
+                "{} / {:?}: rust_swig generated such foreign_code: {}",
+                self.test_name, self.lang, self.code_pair.foreign_code
+            );
+            println!(
+                "{} / {:?}: rust_swig generated such rust_code: {}",
+                self.test_name, self.lang, self.code_pair.rust_code
+            );
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -403,13 +467,6 @@ enum Source<'a> {
 
 fn parse_code(test_name: &str, rust_src: Source, lang: ForeignLang) -> Result<CodePair, Error> {
     let tmp_dir = tempdir().expect("Can not create tmp directory");
-    println!(
-        "{}: test name {} tmp_dir {:?}",
-        file!(),
-        test_name,
-        tmp_dir.path()
-    );
-
     let (swig_gen, ext_list): (Generator, &[&'static str]) = match lang {
         ForeignLang::Java => {
             let swig_gen = Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
