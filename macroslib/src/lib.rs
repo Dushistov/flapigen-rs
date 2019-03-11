@@ -90,7 +90,7 @@ impl JavaConfig {
         self
     }
     /// If you use JDK without java.util.Optional*, then you can provide
-    /// name of custom package with Optional
+    /// name of custom package with Optional. Default value is "java.util"
     pub fn use_optional_package(mut self, optional_package: String) -> JavaConfig {
         self.optional_package = optional_package;
         self
