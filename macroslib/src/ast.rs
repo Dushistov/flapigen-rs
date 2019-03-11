@@ -225,15 +225,16 @@ impl GenericTypeConv {
                     *subst_it,
                     trait_bounds
                 );
+                let traits_bound_not_match = |idx: usize| {
+                    let requires = &trait_bounds[idx].trait_names;
+                    let val_name = normalize_ty_lifetimes(val);
+
+                    others(val_name).map_or(true, |rt| !rt.implements.contains_subset(requires))
+                };
                 if trait_bounds
                     .iter()
                     .position(|it| it.ty_param.as_ref() == subst_it.ident)
-                    .map_or(false, |idx| {
-                        let requires = &trait_bounds[idx].trait_names;
-                        let val_name = normalize_ty_lifetimes(val);
-
-                        others(val_name).map_or(true, |rt| !rt.implements.contains_subset(requires))
-                    })
+                    .map_or(false, traits_bound_not_match)
                 {
                     trace!("is_conv_possible: trait bounds check failed");
                     return None;

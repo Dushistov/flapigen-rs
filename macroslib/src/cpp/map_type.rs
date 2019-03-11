@@ -1146,7 +1146,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
         if empty_ok_ty {
             assert_eq!(foreign_info.base.name, "struct CResultObjectString");
         }
-        return Ok(Some(CppForeignTypeInfo {
+        Ok(Some(CppForeignTypeInfo {
             base: foreign_info.base,
             c_converter: String::new(),
             cpp_converter: Some(CppConverter {
@@ -1154,7 +1154,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
                 output_converter,
                 input_converter: String::new(),
             }),
-        }));
+        }))
     } else if let Some(err_class) =
         conv_map.find_foreigner_class_with_such_self_type(&err_ty, false)
     {
@@ -1176,7 +1176,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
         if empty_ok_ty {
             assert_eq!(foreign_info.base.name, "struct CResultObjectObject");
         }
-        return Ok(Some(CppForeignTypeInfo {
+        Ok(Some(CppForeignTypeInfo {
             base: foreign_info.base,
             c_converter: String::new(),
             cpp_converter: Some(CppConverter {
@@ -1184,7 +1184,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
                 output_converter,
                 input_converter: "#error".into(),
             }),
-        }));
+        }))
     } else {
         Ok(None)
     }
