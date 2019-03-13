@@ -373,5 +373,6 @@ class Main {
         assert foo.getName().equals("Some");
 
         assert TestOptional.f4(null) == false;
+        assert TestOptional.f4(Optional.of(foo)) == true;
     }
 }
