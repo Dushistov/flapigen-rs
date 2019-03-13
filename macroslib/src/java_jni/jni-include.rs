@@ -1362,7 +1362,7 @@ impl<T: SwigForeignClass> SwigFrom<Option<T>> for jobject {
     }
 }
 
-#[swig_from_foreigner_hint = "T"]
+#[swig_from_foreigner_hint = "java.util.Optional<T>"]
 impl<T:SwigForeignClass + Clone> SwigFrom<jobject> for Option<T> {
     fn swig_from(x: jobject, env: *mut JNIEnv) -> Self {
         let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
