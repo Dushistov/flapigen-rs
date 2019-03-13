@@ -371,5 +371,7 @@ class Main {
         Foo foo = foo_o.get();
         assert foo.calcF(0, 0) == 5;
         assert foo.getName().equals("Some");
+
+        assert TestOptional.f4(null) == false;
     }
 }

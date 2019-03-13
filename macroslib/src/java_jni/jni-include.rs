@@ -1361,3 +1361,46 @@ impl<T: SwigForeignClass> SwigFrom<Option<T>> for jobject {
         }
     }
 }
+
+#[swig_from_foreigner_hint = "T"]
+impl<T:SwigForeignClass + Clone> SwigFrom<jobject> for Option<T> {
+    fn swig_from(x: jobject, env: *mut JNIEnv) -> Self {
+        let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
+        if x.is_null() {
+            None
+        } else {
+            let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
+            if x.is_null() {
+                None
+            } else {
+
+                let class_id = <T>::jni_class_name();
+                let class: jclass =
+                    unsafe { (**env).FindClass.unwrap()(env, class_id) };
+                assert!(!class.is_null(), "FindClass for `T` failed");
+
+                let get_m: jmethodID = unsafe {
+                    (**env).GetMethodID.unwrap()(
+                        env,
+                        class,
+                        swig_c_str!("get"),
+                        swig_c_str!("()J"),
+                    )
+                };
+                assert!(
+                    !get_m.is_null(),
+                    "get GetMethodID for doubleValue failed"
+                );
+                let ret: &mut T = unsafe {
+                    let ret = ((**env).CallObjectMethod.unwrap()(env, x, get_m) as *mut T).as_mut().unwrap();
+                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                        panic!("Optional.get failed: catch exception");
+                    }
+                    (**env).DeleteLocalRef.unwrap()(env, x);
+                    ret
+                };
+                Some(ret.clone())
+            }
+        }
+    }
+}
