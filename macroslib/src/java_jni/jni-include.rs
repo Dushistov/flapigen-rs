@@ -1384,12 +1384,12 @@ impl<T:SwigForeignClass + Clone> SwigFrom<jobject> for Option<T> {
                         env,
                         class,
                         swig_c_str!("get"),
-                        swig_c_str!("()J"),
+                        swig_c_str!("()L"),
                     )
                 };
                 assert!(
                     !get_m.is_null(),
-                    "get GetMethodID for doubleValue failed"
+                    "GetMethodID for get failed"
                 );
                 let ret: &mut T = unsafe {
                     let ret = ((**env).CallObjectMethod.unwrap()(env, x, get_m) as *mut T).as_mut().unwrap();
