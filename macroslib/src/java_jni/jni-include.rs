@@ -1361,3 +1361,67 @@ impl<T: SwigForeignClass> SwigFrom<Option<T>> for jobject {
         }
     }
 }
+
+#[swig_to_foreigner_hint = "java.util.Optional<String>"]
+impl SwigFrom<Option<String>> for jobject {
+    fn swig_from(x: Option<String>, env: *mut JNIEnv) -> Self {
+        let class: jclass =
+            unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/Optional")) };
+        assert!(
+            !class.is_null(),
+            "FindClass for `java/util/Optional` failed"
+        );
+        match x {
+            Some(obj) => {
+                let x = obj.into_bytes();
+                let x = unsafe { ::std::ffi::CString::from_vec_unchecked(x) };
+
+                let of_m: jmethodID = unsafe {
+                    (**env).GetStaticMethodID.unwrap()(
+                        env,
+                        class,
+                        swig_c_str!("of"),
+                        swig_c_str!("(Ljava/lang/Object;)Ljava/util/Optional;"),
+                    )
+                };
+                assert!(
+                    !of_m.is_null(),
+                    "java/util/Optional GetStaticMethodID for `of` failed"
+                );
+                let ret = unsafe {
+                    let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, of_m, x);
+                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                        panic!("Optional.of failed: catch exception");
+                    }
+                    ret
+                };
+
+                assert!(!ret.is_null());
+                ret
+            }
+            None => {
+                let empty_m: jmethodID = unsafe {
+                    (**env).GetStaticMethodID.unwrap()(
+                        env,
+                        class,
+                        swig_c_str!("empty"),
+                        swig_c_str!("()Ljava/util/Optional;"),
+                    )
+                };
+                assert!(
+                    !empty_m.is_null(),
+                    "java/util/Optional GetStaticMethodID for `empty` failed"
+                );
+                let ret = unsafe {
+                    let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, empty_m);
+                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                        panic!("Optional.empty failed: catch exception");
+                    }
+                    ret
+                };
+                assert!(!ret.is_null());
+                ret
+            }
+        }
+    }
+}
