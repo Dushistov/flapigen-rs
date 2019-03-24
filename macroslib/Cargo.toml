@@ -17,7 +17,7 @@ doc = false
 
 [dependencies]
 syn = { version = "0.15.23", features = ["full", "extra-traits", "visit-mut", "visit"] }
-quote = "0.6.10"
+quote = "0.6.11"
 proc-macro2 = "0.4.24"
 log = "0.4.6"
 petgraph = "0.4.13"

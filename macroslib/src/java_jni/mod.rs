@@ -7,7 +7,6 @@ use std::fmt;
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
-use quote::quote;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 

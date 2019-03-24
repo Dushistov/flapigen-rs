@@ -10,7 +10,7 @@ use std::{
 
 use log::{log_enabled, trace};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use smol_str::SmolStr;

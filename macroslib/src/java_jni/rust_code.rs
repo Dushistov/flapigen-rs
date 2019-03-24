@@ -1,7 +1,6 @@
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use proc_macro2::TokenStream;
-use quote::quote;
 use rustc_hash::FxHashMap;
 use syn::{parse_quote, spanned::Spanned, Type};
 

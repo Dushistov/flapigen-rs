@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc, str::FromStr};
 
 use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use rustc_hash::FxHashMap;
 use syn::{
     parse_quote,
@@ -791,7 +791,6 @@ impl VisitMut for FilterSwigAttrs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quote::quote;
     use rustc_hash::FxHashSet;
     use syn::parse_quote;
 
