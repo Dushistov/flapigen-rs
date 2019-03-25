@@ -372,7 +372,9 @@ class Main {
         assert foo.calcF(0, 0) == 5;
         assert foo.getName().equals("Some");
 
-        assert TestOptional.f4(null) == false;
-        assert TestOptional.f4(foo) == true;
+        assert !TestOptional.f4(null).isPresent();
+        l = TestOptional.f4(foo);
+        assert l.isPresent();
+        assert l.getAsLong() == 5;
     }
 }

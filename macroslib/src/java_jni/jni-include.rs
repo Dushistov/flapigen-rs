@@ -77,6 +77,7 @@ trait SwigDerefMut {
 trait SwigForeignClass {
     fn jni_class_name() -> *const ::std::os::raw::c_char;
     fn box_object(x: Self) -> jlong;
+    fn unbox_object(x: jlong) -> Self;
 }
 
 #[allow(unused_macros)]
@@ -1362,28 +1363,13 @@ impl<T: SwigForeignClass> SwigFrom<Option<T>> for jobject {
     }
 }
 
-#[swig_from_foreigner_hint = "T"]
-impl<T:SwigForeignClass + Clone> SwigFrom<jobject> for Option<T> {
-    fn swig_from(x: jobject, env: *mut JNIEnv) -> Self {
-        let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
-        if x.is_null() {
-            None
+impl<T: SwigForeignClass> SwigFrom<jlong> for Option<T> {
+    fn swig_from(x: jlong, _: *mut JNIEnv) -> Self {
+        if x != 0 {
+            let o: T = T::unbox_object(x);
+            Some(o)
         } else {
-            let class_id = <T>::jni_class_name();
-            let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
-            let field_id = swig_c_str!("mNativeObj");
-            let type_id = swig_c_str!("J");
-            let field_id: jfieldID =
-                unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id, type_id) };
-            assert!(!field_id.is_null());
-
-            let ret: &mut T = unsafe {
-                let ptr = (**env).GetLongField.unwrap()(env, x, field_id);
-                let native = (jlong_to_pointer(ptr) as *mut T).as_mut().unwrap();
-                (**env).DeleteLocalRef.unwrap()(env, x);
-                native
-            };
-            Some(ret.clone())
+            None
         }
     }
 }
