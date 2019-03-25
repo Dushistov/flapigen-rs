@@ -1,5 +1,4 @@
 use log::trace;
-use quote::quote;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{

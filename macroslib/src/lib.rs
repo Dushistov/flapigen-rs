@@ -33,7 +33,7 @@ use std::{
 
 use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use rustc_hash::FxHashSet;
 use syn::{parse_quote, spanned::Spanned, Token, Type};
 

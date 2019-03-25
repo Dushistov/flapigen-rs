@@ -1,6 +1,6 @@
 use log::debug;
 use proc_macro2::{Ident, TokenStream};
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use syn::{
     braced, parenthesized,
     parse::{Parse, ParseStream},
