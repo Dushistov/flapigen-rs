@@ -1,1 +1,1 @@
-"public static void static_foo(Boo";
+"public static void static_foo(@NonNull Boo";

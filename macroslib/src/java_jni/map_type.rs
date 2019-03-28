@@ -4,7 +4,7 @@ use syn::{parse_quote, spanned::Spanned, Type};
 use crate::{
     ast::{if_option_return_some_type, normalize_ty_lifetimes, RustType},
     error::{DiagnosticError, Result},
-    java_jni::JavaForeignTypeInfo,
+    java_jni::{JavaForeignTypeInfo, NullAnnotation},
     typemap::{ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
     ForeignEnumInfo, ForeignerClassInfo, TypeMap,
 };
@@ -52,6 +52,7 @@ pub(in crate::java_jni) fn special_type(
                 to_var = TO_VAR_TEMPLATE,
                 from_var = FROM_VAR_TEMPLATE
             ),
+            annotation: Some(NullAnnotation::NonNull),
         };
         return Ok(Some(converter));
     }
@@ -100,6 +101,7 @@ fn calc_converter_for_foreign_class_arg(
         },
         java_transition_type: Some("long".into()),
         java_converter,
+        annotation: Some(NullAnnotation::NonNull),
     }
 }
 
@@ -119,6 +121,7 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> JavaForeignTypeInf
         },
         java_transition_type: Some("int".into()),
         java_converter,
+        annotation: Some(NullAnnotation::NonNull),
     }
 }
 
@@ -145,6 +148,7 @@ fn handle_option_type_in_input(
                 to_var = TO_VAR_TEMPLATE,
                 from_var = FROM_VAR_TEMPLATE
             ),
+            annotation: Some(NullAnnotation::Nullable),
         }))
     } else {
         Ok(None)

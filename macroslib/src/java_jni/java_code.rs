@@ -4,7 +4,7 @@ use bitflags::bitflags;
 
 use crate::{
     file_cache::FileWriteCache,
-    java_jni::{fmt_write_err_map, method_name, JniForeignMethodSignature},
+    java_jni::{fmt_write_err_map, method_name, JniForeignMethodSignature, NullAnnotation},
     ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant,
 };
 
@@ -134,12 +134,12 @@ pub(in crate::java_jni) fn generate_java_code(
     package_name: &str,
     class: &ForeignerClassInfo,
     methods_sign: &[JniForeignMethodSignature],
-    use_null_annotation: Option<&str>,
+    null_annotation_package: Option<&str>,
 ) -> Result<(), String> {
     let path = output_dir.join(format!("{}.java", class.name));
     let mut file = FileWriteCache::new(&path);
 
-    let imports = get_null_annotation_imports(use_null_annotation, methods_sign);
+    let imports = get_null_annotation_imports(null_annotation_package, methods_sign);
 
     let class_doc_comments = doc_comments_to_java_comments(&class.doc_comments, true);
     write!(
@@ -197,7 +197,7 @@ public final class {class_name} {{
                         args_with_types = args_with_java_types(
                             f_method,
                             ArgsFormatFlags::EXTERNAL,
-                            use_null_annotation.is_some()
+                            null_annotation_package.is_some()
                         )?,
                         exception_spec = exception_spec,
                     )
@@ -220,13 +220,13 @@ public final class {class_name} {{
                         args_with_types = args_with_java_types(
                             f_method,
                             ArgsFormatFlags::INTERNAL,
-                            use_null_annotation.is_some()
+                            null_annotation_package.is_some()
                         )?,
                         exception_spec = exception_spec,
                         single_args_with_types = args_with_java_types(
                             f_method,
                             ArgsFormatFlags::EXTERNAL,
-                            use_null_annotation.is_some()
+                            null_annotation_package.is_some()
                         )?,
                         convert_code = convert_code,
                         args = list_of_args_for_call_method(f_method, ArgsFormatFlags::INTERNAL)?,
@@ -256,12 +256,12 @@ public final class {class_name} {{
                     single_args_with_types = args_with_java_types(
                         f_method,
                         ArgsFormatFlags::EXTERNAL,
-                        use_null_annotation.is_some()
+                        null_annotation_package.is_some()
                     )?,
                     args_with_types = args_with_java_types(
                         f_method,
                         ArgsFormatFlags::USE_COMMA_IF_NEED | ArgsFormatFlags::INTERNAL,
-                        use_null_annotation.is_some()
+                        null_annotation_package.is_some()
                     )?,
                     args = list_of_args_for_call_method(
                         f_method,
@@ -300,12 +300,12 @@ public final class {class_name} {{
                         ext_args_with_types = args_with_java_types(
                             f_method,
                             ArgsFormatFlags::EXTERNAL,
-                            use_null_annotation.is_some()
+                            null_annotation_package.is_some()
                         )?,
                         args_with_types = args_with_java_types(
                             f_method,
                             ArgsFormatFlags::INTERNAL,
-                            use_null_annotation.is_some()
+                            null_annotation_package.is_some()
                         )?,
                         convert_code = convert_code,
                         args = list_of_args_for_call_method(f_method, ArgsFormatFlags::INTERNAL)?
@@ -383,11 +383,8 @@ fn args_with_java_types(
     if flags.contains(ArgsFormatFlags::USE_COMMA_IF_NEED) && !method.input.is_empty() {
         write!(&mut res, ", ").map_err(fmt_write_err_map)?;
     }
-    let annotation = if flags.contains(ArgsFormatFlags::EXTERNAL) && use_null_annotation {
-        "@NonNull "
-    } else {
-        ""
-    };
+    let external = flags.contains(ArgsFormatFlags::EXTERNAL);
+
     for (i, arg) in method.input.iter().enumerate() {
         let type_name = if flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_need_conversation()
         {
@@ -395,7 +392,11 @@ fn args_with_java_types(
         } else {
             arg.as_ref().name.as_str()
         };
-        let annotation = gen_annotation_if_need(&type_name, annotation);
+        let annotation = match arg.annotation {
+            Some(NullAnnotation::NonNull) if external && use_null_annotation => "@NonNull ",
+            Some(NullAnnotation::Nullable) if external && use_null_annotation => "@Nullable ",
+            _ => "",
+        };
         if i == (method.input.len() - 1) {
             write!(&mut res, "{}{} a{}", annotation, type_name, i)
         } else {
@@ -467,26 +468,41 @@ fn doc_comments_to_java_comments(doc_comments: &[String], class_comments: bool) 
     comments
 }
 
-fn gen_annotation_if_need(type_name: &str, annotation: &'static str) -> &'static str {
-    match type_name {
-        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => "",
-        _ => annotation,
-    }
-}
-
 fn get_null_annotation_imports(
-    use_null_annotation: Option<&str>,
+    null_annotation_package: Option<&str>,
     methods_sign: &[JniForeignMethodSignature],
 ) -> String {
-    if let Some(import) = use_null_annotation {
+    if let Some(null_annotation_package) = null_annotation_package {
+        let mut has_non_null = false;
+        let mut has_nullable = false;
+
         for f_method in methods_sign {
-            let has_annotation = f_method
-                .input
-                .iter()
-                .any(|arg| !gen_annotation_if_need(&arg.as_ref().name, "x").is_empty());
-            if has_annotation {
-                return format!("import {};", import);
+            for arg in &f_method.input {
+                match arg.annotation {
+                    Some(NullAnnotation::NonNull) => has_non_null = true,
+                    Some(NullAnnotation::Nullable) => has_nullable = true,
+                    _ => {}
+                }
+                if has_non_null && has_nullable {
+                    return format!(
+                        "import {package}.NonNull;\nimport {package}.Nullable;\n",
+                        package = null_annotation_package
+                    );
+                }
             }
+        }
+        if has_non_null {
+            return format!(
+                "import {package}.NonNull;",
+                package = null_annotation_package
+            );
+        }
+
+        if has_nullable {
+            return format!(
+                "import {package}.Nullable;\n",
+                package = null_annotation_package
+            );
         }
     }
 

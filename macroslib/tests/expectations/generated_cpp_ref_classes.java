@@ -1,1 +1,1 @@
-"public final boolean eq(Foo";
+"public final boolean eq(@NonNull Foo";
