@@ -12,7 +12,7 @@ use syn::{parse_quote, spanned::Spanned, Type};
 
 use self::map_type::special_type;
 use crate::{
-    ast::{change_span, fn_arg_type, normalize_ty_lifetimes, RustType},
+    ast::{change_span, fn_arg_type, if_option_return_some_type, normalize_ty_lifetimes, RustType},
     error::{DiagnosticError, Result},
     typemap::{
         make_unique_rust_typename, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE,
@@ -22,10 +22,17 @@ use crate::{
     LanguageGenerator, MethodVariant, TypeMap,
 };
 
+#[derive(Clone, Copy)]
+enum NullAnnotation {
+    NonNull,
+    Nullable,
+}
+
 struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,
     pub java_transition_type: Option<SmolStr>,
     java_converter: String,
+    annotation: Option<NullAnnotation>,
 }
 
 impl AsRef<ForeignTypeInfo> for JavaForeignTypeInfo {
@@ -61,6 +68,7 @@ impl From<ForeignTypeInfo> for JavaForeignTypeInfo {
             },
             java_transition_type: None,
             java_converter: String::new(),
+            annotation: None,
         }
     }
 }
@@ -118,7 +126,7 @@ impl LanguageGenerator for JavaConfig {
             &self.package_name,
             class,
             &f_methods_sign,
-            self.use_null_annotation.as_ref().map(|x| &**x),
+            self.null_annotation_package.as_ref().map(String::as_str),
         )
         .map_err(|err| DiagnosticError::new(class.span(), &err))?;
         debug!("generate: java code done");
@@ -164,7 +172,7 @@ impl LanguageGenerator for JavaConfig {
             &self.package_name,
             interface,
             &f_methods,
-            self.use_null_annotation.as_ref().map(|x| &**x),
+            self.null_annotation_package.as_ref().map(String::as_str),
         )
         .map_err(|err| DiagnosticError::new(interface.span(), err))?;
         let items = rust_code::generate_interface(
@@ -280,7 +288,17 @@ fn find_suitable_foreign_types_for_methods(
                         ),
                     )
                 })?;
-            input.push(f_arg_type.into());
+
+            let mut f_arg_type: JavaForeignTypeInfo = f_arg_type.into();
+            if !primitive_type(&f_arg_type.base.name) {
+                f_arg_type.annotation =
+                    Some(if if_option_return_some_type(fn_arg_type(arg)).is_none() {
+                        NullAnnotation::NonNull
+                    } else {
+                        NullAnnotation::Nullable
+                    });
+            }
+            input.push(f_arg_type);
         }
         let output = match method.variant {
             MethodVariant::Constructor => ForeignTypeInfo {
@@ -328,4 +346,11 @@ fn java_class_full_name(package_name: &str, class_name: &str) -> String {
 
 fn java_class_name_to_jni(full_name: &str) -> String {
     full_name.replace(".", "/")
+}
+
+fn primitive_type(type_name: &str) -> bool {
+    match type_name {
+        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => true,
+        _ => false,
+    }
 }

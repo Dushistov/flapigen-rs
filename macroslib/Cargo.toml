@@ -35,7 +35,7 @@ jni-sys = "0.3.0"
 
 [build-dependencies]
 syn = { version = "0.15.23", features = ["full", "extra-traits", "visit-mut", "visit"] }
-quote = "0.6.10"
+quote = "0.6.11"
 
 [badges]
 travis-ci = { repository = "Dushistov/rust_swig" }

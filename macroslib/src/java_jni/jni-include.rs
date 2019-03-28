@@ -77,6 +77,7 @@ trait SwigDerefMut {
 trait SwigForeignClass {
     fn jni_class_name() -> *const ::std::os::raw::c_char;
     fn box_object(x: Self) -> jlong;
+    fn unbox_object(x: jlong) -> Self;
 }
 
 #[allow(unused_macros)]
@@ -1358,6 +1359,17 @@ impl<T: SwigForeignClass> SwigFrom<Option<T>> for jobject {
                 assert!(!ret.is_null());
                 ret
             }
+        }
+    }
+}
+
+impl<T: SwigForeignClass> SwigFrom<jlong> for Option<T> {
+    fn swig_from(x: jlong, _: *mut JNIEnv) -> Self {
+        if x != 0 {
+            let o: T = T::unbox_object(x);
+            Some(o)
+        } else {
+            None
         }
     }
 }
