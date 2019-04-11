@@ -1,4 +1,5 @@
 use std::{
+    env,
     ffi::OsString,
     fs, panic,
     path::{Path, PathBuf},
@@ -66,9 +67,14 @@ fn test_expectations_main() {
         }
     }
 
+    let filter = env::var("RUST_SWIG_EXPECT_RUN_ONLY").ok();
+
     for test_case in test_cases {
         let base_name = test_case.file_stem().expect("name without extenstion");
         let test_name = base_name.to_string_lossy();
+        if filter.as_ref().map(|v| *v != test_name).unwrap_or(false) {
+            continue;
+        }
 
         let mut test_something = false;
         for lang in &[ForeignLang::Cpp, ForeignLang::Java] {
