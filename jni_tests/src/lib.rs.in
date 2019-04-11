@@ -710,6 +710,10 @@ impl TestOptional {
         }
     }
 
+    fn f4(foo: Option<Foo>) -> Option<i64> {
+        foo.map(|x| i64::from(x.data))
+    }
+
     fn f5(need_something: bool) -> Option<String> {
         if need_something {
             Some("true".to_string())
@@ -724,6 +728,6 @@ foreigner_class!(class TestOptional {
     static_method TestOptional::f1(x: Option<f64>) -> Option<f64>;
     static_method TestOptional::f2(x: Option<i64>) -> Option<i64>;
     static_method TestOptional::f3(need_something: bool) -> Option<Foo>;
+    static_method TestOptional::f4(foo: Option<Foo>) -> Option<i64>;
     static_method TestOptional::f5(need_something: bool) -> Option<String>;
-    //static_method TestOptional::f6(need_something: Option<String>) -> bool;
 });

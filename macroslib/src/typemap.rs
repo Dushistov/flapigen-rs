@@ -11,7 +11,6 @@ use petgraph::{
     Graph,
 };
 use proc_macro2::{Span, TokenStream};
-use quote::quote;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use smol_str::SmolStr;

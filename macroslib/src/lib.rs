@@ -33,7 +33,7 @@ use std::{
 
 use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use rustc_hash::FxHashSet;
 use syn::{parse_quote, spanned::Spanned, Token, Type};
 
@@ -64,7 +64,7 @@ pub enum LanguageConfig {
 pub struct JavaConfig {
     output_dir: PathBuf,
     package_name: String,
-    use_null_annotation: Option<String>,
+    null_annotation_package: Option<String>,
     optional_package: String,
 }
 
@@ -77,7 +77,7 @@ impl JavaConfig {
         JavaConfig {
             output_dir,
             package_name,
-            use_null_annotation: None,
+            null_annotation_package: None,
             optional_package: "java.util".to_string(),
         }
     }
@@ -85,8 +85,29 @@ impl JavaConfig {
     /// # Arguments
     /// * `import_annotation` - import statement for @NonNull,
     ///                         for example android.support.annotation.NonNull
+    #[deprecated(note = "Use use_null_annotation_from_package instead")]
     pub fn use_null_annotation(mut self, import_annotation: String) -> JavaConfig {
-        self.use_null_annotation = Some(import_annotation);
+        let suffix = ".NonNull";
+        if !import_annotation.ends_with(suffix) {
+            panic!(
+                "import_annotation({}) should ends with {}",
+                import_annotation, suffix
+            );
+        }
+        let package = &import_annotation[0..import_annotation.len() - suffix.len()];
+        self.null_annotation_package = Some(package.into());
+        self
+    }
+    /// Use @NonNull/@Nullable for types where appropriate
+    /// # Arguments
+    /// * `null_annotation_package` - from which package import annotations like NonNull,
+    ///                         for example for Android Studio
+    ///                         you should pass android.support.annotation
+    pub fn use_null_annotation_from_package(
+        mut self,
+        null_annotation_package: String,
+    ) -> JavaConfig {
+        self.null_annotation_package = Some(null_annotation_package);
         self
     }
     /// If you use JDK without java.util.Optional*, then you can provide

@@ -3,7 +3,6 @@ use std::io::Write;
 use log::{debug, trace};
 use petgraph::Direction;
 use proc_macro2::Span;
-use quote::quote;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 

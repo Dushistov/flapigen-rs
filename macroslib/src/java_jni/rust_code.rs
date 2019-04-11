@@ -1,7 +1,6 @@
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use proc_macro2::TokenStream;
-use quote::quote;
 use rustc_hash::FxHashMap;
 use syn::{parse_quote, spanned::Spanned, Type};
 
@@ -82,6 +81,8 @@ pub(in crate::java_jni) fn generate_rust_code(
                 ret
             };
 
+            let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+
             gen_code.push(syn::parse_str(&format!(
                 r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
     fn jni_class_name() -> *const ::std::os::raw::c_char {{
@@ -91,11 +92,20 @@ pub(in crate::java_jni) fn generate_rust_code(
 {code_box_this}
        this as jlong
     }}
+    fn unbox_object(x: jlong) -> Self {{
+        let x: *mut {this_type} = unsafe {{
+           jlong_to_pointer::<{this_type}>(x).as_mut().unwrap()
+        }};
+    {unpack_code}
+        x
+    }}
 }}"#,
                 lifetimes = lifetimes,
                 class_name = DisplayToTokens(&this_type.ty),
                 jni_class_name = class_name_for_jni,
                 code_box_this = code_box_this,
+                unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "x"),
+                this_type = this_type_for_method.normalized_name,
             ))?);
 
             let jlong_ti: RustType = parse_type! { jlong }.into();

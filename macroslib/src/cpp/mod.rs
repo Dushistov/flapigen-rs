@@ -10,7 +10,7 @@ use std::{
 use log::{debug, trace};
 use petgraph::Direction;
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 

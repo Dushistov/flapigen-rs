@@ -201,7 +201,7 @@ foreigner_class!(class FooImpl {
         println!("Java: {}", java_code.foreign_code);
         assert!(java_code
             .foreign_code
-            .contains("void setAlternateBoarding(Boo [] a0)"));
+            .contains("void setAlternateBoarding(@NonNull Boo [] a0)"));
     }
 }
 
@@ -229,7 +229,7 @@ foreigner_class!(class TestEnumClass {
         let java_code = parse_code(name, Source::Str(src), ForeignLang::Java).unwrap();
         println!("{}", java_code.rust_code);
         println!("{}", java_code.foreign_code);
-        assert!(java_code.foreign_code.contains("int f1(MyEnum"));
+        assert!(java_code.foreign_code.contains("int f1(@NonNull MyEnum"));
     }
 }
 
@@ -469,10 +469,10 @@ fn parse_code(test_name: &str, rust_src: Source, lang: ForeignLang) -> Result<Co
     let tmp_dir = tempdir().expect("Can not create tmp directory");
     let (swig_gen, ext_list): (Generator, &[&'static str]) = match lang {
         ForeignLang::Java => {
-            let swig_gen = Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
-                tmp_dir.path().into(),
-                "org.example".into(),
-            )))
+            let swig_gen = Generator::new(LanguageConfig::JavaConfig(
+                JavaConfig::new(tmp_dir.path().into(), "org.example".into())
+                    .use_null_annotation_from_package("android.support.annotation".into()),
+            ))
             .with_pointer_target_width(64);
 
             (swig_gen, &[".java"])

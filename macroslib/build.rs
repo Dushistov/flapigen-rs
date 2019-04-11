@@ -1,6 +1,6 @@
 use std::{env, io::Write, path::Path};
 
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use syn::{parse_quote, visit_mut::VisitMut};
 
 struct FilterSwigAttrs;

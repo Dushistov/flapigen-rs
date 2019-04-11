@@ -1,17 +1,16 @@
 use log::trace;
-use quote::quote;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
-    ast::{normalize_ty_lifetimes, RustType},
+    ast::{if_option_return_some_type, normalize_ty_lifetimes, RustType},
     error::{DiagnosticError, Result},
-    java_jni::JavaForeignTypeInfo,
-    typemap::ForeignTypeInfo,
+    java_jni::{JavaForeignTypeInfo, NullAnnotation},
+    typemap::{ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
     ForeignEnumInfo, ForeignerClassInfo, TypeMap,
 };
 
 pub(in crate::java_jni) fn special_type(
-    conv_map: &TypeMap,
+    conv_map: &mut TypeMap,
     arg_ty: &Type,
 ) -> Result<Option<JavaForeignTypeInfo>> {
     let foreign_class_trait = "SwigForeignClass";
@@ -48,9 +47,18 @@ pub(in crate::java_jni) fn special_type(
                 correspoding_rust_type: jlong_ti,
             },
             java_transition_type: Some("long".into()),
-            java_converter: "        long {to_var} = {from_var}.mNativeObj;".to_string(),
+            java_converter: format!(
+                "        long {to_var} = {from_var}.mNativeObj;",
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE
+            ),
+            annotation: Some(NullAnnotation::NonNull),
         };
         return Ok(Some(converter));
+    }
+
+    if let Some(ty) = if_option_return_some_type(arg_ty) {
+        return handle_option_type_in_input(conv_map, &ty);
     }
 
     trace!("Oridinary type {:?}", arg_ty);
@@ -65,17 +73,23 @@ fn calc_converter_for_foreign_class_arg(
     let this_ty: RustType = this_ty.clone().into();
 
     let java_converter = if this_ty.normalized_name == normalize_ty_lifetimes(arg_ty) {
-        r#"
+        format!(
+            r#"
         long {to_var} = {from_var}.mNativeObj;
         {from_var}.mNativeObj = 0;
-"#
-        .to_string()
+"#,
+            to_var = TO_VAR_TEMPLATE,
+            from_var = FROM_VAR_TEMPLATE
+        )
     } else if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = arg_ty {
         assert_eq!(normalize_ty_lifetimes(elem), this_ty.normalized_name);
-        r#"
+        format!(
+            r#"
         long {to_var} = {from_var}.mNativeObj;
-"#
-        .to_string()
+"#,
+            to_var = TO_VAR_TEMPLATE,
+            from_var = FROM_VAR_TEMPLATE
+        )
     } else {
         unreachable!();
     };
@@ -87,15 +101,19 @@ fn calc_converter_for_foreign_class_arg(
         },
         java_transition_type: Some("long".into()),
         java_converter,
+        annotation: Some(NullAnnotation::NonNull),
     }
 }
 
 fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> JavaForeignTypeInfo {
     let jint_ti: RustType = parse_type! { jint }.into();
-    let java_converter: String = r#"
+    let java_converter: String = format!(
+        r#"
         int {to_var} = {from_var}.getValue();
-"#
-    .into();
+"#,
+        to_var = TO_VAR_TEMPLATE,
+        from_var = FROM_VAR_TEMPLATE
+    );
     JavaForeignTypeInfo {
         base: ForeignTypeInfo {
             name: foreign_enum.name.to_string().into(),
@@ -103,5 +121,36 @@ fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> JavaForeignTypeInf
         },
         java_transition_type: Some("int".into()),
         java_converter,
+        annotation: Some(NullAnnotation::NonNull),
+    }
+}
+
+fn handle_option_type_in_input(
+    conv_map: &mut TypeMap,
+    opt_inside_ty: &Type,
+) -> Result<Option<JavaForeignTypeInfo>> {
+    if let Some(fclass) = conv_map.find_foreigner_class_with_such_self_type(opt_inside_ty, false) {
+        let jlong_ti: RustType = parse_type! { jlong }.into();
+        Ok(Some(JavaForeignTypeInfo {
+            base: ForeignTypeInfo {
+                name: fclass.name.to_string().into(),
+                correspoding_rust_type: jlong_ti,
+            },
+            java_transition_type: Some("long".into()),
+            java_converter: format!(
+                r#"
+        long {to_var} = 0;//TODO: use ptr::null() for corresponding constant
+        if ({from_var} != null) {{
+            {to_var} = {from_var}.mNativeObj;
+            {from_var}.mNativeObj = 0;
+        }}
+"#,
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE
+            ),
+            annotation: Some(NullAnnotation::Nullable),
+        }))
+    } else {
+        Ok(None)
     }
 }
