@@ -45,6 +45,8 @@ mod swig_foreign_types_map {
     #![swig_rust_type_not_unique = "jobject"]
     #![swig_foreigner_type = "Double"]
     #![swig_rust_type_not_unique = "jobject"]
+    #![swig_foreigner_type = "java.util.Optional<String>"]
+    #![swig_rust_type_not_unique = "jobject"]
 }
 
 #[allow(dead_code)]
@@ -1375,15 +1377,15 @@ impl<T: SwigForeignClass> SwigFrom<jlong> for Option<T> {
 }
 
 #[swig_to_foreigner_hint = "java.util.Optional<String>"]
-impl SwigFrom<Option<String>> for jobject {
-    fn swig_from(x: Option<String>, env: *mut JNIEnv) -> Self {
+impl SwigInto<jobject> for Option<String> {
+    fn swig_into(self, env: *mut JNIEnv) -> jobject {
         let class: jclass =
             unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/Optional")) };
         assert!(
             !class.is_null(),
             "FindClass for `java/util/Optional` failed"
         );
-        match x {
+        match self {
             Some(obj) => {
                 let x = obj.into_bytes();
                 let x = unsafe { ::std::ffi::CString::from_vec_unchecked(x) };
@@ -1437,4 +1439,3 @@ impl SwigFrom<Option<String>> for jobject {
         }
     }
 }
-
