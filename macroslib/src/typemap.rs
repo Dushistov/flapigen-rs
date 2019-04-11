@@ -763,8 +763,9 @@ impl TypeMap {
             });
         if ret.is_none() {
             debug!(
-                "map to foreign failed, foreign_map {:?}",
-                self.foreign_names_map
+                "map to foreign failed, foreign_map {:?}\n conv_graph: {}",
+                self.foreign_names_map,
+                DisplayTypesConvGraph(&self.conv_graph),
             );
         }
         ret
