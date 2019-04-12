@@ -1,6 +1,6 @@
 [package]
 name = "rust_swig"
-version = "0.2.1-pre"
+version = "0.3.0"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 description = "Tool for connecting libraries written in Rust with other languages"
 license = "BSD-3-Clause"
@@ -25,7 +25,7 @@ bitflags = "1.0"
 lazy_static = "1.0"
 smallvec = "0.6.9"
 rustc-hash = "1.0.1"
-smol_str = { git = "https://github.com/Dushistov/smol_str", rev = "ce9802618bf1fa093fcd777a7bac41752cc3e5c9" }
+smol_str = "0.1.10"
 
 [dev-dependencies]
 env_logger = "0.6"
