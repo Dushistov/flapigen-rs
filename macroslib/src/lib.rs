@@ -258,6 +258,8 @@ impl Generator {
         }
     }
 
+    /// By default we get pointer_target_width via cargo (more exactly CARGO_CFG_TARGET_POINTER_WIDTH),
+    /// but you can change default value via this method
     pub fn with_pointer_target_width(mut self, pointer_target_width: usize) -> Generator {
         self.pointer_target_width = pointer_target_width;
         self
