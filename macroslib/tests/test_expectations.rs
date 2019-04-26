@@ -87,7 +87,7 @@ fn test_expectations_main() {
         }
     }
 
-    assert_eq!(40, ntests);
+    assert_eq!(41, ntests);
 }
 
 #[test]
