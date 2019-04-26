@@ -201,6 +201,13 @@ static FOREIGNER_CLASS: &str = "foreigner_class";
 static FOREIGN_ENUM: &str = "foreign_enum";
 static FOREIGN_INTERFACE: &str = "foreign_interface";
 
+enum OutputCode {
+    Item(syn::Item),
+    Class(ForeignerClassInfo),
+    Interface(ForeignInterface),
+    Enum(ForeignEnumInfo),
+}
+
 impl Generator {
     pub fn new(config: LanguageConfig) -> Generator {
         let pointer_target_width = target_pointer_width_from_env();
@@ -326,6 +333,8 @@ impl Generator {
             write!(&mut file, "{}", item.into_token_stream().to_string()).expect("mem I/O failed");
         }
 
+        let mut output_code = vec![];
+
         for item in syn_file.items {
             if let syn::Item::Macro(mut item_macro) = item {
                 let is_our_macro = [FOREIGNER_CLASS, FOREIGN_ENUM, FOREIGN_INTERFACE]
@@ -339,7 +348,6 @@ impl Generator {
                 trace!("Found {:?}", item_macro.mac.path);
                 let mut tts = TokenStream::new();
                 mem::swap(&mut tts, &mut item_macro.mac.tts);
-                let code;
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS) {
                     let fclass = code_parse::parse_foreigner_class(&self.config, tts)?;
                     debug!(
@@ -347,35 +355,62 @@ impl Generator {
                         fclass.self_type, fclass.this_type_for_method, fclass.constructor_ret_type
                     );
                     self.conv_map.register_foreigner_class(&fclass);
-                    code = Generator::language_generator(&self.config).generate(
+                    Generator::language_generator(&self.config).register_class(
+                        &mut self.conv_map,
+                        &fclass,
+                    )?;
+                    output_code.push(OutputCode::Class(fclass));
+                } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
+                    let fenum = code_parse::parse_foreign_enum(tts)?;
+                    output_code.push(OutputCode::Enum(fenum));
+                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE) {
+                    let finterface = code_parse::parse_foreign_interface(tts)?;
+                    output_code.push(OutputCode::Interface(finterface));
+                } else {
+                    unreachable!();
+                }
+            } else {
+                output_code.push(OutputCode::Item(item));
+            }
+        }
+
+        for code_item in output_code {
+            match code_item {
+                OutputCode::Class(fclass) => {
+                    let code = Generator::language_generator(&self.config).generate(
                         &mut self.conv_map,
                         self.pointer_target_width,
                         &fclass,
                     )?;
-                } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
-                    let fenum = code_parse::parse_foreign_enum(tts)?;
-                    code = Generator::language_generator(&self.config).generate_enum(
+                    for elem in code {
+                        writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
+                    }
+                },
+                OutputCode::Enum(fenum) => {
+                    let code = Generator::language_generator(&self.config).generate_enum(
                         &mut self.conv_map,
                         self.pointer_target_width,
                         &fenum,
                     )?;
-                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE) {
-                    let finterface = code_parse::parse_foreign_interface(tts)?;
-                    code = Generator::language_generator(&self.config).generate_interface(
+                    for elem in code {
+                        writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
+                    }
+                },
+                OutputCode::Interface(finterface) => {
+                    let code = Generator::language_generator(&self.config).generate_interface(
                         &mut self.conv_map,
                         self.pointer_target_width,
                         &finterface,
                     )?;
-                } else {
-                    unreachable!();
+                    for elem in code {
+                        writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
+                    }
+                },
+                OutputCode::Item(item) => {
+                    writeln!(&mut file, "{}", item.into_token_stream().to_string())
+                        .expect("mem I/O failed");
                 }
-                for elem in code {
-                    writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
-                }
-            } else {
-                writeln!(&mut file, "{}", item.into_token_stream().to_string())
-                    .expect("mem I/O failed");
-            }
+            }            
         }
 
         file.update_file_if_necessary().unwrap_or_else(|err| {
@@ -615,6 +650,12 @@ struct ForeignInterfaceMethod {
 }
 
 trait LanguageGenerator {
+    fn register_class(
+        &self,
+        conv_map: &mut TypeMap,
+        class: &ForeignerClassInfo
+    ) -> Result<()>;
+
     fn generate(
         &self,
         conv_map: &mut TypeMap,

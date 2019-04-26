@@ -89,16 +89,11 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 }
 
 impl LanguageGenerator for JavaConfig {
-    fn generate(
+    fn register_class(
         &self,
         conv_map: &mut TypeMap,
-        _: usize,
-        class: &ForeignerClassInfo,
-    ) -> Result<Vec<TokenStream>> {
-        debug!(
-            "generate: begin for {}, this_type_for_method {:?}",
-            class.name, class.this_type_for_method
-        );
+        class: &ForeignerClassInfo
+    ) -> Result<()> {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.span(), &err))?;
@@ -119,6 +114,19 @@ impl LanguageGenerator for JavaConfig {
                 },
             );
         }
+        Ok(())
+    }
+
+    fn generate(
+        &self,
+        conv_map: &mut TypeMap,
+        _: usize,
+        class: &ForeignerClassInfo,
+    ) -> Result<Vec<TokenStream>> {
+        debug!(
+            "generate: begin for {}, this_type_for_method {:?}",
+            class.name, class.this_type_for_method
+        );
 
         let f_methods_sign = find_suitable_foreign_types_for_methods(conv_map, class)?;
         java_code::generate_java_code(

@@ -3,4 +3,10 @@
 jni_tests/java/com/example/rust
 *.class
 *.jar
-c++_tests/c++/rust_interface
+/c++_tests/c++/rust_interface
+/c++_tests/c++/build
+/c++_tests/c++/build_with_boost
+target/
+/macroslib/target/
+.vscode
+Cargo.lock
