@@ -18,10 +18,14 @@ struct Session {
 impl Session {
     pub fn new() -> Session {
         #[cfg(target_os = "android")]
-        android_logger::init_once(android_logger::Filter::default(), Some("hello"));
+        android_logger::init_once(
+            android_logger::Config::default()
+                .with_min_level(log::Level::Debug)
+                .with_tag("Hello"),
+        );
         log_panics::init(); // log panics rather than printing them
         info!("init log system - done");
-        Session { a: 2 }
+        Session { a: 3 }
     }
 
     pub fn add_and1(&self, val: i32) -> i32 {

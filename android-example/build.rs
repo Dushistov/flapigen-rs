@@ -222,7 +222,7 @@ fn rust_swig_expand(source_dir: &Path, file: &Path, out_dir: &Path) {
                 .join(ANDROID_PACKAGE_ID.replace(".", "/")),
             ANDROID_PACKAGE_ID.to_string(),
         )
-        .use_null_annotation("android.support.annotation.NonNull".into()),
+        .use_null_annotation_from_package("android.support.annotation".into()),
     ));
 
     let out_file = out_dir.join(
