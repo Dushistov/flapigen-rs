@@ -50,7 +50,7 @@ pub(in crate::java_jni) fn generate_rust_code(
 
     let mut gen_code = Vec::<TokenStream>::new();
     let (this_type_for_method, code_box_this) =
-        if let (Some(this_type), Some(constructor_ret_type)) = (
+        if let (Some(this_type), Some(_constructor_ret_type)) = (
             class.this_type_for_method.as_ref(),
             class.constructor_ret_type.as_ref(),
         ) {
@@ -60,10 +60,6 @@ pub(in crate::java_jni) fn generate_rust_code(
                 "generate_rust_code: add implements SwigForeignClass for {}",
                 this_type.normalized_name
             );
-            conv_map.add_type(this_type.clone());
-
-            let constructor_ret_type: RustType = constructor_ret_type.clone().into();
-            conv_map.add_type(constructor_ret_type);
 
             let (this_type_for_method, code_box_this) =
                 TypeMap::convert_to_heap_pointer(&this_type, "this");
@@ -107,62 +103,6 @@ pub(in crate::java_jni) fn generate_rust_code(
                 unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "x"),
                 this_type = this_type_for_method.normalized_name,
             ))?);
-
-            let jlong_ti: RustType = parse_type! { jlong }.into();
-            let this_type_for_method_ty = &this_type_for_method.ty;
-            //handle foreigner_class as input arg
-            conv_map.add_conversation_rule(
-                jlong_ti.clone(),
-                parse_type! { & #this_type_for_method_ty }.into(),
-                format!(
-                    r#"
-    let {to_var}: &{this_type} = unsafe {{
-        jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
-    }};
-"#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_for_method.normalized_name,
-                )
-                .into(),
-            );
-
-            //handle foreigner_class as input arg
-            conv_map.add_conversation_rule(
-                jlong_ti.clone(),
-                parse_type! { &mut #this_type_for_method_ty }.into(),
-                format!(
-                    r#"
-    let {to_var}: &mut {this_type} = unsafe {{
-        jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
-    }};
-"#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_for_method.normalized_name,
-                )
-                .into(),
-            );
-
-            let unpack_code =
-                TypeMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
-            conv_map.add_conversation_rule(
-                jlong_ti,
-                this_type,
-                format!(
-                    r#"
-    let {to_var}: *mut {this_type} = unsafe {{
-        jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
-    }};
-{unpack_code}
-"#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_for_method.normalized_name,
-                    unpack_code = unpack_code,
-                )
-                .into(),
-            );
 
             (this_type_for_method, code_box_this)
         } else {
