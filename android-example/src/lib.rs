@@ -25,7 +25,7 @@ impl Session {
         );
         log_panics::init(); // log panics rather than printing them
         info!("init log system - done");
-        Session { a: 3 }
+        Session { a: 2 }
     }
 
     pub fn add_and1(&self, val: i32) -> i32 {
