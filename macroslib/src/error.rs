@@ -47,7 +47,6 @@ impl From<syn::Error> for DiagnosticError {
 
 pub(crate) type Result<T> = std::result::Result<T, DiagnosticError>;
 
-#[cfg(procmacro2_semver_exempt)]
 pub(crate) fn panic_on_parse_error(main_err: &DiagnosticError) -> ! {
     eprintln!("error in {}", main_err.src_id);
     for err in &main_err.data {
@@ -79,12 +78,4 @@ pub(crate) fn panic_on_parse_error(main_err: &DiagnosticError) -> ! {
         );
     }
     panic!();
-}
-
-#[cfg(not(procmacro2_semver_exempt))]
-pub(crate) fn panic_on_parse_error(err: &DiagnosticError) -> ! {
-    panic!(
-        "parsing of {} failed  '{}' failed\nerror: '{}'",
-        err.src_id, err.src, err
-    );
 }
