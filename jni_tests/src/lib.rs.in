@@ -1,12 +1,13 @@
-use std::{cell::{Ref, RefCell, RefMut},
-          path::{Path, PathBuf},
-          rc::Rc,
-          time::SystemTime,
-          sync::{Arc, Mutex, MutexGuard},
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::{Arc, Mutex, MutexGuard},
+    time::SystemTime,
 };
 
 use chrono::{DateTime, Utc};
-use log::{error, debug};
+use log::{debug, error};
 
 use crate::jni_c_header::*;
 
@@ -519,7 +520,7 @@ foreigner_class!(class TestPassObjectsAsParams {
     self_type TestPassObjectsAsParams;
     constructor TestPassObjectsAsParams::default() -> TestPassObjectsAsParams;
     constructor TestPassObjectsAsParams::new_from_foo(_: Foo) -> TestPassObjectsAsParams;
-    
+
     method TestPassObjectsAsParams::f1(&mut self, _: &Foo);
     method TestPassObjectsAsParams::f2(&mut self, _: &mut Foo);
     method TestPassObjectsAsParams::f3(&mut self, _: Foo);
@@ -576,11 +577,13 @@ enum MyEnum {
     Item3,
 }
 
-foreign_enum!(enum MyEnum {
-    ITEM1 = MyEnum::Item1,
-    ITEM2 = MyEnum::Item2,
-    ITEM3 = MyEnum::Item3,
-});
+foreign_enum!(
+    enum MyEnum {
+        ITEM1 = MyEnum::Item1,
+        ITEM2 = MyEnum::Item2,
+        ITEM3 = MyEnum::Item3,
+    }
+);
 
 #[derive(Default)]
 struct Moo;
