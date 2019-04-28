@@ -114,8 +114,8 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
                     return Err(syn::Error::new(
                         a.span(),
                         &format!(
-                            "Expect doc attribute or doc comment or derive here, got {:?}",
-                            meta
+                            "Expect doc attribute or doc comment or derive here, got {}",
+                            meta.into_token_stream().to_string()
                         ),
                     ));
                 }
@@ -367,8 +367,9 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                     != normalize_ty_lifetimes(&*ret_type)
                 {
                     return Err(content.error(format!(
-                        "mismatched types of construtors: {:?} {:?}",
-                        constructor_ret_type, ret_type
+                        "mismatched types of construtors: got {} expect {}",
+                        constructor_ret_type.into_token_stream().to_string(),
+                        ret_type.into_token_stream().to_string()
                     )));
                 }
             } else {

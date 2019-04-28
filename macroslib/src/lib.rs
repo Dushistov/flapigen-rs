@@ -297,7 +297,11 @@ impl Generator {
                 err
             )
         });
-        if let Err(err) = self.expand_str(crate_name, &src_cnt, dst) {
+        if let Err(mut err) = self.expand_str(&src_cnt, dst) {
+            err.register_src(
+                format!("{}: {}", crate_name, src.as_ref().display()),
+                src_cnt.into(),
+            );
             panic_on_parse_error(&err);
         }
     }
@@ -306,7 +310,7 @@ impl Generator {
     ///
     /// # Panics
     /// Panics on I/O errors
-    fn expand_str<D>(mut self, crate_name: &str, src: &str, dst: D) -> Result<()>
+    fn expand_str<D>(mut self, src: &str, dst: D) -> Result<()>
     where
         D: AsRef<Path>,
     {
@@ -320,14 +324,7 @@ impl Generator {
         }
         let items = self.init_types_map(self.pointer_target_width)?;
 
-        let syn_file = match syn::parse_file(src) {
-            Ok(x) => x,
-            Err(err) => {
-                let mut err: DiagnosticError = err.into();
-                err.register_src(crate_name.into(), src.into());
-                return Err(err);
-            }
-        };
+        let syn_file = syn::parse_file(src)?;
 
         let mut file = file_cache::FileWriteCache::new(dst.as_ref());
 
@@ -357,10 +354,8 @@ impl Generator {
                         fclass.self_type, fclass.this_type_for_method, fclass.constructor_ret_type
                     );
                     self.conv_map.register_foreigner_class(&fclass);
-                    Generator::language_generator(&self.config).register_class(
-                        &mut self.conv_map,
-                        &fclass,
-                    )?;
+                    Generator::language_generator(&self.config)
+                        .register_class(&mut self.conv_map, &fclass)?;
                     output_code.push(OutputCode::Class(fclass));
                 } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
                     let fenum = code_parse::parse_foreign_enum(tts)?;
@@ -387,7 +382,7 @@ impl Generator {
                     for elem in code {
                         writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
                     }
-                },
+                }
                 OutputCode::Enum(fenum) => {
                     let code = Generator::language_generator(&self.config).generate_enum(
                         &mut self.conv_map,
@@ -397,7 +392,7 @@ impl Generator {
                     for elem in code {
                         writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
                     }
-                },
+                }
                 OutputCode::Interface(finterface) => {
                     let code = Generator::language_generator(&self.config).generate_interface(
                         &mut self.conv_map,
@@ -407,12 +402,12 @@ impl Generator {
                     for elem in code {
                         writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
                     }
-                },
+                }
                 OutputCode::Item(item) => {
                     writeln!(&mut file, "{}", item.into_token_stream().to_string())
                         .expect("mem I/O failed");
                 }
-            }            
+            }
         }
 
         file.update_file_if_necessary().unwrap_or_else(|err| {
@@ -652,11 +647,7 @@ struct ForeignInterfaceMethod {
 }
 
 trait LanguageGenerator {
-    fn register_class(
-        &self,
-        conv_map: &mut TypeMap,
-        class: &ForeignerClassInfo
-    ) -> Result<()>;
+    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()>;
 
     fn generate(
         &self,

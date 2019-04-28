@@ -12,9 +12,9 @@ crate-type = ["cdylib"]
 [dependencies]
 log = "0.4.6"
 log-panics = "2.0"
-android_logger = "0.7"
+android_logger = "0.8"
 
 [build-dependencies]
 rust_swig = { path = "../macroslib" }
-bindgen = "0.48.1"
+bindgen = "0.49.0"
 walkdir = "2.2.7"

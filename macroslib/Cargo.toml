@@ -16,9 +16,9 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
-syn = { version = "0.15.23", features = ["full", "extra-traits", "visit-mut", "visit"] }
-quote = "0.6.11"
-proc-macro2 = "0.4.24"
+syn = { version = "0.15.33", features = ["full", "extra-traits", "visit-mut", "visit"] }
+quote = "0.6.12"
+proc-macro2 = { version = "0.4.28", features = ["span-locations"] }
 log = "0.4.6"
 petgraph = "0.4.13"
 bitflags = "1.0"
@@ -29,7 +29,7 @@ smol_str = "0.1.10"
 
 [dev-dependencies]
 env_logger = "0.6"
-pulldown-cmark = "0.2.0"
+pulldown-cmark = "0.5.0"
 tempfile="3.0"
 jni-sys = "0.3.0"
 

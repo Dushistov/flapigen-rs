@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 
 use proc_macro2::Span;
 
@@ -47,7 +47,6 @@ impl From<syn::Error> for DiagnosticError {
 
 pub(crate) type Result<T> = std::result::Result<T, DiagnosticError>;
 
-#[cfg(procmacro2_semver_exempt)]
 pub(crate) fn panic_on_parse_error(main_err: &DiagnosticError) -> ! {
     eprintln!("error in {}", main_err.src_id);
     for err in &main_err.data {
@@ -56,35 +55,46 @@ pub(crate) fn panic_on_parse_error(main_err: &DiagnosticError) -> ! {
         let end = span.end();
 
         let mut code_problem = String::new();
-        for (i, line) in main_err.src.lines().enumerate() {
-            if i == start.line {
-                code_problem.push_str(if i == end.line {
-                    &line[start.column..end.column]
+        let nlines = end.line - start.line + 1;
+        for (i, line) in main_err
+            .src
+            .lines()
+            .skip(start.line - 1)
+            .take(nlines)
+            .enumerate()
+        {
+            code_problem.push_str(&line);
+            code_problem.push('\n');
+            if i == 0 && start.column > 0 {
+                write!(&mut code_problem, "{:1$}", ' ', start.column)
+                    .expect("write to String failed");
+            }
+            let code_problem_len = if i == 0 {
+                if i == nlines - 1 {
+                    end.column - start.column
                 } else {
-                    &line[start.column..]
-                });
-            } else if i > start.line && i < end.line {
-                code_problem.push_str(line);
-            } else if i == end.line {
-                code_problem.push_str(&line[..end.column]);
+                    line.len() - start.column - 1
+                }
+            } else if i != nlines - 1 {
+                line.len()
+            } else {
+                end.column
+            };
+            write!(&mut code_problem, "{:^^1$}\n", '^', code_problem_len)
+                .expect("write to String failed");
+            if i == end.line {
                 break;
             }
         }
 
         eprintln!(
-            "parsing of {name} failed\nerror: {err} at {line_s}:{col_s} - {line_e}:{col_e} \n{code_problem}",
-            name = main_err.src_id, err = err, code_problem = code_problem,
-            line_s = start.line, col_s = start.column,
-            line_e = end.line, col_e = end.column
+            "parsing of {name} failed\nerror: {err}\n{code_problem}\nAt {name}:{line_s}:{col_s}",
+            name = main_err.src_id,
+            err = err,
+            code_problem = code_problem,
+            line_s = start.line,
+            col_s = start.column,
         );
     }
     panic!();
-}
-
-#[cfg(not(procmacro2_semver_exempt))]
-pub(crate) fn panic_on_parse_error(err: &DiagnosticError) -> ! {
-    panic!(
-        "parsing of {} failed  '{}' failed\nerror: '{}'",
-        err.src_id, err.src, err
-    );
 }

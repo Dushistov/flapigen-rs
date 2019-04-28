@@ -281,7 +281,10 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
         } else {
             return Err(DiagnosticError::new(
                 a.span(),
-                format!("Unexpected attribute: '{:?}'", a),
+                format!(
+                    "Unexpected attribute: '{}'",
+                    a.into_token_stream().to_string()
+                ),
             ));
         }
     }
