@@ -1,0 +1,10 @@
+r#"# [ no_mangle ] pub extern "C" fn Java_org_example_A_do_1a ( env : * mut JNIEnv , _ : jclass , a_0 : jlong , ) -> ( ) {
+ let a_0 : & B = unsafe { jlong_to_pointer ::< B > ( a_0 ) . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : ( ) = A :: a ( a_0 , ) ;
+ ret
+ }"#;
+r#"# [ no_mangle ] pub extern "C" fn Java_org_example_B_do_1b ( env : * mut JNIEnv , _ : jclass , a_0 : jlong , ) -> ( ) {
+ let a_0 : & A = unsafe { jlong_to_pointer ::< A > ( a_0 ) . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : ( ) = B :: b ( a_0 , ) ;
+ ret
+ }"#;

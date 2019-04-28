@@ -21,6 +21,8 @@ import com.example.rust.TestEnumClass;
 import com.example.rust.Observable;
 import com.example.rust.MyObserver;
 import com.example.rust.TestOptional;
+import com.example.rust.CircularDepsA;
+import com.example.rust.CircularDepsB;
 
 class Main {
     private static void testDoubleOverload() {
@@ -146,6 +148,7 @@ class Main {
             testCallbacksWithException();
             testReturnOfEnum();
             testOptional();
+            testCircularDeps();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -380,5 +383,14 @@ class Main {
         assert TestOptional.f5(true).isPresent();
         assert TestOptional.f5(true).get().equals("true");
         assert !TestOptional.f5(false).isPresent();
+    }
+
+    private static void testCircularDeps() {
+        CircularDepsA a = new CircularDepsA("This is A");
+        CircularDepsB b = new CircularDepsB(17.);
+        String s = a.a(b);
+        assert s.equals("This is A17");
+        String s2 = b.b(a);
+        assert s2.equals("17This is A");
     }
 }

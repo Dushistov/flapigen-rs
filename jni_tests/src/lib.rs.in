@@ -1,7 +1,9 @@
 use std::{cell::{Ref, RefCell, RefMut},
           path::{Path, PathBuf},
           rc::Rc,
-          time::SystemTime};
+          time::SystemTime,
+          sync::{Arc, Mutex, MutexGuard},
+};
 
 use chrono::{DateTime, Utc};
 use log::{error, debug};
@@ -730,4 +732,49 @@ foreigner_class!(class TestOptional {
     static_method TestOptional::f3(need_something: bool) -> Option<Foo>;
     static_method TestOptional::f4(foo: Option<Foo>) -> Option<i64>;
     static_method TestOptional::f5(need_something: bool) -> Option<String>;
+});
+
+struct CircularDepsA {
+    s: String,
+}
+
+impl CircularDepsA {
+    fn java_new(s: &str) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(CircularDepsA { s: s.into() }))
+    }
+
+    fn a(&self, b: &CircularDepsB) -> String {
+        let mut ret = self.s.clone();
+        ret.push_str(&b.s);
+        ret
+    }
+}
+
+struct CircularDepsB {
+    s: String,
+}
+
+impl CircularDepsB {
+    fn new(a: f64) -> Self {
+        CircularDepsB {
+            s: format!("{}", a),
+        }
+    }
+    fn b(&self, a: &CircularDepsA) -> String {
+        let mut ret = self.s.clone();
+        ret.push_str(&a.s);
+        ret
+    }
+}
+
+foreigner_class!(class CircularDepsA {
+    self_type CircularDepsA;
+    constructor CircularDepsA::java_new(_: &str) -> Arc<Mutex<CircularDepsA>>;
+    method CircularDepsA::a(&self, b: &CircularDepsB) -> String;
+});
+
+foreigner_class!(class CircularDepsB {
+    self_type CircularDepsB;
+    constructor CircularDepsB::new(_: f64) -> CircularDepsB;
+    method CircularDepsB::b(&self, a: &CircularDepsA) -> String;
 });

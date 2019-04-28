@@ -1,0 +1,12 @@
+r#"pub extern "C" fn A_a ( a_0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
+ assert ! ( ! a_0 . is_null ( ) ) ;
+ let a_0 : & B = unsafe { &* ( a_0 as * const B ) } ;
+ let mut ret : ( ) = A :: a ( a_0 ) ;
+ ret
+ }"#;
+r#"pub extern "C" fn B_b ( a_0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
+ assert ! ( ! a_0 . is_null ( ) ) ;
+ let a_0 : & A = unsafe { &* ( a_0 as * const A ) } ;
+ let mut ret : ( ) = B :: b ( a_0 ) ;
+ ret
+ }"#;
