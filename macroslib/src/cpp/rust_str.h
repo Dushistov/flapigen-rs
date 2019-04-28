@@ -16,7 +16,9 @@ struct RustStrView {
     bool empty() const noexcept { return this->len == 0; }
     std::string to_std_string() const { return std::string{ data, len }; }
 #endif
-#if __cplusplus > 201402L
+#if (defined(__clang__) && __clang_major__ >= 4) \
+    || (defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 7) \
+    || (defined(_MSC_VER) && _MSC_VER >= 1910)
     std::string_view to_string_view() const { return std::string_view{ data, len }; }
 #endif
 #ifdef BOOST_STRING_VIEW_HPP
@@ -76,7 +78,9 @@ public:
     std::string to_std_string() const { return std::string(data, len); }
     size_t size() const noexcept { return this->len; }
     bool empty() const noexcept { return this->len == 0; }
-#if __cplusplus > 201402L
+#if (defined(__clang__) && __clang_major__ >= 4) \
+    || (defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 7) \
+    || (defined(_MSC_VER) && _MSC_VER >= 1910)
     std::string_view to_string_view() const { return std::string_view(data, len); }
 #endif
 
