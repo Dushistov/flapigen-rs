@@ -18,7 +18,7 @@ use crate::{
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
             rust_to_foreign_convert_method_inputs,
         },
-        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        TO_VAR_TEMPLATE,
     },
     ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
     SelfTypeVariant, TypeMap,
