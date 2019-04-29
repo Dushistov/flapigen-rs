@@ -366,11 +366,14 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 if normalize_ty_lifetimes(constructor_ret_type)
                     != normalize_ty_lifetimes(&*ret_type)
                 {
-                    return Err(content.error(format!(
-                        "mismatched types of construtors: got {} expect {}",
-                        constructor_ret_type.into_token_stream().to_string(),
-                        ret_type.into_token_stream().to_string()
-                    )));
+                    return Err(syn::Error::new(
+                        constructor_ret_type.span(),
+                        format!(
+                            "mismatched types of construtors: got {} expect {}",
+                            constructor_ret_type.into_token_stream().to_string(),
+                            ret_type.into_token_stream().to_string()
+                        ),
+                    ));
                 }
             } else {
                 debug!(
