@@ -272,7 +272,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
             } else {
                 return Err(DiagnosticError::new(
                     a.span(),
-                    &format!(
+                    format!(
                         "No {} for {}",
                         SWIG_FOREIGNER_TYPE, SWIG_RUST_TYPE_NOT_UNIQUE
                     ),

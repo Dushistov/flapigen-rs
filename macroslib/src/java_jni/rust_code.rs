@@ -112,7 +112,7 @@ pub(in crate::java_jni) fn generate_rust_code(
     let no_this_info = || {
         DiagnosticError::new(
             class.span(),
-            &format!(
+            format!(
                 "Class {} (package {}) has methods, but there is no constructor\n
 May be you need to use `private constructor = empty;` syntax?",
                 class.name, package_name,

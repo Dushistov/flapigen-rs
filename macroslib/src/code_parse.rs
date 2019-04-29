@@ -113,7 +113,7 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
                 _ => {
                     return Err(syn::Error::new(
                         a.span(),
-                        &format!(
+                        format!(
                             "Expect doc attribute or doc comment or derive here, got {}",
                             meta.into_token_stream().to_string()
                         ),
