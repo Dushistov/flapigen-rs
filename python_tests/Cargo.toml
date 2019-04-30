@@ -1,0 +1,18 @@
+[package]
+name = "rust_swig_test_python"
+version = "0.1.0"
+authors = ["Adam Rzepka <adam@simteract.com>"]
+build = "build.rs"
+edition = "2018"
+
+[lib]
+name = "rust_swig_test_python"
+crate-type = ["cdylib"]
+
+[dependencies]
+cpython = { version = "0.2", features = ["extension-module"] }
+
+[build-dependencies]
+env_logger = "0.6"
+log = "0.4.6"
+rust_swig = { path = "../macroslib" }

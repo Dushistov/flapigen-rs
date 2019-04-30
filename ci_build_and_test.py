@@ -5,6 +5,7 @@ import os
 import sys
 import re
 import time
+import shutil
 
 def show_timing(function):
     def _wrapper(*args, **kwargs):
@@ -109,6 +110,16 @@ def build_cpp_code_with_cmake(cmake_build_dir, addon_params):
                                    "./c++-rust-swig-test"], cwd = str(cmake_build_dir))
 
 @show_timing
+def test_python():
+    subprocess.check_call(["cargo", "build", "-v", "--package", "rust_swig_test_python"], shell = False)
+    if sys.platform == 'win32':
+        shutil.copyfile("target/debug/rust_swig_test_python.dll", "python_tests/python/rust_swig_test_python.dll")
+    else:
+        shutil.copyfile("target/debug/librust_swig_test_python.so", "python_tests/python/rust_swig_test_python.so")
+    subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
+
+
+@show_timing
 def build_cargo_docs():
     print("build docs")
     subprocess.check_call(["cargo", "doc", "-v", "--package", "rust_swig"])
@@ -153,6 +164,8 @@ def main():
     print("skip_cpp_tests %s" % skip_cpp_tests)
     java_only = has_option("--java-only-tests")
     print("java_only %s" % java_only)
+    skip_python_tests = has_option("--skip-python-tests")
+    print("skip_python_tests %s" % skip_python_tests)
     sys.stdout.flush()
 
     build_cargo_docs()
@@ -163,6 +176,9 @@ def main():
         run_jni_tests(use_shell, fast_run)
         if java_only:
             return
+
+    if not skip_python_tests:
+        test_python()
 
     if not skip_cpp_tests:
         print("Check cmake version")
@@ -176,6 +192,7 @@ def main():
 
     if has_android_sdk and (not skip_android_test):
         build_for_android(is_windows)
+
 
 if __name__ == "__main__":
     main()

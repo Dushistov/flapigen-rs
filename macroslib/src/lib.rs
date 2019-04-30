@@ -20,6 +20,7 @@ mod cpp;
 mod error;
 pub mod file_cache;
 mod java_jni;
+mod python;
 mod typemap;
 
 use std::{
@@ -58,6 +59,7 @@ pub fn target_pointer_width_from_env() -> Option<usize> {
 pub enum LanguageConfig {
     JavaConfig(JavaConfig),
     CppConfig(CppConfig),
+    PythonConfig(PythonConfig),
 }
 
 /// Configuration for Java binding generation
@@ -192,6 +194,27 @@ impl CppConfig {
     }
 }
 
+/// Configuration for Java binding generation
+pub struct PythonConfig {
+    output_dir: PathBuf,
+    module_name: String,
+    module_initialization_code: RefCell<Vec<TokenStream>>,
+}
+
+impl PythonConfig {
+    /// Create `PythonConfig`
+    /// # Arguments
+    /// * `output_dir` - directory where place generated java files
+    /// * `package_name` - package name for generated java files
+    pub fn new(output_dir: PathBuf, module_name: String) -> PythonConfig {
+        PythonConfig {
+            output_dir,
+            module_name,
+            module_initialization_code: RefCell::default(),
+        }
+    }
+}
+
 /// `Generator` is a main point of `rust_swig`.
 /// It expands rust macroses and generates not rust code.
 /// It designed to use inside `build.rs`.
@@ -264,6 +287,12 @@ impl Generator {
                 foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_tuple.h".into(),
                     code: include_str!("cpp/rust_tuple.h").into(),
+                });
+            }
+            LanguageConfig::PythonConfig(..) => {
+                conv_map_source.push(SourceCode {
+                    id_of_code: "python-include.rs".into(),
+                    code: include_str!("python/python-include.rs").into(),
                 });
             }
         }
@@ -422,6 +451,11 @@ impl Generator {
             }
         }
 
+        let code = Generator::language_generator(&self.config).finish(&mut self.conv_map)?;
+        for elem in code {
+            writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
+        }
+
         file.update_file_if_necessary().unwrap_or_else(|err| {
             panic!(
                 "Error during write to file {}: {}",
@@ -465,6 +499,7 @@ impl Generator {
         match cfg {
             LanguageConfig::JavaConfig(ref java_cfg) => java_cfg,
             LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,
+            LanguageConfig::PythonConfig(ref python_cfg) => python_cfg,
         }
     }
 }
@@ -684,5 +719,9 @@ trait LanguageGenerator {
 
     fn place_foreign_lang_helpers(&self, _: &[SourceCode]) -> std::result::Result<(), String> {
         Ok(())
+    }
+
+    fn finish(&self, conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
+        Ok(vec![TokenStream::new()])
     }
 }

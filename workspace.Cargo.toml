@@ -1,2 +1,2 @@
 [workspace]
-members = ["macroslib", "jni_tests", "c++_tests", "android-example"]
+members = ["macroslib", "jni_tests", "c++_tests", "android-example", "python_tests"]

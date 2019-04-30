@@ -1,0 +1,10 @@
+pub enum TestEnum {
+    A,
+    B,
+}
+
+foreign_enum!(enum TestEnum {
+    A = TestEnum::A,
+    B = TestEnum::B,
+});
+
