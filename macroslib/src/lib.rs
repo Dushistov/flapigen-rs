@@ -126,6 +126,9 @@ pub struct CppConfig {
     cpp_variant: CppVariant,
     generated_helper_files: RefCell<FxHashSet<PathBuf>>,
     to_generate: RefCell<Vec<TokenStream>>,
+    /// Create separate *_impl.hpp files with methods implementations.
+    /// Can be necessary for the project with circular dependencies between classes.
+    separate_impl_headers: bool,
 }
 
 /// To which `C++` type map `std::option::Option`
@@ -157,6 +160,7 @@ impl CppConfig {
             cpp_variant: CppVariant::Std17,
             generated_helper_files: RefCell::new(FxHashSet::default()),
             to_generate: RefCell::new(vec![]),
+            separate_impl_headers: false,
         }
     }
     pub fn cpp_optional(self, cpp_optional: CppOptional) -> CppConfig {
@@ -175,6 +179,14 @@ impl CppConfig {
         CppConfig {
             cpp_variant: CppVariant::Boost,
             cpp_optional: CppOptional::Boost,
+            ..self
+        }
+    }
+    /// Create separate *_impl.hpp files with methods' implementations.
+    /// Can be necessary for the project with circular dependencies between classes.
+    pub fn separate_impl_headers(self, separate_impl_headers: bool) -> CppConfig {
+        CppConfig {
+            separate_impl_headers,
             ..self
         }
     }
