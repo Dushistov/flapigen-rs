@@ -32,6 +32,7 @@ pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
 pub(in crate::typemap) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
 pub(in crate::typemap) static FUNCTION_RETURN_TYPE_TEMPLATE: &str = "{function_ret_type}";
+const MAX_TRY_BUILD_PATH_STEPS: usize = 7;
 
 #[derive(Debug, Clone)]
 pub(crate) struct TypeConvEdge {
@@ -513,6 +514,7 @@ impl TypeMap {
             &mut self.conv_graph,
             &self.rust_names_map,
             &self.generic_edges,
+            MAX_TRY_BUILD_PATH_STEPS,
         ) {
             merge_path_to_conv_map(path, self);
         }
@@ -748,28 +750,35 @@ impl TypeMap {
 
         let from: RustType = rust_ty.clone().into();
         let mut possible_paths = Vec::<(PossibePath, SmolStr, NodeIndex)>::new();
-        for (foreign_name, graph_idx) in &self.foreign_names_map {
-            let other = self.conv_graph[*graph_idx].clone();
-            let path = match direction {
-                petgraph::Direction::Outgoing => try_build_path(
-                    &from,
-                    &other,
-                    build_for_sp,
-                    &mut self.conv_graph,
-                    &self.rust_names_map,
-                    &self.generic_edges,
-                ),
-                petgraph::Direction::Incoming => try_build_path(
-                    &other,
-                    &from,
-                    build_for_sp,
-                    &mut self.conv_graph,
-                    &self.rust_names_map,
-                    &self.generic_edges,
-                ),
-            };
-            if let Some(path) = path {
-                possible_paths.push((path, foreign_name.clone(), *graph_idx));
+        for max_steps in 1..=MAX_TRY_BUILD_PATH_STEPS {
+            for (foreign_name, graph_idx) in &self.foreign_names_map {
+                let other = self.conv_graph[*graph_idx].clone();
+                let path = match direction {
+                    petgraph::Direction::Outgoing => try_build_path(
+                        &from,
+                        &other,
+                        build_for_sp,
+                        &mut self.conv_graph,
+                        &self.rust_names_map,
+                        &self.generic_edges,
+                        max_steps,
+                    ),
+                    petgraph::Direction::Incoming => try_build_path(
+                        &other,
+                        &from,
+                        build_for_sp,
+                        &mut self.conv_graph,
+                        &self.rust_names_map,
+                        &self.generic_edges,
+                        max_steps,
+                    ),
+                };
+                if let Some(path) = path {
+                    possible_paths.push((path, foreign_name.clone(), *graph_idx));
+                }
+            }
+            if !possible_paths.is_empty() {
+                break;
             }
         }
         let ret = possible_paths
@@ -956,6 +965,7 @@ fn try_build_path(
     conv_graph: &mut TypesConvGraph,
     rust_names_map: &FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
     generic_edges: &[GenericTypeConv],
+    max_steps: usize,
 ) -> Option<PossibePath> {
     debug!(
         "try_build_path from {} to {}, ty names len {}, graph nodes {}, edges {}",
@@ -976,8 +986,7 @@ fn try_build_path(
     cur_step.insert(start_from_idx);
     let mut next_step = FxHashSet::default();
 
-    const MAX_STEPS: usize = 7;
-    for step in 0..MAX_STEPS {
+    for step in 0..max_steps {
         debug!("try_build_path do step {}", step);
         if cur_step.is_empty() {
             break;
@@ -1271,6 +1280,7 @@ fn helper3() {
             &mut types_map.conv_graph,
             &mut types_map.rust_names_map,
             &types_map.generic_edges,
+            MAX_TRY_BUILD_PATH_STEPS,
         )
         .is_none());
     }
