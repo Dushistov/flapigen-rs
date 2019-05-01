@@ -11,6 +11,7 @@ use petgraph::{
     Graph,
 };
 use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -618,7 +619,13 @@ impl TypeMap {
         build_for_sp: Span,
     ) -> Option<ForeignTypeInfo> {
         let norm_rust_typename = normalize_ty_lifetimes(rust_ty);
-        debug!("map foreign: {:?} {:?}", rust_ty, direction);
+        if log_enabled!(log::Level::Debug) {
+            debug!(
+                "map foreign: {} {:?}",
+                rust_ty.into_token_stream().to_string(),
+                direction
+            );
+        }
         if direction == petgraph::Direction::Outgoing {
             if let Some(foreign_name) = self.rust_to_foreign_cache.get(norm_rust_typename) {
                 if let Some(to) = self.foreign_names_map.get(foreign_name) {
@@ -668,7 +675,13 @@ impl TypeMap {
             }
             if let Some(min_path) = min_path {
                 let node = &self.conv_graph[min_path.1];
-                debug!("map foreign {:?} <-> {}", rust_ty, min_path.2);
+                if log_enabled!(log::Level::Debug) {
+                    debug!(
+                        "map foreign, we found min path {} <-> {}",
+                        rust_ty.into_token_stream().to_string(),
+                        min_path.2
+                    );
+                }
                 return Some(ForeignTypeInfo {
                     name: min_path.2,
                     correspoding_rust_type: node.clone(),
@@ -712,10 +725,14 @@ impl TypeMap {
             }
         }
         for (ty, suffix, foreign_name) in new_foreign_types {
-            debug!(
-                "map foreign: add possible type {:?} {} <-> {}",
-                ty, suffix, foreign_name
-            );
+            if log_enabled!(log::Level::Debug) {
+                debug!(
+                    "map foreign: add possible type {} {} <-> {}",
+                    (&ty).into_token_stream().to_string(),
+                    suffix,
+                    foreign_name
+                );
+            }
             let not_uniq_name = normalize_ty_lifetimes(&ty);
             let node = self.add_type(RustType::new(
                 ty,
