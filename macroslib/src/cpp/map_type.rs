@@ -9,7 +9,7 @@ use syn::{parse_quote, spanned::Spanned, Type};
 use crate::{
     ast::{
         if_option_return_some_type, if_result_return_ok_err_types, if_type_slice_return_elem_type,
-        if_vec_return_elem_type, normalize_ty_lifetimes, DisplayToTokens, RustType,
+        if_vec_return_elem_type, normalize_ty_lifetimes, DisplayToTokens,
     },
     cpp::{
         cpp_code::c_class_type,
@@ -17,7 +17,10 @@ use crate::{
     },
     error::{DiagnosticError, Result},
     file_cache::FileWriteCache,
-    typemap::{make_unique_rust_typename, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
+    typemap::{
+        make_unique_rust_typename, ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE,
+        TO_VAR_TEMPLATE,
+    },
     CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypeMap,
 };
 

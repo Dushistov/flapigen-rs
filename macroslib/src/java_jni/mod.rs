@@ -12,11 +12,11 @@ use syn::{parse_quote, spanned::Spanned, Type};
 
 use self::map_type::special_type;
 use crate::{
-    ast::{change_span, fn_arg_type, if_option_return_some_type, normalize_ty_lifetimes, RustType},
+    ast::{change_span, fn_arg_type, if_option_return_some_type, normalize_ty_lifetimes},
     error::{DiagnosticError, Result},
     typemap::{
-        make_unique_rust_typename, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE,
-        TO_VAR_TEMPLATE,
+        make_unique_rust_typename, ty::RustType, ForeignMethodSignature, ForeignTypeInfo,
+        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
     LanguageGenerator, MethodVariant, TypeMap,
@@ -89,11 +89,7 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 }
 
 impl LanguageGenerator for JavaConfig {
-    fn register_class(
-        &self,
-        conv_map: &mut TypeMap,
-        class: &ForeignerClassInfo
-    ) -> Result<()> {
+    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.span(), &err))?;
@@ -118,8 +114,7 @@ impl LanguageGenerator for JavaConfig {
                 },
             );
 
-            if let Some(constructor_ret_type) =
-                class.constructor_ret_type.as_ref() {
+            if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
                 conv_map.add_type(this_type.clone());
 
                 let constructor_ret_type: RustType = constructor_ret_type.clone().into();

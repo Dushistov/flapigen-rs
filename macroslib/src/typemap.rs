@@ -1,4 +1,5 @@
 mod parse;
+pub mod ty;
 pub mod utils;
 
 use std::{cell::RefCell, fmt, mem, rc::Rc};
@@ -17,10 +18,11 @@ use smallvec::SmallVec;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Ident, Type};
 
+use self::ty::RustType;
 use crate::{
     ast::{
         check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
-        GenericTypeConv, RustType,
+        GenericTypeConv,
     },
     error::{DiagnosticError, Result},
     ForeignEnumInfo, ForeignerClassInfo,

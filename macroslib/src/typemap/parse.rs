@@ -13,11 +13,11 @@ use syn::{
 };
 
 use crate::{
-    ast::{normalize_ty_lifetimes, GenericTypeConv, RustType, TypeName},
+    ast::{normalize_ty_lifetimes, GenericTypeConv, TypeName},
     error::{DiagnosticError, Result},
     typemap::{
-        make_unique_rust_typename, make_unique_rust_typename_if_need, validate_code_template,
-        TypeConvEdge, TypeMap, TypesConvGraph,
+        make_unique_rust_typename, make_unique_rust_typename_if_need, ty::RustType,
+        validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
     },
 };
 
