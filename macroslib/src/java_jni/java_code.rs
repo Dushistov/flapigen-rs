@@ -454,16 +454,50 @@ fn convert_code_for_method(f_method: &JniForeignMethodSignature) -> String {
 }
 
 fn doc_comments_to_java_comments(doc_comments: &[String], class_comments: bool) -> String {
+    if class_comments {
+        javadoc_class_comment(doc_comments)
+    } else {
+        javadoc_comment(doc_comments)
+    }
+}
+
+fn javadoc_class_comment(class_comments: &[String]) -> String {
+    use std::fmt::Write;
+    let mut comments = String::new();
+    for (i, comment) in class_comments.iter().enumerate() {
+        if i != 0 {
+            comments.push('\n');
+        }
+        if i == 0 {
+            comments.push_str("/**\n");
+        }
+
+        write!(&mut comments, " * {}", comment.trim()).unwrap();
+
+        if i == class_comments.len() - 1 {
+            comments.push_str("\n */");
+        }
+    }
+    comments
+}
+
+fn javadoc_comment(doc_comments: &[String]) -> String {
     use std::fmt::Write;
     let mut comments = String::new();
     for (i, comment) in doc_comments.iter().enumerate() {
         if i != 0 {
             comments.push('\n');
         }
-        if !class_comments {
-            comments.push_str("    ");
+        comments.push_str("    ");
+        if i == 0 {
+            comments.push_str("/**\n    ");
         }
-        write!(&mut comments, "//{}", comment.trim()).unwrap();
+
+        write!(&mut comments, " * {}", comment.trim()).unwrap();
+
+        if i == doc_comments.len() - 1 {
+            comments.push_str("\n     */");
+        }
     }
     comments
 }
