@@ -677,7 +677,7 @@ impl TypeMap {
                 let node = &self.conv_graph[min_path.1];
                 if log_enabled!(log::Level::Debug) {
                     debug!(
-                        "map foreign, we found min path {} <-> {}",
+                        "map foreign: we found min path {} <-> {}",
                         rust_ty.into_token_stream().to_string(),
                         min_path.2
                     );
@@ -688,10 +688,13 @@ impl TypeMap {
                 });
             }
         }
-        debug!(
-            "No paths exists, may be we can create one for '{:?}'?",
-            rust_ty
-        );
+        if log_enabled!(log::Level::Debug) {
+            debug!(
+                "map foreign: No paths exists, may be we can create one for '{}' {:?}?",
+                rust_ty.into_token_stream().to_string(),
+                direction
+            );
+        }
 
         let mut new_foreign_types = FxHashSet::default();
         for edge in &self.generic_edges {
