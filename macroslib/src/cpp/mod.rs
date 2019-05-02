@@ -15,14 +15,14 @@ use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
-    ast::{
-        change_span, fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens, RustType,
-    },
+    ast::{change_span, fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     cpp::map_type::map_type,
     error::{DiagnosticError, Result},
     file_cache::FileWriteCache,
     typemap::{
-        make_unique_rust_typename, unpack_unique_typename,
+        make_unique_rust_typename,
+        ty::RustType,
+        unpack_unique_typename,
         utils::{
             create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
@@ -98,11 +98,7 @@ struct MethodContext<'a> {
 }
 
 impl LanguageGenerator for CppConfig {
-    fn register_class(
-        &self,
-        conv_map: &mut TypeMap,
-        class: &ForeignerClassInfo
-    ) -> Result<()> {
+    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
@@ -178,44 +174,44 @@ impl LanguageGenerator for CppConfig {
                 .into(),
             );
 
-            if let Some(constructor_ret_type) = 
-                class.constructor_ret_type.as_ref() {
-                    debug!(
-                        "register class: add implements SwigForeignClass for {}",
-                        this_type.normalized_name
-                    );
-                    conv_map.add_type(this_type.clone());
+            if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+                debug!(
+                    "register class: add implements SwigForeignClass for {}",
+                    this_type.normalized_name
+                );
+                conv_map.add_type(this_type.clone());
 
-                    let constructor_ret_type: RustType = constructor_ret_type.clone().into();
-                    conv_map.add_type(constructor_ret_type);
+                let constructor_ret_type: RustType = constructor_ret_type.clone().into();
+                conv_map.add_type(constructor_ret_type);
 
-                    let (this_type_for_method, _code_box_this) =
-                        TypeMap::convert_to_heap_pointer(&this_type, "this");
-                    let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-                    let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
-                    let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
-                    let my_void_ptr_ti = RustType::new(
-                        void_ptr_ty,
-                        make_unique_rust_typename(&void_ptr_typename, &this_type.normalized_name),
-                    );
-                    let this_type_name = this_type_for_method.normalized_name.clone();
-                    conv_map.add_conversation_rule(
-                        my_void_ptr_ti,
-                        this_type,
-                        format!(
-                            r#"
+                let (this_type_for_method, _code_box_this) =
+                    TypeMap::convert_to_heap_pointer(&this_type, "this");
+                let unpack_code =
+                    TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+                let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
+                let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
+                let my_void_ptr_ti = RustType::new(
+                    void_ptr_ty,
+                    make_unique_rust_typename(&void_ptr_typename, &this_type.normalized_name),
+                );
+                let this_type_name = this_type_for_method.normalized_name.clone();
+                conv_map.add_conversation_rule(
+                    my_void_ptr_ti,
+                    this_type,
+                    format!(
+                        r#"
             assert!(!{from_var}.is_null());
             let {to_var}: *mut {this_type} = {from_var} as *mut {this_type};
         {unpack_code}
         "#,
-                            to_var = TO_VAR_TEMPLATE,
-                            from_var = FROM_VAR_TEMPLATE,
-                            this_type = this_type_name,
-                            unpack_code = unpack_code,
-                        )
-                        .into(),
-                    );
-                }
+                        to_var = TO_VAR_TEMPLATE,
+                        from_var = FROM_VAR_TEMPLATE,
+                        this_type = this_type_name,
+                        unpack_code = unpack_code,
+                    )
+                    .into(),
+                );
+            }
         }
         Ok(())
     }
@@ -1003,7 +999,8 @@ private:
 }};
 "#,
         foreigner_code = class.foreigner_code,
-    ).map_err(&map_write_err)?;
+    )
+    .map_err(&map_write_err)?;
 
     // Write method implementations.
     if separate_impl_headers {
@@ -1014,7 +1011,8 @@ private:
 }} // namespace {namespace}
 "#,
             namespace = namespace_name
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
         let cpp_impl_path = output_dir.join(format!("{}_impl.hpp", class.name));
         let mut cpp_impl_f = FileWriteCache::new(&cpp_impl_path);
         write!(
@@ -1028,10 +1026,12 @@ namespace {namespace} {{
 "#,
             class_name = class.name,
             namespace = namespace_name,
-        ).map_err(&map_write_err)?;
+        )
+        .map_err(&map_write_err)?;
         write_methods_impls(&mut cpp_impl_f, namespace_name, &inline_impl)
             .map_err(&map_write_err)?;
-        cpp_impl_f.update_file_if_necessary()
+        cpp_impl_f
+            .update_file_if_necessary()
             .map_err(&map_write_err)?;
     } else {
         write_methods_impls(&mut cpp_include_f, namespace_name, &inline_impl)

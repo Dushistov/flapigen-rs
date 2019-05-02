@@ -10,11 +10,6 @@ documentation = "https://docs.rs/rust_swig"
 readme = "../README.md"
 edition = "2018"
 
-[[bin]]
-name = "rust_swig"
-path = "src/main.rs"
-doc = false
-
 [dependencies]
 syn = { version = "0.15.33", features = ["full", "extra-traits", "visit-mut", "visit"] }
 quote = "0.6.12"

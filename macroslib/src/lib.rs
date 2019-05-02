@@ -38,9 +38,8 @@ use rustc_hash::FxHashSet;
 use syn::{parse_quote, spanned::Spanned, Token, Type};
 
 use crate::{
-    ast::RustType,
     error::{panic_on_parse_error, DiagnosticError, Result},
-    typemap::TypeMap,
+    typemap::{ty::RustType, TypeMap},
 };
 
 /// Calculate target pointer width from environment variable

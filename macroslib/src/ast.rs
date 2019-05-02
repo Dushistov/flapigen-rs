@@ -1,4 +1,4 @@
-mod collections;
+mod subst_map;
 
 use std::{
     cell::RefCell,
@@ -24,8 +24,11 @@ use syn::{
     Type,
 };
 
-use self::collections::{ImplementsSet, TraitNamesSet, TyParamsSubstItem, TyParamsSubstMap};
-use crate::typemap::{make_unique_rust_typename, make_unique_rust_typename_if_need};
+use self::subst_map::{TyParamsSubstItem, TyParamsSubstMap};
+use crate::typemap::{
+    make_unique_rust_typename, make_unique_rust_typename_if_need,
+    ty::{RustType, TraitNamesSet},
+};
 
 #[derive(Debug)]
 pub(crate) struct TypeName {
@@ -53,45 +56,10 @@ impl TypeName {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct RustType {
-    pub ty: syn::Type,
-    pub normalized_name: SmolStr,
-    pub implements: ImplementsSet,
-}
-
-impl Display for RustType {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
-        write!(f, "{}", self.normalized_name)
-    }
-}
-
 impl From<syn::Type> for RustType {
     fn from(ty: syn::Type) -> RustType {
         let normalized_name = normalize_ty_lifetimes(&ty);
         RustType::new(ty, normalized_name)
-    }
-}
-
-impl RustType {
-    pub(crate) fn new<S>(ty: syn::Type, norm_name: S) -> RustType
-    where
-        S: Into<SmolStr>,
-    {
-        RustType {
-            ty,
-            normalized_name: norm_name.into(),
-            implements: ImplementsSet::default(),
-        }
-    }
-    pub(crate) fn implements(mut self, trait_name: &str) -> RustType {
-        self.implements.insert(trait_name.into());
-        self
-    }
-    pub(crate) fn merge(&mut self, other: &RustType) {
-        self.ty = other.ty.clone();
-        self.normalized_name = other.normalized_name.clone();
-        self.implements.insert_set(&other.implements);
     }
 }
 

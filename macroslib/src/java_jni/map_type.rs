@@ -2,10 +2,10 @@ use log::trace;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
-    ast::{if_option_return_some_type, normalize_ty_lifetimes, RustType},
+    ast::{if_option_return_some_type, normalize_ty_lifetimes},
     error::{DiagnosticError, Result},
     java_jni::{JavaForeignTypeInfo, NullAnnotation},
-    typemap::{ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
+    typemap::{ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
     ForeignEnumInfo, ForeignerClassInfo, TypeMap,
 };
 

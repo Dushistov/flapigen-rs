@@ -5,13 +5,14 @@ use rustc_hash::FxHashMap;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
-    ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens, RustType},
+    ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     error::{DiagnosticError, Result},
     java_jni::{
         fmt_write_err_map, java_class_full_name, java_class_name_to_jni, method_name,
         ForeignTypeInfo, JniForeignMethodSignature,
     },
     typemap::{
+        ty::RustType,
         unpack_unique_typename,
         utils::{
             create_suitable_types_for_constructor_and_self,
