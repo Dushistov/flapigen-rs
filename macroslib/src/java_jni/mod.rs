@@ -12,7 +12,10 @@ use syn::{parse_quote, spanned::Spanned, Type};
 
 use self::map_type::special_type;
 use crate::{
-    ast::{change_span, fn_arg_type, if_option_return_some_type, normalize_ty_lifetimes},
+    ast::{
+        change_span, fn_arg_type, if_option_return_some_type, if_result_return_ok_err_types,
+        normalize_ty_lifetimes,
+    },
     error::{DiagnosticError, Result},
     typemap::{
         make_unique_rust_typename, ty::RustType, ForeignMethodSignature, ForeignTypeInfo,
@@ -93,7 +96,9 @@ impl LanguageGenerator for JavaConfig {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.span(), &err))?;
-        if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
+        if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+            let this_type_for_method = calc_this_type_for_method(class).unwrap();
+
             let this_type: RustType = this_type_for_method.clone().into();
             let this_type = this_type.implements("SwigForeignClass");
             debug!(
@@ -114,71 +119,69 @@ impl LanguageGenerator for JavaConfig {
                 },
             );
 
-            if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
-                conv_map.add_type(this_type.clone());
+            conv_map.add_type(this_type.clone());
 
-                let constructor_ret_type: RustType = constructor_ret_type.clone().into();
-                conv_map.add_type(constructor_ret_type);
+            let constructor_ret_type: RustType = constructor_ret_type.clone().into();
+            conv_map.add_type(constructor_ret_type);
 
-                let (this_type_for_method, _code_box_this) =
-                    TypeMap::convert_to_heap_pointer(&this_type, "this");
+            let (this_type_for_method, _code_box_this) =
+                TypeMap::convert_to_heap_pointer(&this_type, "this");
 
-                let jlong_ti: RustType = parse_type! { jlong }.into();
-                let this_type_for_method_ty = &this_type_for_method.ty;
-                //handle foreigner_class as input arg
-                conv_map.add_conversation_rule(
-                    jlong_ti.clone(),
-                    parse_type! { & #this_type_for_method_ty }.into(),
-                    format!(
-                        r#"
+            let jlong_ti: RustType = parse_type! { jlong }.into();
+            let this_type_for_method_ty = &this_type_for_method.ty;
+            //handle foreigner_class as input arg
+            conv_map.add_conversation_rule(
+                jlong_ti.clone(),
+                parse_type! { & #this_type_for_method_ty }.into(),
+                format!(
+                    r#"
         let {to_var}: &{this_type} = unsafe {{
             jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
         }};
     "#,
-                        to_var = TO_VAR_TEMPLATE,
-                        from_var = FROM_VAR_TEMPLATE,
-                        this_type = this_type_for_method.normalized_name,
-                    )
-                    .into(),
-                );
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE,
+                    this_type = this_type_for_method.normalized_name,
+                )
+                .into(),
+            );
 
-                //handle foreigner_class as input arg
-                conv_map.add_conversation_rule(
-                    jlong_ti.clone(),
-                    parse_type! { &mut #this_type_for_method_ty }.into(),
-                    format!(
-                        r#"
+            //handle foreigner_class as input arg
+            conv_map.add_conversation_rule(
+                jlong_ti.clone(),
+                parse_type! { &mut #this_type_for_method_ty }.into(),
+                format!(
+                    r#"
         let {to_var}: &mut {this_type} = unsafe {{
             jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
         }};
     "#,
-                        to_var = TO_VAR_TEMPLATE,
-                        from_var = FROM_VAR_TEMPLATE,
-                        this_type = this_type_for_method.normalized_name,
-                    )
-                    .into(),
-                );
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE,
+                    this_type = this_type_for_method.normalized_name,
+                )
+                .into(),
+            );
 
-                let unpack_code =
-                    TypeMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
-                conv_map.add_conversation_rule(
-                    jlong_ti,
-                    this_type,
-                    format!(
-                        r#"
+            let unpack_code =
+                TypeMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
+            conv_map.add_conversation_rule(
+                jlong_ti,
+                this_type,
+                format!(
+                    r#"
         let {to_var}: *mut {this_type} = unsafe {{
             jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
         }};
     {unpack_code}
     "#,
-                        to_var = TO_VAR_TEMPLATE,
-                        from_var = FROM_VAR_TEMPLATE,
-                        this_type = this_type_for_method.normalized_name,
-                        unpack_code = unpack_code,
-                    )
-                    .into(),
-                );
-            }
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE,
+                    this_type = this_type_for_method.normalized_name,
+                    unpack_code = unpack_code,
+                )
+                .into(),
+            );
         }
 
         let _ = conv_map.find_or_alloc_rust_type(&class.self_type_as_ty());
@@ -194,7 +197,7 @@ impl LanguageGenerator for JavaConfig {
     ) -> Result<Vec<TokenStream>> {
         debug!(
             "generate: begin for {}, this_type_for_method {:?}",
-            class.name, class.this_type_for_method
+            class.name, class.constructor_ret_type
         );
 
         let f_methods_sign = find_suitable_foreign_types_for_methods(conv_map, class)?;
@@ -297,6 +300,7 @@ fn find_suitable_ftypes_for_interace_methods(
                     fn_arg_type(arg),
                     Direction::Outgoing,
                     fn_arg_type(arg).span(),
+                    calc_this_type_for_method,
                 )
                 .ok_or_else(|| {
                     DiagnosticError::new(
@@ -354,6 +358,7 @@ fn find_suitable_foreign_types_for_methods(
                     fn_arg_type(arg),
                     Direction::Incoming,
                     fn_arg_type(arg).span(),
+                    calc_this_type_for_method,
                 )
                 .ok_or_else(|| {
                     DiagnosticError::new(
@@ -392,7 +397,12 @@ fn find_suitable_foreign_types_for_methods(
                     },
                 },
                 syn::ReturnType::Type(_, ref rt) => conv_map
-                    .map_through_conversation_to_foreign(&*rt, Direction::Outgoing, rt.span())
+                    .map_through_conversation_to_foreign(
+                        &*rt,
+                        Direction::Outgoing,
+                        rt.span(),
+                        calc_this_type_for_method,
+                    )
                     .ok_or_else(|| {
                         DiagnosticError::new(
                             rt.span(),
@@ -429,5 +439,17 @@ fn primitive_type(type_name: &str) -> bool {
     match type_name {
         "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => true,
         _ => false,
+    }
+}
+
+fn calc_this_type_for_method(class: &ForeignerClassInfo) -> Option<Type> {
+    if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+        Some(
+            if_result_return_ok_err_types(constructor_ret_type)
+                .map(|(ok_ty, _err_ty)| ok_ty)
+                .unwrap_or_else(|| constructor_ret_type.clone()),
+        )
+    } else {
+        None
     }
 }

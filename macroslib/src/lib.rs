@@ -361,8 +361,8 @@ impl Generator {
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS) {
                     let fclass = code_parse::parse_foreigner_class(&self.config, tts)?;
                     debug!(
-                        "expand_foreigner_class: self {:?}, this_for_method {:?}, constructor {:?}",
-                        fclass.self_type, fclass.this_type_for_method, fclass.constructor_ret_type
+                        "expand_foreigner_class: self {:?}, constructor {:?}",
+                        fclass.self_type, fclass.constructor_ret_type
                     );
                     self.conv_map.register_foreigner_class(&fclass);
                     Generator::language_generator(&self.config)
@@ -473,8 +473,6 @@ struct ForeignerClassInfo {
     name: Ident,
     methods: Vec<ForeignerMethod>,
     self_type: Option<Type>,
-    /// Not necessarily equal to self_type, may be for example Rc<self_type>
-    this_type_for_method: Option<Type>,
     foreigner_code: String,
     /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
     constructor_ret_type: Option<Type>,

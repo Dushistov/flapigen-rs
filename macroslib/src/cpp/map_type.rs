@@ -146,7 +146,7 @@ fn special_type(
                     DisplayToTokens(&parse_type! { *mut ::std::os::raw::c_void })
                 );
                 let this_type = if let Some(this_type_for_method) =
-                    foreign_class.this_type_for_method.as_ref()
+                    foreign_class.constructor_ret_type.as_ref()
                 {
                     let this_type: RustType = this_type_for_method.clone().into();
                     this_type
@@ -184,7 +184,10 @@ fn special_type(
 
     if let Some(foreign_class_this_ty) = conv_map.is_ty_implements(arg_ty, "SwigForeignClass") {
         let foreign_class = conv_map
-            .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
+            .find_foreigner_class_with_such_this_type(
+                &foreign_class_this_ty.ty,
+                calc_this_type_for_method,
+            )
             .ok_or_else(|| {
                 DiagnosticError::new(
                     arg_ty.span(),
@@ -240,8 +243,14 @@ fn special_type(
             if tupple.elems.len() == 2 {
                 let mut ret = map_ordinal_result_type(conv_map, arg_ty)?;
                 if let (Some(fc1), Some(fc2)) = (
-                    conv_map.find_foreigner_class_with_such_this_type(&tupple.elems[0]),
-                    conv_map.find_foreigner_class_with_such_this_type(&tupple.elems[1]),
+                    conv_map.find_foreigner_class_with_such_this_type(
+                        &tupple.elems[0],
+                        calc_this_type_for_method,
+                    ),
+                    conv_map.find_foreigner_class_with_such_this_type(
+                        &tupple.elems[1],
+                        calc_this_type_for_method,
+                    ),
                 ) {
                     ret.cpp_converter = Some(CppConverter {
                         typename: format!("std::pair<{}, {}>", fc1.name, fc2.name).into(),
@@ -330,7 +339,12 @@ pub(in crate::cpp) fn map_type(
 
 fn map_ordinal_result_type(conv_map: &mut TypeMap, arg_ty: &Type) -> Result<CppForeignTypeInfo> {
     Ok(conv_map
-        .map_through_conversation_to_foreign(arg_ty, Direction::Outgoing, arg_ty.span())
+        .map_through_conversation_to_foreign(
+            arg_ty,
+            Direction::Outgoing,
+            arg_ty.span(),
+            calc_this_type_for_method,
+        )
         .ok_or_else(|| {
             DiagnosticError::new(
                 arg_ty.span(),
@@ -346,7 +360,12 @@ fn map_ordinal_result_type(conv_map: &mut TypeMap, arg_ty: &Type) -> Result<CppF
 
 fn map_ordinal_input_type(conv_map: &mut TypeMap, arg_ty: &Type) -> Result<CppForeignTypeInfo> {
     Ok(conv_map
-        .map_through_conversation_to_foreign(arg_ty, Direction::Incoming, arg_ty.span())
+        .map_through_conversation_to_foreign(
+            arg_ty,
+            Direction::Incoming,
+            arg_ty.span(),
+            calc_this_type_for_method,
+        )
         .ok_or_else(|| {
             DiagnosticError::new(
                 arg_ty.span(),
@@ -573,7 +592,10 @@ fn handle_result_type_as_return_type(
     );
     if let Some(foreign_class_this_ty) = conv_map.is_ty_implements(ok_ty, "SwigForeignClass") {
         let foreign_class = conv_map
-            .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
+            .find_foreigner_class_with_such_this_type(
+                &foreign_class_this_ty.ty,
+                calc_this_type_for_method,
+            )
             .ok_or_else(|| {
                 DiagnosticError::new(
                     arg_ty.span(),
@@ -910,7 +932,10 @@ fn handle_option_type_in_return(
     if let Some(foreign_class_this_ty) = conv_map.is_ty_implements_exact(opt_ty, "SwigForeignClass")
     {
         let foreign_class = conv_map
-            .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
+            .find_foreigner_class_with_such_this_type(
+                &foreign_class_this_ty.ty,
+                calc_this_type_for_method,
+            )
             .ok_or_else(|| {
                 DiagnosticError::new(
                     arg_ty.span(),
@@ -961,7 +986,7 @@ fn handle_option_type_in_return(
         {
             let foreign_info =
                 foreign_class_foreign_name(conv_map, &fclass, under_ref_ty.span(), false)?;
-            let this_type_for_method = fclass.this_type_for_method.as_ref().ok_or_else(|| {
+            let this_type_for_method = fclass.constructor_ret_type.as_ref().ok_or_else(|| {
                 DiagnosticError::new(
                     fclass.span(),
                     format!(
@@ -1193,4 +1218,8 @@ fn handle_result_with_primitive_type_as_ok_ty(
     } else {
         Ok(None)
     }
+}
+
+fn calc_this_type_for_method(class: &ForeignerClassInfo) -> Option<Type> {
+    class.constructor_ret_type.clone()
 }

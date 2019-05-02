@@ -102,7 +102,8 @@ impl LanguageGenerator for CppConfig {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
-        if let Some(this_type_for_method) = class.this_type_for_method.as_ref() {
+        if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+            let this_type_for_method = constructor_ret_type;
             let this_type: RustType = this_type_for_method.clone().into();
             let this_type = this_type.implements("SwigForeignClass");
             let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
@@ -174,44 +175,41 @@ impl LanguageGenerator for CppConfig {
                 .into(),
             );
 
-            if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
-                debug!(
-                    "register class: add implements SwigForeignClass for {}",
-                    this_type.normalized_name
-                );
-                conv_map.add_type(this_type.clone());
+            debug!(
+                "register class: add implements SwigForeignClass for {}",
+                this_type.normalized_name
+            );
+            conv_map.add_type(this_type.clone());
 
-                let constructor_ret_type: RustType = constructor_ret_type.clone().into();
-                conv_map.add_type(constructor_ret_type);
+            let constructor_ret_type: RustType = constructor_ret_type.clone().into();
+            conv_map.add_type(constructor_ret_type);
 
-                let (this_type_for_method, _code_box_this) =
-                    TypeMap::convert_to_heap_pointer(&this_type, "this");
-                let unpack_code =
-                    TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-                let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
-                let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
-                let my_void_ptr_ti = RustType::new(
-                    void_ptr_ty,
-                    make_unique_rust_typename(&void_ptr_typename, &this_type.normalized_name),
-                );
-                let this_type_name = this_type_for_method.normalized_name.clone();
-                conv_map.add_conversation_rule(
-                    my_void_ptr_ti,
-                    this_type,
-                    format!(
-                        r#"
+            let (this_type_for_method, _code_box_this) =
+                TypeMap::convert_to_heap_pointer(&this_type, "this");
+            let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+            let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
+            let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
+            let my_void_ptr_ti = RustType::new(
+                void_ptr_ty,
+                make_unique_rust_typename(&void_ptr_typename, &this_type.normalized_name),
+            );
+            let this_type_name = this_type_for_method.normalized_name.clone();
+            conv_map.add_conversation_rule(
+                my_void_ptr_ti,
+                this_type,
+                format!(
+                    r#"
             assert!(!{from_var}.is_null());
             let {to_var}: *mut {this_type} = {from_var} as *mut {this_type};
         {unpack_code}
         "#,
-                        to_var = TO_VAR_TEMPLATE,
-                        from_var = FROM_VAR_TEMPLATE,
-                        this_type = this_type_name,
-                        unpack_code = unpack_code,
-                    )
-                    .into(),
-                );
-            }
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE,
+                    this_type = this_type_name,
+                    unpack_code = unpack_code,
+                )
+                .into(),
+            );
         }
         let _ = conv_map.find_or_alloc_rust_type(&class.self_type_as_ty());
         Ok(())
@@ -225,7 +223,7 @@ impl LanguageGenerator for CppConfig {
     ) -> Result<Vec<TokenStream>> {
         debug!(
             "generate: begin for {}, this_type_for_method {:?}",
-            class.name, class.this_type_for_method
+            class.name, class.constructor_ret_type
         );
         let has_methods = class.methods.iter().any(|m| match m.variant {
             MethodVariant::Method(_) => true,
@@ -563,10 +561,7 @@ public:
     let mut gen_code = Vec::new();
 
     let (this_type_for_method, code_box_this) =
-        if let (Some(this_type), Some(_constructor_ret_type)) = (
-            class.this_type_for_method.as_ref(),
-            class.constructor_ret_type.as_ref(),
-        ) {
+        if let Some(this_type) = class.constructor_ret_type.as_ref() {
             let this_type: RustType = this_type.clone().into();
             let this_type = this_type.implements("SwigForeignClass");
             let (this_type_for_method, code_box_this) =
@@ -894,11 +889,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         .as_ref()
                         .ok_or_else(&no_this_info)?
                         .clone();
-                    let this_type = class
-                        .this_type_for_method
-                        .as_ref()
-                        .ok_or_else(&no_this_info)?
-                        .clone();
+                    let this_type = constructor_ret_type.clone();
                     gen_code.append(&mut generate_constructor(
                         conv_map,
                         &method_ctx,
@@ -913,7 +904,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
     if need_destructor {
         let this_type: RustType = class
-            .this_type_for_method
+            .constructor_ret_type
             .as_ref()
             .ok_or_else(&no_this_info)?
             .clone()

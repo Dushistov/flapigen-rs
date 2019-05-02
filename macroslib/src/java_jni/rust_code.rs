@@ -8,8 +8,8 @@ use crate::{
     ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     error::{DiagnosticError, Result},
     java_jni::{
-        fmt_write_err_map, java_class_full_name, java_class_name_to_jni, method_name,
-        ForeignTypeInfo, JniForeignMethodSignature,
+        calc_this_type_for_method, fmt_write_err_map, java_class_full_name, java_class_name_to_jni,
+        method_name, ForeignTypeInfo, JniForeignMethodSignature,
     },
     typemap::{
         ty::RustType,
@@ -51,10 +51,7 @@ pub(in crate::java_jni) fn generate_rust_code(
 
     let mut gen_code = Vec::<TokenStream>::new();
     let (this_type_for_method, code_box_this) =
-        if let (Some(this_type), Some(_constructor_ret_type)) = (
-            class.this_type_for_method.as_ref(),
-            class.constructor_ret_type.as_ref(),
-        ) {
+        if let Some(this_type) = calc_this_type_for_method(class) {
             let this_type: RustType = this_type.clone().into();
             let this_type = this_type.implements("SwigForeignClass");
             debug!(
@@ -179,11 +176,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         .as_ref()
                         .ok_or_else(&no_this_info)?
                         .clone();
-                    let this_type = class
-                        .this_type_for_method
-                        .as_ref()
-                        .ok_or_else(&no_this_info)?
-                        .clone();
+                    let this_type = calc_this_type_for_method(class).ok_or_else(&no_this_info)?;
                     gen_code.append(&mut generate_constructor(
                         conv_map,
                         &method_ctx,
@@ -197,9 +190,7 @@ May be you need to use `private constructor = empty;` syntax?",
     }
 
     if have_constructor {
-        let this_type: RustType = class
-            .this_type_for_method
-            .as_ref()
+        let this_type: RustType = calc_this_type_for_method(class)
             .ok_or_else(&no_this_info)?
             .clone()
             .into();

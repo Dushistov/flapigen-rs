@@ -4,7 +4,7 @@ use syn::{parse_quote, spanned::Spanned, Type};
 use crate::{
     ast::{if_option_return_some_type, normalize_ty_lifetimes},
     error::{DiagnosticError, Result},
-    java_jni::{JavaForeignTypeInfo, NullAnnotation},
+    java_jni::{calc_this_type_for_method, JavaForeignTypeInfo, NullAnnotation},
     typemap::{ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
     ForeignEnumInfo, ForeignerClassInfo, TypeMap,
 };
@@ -22,7 +22,10 @@ pub(in crate::java_jni) fn special_type(
 
     if let Some(foreign_class_this_ty) = conv_map.is_ty_implements(arg_ty, foreign_class_trait) {
         let foreigner_class = conv_map
-            .find_foreigner_class_with_such_this_type(&foreign_class_this_ty.ty)
+            .find_foreigner_class_with_such_this_type(
+                &foreign_class_this_ty.ty,
+                calc_this_type_for_method,
+            )
             .ok_or_else(|| {
                 DiagnosticError::new(
                     arg_ty.span(),
@@ -69,7 +72,7 @@ fn calc_converter_for_foreign_class_arg(
     foreigner_class: &ForeignerClassInfo,
     arg_ty: &Type,
 ) -> JavaForeignTypeInfo {
-    let this_ty = foreigner_class.this_type_for_method.as_ref().unwrap();
+    let this_ty = calc_this_type_for_method(foreigner_class).unwrap();
     let this_ty: RustType = this_ty.clone().into();
 
     let java_converter = if this_ty.normalized_name == normalize_ty_lifetimes(arg_ty) {

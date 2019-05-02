@@ -623,11 +623,14 @@ impl TypeMap {
     }
 
     /// find correspoint to rust foreign type
-    pub(crate) fn map_through_conversation_to_foreign(
+    pub(crate) fn map_through_conversation_to_foreign<
+        F: Fn(&ForeignerClassInfo) -> Option<Type>,
+    >(
         &mut self,
         rust_ty: &Type,
         direction: petgraph::Direction,
         build_for_sp: Span,
+        calc_this_type_for_method: F,
     ) -> Option<ForeignTypeInfo> {
         let norm_rust_typename = normalize_ty_lifetimes(rust_ty);
         if log_enabled!(log::Level::Debug) {
@@ -715,9 +718,10 @@ impl TypeMap {
                     for trait_bound in &trait_bounds {
                         let rust_ty = &self.conv_graph[*graph_idx];
                         if rust_ty.implements.contains_subset(&trait_bound.trait_names) {
-                            if let Some(class) =
-                                self.find_foreigner_class_with_such_this_type(&rust_ty.ty)
-                            {
+                            if let Some(class) = self.find_foreigner_class_with_such_this_type(
+                                &rust_ty.ty,
+                                &calc_this_type_for_method,
+                            ) {
                                 let ty_param_name = trait_bound.ty_param.as_ref().to_string();
                                 let suffix = to_foreigner_hint
                                     .as_str()
@@ -809,14 +813,17 @@ impl TypeMap {
         ret
     }
 
-    pub(crate) fn find_foreigner_class_with_such_this_type(
+    pub(crate) fn find_foreigner_class_with_such_this_type<
+        F: Fn(&ForeignerClassInfo) -> Option<Type>,
+    >(
         &self,
         this_ty: &Type,
+        get_this_type: F,
     ) -> Option<&ForeignerClassInfo> {
         let this_name = normalize_ty_lifetimes(this_ty);
         for fc in &self.foreign_classes {
-            if let Some(this_type_for_method) = fc.this_type_for_method.as_ref() {
-                let cur_this = normalize_ty_lifetimes(this_type_for_method);
+            if let Some(this_type_for_method) = get_this_type(fc) {
+                let cur_this = normalize_ty_lifetimes(&this_type_for_method);
                 if cur_this == this_name {
                     return Some(fc);
                 }
@@ -1179,7 +1186,8 @@ fn helper3() {
                 .map_through_conversation_to_foreign(
                     &parse_type! { i32 },
                     petgraph::Direction::Outgoing,
-                    Span::call_site()
+                    Span::call_site(),
+                    |fc| fc.constructor_ret_type.clone(),
                 )
                 .unwrap()
                 .name,
@@ -1244,7 +1252,6 @@ fn helper3() {
             name: Ident::new("Foo", Span::call_site()),
             methods: vec![],
             self_type: None,
-            this_type_for_method: Some(foo_rt.ty.clone()),
             foreigner_code: String::new(),
             constructor_ret_type: Some(foo_rt.ty.clone()),
             doc_comments: vec![],
@@ -1291,7 +1298,8 @@ fn helper3() {
                 .map_through_conversation_to_foreign(
                     &parse_type! { Vec<Foo> },
                     petgraph::Direction::Outgoing,
-                    Span::call_site()
+                    Span::call_site(),
+                    |fc| fc.constructor_ret_type.clone(),
                 )
                 .unwrap()
                 .name
