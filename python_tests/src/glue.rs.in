@@ -8,3 +8,15 @@ foreign_enum!(enum TestEnum {
     B = TestEnum::B,
 });
 
+pub struct TestClass {
+}
+
+impl TestClass {
+    pub fn print_hello() {
+        println!("Hello from rust");
+    }
+}
+
+foreigner_class!(class TestClass {
+    static_method TestClass::print_hello();
+});
