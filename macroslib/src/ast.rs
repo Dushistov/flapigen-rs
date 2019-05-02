@@ -1,4 +1,4 @@
-mod collections;
+mod subst_map;
 
 use std::{
     cell::RefCell,
@@ -24,7 +24,7 @@ use syn::{
     Type,
 };
 
-use self::collections::{TyParamsSubstItem, TyParamsSubstMap};
+use self::subst_map::{TyParamsSubstItem, TyParamsSubstMap};
 use crate::typemap::{
     make_unique_rust_typename, make_unique_rust_typename_if_need,
     ty::{RustType, TraitNamesSet},
