@@ -376,11 +376,18 @@ impl TypeMap {
             _ => normalize_ty_lifetimes(may_be_self_ty),
         };
 
-        trace!("find self type: possible name {:?}", type_name);
+        trace!("find self type: possible name {}", type_name);
         for fc in &self.foreign_classes {
-            let self_ty = fc.self_type_name();
-            trace!("self_type {}", self_ty);
-            if self_ty == type_name {
+            let self_rust_ty = self
+                .ty_to_rust_type(&fc.self_type_as_ty())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Internal error: self_type ({}) not registered",
+                        fc.self_type_as_ty().into_token_stream().to_string()
+                    )
+                });
+            trace!("self_type {}", self_rust_ty);
+            if self_rust_ty.normalized_name == type_name {
                 return Some(fc);
             }
         }
@@ -820,6 +827,23 @@ impl TypeMap {
 
     pub(crate) fn register_foreigner_class(&mut self, class: &ForeignerClassInfo) {
         self.foreign_classes.push(class.clone());
+    }
+
+    pub(crate) fn find_or_alloc_rust_type(&mut self, ty: &Type) -> RustType {
+        let ty = RustType::new_from_type(ty);
+        let rust_names_map = &mut self.rust_names_map;
+        let conv_graph = &mut self.conv_graph;
+        let index = *rust_names_map
+            .entry(ty.normalized_name.clone())
+            .or_insert_with(|| conv_graph.add_node(ty));
+        conv_graph[index].clone()
+    }
+
+    pub(crate) fn ty_to_rust_type(&self, ty: &Type) -> Option<RustType> {
+        let ty = RustType::new_from_type(ty);
+        self.rust_names_map
+            .get(&ty.normalized_name)
+            .map(|idx| self.conv_graph[*idx].clone())
     }
 }
 

@@ -414,7 +414,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     Ok(ForeignerClassInfo {
         name: class_name,
         methods,
-        self_type: rust_self_type.map(|x| x.clone().into()),
+        self_type: rust_self_type,
         this_type_for_method,
         foreigner_code,
         constructor_ret_type,

@@ -470,6 +470,9 @@ using {vec_type} = RustForeignVec<{class}Ref, CRustForeignVec,
                     format!("update of {:?} failed: {}", fc_vec_path, err),
                 )
             })?;
+
+            let self_rust_ty = conv_map.find_or_alloc_rust_type(&foreign_class.self_type_as_ty());
+
             cpp_cfg
                 .to_generate
                 .borrow_mut()
@@ -483,7 +486,7 @@ pub extern "C" fn {func_name}(v: CRustForeignVec) {{
 }}
 "#,
                     func_name = free_mem_func,
-                    self_type = foreign_class.self_type_name()
+                    self_type = self_rust_ty.normalized_name
                 ))?);
             cpp_cfg
                 .to_generate
@@ -497,7 +500,7 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, e: *mut ::std::os::raw::c
 }}
 "#,
                     func_name = push_func,
-                    self_type = foreign_class.self_type_name()
+                    self_type = self_rust_ty.normalized_name
                 ))?);
             cpp_cfg
                 .to_generate
@@ -511,7 +514,7 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
 }}
 "#,
                     func_name = remove_func,
-                    self_type = foreign_class.self_type_name()
+                    self_type = self_rust_ty.normalized_name
                 ))?);
             cpp_cfg
                 .generated_helper_files

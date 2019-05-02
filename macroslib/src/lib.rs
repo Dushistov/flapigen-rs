@@ -39,7 +39,7 @@ use syn::{parse_quote, spanned::Spanned, Token, Type};
 
 use crate::{
     error::{panic_on_parse_error, DiagnosticError, Result},
-    typemap::{ty::RustType, TypeMap},
+    typemap::TypeMap,
 };
 
 /// Calculate target pointer width from environment variable
@@ -472,7 +472,7 @@ impl Generator {
 struct ForeignerClassInfo {
     name: Ident,
     methods: Vec<ForeignerMethod>,
-    self_type: Option<RustType>,
+    self_type: Option<Type>,
     /// Not necessarily equal to self_type, may be for example Rc<self_type>
     this_type_for_method: Option<Type>,
     foreigner_code: String,
@@ -486,16 +486,10 @@ impl ForeignerClassInfo {
     fn span(&self) -> Span {
         self.name.span()
     }
-    fn self_type_name(&self) -> &str {
-        self.self_type
-            .as_ref()
-            .map(|x| x.normalized_name.as_str())
-            .unwrap_or("")
-    }
     fn self_type_as_ty(&self) -> Type {
         self.self_type
             .as_ref()
-            .map(|x| x.ty.clone())
+            .cloned()
             .unwrap_or_else(|| parse_quote! { () })
     }
     /// common for several language binding generator code

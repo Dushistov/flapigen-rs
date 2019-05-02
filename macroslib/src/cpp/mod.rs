@@ -213,6 +213,7 @@ impl LanguageGenerator for CppConfig {
                 );
             }
         }
+        let _ = conv_map.find_or_alloc_rust_type(&class.self_type_as_ty());
         Ok(())
     }
 
