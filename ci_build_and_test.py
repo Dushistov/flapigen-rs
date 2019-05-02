@@ -177,9 +177,6 @@ def main():
         if java_only:
             return
 
-    if not skip_python_tests:
-        test_python()
-
     if not skip_cpp_tests:
         print("Check cmake version")
         subprocess.check_call(["cmake", "--version"], shell = False)
@@ -192,6 +189,10 @@ def main():
 
     if has_android_sdk and (not skip_android_test):
         build_for_android(is_windows)
+
+    if not skip_python_tests:
+        test_python()
+
 
 
 if __name__ == "__main__":

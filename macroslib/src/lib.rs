@@ -412,6 +412,10 @@ impl Generator {
             }
         }
 
+        let code = Generator::language_generator(&self.config).init_glue_rs(&mut self.conv_map)?;
+        for elem in code {
+            writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
+        }
         for code_item in output_code {
             match code_item {
                 OutputCode::Class(fclass) => {
@@ -451,7 +455,7 @@ impl Generator {
             }
         }
 
-        let code = Generator::language_generator(&self.config).finish(&mut self.conv_map)?;
+        let code = Generator::language_generator(&self.config).finish_glue_rs(&mut self.conv_map)?;
         for elem in code {
             writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
         }
@@ -694,6 +698,7 @@ struct ForeignInterfaceMethod {
 }
 
 trait LanguageGenerator {
+    
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()>;
 
     fn generate(
@@ -720,8 +725,12 @@ trait LanguageGenerator {
     fn place_foreign_lang_helpers(&self, _: &[SourceCode]) -> std::result::Result<(), String> {
         Ok(())
     }
+    
+    fn init_glue_rs(&self, conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
+        Ok(vec![])
+    }
 
-    fn finish(&self, conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
-        Ok(vec![TokenStream::new()])
+    fn finish_glue_rs(&self, conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
+        Ok(vec![])
     }
 }

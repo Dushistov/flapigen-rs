@@ -19,6 +19,7 @@ fn main() {
     );
     println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed=src/glue.rs.in");
+    println!("cargo:rerun-if-changed=src/lib.rs");
     //rebuild if user remove generated code
     println!("cargo:rerun-if-changed={}", out_dir);
 }
