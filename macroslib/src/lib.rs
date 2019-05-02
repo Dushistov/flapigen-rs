@@ -534,8 +534,6 @@ struct ForeignerMethod {
     rust_id: syn::Path,
     fn_decl: FnDecl,
     name_alias: Option<Ident>,
-    /// cache if rust_fn_decl.output == Result
-    may_return_error: bool,
     access: MethodAccess,
     doc_comments: Vec<String>,
 }

@@ -3,6 +3,7 @@ use std::{fmt, io::Write, path::Path};
 use bitflags::bitflags;
 
 use crate::{
+    ast::if_result_return_ok_err_types,
     file_cache::FileWriteCache,
     java_jni::{fmt_write_err_map, method_name, JniForeignMethodSignature, NullAnnotation},
     ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant,
@@ -167,7 +168,13 @@ public final class {class_name} {{
             doc_comments = doc_comments_to_java_comments(&method.doc_comments, false)
         )
         .map_err(&map_write_err)?;
-        let exception_spec = if method.may_return_error {
+
+        let may_return_error = match method.fn_decl.output {
+            syn::ReturnType::Default => false,
+            syn::ReturnType::Type(_, ref ptype) => if_result_return_ok_err_types(&*ptype).is_some(),
+        };
+
+        let exception_spec = if may_return_error {
             "throws Exception"
         } else {
             ""

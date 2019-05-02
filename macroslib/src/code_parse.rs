@@ -226,11 +226,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 let ret_type: Type = content.parse()?;
                 debug!("constructor ret_ty {:?}", ret_type);
                 constructor_ret_type = Some(ret_type.clone());
-                this_type_for_method = Some(
-                    if_result_return_ok_err_types(constructor_ret_type.as_ref().unwrap())
-                        .unwrap_or_else(|| (ret_type.clone(), ret_type))
-                        .0,
-                );
+                this_type_for_method = Some(ret_type);
             }
             content.parse::<Token![;]>()?;
             if access != MethodAccess::Private {
@@ -268,7 +264,6 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 rust_id: dummy_path,
                 fn_decl: dummy_func.into(),
                 name_alias: None,
-                may_return_error: false,
                 access,
                 doc_comments,
             });
@@ -345,12 +340,9 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             content.parse::<Token![;]>()?;
         }
 
-        let (may_return_error, ret_type) = match out_type {
-            syn::ReturnType::Default => (false, None),
-            syn::ReturnType::Type(_, ref ptype) => (
-                if_result_return_ok_err_types(&*ptype).is_some(),
-                Some((*ptype).clone()),
-            ),
+        let ret_type = match out_type {
+            syn::ReturnType::Default => None,
+            syn::ReturnType::Type(_, ref ptype) => Some((*ptype).clone()),
         };
         if func_type == MethodVariant::Constructor {
             let ret_type = match ret_type {
@@ -398,7 +390,6 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 output: out_type,
             },
             name_alias: func_name_alias,
-            may_return_error,
             access,
             doc_comments,
         });
