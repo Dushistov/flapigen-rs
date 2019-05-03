@@ -16,13 +16,6 @@ impl Display for RustType {
     }
 }
 
-impl From<syn::Type> for RustType {
-    fn from(ty: syn::Type) -> RustType {
-        let normalized_name = normalize_ty_lifetimes(&ty);
-        RustType::new(ty, normalized_name)
-    }
-}
-
 impl RustType {
     pub(crate) fn new<S>(ty: syn::Type, norm_name: S) -> RustType
     where

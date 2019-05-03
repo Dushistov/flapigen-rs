@@ -1267,6 +1267,6 @@ macro_rules! jni_unpack_return {
     }
 
     fn str_to_rust_ty(code: &str) -> RustType {
-        syn::parse_str::<syn::Type>(code).unwrap().into()
+        RustType::new_from_type(&syn::parse_str::<syn::Type>(code).unwrap())
     }
 }

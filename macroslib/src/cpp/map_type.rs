@@ -38,7 +38,7 @@ fn special_type(
     );
 
     if let Some(foreign_enum) = conv_map.is_this_exported_enum(arg_ty) {
-        let converter = calc_converter_for_enum(foreign_enum);
+        let converter = calc_converter_for_enum(conv_map, foreign_enum);
         return Ok(Some(converter));
     }
 
@@ -151,7 +151,9 @@ fn special_type(
                 let this_type = if let Some(this_type_for_method) =
                     foreign_class.constructor_ret_type.as_ref()
                 {
-                    let this_type: RustType = this_type_for_method.clone().into();
+                    let this_type: RustType = conv_map
+                        .ty_to_rust_type(this_type_for_method)
+                        .expect("cpp: this type not registered");
                     this_type
                 } else {
                     return Err(DiagnosticError::new(
@@ -306,8 +308,13 @@ fn foreign_class_foreign_name(
         })
 }
 
-fn calc_converter_for_enum(foreign_enum: &ForeignEnumInfo) -> CppForeignTypeInfo {
-    let u32_ti: RustType = parse_type! { u32 }.into();
+fn calc_converter_for_enum(
+    conv_map: &TypeMap,
+    foreign_enum: &ForeignEnumInfo,
+) -> CppForeignTypeInfo {
+    let u32_ti: RustType = conv_map
+        .ty_to_rust_type(&parse_type! { u32 })
+        .expect("u32 not registered");
     let c_converter: String = r#"
         uint32_t {to_var} = {from_var};
 "#
@@ -620,7 +627,7 @@ fn handle_result_type_as_return_type(
     let err_rust_ty = conv_map.find_or_alloc_rust_type(err_ty);
     let ok_rust_ty = conv_map.find_or_alloc_rust_type(ok_ty);
     debug!(
-        "handle_result_type_as_return_type: ok_ty: {}, err_ty: {}",
+        "handle_result_type_as_return_type: ok_ty: {:?}, err_ty: {}",
         ok_rust_ty, err_rust_ty
     );
     if let Some(foreign_class_this_ty) = conv_map.is_ty_implements(&ok_rust_ty, "SwigForeignClass")
@@ -1050,17 +1057,15 @@ fn handle_option_type_in_return(
                     ),
                 )
             })?;
-            let this_type: RustType = this_type_for_method.clone().into();
+            let this_type: RustType = conv_map.find_or_alloc_rust_type(this_type_for_method);
             let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
             let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
             let my_void_ptr_ti = RustType::new(
                 void_ptr_ty,
                 make_unique_rust_typename(&void_ptr_typename, &this_type.normalized_name),
             );
-            let arg_rust_ty: RustType = arg_ty.clone().into();
-            conv_map.add_type(arg_rust_ty.clone());
             conv_map.add_conversation_rule(
-                arg_rust_ty,
+                arg_ty.clone(),
                 my_void_ptr_ti,
                 format!(
                     r#"

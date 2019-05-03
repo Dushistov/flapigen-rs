@@ -14,7 +14,7 @@ use syn::{parse_quote, spanned::Spanned, Type};
 use self::map_type::special_type;
 use crate::{
     ast::{
-        change_span, fn_arg_type, if_option_return_some_type, if_result_return_ok_err_types,
+        fn_arg_type, if_option_return_some_type, if_result_return_ok_err_types,
         if_ty_result_return_ok_type,
     },
     error::{DiagnosticError, Result},
@@ -94,6 +94,9 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 
 impl LanguageGenerator for JavaConfig {
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
+        //register for future use
+        conv_map.find_or_alloc_rust_type(&parse_type! { jint });
+        conv_map.find_or_alloc_rust_type(&parse_type! { jlong });
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.span(), &err))?;
@@ -101,8 +104,8 @@ impl LanguageGenerator for JavaConfig {
             let this_type_for_method = if_ty_result_return_ok_type(constructor_ret_type)
                 .unwrap_or_else(|| constructor_ret_type.clone());
 
-            let this_type: RustType = this_type_for_method.into();
-            let this_type = this_type.implements("SwigForeignClass");
+            let this_type: RustType = conv_map
+                .find_or_alloc_rust_type_that_implements(&this_type_for_method, "SwigForeignClass");
             debug!(
                 "register_class: add implements SwigForeignClass for {}",
                 this_type
@@ -121,20 +124,19 @@ impl LanguageGenerator for JavaConfig {
                 },
             );
 
-            conv_map.add_type(this_type.clone());
-
-            let constructor_ret_type: RustType = constructor_ret_type.clone().into();
-            conv_map.add_type(constructor_ret_type);
+            conv_map.find_or_alloc_rust_type(constructor_ret_type);
 
             let (this_type_for_method, _code_box_this) =
-                TypeMap::convert_to_heap_pointer(&this_type, "this");
+                conv_map.convert_to_heap_pointer(&this_type, "this");
 
-            let jlong_ti: RustType = parse_type! { jlong }.into();
+            let jlong_ti: RustType = conv_map.find_or_alloc_rust_type(&parse_type! { jlong });
             let this_type_for_method_ty = &this_type_for_method.ty;
+            let this_type_ref =
+                conv_map.find_or_alloc_rust_type(&parse_type! { & #this_type_for_method_ty });
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 jlong_ti.clone(),
-                parse_type! { & #this_type_for_method_ty }.into(),
+                this_type_ref,
                 format!(
                     r#"
         let {to_var}: &{this_type} = unsafe {{
@@ -147,11 +149,12 @@ impl LanguageGenerator for JavaConfig {
                 )
                 .into(),
             );
-
+            let this_type_mut_ref =
+                conv_map.find_or_alloc_rust_type(&parse_type! { &mut #this_type_for_method_ty });
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 jlong_ti.clone(),
-                parse_type! { &mut #this_type_for_method_ty }.into(),
+                this_type_mut_ref,
                 format!(
                     r#"
         let {to_var}: &mut {this_type} = unsafe {{
@@ -293,6 +296,7 @@ fn find_suitable_ftypes_for_interace_methods(
 ) -> Result<Vec<JniForeignMethodSignature>> {
     let void_sym = "void";
     let dummy_ty = parse_type! { () };
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
     let mut f_methods = vec![];
 
     for method in &interace.items {
@@ -321,11 +325,7 @@ fn find_suitable_ftypes_for_interace_methods(
         let output = match method.fn_decl.output {
             syn::ReturnType::Default => ForeignTypeInfo {
                 name: void_sym.into(),
-                correspoding_rust_type: {
-                    let mut ty: Type = dummy_ty.clone();
-                    change_span(&mut ty, method.fn_decl.span());
-                    ty.into()
-                },
+                correspoding_rust_type: dummy_rust_ty.clone(),
             },
             _ => unimplemented!(),
         };
@@ -341,6 +341,7 @@ fn find_suitable_foreign_types_for_methods(
     let mut ret = Vec::<JniForeignMethodSignature>::with_capacity(class.methods.len());
     let empty_symbol = "";
     let dummy_ty = parse_type! { () };
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
 
     for method in &class.methods {
         //skip self argument
@@ -390,16 +391,12 @@ fn find_suitable_foreign_types_for_methods(
         let output = match method.variant {
             MethodVariant::Constructor => ForeignTypeInfo {
                 name: empty_symbol.into(),
-                correspoding_rust_type: dummy_ty.clone().into(),
+                correspoding_rust_type: dummy_rust_ty.clone(),
             },
             _ => match method.fn_decl.output {
                 syn::ReturnType::Default => ForeignTypeInfo {
                     name: "void".into(),
-                    correspoding_rust_type: {
-                        let mut ty: Type = dummy_ty.clone();
-                        change_span(&mut ty, method.fn_decl.output.span());
-                        ty.into()
-                    },
+                    correspoding_rust_type: dummy_rust_ty.clone(),
                 },
                 syn::ReturnType::Type(_, ref rt) => {
                     let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt);

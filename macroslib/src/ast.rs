@@ -631,20 +631,6 @@ pub(crate) fn list_lifetimes(ty: &Type) -> Vec<String> {
     catch_lifetimes.0
 }
 
-pub(crate) fn change_span(ty: &mut Type, sp: Span) {
-    struct ChangeSpan(Option<Span>);
-    impl VisitMut for ChangeSpan {
-        fn visit_span_mut(&mut self, i: &mut Span) {
-            if let Some(sp) = self.0 {
-                *i = sp;
-            }
-            self.0 = None;
-        }
-    }
-    let mut change_span = ChangeSpan(Some(sp));
-    change_span.visit_type_mut(ty);
-}
-
 pub(crate) struct DisplayToTokens<'a, T: ToTokens>(pub &'a T);
 
 impl<T> Display for DisplayToTokens<'_, T>
@@ -714,7 +700,7 @@ mod tests {
                 str_to_ty(to_ty_name),
                 generic.clone(),
             )
-            .is_conv_possible(&str_to_ty(ty_check_name).into(), None, map_others)
+            .is_conv_possible(&str_to_rust_ty(ty_check_name), None, map_others)
             .expect("check subst failed");
             assert_eq!(
                 ret_ty.normalized_name,
@@ -844,11 +830,11 @@ mod tests {
             "& Foo"
         );
 
-        let box_foo: RustType = str_to_ty("Box<Foo>").into();
+        let box_foo: RustType = str_to_rust_ty("Box<Foo>");
 
         assert_eq!(
             &*GenericTypeConv::simple_new(str_to_ty("jlong"), str_to_ty("Box<T>"), generic,)
-                .is_conv_possible(&str_to_ty("jlong").into(), Some(&box_foo), |_| None)
+                .is_conv_possible(&str_to_rust_ty("jlong"), Some(&box_foo), |_| None)
                 .unwrap()
                 .normalized_name,
             "Box < Foo >"
@@ -999,7 +985,7 @@ mod tests {
         assert_eq!(
             "bool",
             GenericTypeConv::simple_new(str_to_ty("RefCell<T>"), str_to_ty("T"), generic_params,)
-                .is_conv_possible(&ty.into(), None, |_| None)
+                .is_conv_possible(&str_to_rust_ty(normalize_ty_lifetimes(&ty)), None, |_| None)
                 .unwrap()
                 .normalized_name
         );

@@ -48,19 +48,20 @@ pub(in crate::java_jni) fn generate_rust_code(
     }
 
     let dummy_ty = parse_type! { () };
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
 
     let mut gen_code = Vec::<TokenStream>::new();
     let (this_type_for_method, code_box_this) =
         if let Some(this_type) = calc_this_type_for_method(conv_map, class) {
-            let this_type: RustType = this_type.clone().into();
-            let this_type = this_type.implements("SwigForeignClass");
+            let this_type =
+                conv_map.find_or_alloc_rust_type_that_implements(&this_type, "SwigForeignClass");
             debug!(
                 "generate_rust_code: add implements SwigForeignClass for {}",
                 this_type.normalized_name
             );
 
             let (this_type_for_method, code_box_this) =
-                TypeMap::convert_to_heap_pointer(&this_type, "this");
+                conv_map.convert_to_heap_pointer(&this_type, "this");
             let class_name_for_user = java_class_full_name(package_name, &class.name.to_string());
             let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
             let lifetimes = {
@@ -104,7 +105,7 @@ pub(in crate::java_jni) fn generate_rust_code(
 
             (this_type_for_method, code_box_this)
         } else {
-            (dummy_ty.clone().into(), String::new())
+            (dummy_rust_ty.clone(), String::new())
         };
 
     let no_this_info = || {
@@ -191,10 +192,10 @@ May be you need to use `private constructor = empty;` syntax?",
     }
 
     if have_constructor {
-        let this_type: RustType = calc_this_type_for_method(conv_map, class)
-            .ok_or_else(&no_this_info)?
-            .clone()
-            .into();
+        let this_type: RustType = conv_map.find_or_alloc_rust_type(
+            &calc_this_type_for_method(conv_map, class).ok_or_else(&no_this_info)?,
+        );
+
         let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, "this", false);
 
         let jni_destructor_name = generate_jni_func_name(
@@ -204,7 +205,7 @@ May be you need to use `private constructor = empty;` syntax?",
             &JniForeignMethodSignature {
                 output: ForeignTypeInfo {
                     name: "".into(),
-                    correspoding_rust_type: dummy_ty.into(),
+                    correspoding_rust_type: dummy_rust_ty.clone(),
                 },
                 input: vec![],
             },
@@ -639,10 +640,11 @@ fn generate_constructor(
         "jlong",
     )?;
 
-    let this_type: RustType = this_type.into();
+    let this_type: RustType = conv_map.find_or_alloc_rust_type(&this_type);
+    let construct_ret_type = conv_map.find_or_alloc_rust_type(&construct_ret_type);
 
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
-        &construct_ret_type.into(),
+        &construct_ret_type,
         &this_type,
         "this",
         "jlong",
@@ -709,14 +711,12 @@ fn generate_method(
         class,
         &this_type_for_method.ty,
     );
-    let this_type_ref = normalize_ty_lifetimes(&from_ty);
-    let (mut deps_this, convert_this) = conv_map.convert_rust_types(
-        &from_ty.into(),
-        &to_ty.into(),
-        "this",
-        jni_ret_type,
-        mc.method.span(),
-    )?;
+    let from_ty = conv_map.find_or_alloc_rust_type(&from_ty);
+    let this_type_ref = from_ty.normalized_name.as_str();
+    let to_ty = conv_map.find_or_alloc_rust_type(&to_ty);
+
+    let (mut deps_this, convert_this) =
+        conv_map.convert_rust_types(&from_ty, &to_ty, "this", jni_ret_type, mc.method.span())?;
 
     let code = format!(
         r#"

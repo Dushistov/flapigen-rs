@@ -259,22 +259,23 @@ impl TypeMap {
         self.foreign_names_map.insert(to.name, to_id);
     }
 
-    pub(crate) fn convert_to_heap_pointer(from: &RustType, var_name: &str) -> (RustType, String) {
+    pub(crate) fn convert_to_heap_pointer(
+        &mut self,
+        from: &RustType,
+        var_name: &str,
+    ) -> (RustType, String) {
         for smart_pointer in &["Box", "Rc", "Arc"] {
             if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, *smart_pointer) {
-                let inner_ty: RustType = inner_ty.into();
-                let inner_ty_str = normalize_ty_lifetimes(&inner_ty.ty);
-                return (
-                    inner_ty,
-                    format!(
-                        r#"
+                let inner_ty: RustType = self.find_or_alloc_rust_type(&inner_ty);
+                let code = format!(
+                    r#"
     let {var_name}: *const {inner_ty} = {smart_pointer}::into_raw({var_name});
 "#,
-                        var_name = var_name,
-                        inner_ty = inner_ty_str,
-                        smart_pointer = *smart_pointer,
-                    ),
+                    var_name = var_name,
+                    inner_ty = inner_ty.normalized_name,
+                    smart_pointer = *smart_pointer,
                 );
+                return (inner_ty, code);
             }
         }
 
@@ -414,7 +415,7 @@ impl TypeMap {
             .any(|fc| fc.name == foreign_name)
     }
 
-    pub(crate) fn add_type(&mut self, ty: RustType) -> NodeIndex {
+    pub(in crate::typemap) fn add_type(&mut self, ty: RustType) -> NodeIndex {
         let rust_names_map = &mut self.rust_names_map;
         let conv_graph = &mut self.conv_graph;
         *rust_names_map
@@ -815,12 +816,8 @@ impl TypeMap {
 
     pub(crate) fn find_or_alloc_rust_type(&mut self, ty: &Type) -> RustType {
         let ty = RustType::new_from_type(ty);
-        let rust_names_map = &mut self.rust_names_map;
-        let conv_graph = &mut self.conv_graph;
-        let index = *rust_names_map
-            .entry(ty.normalized_name.clone())
-            .or_insert_with(|| conv_graph.add_node(ty));
-        conv_graph[index].clone()
+        let idx = self.add_type(ty);
+        self.conv_graph[idx].clone()
     }
 
     pub(crate) fn ty_to_rust_type(&self, ty: &Type) -> Option<RustType> {
@@ -828,6 +825,17 @@ impl TypeMap {
         self.rust_names_map
             .get(&ty.normalized_name)
             .map(|idx| self.conv_graph[*idx].clone())
+    }
+
+    pub(crate) fn find_or_alloc_rust_type_that_implements(
+        &mut self,
+        ty: &Type,
+        trait_name: &str,
+    ) -> RustType {
+        let ty = RustType::new_from_type(ty);
+        let ty = ty.implements(trait_name);
+        let idx = self.add_type(ty);
+        self.conv_graph[idx].clone()
     }
 }
 
@@ -1223,9 +1231,8 @@ fn helper3() {
             )
             .unwrap();
 
-        let foo_rt: RustType = parse_type! { Foo }.into();
-        let foo_rt = foo_rt.implements("SwigForeignClass");
-        types_map.add_type(foo_rt.clone());
+        let foo_rt: RustType = types_map
+            .find_or_alloc_rust_type_that_implements(&parse_type! { Foo }, "SwigForeignClass");
         types_map.register_foreigner_class(&ForeignerClassInfo {
             name: Ident::new("Foo", Span::call_site()),
             methods: vec![],
@@ -1236,6 +1243,10 @@ fn helper3() {
             copy_derived: false,
         });
 
+        let rc_refcell_foo_ty =
+            types_map.find_or_alloc_rust_type(&parse_type! { &mut Rc<RefCell<Foo>> });
+        let foo_ref_ty = types_map.find_or_alloc_rust_type(&parse_type! { &mut Foo });
+
         assert_eq!(
             r#"    let mut a0: & Rc < RefCell < Foo > > = a0;
     let mut a0: & RefCell < Foo > = a0.swig_deref();
@@ -1244,8 +1255,8 @@ fn helper3() {
 "#,
             types_map
                 .convert_rust_types(
-                    &parse_type! { &mut Rc<RefCell<Foo>> }.into(),
-                    &parse_type! { &mut Foo }.into(),
+                    &rc_refcell_foo_ty,
+                    &foo_ref_ty,
                     "a0",
                     "jlong",
                     Span::call_site()
@@ -1254,14 +1265,17 @@ fn helper3() {
                 .1,
         );
 
+        let rc_refcell_foo_ty = types_map.find_or_alloc_rust_type(&parse_type! { &RefCell<Foo> });
+        let foo_ref_ty = types_map.find_or_alloc_rust_type(&parse_type! { &Foo });
+
         assert_eq!(
             r#"    let mut a0: Ref < Foo > = <Ref < Foo >>::swig_from(a0, env);
     let mut a0: & Foo = a0.swig_deref();
 "#,
             types_map
                 .convert_rust_types(
-                    &parse_type! { &RefCell<Foo> }.into(),
-                    &parse_type! { &Foo }.into(),
+                    &rc_refcell_foo_ty,
+                    &foo_ref_ty,
                     "a0",
                     "jlong",
                     Span::call_site()
@@ -1286,8 +1300,8 @@ fn helper3() {
         );
 
         assert!(try_build_path(
-            &parse_type! { Vec<i32> }.into(),
-            &parse_type! { jlong }.into(),
+            &types_map.find_or_alloc_rust_type(&parse_type! { Vec<i32> }),
+            &types_map.find_or_alloc_rust_type(&parse_type! { jlong }),
             Span::call_site(),
             &mut types_map.conv_graph,
             &mut types_map.rust_names_map,
