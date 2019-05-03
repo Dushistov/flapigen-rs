@@ -15,12 +15,11 @@ use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
-    ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     cpp::map_type::map_type,
     error::{DiagnosticError, Result},
     file_cache::FileWriteCache,
+    typemap::ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     typemap::{
-        make_unique_rust_typename,
         ty::RustType,
         unpack_unique_typename,
         utils::{
@@ -111,33 +110,27 @@ impl LanguageGenerator for CppConfig {
                 .find_or_alloc_rust_type_that_implements(this_type_for_method, "SwigForeignClass");
 
             let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
-            let void_ptr_ty_name = format!("{}", DisplayToTokens(&void_ptr_ty));
-            let my_void_ptr_ti = RustType::new(
-                void_ptr_ty.clone(),
-                make_unique_rust_typename(&void_ptr_ty_name, &this_type.normalized_name),
-            );
+            let void_ptr_rust_ty = conv_map
+                .find_or_alloc_rust_type_with_suffix(&void_ptr_ty, &this_type.normalized_name);
             let foreign_typename = format!("{} *", cpp_code::c_class_type(class));
             conv_map.cache_rust_to_foreign_conv(
                 &this_type,
                 ForeignTypeInfo {
-                    correspoding_rust_type: my_void_ptr_ti,
+                    correspoding_rust_type: void_ptr_rust_ty.clone(),
                     name: foreign_typename.into(),
                 },
             );
 
             let const_void_ptr_ty = parse_type! { *const ::std::os::raw::c_void };
-            let const_void_ptr_typename = format!("{}", DisplayToTokens(&const_void_ptr_ty));
-
-            let my_const_void_ptr_ti = RustType::new(
-                const_void_ptr_ty,
-                make_unique_rust_typename(&const_void_ptr_typename, &this_type.normalized_name),
+            let const_void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
+                &const_void_ptr_ty,
+                &this_type.normalized_name,
             );
-            let my_const_void_ptr_ti2 = my_const_void_ptr_ti.clone();
             let const_foreign_typename = format!("const {} *", cpp_code::c_class_type(class));
             conv_map.cache_rust_to_foreign_conv(
                 &this_type,
                 ForeignTypeInfo {
-                    correspoding_rust_type: my_const_void_ptr_ti,
+                    correspoding_rust_type: const_void_ptr_rust_ty.clone(),
                     name: const_foreign_typename.into(),
                 },
             );
@@ -146,7 +139,7 @@ impl LanguageGenerator for CppConfig {
             //handle foreigner_class as input arg
             let this_type_ref = conv_map.find_or_alloc_rust_type(&parse_type! { & #this_type_ty });
             conv_map.add_conversation_rule(
-                my_const_void_ptr_ti2,
+                const_void_ptr_rust_ty.clone(),
                 this_type_ref,
                 format!(
                     r#"
@@ -160,16 +153,11 @@ impl LanguageGenerator for CppConfig {
                 .into(),
             );
 
-            let my_mut_void_ptr_ti = RustType::new(
-                void_ptr_ty,
-                make_unique_rust_typename(&void_ptr_ty_name, &this_type.normalized_name),
-            );
-
             let this_type_mut_ref =
                 conv_map.find_or_alloc_rust_type(&parse_type! { &mut #this_type_ty });
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
-                my_mut_void_ptr_ti,
+                void_ptr_rust_ty.clone(),
                 this_type_mut_ref,
                 format!(
                     r#"
@@ -193,15 +181,9 @@ impl LanguageGenerator for CppConfig {
             let (this_type_for_method, _code_box_this) =
                 conv_map.convert_to_heap_pointer(&this_type, "this");
             let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-            let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
-            let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
-            let my_void_ptr_ti = RustType::new(
-                void_ptr_ty,
-                make_unique_rust_typename(&void_ptr_typename, &this_type.normalized_name),
-            );
             let this_type_name = this_type_for_method.normalized_name.clone();
             conv_map.add_conversation_rule(
-                my_void_ptr_ti,
+                void_ptr_rust_ty,
                 this_type,
                 format!(
                     r#"

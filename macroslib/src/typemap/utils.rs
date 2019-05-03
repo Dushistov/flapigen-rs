@@ -2,9 +2,8 @@ use proc_macro2::TokenStream;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
-    ast::fn_arg_type,
     error::{DiagnosticError, Result},
-    typemap::{ty::RustType, ForeignMethodSignature, ForeignTypeInfo, TypeMap},
+    typemap::{ast::fn_arg_type, ty::RustType, ForeignMethodSignature, ForeignTypeInfo, TypeMap},
     ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
 };
 

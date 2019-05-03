@@ -3,9 +3,9 @@ use proc_macro2::Span;
 use syn::{parse_quote, Type};
 
 use crate::{
-    ast::{if_option_return_some_type, normalize_ty_lifetimes},
     error::{DiagnosticError, Result},
     java_jni::{calc_this_type_for_method, JavaForeignTypeInfo, NullAnnotation},
+    typemap::ast::{if_option_return_some_type, normalize_ty_lifetimes},
     typemap::{ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
     ForeignEnumInfo, ForeignerClassInfo, TypeMap,
 };

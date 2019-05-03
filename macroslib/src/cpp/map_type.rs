@@ -7,20 +7,17 @@ use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
-    ast::{
-        if_option_return_some_type, if_result_return_ok_err_types, if_type_slice_return_elem_type,
-        if_vec_return_elem_type, DisplayToTokens,
-    },
     cpp::{
         cpp_code::c_class_type,
         {CppConverter, CppForeignTypeInfo},
     },
     error::{DiagnosticError, Result},
     file_cache::FileWriteCache,
-    typemap::{
-        make_unique_rust_typename, ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE,
-        TO_VAR_TEMPLATE,
+    typemap::ast::{
+        if_option_return_some_type, if_result_return_ok_err_types, if_type_slice_return_elem_type,
+        if_vec_return_elem_type,
     },
+    typemap::{ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
     CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypeMap,
 };
 
@@ -144,10 +141,6 @@ fn special_type(
                     ),
                 ));
             } else {
-                let mut_void_ptr_typename = format!(
-                    "{}",
-                    DisplayToTokens(&parse_type! { *mut ::std::os::raw::c_void })
-                );
                 let this_type = if let Some(this_type_for_method) =
                     foreign_class.constructor_ret_type.as_ref()
                 {
@@ -164,10 +157,12 @@ fn special_type(
                         ),
                     ));
                 };
-                let my_mut_void_ptr_ti = RustType::new(
-                    parse_quote! { *mut ::std::os::raw::c_void },
-                    make_unique_rust_typename(&mut_void_ptr_typename, &this_type.normalized_name),
-                );
+                let my_mut_void_ptr_ti = conv_map
+                    .find_rust_type_with_suffix(
+                        &parse_quote! { *mut ::std::os::raw::c_void },
+                        &this_type.normalized_name,
+                    )
+                    .expect("Internal Error (cpp): Can not find void * (this_type)");
                 let cpp_type = format!("{} &", foreign_class.name);
                 let c_type = &foreign_info.name;
                 let input_converter = format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE);
@@ -1059,11 +1054,8 @@ fn handle_option_type_in_return(
             })?;
             let this_type: RustType = conv_map.find_or_alloc_rust_type(this_type_for_method);
             let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
-            let void_ptr_typename = format!("{}", DisplayToTokens(&void_ptr_ty));
-            let my_void_ptr_ti = RustType::new(
-                void_ptr_ty,
-                make_unique_rust_typename(&void_ptr_typename, &this_type.normalized_name),
-            );
+            let my_void_ptr_ti = conv_map
+                .find_or_alloc_rust_type_with_suffix(&void_ptr_ty, &this_type.normalized_name);
             conv_map.add_conversation_rule(
                 arg_ty.clone(),
                 my_void_ptr_ti,

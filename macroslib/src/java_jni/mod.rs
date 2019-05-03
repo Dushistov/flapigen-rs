@@ -13,14 +13,13 @@ use syn::{parse_quote, spanned::Spanned, Type};
 
 use self::map_type::special_type;
 use crate::{
-    ast::{
+    error::{DiagnosticError, Result},
+    typemap::ast::{
         fn_arg_type, if_option_return_some_type, if_result_return_ok_err_types,
         if_ty_result_return_ok_type,
     },
-    error::{DiagnosticError, Result},
     typemap::{
-        make_unique_rust_typename, ty::RustType, ForeignMethodSignature, ForeignTypeInfo,
-        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
     LanguageGenerator, MethodVariant, TypeMap,
@@ -110,12 +109,12 @@ impl LanguageGenerator for JavaConfig {
                 "register_class: add implements SwigForeignClass for {}",
                 this_type
             );
-            let jobject_name = "jobject";
-            let jobject_ty = parse_type! { jobject };
-            let my_jobj_ti = RustType::new(
-                jobject_ty,
-                make_unique_rust_typename(jobject_name, &this_type.normalized_name),
+
+            let my_jobj_ti = conv_map.find_or_alloc_rust_type_with_suffix(
+                &parse_type! { jobject },
+                &this_type.normalized_name,
             );
+
             conv_map.cache_rust_to_foreign_conv(
                 &this_type,
                 ForeignTypeInfo {
@@ -268,11 +267,10 @@ impl LanguageGenerator for JavaConfig {
             interface,
             &f_methods,
         )?;
-        let jobject_name = "jobject";
-        let jobject_ty = parse_type! { jobject };
-        let my_jobj_ti = RustType::new(
-            jobject_ty,
-            make_unique_rust_typename(jobject_name, &interface.name.to_string()),
+
+        let my_jobj_ti = conv_map.find_or_alloc_rust_type_with_suffix(
+            &parse_type! { jobject },
+            &interface.name.to_string(),
         );
         conv_map.add_foreign(my_jobj_ti, interface.name.to_string().into());
         Ok(items)

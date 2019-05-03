@@ -1,3 +1,4 @@
+pub mod ast;
 mod parse;
 pub mod ty;
 pub mod utils;
@@ -20,11 +21,11 @@ use syn::{parse_quote, spanned::Spanned, Ident, Type};
 
 use self::ty::RustType;
 use crate::{
-    ast::{
+    error::{DiagnosticError, Result},
+    typemap::ast::{
         check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
         GenericTypeConv,
     },
-    error::{DiagnosticError, Result},
     ForeignEnumInfo, ForeignerClassInfo,
 };
 
@@ -836,6 +837,27 @@ impl TypeMap {
         let ty = ty.implements(trait_name);
         let idx = self.add_type(ty);
         self.conv_graph[idx].clone()
+    }
+
+    pub(crate) fn find_or_alloc_rust_type_with_suffix(
+        &mut self,
+        ty: &Type,
+        suffix: &str,
+    ) -> RustType {
+        let name: SmolStr = make_unique_rust_typename(normalize_ty_lifetimes(ty), suffix).into();
+        let rust_names_map = &mut self.rust_names_map;
+        let conv_graph = &mut self.conv_graph;
+        let idx = *rust_names_map
+            .entry(name.clone())
+            .or_insert_with(|| conv_graph.add_node(RustType::new(ty.clone(), name)));
+        self.conv_graph[idx].clone()
+    }
+
+    pub(crate) fn find_rust_type_with_suffix(&self, ty: &Type, suffix: &str) -> Option<RustType> {
+        let name: SmolStr = make_unique_rust_typename(normalize_ty_lifetimes(ty), suffix).into();
+        self.rust_names_map
+            .get(&name)
+            .map(|idx| self.conv_graph[*idx].clone())
     }
 }
 

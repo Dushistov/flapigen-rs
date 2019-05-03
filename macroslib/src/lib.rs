@@ -14,7 +14,6 @@ macro_rules! parse_type {
     }}
 }
 
-mod ast;
 mod code_parse;
 mod cpp;
 mod error;
@@ -535,12 +534,6 @@ struct FnDecl {
     span: Span,
     inputs: syn::punctuated::Punctuated<syn::FnArg, Token![,]>,
     output: syn::ReturnType,
-}
-
-impl FnDecl {
-    fn span(&self) -> Span {
-        self.span
-    }
 }
 
 impl From<syn::FnDecl> for crate::FnDecl {

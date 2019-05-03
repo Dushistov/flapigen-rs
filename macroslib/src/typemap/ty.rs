@@ -1,4 +1,4 @@
-use crate::ast::normalize_ty_lifetimes;
+use crate::typemap::ast::normalize_ty_lifetimes;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 use std::fmt::Display;
@@ -17,7 +17,7 @@ impl Display for RustType {
 }
 
 impl RustType {
-    pub(crate) fn new<S>(ty: syn::Type, norm_name: S) -> RustType
+    pub(in crate::typemap) fn new<S>(ty: syn::Type, norm_name: S) -> RustType
     where
         S: Into<SmolStr>,
     {
@@ -27,7 +27,7 @@ impl RustType {
             implements: ImplementsSet::default(),
         }
     }
-    pub(crate) fn implements(mut self, trait_name: &str) -> RustType {
+    pub(in crate::typemap) fn implements(mut self, trait_name: &str) -> RustType {
         self.implements.insert(trait_name.into());
         self
     }
@@ -36,8 +36,7 @@ impl RustType {
         self.normalized_name = other.normalized_name.clone();
         self.implements.insert_set(&other.implements);
     }
-    //TODO: change to in pub(in crate::typemap)
-    pub(crate) fn new_from_type(ty: &syn::Type) -> RustType {
+    pub(in crate::typemap) fn new_from_type(ty: &syn::Type) -> RustType {
         let normalized_name = normalize_ty_lifetimes(ty);
         RustType::new(ty.clone(), normalized_name)
     }

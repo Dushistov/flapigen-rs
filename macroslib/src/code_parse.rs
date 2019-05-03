@@ -11,9 +11,9 @@ use syn::{
 };
 
 use crate::{
-    ast::normalize_ty_lifetimes, error::Result, ForeignEnumInfo, ForeignEnumItem, ForeignInterface,
-    ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, LanguageConfig, MethodAccess,
-    MethodVariant, SelfTypeVariant,
+    error::Result, typemap::ast::normalize_ty_lifetimes, ForeignEnumInfo, ForeignEnumItem,
+    ForeignInterface, ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, LanguageConfig,
+    MethodAccess, MethodVariant, SelfTypeVariant,
 };
 
 pub(crate) fn parse_foreigner_class(
