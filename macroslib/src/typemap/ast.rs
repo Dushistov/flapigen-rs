@@ -155,7 +155,7 @@ impl GenericTypeConv {
         ty: &RustType,
         goal_ty: Option<&RustType>,
         others: OtherRustTypes,
-    ) -> Option<RustType>
+    ) -> Option<(syn::Type, SmolStr)>
     where
         OtherRustTypes: Fn(&str) -> Option<&'a RustType>,
     {
@@ -256,8 +256,9 @@ impl GenericTypeConv {
         let normalized_name = make_unique_rust_typename_if_need(
             normalize_ty_lifetimes(&to_ty).to_string(),
             to_suffix,
-        );
-        Some(RustType::new(to_ty, normalized_name))
+        )
+        .into();
+        Some((to_ty, normalized_name))
     }
 }
 
@@ -543,7 +544,7 @@ pub(crate) fn if_option_return_some_type(ty: &RustType) -> Option<Type> {
 
     GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
         .is_conv_possible(ty, None, |_| None)
-        .map(|x| x.ty)
+        .map(|x| x.0)
 }
 
 pub(crate) fn if_vec_return_elem_type(ty: &RustType) -> Option<Type> {
@@ -553,7 +554,7 @@ pub(crate) fn if_vec_return_elem_type(ty: &RustType) -> Option<Type> {
 
     GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
         .is_conv_possible(ty, None, |_| None)
-        .map(|x| x.ty)
+        .map(|x| x.0)
 }
 
 pub(crate) fn if_result_return_ok_err_types(ty: &RustType) -> Option<(Type, Type)> {
@@ -565,13 +566,13 @@ pub(crate) fn if_result_return_ok_err_types(ty: &RustType) -> Option<(Type, Type
     let ok_ty = {
         GenericTypeConv::simple_new(from_ty.clone(), ok_ty, generic_params.clone())
             .is_conv_possible(ty, None, |_| None)
-            .map(|x| x.ty)
+            .map(|x| x.0)
     }?;
 
     let err_ty = {
         GenericTypeConv::simple_new(from_ty, err_ty, generic_params)
             .is_conv_possible(ty, None, |_| None)
-            .map(|x| x.ty)
+            .map(|x| x.0)
     }?;
     Some((ok_ty, err_ty))
 }
@@ -606,7 +607,7 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
 
     GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
         .is_conv_possible(ty, None, |_| None)
-        .map(|x| x.ty)
+        .map(|x| x.0)
 }
 
 pub(crate) fn fn_arg_type(a: &syn::FnArg) -> &syn::Type {
@@ -678,10 +679,12 @@ mod tests {
             }
         };
 
-        let foo_spec = RustType::new(str_to_ty("Foo"), "Foo").implements("SwigForeignClass");
+        let foo_spec =
+            RustType::new_without_graph_idx(str_to_ty("Foo"), "Foo").implements("SwigForeignClass");
 
         let refcell_foo_spec =
-            RustType::new(str_to_ty("RefCell<Foo>"), "RefCell<Foo>").implements("SwigForeignClass");
+            RustType::new_without_graph_idx(str_to_ty("RefCell<Foo>"), "RefCell<Foo>")
+                .implements("SwigForeignClass");
 
         fn check_subst<'a, FT: Fn(&str) -> Option<&'a RustType>>(
             generic: &syn::Generics,
@@ -695,7 +698,7 @@ mod tests {
                 "check_subst: conv {} -> {} with {}",
                 from_ty_name, to_ty_name, ty_check_name
             );
-            let ret_ty: RustType = GenericTypeConv::simple_new(
+            let (ret_ty, ret_ty_name) = GenericTypeConv::simple_new(
                 str_to_ty(from_ty_name),
                 str_to_ty(to_ty_name),
                 generic.clone(),
@@ -703,11 +706,11 @@ mod tests {
             .is_conv_possible(&str_to_rust_ty(ty_check_name), None, map_others)
             .expect("check subst failed");
             assert_eq!(
-                ret_ty.normalized_name,
+                ret_ty_name,
                 normalize_ty_lifetimes(&str_to_ty(expect_to_ty_name))
             );
 
-            ret_ty
+            RustType::new_without_graph_idx(ret_ty, ret_ty_name)
         }
 
         let pair_generic = get_generic_params_from_code! {
@@ -718,8 +721,10 @@ mod tests {
             }
         };
 
-        let one_spec = RustType::new(str_to_ty("One"), "One").implements("SwigForeignClass");
-        let two_spec = RustType::new(str_to_ty("One"), "One").implements("SwigForeignClass");
+        let one_spec =
+            RustType::new_without_graph_idx(str_to_ty("One"), "One").implements("SwigForeignClass");
+        let two_spec =
+            RustType::new_without_graph_idx(str_to_ty("One"), "One").implements("SwigForeignClass");
         check_subst(
             &pair_generic,
             "(T1, T2)",
@@ -826,7 +831,7 @@ mod tests {
                 None
             })
             .unwrap()
-            .normalized_name,
+            .1,
             "& Foo"
         );
 
@@ -836,7 +841,7 @@ mod tests {
             &*GenericTypeConv::simple_new(str_to_ty("jlong"), str_to_ty("Box<T>"), generic,)
                 .is_conv_possible(&str_to_rust_ty("jlong"), Some(&box_foo), |_| None)
                 .unwrap()
-                .normalized_name,
+                .1,
             "Box < Foo >"
         );
 
@@ -987,7 +992,7 @@ mod tests {
             GenericTypeConv::simple_new(str_to_ty("RefCell<T>"), str_to_ty("T"), generic_params,)
                 .is_conv_possible(&str_to_rust_ty(normalize_ty_lifetimes(&ty)), None, |_| None)
                 .unwrap()
-                .normalized_name
+                .1
         );
     }
 
@@ -1036,6 +1041,7 @@ mod tests {
 
     fn str_to_rust_ty(code: &str) -> RustType {
         let ty = syn::parse_str::<syn::Type>(code).unwrap();
-        RustType::new_from_type(&ty)
+        let name = normalize_ty_lifetimes(&ty);
+        RustType::new_without_graph_idx(ty, name)
     }
 }

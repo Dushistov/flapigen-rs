@@ -1,4 +1,4 @@
-use crate::typemap::ast::normalize_ty_lifetimes;
+use petgraph::graph::NodeIndex;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 use std::fmt::Display;
@@ -8,6 +8,7 @@ pub(crate) struct RustType {
     pub ty: syn::Type,
     pub normalized_name: SmolStr,
     pub implements: ImplementsSet,
+    pub(in crate::typemap) graph_idx: NodeIndex,
 }
 
 impl Display for RustType {
@@ -17,7 +18,7 @@ impl Display for RustType {
 }
 
 impl RustType {
-    pub(in crate::typemap) fn new<S>(ty: syn::Type, norm_name: S) -> RustType
+    pub(in crate::typemap) fn new_without_graph_idx<S>(ty: syn::Type, norm_name: S) -> RustType
     where
         S: Into<SmolStr>,
     {
@@ -25,6 +26,7 @@ impl RustType {
             ty,
             normalized_name: norm_name.into(),
             implements: ImplementsSet::default(),
+            graph_idx: NodeIndex::new(0),
         }
     }
     pub(in crate::typemap) fn implements(mut self, trait_name: &str) -> RustType {
@@ -35,10 +37,6 @@ impl RustType {
         self.ty = other.ty.clone();
         self.normalized_name = other.normalized_name.clone();
         self.implements.insert_set(&other.implements);
-    }
-    pub(in crate::typemap) fn new_from_type(ty: &syn::Type) -> RustType {
-        let normalized_name = normalize_ty_lifetimes(ty);
-        RustType::new(ty.clone(), normalized_name)
     }
 }
 

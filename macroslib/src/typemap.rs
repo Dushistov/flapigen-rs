@@ -195,15 +195,17 @@ impl<'a> TypeGraphSnapshot<'a> {
     fn node_for_ty(
         &mut self,
         names_to_graph_map: &mut FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
-        rty: &RustType,
+        (ty, ty_name): (syn::Type, SmolStr),
     ) -> NodeIndex<TypeGraphIdx> {
         let graph = &mut self.conv_graph;
         let mut new_node = false;
         let idx = *names_to_graph_map
-            .entry(rty.normalized_name.clone())
+            .entry(ty_name.clone())
             .or_insert_with(|| {
                 new_node = true;
-                graph.add_node(rty.clone())
+                let idx = graph.add_node(RustType::new_without_graph_idx(ty, ty_name));
+                graph[idx].graph_idx = idx;
+                idx
             });
         if new_node {
             self.new_nodes.push(idx);
@@ -237,8 +239,8 @@ impl TypeMap {
     }
 
     pub(crate) fn add_foreign(&mut self, correspoding_rty: RustType, foreign_name: SmolStr) {
-        let idx = self.add_type(correspoding_rty);
-        self.foreign_names_map.insert(foreign_name, idx);
+        self.foreign_names_map
+            .insert(foreign_name, correspoding_rty.graph_idx);
     }
     pub(crate) fn find_foreign_type_info_by_name(
         &self,
@@ -253,8 +255,7 @@ impl TypeMap {
     }
 
     pub(crate) fn cache_rust_to_foreign_conv(&mut self, from: &RustType, to: ForeignTypeInfo) {
-        self.add_type(from.clone());
-        let to_id = self.add_type(to.correspoding_rust_type);
+        let to_id = to.correspoding_rust_type.graph_idx;
         self.rust_to_foreign_cache
             .insert(from.normalized_name.clone(), to.name.clone());
         self.foreign_names_map.insert(to.name, to_id);
@@ -393,8 +394,8 @@ impl TypeMap {
             "TypesConvMap::add_conversation_rule {} -> {}: {:?}",
             from, to, rule
         );
-        let from = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, from);
-        let to = get_graph_node(&mut self.conv_graph, &mut self.rust_names_map, to);
+        let from = from.graph_idx;
+        let to = to.graph_idx;
         self.conv_graph.update_edge(from, to, rule);
     }
 
@@ -414,14 +415,6 @@ impl TypeMap {
         self.foreign_classes
             .iter()
             .any(|fc| fc.name == foreign_name)
-    }
-
-    pub(in crate::typemap) fn add_type(&mut self, ty: RustType) -> NodeIndex {
-        let rust_names_map = &mut self.rust_names_map;
-        let conv_graph = &mut self.conv_graph;
-        *rust_names_map
-            .entry(ty.normalized_name.clone())
-            .or_insert_with(|| conv_graph.add_node(ty))
     }
 
     pub(crate) fn convert_rust_types(
@@ -468,26 +461,11 @@ impl TypeMap {
         to: &RustType,
         build_for_sp: Span,
     ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
-        debug!(
-            "find_path: begin {} -> {}",
-            from.normalized_name, to.normalized_name
-        );
+        debug!("find_path: begin {} -> {}", from, to);
         if from.normalized_name == to.normalized_name {
             return Ok(vec![]);
         }
-        let err_add_note = |mut err: DiagnosticError| -> DiagnosticError {
-            err.span_note(
-                Span::call_site(),
-                format!(
-                    "Can not find conversation from {} to {}",
-                    from.normalized_name, to.normalized_name
-                ),
-            );
-            err
-        };
-        let from = self.find_rust_type(from).map_err(&err_add_note)?;
-        let to = self.find_rust_type(to).map_err(&err_add_note)?;
-        find_conversation_path(&self.conv_graph, from, to, build_for_sp)
+        find_conversation_path(&self.conv_graph, from.graph_idx, to.graph_idx, build_for_sp)
     }
 
     fn build_path_if_possible(
@@ -499,8 +477,8 @@ impl TypeMap {
         debug!(
             "build_path_if_possible begin {}\n {} -> {}",
             DisplayTypesConvGraph(&self.conv_graph),
-            start_from.normalized_name,
-            goal_to.normalized_name
+            start_from,
+            goal_to
         );
         if let Some(path) = try_build_path(
             start_from,
@@ -513,18 +491,6 @@ impl TypeMap {
         ) {
             merge_path_to_conv_map(path, self);
         }
-    }
-
-    fn find_rust_type(&self, ty: &RustType) -> Result<NodeIndex<TypeGraphIdx>> {
-        self.rust_names_map
-            .get(&ty.normalized_name)
-            .cloned()
-            .ok_or_else(|| {
-                DiagnosticError::new(
-                    ty.ty.span(),
-                    format!("Can not find such rust type {}", ty.normalized_name),
-                )
-            })
     }
 
     pub(crate) fn merge(
@@ -556,7 +522,11 @@ impl TypeMap {
             let data_conv_graph = &mut data.conv_graph;
             let idx = *data_rust_names_map
                 .entry(node.normalized_name.clone())
-                .or_insert_with(|| data_conv_graph.add_node(node2));
+                .or_insert_with(|| {
+                    let idx = data_conv_graph.add_node(node2);
+                    data_conv_graph[idx].graph_idx = idx;
+                    idx
+                });
 
             data_conv_graph[idx].merge(node);
 
@@ -634,7 +604,11 @@ impl TypeMap {
             }
         }
 
-        if let Some(from) = self.rust_names_map.get(&rust_ty.normalized_name).cloned() {
+        {
+            debug!(
+                "map foreign: graph node {:?}",
+                self.conv_graph[rust_ty.graph_idx]
+            );
             let find_path = |from, to| match find_conversation_path(
                 &self.conv_graph,
                 from,
@@ -647,8 +621,8 @@ impl TypeMap {
             let mut min_path: Option<(usize, NodeIndex, SmolStr)> = None;
             for (foreign_name, graph_idx) in &self.foreign_names_map {
                 let path = match direction {
-                    petgraph::Direction::Outgoing => find_path(from, *graph_idx),
-                    petgraph::Direction::Incoming => find_path(*graph_idx, from),
+                    petgraph::Direction::Outgoing => find_path(rust_ty.graph_idx, *graph_idx),
+                    petgraph::Direction::Incoming => find_path(*graph_idx, rust_ty.graph_idx),
                 };
                 if let Some(path) = path {
                     trace!(
@@ -730,12 +704,9 @@ impl TypeMap {
                     foreign_name
                 );
             }
-            let not_uniq_name = normalize_ty_lifetimes(&ty);
-            let node = self.add_type(RustType::new(
-                ty,
-                make_unique_rust_typename(&not_uniq_name, &suffix),
-            ));
-            self.foreign_names_map.insert(foreign_name.into(), node);
+            let rust_ty = self.find_or_alloc_rust_type_with_suffix(&ty, &suffix);
+            self.foreign_names_map
+                .insert(foreign_name.into(), rust_ty.graph_idx);
         }
 
         let from: RustType = rust_ty.clone().into();
@@ -815,17 +786,26 @@ impl TypeMap {
         self.foreign_classes.push(class.clone());
     }
 
-    pub(crate) fn find_or_alloc_rust_type(&mut self, ty: &Type) -> RustType {
-        let ty = RustType::new_from_type(ty);
-        let idx = self.add_type(ty);
-        self.conv_graph[idx].clone()
+    fn add_node<F: FnOnce() -> RustType>(
+        &mut self,
+        key: SmolStr,
+        init_without_graph_idx: F,
+    ) -> NodeIndex {
+        let rust_names_map = &mut self.rust_names_map;
+        let conv_graph = &mut self.conv_graph;
+        *rust_names_map.entry(key).or_insert_with(|| {
+            let idx = conv_graph.add_node(init_without_graph_idx());
+            conv_graph[idx].graph_idx = idx;
+            idx
+        })
     }
 
-    pub(crate) fn ty_to_rust_type(&self, ty: &Type) -> Option<RustType> {
-        let ty = RustType::new_from_type(ty);
-        self.rust_names_map
-            .get(&ty.normalized_name)
-            .map(|idx| self.conv_graph[*idx].clone())
+    pub(crate) fn find_or_alloc_rust_type(&mut self, ty: &Type) -> RustType {
+        let name = normalize_ty_lifetimes(ty);
+        let idx = self.add_node(name.into(), || {
+            RustType::new_without_graph_idx(ty.clone(), name)
+        });
+        self.conv_graph[idx].clone()
     }
 
     pub(crate) fn find_or_alloc_rust_type_that_implements(
@@ -833,9 +813,10 @@ impl TypeMap {
         ty: &Type,
         trait_name: &str,
     ) -> RustType {
-        let ty = RustType::new_from_type(ty);
-        let ty = ty.implements(trait_name);
-        let idx = self.add_type(ty);
+        let name = normalize_ty_lifetimes(ty);
+        let idx = self.add_node(name.into(), || {
+            RustType::new_without_graph_idx(ty.clone(), name).implements(trait_name)
+        });
         self.conv_graph[idx].clone()
     }
 
@@ -845,12 +826,29 @@ impl TypeMap {
         suffix: &str,
     ) -> RustType {
         let name: SmolStr = make_unique_rust_typename(normalize_ty_lifetimes(ty), suffix).into();
-        let rust_names_map = &mut self.rust_names_map;
-        let conv_graph = &mut self.conv_graph;
-        let idx = *rust_names_map
-            .entry(name.clone())
-            .or_insert_with(|| conv_graph.add_node(RustType::new(ty.clone(), name)));
+        let idx = self.add_node(name.clone(), || {
+            RustType::new_without_graph_idx(ty.clone(), name)
+        });
         self.conv_graph[idx].clone()
+    }
+
+    pub(crate) fn find_or_alloc_rust_type_with_may_be_suffix(
+        &mut self,
+        ty: &Type,
+        suffix: Option<String>,
+    ) -> RustType {
+        if let Some(suffix) = suffix {
+            self.find_or_alloc_rust_type_with_suffix(ty, &suffix)
+        } else {
+            self.find_or_alloc_rust_type(ty)
+        }
+    }
+
+    pub(crate) fn ty_to_rust_type(&self, ty: &Type) -> Option<RustType> {
+        let name = normalize_ty_lifetimes(ty);
+        self.rust_names_map
+            .get(name)
+            .map(|idx| self.conv_graph[*idx].clone())
     }
 
     pub(crate) fn find_rust_type_with_suffix(&self, ty: &Type, suffix: &str) -> Option<RustType> {
@@ -1016,9 +1014,9 @@ fn try_build_path(
     let mut rust_names_map = rust_names_map.clone();
     let mut ty_graph = TypeGraphSnapshot::new(conv_graph);
 
-    let start_from_idx = ty_graph.node_for_ty(&mut rust_names_map, start_from);
+    let start_from_idx = start_from.graph_idx;
 
-    let goal_to_idx = ty_graph.node_for_ty(&mut rust_names_map, goal_to);
+    let goal_to_idx = goal_to.graph_idx;
 
     let mut cur_step = FxHashSet::default();
     cur_step.insert(start_from_idx);
@@ -1057,13 +1055,15 @@ fn try_build_path(
                     edge.to_ty,
                     from
                 );
-                if let Some(to_ty) = edge.is_conv_possible(&from, Some(goal_to), |name| {
-                    rust_names_map.get(name).map(|i| &ty_graph.conv_graph[*i])
-                }) {
-                    if from.normalized_name == to_ty.normalized_name {
+                if let Some((to_ty, to_ty_name)) =
+                    edge.is_conv_possible(&from, Some(goal_to), |name| {
+                        rust_names_map.get(name).map(|i| &ty_graph.conv_graph[*i])
+                    })
+                {
+                    if from.normalized_name == to_ty_name {
                         continue;
                     }
-                    let to = ty_graph.node_for_ty(&mut rust_names_map, &to_ty);
+                    let to = ty_graph.node_for_ty(&mut rust_names_map, (to_ty, to_ty_name));
                     ty_graph.conv_graph.add_edge(
                         *from_ty,
                         to,

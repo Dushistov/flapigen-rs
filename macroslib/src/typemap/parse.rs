@@ -16,7 +16,7 @@ use crate::{
     error::{DiagnosticError, Result},
     typemap::{
         ast::{normalize_ty_lifetimes, GenericTypeConv, TypeName},
-        make_unique_rust_typename, make_unique_rust_typename_if_need,
+        make_unique_rust_typename,
         ty::RustType,
         validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
     },
@@ -177,9 +177,11 @@ fn fill_foreign_types_map(item_mod: &syn::ItemMod, ret: &mut TypeMap) -> Result<
         let rust_name = rust_name.typename;
         let rust_names_map = &mut ret.rust_names_map;
         let conv_graph = &mut ret.conv_graph;
-        let graph_id = *rust_names_map
-            .entry(rust_name.clone())
-            .or_insert_with(|| conv_graph.add_node(RustType::new(rust_ty, rust_name)));
+        let graph_id = *rust_names_map.entry(rust_name.clone()).or_insert_with(|| {
+            let idx = conv_graph.add_node(RustType::new_without_graph_idx(rust_ty, rust_name));
+            conv_graph[idx].graph_idx = idx;
+            idx
+        });
         let foreign_name = foreign_name.typename;
         assert!(!ret.foreign_names_map.contains_key(&foreign_name));
         ret.foreign_names_map.insert(foreign_name, graph_id);
@@ -718,34 +720,21 @@ fn get_foreigner_hint_for_generic(
 }
 
 fn add_conv_code(
-    from: (Type, Option<String>),
-    to: (Type, Option<String>),
+    (from_ty, from_suffix): (Type, Option<String>),
+    (to_ty, to_suffix): (Type, Option<String>),
     item_code: TokenStream,
     conv_code: String,
     ret: &mut TypeMap,
 ) {
-    let (from, from_suffix) = from;
-    let from_typename =
-        make_unique_rust_typename_if_need(normalize_ty_lifetimes(&from).into(), from_suffix);
-    let from: RustType = RustType::new(from, from_typename);
-    let (to, to_suffix) = to;
-    let to_typename =
-        make_unique_rust_typename_if_need(normalize_ty_lifetimes(&to).into(), to_suffix);
-    let to = RustType::new(to, to_typename);
-    debug!(
-        "add_conv_code from {} to {}",
-        from.normalized_name, to.normalized_name
-    );
-    let rust_names_map = &mut ret.rust_names_map;
-    let conv_graph = &mut ret.conv_graph;
-    let from = *rust_names_map
-        .entry(from.normalized_name.clone())
-        .or_insert_with(|| conv_graph.add_node(from));
+    let from: RustType = ret.find_or_alloc_rust_type_with_may_be_suffix(&from_ty, from_suffix);
+    let to = ret.find_or_alloc_rust_type_with_may_be_suffix(&to_ty, to_suffix);
 
-    let to = *rust_names_map
-        .entry(to.normalized_name.clone())
-        .or_insert_with(|| conv_graph.add_node(to));
-    conv_graph.add_edge(from, to, TypeConvEdge::new(conv_code, Some(item_code)));
+    debug!("add_conv_code from {} to {}", from, to);
+    ret.conv_graph.add_edge(
+        from.graph_idx,
+        to.graph_idx,
+        TypeConvEdge::new(conv_code, Some(item_code)),
+    );
 }
 
 fn unpack_first_associated_type<'a, 'b>(
@@ -1050,25 +1039,16 @@ impl SwigFrom<bool> for jboolean {
         )
         .unwrap();
 
+        let jboolean_ty = conv_map.find_or_alloc_rust_type(&parse_type! { jboolean });
+        let bool_ty = conv_map.find_or_alloc_rust_type(&parse_type! { bool });
+
         let (_, code) = conv_map
-            .convert_rust_types(
-                &str_to_rust_ty("jboolean"),
-                &str_to_rust_ty("bool"),
-                "a0",
-                "jlong",
-                Span::call_site(),
-            )
+            .convert_rust_types(&jboolean_ty, &bool_ty, "a0", "jlong", Span::call_site())
             .unwrap();
         assert_eq!("    let a0: bool = a0.swig_into(env);\n".to_string(), code);
 
         let (_, code) = conv_map
-            .convert_rust_types(
-                &str_to_rust_ty("bool"),
-                &str_to_rust_ty("jboolean"),
-                "a0",
-                "jlong",
-                Span::call_site(),
-            )
+            .convert_rust_types(&bool_ty, &jboolean_ty, "a0", "jlong", Span::call_site())
             .unwrap();
 
         assert_eq!(
@@ -1100,21 +1080,18 @@ impl SwigDeref for String {
             FxHashMap::default(),
         )
         .unwrap();
-
+        let string_ty = conv_map.find_or_alloc_rust_type(&parse_type! { String });
+        let str_ty = conv_map.find_or_alloc_rust_type(&parse_type! { &str });
         let (_, code) = conv_map
-            .convert_rust_types(
-                &str_to_rust_ty("String"),
-                &str_to_rust_ty("&str"),
-                "a0",
-                "jlong",
-                Span::call_site(),
-            )
+            .convert_rust_types(&string_ty, &str_ty, "a0", "jlong", Span::call_site())
             .unwrap();
         assert_eq!("    let a0: & str = a0.swig_deref();\n".to_string(), code);
     }
 
     #[test]
     fn test_parse_conv_impl_with_type_params() {
+        let _ = env_logger::try_init();
+
         let mut conv_map = parse(
             "trait_with_type_params_code",
             r#"
@@ -1162,16 +1139,12 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
         )
         .unwrap();
 
-        conv_map.add_type(str_to_rust_ty("Foo").implements("SwigForeignClass"));
+        conv_map.find_or_alloc_rust_type_that_implements(&parse_type! { Foo }, "SwigForeignClass");
+        let arc_mutex_foo = conv_map.find_or_alloc_rust_type(&parse_type! { Arc<Mutex<Foo>> });
+        let foo_ref = conv_map.find_or_alloc_rust_type(&parse_type! { &Foo });
 
         let (_, code) = conv_map
-            .convert_rust_types(
-                &str_to_rust_ty("Arc<Mutex<Foo>>"),
-                &str_to_rust_ty("&Foo"),
-                "a0",
-                "jlong",
-                Span::call_site(),
-            )
+            .convert_rust_types(&arc_mutex_foo, &foo_ref, "a0", "jlong", Span::call_site())
             .unwrap();
         assert_eq!(
             r#"    let a0: & Mutex < Foo > = a0.swig_deref();
@@ -1233,12 +1206,14 @@ macro_rules! jni_unpack_return {
         )
         .unwrap();
 
-        conv_map.add_type(str_to_rust_ty("Foo"));
+        let foo_ty = conv_map.find_or_alloc_rust_type(&parse_type! { Foo });
+        let result_foo_str_ty =
+            conv_map.find_or_alloc_rust_type(&parse_type! { Result<Foo, String> });
 
         let (_, code) = conv_map
             .convert_rust_types(
-                &str_to_rust_ty("Result<Foo, String>"),
-                &str_to_rust_ty("Foo"),
+                &result_foo_str_ty,
+                &foo_ty,
                 "a0",
                 "jlong",
                 Span::call_site(),
@@ -1250,10 +1225,14 @@ macro_rules! jni_unpack_return {
             code
         );
 
+        let result_u8_str_ty =
+            conv_map.find_or_alloc_rust_type(&parse_type! { Result<u8, &'static str> });
+        let jshort_ty = conv_map.find_or_alloc_rust_type(&parse_type! { jshort });
+
         let (_, code) = conv_map
             .convert_rust_types(
-                &str_to_rust_ty("Result<u8, &'static str>"),
-                &str_to_rust_ty("jshort"),
+                &result_u8_str_ty,
+                &jshort_ty,
                 "a0",
                 "jlong",
                 Span::call_site(),
@@ -1265,9 +1244,5 @@ macro_rules! jni_unpack_return {
 "#,
             code
         );
-    }
-
-    fn str_to_rust_ty(code: &str) -> RustType {
-        RustType::new_from_type(&syn::parse_str::<syn::Type>(code).unwrap())
     }
 }
