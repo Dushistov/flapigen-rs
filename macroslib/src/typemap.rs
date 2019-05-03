@@ -261,9 +261,7 @@ impl TypeMap {
 
     pub(crate) fn convert_to_heap_pointer(from: &RustType, var_name: &str) -> (RustType, String) {
         for smart_pointer in &["Box", "Rc", "Arc"] {
-            if let Some(inner_ty) =
-                check_if_smart_pointer_return_inner_type(&from.ty, *smart_pointer)
-            {
+            if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, *smart_pointer) {
                 let inner_ty: RustType = inner_ty.into();
                 let inner_ty_str = normalize_ty_lifetimes(&inner_ty.ty);
                 return (
@@ -301,7 +299,7 @@ impl TypeMap {
         unbox_if_boxed: bool,
     ) -> String {
         for smart_pointer in &["Box", "Rc", "Arc"] {
-            if check_if_smart_pointer_return_inner_type(&from.ty, *smart_pointer).is_some() {
+            if check_if_smart_pointer_return_inner_type(from, *smart_pointer).is_some() {
                 return format!(
                     r#"
     let {var_name}: {rc_type}  = unsafe {{ {smart_pointer}::from_raw({var_name}) }};
@@ -334,46 +332,35 @@ impl TypeMap {
         )
     }
 
-    pub(crate) fn is_ty_implements_exact(&self, ty: &Type, trait_name: &str) -> Option<RustType> {
-        let ty_name = normalize_ty_lifetimes(ty);
-        if let Some(idx) = self.rust_names_map.get(ty_name) {
-            if self.conv_graph[*idx].implements.contains(trait_name) {
-                return Some(self.conv_graph[*idx].clone());
-            }
-        }
-        None
-    }
-
-    pub(crate) fn is_ty_implements(&self, ty: &Type, trait_name: &str) -> Option<RustType> {
-        match self.is_ty_implements_exact(ty, trait_name) {
-            Some(x) => Some(x),
-            None => {
-                if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = ty {
-                    let ty_name = normalize_ty_lifetimes(&*elem);
-                    self.rust_names_map.get(ty_name).and_then(|idx| {
-                        if self.conv_graph[*idx].implements.contains(trait_name) {
-                            Some(self.conv_graph[*idx].clone())
-                        } else {
-                            None
-                        }
-                    })
-                } else {
-                    None
-                }
+    pub(crate) fn is_ty_implements(&self, ty: &RustType, trait_name: &str) -> Option<RustType> {
+        if ty.implements.contains(trait_name) {
+            Some(ty.clone())
+        } else {
+            if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = ty.ty {
+                let ty_name = normalize_ty_lifetimes(&*elem);
+                self.rust_names_map.get(ty_name).and_then(|idx| {
+                    if self.conv_graph[*idx].implements.contains(trait_name) {
+                        Some(self.conv_graph[*idx].clone())
+                    } else {
+                        None
+                    }
+                })
+            } else {
+                None
             }
         }
     }
 
     pub(crate) fn find_foreigner_class_with_such_self_type(
         &self,
-        may_be_self_ty: &Type,
+        may_be_self_ty: &RustType,
         if_ref_search_reftype: bool,
     ) -> Option<&ForeignerClassInfo> {
-        let type_name = match may_be_self_ty {
+        let type_name = match may_be_self_ty.ty {
             syn::Type::Reference(syn::TypeReference { ref elem, .. }) if if_ref_search_reftype => {
                 normalize_ty_lifetimes(&*elem)
             }
-            _ => normalize_ty_lifetimes(may_be_self_ty),
+            _ => may_be_self_ty.normalized_name.as_str(),
         };
 
         trace!("find self type: possible name {}", type_name);
@@ -414,9 +401,8 @@ impl TypeMap {
             .insert(enum_info.name.to_string().into(), enum_info.clone());
     }
 
-    pub(crate) fn is_this_exported_enum(&self, ty: &Type) -> Option<&ForeignEnumInfo> {
-        let type_name = normalize_ty_lifetimes(ty);
-        self.exported_enums.get(type_name)
+    pub(crate) fn is_this_exported_enum(&self, ty: &RustType) -> Option<&ForeignEnumInfo> {
+        self.exported_enums.get(&ty.normalized_name)
     }
 
     pub(crate) fn is_generated_foreign_type(&self, foreign_name: &str) -> bool {
@@ -624,24 +610,18 @@ impl TypeMap {
 
     /// find correspoint to rust foreign type
     pub(crate) fn map_through_conversation_to_foreign<
-        F: Fn(&ForeignerClassInfo) -> Option<Type>,
+        F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
     >(
         &mut self,
-        rust_ty: &Type,
+        rust_ty: &RustType,
         direction: petgraph::Direction,
         build_for_sp: Span,
         calc_this_type_for_method: F,
     ) -> Option<ForeignTypeInfo> {
-        let norm_rust_typename = normalize_ty_lifetimes(rust_ty);
-        if log_enabled!(log::Level::Debug) {
-            debug!(
-                "map foreign: {} {:?}",
-                rust_ty.into_token_stream().to_string(),
-                direction
-            );
-        }
+        debug!("map foreign: {} {:?}", rust_ty, direction);
+
         if direction == petgraph::Direction::Outgoing {
-            if let Some(foreign_name) = self.rust_to_foreign_cache.get(norm_rust_typename) {
+            if let Some(foreign_name) = self.rust_to_foreign_cache.get(&rust_ty.normalized_name) {
                 if let Some(to) = self.foreign_names_map.get(foreign_name) {
                     let to = &self.conv_graph[*to];
                     return Some(ForeignTypeInfo {
@@ -652,7 +632,7 @@ impl TypeMap {
             }
         }
 
-        if let Some(from) = self.rust_names_map.get(norm_rust_typename).cloned() {
+        if let Some(from) = self.rust_names_map.get(&rust_ty.normalized_name).cloned() {
             let find_path = |from, to| match find_conversation_path(
                 &self.conv_graph,
                 from,
@@ -689,26 +669,23 @@ impl TypeMap {
             }
             if let Some(min_path) = min_path {
                 let node = &self.conv_graph[min_path.1];
-                if log_enabled!(log::Level::Debug) {
-                    debug!(
-                        "map foreign: we found min path {} <-> {}",
-                        rust_ty.into_token_stream().to_string(),
-                        min_path.2
-                    );
-                }
+
+                debug!(
+                    "map foreign: we found min path {} <-> {}",
+                    rust_ty, min_path.2
+                );
+
                 return Some(ForeignTypeInfo {
                     name: min_path.2,
                     correspoding_rust_type: node.clone(),
                 });
             }
         }
-        if log_enabled!(log::Level::Debug) {
-            debug!(
-                "map foreign: No paths exists, may be we can create one for '{}' {:?}?",
-                rust_ty.into_token_stream().to_string(),
-                direction
-            );
-        }
+
+        debug!(
+            "map foreign: No paths exists, may be we can create one for '{}' {:?}?",
+            rust_ty, direction
+        );
 
         let mut new_foreign_types = FxHashSet::default();
         for edge in &self.generic_edges {
@@ -814,7 +791,7 @@ impl TypeMap {
     }
 
     pub(crate) fn find_foreigner_class_with_such_this_type<
-        F: Fn(&ForeignerClassInfo) -> Option<Type>,
+        F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
     >(
         &self,
         this_ty: &Type,
@@ -822,7 +799,7 @@ impl TypeMap {
     ) -> Option<&ForeignerClassInfo> {
         let this_name = normalize_ty_lifetimes(this_ty);
         for fc in &self.foreign_classes {
-            if let Some(this_type_for_method) = get_this_type(fc) {
+            if let Some(this_type_for_method) = get_this_type(self, fc) {
                 let cur_this = normalize_ty_lifetimes(&this_type_for_method);
                 if cur_this == this_name {
                     return Some(fc);
@@ -1181,13 +1158,14 @@ fn helper3() {
                 set
             }
         );
+        let ty_i32 = types_map.find_or_alloc_rust_type(&parse_type! { i32 });
         assert_eq!(
             types_map
                 .map_through_conversation_to_foreign(
-                    &parse_type! { i32 },
+                    &ty_i32,
                     petgraph::Direction::Outgoing,
                     Span::call_site(),
-                    |fc| fc.constructor_ret_type.clone(),
+                    |_, fc| fc.constructor_ret_type.clone(),
                 )
                 .unwrap()
                 .name,
@@ -1292,14 +1270,16 @@ fn helper3() {
                 .1
         );
 
+        let vec_foo_ty = types_map.find_or_alloc_rust_type(&parse_type! { Vec<Foo> });
+
         assert_eq!(
             "Foo []",
             types_map
                 .map_through_conversation_to_foreign(
-                    &parse_type! { Vec<Foo> },
+                    &vec_foo_ty,
                     petgraph::Direction::Outgoing,
                     Span::call_site(),
-                    |fc| fc.constructor_ret_type.clone(),
+                    |_, fc| fc.constructor_ret_type.clone(),
                 )
                 .unwrap()
                 .name

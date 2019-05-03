@@ -348,11 +348,13 @@ fn find_suitable_foreign_types_for_methods(
         let mut input =
             Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg));
             input.push(map_type(
                 conv_map,
                 cpp_cfg,
-                fn_arg_type(arg),
+                &arg_rust_ty,
                 Direction::Incoming,
+                fn_arg_type(arg).span(),
             )?);
         }
         let output: CppForeignTypeInfo = match method.variant {
@@ -372,7 +374,14 @@ fn find_suitable_foreign_types_for_methods(
                 }
                 .into(),
                 syn::ReturnType::Type(_, ref rt) => {
-                    map_type(conv_map, cpp_cfg, &*rt, Direction::Outgoing)?
+                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt);
+                    map_type(
+                        conv_map,
+                        cpp_cfg,
+                        &ret_rust_ty,
+                        Direction::Outgoing,
+                        rt.span(),
+                    )?
                 }
             },
         };
@@ -1483,11 +1492,13 @@ fn find_suitable_ftypes_for_interace_methods(
     for method in &interace.items {
         let mut input = Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg));
             input.push(map_type(
                 conv_map,
                 cpp_cfg,
-                fn_arg_type(arg),
+                &arg_rust_ty,
                 Direction::Outgoing,
+                fn_arg_type(arg).span(),
             )?);
         }
         let output = match method.fn_decl.output {
@@ -1501,7 +1512,14 @@ fn find_suitable_ftypes_for_interace_methods(
             }
             .into(),
             syn::ReturnType::Type(_, ref ret_ty) => {
-                map_type(conv_map, cpp_cfg, ret_ty, Direction::Incoming)?
+                let ret_rust_ty = conv_map.find_or_alloc_rust_type(ret_ty);
+                map_type(
+                    conv_map,
+                    cpp_cfg,
+                    &ret_rust_ty,
+                    Direction::Incoming,
+                    ret_ty.span(),
+                )?
             }
         };
         f_methods.push(CppForeignMethodSignature { output, input });

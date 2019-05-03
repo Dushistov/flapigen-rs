@@ -1,5 +1,6 @@
 use log::trace;
-use syn::{parse_quote, spanned::Spanned, Type};
+use proc_macro2::Span;
+use syn::{parse_quote, Type};
 
 use crate::{
     ast::{if_option_return_some_type, normalize_ty_lifetimes},
@@ -11,7 +12,8 @@ use crate::{
 
 pub(in crate::java_jni) fn special_type(
     conv_map: &mut TypeMap,
-    arg_ty: &Type,
+    arg_ty: &RustType,
+    arg_ty_span: Span,
 ) -> Result<Option<JavaForeignTypeInfo>> {
     let foreign_class_trait = "SwigForeignClass";
 
@@ -28,11 +30,11 @@ pub(in crate::java_jni) fn special_type(
             )
             .ok_or_else(|| {
                 DiagnosticError::new(
-                    arg_ty.span(),
-                    format!("Can not find foreigner_class for '{:?}'", arg_ty),
+                    arg_ty_span,
+                    format!("Can not find foreigner_class for '{}'", arg_ty),
                 )
             })?;
-        let converter = calc_converter_for_foreign_class_arg(foreigner_class, arg_ty);
+        let converter = calc_converter_for_foreign_class_arg(conv_map, foreigner_class, arg_ty);
         return Ok(Some(converter));
     }
     trace!("Check is arg.ty({:?}) implements exported enum", arg_ty);
@@ -69,13 +71,14 @@ pub(in crate::java_jni) fn special_type(
 }
 
 fn calc_converter_for_foreign_class_arg(
+    conv_map: &TypeMap,
     foreigner_class: &ForeignerClassInfo,
-    arg_ty: &Type,
+    arg_ty: &RustType,
 ) -> JavaForeignTypeInfo {
-    let this_ty = calc_this_type_for_method(foreigner_class).unwrap();
+    let this_ty = calc_this_type_for_method(conv_map, foreigner_class).unwrap();
     let this_ty: RustType = this_ty.clone().into();
 
-    let java_converter = if this_ty.normalized_name == normalize_ty_lifetimes(arg_ty) {
+    let java_converter = if this_ty.normalized_name == arg_ty.normalized_name {
         format!(
             r#"
         long {to_var} = {from_var}.mNativeObj;
@@ -84,7 +87,7 @@ fn calc_converter_for_foreign_class_arg(
             to_var = TO_VAR_TEMPLATE,
             from_var = FROM_VAR_TEMPLATE
         )
-    } else if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = arg_ty {
+    } else if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = arg_ty.ty {
         assert_eq!(normalize_ty_lifetimes(elem), this_ty.normalized_name);
         format!(
             r#"
@@ -132,7 +135,10 @@ fn handle_option_type_in_input(
     conv_map: &mut TypeMap,
     opt_inside_ty: &Type,
 ) -> Result<Option<JavaForeignTypeInfo>> {
-    if let Some(fclass) = conv_map.find_foreigner_class_with_such_self_type(opt_inside_ty, false) {
+    let opt_inside_rust_ty = conv_map.find_or_alloc_rust_type(opt_inside_ty);
+    if let Some(fclass) =
+        conv_map.find_foreigner_class_with_such_self_type(&opt_inside_rust_ty, false)
+    {
         let jlong_ti: RustType = parse_type! { jlong }.into();
         Ok(Some(JavaForeignTypeInfo {
             base: ForeignTypeInfo {

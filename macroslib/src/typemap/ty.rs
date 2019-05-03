@@ -43,7 +43,8 @@ impl RustType {
         self.normalized_name = other.normalized_name.clone();
         self.implements.insert_set(&other.implements);
     }
-    pub(in crate::typemap) fn new_from_type(ty: &syn::Type) -> RustType {
+    //TODO: change to in pub(in crate::typemap)
+    pub(crate) fn new_from_type(ty: &syn::Type) -> RustType {
         let normalized_name = normalize_ty_lifetimes(ty);
         RustType::new(ty.clone(), normalized_name)
     }

@@ -173,8 +173,8 @@ impl GenericTypeConv {
             return None;
         }
         trace!(
-            "is_conv_possible: {:?} is subst of {:?}, check trait bounds",
-            ty.ty,
+            "is_conv_possible: {} is subst of {:?}, check trait bounds",
+            ty,
             self.from_ty
         );
         let trait_bounds = get_trait_bounds(&self.generic_params);
@@ -536,27 +536,27 @@ pub(crate) fn if_type_slice_return_elem_type(ty: &Type, accept_mutbl_slice: bool
     }
 }
 
-pub(crate) fn if_option_return_some_type(ty: &Type) -> Option<Type> {
+pub(crate) fn if_option_return_some_type(ty: &RustType) -> Option<Type> {
     let generic_params: syn::Generics = parse_quote! { <T> };
     let from_ty: Type = parse_quote! { Option<T> };
     let to_ty: Type = parse_quote! { T };
 
     GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
-        .is_conv_possible(&ty.clone().into(), None, |_| None)
+        .is_conv_possible(ty, None, |_| None)
         .map(|x| x.ty)
 }
 
-pub(crate) fn if_vec_return_elem_type(ty: &Type) -> Option<Type> {
+pub(crate) fn if_vec_return_elem_type(ty: &RustType) -> Option<Type> {
     let from_ty: Type = parse_quote! { Vec<T> };
     let to_ty: Type = parse_quote! { T };
     let generic_params: syn::Generics = parse_quote! { <T> };
 
     GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
-        .is_conv_possible(&ty.clone().into(), None, |_| None)
+        .is_conv_possible(ty, None, |_| None)
         .map(|x| x.ty)
 }
 
-pub(crate) fn if_result_return_ok_err_types(ty: &Type) -> Option<(Type, Type)> {
+pub(crate) fn if_result_return_ok_err_types(ty: &RustType) -> Option<(Type, Type)> {
     let from_ty: Type = parse_quote! { Result<T, E> };
     let ok_ty: Type = parse_quote! { T };
     let err_ty: Type = parse_quote! { E };
@@ -564,20 +564,39 @@ pub(crate) fn if_result_return_ok_err_types(ty: &Type) -> Option<(Type, Type)> {
 
     let ok_ty = {
         GenericTypeConv::simple_new(from_ty.clone(), ok_ty, generic_params.clone())
-            .is_conv_possible(&ty.clone().into(), None, |_| None)
+            .is_conv_possible(ty, None, |_| None)
             .map(|x| x.ty)
     }?;
 
     let err_ty = {
         GenericTypeConv::simple_new(from_ty, err_ty, generic_params)
-            .is_conv_possible(&ty.clone().into(), None, |_| None)
+            .is_conv_possible(ty, None, |_| None)
             .map(|x| x.ty)
     }?;
     Some((ok_ty, err_ty))
 }
 
+/// Sometimes impossible to use RustType, so separate function
+pub(crate) fn if_ty_result_return_ok_type(ty: &Type) -> Option<Type> {
+    let result_ty: Type = parse_quote! { Result<T, E> };
+    let ok_ty: Type = parse_quote! { T };
+    let generic_params: syn::Generics = parse_quote! { <T, E> };
+
+    let mut subst_map = TyParamsSubstMap::default();
+    for ty_p in generic_params.type_params() {
+        subst_map.insert(&ty_p.ident, None);
+    }
+    if !is_second_subst_of_first(&result_ty, ty, &mut subst_map) {
+        return None;
+    }
+
+    let to_ty = replace_all_types_with(&ok_ty, &subst_map);
+
+    Some(to_ty)
+}
+
 pub(crate) fn check_if_smart_pointer_return_inner_type(
-    ty: &Type,
+    ty: &RustType,
     smart_ptr_name: &str,
 ) -> Option<Type> {
     let generic_params: syn::Generics = parse_quote! { <T> };
@@ -586,7 +605,7 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
     let to_ty: Type = parse_quote! { T };
 
     GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
-        .is_conv_possible(&ty.clone().into(), None, |_| None)
+        .is_conv_possible(ty, None, |_| None)
         .map(|x| x.ty)
 }
 
@@ -930,7 +949,7 @@ mod tests {
         assert_eq!(
             "String",
             normalize_ty_lifetimes(
-                &if_option_return_some_type(&str_to_ty("Option<String>")).unwrap()
+                &if_option_return_some_type(&str_to_rust_ty("Option<String>")).unwrap()
             )
         );
     }
@@ -938,10 +957,24 @@ mod tests {
     #[test]
     fn test_work_with_result() {
         assert_eq!(
-            if_result_return_ok_err_types(&str_to_ty("Result<bool, String>"))
+            if_result_return_ok_err_types(&str_to_rust_ty("Result<bool, String>"))
                 .map(|(x, y)| (normalize_ty_lifetimes(&x), normalize_ty_lifetimes(&y)))
                 .unwrap(),
             ("bool", "String")
+        );
+
+        assert_eq!(
+            if_ty_result_return_ok_type(&str_to_ty("Result<bool, String>"))
+                .map(|x| normalize_ty_lifetimes(&x))
+                .unwrap(),
+            "bool"
+        );
+
+        assert_eq!(
+            if_ty_result_return_ok_type(&str_to_ty("Result<Option<i32>, String>"))
+                .map(|x| normalize_ty_lifetimes(&x))
+                .unwrap(),
+            "Option < i32 >"
         );
     }
 
@@ -949,7 +982,7 @@ mod tests {
     fn test_work_with_vec() {
         assert_eq!(
             "bool",
-            if_vec_return_elem_type(&str_to_ty("Vec<bool>"))
+            if_vec_return_elem_type(&str_to_rust_ty("Vec<bool>"))
                 .map(|x| normalize_ty_lifetimes(&x))
                 .unwrap(),
         );
@@ -957,8 +990,9 @@ mod tests {
 
     #[test]
     fn test_work_with_rc() {
-        let ty = check_if_smart_pointer_return_inner_type(&str_to_ty("Rc<RefCell<bool>>"), "Rc")
-            .unwrap();
+        let ty =
+            check_if_smart_pointer_return_inner_type(&str_to_rust_ty("Rc<RefCell<bool>>"), "Rc")
+                .unwrap();
         assert_eq!("RefCell < bool >", normalize_ty_lifetimes(&ty));
 
         let generic_params: syn::Generics = parse_quote! { <T> };
@@ -1012,5 +1046,10 @@ mod tests {
 
     fn str_to_ty(code: &str) -> syn::Type {
         syn::parse_str::<syn::Type>(code).unwrap()
+    }
+
+    fn str_to_rust_ty(code: &str) -> RustType {
+        let ty = syn::parse_str::<syn::Type>(code).unwrap();
+        RustType::new_from_type(&ty)
     }
 }

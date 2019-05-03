@@ -51,7 +51,7 @@ pub(in crate::java_jni) fn generate_rust_code(
 
     let mut gen_code = Vec::<TokenStream>::new();
     let (this_type_for_method, code_box_this) =
-        if let Some(this_type) = calc_this_type_for_method(class) {
+        if let Some(this_type) = calc_this_type_for_method(conv_map, class) {
             let this_type: RustType = this_type.clone().into();
             let this_type = this_type.implements("SwigForeignClass");
             debug!(
@@ -176,7 +176,8 @@ May be you need to use `private constructor = empty;` syntax?",
                         .as_ref()
                         .ok_or_else(&no_this_info)?
                         .clone();
-                    let this_type = calc_this_type_for_method(class).ok_or_else(&no_this_info)?;
+                    let this_type =
+                        calc_this_type_for_method(conv_map, class).ok_or_else(&no_this_info)?;
                     gen_code.append(&mut generate_constructor(
                         conv_map,
                         &method_ctx,
@@ -190,7 +191,7 @@ May be you need to use `private constructor = empty;` syntax?",
     }
 
     if have_constructor {
-        let this_type: RustType = calc_this_type_for_method(class)
+        let this_type: RustType = calc_this_type_for_method(conv_map, class)
             .ok_or_else(&no_this_info)?
             .clone()
             .into();
