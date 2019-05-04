@@ -167,8 +167,39 @@ impl<'a> fmt::Display for DisplayTypesConvGraph<'a> {
 
 #[derive(Debug)]
 struct PossiblePath {
-    tmp_graph: TypesConvGraph,
-    path: Vec<EdgeIndex<TypeGraphIdx>>,
+    path_len: usize,
+    new_edges: Vec<(RustType, RustType, TypeConvEdge)>,
+}
+
+impl PossiblePath {
+    fn len(&self) -> usize {
+        self.path_len
+    }
+    fn new(graph_snapshot: TypeGraphSnapshot, path: Vec<EdgeIndex<TypeGraphIdx>>) -> Self {
+        let mut new_edges = Vec::with_capacity(path.len());
+        for edge in &path {
+            if graph_snapshot.new_edges.iter().any(|x| *x == *edge) {
+                let (from, to) = graph_snapshot
+                    .conv_graph
+                    .edge_endpoints(*edge)
+                    .expect("Internal error: PossiblePath::new no edge");
+                let conv_rule = graph_snapshot
+                    .conv_graph
+                    .edge_weight(*edge)
+                    .expect("Internal error: PossiblePath::new no edge")
+                    .clone();
+                new_edges.push((
+                    graph_snapshot.conv_graph[from].clone(),
+                    graph_snapshot.conv_graph[to].clone(),
+                    conv_rule,
+                ));
+            }
+        }
+        PossiblePath {
+            path_len: path.len(),
+            new_edges,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -188,6 +219,7 @@ struct TypeGraphSnapshot<'a> {
     rust_names_map: &'a RustTypeNameToGraphIdx,
     new_nodes_names_map: RustTypeNameToGraphIdx,
     new_nodes: SmallVec<[NodeIndex<TypeGraphIdx>; 32]>,
+    new_edges: SmallVec<[EdgeIndex<TypeGraphIdx>; 32]>,
 }
 
 impl<'a> TypeGraphSnapshot<'a> {
@@ -197,6 +229,7 @@ impl<'a> TypeGraphSnapshot<'a> {
             rust_names_map,
             new_nodes: SmallVec::new(),
             new_nodes_names_map: RustTypeNameToGraphIdx::default(),
+            new_edges: SmallVec::new(),
         }
     }
 
@@ -229,16 +262,31 @@ impl<'a> TypeGraphSnapshot<'a> {
         self.rust_names_map
             .get(type_name)
             .map(|i| &self.conv_graph[*i])
+            .or_else(|| {
+                self.new_nodes_names_map
+                    .get(type_name)
+                    .map(|i| &self.conv_graph[*i])
+            })
     }
 
-    fn into_graph(mut self) -> TypesConvGraph {
-        self.new_nodes.clear();
-        self.conv_graph.clone()
+    fn add_edge(
+        &mut self,
+        from: NodeIndex<TypeGraphIdx>,
+        to: NodeIndex<TypeGraphIdx>,
+        edge: TypeConvEdge,
+    ) {
+        if self.conv_graph.find_edge(from, to).is_none() {
+            let edge_idx = self.conv_graph.add_edge(from, to, edge);
+            self.new_edges.push(edge_idx);
+        }
     }
 }
 
 impl<'a> Drop for TypeGraphSnapshot<'a> {
     fn drop(&mut self) {
+        for edge in self.new_edges.iter().rev() {
+            self.conv_graph.remove_edge(*edge);
+        }
         for idx in self.new_nodes.iter().rev() {
             self.conv_graph.remove_node(*idx);
         }
@@ -760,17 +808,16 @@ impl TypeMap {
                 break;
             }
         }
-        let ret = possible_paths
-            .into_iter()
-            .min_by_key(|pp| pp.0.path.len())
-            .map(|(pp, foreign_name, graph_idx)| {
+        let ret = possible_paths.into_iter().min_by_key(|pp| pp.0.len()).map(
+            |(pp, foreign_name, graph_idx)| {
                 merge_path_to_conv_map(pp, self);
                 let node = &self.conv_graph[graph_idx];
                 ForeignTypeInfo {
                     name: foreign_name,
                     correspoding_rust_type: node.clone(),
                 }
-            });
+            },
+        );
         if ret.is_none() {
             debug!(
                 "map to foreign failed, foreign_map {:?}\n conv_graph: {}",
@@ -983,36 +1030,17 @@ fn find_conversation_path(
 }
 
 fn merge_path_to_conv_map(path: PossiblePath, conv_map: &mut TypeMap) {
-    let PossiblePath { tmp_graph, path } = path;
-    for edge in path {
-        if let Some((from, to)) = tmp_graph.edge_endpoints(edge) {
-            let new_from = get_graph_node(
-                &mut conv_map.conv_graph,
-                &mut conv_map.rust_names_map,
-                tmp_graph[from].clone(),
-            );
+    let PossiblePath {
+        new_edges,
+        path_len: _,
+    } = path;
 
-            let new_to = get_graph_node(
-                &mut conv_map.conv_graph,
-                &mut conv_map.rust_names_map,
-                tmp_graph[to].clone(),
-            );
-
-            conv_map
-                .conv_graph
-                .add_edge(new_from, new_to, tmp_graph[edge].clone());
-        }
+    for (from, to, conv_rule) in new_edges {
+        let from_idx = conv_map.add_node(from.normalized_name.clone(), || (*from).clone());
+        let to_idx = conv_map.add_node(to.normalized_name.clone(), || (*to).clone());
+        assert!(conv_map.conv_graph.find_edge(from_idx, to_idx).is_none());
+        conv_map.conv_graph.add_edge(from_idx, to_idx, conv_rule);
     }
-}
-
-fn get_graph_node(
-    graph: &mut TypesConvGraph,
-    names_to_graph_map: &mut FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
-    rty: RustType,
-) -> NodeIndex<TypeGraphIdx> {
-    *names_to_graph_map
-        .entry(rty.normalized_name.clone())
-        .or_insert_with(|| graph.add_node(rty))
 }
 
 fn try_build_path(
@@ -1079,16 +1107,14 @@ fn try_build_path(
                         continue;
                     }
                     let to = ty_graph.node_for_ty((to_ty, to_ty_name));
-                    if ty_graph.conv_graph.find_edge(*from_ty, to).is_none() {
-                        ty_graph.conv_graph.add_edge(
-                            *from_ty,
-                            to,
-                            TypeConvEdge {
-                                code_template: edge.code_template.clone(),
-                                dependency: edge.dependency.clone(),
-                            },
-                        );
-                    }
+                    ty_graph.add_edge(
+                        *from_ty,
+                        to,
+                        TypeConvEdge {
+                            code_template: edge.code_template.clone(),
+                            dependency: edge.dependency.clone(),
+                        },
+                    );
 
                     if petgraph::algo::has_path_connecting(
                         &*ty_graph.conv_graph,
@@ -1116,10 +1142,7 @@ fn try_build_path(
                             }
                         }
 
-                        return Some(PossiblePath {
-                            tmp_graph: ty_graph.into_graph(),
-                            path,
-                        });
+                        return Some(PossiblePath::new(ty_graph, path));
                     }
                     next_step.insert(to);
                 }
