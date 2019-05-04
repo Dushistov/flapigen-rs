@@ -7,9 +7,7 @@ use std::{cell::RefCell, fmt, mem, rc::Rc};
 
 use log::{debug, log_enabled, trace, warn};
 use petgraph::{
-    algo::dijkstra,
     graph::{EdgeIndex, NodeIndex},
-    visit::EdgeRef,
     Graph,
 };
 use proc_macro2::{Span, TokenStream};
@@ -991,42 +989,39 @@ fn find_conversation_path(
     build_for_sp: Span,
 ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
     trace!(
-        "find_conversation_path: begin {:?} -> {:?}",
+        "find_conversation_path: begin {} -> {}",
         conv_graph[from],
         conv_graph[to]
     );
 
-    let paths_cost = dijkstra(conv_graph, from, Some(to), |_| 1);
-
-    let mut path = Vec::new();
-    let mut cur_node = to;
-
-    while cur_node != from {
-        let edge = match conv_graph
-            .edges_directed(cur_node, petgraph::Direction::Incoming)
-            .filter_map(|edge| paths_cost.get(&edge.source()).map(|v| (edge, v)))
-            .min_by_key(|x| x.1)
-        {
-            Some((edge, _)) => edge,
-            _ => {
-                let mut err = DiagnosticError::new(
-                    conv_graph[from].ty.span(),
-                    format!("Can not find conversation from type '{}'", conv_graph[from]),
-                );
-                err.span_note(
-                    conv_graph[to].ty.span(),
-                    format!("to type '{}'", conv_graph[to]),
-                );
-                err.span_note(build_for_sp, "In this context");
-                return Err(err);
-            }
-        };
-        path.push(edge.id());
-        cur_node = edge.source();
+    if let Some((_, nodes_path)) = petgraph::algo::astar(
+        conv_graph,
+        from,
+        |idx| idx == to,
+        |_| 1,
+        |idx| if idx != from { 1 } else { 0 },
+    ) {
+        let mut edges = Vec::with_capacity(nodes_path.len());
+        for (cur_node, next_node) in nodes_path.iter().zip(nodes_path.iter().skip(1)) {
+            edges.push(
+                conv_graph
+                    .find_edge(*cur_node, *next_node)
+                    .expect("Internal error: find_conversation_path no edge"),
+            );
+        }
+        Ok(edges)
+    } else {
+        let mut err = DiagnosticError::new(
+            conv_graph[from].ty.span(),
+            format!("Can not find conversation from type '{}'", conv_graph[from]),
+        );
+        err.span_note(
+            conv_graph[to].ty.span(),
+            format!("to type '{}'", conv_graph[to]),
+        );
+        err.span_note(build_for_sp, "In this context");
+        Err(err)
     }
-
-    path.reverse();
-    Ok(path)
 }
 
 fn merge_path_to_conv_map(path: PossiblePath, conv_map: &mut TypeMap) {
