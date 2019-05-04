@@ -70,11 +70,13 @@ pub(crate) trait ForeignMethodSignature {
     fn input(&self) -> &[Self::FI];
 }
 
+type RustTypeNameToGraphIdx = FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>;
+
 #[derive(Debug)]
 pub(crate) struct TypeMap {
     conv_graph: TypesConvGraph,
     foreign_names_map: FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
-    rust_names_map: FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
+    rust_names_map: RustTypeNameToGraphIdx,
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
     rust_to_foreign_cache: FxHashMap<SmolStr, SmolStr>,
@@ -183,38 +185,50 @@ impl AsRef<ForeignTypeInfo> for ForeignTypeInfo {
 
 struct TypeGraphSnapshot<'a> {
     conv_graph: &'a mut TypesConvGraph,
+    rust_names_map: &'a RustTypeNameToGraphIdx,
+    new_nodes_names_map: RustTypeNameToGraphIdx,
     new_nodes: SmallVec<[NodeIndex<TypeGraphIdx>; 32]>,
 }
 
 impl<'a> TypeGraphSnapshot<'a> {
-    fn new(conv_graph: &'a mut TypesConvGraph) -> Self {
+    fn new(conv_graph: &'a mut TypesConvGraph, rust_names_map: &'a RustTypeNameToGraphIdx) -> Self {
         TypeGraphSnapshot {
             conv_graph,
+            rust_names_map,
             new_nodes: SmallVec::new(),
+            new_nodes_names_map: RustTypeNameToGraphIdx::default(),
         }
     }
 
-    fn node_for_ty(
-        &mut self,
-        names_to_graph_map: &mut FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
-        (ty, ty_name): (syn::Type, SmolStr),
-    ) -> NodeIndex<TypeGraphIdx> {
+    fn node_for_ty(&mut self, (ty, ty_name): (syn::Type, SmolStr)) -> NodeIndex<TypeGraphIdx> {
         let graph = &mut self.conv_graph;
         let mut new_node = false;
-        let idx = *names_to_graph_map
-            .entry(ty_name.clone())
-            .or_insert_with(|| {
-                new_node = true;
-                let idx = graph.add_node(Rc::new(RustTypeS::new_without_graph_idx(ty, ty_name)));
-                Rc::get_mut(&mut graph[idx])
-                    .expect("Internal error: can not modify Rc")
-                    .graph_idx = idx;
-                idx
-            });
+        let idx = if let Some(idx) = self.rust_names_map.get(&ty_name) {
+            *idx
+        } else {
+            let names_to_graph_map = &mut self.new_nodes_names_map;
+            *names_to_graph_map
+                .entry(ty_name.clone())
+                .or_insert_with(|| {
+                    new_node = true;
+                    let idx =
+                        graph.add_node(Rc::new(RustTypeS::new_without_graph_idx(ty, ty_name)));
+                    Rc::get_mut(&mut graph[idx])
+                        .expect("Internal error: can not modify Rc")
+                        .graph_idx = idx;
+                    idx
+                })
+        };
         if new_node {
             self.new_nodes.push(idx);
         }
         idx
+    }
+
+    fn find_type_by_name(&self, type_name: &str) -> Option<&RustType> {
+        self.rust_names_map
+            .get(type_name)
+            .map(|i| &self.conv_graph[*i])
     }
 
     fn into_graph(mut self) -> TypesConvGraph {
@@ -1006,7 +1020,7 @@ fn try_build_path(
     goal_to: &RustType,
     build_for_sp: Span,
     conv_graph: &mut TypesConvGraph,
-    rust_names_map: &FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
+    rust_names_map: &RustTypeNameToGraphIdx,
     generic_edges: &[GenericTypeConv],
     max_steps: usize,
 ) -> Option<PossibePath> {
@@ -1018,8 +1032,7 @@ fn try_build_path(
         conv_graph.node_count(),
         conv_graph.edge_count()
     );
-    let mut rust_names_map = rust_names_map.clone();
-    let mut ty_graph = TypeGraphSnapshot::new(conv_graph);
+    let mut ty_graph = TypeGraphSnapshot::new(conv_graph, &rust_names_map);
 
     let start_from_idx = start_from.graph_idx;
 
@@ -1059,13 +1072,13 @@ fn try_build_path(
                 );
                 if let Some((to_ty, to_ty_name)) =
                     edge.is_conv_possible(&from, Some(goal_to), |name| {
-                        rust_names_map.get(name).map(|i| &ty_graph.conv_graph[*i])
+                        ty_graph.find_type_by_name(name)
                     })
                 {
                     if from.normalized_name == to_ty_name {
                         continue;
                     }
-                    let to = ty_graph.node_for_ty(&mut rust_names_map, (to_ty, to_ty_name));
+                    let to = ty_graph.node_for_ty((to_ty, to_ty_name));
                     if ty_graph.conv_graph.find_edge(*from_ty, to).is_none() {
                         ty_graph.conv_graph.add_edge(
                             *from_ty,
