@@ -983,6 +983,7 @@ fn merge_path_to_conv_map(path: PossibePath, conv_map: &mut TypeMap) {
                 &mut conv_map.rust_names_map,
                 tmp_graph[to].clone(),
             );
+
             conv_map
                 .conv_graph
                 .add_edge(new_from, new_to, tmp_graph[edge].clone());
@@ -1010,9 +1011,9 @@ fn try_build_path(
     max_steps: usize,
 ) -> Option<PossibePath> {
     debug!(
-        "try_build_path from {} to {}, ty names len {}, graph nodes {}, edges {}",
-        start_from.normalized_name,
-        goal_to.normalized_name,
+        "try_build_path: from {} to {}, ty names len {}, graph nodes {}, edges {}",
+        start_from,
+        goal_to,
         rust_names_map.len(),
         conv_graph.node_count(),
         conv_graph.edge_count()
@@ -1029,7 +1030,7 @@ fn try_build_path(
     let mut next_step = FxHashSet::default();
 
     for step in 0..max_steps {
-        debug!("try_build_path do step {}", step);
+        debug!("try_build_path: do step {}", step);
         if cur_step.is_empty() {
             break;
         }
@@ -1037,14 +1038,9 @@ fn try_build_path(
             use std::fmt::Write;
             let mut step_types = String::new();
             for from_ty in &cur_step {
-                write!(
-                    step_types,
-                    "{:?} ",
-                    ty_graph.conv_graph[*from_ty].normalized_name
-                )
-                .unwrap();
+                write!(step_types, "{} ", ty_graph.conv_graph[*from_ty]).unwrap();
             }
-            debug!("cur_step {}", step_types);
+            debug!("try_build_path: cur_step {}", step_types);
         }
         for from_ty in &cur_step {
             let from: RustType = ty_graph.conv_graph[*from_ty].clone();
@@ -1056,7 +1052,7 @@ fn try_build_path(
             }
             for edge in generic_edges {
                 trace!(
-                    "we check edge({:?} -> {:?}) for {:?}",
+                    "try_build_path: we check edge({:?} -> {:?}) for {}",
                     edge.from_ty,
                     edge.to_ty,
                     from
@@ -1085,7 +1081,7 @@ fn try_build_path(
                         goal_to_idx,
                         None,
                     ) {
-                        debug!("NEW ALGO: we found PATH!!!!");
+                        debug!("try_build_path: NEW ALGO: we found PATH!!!!");
                         let path = find_conversation_path(
                             &ty_graph.conv_graph,
                             start_from_idx,
@@ -1098,9 +1094,8 @@ fn try_build_path(
                                 if let Some((from, to)) = ty_graph.conv_graph.edge_endpoints(*edge)
                                 {
                                     debug!(
-                                        "path: {} -> {}",
-                                        ty_graph.conv_graph[from].normalized_name,
-                                        ty_graph.conv_graph[to].normalized_name
+                                        "try_build_path: path: {} -> {}",
+                                        ty_graph.conv_graph[from], ty_graph.conv_graph[to]
                                     );
                                 }
                             }
