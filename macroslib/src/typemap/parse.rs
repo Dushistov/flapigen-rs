@@ -17,7 +17,7 @@ use crate::{
     typemap::{
         ast::{normalize_ty_lifetimes, GenericTypeConv, TypeName},
         make_unique_rust_typename,
-        ty::RustType,
+        ty::{RustType, RustTypeS},
         validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
     },
 };
@@ -178,8 +178,12 @@ fn fill_foreign_types_map(item_mod: &syn::ItemMod, ret: &mut TypeMap) -> Result<
         let rust_names_map = &mut ret.rust_names_map;
         let conv_graph = &mut ret.conv_graph;
         let graph_id = *rust_names_map.entry(rust_name.clone()).or_insert_with(|| {
-            let idx = conv_graph.add_node(RustType::new_without_graph_idx(rust_ty, rust_name));
-            conv_graph[idx].graph_idx = idx;
+            let idx = conv_graph.add_node(Rc::new(RustTypeS::new_without_graph_idx(
+                rust_ty, rust_name,
+            )));
+            Rc::get_mut(&mut conv_graph[idx])
+                .expect("Internal error: can not modify Rc")
+                .graph_idx = idx;
             idx
         });
         let foreign_name = foreign_name.typename;

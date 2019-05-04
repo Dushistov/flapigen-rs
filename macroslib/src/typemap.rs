@@ -19,12 +19,14 @@ use smallvec::SmallVec;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Ident, Type};
 
-use self::ty::RustType;
 use crate::{
     error::{DiagnosticError, Result},
-    typemap::ast::{
-        check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
-        GenericTypeConv,
+    typemap::{
+        ast::{
+            check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
+            GenericTypeConv,
+        },
+        ty::{RustType, RustTypeS},
     },
     ForeignEnumInfo, ForeignerClassInfo,
 };
@@ -203,8 +205,10 @@ impl<'a> TypeGraphSnapshot<'a> {
             .entry(ty_name.clone())
             .or_insert_with(|| {
                 new_node = true;
-                let idx = graph.add_node(RustType::new_without_graph_idx(ty, ty_name));
-                graph[idx].graph_idx = idx;
+                let idx = graph.add_node(Rc::new(RustTypeS::new_without_graph_idx(ty, ty_name)));
+                Rc::get_mut(&mut graph[idx])
+                    .expect("Internal error: can not modify Rc")
+                    .graph_idx = idx;
                 idx
             });
         if new_node {
@@ -524,11 +528,11 @@ impl TypeMap {
                 .entry(node.normalized_name.clone())
                 .or_insert_with(|| {
                     let idx = data_conv_graph.add_node(node2);
-                    data_conv_graph[idx].graph_idx = idx;
+                    Rc::make_mut(&mut data_conv_graph[idx]).graph_idx = idx;
                     idx
                 });
 
-            data_conv_graph[idx].merge(node);
+            Rc::make_mut(&mut data_conv_graph[idx]).merge(node);
 
             if let Some((foreign_name, _)) = new_data
                 .foreign_names_map
@@ -786,7 +790,7 @@ impl TypeMap {
         self.foreign_classes.push(class.clone());
     }
 
-    fn add_node<F: FnOnce() -> RustType>(
+    fn add_node<F: FnOnce() -> RustTypeS>(
         &mut self,
         key: SmolStr,
         init_without_graph_idx: F,
@@ -794,8 +798,10 @@ impl TypeMap {
         let rust_names_map = &mut self.rust_names_map;
         let conv_graph = &mut self.conv_graph;
         *rust_names_map.entry(key).or_insert_with(|| {
-            let idx = conv_graph.add_node(init_without_graph_idx());
-            conv_graph[idx].graph_idx = idx;
+            let idx = conv_graph.add_node(Rc::new(init_without_graph_idx()));
+            Rc::get_mut(&mut conv_graph[idx])
+                .expect("Internal error: can not modify Rc")
+                .graph_idx = idx;
             idx
         })
     }
@@ -803,7 +809,7 @@ impl TypeMap {
     pub(crate) fn find_or_alloc_rust_type(&mut self, ty: &Type) -> RustType {
         let name = normalize_ty_lifetimes(ty);
         let idx = self.add_node(name.into(), || {
-            RustType::new_without_graph_idx(ty.clone(), name)
+            RustTypeS::new_without_graph_idx(ty.clone(), name)
         });
         self.conv_graph[idx].clone()
     }
@@ -815,7 +821,7 @@ impl TypeMap {
     ) -> RustType {
         let name = normalize_ty_lifetimes(ty);
         let idx = self.add_node(name.into(), || {
-            RustType::new_without_graph_idx(ty.clone(), name).implements(trait_name)
+            RustTypeS::new_without_graph_idx(ty.clone(), name).implements(trait_name)
         });
         self.conv_graph[idx].clone()
     }
@@ -827,7 +833,7 @@ impl TypeMap {
     ) -> RustType {
         let name: SmolStr = make_unique_rust_typename(normalize_ty_lifetimes(ty), suffix).into();
         let idx = self.add_node(name.clone(), || {
-            RustType::new_without_graph_idx(ty.clone(), name)
+            RustTypeS::new_without_graph_idx(ty.clone(), name)
         });
         self.conv_graph[idx].clone()
     }

@@ -646,6 +646,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::typemap::ty::RustTypeS;
     use smallvec::smallvec;
 
     #[test]
@@ -679,12 +680,15 @@ mod tests {
             }
         };
 
-        let foo_spec =
-            RustType::new_without_graph_idx(str_to_ty("Foo"), "Foo").implements("SwigForeignClass");
+        let foo_spec = Rc::new(
+            RustTypeS::new_without_graph_idx(str_to_ty("Foo"), "Foo")
+                .implements("SwigForeignClass"),
+        );
 
-        let refcell_foo_spec =
-            RustType::new_without_graph_idx(str_to_ty("RefCell<Foo>"), "RefCell<Foo>")
-                .implements("SwigForeignClass");
+        let refcell_foo_spec = Rc::new(
+            RustTypeS::new_without_graph_idx(str_to_ty("RefCell<Foo>"), "RefCell<Foo>")
+                .implements("SwigForeignClass"),
+        );
 
         fn check_subst<'a, FT: Fn(&str) -> Option<&'a RustType>>(
             generic: &syn::Generics,
@@ -710,7 +714,7 @@ mod tests {
                 normalize_ty_lifetimes(&str_to_ty(expect_to_ty_name))
             );
 
-            RustType::new_without_graph_idx(ret_ty, ret_ty_name)
+            Rc::new(RustTypeS::new_without_graph_idx(ret_ty, ret_ty_name))
         }
 
         let pair_generic = get_generic_params_from_code! {
@@ -721,10 +725,14 @@ mod tests {
             }
         };
 
-        let one_spec =
-            RustType::new_without_graph_idx(str_to_ty("One"), "One").implements("SwigForeignClass");
-        let two_spec =
-            RustType::new_without_graph_idx(str_to_ty("One"), "One").implements("SwigForeignClass");
+        let one_spec = Rc::new(
+            RustTypeS::new_without_graph_idx(str_to_ty("One"), "One")
+                .implements("SwigForeignClass"),
+        );
+        let two_spec = Rc::new(
+            RustTypeS::new_without_graph_idx(str_to_ty("One"), "One")
+                .implements("SwigForeignClass"),
+        );
         check_subst(
             &pair_generic,
             "(T1, T2)",
@@ -1042,6 +1050,6 @@ mod tests {
     fn str_to_rust_ty(code: &str) -> RustType {
         let ty = syn::parse_str::<syn::Type>(code).unwrap();
         let name = normalize_ty_lifetimes(&ty);
-        RustType::new_without_graph_idx(ty, name)
+        Rc::new(RustTypeS::new_without_graph_idx(ty, name))
     }
 }
