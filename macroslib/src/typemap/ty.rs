@@ -1,41 +1,46 @@
+use petgraph::graph::NodeIndex;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
-use std::fmt::Display;
+use std::{fmt::Display, rc::Rc};
 
 #[derive(Debug, Clone)]
-pub(crate) struct RustType {
+pub(crate) struct RustTypeS {
     pub ty: syn::Type,
     pub normalized_name: SmolStr,
     pub implements: ImplementsSet,
+    pub(in crate::typemap) graph_idx: NodeIndex,
 }
 
-impl Display for RustType {
+impl Display for RustTypeS {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
         write!(f, "{}", self.normalized_name)
     }
 }
 
-impl RustType {
-    pub(crate) fn new<S>(ty: syn::Type, norm_name: S) -> RustType
+impl RustTypeS {
+    pub(in crate::typemap) fn new_without_graph_idx<S>(ty: syn::Type, norm_name: S) -> RustTypeS
     where
         S: Into<SmolStr>,
     {
-        RustType {
+        RustTypeS {
             ty,
             normalized_name: norm_name.into(),
             implements: ImplementsSet::default(),
+            graph_idx: NodeIndex::new(0),
         }
     }
-    pub(crate) fn implements(mut self, trait_name: &str) -> RustType {
+    pub(in crate::typemap) fn implements(mut self, trait_name: &str) -> RustTypeS {
         self.implements.insert(trait_name.into());
         self
     }
-    pub(crate) fn merge(&mut self, other: &RustType) {
+    pub(in crate::typemap) fn merge(&mut self, other: &RustTypeS) {
         self.ty = other.ty.clone();
         self.normalized_name = other.normalized_name.clone();
         self.implements.insert_set(&other.implements);
     }
 }
+
+pub(crate) type RustType = Rc<RustTypeS>;
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct ImplementsSet {

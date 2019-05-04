@@ -56,13 +56,6 @@ impl TypeName {
     }
 }
 
-impl From<syn::Type> for RustType {
-    fn from(ty: syn::Type) -> RustType {
-        let normalized_name = normalize_ty_lifetimes(&ty);
-        RustType::new(ty, normalized_name)
-    }
-}
-
 struct NormalizeTyLifetimesCache {
     inner: FxHashMap<syn::Type, Box<str>>,
 }
@@ -162,7 +155,7 @@ impl GenericTypeConv {
         ty: &RustType,
         goal_ty: Option<&RustType>,
         others: OtherRustTypes,
-    ) -> Option<RustType>
+    ) -> Option<(syn::Type, SmolStr)>
     where
         OtherRustTypes: Fn(&str) -> Option<&'a RustType>,
     {
@@ -180,8 +173,8 @@ impl GenericTypeConv {
             return None;
         }
         trace!(
-            "is_conv_possible: {:?} is subst of {:?}, check trait bounds",
-            ty.ty,
+            "is_conv_possible: {} is subst of {:?}, check trait bounds",
+            ty,
             self.from_ty
         );
         let trait_bounds = get_trait_bounds(&self.generic_params);
@@ -263,8 +256,9 @@ impl GenericTypeConv {
         let normalized_name = make_unique_rust_typename_if_need(
             normalize_ty_lifetimes(&to_ty).to_string(),
             to_suffix,
-        );
-        Some(RustType::new(to_ty, normalized_name))
+        )
+        .into();
+        Some((to_ty, normalized_name))
     }
 }
 
@@ -543,27 +537,27 @@ pub(crate) fn if_type_slice_return_elem_type(ty: &Type, accept_mutbl_slice: bool
     }
 }
 
-pub(crate) fn if_option_return_some_type(ty: &Type) -> Option<Type> {
+pub(crate) fn if_option_return_some_type(ty: &RustType) -> Option<Type> {
     let generic_params: syn::Generics = parse_quote! { <T> };
     let from_ty: Type = parse_quote! { Option<T> };
     let to_ty: Type = parse_quote! { T };
 
     GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
-        .is_conv_possible(&ty.clone().into(), None, |_| None)
-        .map(|x| x.ty)
+        .is_conv_possible(ty, None, |_| None)
+        .map(|x| x.0)
 }
 
-pub(crate) fn if_vec_return_elem_type(ty: &Type) -> Option<Type> {
+pub(crate) fn if_vec_return_elem_type(ty: &RustType) -> Option<Type> {
     let from_ty: Type = parse_quote! { Vec<T> };
     let to_ty: Type = parse_quote! { T };
     let generic_params: syn::Generics = parse_quote! { <T> };
 
     GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
-        .is_conv_possible(&ty.clone().into(), None, |_| None)
-        .map(|x| x.ty)
+        .is_conv_possible(ty, None, |_| None)
+        .map(|x| x.0)
 }
 
-pub(crate) fn if_result_return_ok_err_types(ty: &Type) -> Option<(Type, Type)> {
+pub(crate) fn if_result_return_ok_err_types(ty: &RustType) -> Option<(Type, Type)> {
     let from_ty: Type = parse_quote! { Result<T, E> };
     let ok_ty: Type = parse_quote! { T };
     let err_ty: Type = parse_quote! { E };
@@ -571,20 +565,39 @@ pub(crate) fn if_result_return_ok_err_types(ty: &Type) -> Option<(Type, Type)> {
 
     let ok_ty = {
         GenericTypeConv::simple_new(from_ty.clone(), ok_ty, generic_params.clone())
-            .is_conv_possible(&ty.clone().into(), None, |_| None)
-            .map(|x| x.ty)
+            .is_conv_possible(ty, None, |_| None)
+            .map(|x| x.0)
     }?;
 
     let err_ty = {
         GenericTypeConv::simple_new(from_ty, err_ty, generic_params)
-            .is_conv_possible(&ty.clone().into(), None, |_| None)
-            .map(|x| x.ty)
+            .is_conv_possible(ty, None, |_| None)
+            .map(|x| x.0)
     }?;
     Some((ok_ty, err_ty))
 }
 
+/// Sometimes impossible to use RustType, so separate function
+pub(crate) fn if_ty_result_return_ok_type(ty: &Type) -> Option<Type> {
+    let result_ty: Type = parse_quote! { Result<T, E> };
+    let ok_ty: Type = parse_quote! { T };
+    let generic_params: syn::Generics = parse_quote! { <T, E> };
+
+    let mut subst_map = TyParamsSubstMap::default();
+    for ty_p in generic_params.type_params() {
+        subst_map.insert(&ty_p.ident, None);
+    }
+    if !is_second_subst_of_first(&result_ty, ty, &mut subst_map) {
+        return None;
+    }
+
+    let to_ty = replace_all_types_with(&ok_ty, &subst_map);
+
+    Some(to_ty)
+}
+
 pub(crate) fn check_if_smart_pointer_return_inner_type(
-    ty: &Type,
+    ty: &RustType,
     smart_ptr_name: &str,
 ) -> Option<Type> {
     let generic_params: syn::Generics = parse_quote! { <T> };
@@ -593,8 +606,8 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
     let to_ty: Type = parse_quote! { T };
 
     GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
-        .is_conv_possible(&ty.clone().into(), None, |_| None)
-        .map(|x| x.ty)
+        .is_conv_possible(ty, None, |_| None)
+        .map(|x| x.0)
 }
 
 pub(crate) fn fn_arg_type(a: &syn::FnArg) -> &syn::Type {
@@ -619,20 +632,6 @@ pub(crate) fn list_lifetimes(ty: &Type) -> Vec<String> {
     catch_lifetimes.0
 }
 
-pub(crate) fn change_span(ty: &mut Type, sp: Span) {
-    struct ChangeSpan(Option<Span>);
-    impl VisitMut for ChangeSpan {
-        fn visit_span_mut(&mut self, i: &mut Span) {
-            if let Some(sp) = self.0 {
-                *i = sp;
-            }
-            self.0 = None;
-        }
-    }
-    let mut change_span = ChangeSpan(Some(sp));
-    change_span.visit_type_mut(ty);
-}
-
 pub(crate) struct DisplayToTokens<'a, T: ToTokens>(pub &'a T);
 
 impl<T> Display for DisplayToTokens<'_, T>
@@ -647,6 +646,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::typemap::ty::RustTypeS;
     use smallvec::smallvec;
 
     #[test]
@@ -680,10 +680,15 @@ mod tests {
             }
         };
 
-        let foo_spec = RustType::new(str_to_ty("Foo"), "Foo").implements("SwigForeignClass");
+        let foo_spec = Rc::new(
+            RustTypeS::new_without_graph_idx(str_to_ty("Foo"), "Foo")
+                .implements("SwigForeignClass"),
+        );
 
-        let refcell_foo_spec =
-            RustType::new(str_to_ty("RefCell<Foo>"), "RefCell<Foo>").implements("SwigForeignClass");
+        let refcell_foo_spec = Rc::new(
+            RustTypeS::new_without_graph_idx(str_to_ty("RefCell<Foo>"), "RefCell<Foo>")
+                .implements("SwigForeignClass"),
+        );
 
         fn check_subst<'a, FT: Fn(&str) -> Option<&'a RustType>>(
             generic: &syn::Generics,
@@ -697,19 +702,19 @@ mod tests {
                 "check_subst: conv {} -> {} with {}",
                 from_ty_name, to_ty_name, ty_check_name
             );
-            let ret_ty: RustType = GenericTypeConv::simple_new(
+            let (ret_ty, ret_ty_name) = GenericTypeConv::simple_new(
                 str_to_ty(from_ty_name),
                 str_to_ty(to_ty_name),
                 generic.clone(),
             )
-            .is_conv_possible(&str_to_ty(ty_check_name).into(), None, map_others)
+            .is_conv_possible(&str_to_rust_ty(ty_check_name), None, map_others)
             .expect("check subst failed");
             assert_eq!(
-                ret_ty.normalized_name,
+                ret_ty_name,
                 normalize_ty_lifetimes(&str_to_ty(expect_to_ty_name))
             );
 
-            ret_ty
+            Rc::new(RustTypeS::new_without_graph_idx(ret_ty, ret_ty_name))
         }
 
         let pair_generic = get_generic_params_from_code! {
@@ -720,8 +725,14 @@ mod tests {
             }
         };
 
-        let one_spec = RustType::new(str_to_ty("One"), "One").implements("SwigForeignClass");
-        let two_spec = RustType::new(str_to_ty("One"), "One").implements("SwigForeignClass");
+        let one_spec = Rc::new(
+            RustTypeS::new_without_graph_idx(str_to_ty("One"), "One")
+                .implements("SwigForeignClass"),
+        );
+        let two_spec = Rc::new(
+            RustTypeS::new_without_graph_idx(str_to_ty("One"), "One")
+                .implements("SwigForeignClass"),
+        );
         check_subst(
             &pair_generic,
             "(T1, T2)",
@@ -828,17 +839,17 @@ mod tests {
                 None
             })
             .unwrap()
-            .normalized_name,
+            .1,
             "& Foo"
         );
 
-        let box_foo: RustType = str_to_ty("Box<Foo>").into();
+        let box_foo: RustType = str_to_rust_ty("Box<Foo>");
 
         assert_eq!(
             &*GenericTypeConv::simple_new(str_to_ty("jlong"), str_to_ty("Box<T>"), generic,)
-                .is_conv_possible(&str_to_ty("jlong").into(), Some(&box_foo), |_| None)
+                .is_conv_possible(&str_to_rust_ty("jlong"), Some(&box_foo), |_| None)
                 .unwrap()
-                .normalized_name,
+                .1,
             "Box < Foo >"
         );
 
@@ -937,7 +948,7 @@ mod tests {
         assert_eq!(
             "String",
             normalize_ty_lifetimes(
-                &if_option_return_some_type(&str_to_ty("Option<String>")).unwrap()
+                &if_option_return_some_type(&str_to_rust_ty("Option<String>")).unwrap()
             )
         );
     }
@@ -945,10 +956,24 @@ mod tests {
     #[test]
     fn test_work_with_result() {
         assert_eq!(
-            if_result_return_ok_err_types(&str_to_ty("Result<bool, String>"))
+            if_result_return_ok_err_types(&str_to_rust_ty("Result<bool, String>"))
                 .map(|(x, y)| (normalize_ty_lifetimes(&x), normalize_ty_lifetimes(&y)))
                 .unwrap(),
             ("bool", "String")
+        );
+
+        assert_eq!(
+            if_ty_result_return_ok_type(&str_to_ty("Result<bool, String>"))
+                .map(|x| normalize_ty_lifetimes(&x))
+                .unwrap(),
+            "bool"
+        );
+
+        assert_eq!(
+            if_ty_result_return_ok_type(&str_to_ty("Result<Option<i32>, String>"))
+                .map(|x| normalize_ty_lifetimes(&x))
+                .unwrap(),
+            "Option < i32 >"
         );
     }
 
@@ -956,7 +981,7 @@ mod tests {
     fn test_work_with_vec() {
         assert_eq!(
             "bool",
-            if_vec_return_elem_type(&str_to_ty("Vec<bool>"))
+            if_vec_return_elem_type(&str_to_rust_ty("Vec<bool>"))
                 .map(|x| normalize_ty_lifetimes(&x))
                 .unwrap(),
         );
@@ -964,17 +989,18 @@ mod tests {
 
     #[test]
     fn test_work_with_rc() {
-        let ty = check_if_smart_pointer_return_inner_type(&str_to_ty("Rc<RefCell<bool>>"), "Rc")
-            .unwrap();
+        let ty =
+            check_if_smart_pointer_return_inner_type(&str_to_rust_ty("Rc<RefCell<bool>>"), "Rc")
+                .unwrap();
         assert_eq!("RefCell < bool >", normalize_ty_lifetimes(&ty));
 
         let generic_params: syn::Generics = parse_quote! { <T> };
         assert_eq!(
             "bool",
             GenericTypeConv::simple_new(str_to_ty("RefCell<T>"), str_to_ty("T"), generic_params,)
-                .is_conv_possible(&ty.into(), None, |_| None)
+                .is_conv_possible(&str_to_rust_ty(normalize_ty_lifetimes(&ty)), None, |_| None)
                 .unwrap()
-                .normalized_name
+                .1
         );
     }
 
@@ -1019,5 +1045,11 @@ mod tests {
 
     fn str_to_ty(code: &str) -> syn::Type {
         syn::parse_str::<syn::Type>(code).unwrap()
+    }
+
+    fn str_to_rust_ty(code: &str) -> RustType {
+        let ty = syn::parse_str::<syn::Type>(code).unwrap();
+        let name = normalize_ty_lifetimes(&ty);
+        Rc::new(RustTypeS::new_without_graph_idx(ty, name))
     }
 }

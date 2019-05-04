@@ -3,4 +3,4 @@ members = ["macroslib", "jni_tests", "c++_tests", "android-example", "debug-util
 
 [profile.release]
 debug = true
-
+incremental = true

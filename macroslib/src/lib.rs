@@ -14,7 +14,6 @@ macro_rules! parse_type {
     }}
 }
 
-mod ast;
 mod code_parse;
 mod cpp;
 mod error;
@@ -39,7 +38,7 @@ use syn::{parse_quote, spanned::Spanned, Token, Type};
 
 use crate::{
     error::{panic_on_parse_error, DiagnosticError, Result},
-    typemap::{ty::RustType, TypeMap},
+    typemap::TypeMap,
 };
 
 /// Calculate target pointer width from environment variable
@@ -361,8 +360,8 @@ impl Generator {
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS) {
                     let fclass = code_parse::parse_foreigner_class(&self.config, tts)?;
                     debug!(
-                        "expand_foreigner_class: self {:?}, this_for_method {:?}, constructor {:?}",
-                        fclass.self_type, fclass.this_type_for_method, fclass.constructor_ret_type
+                        "expand_foreigner_class: self {:?}, constructor {:?}",
+                        fclass.self_type, fclass.constructor_ret_type
                     );
                     self.conv_map.register_foreigner_class(&fclass);
                     Generator::language_generator(&self.config)
@@ -472,9 +471,7 @@ impl Generator {
 struct ForeignerClassInfo {
     name: Ident,
     methods: Vec<ForeignerMethod>,
-    self_type: Option<RustType>,
-    /// Not necessarily equal to self_type, may be for example Rc<self_type>
-    this_type_for_method: Option<Type>,
+    self_type: Option<Type>,
     foreigner_code: String,
     /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
     constructor_ret_type: Option<Type>,
@@ -486,16 +483,10 @@ impl ForeignerClassInfo {
     fn span(&self) -> Span {
         self.name.span()
     }
-    fn self_type_name(&self) -> &str {
-        self.self_type
-            .as_ref()
-            .map(|x| x.normalized_name.as_str())
-            .unwrap_or("")
-    }
     fn self_type_as_ty(&self) -> Type {
         self.self_type
             .as_ref()
-            .map(|x| x.ty.clone())
+            .cloned()
             .unwrap_or_else(|| parse_quote! { () })
     }
     /// common for several language binding generator code
@@ -534,8 +525,6 @@ struct ForeignerMethod {
     rust_id: syn::Path,
     fn_decl: FnDecl,
     name_alias: Option<Ident>,
-    /// cache if rust_fn_decl.output == Result
-    may_return_error: bool,
     access: MethodAccess,
     doc_comments: Vec<String>,
 }
@@ -545,12 +534,6 @@ struct FnDecl {
     span: Span,
     inputs: syn::punctuated::Punctuated<syn::FnArg, Token![,]>,
     output: syn::ReturnType,
-}
-
-impl FnDecl {
-    fn span(&self) -> Span {
-        self.span
-    }
 }
 
 impl From<syn::FnDecl> for crate::FnDecl {
