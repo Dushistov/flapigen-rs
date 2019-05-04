@@ -166,7 +166,7 @@ impl<'a> fmt::Display for DisplayTypesConvGraph<'a> {
 }
 
 #[derive(Debug)]
-struct PossibePath {
+struct PossiblePath {
     tmp_graph: TypesConvGraph,
     path: Vec<EdgeIndex<TypeGraphIdx>>,
 }
@@ -728,7 +728,7 @@ impl TypeMap {
         }
 
         let from: RustType = rust_ty.clone().into();
-        let mut possible_paths = Vec::<(PossibePath, SmolStr, NodeIndex)>::new();
+        let mut possible_paths = Vec::<(PossiblePath, SmolStr, NodeIndex)>::new();
         for max_steps in 1..=MAX_TRY_BUILD_PATH_STEPS {
             for (foreign_name, graph_idx) in &self.foreign_names_map {
                 let other = self.conv_graph[*graph_idx].clone();
@@ -982,8 +982,8 @@ fn find_conversation_path(
     Ok(path)
 }
 
-fn merge_path_to_conv_map(path: PossibePath, conv_map: &mut TypeMap) {
-    let PossibePath { tmp_graph, path } = path;
+fn merge_path_to_conv_map(path: PossiblePath, conv_map: &mut TypeMap) {
+    let PossiblePath { tmp_graph, path } = path;
     for edge in path {
         if let Some((from, to)) = tmp_graph.edge_endpoints(edge) {
             let new_from = get_graph_node(
@@ -1023,7 +1023,7 @@ fn try_build_path(
     rust_names_map: &RustTypeNameToGraphIdx,
     generic_edges: &[GenericTypeConv],
     max_steps: usize,
-) -> Option<PossibePath> {
+) -> Option<PossiblePath> {
     debug!(
         "try_build_path: from {} to {}, ty names len {}, graph nodes {}, edges {}",
         start_from,
@@ -1116,7 +1116,7 @@ fn try_build_path(
                             }
                         }
 
-                        return Some(PossibePath {
+                        return Some(PossiblePath {
                             tmp_graph: ty_graph.into_graph(),
                             path,
                         });
