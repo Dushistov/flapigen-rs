@@ -559,7 +559,7 @@ impl TypeMap {
 
                 if let Some(existing_edge) = data.conv_graph.find_edge(self_src, self_target) {
                     warn!(
-                        "Converstation {:?} from {:?} to {:?} ignored, we use {:?} instead",
+                        "typemap merge: Converstation {:?} from {:?} to {:?} ignored, we use {:?} instead",
                         new_data.conv_graph[edge],
                         self_src,
                         self_target,
@@ -1066,14 +1066,16 @@ fn try_build_path(
                         continue;
                     }
                     let to = ty_graph.node_for_ty(&mut rust_names_map, (to_ty, to_ty_name));
-                    ty_graph.conv_graph.add_edge(
-                        *from_ty,
-                        to,
-                        TypeConvEdge {
-                            code_template: edge.code_template.clone(),
-                            dependency: edge.dependency.clone(),
-                        },
-                    );
+                    if ty_graph.conv_graph.find_edge(*from_ty, to).is_none() {
+                        ty_graph.conv_graph.add_edge(
+                            *from_ty,
+                            to,
+                            TypeConvEdge {
+                                code_template: edge.code_template.clone(),
+                                dependency: edge.dependency.clone(),
+                            },
+                        );
+                    }
 
                     if petgraph::algo::has_path_connecting(
                         &*ty_graph.conv_graph,

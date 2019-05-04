@@ -17,7 +17,7 @@ use crate::{
     typemap::{
         ast::{normalize_ty_lifetimes, GenericTypeConv, TypeName},
         make_unique_rust_typename,
-        ty::{RustType, RustTypeS},
+        ty::RustTypeS,
         validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
     },
 };
@@ -730,11 +730,11 @@ fn add_conv_code(
     conv_code: String,
     ret: &mut TypeMap,
 ) {
-    let from: RustType = ret.find_or_alloc_rust_type_with_may_be_suffix(&from_ty, from_suffix);
+    let from = ret.find_or_alloc_rust_type_with_may_be_suffix(&from_ty, from_suffix);
     let to = ret.find_or_alloc_rust_type_with_may_be_suffix(&to_ty, to_suffix);
 
-    debug!("add_conv_code from {} to {}", from, to);
-    ret.conv_graph.add_edge(
+    debug!("add_conv_code: from {} to {}", from, to);
+    ret.conv_graph.update_edge(
         from.graph_idx,
         to.graph_idx,
         TypeConvEdge::new(conv_code, Some(item_code)),
