@@ -98,9 +98,6 @@ struct MethodContext<'a> {
 
 impl LanguageGenerator for CppConfig {
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
-        //for future use
-        conv_map.find_or_alloc_rust_type(&parse_type! { u32 });
-
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
@@ -299,7 +296,10 @@ May be you need to use `private constructor = empty;` syntax?",
         Ok(items)
     }
 
-    fn place_foreign_lang_helpers(&self, code: &[SourceCode]) -> std::result::Result<(), String> {
+    fn init(&self, conv_map: &mut TypeMap, code: &[SourceCode]) -> std::result::Result<(), String> {
+        //for enum
+        conv_map.find_or_alloc_rust_type(&parse_type! { u32 });
+
         for cu in code {
             let src_path = self.output_dir.join(&cu.id_of_code);
             let mut src_file = FileWriteCache::new(&src_path);

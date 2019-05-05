@@ -21,7 +21,7 @@ use crate::{
         ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
-    LanguageGenerator, MethodVariant, TypeMap,
+    LanguageGenerator, MethodVariant, SourceCode, TypeMap,
 };
 
 #[derive(Clone, Copy)]
@@ -91,10 +91,16 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 }
 
 impl LanguageGenerator for JavaConfig {
-    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
-        //register for future use
+    fn init(
+        &self,
+        conv_map: &mut TypeMap,
+        _code: &[SourceCode],
+    ) -> std::result::Result<(), String> {
         conv_map.find_or_alloc_rust_type(&parse_type! { jint });
         conv_map.find_or_alloc_rust_type(&parse_type! { jlong });
+        Ok(())
+    }
+    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.span(), &err))?;

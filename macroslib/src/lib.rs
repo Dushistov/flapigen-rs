@@ -446,7 +446,7 @@ impl Generator {
         }
 
         Generator::language_generator(&self.config)
-            .place_foreign_lang_helpers(&self.foreign_lang_helpers)
+            .init(&mut self.conv_map, &self.foreign_lang_helpers)
             .map_err(|err| {
                 DiagnosticError::new(
                     Span::call_site(),
@@ -662,7 +662,12 @@ trait LanguageGenerator {
         interace: &ForeignInterface,
     ) -> Result<Vec<TokenStream>>;
 
-    fn place_foreign_lang_helpers(&self, _: &[SourceCode]) -> std::result::Result<(), String> {
+    /// Called before any other methods and only once
+    fn init(
+        &self,
+        _type_map: &mut TypeMap,
+        _foreign_lang_helpers: &[SourceCode],
+    ) -> std::result::Result<(), String> {
         Ok(())
     }
 }
