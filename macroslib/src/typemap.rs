@@ -432,7 +432,7 @@ impl TypeMap {
         trace!("find self type: possible name {}", type_name);
         for fc in &self.foreign_classes {
             let self_rust_ty = self
-                .ty_to_rust_type(&fc.self_type_as_ty())
+                .ty_to_rust_type_checked(&fc.self_type_as_ty())
                 .unwrap_or_else(|| {
                     panic!(
                         "Internal error: self_type ({}) not registered",
@@ -906,7 +906,17 @@ impl TypeMap {
         }
     }
 
-    pub(crate) fn ty_to_rust_type(&self, ty: &Type) -> Option<RustType> {
+    /// # Panics
+    pub(crate) fn ty_to_rust_type(&self, ty: &Type) -> RustType {
+        self.ty_to_rust_type_checked(ty).unwrap_or_else(|| {
+            panic!(
+                "Internal Error: type '{}' unknown (ty_to_rust_type)",
+                DisplayToTokens(ty)
+            )
+        })
+    }
+
+    pub(crate) fn ty_to_rust_type_checked(&self, ty: &Type) -> Option<RustType> {
         let name = normalize_ty_lifetimes(ty);
         self.rust_names_map
             .get(name)

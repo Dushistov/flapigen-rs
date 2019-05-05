@@ -218,7 +218,7 @@ impl LanguageGenerator for JavaConfig {
             &f_methods_sign,
             self.null_annotation_package.as_ref().map(String::as_str),
         )
-        .map_err(|err| DiagnosticError::new(class.span(), &err))?;
+        .map_err(|err| DiagnosticError::new(class.span(), err))?;
         debug!("generate: java code done");
         let ast_items =
             rust_code::generate_rust_code(conv_map, &self.package_name, class, &f_methods_sign)?;
@@ -454,13 +454,14 @@ fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignerClassInfo) -> Option
     if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
         Some(
             if_result_return_ok_err_types(
-                &tm.ty_to_rust_type(constructor_ret_type).unwrap_or_else(|| {
-                    panic!(
-                        "Internal error: constructor type {} for class {} unknown",
-                        DisplayToTokens(constructor_ret_type),
-                        class.name
-                    );
-                }),
+                &tm.ty_to_rust_type_checked(constructor_ret_type)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Internal error: constructor type {} for class {} unknown",
+                            DisplayToTokens(constructor_ret_type),
+                            class.name
+                        );
+                    }),
             )
             .map(|(ok_ty, _err_ty)| ok_ty)
             .unwrap_or_else(|| constructor_ret_type.clone()),

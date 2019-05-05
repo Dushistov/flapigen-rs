@@ -144,10 +144,7 @@ fn special_type(
                 let this_type = if let Some(this_type_for_method) =
                     foreign_class.constructor_ret_type.as_ref()
                 {
-                    let this_type: RustType = conv_map
-                        .ty_to_rust_type(this_type_for_method)
-                        .expect("cpp: this type not registered");
-                    this_type
+                    conv_map.ty_to_rust_type(this_type_for_method)
                 } else {
                     return Err(DiagnosticError::new(
                         arg_ty_span,
@@ -307,9 +304,7 @@ fn calc_converter_for_enum(
     conv_map: &TypeMap,
     foreign_enum: &ForeignEnumInfo,
 ) -> CppForeignTypeInfo {
-    let u32_ti: RustType = conv_map
-        .ty_to_rust_type(&parse_type! { u32 })
-        .expect("u32 not registered");
+    let u32_ti: RustType = conv_map.ty_to_rust_type(&parse_type! { u32 });
     let c_converter: String = r#"
         uint32_t {to_var} = {from_var};
 "#
