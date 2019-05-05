@@ -15,7 +15,7 @@ use syn::{
 use crate::{
     error::{DiagnosticError, Result},
     typemap::{
-        ast::{normalize_ty_lifetimes, GenericTypeConv, TypeName},
+        ast::{normalize_ty_lifetimes, DisplayToTokens, GenericTypeConv, TypeName},
         make_unique_rust_typename,
         ty::RustTypeS,
         validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
@@ -288,10 +288,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
         } else {
             return Err(DiagnosticError::new(
                 a.span(),
-                format!(
-                    "Unexpected attribute: '{}'",
-                    a.into_token_stream().to_string()
-                ),
+                format!("Unexpected attribute: '{}'", DisplayToTokens(a)),
             ));
         }
     }

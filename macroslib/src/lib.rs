@@ -32,13 +32,12 @@ use std::{
 
 use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::ToTokens;
 use rustc_hash::FxHashSet;
 use syn::{parse_quote, spanned::Spanned, Token, Type};
 
 use crate::{
     error::{panic_on_parse_error, DiagnosticError, Result},
-    typemap::TypeMap,
+    typemap::{ast::DisplayToTokens, TypeMap},
 };
 
 /// Calculate target pointer width from environment variable
@@ -339,7 +338,7 @@ impl Generator {
         let mut file = file_cache::FileWriteCache::new(dst.as_ref());
 
         for item in items {
-            write!(&mut file, "{}", item.into_token_stream().to_string()).expect("mem I/O failed");
+            write!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
         }
 
         let mut output_code = vec![];
@@ -350,7 +349,7 @@ impl Generator {
                     .iter()
                     .any(|x| item_macro.mac.path.is_ident(x));
                 if !is_our_macro {
-                    writeln!(&mut file, "{}", item_macro.into_token_stream().to_string())
+                    writeln!(&mut file, "{}", DisplayToTokens(&item_macro))
                         .expect("mem I/O failed");
                     continue;
                 }
@@ -414,8 +413,7 @@ impl Generator {
                     }
                 }
                 OutputCode::Item(item) => {
-                    writeln!(&mut file, "{}", item.into_token_stream().to_string())
-                        .expect("mem I/O failed");
+                    writeln!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
                 }
             }
         }

@@ -8,7 +8,7 @@ use std::{
     rc::Rc,
 };
 
-use log::{log_enabled, trace};
+use log::trace;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
 use rustc_hash::FxHashMap;
@@ -415,13 +415,13 @@ fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
             }
         }
     }
-    if log_enabled!(log::Level::Trace) {
-        trace!(
-            "replace_all_types_with in_ty {}, subst_map {:?}",
-            in_ty.into_token_stream().to_string(),
-            subst_map
-        );
-    }
+
+    trace!(
+        "replace_all_types_with in_ty {}, subst_map {:?}",
+        DisplayToTokens(in_ty),
+        subst_map
+    );
+
     let mut rt = ReplaceTypes { subst_map };
     let mut new_ty = in_ty.clone();
     rt.visit_type_mut(&mut new_ty);
@@ -639,7 +639,7 @@ where
     T: ToTokens,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
-        write!(f, "{}", self.0.into_token_stream().to_string())
+        f.write_str(&self.0.into_token_stream().to_string())
     }
 }
 

@@ -7,7 +7,6 @@ use std::fmt;
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
-use quote::ToTokens;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
@@ -16,7 +15,7 @@ use crate::{
     error::{DiagnosticError, Result},
     typemap::ast::{
         fn_arg_type, if_option_return_some_type, if_result_return_ok_err_types,
-        if_ty_result_return_ok_type,
+        if_ty_result_return_ok_type, DisplayToTokens,
     },
     typemap::{
         ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
@@ -452,7 +451,7 @@ fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignerClassInfo) -> Option
                 &tm.ty_to_rust_type(constructor_ret_type).unwrap_or_else(|| {
                     panic!(
                         "Internal error: constructor type {} for class {} unknown",
-                        constructor_ret_type.into_token_stream().to_string(),
+                        DisplayToTokens(constructor_ret_type),
                         class.name
                     );
                 }),

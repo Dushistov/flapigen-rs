@@ -11,7 +11,6 @@ use petgraph::{
     Graph,
 };
 use proc_macro2::{Span, TokenStream};
-use quote::ToTokens;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -22,7 +21,7 @@ use crate::{
     typemap::{
         ast::{
             check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
-            GenericTypeConv,
+            DisplayToTokens, GenericTypeConv,
         },
         ty::{RustType, RustTypeS},
     },
@@ -437,7 +436,7 @@ impl TypeMap {
                 .unwrap_or_else(|| {
                     panic!(
                         "Internal error: self_type ({}) not registered",
-                        fc.self_type_as_ty().into_token_stream().to_string()
+                        DisplayToTokens(&fc.self_type_as_ty())
                     )
                 });
             trace!("self_type {}", self_rust_ty);
@@ -760,14 +759,12 @@ impl TypeMap {
             }
         }
         for (ty, suffix, foreign_name) in new_foreign_types {
-            if log_enabled!(log::Level::Debug) {
-                debug!(
-                    "map foreign: add possible type {} {} <-> {}",
-                    (&ty).into_token_stream().to_string(),
-                    suffix,
-                    foreign_name
-                );
-            }
+            debug!(
+                "map foreign: add possible type {} {} <-> {}",
+                DisplayToTokens(&ty),
+                suffix,
+                foreign_name
+            );
             let rust_ty = self.find_or_alloc_rust_type_with_suffix(&ty, &suffix);
             self.foreign_names_map
                 .insert(foreign_name.into(), rust_ty.graph_idx);
