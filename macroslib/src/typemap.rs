@@ -579,7 +579,7 @@ impl TypeMap {
             data: &mut TypeMap,
         ) -> NodeIndex<TypeGraphIdx> {
             let node = &new_data.conv_graph[node_new_data_idx];
-            debug!("handling new node {:?}", node);
+            debug!("get_graph_node_idx: handling new node {}", node);
             let node2 = node.clone();
             let data_rust_names_map = &mut data.rust_names_map;
             let data_conv_graph = &mut data.conv_graph;
