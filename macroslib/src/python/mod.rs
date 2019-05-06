@@ -37,7 +37,8 @@ impl LanguageGenerator for PythonConfig {
         // let method_names = class.methods
         //     .iter()
         //     .filter(|m| m.variant == MethodVariant::Method)
-        //     .map(|m| m.short_name());
+        //     .map(method_name)
+        //     .collect::<Result<Vec<_>>>()?;
         // let method_rust_paths = class.methods
         //     .iter()
         //     .filter(|m| m.variant == MethodVariant::Method)
@@ -51,9 +52,16 @@ impl LanguageGenerator for PythonConfig {
             .iter()
             .filter(|m| m.variant == MethodVariant::StaticMethod)
             .map(|m| &m.rust_id);
+        let self_type = class.self_type_as_ty();
+        let rust_instance_field_code = generate_rust_instance_field_code(class, conv_map)?;
+        let constructor_code = generate_constructor_code(class, conv_map)?;
         let class_code = quote! {
             mod #wrapper_mod_name {
                 py_class!(pub class #class_name |py| {
+                    #rust_instance_field_code
+                    
+                    #constructor_code
+
                     #( @staticmethod def #static_method_names() -> cpython::PyResult<cpython::PyObject> {
                         super::#static_method_rust_paths();
                         Ok(py.None()) 
@@ -122,4 +130,42 @@ impl LanguageGenerator for PythonConfig {
         }];
         Ok(registration_code)
     }
+}
+
+fn generate_rust_instance_field_code(class: &ForeignerClassInfo, conv_map: &TypeMap) -> Result<TokenStream> {
+    if let Some(ref rust_self_type) = class.self_type {
+        let self_type = &rust_self_type.ty;
+        Ok(quote!{
+            data rust_instance: std::sync::RwLock<super::#self_type>;
+        })
+    } else if !has_any_methods(class) {
+        Ok(TokenStream::new())
+    } else {
+        Err(DiagnosticError::new(class.span(), format!("Class {} has non-static methods, but no self_type", class.name)))
+    }
+}
+
+fn generate_constructor_code(class: &ForeignerClassInfo, conv_map: &TypeMap) -> Result<TokenStream> {
+    if let Some(constructor) = class.methods
+        .iter()
+        .find(|m| m.variant == MethodVariant::Constructor) {
+        let class_name = &class.name;
+        let constructor_rust_path = &constructor.rust_id;
+        Ok(quote!{
+             def __new__(_cls) -> cpython::PyResult<#class_name> {
+                let rust_instance = super::#constructor_rust_path();
+                #class_name::create_instance(py, std::sync::RwLock::new(rust_instance))
+            }
+        })
+    } else if !has_any_methods(class) {
+        Ok(TokenStream::new())
+    } else {
+        Err(DiagnosticError::new(class.span(), format!("Class {} has non-static methods, but no constructor", class.name)))
+    }
+}
+
+fn has_any_methods(class: &ForeignerClassInfo) -> bool {
+    class.methods
+        .iter()
+        .any(|m| if let MethodVariant::Method(_) = m.variant { true } else { false })
 }
