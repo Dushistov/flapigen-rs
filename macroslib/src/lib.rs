@@ -412,10 +412,7 @@ impl Generator {
             }
         }
 
-        let code = Generator::language_generator(&self.config).init_glue_rs(&mut self.conv_map)?;
-        for elem in code {
-            writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
-        }
+
         for code_item in output_code {
             match code_item {
                 OutputCode::Class(fclass) => {
@@ -726,10 +723,6 @@ trait LanguageGenerator {
         Ok(())
     }
     
-    fn init_glue_rs(&self, conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
-        Ok(vec![])
-    }
-
     fn finish_glue_rs(&self, conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
         Ok(vec![])
     }

@@ -6,6 +6,8 @@ use heck::SnakeCase;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Ident, Type};
+use syn::spanned::Spanned;
+use syn::parse_quote;
 
 fn method_name(method: &ForeignerMethod) -> Result<&syn::Ident> {
     Ok(&method.rust_id.segments.last().ok_or_else(|| {
@@ -109,13 +111,6 @@ impl LanguageGenerator for PythonConfig {
         Ok(vec![])
     }
 
-    fn init_glue_rs(&self, _conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
-        Ok(vec![quote! {
-            #[macro_use] extern crate cpython;
-            use cpython::{ObjectProtocol};
-        }])
-    }
-
     fn finish_glue_rs(&self, _conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
         let module_initialization_code_cell = self.module_initialization_code.borrow();
         let module_initialization_code = &*module_initialization_code_cell;
@@ -201,14 +196,17 @@ fn generate_static_method_code(method: &ForeignerMethod, conv_map: &TypeMap) -> 
     let args_names = (0..method.fn_decl.inputs.len())
         .map(|i| syn::parse_str(&format!("a_{}", i)))
         .collect::<std::result::Result<Vec<TokenStream>, _>>()?;
+    let (return_type, return_conversion) = generate_conversion_for_return(
+        &extract_return_type(&method.fn_decl.output), conv_map, "_ret"
+    )?;
     Ok(quote!{
         @staticmethod def #static_method_name(
             #( #args_names: #args_types ),*
-        ) -> cpython::PyResult<cpython::PyObject> {
-            super::#static_method_rust_path(
+        ) -> cpython::PyResult<#return_type> {
+            let _ret = super::#static_method_rust_path(
                 #( #args_convertions ),*
             );
-            Ok(py.None()) 
+            Ok(#return_conversion) 
         }
     })
 }
@@ -229,14 +227,36 @@ fn generate_conversion_for_argument(rust_type: &RustType, conv_map: &TypeMap, ar
     }
 }
 
-fn generate_conversion_from_return() -> Result<TokenStream> {
-    unimplemented!()
+fn generate_conversion_for_return(rust_type: &RustType, conv_map: &TypeMap, ret_name: &str) -> Result<(Type, TokenStream)> {
+    if rust_type.normalized_name == "( )" {
+        Ok((parse_type!(cpython::PyObject), quote!(py.None())))
+    } else if is_cpython_supported_type(rust_type) {
+        Ok((rust_type.ty.clone(), syn::parse_str(ret_name)?))
+    } else if let Some(foreing_class) = conv_map.find_foreigner_class_with_such_this_type(&rust_type.ty) {
+        unimplemented!();
+    } else {
+        unimplemented!();
+    }
 }
 
 fn is_cpython_supported_type(rust_type: &RustType) -> bool {
-    // let name_str = rust_type.normalized_name;
-    let primitive_types = ["bool", "i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize", "String", "&str"];
+    let primitive_types = [
+        "bool", "i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize",
+        "f32", "f64", "String", "&str"
+    ];
     primitive_types.contains(&rust_type.normalized_name.as_str())
 }
 
-
+fn extract_return_type(syn_return_type: &syn::ReturnType) -> RustType {
+    match syn_return_type {
+        syn::ReturnType::Default => {
+                let mut ty: Type = parse_type! { () };
+                ast::change_span(&mut ty, syn_return_type.span());
+                ty.into()
+        },
+        syn::ReturnType::Type(_, ref ty) => {
+            let ty: Type = *ty.clone();
+            ty.into()
+        },
+    }
+}
