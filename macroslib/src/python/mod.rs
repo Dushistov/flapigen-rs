@@ -1,6 +1,6 @@
 use crate::{
-    DiagnosticError, error::Result, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, LanguageGenerator,
-    MethodVariant, PythonConfig, SelfTypeVariant, TypeMap,
+    ast, DiagnosticError, error::Result, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, LanguageGenerator,
+    MethodVariant, PythonConfig, RustType, SelfTypeVariant, TypeMap,
 };
 use heck::SnakeCase;
 use proc_macro2::TokenStream;
@@ -175,19 +175,17 @@ fn generate_standard_method_code(method: &ForeignerMethod, self_variant: SelfTyp
     let method_rust_path = &method.rust_id;
     let self_conversion_code = match self_variant {
         SelfTypeVariant::Rptr => quote!{
-            let self_rw_guard = self.rust_instance(py).read().unwrap();
-            let self_ref = &*self_rw_guard;
+            &*self.rust_instance(py).read().unwrap()
         },
         SelfTypeVariant::RptrMut => quote!{
-            let mut self_rw_guard = self.rust_instance(py).write().unwrap();
-            let self_ref = &mut *self_rw_guard;
+            &mut *self.rust_instance(py).write().unwrap()
         },
         _ => unimplemented!("Passing self by value not implemented yet"),
     };
     Ok(quote!{
         def #method_name(&self) -> cpython::PyResult<cpython::PyObject> {
-            #self_conversion_code
-            super::#method_rust_path(self_ref);
+            //#self_conversion_code
+            super::#method_rust_path(#self_conversion_code);
             Ok(py.None())
         }
     })
@@ -196,9 +194,20 @@ fn generate_standard_method_code(method: &ForeignerMethod, self_variant: SelfTyp
 fn generate_static_method_code(method: &ForeignerMethod, conv_map: &TypeMap) -> Result<TokenStream> {
     let static_method_name = method_name(method)?;
     let static_method_rust_path = &method.rust_id;
+    let (args_types, args_convertions): (Vec<_>, Vec<_>) = method.fn_decl.inputs.iter().enumerate().map(|(i, a)| {
+        let arg_name = format!("a_{}", i);
+        generate_conversion_for_argument(&ast::fn_arg_type(a).clone().into(), conv_map, &arg_name)
+    }).collect::<Result<Vec<_>>>()?.into_iter().unzip();
+    let args_names = (0..method.fn_decl.inputs.len())
+        .map(|i| syn::parse_str(&format!("a_{}", i)))
+        .collect::<std::result::Result<Vec<TokenStream>, _>>()?;
     Ok(quote!{
-        @staticmethod def #static_method_name() -> cpython::PyResult<cpython::PyObject> {
-            super::#static_method_rust_path();
+        @staticmethod def #static_method_name(
+            #( #args_names: #args_types ),*
+        ) -> cpython::PyResult<cpython::PyObject> {
+            super::#static_method_rust_path(
+                #( #args_convertions ),*
+            );
             Ok(py.None()) 
         }
     })
@@ -210,10 +219,24 @@ fn has_any_methods(class: &ForeignerClassInfo) -> bool {
         .any(|m| if let MethodVariant::Method(_) = m.variant { true } else { false })
 }
 
-// fn is_cpython_primitive_type(rust_type: RustType) -> bool {
-//     // let name_str = rust_type.normalized_name;
-//     let primitive_types = ["bool", "i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize", "String", "&str"];
-//     primitive_types.contains(&rust_type.normalized_name)
-// }
+fn generate_conversion_for_argument(rust_type: &RustType, conv_map: &TypeMap, arg_name: &str) -> Result<(Type, TokenStream)> {
+    if is_cpython_supported_type(rust_type) {
+        Ok((rust_type.ty.clone(), syn::parse_str(arg_name)?))
+    } else if let Some(foreing_class) = conv_map.find_foreigner_class_with_such_this_type(&rust_type.ty) {
+        unimplemented!();
+    } else {
+        unimplemented!();
+    }
+}
+
+fn generate_conversion_from_return() -> Result<TokenStream> {
+    unimplemented!()
+}
+
+fn is_cpython_supported_type(rust_type: &RustType) -> bool {
+    // let name_str = rust_type.normalized_name;
+    let primitive_types = ["bool", "i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize", "String", "&str"];
+    primitive_types.contains(&rust_type.normalized_name.as_str())
+}
 
 

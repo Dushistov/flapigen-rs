@@ -15,10 +15,15 @@ impl TestStaticClass {
     pub fn print_hello() {
         println!("Hello from rust");
     }
+
+    pub fn print_number(i: i32) {
+        println!("print_number: {}", i);
+    }
 }
 
 foreigner_class!(class TestStaticClass {
     static_method TestStaticClass::print_hello();
+    static_method TestStaticClass::print_number(i: i32);
 });
 
 pub struct TestClass {
