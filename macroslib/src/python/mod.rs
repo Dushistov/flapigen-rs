@@ -27,35 +27,14 @@ impl LanguageGenerator for PythonConfig {
         class: &ForeignerClassInfo,
     ) -> Result<Vec<TokenStream>> {
         let class_name = &class.name;
-        let wrapper_mod_name = syn::parse_str::<Ident>(&format!(
-            "py_{}",
-            class_name.to_string().to_snake_case()
-        ))?;
+        let wrapper_mod_name = syn::parse_str::<Ident>(&py_wrapper_mod_name(&class_name.to_string()))?;
         self.module_initialization_code.borrow_mut().push(quote! {
             {
                 m.add_class::<#wrapper_mod_name::#class_name>(py)?;
             }
         });
-        // let method_names = class.methods
-        //     .iter()
-        //     .filter(|m| m.variant == MethodVariant::Method)
-        //     .map(method_name)
-        //     .collect::<Result<Vec<_>>>()?;
-        // let method_rust_paths = class.methods
-        //     .iter()
-        //     .filter(|m| m.variant == MethodVariant::Method)
-        //     .map(|m| m.rust_id);
-        // let static_method_names = class.methods
-        //     .iter()
-        //     .filter(|m| m.variant == MethodVariant::StaticMethod)
-        //     .map(method_name)
-        //     .collect::<Result<Vec<_>>>()?;
-        // let static_method_rust_paths = class.methods
-        //     .iter()
-        //     .filter(|m| m.variant == MethodVariant::StaticMethod)
-        //     .map(|m| &m.rust_id);
         let self_type = class.self_type_as_ty();
-        let rust_instance_field_code = generate_rust_instance_field_code(class, conv_map)?;
+        let (rust_instance_field, rust_instance_getter) = generate_rust_instance_field_and_getter(class, conv_map)?;
         let methods_code = class.methods
             .iter()
             .map(|m| generate_method_code(class, m, conv_map))
@@ -63,10 +42,12 @@ impl LanguageGenerator for PythonConfig {
         let class_code = quote!{
             mod #wrapper_mod_name {
                 py_class!(pub class #class_name |py| {
-                    #rust_instance_field_code
+                    #rust_instance_field
                     
                     #( #methods_code )*
                 });
+
+                #rust_instance_getter
             }
         };
         Ok(vec![class_code])
@@ -79,10 +60,7 @@ impl LanguageGenerator for PythonConfig {
         enum_info: &ForeignEnumInfo,
     ) -> Result<Vec<TokenStream>> {
         let enum_name = &enum_info.name;
-        let wrapper_mod_name = syn::parse_str::<Ident>(&format!(
-            "py_{}",
-            enum_info.name.to_string().to_snake_case()
-        ))?;
+        let wrapper_mod_name = syn::parse_str::<Ident>(&py_wrapper_mod_name(&enum_name.to_string()))?;
         self.module_initialization_code.borrow_mut().push(quote! {
             {
                 m.add_class::<#wrapper_mod_name::#enum_name>(py)?;
@@ -125,14 +103,22 @@ impl LanguageGenerator for PythonConfig {
     }
 }
 
-fn generate_rust_instance_field_code(class: &ForeignerClassInfo, conv_map: &TypeMap) -> Result<TokenStream> {
+fn generate_rust_instance_field_and_getter(class: &ForeignerClassInfo, conv_map: &TypeMap) -> Result<(TokenStream, TokenStream)> {
     if let Some(ref rust_self_type) = class.self_type {
         let self_type = &rust_self_type.ty;
-        Ok(quote!{
+        let class_name = &class.name;
+        Ok((quote!{
             data rust_instance: std::sync::RwLock<super::#self_type>;
-        })
+        }, 
+        // For some reason, rust-cpython generates private `rust_instance` getter method.
+        // As a workaround, we add public function in the same module, that gets `rust_instance`.
+        quote!{
+            pub fn rust_instance<'a>(class: &'a #class_name, py: cpython::Python<'a>) -> &'a std::sync::RwLock<super::#self_type> {
+                class.rust_instance(py)
+            }
+        }))
     } else if !has_any_methods(class) {
-        Ok(TokenStream::new())
+        Ok((TokenStream::new(), TokenStream::new()))
     } else {
         Err(DiagnosticError::new(class.span(), format!("Class {} has non-static methods, but no self_type", class.name)))
     }
@@ -179,7 +165,6 @@ fn generate_standard_method_code(method: &ForeignerMethod, self_variant: SelfTyp
     };
     Ok(quote!{
         def #method_name(&self) -> cpython::PyResult<cpython::PyObject> {
-            //#self_conversion_code
             super::#method_rust_path(#self_conversion_code);
             Ok(py.None())
         }
@@ -218,12 +203,29 @@ fn has_any_methods(class: &ForeignerClassInfo) -> bool {
 }
 
 fn generate_conversion_for_argument(rust_type: &RustType, conv_map: &TypeMap, arg_name: &str) -> Result<(Type, TokenStream)> {
+    let arg_name_ident: TokenStream = syn::parse_str(arg_name)?;
     if is_cpython_supported_type(rust_type) {
-        Ok((rust_type.ty.clone(), syn::parse_str(arg_name)?))
-    } else if let Some(foreing_class) = conv_map.find_foreigner_class_with_such_this_type(&rust_type.ty) {
-        unimplemented!();
+        Ok((rust_type.ty.clone(), arg_name_ident))
+    } else if let Some(foreign_class) = conv_map.find_foreigner_class_with_such_self_type(&rust_type.ty, true) {
+        let class_name = foreign_class.name.to_string();
+        let py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&class_name))?;
+        let py_type: Type = syn::parse_str(&format!("&super::{}::{}", py_wrapper_mod_name(&class_name), &class_name))?;
+        let self_conversion_code = if let Type::Reference(ref reference) = rust_type.ty {
+            if reference.mutability.is_some() {
+                quote!{
+                    &mut *super::#py_mod::rust_instance(#arg_name_ident, py).write().unwrap()
+                }
+            } else {
+                quote!{
+                    &*super::#py_mod::rust_instance(#arg_name_ident, py).read().unwrap()
+                }
+            }
+        } else {
+            unimplemented!("Passing object by value not implemented yet")
+        };
+        Ok((py_type, self_conversion_code))
     } else {
-        unimplemented!();
+        unimplemented!("other arg");
     }
 }
 
@@ -259,4 +261,11 @@ fn extract_return_type(syn_return_type: &syn::ReturnType) -> RustType {
             ty.into()
         },
     }
+}
+
+fn py_wrapper_mod_name(type_name: &str) -> String {
+    format!(
+        "py_{}",
+        type_name.to_snake_case()
+    )
 }

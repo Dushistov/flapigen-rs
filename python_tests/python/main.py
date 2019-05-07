@@ -19,3 +19,5 @@ print(test_class)
 test_class.print()
 test_class.increment()
 test_class.print()
+
+rust_swig_test_python.TestStaticClass.call_test_class_print(test_class)

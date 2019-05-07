@@ -28,18 +28,14 @@ impl TestStaticClass {
         println!("print_str: {}", s);
     }
 
+    pub fn call_test_class_print(test_object: &TestClass) {
+        test_object.print();
+    }
+
     pub fn add(a: f32, b: f32) -> f32 {
         a + b
     }
 }
-
-foreigner_class!(class TestStaticClass {
-    static_method TestStaticClass::print_hello();
-    static_method TestStaticClass::print_number(i: i32);
-    static_method TestStaticClass::add(a: f32, b: f32) -> f32;
-    static_method TestStaticClass::print_str(s: &str);
-    static_method TestStaticClass::print_string(s: String);
-});
 
 pub struct TestClass {
     i: i32,
@@ -64,6 +60,15 @@ impl TestClass {
         self.i
     }
 }
+
+foreigner_class!(class TestStaticClass {
+    static_method TestStaticClass::print_hello();
+    static_method TestStaticClass::print_number(i: i32);
+    static_method TestStaticClass::add(a: f32, b: f32) -> f32;
+    static_method TestStaticClass::print_str(s: &str);
+    static_method TestStaticClass::print_string(s: String);
+    static_method TestStaticClass::call_test_class_print(test_object: &TestClass);
+});
 
 foreigner_class!(class TestClass {
     self_type TestClass;
