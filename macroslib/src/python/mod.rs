@@ -206,7 +206,7 @@ fn generate_static_method_code(method: &ForeignerMethod, conv_map: &TypeMap) -> 
             let _ret = super::#static_method_rust_path(
                 #( #args_convertions ),*
             );
-            Ok(#return_conversion) 
+            Ok(#return_conversion)
         }
     })
 }
@@ -242,7 +242,7 @@ fn generate_conversion_for_return(rust_type: &RustType, conv_map: &TypeMap, ret_
 fn is_cpython_supported_type(rust_type: &RustType) -> bool {
     let primitive_types = [
         "bool", "i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize",
-        "f32", "f64", "String", "&str"
+        "f32", "f64", "String", "& str"
     ];
     primitive_types.contains(&rust_type.normalized_name.as_str())
 }
