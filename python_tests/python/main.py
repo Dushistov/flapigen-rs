@@ -11,3 +11,7 @@ rust_swig_test_python.TestStaticClass.print_hello()
 
 test_class = rust_swig_test_python.TestClass()
 print(test_class)
+
+test_class.print()
+test_class.increment()
+test_class.print()

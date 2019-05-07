@@ -22,15 +22,32 @@ foreigner_class!(class TestStaticClass {
 });
 
 pub struct TestClass {
+    i: i32,
 }
 
 impl TestClass {
     pub fn new() -> TestClass {
-        TestClass {}
+        TestClass {
+            i: 0
+        }
+    }
+
+    pub fn increment(&mut self) {
+        self.i += 1;
+    }
+
+    pub fn print(&self) {
+        println!("TestClass::i: {}", self.i);
+    }
+
+    pub fn get(&self) -> i32 {
+        self.i
     }
 }
 
 foreigner_class!(class TestClass {
     self_type TestClass;
     constructor TestClass::new() -> TestClass;
+    method TestClass::increment(&mut self);
+    method TestClass::print(&self);
 });

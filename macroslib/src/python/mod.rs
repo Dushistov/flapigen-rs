@@ -1,11 +1,11 @@
 use crate::{
     DiagnosticError, error::Result, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, LanguageGenerator,
-    MethodVariant, PythonConfig, TypeMap,
+    MethodVariant, PythonConfig, SelfTypeVariant, TypeMap,
 };
 use heck::SnakeCase;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::Ident;
+use syn::{Ident, Type};
 
 fn method_name(method: &ForeignerMethod) -> Result<&syn::Ident> {
     Ok(&method.rust_id.segments.last().ok_or_else(|| {
@@ -43,29 +43,27 @@ impl LanguageGenerator for PythonConfig {
         //     .iter()
         //     .filter(|m| m.variant == MethodVariant::Method)
         //     .map(|m| m.rust_id);
-        let static_method_names = class.methods
-            .iter()
-            .filter(|m| m.variant == MethodVariant::StaticMethod)
-            .map(method_name)
-            .collect::<Result<Vec<_>>>()?;
-        let static_method_rust_paths = class.methods
-            .iter()
-            .filter(|m| m.variant == MethodVariant::StaticMethod)
-            .map(|m| &m.rust_id);
+        // let static_method_names = class.methods
+        //     .iter()
+        //     .filter(|m| m.variant == MethodVariant::StaticMethod)
+        //     .map(method_name)
+        //     .collect::<Result<Vec<_>>>()?;
+        // let static_method_rust_paths = class.methods
+        //     .iter()
+        //     .filter(|m| m.variant == MethodVariant::StaticMethod)
+        //     .map(|m| &m.rust_id);
         let self_type = class.self_type_as_ty();
         let rust_instance_field_code = generate_rust_instance_field_code(class, conv_map)?;
-        let constructor_code = generate_constructor_code(class, conv_map)?;
-        let class_code = quote! {
+        let methods_code = class.methods
+            .iter()
+            .map(|m| generate_method_code(class, m, conv_map))
+            .collect::<Result<Vec<_>>>()?;
+        let class_code = quote!{
             mod #wrapper_mod_name {
                 py_class!(pub class #class_name |py| {
                     #rust_instance_field_code
                     
-                    #constructor_code
-
-                    #( @staticmethod def #static_method_names() -> cpython::PyResult<cpython::PyObject> {
-                        super::#static_method_rust_paths();
-                        Ok(py.None()) 
-                    } )*
+                    #( #methods_code )*
                 });
             }
         };
@@ -98,6 +96,7 @@ impl LanguageGenerator for PythonConfig {
                 });
             }
         };
+        conv_map.register_exported_enum(enum_info);
         Ok(vec![class_code])
     }
 
@@ -121,7 +120,6 @@ impl LanguageGenerator for PythonConfig {
         let module_initialization_code_cell = self.module_initialization_code.borrow();
         let module_initialization_code = &*module_initialization_code_cell;
         let registration_code = vec![quote! {
-
             py_module_initializer!(librust_swig_test_python, initlibrust_swig_test_python, PyInit_rust_swig_test_python, |py, m| {
                 m.add(py, "__doc__", "This is test module for rust_swig.")?;
                 #(#module_initialization_code)*
@@ -145,6 +143,14 @@ fn generate_rust_instance_field_code(class: &ForeignerClassInfo, conv_map: &Type
     }
 }
 
+fn generate_method_code(class: &ForeignerClassInfo, method: &ForeignerMethod, conv_map: &TypeMap) -> Result<TokenStream> {
+    match method.variant {
+        MethodVariant::Constructor => generate_constructor_code(class, conv_map),
+        MethodVariant::Method(self_variant) => generate_standard_method_code(method, self_variant, conv_map),
+        MethodVariant::StaticMethod => generate_static_method_code(method, conv_map),
+    }
+}
+
 fn generate_constructor_code(class: &ForeignerClassInfo, conv_map: &TypeMap) -> Result<TokenStream> {
     if let Some(constructor) = class.methods
         .iter()
@@ -164,8 +170,50 @@ fn generate_constructor_code(class: &ForeignerClassInfo, conv_map: &TypeMap) -> 
     }
 }
 
+fn generate_standard_method_code(method: &ForeignerMethod, self_variant: SelfTypeVariant, conv_map: &TypeMap) -> Result<TokenStream> {
+    let method_name = method_name(method)?;
+    let method_rust_path = &method.rust_id;
+    let self_conversion_code = match self_variant {
+        SelfTypeVariant::Rptr => quote!{
+            let self_rw_guard = self.rust_instance(py).read().unwrap();
+            let self_ref = &*self_rw_guard;
+        },
+        SelfTypeVariant::RptrMut => quote!{
+            let mut self_rw_guard = self.rust_instance(py).write().unwrap();
+            let self_ref = &mut *self_rw_guard;
+        },
+        _ => unimplemented!("Passing self by value not implemented yet"),
+    };
+    Ok(quote!{
+        def #method_name(&self) -> cpython::PyResult<cpython::PyObject> {
+            #self_conversion_code
+            super::#method_rust_path(self_ref);
+            Ok(py.None())
+        }
+    })
+}
+
+fn generate_static_method_code(method: &ForeignerMethod, conv_map: &TypeMap) -> Result<TokenStream> {
+    let static_method_name = method_name(method)?;
+    let static_method_rust_path = &method.rust_id;
+    Ok(quote!{
+        @staticmethod def #static_method_name() -> cpython::PyResult<cpython::PyObject> {
+            super::#static_method_rust_path();
+            Ok(py.None()) 
+        }
+    })
+}
+
 fn has_any_methods(class: &ForeignerClassInfo) -> bool {
     class.methods
         .iter()
         .any(|m| if let MethodVariant::Method(_) = m.variant { true } else { false })
 }
+
+// fn is_cpython_primitive_type(rust_type: RustType) -> bool {
+//     // let name_str = rust_type.normalized_name;
+//     let primitive_types = ["bool", "i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize", "String", "&str"];
+//     primitive_types.contains(&rust_type.normalized_name)
+// }
+
+
