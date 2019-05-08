@@ -24,3 +24,7 @@ test_class.print()
 print("test_class.get: ", test_class.get())
 
 rust_swig_test_python.TestStaticClass.call_test_class_print(test_class)
+
+enum = rust_swig_test_python.TestEnum.A
+print("test_enum: ", enum)
+print("test_enum: ", rust_swig_test_python.TestStaticClass.reverse_enum(enum))

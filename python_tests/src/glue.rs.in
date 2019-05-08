@@ -28,6 +28,13 @@ impl TestStaticClass {
         println!("print_str: {}", s);
     }
 
+    pub fn reverse_enum(e: TestEnum) -> TestEnum {
+        match e {
+            TestEnum::A => TestEnum::B,
+            TestEnum::B => TestEnum::A,
+        }
+    }
+
     pub fn call_test_class_print(test_object: &TestClass) {
         test_object.print();
     }
@@ -72,6 +79,7 @@ foreigner_class!(class TestStaticClass {
     static_method TestStaticClass::print_str(s: &str);
     static_method TestStaticClass::print_string(s: String);
     static_method TestStaticClass::call_test_class_print(test_object: &TestClass);
+    static_method TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
 });
 
 foreigner_class!(class TestClass {

@@ -65,15 +65,24 @@ impl LanguageGenerator for PythonConfig {
             {
                 m.add_class::<#wrapper_mod_name::#enum_name>(py)?;
             }
-
         });
         let foreign_variants = enum_info.items.iter().map(|item| &item.name);
-        let rust_variants = enum_info.items.iter().map(|item| &item.rust_name);
+        let rust_variants = enum_info.items.iter().map(|item| &item.rust_name).collect::<Vec<_>>();
+        let rust_variants_ref_1 = &rust_variants;
+        let rust_variants_ref_2 = &rust_variants;
+        let enum_name_str = enum_name.to_string();
         let class_code = quote! {
             mod #wrapper_mod_name {
                 py_class!(pub class #enum_name |py| {
-                    #( static #foreign_variants = super::#rust_variants as u32; )*
+                    #( static #foreign_variants = super::#rust_variants_ref_1 as u32; )*
                 });
+
+                pub fn from_u32(py: cpython::Python, value: u32) -> cpython::PyResult<super::#enum_name> {
+                    #( if value == super::#rust_variants_ref_1 as u32 { return Ok(super::#rust_variants_ref_2); } )*
+                    Err(cpython::PyErr::new::<cpython::exc::ValueError, _>(
+                        py, format!("{} is not valid value for enum {}", value, #enum_name_str)
+                    ))
+                }
             }
         };
         conv_map.register_exported_enum(enum_info);
@@ -289,9 +298,17 @@ fn generate_conversion_for_argument(
                 }
             }
         } else {
-            unimplemented!("Passing object by value not implemented yet")
+            unimplemented!("Passing object by value not implemented")
         };
         Ok((py_type, self_conversion_code))
+    } else if let Some(enum_info) = conv_map.is_this_exported_enum(&rust_type.ty) {
+        let enum_py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&enum_info.name.to_string()))?;
+        Ok((
+            parse_type!(u32),
+            quote!{
+                super::#enum_py_mod::from_u32(py, #arg_name_ident)?
+            }
+        ))
     } else {
         unimplemented!("other arg");
     }
@@ -322,6 +339,13 @@ fn generate_conversion_for_return(
             quote! {
                 super::#py_mod::#class_name::create_instance(py, std::sync::RwLock::new(#ret_name_ident))?
             },
+        ))
+    } else if conv_map.is_this_exported_enum(&rust_type.ty).is_some() {
+        Ok((
+            parse_type!(u32),
+            quote!{
+                #ret_name_ident as u32
+            }
         ))
     } else {
         unimplemented!();
