@@ -291,7 +291,7 @@ public:
 
     RustForeignVecIterator operator+(ptrdiff_t n) const noexcept
     {
-        void *p = static_cast<const uint8_t *>(this->ptr) + n * this->step;
+        const void *p = static_cast<const uint8_t *>(this->ptr) + n * this->step;
         return RustForeignVecIterator(p, this->step);
     }
 
@@ -303,7 +303,7 @@ public:
 
     RustForeignVecIterator operator-(ptrdiff_t n) const noexcept
     {
-        void *p = static_cast<const uint8_t *>(this->ptr) - n * this->step;
+        const void *p = static_cast<const uint8_t *>(this->ptr) - n * this->step;
         return RustForeignVecIterator(p, this->step);
     }
 
