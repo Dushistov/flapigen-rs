@@ -97,6 +97,7 @@ struct CRustObjectSlice {
 
 #include <cassert>
 #include <type_traits>
+#include <iterator>
 
 namespace RUST_SWIG_USER_NAMESPACE {
 
@@ -222,7 +223,14 @@ using RustVecUsize = RustVec<CRustVecUsize, CRustVecUsize_free>;
 using RustVecF32 = RustVec<CRustVecF32, CRustVecF32_free>;
 using RustVecF64 = RustVec<CRustVecF64, CRustVecF64_free>;
 
-template <typename T> class RustForeignVecIterator final {
+template <typename T>
+class RustForeignVecIterator final
+    : public std::iterator<std::bidirectional_iterator_tag, // iterator_category
+                           T, // value_type
+                           ptrdiff_t, // difference_type
+                           const T *, // pointer
+                           T // reference
+                           > {
 public:
     using CForeignType = typename T::CForeignType;
 
@@ -236,9 +244,31 @@ public:
         , step(s)
     {
     }
+
+    /**
+     * \defgroup Forward iterator requirements
+     */
+    /*@{*/
+    T operator*() const noexcept
+    {
+        auto elem_ptr = static_cast<const CForeignType *>(this->ptr);
+        return T{ elem_ptr };
+    }
+
     RustForeignVecIterator &operator++() noexcept
     {
         this->ptr = static_cast<const uint8_t *>(this->ptr) + this->step;
+        return *this;
+    }
+    /*@}*/
+
+    /**
+     * \defgroup Bidirectional iterator requirements
+     */
+    /*@{*/
+    RustForeignVecIterator &operator--() noexcept
+    {
+        this->ptr = static_cast<const uint8_t *>(this->ptr) - this->step;
         return *this;
     }
 
@@ -248,12 +278,6 @@ public:
         return this->ptr == o.ptr;
     }
     bool operator!=(const RustForeignVecIterator<T> &o) const noexcept { return !operator==(o); }
-
-    T operator*() const noexcept
-    {
-        auto elem_ptr = static_cast<const CForeignType *>(this->ptr);
-        return T{ elem_ptr };
-    }
 
 private:
     const void *ptr;

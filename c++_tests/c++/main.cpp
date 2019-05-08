@@ -363,6 +363,12 @@ TEST(TestWorkWithVec, smokeTest)
             EXPECT_EQ(i, size_t(foo.f(0, 0)));
             ++i;
         }
+
+        auto it = std::find_if(slice_foo.begin(), slice_foo.end(), [tag_len](const FooRef &item) {
+            return static_cast<size_t>(item.f(0, 0)) == tag_len / 2;
+        });
+        ASSERT_NE(slice_foo.end(), it);
+        ASSERT_EQ(tag_len / 2, static_cast<size_t>((*it).f(0, 0)));
     }
     {
         auto v = TestWorkWithVec::create_foo_vec(30);
