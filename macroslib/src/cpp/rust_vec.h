@@ -325,7 +325,7 @@ public:
 
 private:
     const void *ptr;
-    const uintptr_t step;
+    uintptr_t step;
 };
 
 template <class ForeignClassRef> class RustForeignSlice final : public CRustObjectSlice {
