@@ -225,7 +225,7 @@ using RustVecF64 = RustVec<CRustVecF64, CRustVecF64_free>;
 
 template <typename T>
 class RustForeignVecIterator final
-    : public std::iterator<std::bidirectional_iterator_tag, // iterator_category
+    : public std::iterator<std::random_access_iterator_tag, // iterator_category
                            T, // value_type
                            ptrdiff_t, // difference_type
                            const T *, // pointer
@@ -271,6 +271,50 @@ public:
         this->ptr = static_cast<const uint8_t *>(this->ptr) - this->step;
         return *this;
     }
+    /*@}*/
+    /**
+     * \defgroup Random access iterator requirements
+     */
+    /*@{*/
+    T operator[](ptrdiff_t n) const noexcept
+    {
+        auto p = static_cast<const uint8_t *>(this->ptr) + n * this->step;
+        auto elem_ptr = static_cast<const CForeignType *>(p);
+        return T{ elem_ptr };
+    }
+
+    RustForeignVecIterator &operator+=(ptrdiff_t n) noexcept
+    {
+        this->ptr = static_cast<const uint8_t *>(this->ptr) + n * this->step;
+        return *this;
+    }
+
+    RustForeignVecIterator operator+(ptrdiff_t n) const noexcept
+    {
+        void *p = static_cast<const uint8_t *>(this->ptr) + n * this->step;
+        return RustForeignVecIterator(p, this->step);
+    }
+
+    RustForeignVecIterator &operator-=(ptrdiff_t n) noexcept
+    {
+        this->ptr = static_cast<const uint8_t *>(this->ptr) - n * this->step;
+        return *this;
+    }
+
+    RustForeignVecIterator operator-(ptrdiff_t n) const noexcept
+    {
+        void *p = static_cast<const uint8_t *>(this->ptr) - n * this->step;
+        return RustForeignVecIterator(p, this->step);
+    }
+
+    ptrdiff_t operator-(const RustForeignVecIterator &o) const noexcept
+    {
+        assert(this->step == o.step);
+        ptrdiff_t diff
+            = static_cast<const uint8_t *>(this->ptr) - static_cast<const uint8_t *>(o.ptr);
+        return diff / this->step;
+    }
+    /*@}*/
 
     bool operator==(const RustForeignVecIterator<T> &o) const noexcept
     {
@@ -281,7 +325,7 @@ public:
 
 private:
     const void *ptr;
-    uintptr_t step;
+    const uintptr_t step;
 };
 
 template <class ForeignClassRef> class RustForeignSlice final : public CRustObjectSlice {
