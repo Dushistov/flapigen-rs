@@ -52,6 +52,10 @@ impl TestClass {
         self.i += 1;
     }
 
+    pub fn add(&mut self, i: i32) {
+        self.i += i;
+    }
+
     pub fn print(&self) {
         println!("TestClass::i: {}", self.i);
     }
@@ -75,4 +79,6 @@ foreigner_class!(class TestClass {
     constructor TestClass::new() -> TestClass;
     method TestClass::increment(&mut self);
     method TestClass::print(&self);
+    method TestClass::add(&mut self, i: i32);
+    method TestClass::get(&self) -> i32;
 });

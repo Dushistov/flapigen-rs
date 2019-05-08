@@ -19,5 +19,8 @@ print(test_class)
 test_class.print()
 test_class.increment()
 test_class.print()
+test_class.add(3)
+test_class.print()
+print("test_class.get: ", test_class.get())
 
 rust_swig_test_python.TestStaticClass.call_test_class_print(test_class)
