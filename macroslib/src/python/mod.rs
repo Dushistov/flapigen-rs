@@ -4,21 +4,13 @@ use crate::{
     TypeMap,
 };
 use heck::SnakeCase;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
+use quote::ToTokens;
 use syn::parse_quote;
 use syn::spanned::Spanned;
-use syn::{Ident, Type};
 
-fn method_name(method: &ForeignerMethod) -> Result<&syn::Ident> {
-    Ok(&method
-        .rust_id
-        .segments
-        .last()
-        .ok_or_else(|| DiagnosticError::new(method.span(), "Method has no name"))?
-        .value()
-        .ident)
-}
+use syn::{Ident, Type};
 
 impl LanguageGenerator for PythonConfig {
     fn register_class(&self, _conv_map: &mut TypeMap, _class: &ForeignerClassInfo) -> Result<()> {
@@ -40,7 +32,7 @@ impl LanguageGenerator for PythonConfig {
             }
         });
         let (rust_instance_field, rust_instance_getter) =
-            generate_rust_instance_field_and_getter(class)?;
+            generate_rust_instance_field_and_methods(class)?;
         let methods_code = class
             .methods
             .iter()
@@ -111,7 +103,7 @@ impl LanguageGenerator for PythonConfig {
     }
 }
 
-fn generate_rust_instance_field_and_getter(
+fn generate_rust_instance_field_and_methods(
     class: &ForeignerClassInfo,
 ) -> Result<(TokenStream, TokenStream)> {
     if let Some(ref rust_self_type) = class.self_type {
@@ -123,9 +115,14 @@ fn generate_rust_instance_field_and_getter(
             },
             // For some reason, rust-cpython generates private `rust_instance` getter method.
             // As a workaround, we add public function in the same module, that gets `rust_instance`.
+            // The same goes for `create_instance
             quote! {
                 pub fn rust_instance<'a>(class: &'a #class_name, py: cpython::Python<'a>) -> &'a std::sync::RwLock<super::#self_type> {
                     class.rust_instance(py)
+                }
+
+                pub fn create_instance(py: cpython::Python, instance: std::sync::RwLock<super::#self_type>) -> cpython::PyResult<#class_name> {
+                    #class_name::create_instance(py, instance)
                 }
             },
         ))
@@ -147,75 +144,21 @@ fn generate_method_code(
     method: &ForeignerMethod,
     conv_map: &TypeMap,
 ) -> Result<TokenStream> {
-    match method.variant {
-        MethodVariant::Constructor => generate_constructor_code(class, conv_map),
-        MethodVariant::Method(self_variant) => {
-            generate_standard_method_code(class, method, self_variant, conv_map)
-        }
-        MethodVariant::StaticMethod => generate_static_method_code(method, conv_map),
+    if method.is_dummy_constructor() {
+        return Ok(TokenStream::new());
     }
-}
-
-fn generate_constructor_code(
-    class: &ForeignerClassInfo,
-    conv_map: &TypeMap,
-) -> Result<TokenStream> {
-    if let Some(constructor) = class
-        .methods
-        .iter()
-        .find(|m| m.variant == MethodVariant::Constructor)
-    {
-        let class_name = &class.name;
-        let constructor_rust_path = &constructor.rust_id;
-        Ok(quote! {
-             def __new__(_cls) -> cpython::PyResult<#class_name> {
-                let rust_instance = super::#constructor_rust_path();
-                #class_name::create_instance(py, std::sync::RwLock::new(rust_instance))
-            }
-        })
-    } else if !has_any_methods(class) {
-        Ok(TokenStream::new())
-    } else {
-        Err(DiagnosticError::new(
-            class.span(),
-            format!(
-                "Class {} has non-static methods, but no constructor",
-                class.name
-            ),
-        ))
-    }
-}
-
-fn generate_standard_method_code(
-    class: &ForeignerClassInfo,
-    method: &ForeignerMethod,
-    self_variant: SelfTypeVariant,
-    conv_map: &TypeMap,
-) -> Result<TokenStream> {
     let method_name = method_name(method)?;
     let method_rust_path = &method.rust_id;
-    let self_type = &class
-        .self_type
-        .as_ref()
-        .ok_or_else(|| {
-            DiagnosticError::new(
-                class.span(),
-                "Class have non-static methods, but no self_type",
-            )
-        })?
-        .ty;
-    let self_type_ref = match self_variant {
-        SelfTypeVariant::Rptr => parse_type! {&#self_type},
-        SelfTypeVariant::RptrMut => parse_type! {&mut #self_type},
-        _ => unimplemented!("Passing self by value not implemented yet"),
+    let skip_args_count = if let MethodVariant::Method(_) = method.variant {
+        1
+    } else {
+        0
     };
-    let (_, self_convertion) =
-        generate_conversion_for_argument(&self_type_ref.into(), conv_map, "self")?;
     let (args_types, mut args_convertions): (Vec<_>, Vec<_>) = method
         .fn_decl
         .inputs
         .iter()
-        .skip(1) // Skip `self`, which is handled above.
+        .skip(skip_args_count)
         .enumerate()
         .map(|(i, a)| {
             let arg_name = format!("a_{}", i);
@@ -228,19 +171,33 @@ fn generate_standard_method_code(
         .collect::<Result<Vec<_>>>()?
         .into_iter()
         .unzip();
-    args_convertions.insert(0, self_convertion);
-    let args_names = (0..method.fn_decl.inputs.len() - 1)
-        .map(|i| syn::parse_str(&format!("a_{}", i)))
+    if let Some(self_convertion) = self_type_conversion(class, method, conv_map)? {
+        args_convertions.insert(0, self_convertion);
+    }
+    let mut args_list = args_types
+        .into_iter()
+        .enumerate()
+        .map(|(i, t)| syn::parse_str(&format!("a_{}: {}", i, t.into_token_stream().to_string())))
         .collect::<std::result::Result<Vec<TokenStream>, _>>()?;
+    if let MethodVariant::Method(_) = method.variant {
+        args_list.insert(0, syn::parse_str("&self")?);
+    } else if method.variant == MethodVariant::Constructor {
+        args_list.insert(0, syn::parse_str("_cls")?);
+    }
+    let attribute = if method.variant == MethodVariant::StaticMethod {
+        syn::parse_str("@staticmethod")?
+    } else {
+        TokenStream::new()
+    };
     let (return_type, return_conversion) = generate_conversion_for_return(
         &extract_return_type(&method.fn_decl.output),
+        method.span(),
         conv_map,
         "_ret",
     )?;
     Ok(quote! {
-        def #method_name(
-            &self
-            #( ,#args_names: #args_types )*
+        #attribute def #method_name(
+            #( #args_list ),*
         ) -> cpython::PyResult<#return_type> {
             let _ret = super::#method_rust_path(
                 #( #args_convertions ),*
@@ -250,46 +207,50 @@ fn generate_standard_method_code(
     })
 }
 
-fn generate_static_method_code(
+fn standard_method_name(method: &ForeignerMethod) -> Result<syn::Ident> {
+    Ok(method
+        .name_alias
+        .as_ref()
+        .or_else(|| method.rust_id.segments.last().map(|p| &p.value().ident))
+        .ok_or_else(|| DiagnosticError::new(method.span(), "Method has no name"))?
+        .clone())
+}
+
+fn method_name(method: &ForeignerMethod) -> Result<syn::Ident> {
+    if method.variant == MethodVariant::Constructor {
+        Ok(syn::parse_str("__new__")?)
+    } else {
+        standard_method_name(method)
+    }
+}
+
+fn self_type_conversion(
+    class: &ForeignerClassInfo,
     method: &ForeignerMethod,
     conv_map: &TypeMap,
-) -> Result<TokenStream> {
-    let static_method_name = method_name(method)?;
-    let static_method_rust_path = &method.rust_id;
-    let (args_types, args_convertions): (Vec<_>, Vec<_>) = method
-        .fn_decl
-        .inputs
-        .iter()
-        .enumerate()
-        .map(|(i, a)| {
-            let arg_name = format!("a_{}", i);
-            generate_conversion_for_argument(
-                &ast::fn_arg_type(a).clone().into(),
-                conv_map,
-                &arg_name,
-            )
-        })
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .unzip();
-    let args_names = (0..method.fn_decl.inputs.len())
-        .map(|i| syn::parse_str(&format!("a_{}", i)))
-        .collect::<std::result::Result<Vec<TokenStream>, _>>()?;
-    let (return_type, return_conversion) = generate_conversion_for_return(
-        &extract_return_type(&method.fn_decl.output),
-        conv_map,
-        "_ret",
-    )?;
-    Ok(quote! {
-        @staticmethod def #static_method_name(
-            #( #args_names: #args_types ),*
-        ) -> cpython::PyResult<#return_type> {
-            let _ret = super::#static_method_rust_path(
-                #( #args_convertions ),*
-            );
-            Ok(#return_conversion)
-        }
-    })
+) -> Result<Option<TokenStream>> {
+    if let MethodVariant::Method(self_variant) = method.variant {
+        let self_type = &class
+            .self_type
+            .as_ref()
+            .ok_or_else(|| {
+                DiagnosticError::new(
+                    class.span(),
+                    "Class have non-static methods, but no self_type",
+                )
+            })?
+            .ty;
+        let self_type_ref = match self_variant {
+            SelfTypeVariant::Rptr => parse_type! {&#self_type},
+            SelfTypeVariant::RptrMut => parse_type! {&mut #self_type},
+            _ => unimplemented!("Passing self by value not implemented"),
+        };
+        Ok(Some(
+            generate_conversion_for_argument(&self_type_ref.into(), conv_map, "self")?.1,
+        ))
+    } else {
+        Ok(None)
+    }
 }
 
 fn has_any_methods(class: &ForeignerClassInfo) -> bool {
@@ -314,12 +275,9 @@ fn generate_conversion_for_argument(
         conv_map.find_foreigner_class_with_such_self_type(&rust_type.ty, true)
     {
         let class_name = foreign_class.name.to_string();
-        let py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&class_name))?;
-        let py_type: Type = syn::parse_str(&format!(
-            "&super::{}::{}",
-            py_wrapper_mod_name(&class_name),
-            &class_name
-        ))?;
+        let py_mod_str = py_wrapper_mod_name(&class_name);
+        let py_mod: Ident = syn::parse_str(&py_mod_str)?;
+        let py_type: Type = syn::parse_str(&format!("&super::{}::{}", &py_mod_str, &class_name))?;
         let self_conversion_code = if let Type::Reference(ref reference) = rust_type.ty {
             if reference.mutability.is_some() {
                 quote! {
@@ -341,17 +299,30 @@ fn generate_conversion_for_argument(
 
 fn generate_conversion_for_return(
     rust_type: &RustType,
+    method_span: Span,
     conv_map: &TypeMap,
     ret_name: &str,
 ) -> Result<(Type, TokenStream)> {
+    let ret_name_ident: TokenStream = syn::parse_str(ret_name)?;
     if rust_type.normalized_name == "( )" {
         Ok((parse_type!(cpython::PyObject), quote!(py.None())))
     } else if is_cpython_supported_type(rust_type) {
-        Ok((rust_type.ty.clone(), syn::parse_str(ret_name)?))
-    } else if let Some(foreign_class) =
-        conv_map.find_foreigner_class_with_such_this_type(&rust_type.ty)
-    {
-        unimplemented!();
+        Ok((rust_type.ty.clone(), ret_name_ident))
+    } else if let Some(class) = conv_map.find_foreigner_class_with_such_this_type(&rust_type.ty) {
+        if let Type::Reference(_) = rust_type.ty {
+            return Err(DiagnosticError::new(
+                method_span,
+                "Returning rust object into python by reference is not safe and not supported.",
+            ));
+        };
+        let class_name = &class.name;
+        let py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&class_name.to_string()))?;
+        Ok((
+            parse_type!(super::#py_mod::#class_name),
+            quote! {
+                super::#py_mod::#class_name::create_instance(py, std::sync::RwLock::new(#ret_name_ident))?
+            },
+        ))
     } else {
         unimplemented!();
     }
