@@ -1,3 +1,3 @@
-#![allow(unknown_lints, clippy)]
+#![allow(unused)]
 
 include!(concat!(env!("OUT_DIR"), "/glue.rs"));

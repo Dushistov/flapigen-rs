@@ -40,6 +40,7 @@ impl LanguageGenerator for PythonConfig {
             .collect::<Result<Vec<_>>>()?;
         let class_code = quote! {
             mod #wrapper_mod_name {
+                #[allow(unused)]
                 py_class!(pub class #class_name |py| {
                     #rust_instance_field
 

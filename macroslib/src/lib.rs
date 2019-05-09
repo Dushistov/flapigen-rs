@@ -196,20 +196,14 @@ impl CppConfig {
 
 /// Configuration for Java binding generation
 pub struct PythonConfig {
-    output_dir: PathBuf,
-    module_name: String,
     module_initialization_code: RefCell<Vec<TokenStream>>,
 }
 
 impl PythonConfig {
     /// Create `PythonConfig`
     /// # Arguments
-    /// * `output_dir` - directory where place generated java files
-    /// * `package_name` - package name for generated java files
-    pub fn new(output_dir: PathBuf, module_name: String) -> PythonConfig {
+    pub fn new() -> PythonConfig {
         PythonConfig {
-            output_dir,
-            module_name,
             module_initialization_code: RefCell::default(),
         }
     }
@@ -723,7 +717,7 @@ trait LanguageGenerator {
         Ok(())
     }
     
-    fn finish_glue_rs(&self, conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
+    fn finish_glue_rs(&self, _conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
         Ok(vec![])
     }
 }

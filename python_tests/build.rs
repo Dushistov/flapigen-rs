@@ -26,9 +26,7 @@ fn main() {
 
 fn rust_swig_expand(from: &Path, out: &Path) {
     println!("Run rust_swig_expand");
-    let python_gen_path = Path::new("python");
-    println!("cargo:rerun-if-changed={}", python_gen_path.display());
-    let python_cfg = PythonConfig::new(python_gen_path.to_owned(), "rust_swig_test_python".to_owned());
+    let python_cfg = PythonConfig::new();
     let swig_gen = rust_swig::Generator::new(LanguageConfig::PythonConfig(python_cfg));
     swig_gen.expand("rust_swig_test_python", from, out);
 }
