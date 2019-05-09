@@ -369,7 +369,6 @@ TEST(TestWorkWithVec, smokeTest)
         });
         ASSERT_NE(slice_foo.end(), it);
         ASSERT_EQ(tag_len / 2, static_cast<size_t>((*it).f(0, 0)));
-        ASSERT_EQ(tag_len / 2, size_t(it - slice_foo.begin()));
     }
     {
         auto v = TestWorkWithVec::create_foo_vec(30);
