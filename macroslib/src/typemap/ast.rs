@@ -32,8 +32,8 @@ use crate::typemap::{
 
 #[derive(Debug)]
 pub(crate) struct TypeName {
-    pub typename: SmolStr,
-    pub span: Span,
+    pub(crate) typename: SmolStr,
+    pub(crate) span: Span,
 }
 
 impl PartialEq for TypeName {
@@ -50,9 +50,22 @@ impl Hash for TypeName {
     }
 }
 
+impl Display for TypeName {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
+        f.write_str(self.typename.as_str())
+    }
+}
+
 impl TypeName {
-    pub fn new(typename: SmolStr, span: Span) -> Self {
-        TypeName { typename, span }
+    pub(crate) fn new<S: Into<SmolStr>>(tn: S, span: Span) -> Self {
+        TypeName {
+            typename: tn.into(),
+            span,
+        }
+    }
+    #[inline]
+    pub(crate) fn as_str(&self) -> &str {
+        self.typename.as_str()
     }
 }
 

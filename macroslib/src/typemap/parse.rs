@@ -213,7 +213,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                 ..
             }) = meta_attr
             {
-                ftype = Some(TypeName::new(value.value().into(), value.span()));
+                ftype = Some(TypeName::new(value.value(), value.span()));
             } else {
                 return Err(DiagnosticError::new(
                     meta_attr.span(),
@@ -236,7 +236,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     ));
                 };
                 let span = attr_value.span();
-                let mut attr_value_tn = TypeName::new(attr_value.value().into(), span);
+                let mut attr_value_tn = TypeName::new(attr_value.value(), span);
 
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
                 attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
@@ -264,17 +264,14 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     ));
                 };
                 let span = attr_value.span();
-                let mut attr_value_tn = TypeName::new(attr_value.value().into(), span);
+                let mut attr_value_tn = TypeName::new(attr_value.value(), span);
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
                 attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
                 let unique_name =
                     make_unique_rust_typename(&attr_value_tn.typename, &ftype.typename);
                 names_map.insert(
                     ftype,
-                    (
-                        TypeName::new(unique_name.into(), Span::call_site()),
-                        rust_ty,
-                    ),
+                    (TypeName::new(unique_name, Span::call_site()), rust_ty),
                 );
             } else {
                 return Err(DiagnosticError::new(
