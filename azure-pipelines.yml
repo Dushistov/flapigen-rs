@@ -1,11 +1,20 @@
 strategy:
   matrix:
-    linux:
+    linux-stable:
       imageName: 'ubuntu-16.04'
-    mac:
+      rustup_toolchain: stable
+    mac-stable:
       imageName: 'macos-10.14'
-    windows:
+      rustup_toolchain: stable
+    linux-beta:
+      imageName: 'ubuntu-16.04'
+      rustup_toolchain: beta
+    mac-beta:
+      imageName: 'macos-10.14'
+      rustup_toolchain: beta
+    windows-stable:
       imageName: 'vs2017-win2016'
+      rustup_toolchain: stable
 pool:
   vmImage: $(imageName)
 
@@ -14,8 +23,14 @@ steps:
   - checkout: self
     submodules: true
   - script: |
-      curl https://sh.rustup.rs -sSf | sh -s -- -y
-    displayName: Install Rust
+      curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain $RUSTUP_TOOLCHAIN
+    condition: ne( variables['Agent.OS'], 'Windows_NT' )
+    displayName: Install Rust on linux/mac
+  - script: |
+      curl -sSf -o rustup-init.exe https://win.rustup.rs
+      rustup-init.exe -y --default-toolchain %RUSTUP_TOOLCHAIN%
+    condition: eq( variables['Agent.OS'], 'Windows_NT' )
+    displayName: Install Rust on windows
   - script: |
       curl http://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
       7z x llvm-installer.exe -oc:\llvm-binary

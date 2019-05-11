@@ -9,7 +9,6 @@ matrix:
     - rust: nightly
 os:
   - linux
-  - osx
 cache: cargo
 addons:
   apt:
