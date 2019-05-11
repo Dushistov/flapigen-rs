@@ -1,4 +1,11 @@
 environment:
+  global:
+    AWS_ACCESS_KEY_ID:
+      secure: ia1fDYLbSPFU30HXGDcpvvUJ+UEejBxs4tggTlVX34s=
+    AWS_SECRET_ACCESS_KEY:
+      secure: wZorUdtx/Tl/NoEbtL4LiHIlHjfebAZVSrvqJb1EX1bIxU5J2gjDu9yXi7kEc5RM
+    SCCACHE_ENDPOINT:
+      secure: XP9XQlAmYSbW1ukHJHRl0R+k/4Xtl56ms8ETAEE6+6s=
   RUST_CHANNEL: stable
   matrix:
   - TARGET: msvc
@@ -8,6 +15,7 @@ platform:
   - x86
 install:
   - ps: git submodule -q update --init
+  - cmd: set SCCACHE_BUCKET=swig%PLATFORM%
   - if %PLATFORM% == x86 (set RUST_PLATFORM=i686&set MINGW_BITS=32) else (set RUST_PLATFORM=x86_64&set MINGW_BITS=64)
   - if %PLATFORM% == x86 (set "JAVA_HOME=C:\Program Files (x86)\Java\jdk1.8.0") else (set "JAVA_HOME=C:\Program Files\Java\jdk1.8.0")
   - echo %RUST_CHANNEL%
@@ -27,15 +35,22 @@ install:
   - 7z x llvm-installer.exe -oc:\llvm-binary
   - set PATH=C:\llvm-binary\bin;%PATH%
   - set LIBCLANG_PATH=C:\llvm-binary\bin
-  - where clang
+  - set SCCACHE_VER=0.2.8
+  - appveyor-retry appveyor DownloadFile https://github.com/mozilla/sccache/releases/download/%SCCACHE_VER%/sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc.tar.gz -FileName sccache.tar.gz
+  - 7z x sccache.tar.gz
+  - 7z x sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc.tar
+  - mkdir C:\rust\bin
+  - copy /Y sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc\sccache.exe C:\rust\bin
+  - sccache --version
   - clang --version
   - rustc -vV
   - cargo -vV
   - javac -version
   - cmake --version
+  - set RUSTC_WRAPPER=C:\rust\bin\sccache.exe
 cache:
   - '%USERPROFILE%\.cargo'
 build: off
 test_script:
   - copy /Y workspace.Cargo.toml Cargo.toml
-  - python ci_build_and_test.py
+  - python ci_build_and_test.py --skip-android-tests
