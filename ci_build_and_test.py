@@ -94,9 +94,9 @@ def run_jni_tests(use_shell, test_cfg):
 @show_timing
 def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
     if sys.platform == 'win32':
-        cmake_generator = "Visual Studio 14 2015"
+        cmake_generator = "Visual Studio 15 2017"
         if os.getenv('platform') == "x64":
-            cmake_generator = "Visual Studio 14 2015 Win64"
+            cmake_generator = "Visual Studio 15 2017 Win64"
     else:
         cmake_generator = "Unix Makefiles"
     cmake_args = ["cmake", "-G", cmake_generator, "-DCMAKE_BUILD_TYPE=RelWithDebInfo"] \
