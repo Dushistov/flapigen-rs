@@ -1,3 +1,5 @@
+image: Visual Studio 2017
+
 environment:
   global:
     AWS_ACCESS_KEY_ID:
