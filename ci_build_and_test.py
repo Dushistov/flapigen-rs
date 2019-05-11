@@ -92,7 +92,7 @@ def run_jni_tests(use_shell, test_cfg):
         run_jar(target_dir, jar_dir, use_shell)
 
 @show_timing
-def build_cpp_code_with_cmake(cmake_build_dir, addon_params):
+def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
     if sys.platform == 'win32':
         cmake_generator = "Visual Studio 14 2015"
         if os.getenv('platform') == "x64":
@@ -105,11 +105,14 @@ def build_cpp_code_with_cmake(cmake_build_dir, addon_params):
         os.makedirs(cmake_build_dir)
         subprocess.check_call(cmake_args,
                               cwd = str(cmake_build_dir))
-    subprocess.check_call(["cmake", "--build", "."], cwd = str(cmake_build_dir))
     if sys.platform == 'win32' or sys.platform == 'win64':
         os.environ["CTEST_OUTPUT_ON_FAILURE"] = "1"
-        subprocess.check_call(["msbuild", "RUN_TESTS.vcxproj"], cwd = str(cmake_build_dir))
+        for cfg in test_cfg:
+            subprocess.check_call(["cmake", "--build", ".", "--config", cfg], cwd = str(cmake_build_dir))
+            subprocess.check_call(["cmake", "--build", ".", "--target", "RUN_TESTS", "--config", cfg],
+                                  cwd = str(cmake_build_dir))
     else:
+        subprocess.check_call(["cmake", "--build", "."], cwd = str(cmake_build_dir))
         subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cmake_build_dir))
         if sys.platform == "linux":
             subprocess.check_call(["valgrind", "--error-exitcode=1", "--leak-check=full",
@@ -192,9 +195,9 @@ def main():
     if CPP_TESTS in test_set:
         print("Check cmake version")
         subprocess.check_call(["cmake", "--version"], shell = False)
-        build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build"), [])
+        build_cpp_code_with_cmake(test_cfg, os.path.join("c++_tests", "c++", "build"), [])
         purge(os.path.join("c++_tests", "c++", "rust_interface"), ".*\.h.*$")
-        build_cpp_code_with_cmake(os.path.join("c++_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
+        build_cpp_code_with_cmake(test_cfg, os.path.join("c++_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
 
     if ANDROID_TESTS in test_set:
         build_for_android(is_windows)
