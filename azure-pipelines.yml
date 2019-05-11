@@ -1,0 +1,70 @@
+strategy:
+  matrix:
+    linux-stable:
+      imageName: 'ubuntu-16.04'
+      rustup_toolchain: stable
+    mac-stable:
+      imageName: 'macos-10.14'
+      rustup_toolchain: stable
+    linux-beta:
+      imageName: 'ubuntu-16.04'
+      rustup_toolchain: beta
+    mac-beta:
+      imageName: 'macos-10.14'
+      rustup_toolchain: beta
+    windows-stable:
+      imageName: 'vs2017-win2016'
+      rustup_toolchain: stable
+pool:
+  vmImage: $(imageName)
+
+
+steps:
+  - checkout: self
+    submodules: true
+  - script: |
+      curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain $RUSTUP_TOOLCHAIN
+    condition: ne( variables['Agent.OS'], 'Windows_NT' )
+    displayName: Install Rust on linux/mac
+  - script: |
+      curl -sSf -o rustup-init.exe https://win.rustup.rs
+      rustup-init.exe -y --default-toolchain %RUSTUP_TOOLCHAIN%
+    condition: eq( variables['Agent.OS'], 'Windows_NT' )
+    displayName: Install Rust on windows
+  - script: |
+      curl http://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
+      7z x llvm-installer.exe -oc:\llvm-binary
+    condition: eq( variables['Agent.OS'], 'Windows_NT' )
+    displayName: Install llvm on windows
+  - script: |
+      export TAR="boost_1_66_0.tar.gz"
+      curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.66.0/source/$TAR
+      tar -xzf $TAR
+    condition: eq( variables['Agent.OS'], 'Darwin' )
+    displayName: Install boost on mac os
+  - script: |
+      export PATH=$PATH:$HOME/.cargo/bin
+      cp workspace.Cargo.toml Cargo.toml
+      python ci_build_and_test.py --skip-android-tests
+    condition: eq( variables['Agent.OS'], 'Linux' )
+    displayName: Build and test on linux
+  - script: |
+      export PATH=$PATH:$HOME/.cargo/bin
+      export BOOST_ROOT=$PWD/boost_1_66_0
+      cp workspace.Cargo.toml Cargo.toml
+      python ci_build_and_test.py --skip-android-tests
+    condition: eq( variables['Agent.OS'], 'Darwin' )
+    displayName: Build and test on mac os
+  - script: |
+      set PATH=C:\llvm-binary\bin;%PATH%;%USERPROFILE%/.cargo/bin
+      set LIBCLANG_PATH=C:\llvm-binary\bin
+      set platform=x64
+      clang --version
+      rustc -vV
+      cargo -vV
+      javac -version
+      cmake --version
+      cp workspace.Cargo.toml Cargo.toml
+      python ci_build_and_test.py --skip-android-tests
+    displayName: Build and test on windows
+    condition: eq( variables['Agent.OS'], 'Windows_NT' )
