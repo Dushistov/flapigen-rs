@@ -315,38 +315,29 @@ public:
         return diff / this->step;
     }
 
-    constexpr bool operator<(const RustForeignVecIterator &o) const noexcept
+    bool operator<(const RustForeignVecIterator &o) const noexcept
     {
         assert(this->step == o.step);
         return this->ptr < o.ptr;
     }
 
-    constexpr bool operator>(const RustForeignVecIterator &o) const noexcept
+    bool operator>(const RustForeignVecIterator &o) const noexcept
     {
         assert(this->step == o.step);
         return this->ptr > o.ptr;
     }
 
-    constexpr bool operator<=(const RustForeignVecIterator &o) const noexcept
-    {
-        return !operator>(o);
-    }
+    bool operator<=(const RustForeignVecIterator &o) const noexcept { return !operator>(o); }
 
-    constexpr bool operator>=(const RustForeignVecIterator &o) const noexcept
-    {
-        return !operator<(o);
-    }
+    bool operator>=(const RustForeignVecIterator &o) const noexcept { return !operator<(o); }
     /*@}*/
 
-    constexpr bool operator==(const RustForeignVecIterator<T> &o) const noexcept
+    bool operator==(const RustForeignVecIterator<T> &o) const noexcept
     {
         assert(this->step == o.step);
         return this->ptr == o.ptr;
     }
-    constexpr bool operator!=(const RustForeignVecIterator<T> &o) const noexcept
-    {
-        return !operator==(o);
-    }
+    bool operator!=(const RustForeignVecIterator<T> &o) const noexcept { return !operator==(o); }
 
 private:
     const void *ptr;
