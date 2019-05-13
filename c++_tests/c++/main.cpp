@@ -349,22 +349,6 @@ TEST(TestWorkWithVec, smokeTest)
         }
     }
     {
-        auto slice_foo = t.get_slice_foo();
-        ASSERT_EQ(tag_len, slice_foo.size());
-        for (size_t i = 0; i < slice_foo.size(); ++i) {
-            EXPECT_EQ(std::string(tag), slice_foo[i].getName().to_std_string());
-            EXPECT_TRUE(slice_foo[i].f(0, 0) >= 0);
-            EXPECT_EQ(i, size_t(slice_foo[i].f(0, 0)));
-        }
-        size_t i = 0;
-        for (auto foo : slice_foo) {
-            EXPECT_EQ(std::string(tag), foo.getName().to_std_string());
-            EXPECT_TRUE(foo.f(0, 0) >= 0);
-            EXPECT_EQ(i, size_t(foo.f(0, 0)));
-            ++i;
-        }
-    }
-    {
         auto v = TestWorkWithVec::create_foo_vec(30);
         auto v1 = TestWorkWithVec::create_foo_vec(0);
         while (!v.empty()) {
@@ -435,6 +419,34 @@ TEST(TestWorkWithVec, assign)
     vec3 = std::move(vec2);
     validate_create_foo_vec(100, vec3);
     EXPECT_TRUE(vec2.empty());
+}
+
+TEST(TestWorkWithVec, iterator)
+{
+    const char tag[] = "Test data";
+    const size_t tag_len = std::strlen(tag);
+    TestWorkWithVec t{ tag };
+    auto slice_foo = t.get_slice_foo();
+    ASSERT_EQ(tag_len, slice_foo.size());
+    for (size_t i = 0; i < slice_foo.size(); ++i) {
+        EXPECT_EQ(std::string(tag), slice_foo[i].getName().to_std_string());
+        EXPECT_TRUE(slice_foo[i].f(0, 0) >= 0);
+        EXPECT_EQ(i, size_t(slice_foo[i].f(0, 0)));
+    }
+    size_t i = 0;
+    for (auto foo : slice_foo) {
+        EXPECT_EQ(std::string(tag), foo.getName().to_std_string());
+        EXPECT_TRUE(foo.f(0, 0) >= 0);
+        EXPECT_EQ(i, size_t(foo.f(0, 0)));
+        ++i;
+    }
+
+    auto it = std::find_if(slice_foo.begin(), slice_foo.end(), [tag_len](const FooRef &item) {
+        return static_cast<size_t>(item.f(0, 0)) == tag_len / 2;
+    });
+    ASSERT_NE(slice_foo.end(), it);
+    ASSERT_EQ(tag_len / 2, static_cast<size_t>((*it).f(0, 0)));
+    ASSERT_EQ(tag_len / 2, size_t(it - slice_foo.begin()));
 }
 
 TEST(TestEnumClass, smokeTest)
