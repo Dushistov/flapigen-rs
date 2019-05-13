@@ -99,26 +99,37 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
             cmake_generator = "Visual Studio 15 2017 Win64"
     else:
         cmake_generator = "Unix Makefiles"
-    cmake_args = ["cmake", "-G", cmake_generator, "-DCMAKE_BUILD_TYPE=RelWithDebInfo"] \
-                                                                       + addon_params + [".."]
-    if not os.path.exists(cmake_build_dir):
-        os.makedirs(cmake_build_dir)
-        subprocess.check_call(cmake_args,
-                              cwd = str(cmake_build_dir))
+    cmake_args = ["cmake", "-G", cmake_generator] + addon_params
     if sys.platform == 'win32' or sys.platform == 'win64':
+        if not os.path.exists(cmake_build_dir):
+            os.makedirs(cmake_build_dir)
+            subprocess.check_call(cmake_args + [".."], cwd = str(cmake_build_dir))
         os.environ["CTEST_OUTPUT_ON_FAILURE"] = "1"
         for cfg in test_cfg:
             subprocess.check_call(["cmake", "--build", ".", "--config", cfg], cwd = str(cmake_build_dir))
             subprocess.check_call(["cmake", "--build", ".", "--target", "RUN_TESTS", "--config", cfg],
                                   cwd = str(cmake_build_dir))
     else:
-        subprocess.check_call(["cmake", "--build", "."], cwd = str(cmake_build_dir))
-        subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cmake_build_dir))
-        if sys.platform == "linux":
-            subprocess.check_call(["valgrind", "--error-exitcode=1", "--leak-check=full",
-                                   "--show-leak-kinds=all", "--errors-for-leak-kinds=all",
-                                   "--suppressions=../../valgrind.supp",
-                                   "./c++-rust-swig-test"], cwd = str(cmake_build_dir))
+        for cfg in test_cfg:
+            cur_cmake_args = cmake_args[:]
+            cur_cmake_build_dir = cmake_build_dir
+            if cfg == RELEASE:
+                cur_cmake_args.append("-DCMAKE_BUILD_TYPE:String=Release")
+            elif cfg == DEBUG:
+                cur_cmake_args.append("-DCMAKE_BUILD_TYPE:String=Debug")
+                cur_cmake_build_dir = cur_cmake_build_dir + "_dbg"
+            print("cur_cmake_build_dir %s" % cur_cmake_build_dir)
+            if not os.path.exists(cur_cmake_build_dir):
+                os.makedirs(cur_cmake_build_dir)
+                subprocess.check_call(cur_cmake_args + [".."], cwd = str(cur_cmake_build_dir))
+
+            subprocess.check_call(["cmake", "--build", "."], cwd = str(cur_cmake_build_dir))
+            subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cur_cmake_build_dir))
+            if sys.platform == "linux":
+                subprocess.check_call(["valgrind", "--error-exitcode=1", "--leak-check=full",
+                                       "--show-leak-kinds=all", "--errors-for-leak-kinds=all",
+                                       "--suppressions=../../valgrind.supp",
+                                       "./c++-rust-swig-test"], cwd = str(cur_cmake_build_dir))
 
 @show_timing
 def build_cargo_docs():
