@@ -165,6 +165,8 @@ def main():
             test_set = set([JNI_TESTS])
         elif arg == "--cpp-only-tests":
             test_set = set([CPP_TESTS])
+        elif arg == "--skip-java-tests":
+            test_set.remove(JNI_TESTS)
         else:
             raise Exception("Fatal Error: unknown option: %s" % arg)
 
