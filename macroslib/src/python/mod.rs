@@ -7,6 +7,7 @@ use heck::SnakeCase;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use quote::ToTokens;
+use std::ops::Deref;
 use syn::parse_quote;
 use syn::spanned::Spanned;
 
@@ -174,6 +175,7 @@ fn generate_method_code(
             let arg_name = format!("a_{}", i);
             generate_conversion_for_argument(
                 &ast::fn_arg_type(a).clone().into(),
+                method.span(),
                 conv_map,
                 &arg_name,
             )
@@ -256,7 +258,7 @@ fn self_type_conversion(
             _ => unimplemented!("Passing self by value not implemented"),
         };
         Ok(Some(
-            generate_conversion_for_argument(&self_type_ref.into(), conv_map, "self")?.1,
+            generate_conversion_for_argument(&self_type_ref.into(), method.span(), conv_map, "self")?.1,
         ))
     } else {
         Ok(None)
@@ -275,6 +277,7 @@ fn has_any_methods(class: &ForeignerClassInfo) -> bool {
 
 fn generate_conversion_for_argument(
     rust_type: &RustType,
+    method_span: Span,
     conv_map: &TypeMap,
     arg_name: &str,
 ) -> Result<(Type, TokenStream)> {
@@ -313,6 +316,7 @@ fn generate_conversion_for_argument(
     } else if let Some(inner) = ast::if_option_return_some_type(&rust_type.ty) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
             &inner.into(),
+            method_span,
             conv_map,
             "inner",
         )?;
@@ -320,6 +324,22 @@ fn generate_conversion_for_argument(
             parse_type!(Option<#inner_py_type>),
             quote!{
                 #arg_name_ident.map(|inner| #inner_conversion)
+            }
+        ))
+    } else if let Type::Reference(ref inner) = rust_type.ty {
+        if inner.mutability.is_some() {
+            return Err(DiagnosticError::new(method_span, "mutable reference is only supported for exported class types"));
+        }
+        let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
+            &inner.elem.deref().clone().into(),
+            method_span,
+            conv_map,
+            arg_name,
+        )?;
+        Ok((
+            parse_type!(#inner_py_type),
+            quote!{
+                &#inner_conversion
             }
         ))
     } else {
@@ -383,6 +403,13 @@ fn generate_conversion_for_return(
 //         foo
 //     }
 // }
+
+
+
+// fn container_and_inner_type(
+//     rust_type: &RustType,
+//     conv_map: &TypeMap,
+//     arg_name: &str,) -> Option<(RustType, RustType, )>
 
 fn is_cpython_supported_type(rust_type: &RustType) -> bool {
     let primitive_types = [
