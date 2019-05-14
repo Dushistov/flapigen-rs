@@ -26,7 +26,7 @@ fn main() {
 
 fn rust_swig_expand(from: &Path, out: &Path) {
     println!("Run rust_swig_expand");
-    let python_cfg = PythonConfig::new();
+    let python_cfg = PythonConfig::new("rust_swig_test_python".to_owned());
     let swig_gen = rust_swig::Generator::new(LanguageConfig::PythonConfig(python_cfg));
     swig_gen.expand("rust_swig_test_python", from, out);
 }

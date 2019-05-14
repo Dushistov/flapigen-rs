@@ -197,14 +197,16 @@ impl CppConfig {
 /// Configuration for Java binding generation
 pub struct PythonConfig {
     module_initialization_code: RefCell<Vec<TokenStream>>,
+    module_name: String,
 }
 
 impl PythonConfig {
     /// Create `PythonConfig`
     /// # Arguments
-    pub fn new() -> PythonConfig {
+    pub fn new(module_name: String) -> PythonConfig {
         PythonConfig {
             module_initialization_code: RefCell::default(),
+            module_name,
         }
     }
 }

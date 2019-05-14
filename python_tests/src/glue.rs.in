@@ -1,3 +1,5 @@
+use std::fmt;
+
 pub enum TestEnum {
     A,
     B,
@@ -50,7 +52,41 @@ impl TestStaticClass {
     pub fn increment_slice(v: &[f32]) -> Vec<f32> {
         v.into_iter().map(|i| i + 1.0).collect()
     }
+
+    pub fn test_result_str_ok() -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn test_result_str_err() -> Result<(), String> {
+        Err("Test error string".to_owned())
+    }
+
+    pub fn test_result_ok() -> Result<i32, TestError> {
+        Ok(0)
+    }
+
+    pub fn test_result_err() -> Result<i32, TestError> {
+        Err(TestError::new())
+    }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct TestError {
+}
+
+impl TestError {
+    pub fn new() -> TestError {
+        TestError {}
+    }
+}
+
+impl fmt::Display for TestError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "TestError struct!")
+    }
+}
+
+impl std::error::Error for TestError {}
 
 pub struct TestClass {
     i: i32,
@@ -89,6 +125,12 @@ impl TestClass {
     }
 }
 
+foreigner_class!(class TestError {
+    self_type TestError;
+    constructor TestError::new() -> TestError;
+    method TestError::to_string(&self) -> String;
+});
+
 foreigner_class!(class TestStaticClass {
     static_method TestStaticClass::print_hello();
     static_method TestStaticClass::print_number(i: i32);
@@ -99,6 +141,10 @@ foreigner_class!(class TestStaticClass {
     static_method TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
     static_method TestStaticClass::increment_vec(v: Vec<f32>) -> Vec<f32>;
     static_method TestStaticClass::increment_slice(v: &[f32]) -> Vec<f32>;
+    static_method TestStaticClass::test_result_str_ok() -> Result<(), String>;
+    static_method TestStaticClass::test_result_str_err() -> Result<(), String>;
+    static_method TestStaticClass::test_result_ok() -> Result<i32, TestError>;
+    static_method TestStaticClass::test_result_err() -> Result<i32, TestError>;
 });
 
 foreigner_class!(class TestClass {

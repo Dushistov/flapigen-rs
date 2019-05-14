@@ -103,9 +103,12 @@ impl LanguageGenerator for PythonConfig {
     fn finish_glue_rs(&self, _conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
         let module_initialization_code_cell = self.module_initialization_code.borrow();
         let module_initialization_code = &*module_initialization_code_cell;
+        let module_name = syn::parse_str::<syn::Ident>(&self.module_name)?;
         let registration_code = vec![quote! {
+            py_exception!(#module_name, Error);
             py_module_initializer!(librust_swig_test_python, initlibrust_swig_test_python, PyInit_rust_swig_test_python, |py, m| {
                 m.add(py, "__doc__", "This is test module for rust_swig.")?;
+                //m.add_class::<Error>(py)?;
                 #(#module_initialization_code)*
                 Ok(())
             });
@@ -396,7 +399,7 @@ fn generate_conversion_for_return(
         Ok((
             parse_type!(super::#py_mod::#class_name),
             quote! {
-                super::#py_mod::#class_name::create_instance(py, std::sync::RwLock::new(#ret_name_ident))?
+                super::#py_mod::create_instance(py, std::sync::RwLock::new(#ret_name_ident))?
             },
         ))
     } else if conv_map.is_this_exported_enum(&rust_type.ty).is_some() {
@@ -430,6 +433,28 @@ fn generate_conversion_for_return(
             parse_type!(Vec<#inner_py_type>),
             quote!{
                 #ret_name_ident.into_iter().map(|inner| #inner_conversion).collect::<Vec<_>>()
+            }
+        ))
+    } else if let Some((inner_ok, inner_err)) = ast::if_result_return_ok_err_types(&rust_type.ty) {
+        let (inner_py_type, inner_conversion) = generate_conversion_for_return(
+            &inner_ok.into(),
+            method_span,
+            conv_map,
+            "ok_inner",
+        )?;
+        let (inner_py_err_type, inner_err_conversion) = generate_conversion_for_return(
+            &inner_err.into(),
+            method_span,
+            conv_map,
+            "err_inner",
+        )?;
+        Ok((
+            parse_type!(#inner_py_type),
+            quote!{
+                match #ret_name_ident {
+                    Ok(ok_inner) => #inner_conversion,
+                    Err(err_inner) => return Err(cpython::PyErr::new::<super::Error, #inner_py_err_type>(py, #inner_err_conversion)),
+                }
             }
         ))
     } else {

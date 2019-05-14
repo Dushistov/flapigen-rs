@@ -36,3 +36,15 @@ try:
     print("test_invalid: ", rust_swig_test_python.TestStaticClass.reverse_enum(2))
 except Exception as ex:
     print(ex)
+
+# results:
+print(rust_swig_test_python.TestStaticClass.test_result_str_ok())
+try:
+    rust_swig_test_python.TestStaticClass.test_result_str_err()
+except rust_swig_test_python.Error as err:
+    print(err)
+print(rust_swig_test_python.TestStaticClass.test_result_ok())
+try:
+    rust_swig_test_python.TestStaticClass.test_result_err()
+except rust_swig_test_python.Error as err:
+    print(err)
