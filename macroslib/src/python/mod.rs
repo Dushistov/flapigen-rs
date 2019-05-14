@@ -326,6 +326,32 @@ fn generate_conversion_for_argument(
                 #arg_name_ident.map(|inner| #inner_conversion)
             }
         ))
+    } else if let Some(inner) = ast::if_type_slice_return_elem_type(&rust_type.ty, false) {
+        let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
+            &inner.clone().into(),
+            method_span,
+            conv_map,
+            "inner",
+        )?;
+        Ok((
+            parse_type!(Vec<#inner_py_type>),
+            quote!{
+                &#arg_name_ident.into_iter().map(|inner| #inner_conversion).collect::<Vec<_>>()
+            }
+        ))
+    } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type.ty) {
+        let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
+            &inner.clone().into(),
+            method_span,
+            conv_map,
+            "inner",
+        )?;
+        Ok((
+            parse_type!(Vec<#inner_py_type>),
+            quote!{
+                #arg_name_ident.into_iter().map(|inner| #inner_conversion).collect::<Vec<_>>()
+            }
+        ))
     } else if let Type::Reference(ref inner) = rust_type.ty {
         if inner.mutability.is_some() {
             return Err(DiagnosticError::new(method_span, "mutable reference is only supported for exported class types"));
@@ -391,6 +417,19 @@ fn generate_conversion_for_return(
             parse_type!(Option<#inner_py_type>),
             quote!{
                 #ret_name_ident.map(|ret_inner| #inner_conversion)
+            }
+        ))
+    } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type.ty) {
+        let (inner_py_type, inner_conversion) = generate_conversion_for_return(
+            &inner.clone().into(),
+            method_span,
+            conv_map,
+            "inner",
+        )?;
+        Ok((
+            parse_type!(Vec<#inner_py_type>),
+            quote!{
+                #ret_name_ident.into_iter().map(|inner| #inner_conversion).collect::<Vec<_>>()
             }
         ))
     } else {
