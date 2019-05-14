@@ -310,6 +310,18 @@ fn generate_conversion_for_argument(
                 super::#enum_py_mod::from_u32(py, #arg_name_ident)?
             }
         ))
+    } else if let Some(inner) = ast::if_option_return_some_type(&rust_type.ty) {
+        let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
+            &inner.into(),
+            conv_map,
+            "inner",
+        )?;
+        Ok((
+            parse_type!(Option<#inner_py_type>),
+            quote!{
+                #arg_name_ident.map(|inner| #inner_conversion)
+            }
+        ))
     } else {
         unimplemented!("other arg");
     }
@@ -348,10 +360,29 @@ fn generate_conversion_for_return(
                 #ret_name_ident as u32
             }
         ))
+    } else if let Some(inner) = ast::if_option_return_some_type(&rust_type.ty) {
+        let (inner_py_type, inner_conversion) = generate_conversion_for_return(
+            &inner.into(),
+            method_span,
+            conv_map,
+            "ret_inner",
+        )?;
+        Ok((
+            parse_type!(Option<#inner_py_type>),
+            quote!{
+                #ret_name_ident.map(|ret_inner| #inner_conversion)
+            }
+        ))
     } else {
         unimplemented!();
     }
 }
+
+// fn option_inner_type(rust_type: &RustType) -> Some(RustType) {
+//     if let Type::Path(type_path) = foo {
+//         foo
+//     }
+// }
 
 fn is_cpython_supported_type(rust_type: &RustType) -> bool {
     let primitive_types = [

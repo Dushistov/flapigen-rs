@@ -22,6 +22,8 @@ test_class.print()
 test_class.add(3)
 test_class.print()
 print("test_class.get: ", test_class.get())
+print("test option (Some)", test_class.maybe_add(1))
+print("test option (None)", test_class.maybe_add(None))
 
 rust_swig_test_python.TestStaticClass.call_test_class_print(test_class)
 

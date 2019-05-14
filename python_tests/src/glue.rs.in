@@ -63,6 +63,15 @@ impl TestClass {
         self.i += i;
     }
 
+    pub fn maybe_add(&mut self, i: Option<i32>) -> Option<i32> {
+        if let Some(i) = i {
+            self.i += i;
+            Some(self.i)
+        } else {
+            None
+        }
+    }
+
     pub fn print(&self) {
         println!("TestClass::i: {}", self.i);
     }
@@ -89,4 +98,5 @@ foreigner_class!(class TestClass {
     method TestClass::print(&self);
     method TestClass::add(&mut self, i: i32);
     method TestClass::get(&self) -> i32;
+    method TestClass::maybe_add(&mut self, i: Option<i32>) -> Option<i32>;
 });
