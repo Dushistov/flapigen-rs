@@ -10,7 +10,6 @@ use quote::ToTokens;
 use std::ops::Deref;
 use syn::parse_quote;
 use syn::spanned::Spanned;
-
 use syn::{Ident, Type};
 
 impl LanguageGenerator for PythonConfig {
@@ -104,11 +103,15 @@ impl LanguageGenerator for PythonConfig {
         let module_initialization_code_cell = self.module_initialization_code.borrow();
         let module_initialization_code = &*module_initialization_code_cell;
         let module_name = syn::parse_str::<syn::Ident>(&self.module_name)?;
+        let module_init = syn::parse_str::<syn::Ident>(&format!("init{}", &self.module_name))?;
+        let module_py_init = syn::parse_str::<syn::Ident>(&format!("PyInit_{}", &self.module_name))?;
         let registration_code = vec![quote! {
-            py_exception!(#module_name, Error);
-            py_module_initializer!(librust_swig_test_python, initlibrust_swig_test_python, PyInit_rust_swig_test_python, |py, m| {
-                m.add(py, "__doc__", "This is test module for rust_swig.")?;
-                //m.add_class::<Error>(py)?;
+            mod py_error {
+                py_exception!(#module_name, Error);
+            }
+
+            py_module_initializer!(#module_name, #module_init, #module_py_init, |py, m| {
+                m.add(py, "Error", py_error::Error::type_object(py))?;
                 #(#module_initialization_code)*
                 Ok(())
             });
@@ -214,7 +217,8 @@ fn generate_method_code(
         #attribute def #method_name(
             #( #args_list ),*
         ) -> cpython::PyResult<#return_type> {
-            let _ret = super::#method_rust_path(
+            use super::*;
+            let _ret = #method_rust_path(
                 #( #args_convertions ),*
             );
             Ok(#return_conversion)
@@ -435,25 +439,19 @@ fn generate_conversion_for_return(
                 #ret_name_ident.into_iter().map(|inner| #inner_conversion).collect::<Vec<_>>()
             }
         ))
-    } else if let Some((inner_ok, inner_err)) = ast::if_result_return_ok_err_types(&rust_type.ty) {
+    } else if let Some((inner_ok, _inner_err)) = ast::if_result_return_ok_err_types(&rust_type.ty) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
             &inner_ok.into(),
             method_span,
             conv_map,
             "ok_inner",
         )?;
-        let (inner_py_err_type, inner_err_conversion) = generate_conversion_for_return(
-            &inner_err.into(),
-            method_span,
-            conv_map,
-            "err_inner",
-        )?;
         Ok((
             parse_type!(#inner_py_type),
             quote!{
                 match #ret_name_ident {
                     Ok(ok_inner) => #inner_conversion,
-                    Err(err_inner) => return Err(cpython::PyErr::new::<super::Error, #inner_py_err_type>(py, #inner_err_conversion)),
+                    Err(err_inner) => return Err(cpython::PyErr::new::<super::py_error::Error, _>(py, err_inner.to_string())),
                 }
             }
         ))
@@ -461,19 +459,6 @@ fn generate_conversion_for_return(
         unimplemented!();
     }
 }
-
-// fn option_inner_type(rust_type: &RustType) -> Some(RustType) {
-//     if let Type::Path(type_path) = foo {
-//         foo
-//     }
-// }
-
-
-
-// fn container_and_inner_type(
-//     rust_type: &RustType,
-//     conv_map: &TypeMap,
-//     arg_name: &str,) -> Option<(RustType, RustType, )>
 
 fn is_cpython_supported_type(rust_type: &RustType) -> bool {
     let primitive_types = [
