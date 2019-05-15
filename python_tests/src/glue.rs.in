@@ -107,6 +107,10 @@ impl TestClass {
         self.i += i;
     }
 
+    pub fn add_ref(&mut self, i: &i32) {
+        self.i += *i;
+    }
+
     pub fn maybe_add(&mut self, i: Option<i32>) -> Option<i32> {
         if let Some(i) = i {
             self.i += i;
@@ -123,12 +127,16 @@ impl TestClass {
     pub fn get(&self) -> i32 {
         self.i
     }
+
+    pub fn get_ref(&self) -> &i32 {
+        &self.i
+    }
 }
 
 foreigner_class!(class TestError {
     self_type TestError;
     constructor TestError::new() -> TestError;
-    method TestError::to_string(&self) -> String;
+    method std::string::ToString::to_string(&self) -> String;
 });
 
 foreigner_class!(class TestStaticClass {
@@ -153,6 +161,8 @@ foreigner_class!(class TestClass {
     method TestClass::increment(&mut self);
     method TestClass::print(&self);
     method TestClass::add(&mut self, i: i32);
+    method TestClass::add_ref(&mut self, i: &i32);
     method TestClass::get(&self) -> i32;
+    method TestClass::get_ref(&self) -> &i32;
     method TestClass::maybe_add(&mut self, i: Option<i32>) -> Option<i32>;
 });

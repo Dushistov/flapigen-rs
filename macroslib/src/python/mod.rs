@@ -207,21 +207,20 @@ fn generate_method_code(
     } else {
         TokenStream::new()
     };
-    let (return_type, return_conversion) = generate_conversion_for_return(
+    let (return_type, rust_call_with_return_conversion) = generate_conversion_for_return(
         &extract_return_type(&method.fn_decl.output),
         method.span(),
         conv_map,
-        "_ret",
+        quote!{
+            #method_rust_path(#( #args_convertions ),*)
+        }
     )?;
     Ok(quote! {
         #attribute def #method_name(
             #( #args_list ),*
         ) -> cpython::PyResult<#return_type> {
             use super::*;
-            let _ret = #method_rust_path(
-                #( #args_convertions ),*
-            );
-            Ok(#return_conversion)
+            Ok(#rust_call_with_return_conversion)
         }
     })
 }
@@ -308,8 +307,15 @@ fn generate_conversion_for_argument(
                     &*super::#py_mod::rust_instance(#arg_name_ident, py).read().unwrap()
                 }
             }
+        } else if foreign_class.copy_derived {
+            quote!{
+                *super::#py_mod::rust_instance(#arg_name_ident, py).read().unwrap().clone()
+            }
         } else {
-            unimplemented!("Passing object by value not implemented")
+            return Err(DiagnosticError::new(method_span,
+                "Passing object by value requires that it is marked with `#[derive(Copy)]` inside its `foreigner_class` macro. \
+                (Note, that the corresponding rust type doesn't actually need to be `Copy`. `Clone` is sufficient)"
+            ));
         };
         Ok((py_type, self_conversion_code))
     } else if let Some(enum_info) = conv_map.is_this_exported_enum(&rust_type.ty) {
@@ -330,7 +336,10 @@ fn generate_conversion_for_argument(
         Ok((
             parse_type!(Option<#inner_py_type>),
             quote!{
-                #arg_name_ident.map(|inner| #inner_conversion)
+                match #arg_name_ident {
+                    Some(inner) => Some(#inner_conversion),
+                    None => None,
+                }
             }
         ))
     } else if let Some(inner) = ast::if_type_slice_return_elem_type(&rust_type.ty, false) {
@@ -343,7 +352,7 @@ fn generate_conversion_for_argument(
         Ok((
             parse_type!(Vec<#inner_py_type>),
             quote!{
-                &#arg_name_ident.into_iter().map(|inner| #inner_conversion).collect::<Vec<_>>()
+                &#arg_name_ident.into_iter().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
             }
         ))
     } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type.ty) {
@@ -356,7 +365,7 @@ fn generate_conversion_for_argument(
         Ok((
             parse_type!(Vec<#inner_py_type>),
             quote!{
-                #arg_name_ident.into_iter().map(|inner| #inner_conversion).collect::<Vec<_>>()
+                #arg_name_ident.into_iter().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
             }
         ))
     } else if let Type::Reference(ref inner) = rust_type.ty {
@@ -384,33 +393,48 @@ fn generate_conversion_for_return(
     rust_type: &RustType,
     method_span: Span,
     conv_map: &TypeMap,
-    ret_name: &str,
+    rust_call: TokenStream,
 ) -> Result<(Type, TokenStream)> {
-    let ret_name_ident: TokenStream = syn::parse_str(ret_name)?;
+    // let ret_name_ident: TokenStream = syn::parse_str(ret_name)?;
     if rust_type.normalized_name == "( )" {
-        Ok((parse_type!(cpython::PyObject), quote!(py.None())))
+        Ok((
+            parse_type!(cpython::PyObject),
+            quote!{
+                {#rust_call; py.None()}
+            }
+        ))
     } else if is_cpython_supported_type(rust_type) {
-        Ok((rust_type.ty.clone(), ret_name_ident))
+        Ok((rust_type.ty.clone(), rust_call))
     } else if let Some(class) = conv_map.find_foreigner_class_with_such_this_type(&rust_type.ty) {
-        if let Type::Reference(_) = rust_type.ty {
-            return Err(DiagnosticError::new(
-                method_span,
-                "Returning rust object into python by reference is not safe and not supported.",
-            ));
-        };
         let class_name = &class.name;
         let py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&class_name.to_string()))?;
+        let conversion = if let Type::Reference(_) = rust_type.ty {
+            if class.copy_derived {
+                quote!{
+                    super::#py_mod::create_instance(py, std::sync::RwLock::new(#rust_call.clone()))?
+                }
+            } else {
+                return Err(DiagnosticError::new(
+                    method_span,
+                    "Returning a rust object into python by reference is not safe, so the copy of the object needs to be make. \
+                    Thus, the returned type must marked with `#[derive(Copy)]` inside its `foreigner_class` macro. \
+                    (Note, that the corresponding rust type doesn't actually need to be `Copy`. `Clone` is sufficient)"
+                ));
+            }
+        } else {
+            quote! {
+                super::#py_mod::create_instance(py, std::sync::RwLock::new(#rust_call))?
+            }
+        };
         Ok((
             parse_type!(super::#py_mod::#class_name),
-            quote! {
-                super::#py_mod::create_instance(py, std::sync::RwLock::new(#ret_name_ident))?
-            },
+            conversion,
         ))
     } else if conv_map.is_this_exported_enum(&rust_type.ty).is_some() {
         Ok((
             parse_type!(u32),
             quote!{
-                #ret_name_ident as u32
+                #rust_call as u32
             }
         ))
     } else if let Some(inner) = ast::if_option_return_some_type(&rust_type.ty) {
@@ -418,25 +442,41 @@ fn generate_conversion_for_return(
             &inner.into(),
             method_span,
             conv_map,
-            "ret_inner",
+            quote!{inner},
         )?;
         Ok((
             parse_type!(Option<#inner_py_type>),
             quote!{
-                #ret_name_ident.map(|ret_inner| #inner_conversion)
+                match #rust_call {
+                    Some(inner) => Some(#inner_conversion),
+                    None => None
+                }
             }
         ))
+    // } else if let Some(inner) = ast::if_type_slice_return_elem_type(&rust_type.ty, false) {
+    //     let (inner_py_type, inner_conversion) = generate_conversion_for_return(
+    //         &inner.clone().into(),
+    //         method_span,
+    //         conv_map,
+    //         quote!{inner},
+    //     )?;
+    //     Ok((
+    //         parse_type!(Vec<#inner_py_type>),
+    //         quote!{
+    //             #rust_call.iter().cloned().map(|inner| Ok(#inner_conversion)).collect::<Result<Vec<_>>>()?
+    //         }
+    //     ))
     } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type.ty) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
             &inner.clone().into(),
             method_span,
             conv_map,
-            "inner",
+            quote!{inner},
         )?;
         Ok((
             parse_type!(Vec<#inner_py_type>),
             quote!{
-                #ret_name_ident.into_iter().map(|inner| #inner_conversion).collect::<Vec<_>>()
+                #rust_call.into_iter().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
             }
         ))
     } else if let Some((inner_ok, _inner_err)) = ast::if_result_return_ok_err_types(&rust_type.ty) {
@@ -444,17 +484,24 @@ fn generate_conversion_for_return(
             &inner_ok.into(),
             method_span,
             conv_map,
-            "ok_inner",
+            quote!{ok_inner},
         )?;
         Ok((
             parse_type!(#inner_py_type),
             quote!{
-                match #ret_name_ident {
+                match #rust_call {
                     Ok(ok_inner) => #inner_conversion,
                     Err(err_inner) => return Err(cpython::PyErr::new::<super::py_error::Error, _>(py, err_inner.to_string())),
                 }
             }
         ))
+    } else if let Type::Reference(ref inner) = rust_type.ty {
+        generate_conversion_for_return(
+            &inner.elem.deref().clone().into(),
+            method_span,
+            conv_map,
+            quote!{(#rust_call).clone()}
+        )
     } else {
         unimplemented!();
     }
