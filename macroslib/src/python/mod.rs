@@ -26,11 +26,6 @@ impl LanguageGenerator for PythonConfig {
         let class_name = &class.name;
         let wrapper_mod_name =
             syn::parse_str::<Ident>(&py_wrapper_mod_name(&class_name.to_string()))?;
-        self.module_initialization_code.borrow_mut().push(quote! {
-            {
-                m.add_class::<#wrapper_mod_name::#class_name>(py)?;
-            }
-        });
         let (rust_instance_field, rust_instance_getter) =
             generate_rust_instance_field_and_methods(class)?;
         let methods_code = class
@@ -38,10 +33,13 @@ impl LanguageGenerator for PythonConfig {
             .iter()
             .map(|m| generate_method_code(class, m, conv_map))
             .collect::<Result<Vec<_>>>()?;
+        let docstring = class.doc_comments.as_slice().join("\n");
         let class_code = quote! {
             mod #wrapper_mod_name {
                 #[allow(unused)]
                 py_class!(pub class #class_name |py| {
+                    static __doc__  = #docstring;
+
                     #rust_instance_field
 
                     #( #methods_code )*
@@ -50,6 +48,12 @@ impl LanguageGenerator for PythonConfig {
                 #rust_instance_getter
             }
         };
+        
+        self.module_initialization_code.borrow_mut().push(quote! {
+            {
+                m.add_class::<#wrapper_mod_name::#class_name>(py)?;
+            }
+        });
         Ok(vec![class_code])
     }
 
@@ -71,10 +75,12 @@ impl LanguageGenerator for PythonConfig {
         let rust_variants = enum_info.items.iter().map(|item| &item.rust_name).collect::<Vec<_>>();
         let rust_variants_ref_1 = &rust_variants;
         let rust_variants_ref_2 = &rust_variants;
-        let enum_name_str = enum_name.to_string();
+        let enum_name_str = enum_name.to_string();        
+        let docstring = enum_info.doc_comments.as_slice().join("\n");
         let class_code = quote! {
             mod #wrapper_mod_name {
                 py_class!(pub class #enum_name |py| {
+                    static __doc__  = #docstring;
                     #( static #foreign_variants = super::#rust_variants_ref_1 as u32; )*
                 });
 

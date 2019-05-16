@@ -7,6 +7,7 @@ print("Doc: ", rust_swig_test_python.__doc__)
 print("Members: ", dir(rust_swig_test_python))
 
 print("TestEnum variants", dir(rust_swig_test_python.TestEnum))
+help(rust_swig_test_python.TestEnum)
 rust_swig_test_python.TestStaticClass.print_hello()
 rust_swig_test_python.TestStaticClass.print_number(123)
 rust_swig_test_python.TestStaticClass.print_str("python str")

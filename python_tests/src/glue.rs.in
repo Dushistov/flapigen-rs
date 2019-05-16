@@ -5,10 +5,13 @@ pub enum TestEnum {
     B,
 }
 
-foreign_enum!(enum TestEnum {
-    A = TestEnum::A,
-    B = TestEnum::B,
-});
+foreign_enum!(
+    /// Test enum with A and B.
+    enum TestEnum {
+        A = TestEnum::A,
+        B = TestEnum::B,
+    }
+);
 
 pub struct TestStaticClass {
 }
@@ -133,36 +136,36 @@ impl TestClass {
     }
 }
 
-foreigner_class!(class TestError {
-    self_type TestError;
-    constructor TestError::new() -> TestError;
-    method std::string::ToString::to_string(&self) -> String;
-});
+foreigner_class!(
+    /// Test class containing static methods only.
+    class TestStaticClass {
+        static_method TestStaticClass::print_hello();
+        static_method TestStaticClass::print_number(i: i32);
+        static_method TestStaticClass::add(a: f32, b: f32) -> f32;
+        static_method TestStaticClass::print_str(s: &str);
+        static_method TestStaticClass::print_string(s: String);
+        static_method TestStaticClass::call_test_class_print(test_object: &TestClass);
+        static_method TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
+        static_method TestStaticClass::increment_vec(v: Vec<f32>) -> Vec<f32>;
+        static_method TestStaticClass::return_slice(v: &[f32]) -> &[f32];
+        static_method TestStaticClass::test_result_str_ok() -> Result<(), String>;
+        static_method TestStaticClass::test_result_str_err() -> Result<(), String>;
+        static_method TestStaticClass::test_result_ok() -> Result<i32, TestError>;
+        static_method TestStaticClass::test_result_err() -> Result<i32, TestError>;
+    }
+);
 
-foreigner_class!(class TestStaticClass {
-    static_method TestStaticClass::print_hello();
-    static_method TestStaticClass::print_number(i: i32);
-    static_method TestStaticClass::add(a: f32, b: f32) -> f32;
-    static_method TestStaticClass::print_str(s: &str);
-    static_method TestStaticClass::print_string(s: String);
-    static_method TestStaticClass::call_test_class_print(test_object: &TestClass);
-    static_method TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
-    static_method TestStaticClass::increment_vec(v: Vec<f32>) -> Vec<f32>;
-    static_method TestStaticClass::return_slice(v: &[f32]) -> &[f32];
-    static_method TestStaticClass::test_result_str_ok() -> Result<(), String>;
-    static_method TestStaticClass::test_result_str_err() -> Result<(), String>;
-    static_method TestStaticClass::test_result_ok() -> Result<i32, TestError>;
-    static_method TestStaticClass::test_result_err() -> Result<i32, TestError>;
-});
-
-foreigner_class!(class TestClass {
-    self_type TestClass;
-    constructor TestClass::new() -> TestClass;
-    method TestClass::increment(&mut self);
-    method TestClass::print(&self);
-    method TestClass::add(&mut self, i: i32);
-    method TestClass::add_ref(&mut self, i: &i32);
-    method TestClass::get(&self) -> i32;
-    method TestClass::get_ref(&self) -> &i32;
-    method TestClass::maybe_add(&mut self, i: Option<i32>) -> Option<i32>;
-});
+foreigner_class!(
+    /// Test class containing standard methods.
+    class TestClass {
+        self_type TestClass;
+        constructor TestClass::new() -> TestClass;
+        method TestClass::increment(&mut self);
+        method TestClass::print(&self);
+        method TestClass::add(&mut self, i: i32);
+        method TestClass::add_ref(&mut self, i: &i32);
+        method TestClass::get(&self) -> i32;
+        method TestClass::get_ref(&self) -> &i32;
+        method TestClass::maybe_add(&mut self, i: Option<i32>) -> Option<i32>;
+    }
+);
