@@ -259,9 +259,9 @@ fn self_type_conversion(
             })?
             .ty;
         let self_type_ref = match self_variant {
-            SelfTypeVariant::Rptr => parse_type! {&#self_type},
-            SelfTypeVariant::RptrMut => parse_type! {&mut #self_type},
-            _ => unimplemented!("Passing self by value not implemented"),
+            SelfTypeVariant::Rptr => parse_type!{&#self_type},
+            SelfTypeVariant::RptrMut => parse_type!{&mut #self_type},
+            _ => parse_type!{#self_type},
         };
         Ok(Some(
             generate_conversion_for_argument(&self_type_ref.into(), method.span(), conv_map, "self")?.1,
@@ -385,7 +385,10 @@ fn generate_conversion_for_argument(
             }
         ))
     } else {
-        unimplemented!("other arg");
+        Err(DiagnosticError::new(
+            method_span,
+            format!("Unsupported argument type: {:?}", rust_type.normalized_name)
+        ))
     }
 }
 
@@ -503,7 +506,10 @@ fn generate_conversion_for_return(
             quote!{(#rust_call).clone()}
         )
     } else {
-        unimplemented!();
+        Err(DiagnosticError::new(
+            method_span,
+            format!("Unsupported return type: {:?}", rust_type.normalized_name)
+        ))
     }
 }
 
