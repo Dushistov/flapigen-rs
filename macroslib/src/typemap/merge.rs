@@ -1,13 +1,10 @@
 use std::{mem, rc::Rc};
 
-use log::{debug, warn};
+use log::{debug, info};
 use petgraph::graph::NodeIndex;
 use rustc_hash::FxHashMap;
 
-use crate::{
-    error::Result,
-    typemap::{TypeGraphIdx, TypeMap},
-};
+use crate::{error::Result, typemap::TypeMap};
 
 impl TypeMap {
     pub(crate) fn merge(
@@ -27,9 +24,11 @@ impl TypeMap {
         )?;
         mem::swap(&mut new_data.traits_usage_code, &mut self.traits_usage_code);
 
-        for node in new_data.conv_graph.node_indices() {
-            process_new_node(node, &new_data, self);
-        }
+        let mut new_node_to_our_map = FxHashMap::<NodeIndex, NodeIndex>::default();
+        add_new_nodes(&new_data, self, &mut new_node_to_our_map);
+        add_new_edges(&new_data, self, &new_node_to_our_map);
+        add_new_ftypes(&new_data, self, &new_node_to_our_map);
+
         self.utils_code.append(&mut new_data.utils_code);
         //TODO: more intellect to process new generics
         self.generic_edges.append(&mut new_data.generic_edges);
@@ -37,54 +36,72 @@ impl TypeMap {
     }
 }
 
-fn get_graph_node_idx(
-    node_new_data_idx: NodeIndex<TypeGraphIdx>,
+fn add_new_nodes(
     new_data: &TypeMap,
     data: &mut TypeMap,
-) -> NodeIndex<TypeGraphIdx> {
-    let node = &new_data.conv_graph[node_new_data_idx];
-    debug!("get_graph_node_idx: handling new node {}", node);
-    let node2 = node.clone();
-    let data_rust_names_map = &mut data.rust_names_map;
-    let data_conv_graph = &mut data.conv_graph;
-    let idx = *data_rust_names_map
-        .entry(node.normalized_name.clone())
-        .or_insert_with(|| {
-            let idx = data_conv_graph.add_node(node2);
-            Rc::make_mut(&mut data_conv_graph[idx]).graph_idx = idx;
-            idx
-        });
-
-    Rc::make_mut(&mut data_conv_graph[idx]).merge(node);
-
-    if let Some((foreign_name, _)) = new_data
-        .foreign_names_map
-        .iter()
-        .find(|x| *x.1 == node_new_data_idx)
-    {
-        data.foreign_names_map.insert(foreign_name.clone(), idx);
+    new_node_to_our_map: &mut FxHashMap<NodeIndex, NodeIndex>,
+) {
+    for new_node_idx in new_data.conv_graph.node_indices() {
+        let new_node = &new_data.conv_graph[new_node_idx];
+        let data_rust_names_map = &mut data.rust_names_map;
+        let data_conv_graph = &mut data.conv_graph;
+        let data_idx = *data_rust_names_map
+            .entry(new_node.normalized_name.clone())
+            .or_insert_with(|| {
+                let idx = data_conv_graph.add_node((*new_node).clone());
+                Rc::make_mut(&mut data_conv_graph[idx]).graph_idx = idx;
+                idx
+            });
+        Rc::make_mut(&mut data_conv_graph[data_idx]).merge(&new_data.conv_graph[new_node_idx]);
+        new_node_to_our_map.insert(new_node_idx, data_idx);
     }
-    idx
 }
 
-fn process_new_node(new_data_idx: NodeIndex<TypeGraphIdx>, new_data: &TypeMap, data: &mut TypeMap) {
-    let self_src = get_graph_node_idx(new_data_idx, new_data, data);
-    let mut edges = new_data
-        .conv_graph
-        .neighbors_directed(new_data_idx, petgraph::Outgoing)
-        .detach();
-    while let Some((edge, target)) = edges.next(&new_data.conv_graph) {
-        let self_target = get_graph_node_idx(target, new_data, data);
-
-        if let Some(existing_edge) = data.conv_graph.find_edge(self_src, self_target) {
-            warn!(
-                "typemap merge: Converstation {:?} from {:?} to {:?} ignored, we use {:?} instead",
-                new_data.conv_graph[edge], self_src, self_target, data.conv_graph[existing_edge]
+fn add_new_edges(
+    new_data: &TypeMap,
+    data: &mut TypeMap,
+    new_node_to_our_map: &FxHashMap<NodeIndex, NodeIndex>,
+) {
+    for (new_node_idx, our_idx) in new_node_to_our_map {
+        let mut new_edges = new_data
+            .conv_graph
+            .neighbors_directed(*new_node_idx, petgraph::Outgoing)
+            .detach();
+        while let Some((new_edge, new_target)) = new_edges.next(&new_data.conv_graph) {
+            let our_target = *new_node_to_our_map
+                .get(&new_target)
+                .expect("At this step we should have full map new -> our");
+            if let Some(existing_edge) = data.conv_graph.find_edge(*our_idx, our_target) {
+                info!(
+                    "typemap merge: replace {:?} with new conversation rule {:?}, for {} -> {}",
+                    data.conv_graph[existing_edge],
+                    new_data.conv_graph[new_edge],
+                    data.conv_graph[*our_idx],
+                    data.conv_graph[our_target],
+                );
+            }
+            data.conv_graph.update_edge(
+                *our_idx,
+                our_target,
+                new_data.conv_graph[new_edge].clone(),
             );
-        } else {
-            data.conv_graph
-                .add_edge(self_src, self_target, new_data.conv_graph[edge].clone());
         }
+    }
+}
+
+fn add_new_ftypes(
+    new_data: &TypeMap,
+    data: &mut TypeMap,
+    new_node_to_our_map: &FxHashMap<NodeIndex, NodeIndex>,
+) {
+    for (new_ftype, correspoding_rtype) in &new_data.foreign_names_map {
+        let our_rtype = new_node_to_our_map
+            .get(correspoding_rtype)
+            .expect("At this step we should have full map new -> our");
+        *data
+            .foreign_names_map
+            .entry(new_ftype.clone())
+            .or_insert(*our_rtype) = *our_rtype;
     }
 }
 
@@ -99,6 +116,20 @@ mod tests {
     #[test]
     fn test_merge() {
         let mut types_map = TypeMap::default();
+        types_map
+            .merge(
+                "base",
+                r#"
+mod swig_foreign_types_map {
+    #![swig_foreigner_type="boolean"]
+    #![swig_rust_type="jboolean"]
+    #![swig_foreigner_type="int"]
+    #![swig_rust_type="jint"]
+}
+"#,
+                64,
+            )
+            .unwrap();
         types_map
             .merge(
                 "test_merge",
