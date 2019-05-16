@@ -22,7 +22,7 @@ use crate::{
     typemap::{
         ast::{
             check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
-            DisplayToTokens, GenericTypeConv,
+            DisplayToTokens, GenericTypeConv, TypeName,
         },
         ty::{RustType, RustTypeS},
     },
@@ -74,12 +74,13 @@ type RustTypeNameToGraphIdx = FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>;
 pub(crate) struct TypeMap {
     conv_graph: TypesConvGraph,
     foreign_names_map: FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>,
+    rust_to_foreign_cache: FxHashMap<SmolStr, SmolStr>,
     rust_names_map: RustTypeNameToGraphIdx,
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
-    rust_to_foreign_cache: FxHashMap<SmolStr, SmolStr>,
     foreign_classes: Vec<ForeignerClassInfo>,
     exported_enums: FxHashMap<SmolStr, ForeignEnumInfo>,
+    /// How to use trait to convert types, Trait Name -> Code
     traits_usage_code: FxHashMap<Ident, String>,
 }
 
@@ -302,9 +303,9 @@ impl TypeMap {
         ret
     }
 
-    pub(crate) fn add_foreign(&mut self, correspoding_rty: RustType, foreign_name: SmolStr) {
+    pub(crate) fn add_foreign(&mut self, correspoding_rty: RustType, foreign_name: TypeName) {
         self.foreign_names_map
-            .insert(foreign_name, correspoding_rty.graph_idx);
+            .insert(foreign_name.typename, correspoding_rty.graph_idx);
     }
     pub(crate) fn find_foreign_type_info_by_name(
         &self,

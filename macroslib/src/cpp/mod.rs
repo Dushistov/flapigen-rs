@@ -18,8 +18,8 @@ use crate::{
     cpp::map_type::map_type,
     error::{DiagnosticError, Result},
     file_cache::FileWriteCache,
-    typemap::ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     typemap::{
+        ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens, TypeName},
         ty::RustType,
         unpack_unique_typename,
         utils::{
@@ -291,7 +291,10 @@ May be you need to use `private constructor = empty;` syntax?",
 
         let rust_ty = conv_map.find_or_alloc_rust_type(&rust_ty);
 
-        conv_map.add_foreign(rust_ty, c_struct_pointer.into());
+        conv_map.add_foreign(
+            rust_ty,
+            TypeName::new(c_struct_pointer, interface.name.span()),
+        );
 
         Ok(items)
     }

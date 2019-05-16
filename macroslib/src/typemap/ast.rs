@@ -69,6 +69,12 @@ impl TypeName {
     }
 }
 
+impl<'a> From<&'a Ident> for TypeName {
+    fn from(id: &'a Ident) -> Self {
+        TypeName::new(id.to_string(), id.span())
+    }
+}
+
 struct NormalizeTyLifetimesCache {
     inner: FxHashMap<syn::Type, Box<str>>,
 }

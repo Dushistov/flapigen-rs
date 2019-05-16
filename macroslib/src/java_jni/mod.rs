@@ -277,7 +277,7 @@ impl LanguageGenerator for JavaConfig {
             &parse_type! { jobject },
             &interface.name.to_string(),
         );
-        conv_map.add_foreign(my_jobj_ti, interface.name.to_string().into());
+        conv_map.add_foreign(my_jobj_ti, (&interface.name).into());
         Ok(items)
     }
 }
