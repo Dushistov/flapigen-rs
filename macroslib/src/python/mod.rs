@@ -453,19 +453,19 @@ fn generate_conversion_for_return(
                 }
             }
         ))
-    // } else if let Some(inner) = ast::if_type_slice_return_elem_type(&rust_type.ty, false) {
-    //     let (inner_py_type, inner_conversion) = generate_conversion_for_return(
-    //         &inner.clone().into(),
-    //         method_span,
-    //         conv_map,
-    //         quote!{inner},
-    //     )?;
-    //     Ok((
-    //         parse_type!(Vec<#inner_py_type>),
-    //         quote!{
-    //             #rust_call.iter().cloned().map(|inner| Ok(#inner_conversion)).collect::<Result<Vec<_>>>()?
-    //         }
-    //     ))
+    } else if let Some(inner) = ast::if_type_slice_return_elem_type(&rust_type.ty, false) {
+        let (inner_py_type, inner_conversion) = generate_conversion_for_return(
+            &inner.clone().into(),
+            method_span,
+            conv_map,
+            quote!{inner},
+        )?;
+        Ok((
+            parse_type!(Vec<#inner_py_type>),
+            quote!{
+                #rust_call.iter().cloned().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
+            }
+        ))
     } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type.ty) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
             &inner.clone().into(),

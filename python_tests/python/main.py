@@ -13,7 +13,7 @@ rust_swig_test_python.TestStaticClass.print_str("python str")
 rust_swig_test_python.TestStaticClass.print_string("python string")
 print(rust_swig_test_python.TestStaticClass.add(1, 2))
 print(rust_swig_test_python.TestStaticClass.increment_vec([1, 2]))
-print(rust_swig_test_python.TestStaticClass.increment_slice([3, 4]))
+print(rust_swig_test_python.TestStaticClass.return_slice([3, 4]))
 
 test_class = rust_swig_test_python.TestClass()
 print(test_class)

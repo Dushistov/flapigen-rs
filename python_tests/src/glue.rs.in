@@ -49,8 +49,8 @@ impl TestStaticClass {
         v.into_iter().map(|i| i + 1.0).collect()
     }
 
-    pub fn increment_slice(v: &[f32]) -> Vec<f32> {
-        v.into_iter().map(|i| i + 1.0).collect()
+    pub fn return_slice(v: &[f32]) -> &[f32] {
+        v
     }
 
     pub fn test_result_str_ok() -> Result<(), String> {
@@ -148,7 +148,7 @@ foreigner_class!(class TestStaticClass {
     static_method TestStaticClass::call_test_class_print(test_object: &TestClass);
     static_method TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
     static_method TestStaticClass::increment_vec(v: Vec<f32>) -> Vec<f32>;
-    static_method TestStaticClass::increment_slice(v: &[f32]) -> Vec<f32>;
+    static_method TestStaticClass::return_slice(v: &[f32]) -> &[f32];
     static_method TestStaticClass::test_result_str_ok() -> Result<(), String>;
     static_method TestStaticClass::test_result_str_err() -> Result<(), String>;
     static_method TestStaticClass::test_result_ok() -> Result<i32, TestError>;
