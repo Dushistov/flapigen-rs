@@ -91,6 +91,7 @@ impl fmt::Display for TestError {
 
 impl std::error::Error for TestError {}
 
+#[derive(Clone, Copy)]
 pub struct TestClass {
     i: i32,
 }
@@ -156,6 +157,7 @@ foreigner_class!(
 );
 
 foreigner_class!(
+    #[derive(Copy)]
     /// Test class containing standard methods.
     class TestClass {
         self_type TestClass;
@@ -167,5 +169,6 @@ foreigner_class!(
         method TestClass::get(&self) -> i32;
         method TestClass::get_ref(&self) -> &i32;
         method TestClass::maybe_add(&mut self, i: Option<i32>) -> Option<i32>;
+        method TestClass::clone(&self) -> TestClass;
     }
 );

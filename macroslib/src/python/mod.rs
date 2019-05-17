@@ -36,6 +36,7 @@ impl LanguageGenerator for PythonConfig {
         let docstring = class.doc_comments.as_slice().join("\n");
         let class_code = quote! {
             mod #wrapper_mod_name {
+                use super::*;
                 #[allow(unused)]
                 py_class!(pub class #class_name |py| {
                     static __doc__  = #docstring;
@@ -225,6 +226,7 @@ fn generate_method_code(
         #attribute def #method_name(
             #( #args_list ),*
         ) -> cpython::PyResult<#return_type> {
+            #[allow(unused)]
             use super::*;
             Ok(#rust_call_with_return_conversion)
         }
@@ -315,7 +317,7 @@ fn generate_conversion_for_argument(
             }
         } else if foreign_class.copy_derived {
             quote!{
-                *super::#py_mod::rust_instance(#arg_name_ident, py).read().unwrap().clone()
+                super::#py_mod::rust_instance(#arg_name_ident, py).read().unwrap().clone()
             }
         } else {
             return Err(DiagnosticError::new(method_span,

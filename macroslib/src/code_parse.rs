@@ -150,7 +150,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     let Attrs {
         doc_comments: class_doc_comments,
         derive_list,
-    } = parse_attrs(&input, lang == Language::Cpp)?;
+    } = parse_attrs(&input, lang != Language::Java)?;
     debug!(
         "parse_foreigner_class: class comment {:?}",
         class_doc_comments
