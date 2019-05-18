@@ -116,7 +116,7 @@ impl LanguageGenerator for CppConfig {
                     correspoding_rust_type: void_ptr_rust_ty.clone(),
                     name: foreign_typename.into(),
                 },
-            );
+            )?;
 
             let const_void_ptr_ty = parse_type! { *const ::std::os::raw::c_void };
             let const_void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
@@ -130,7 +130,7 @@ impl LanguageGenerator for CppConfig {
                     correspoding_rust_type: const_void_ptr_rust_ty.clone(),
                     name: const_foreign_typename.into(),
                 },
-            );
+            )?;
 
             let this_type_ty = &this_type.ty;
             //handle foreigner_class as input arg
@@ -294,7 +294,7 @@ May be you need to use `private constructor = empty;` syntax?",
         conv_map.add_foreign(
             rust_ty,
             TypeName::new(c_struct_pointer, interface.name.span()),
-        );
+        )?;
 
         Ok(items)
     }

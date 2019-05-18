@@ -126,7 +126,7 @@ impl LanguageGenerator for JavaConfig {
                     correspoding_rust_type: my_jobj_ti,
                     name: class.name.to_string().into(),
                 },
-            );
+            )?;
 
             conv_map.find_or_alloc_rust_type(constructor_ret_type);
 
@@ -277,7 +277,7 @@ impl LanguageGenerator for JavaConfig {
             &parse_type! { jobject },
             &interface.name.to_string(),
         );
-        conv_map.add_foreign(my_jobj_ti, (&interface.name).into());
+        conv_map.add_foreign(my_jobj_ti, (&interface.name).into())?;
         Ok(items)
     }
 }

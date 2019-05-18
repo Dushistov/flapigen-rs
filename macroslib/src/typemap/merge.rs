@@ -1,10 +1,17 @@
+use crate::typemap::ty::ForeignConversationRule;
 use std::{mem, rc::Rc};
 
 use log::{debug, info};
 use petgraph::graph::NodeIndex;
 use rustc_hash::FxHashMap;
 
-use crate::{error::Result, typemap::TypeMap};
+use crate::{
+    error::Result,
+    typemap::{
+        ty::{ForeignTypeS, ForeignTypesStorage},
+        TypeMap,
+    },
+};
 
 impl TypeMap {
     pub(crate) fn merge(
@@ -14,6 +21,7 @@ impl TypeMap {
         target_pointer_width: usize,
     ) -> Result<()> {
         debug!("merging {} with our rules", id_of_code);
+        self.rust_to_foreign_cache.clear();
         let mut was_traits_usage_code = FxHashMap::default();
         mem::swap(&mut was_traits_usage_code, &mut self.traits_usage_code);
         let mut new_data = crate::typemap::parse::parse(
@@ -27,11 +35,17 @@ impl TypeMap {
         let mut new_node_to_our_map = FxHashMap::<NodeIndex, NodeIndex>::default();
         add_new_nodes(&new_data, self, &mut new_node_to_our_map);
         add_new_edges(&new_data, self, &new_node_to_our_map);
-        add_new_ftypes(&new_data, self, &new_node_to_our_map);
+        let TypeMap {
+            ftypes_storage: new_ftypes_storage,
+            generic_edges: mut new_generic_edges,
+            utils_code: mut new_utils_code,
+            ..
+        } = new_data;
+        add_new_ftypes(new_ftypes_storage, self, &new_node_to_our_map);
 
-        self.utils_code.append(&mut new_data.utils_code);
+        self.utils_code.append(&mut new_utils_code);
         //TODO: more intellect to process new generics
-        self.generic_edges.append(&mut new_data.generic_edges);
+        self.generic_edges.append(&mut new_generic_edges);
         Ok(())
     }
 }
@@ -90,18 +104,58 @@ fn add_new_edges(
 }
 
 fn add_new_ftypes(
-    new_data: &TypeMap,
+    new_ftypes_storage: ForeignTypesStorage,
     data: &mut TypeMap,
     new_node_to_our_map: &FxHashMap<NodeIndex, NodeIndex>,
 ) {
-    for (new_ftype, correspoding_rtype) in &new_data.foreign_names_map {
-        let our_rtype = new_node_to_our_map
-            .get(correspoding_rtype)
-            .expect("At this step we should have full map new -> our");
-        *data
-            .foreign_names_map
-            .entry(new_ftype.clone())
-            .or_insert(*our_rtype) = *our_rtype;
+    for mut new_ftype in new_ftypes_storage.into_iter() {
+        ftype_map_rust_types(&mut new_ftype, new_node_to_our_map);
+        match data
+            .ftypes_storage
+            .find_ftype_by_name(new_ftype.name.as_str())
+        {
+            Some(ftype_idx) => {
+                ftype_merge(&mut data.ftypes_storage[ftype_idx], new_ftype);
+            }
+            None => {
+                data.ftypes_storage.add_new_ftype(new_ftype);
+            }
+        }
+    }
+}
+
+fn ftype_map_rust_types(
+    extrn_ft: &mut ForeignTypeS,
+    new_node_to_our_map: &FxHashMap<NodeIndex, NodeIndex>,
+) {
+    if let Some(rule) = extrn_ft.into_from_rust.as_mut() {
+        ftype_rule_map_rust_type(rule, new_node_to_our_map);
+    }
+    if let Some(rule) = extrn_ft.from_into_rust.as_mut() {
+        ftype_rule_map_rust_type(rule, new_node_to_our_map);
+    }
+}
+
+fn ftype_rule_map_rust_type(
+    rule: &mut ForeignConversationRule,
+    new_node_to_our_map: &FxHashMap<NodeIndex, NodeIndex>,
+) {
+    rule.rust_ty = *new_node_to_our_map
+        .get(&rule.rust_ty)
+        .expect("Internal Error: no full types map");
+    if let Some(intr_ty) = rule.intermediate.as_mut() {
+        intr_ty.intermediate_ty = *new_node_to_our_map
+            .get(&intr_ty.intermediate_ty)
+            .expect("Internal Error: no full types map");
+    }
+}
+
+fn ftype_merge(our: &mut ForeignTypeS, extrn_ft: ForeignTypeS) {
+    if let Some(rule) = extrn_ft.into_from_rust {
+        our.into_from_rust = Some(rule);
+    }
+    if let Some(rule) = extrn_ft.from_into_rust {
+        our.from_into_rust = Some(rule);
     }
 }
 
@@ -183,8 +237,8 @@ fn helper3() {
         assert_eq!(
             {
                 let mut set = FxHashSet::default();
-                for k in types_map.foreign_names_map.keys() {
-                    set.insert(k.clone());
+                for ft in types_map.ftypes_storage.iter() {
+                    set.insert(ft.name.typename.clone());
                 }
                 set
             },
