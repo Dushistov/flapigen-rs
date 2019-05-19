@@ -1,6 +1,5 @@
 use log::debug;
 use proc_macro2::{Ident, TokenStream};
-use quote::ToTokens;
 use syn::{
     braced, parenthesized,
     parse::{Parse, ParseStream},
@@ -11,9 +10,10 @@ use syn::{
 };
 
 use crate::{
-    error::Result, typemap::ast::normalize_ty_lifetimes, ForeignEnumInfo, ForeignEnumItem,
-    ForeignInterface, ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, LanguageConfig,
-    MethodAccess, MethodVariant, SelfTypeVariant,
+    error::Result,
+    typemap::ast::{normalize_ty_lifetimes, DisplayToTokens},
+    ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod, ForeignerClassInfo,
+    ForeignerMethod, LanguageConfig, MethodAccess, MethodVariant, SelfTypeVariant,
 };
 
 pub(crate) fn parse_foreigner_class(
@@ -114,7 +114,7 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
                         a.span(),
                         format!(
                             "Expect doc attribute or doc comment or derive here, got {}",
-                            meta.into_token_stream().to_string()
+                            DisplayToTokens(&meta)
                         ),
                     ));
                 }
@@ -311,7 +311,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 Some(first_arg) => {
                     return Err(content.error(format!(
                         "Can not parse type {} as self type",
-                        first_arg.into_token_stream().to_string()
+                        DisplayToTokens(first_arg)
                     )));
                 }
                 None => {
@@ -358,8 +358,8 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                         constructor_ret_type.span(),
                         format!(
                             "mismatched types of construtors: got {} expect {}",
-                            constructor_ret_type.into_token_stream().to_string(),
-                            ret_type.into_token_stream().to_string()
+                            DisplayToTokens(constructor_ret_type),
+                            DisplayToTokens(&ret_type)
                         ),
                     ));
                 }
@@ -586,7 +586,7 @@ mod tests {
         let code = tokens.to_string();
         let class: T = syn::parse2(tokens).unwrap_or_else(|err| {
             let mut err: DiagnosticError = err.into();
-            err.register_src("test_parse".into(), code);
+            err.register_src_if_no("test_parse".into(), code);
             panic_on_parse_error(&err);
         });
         class

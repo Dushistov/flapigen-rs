@@ -1,1 +1,1 @@
-
+"public final Boo getBoo()";

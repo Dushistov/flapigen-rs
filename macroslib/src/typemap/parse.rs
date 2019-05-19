@@ -15,9 +15,9 @@ use syn::{
 use crate::{
     error::{DiagnosticError, Result},
     typemap::{
-        ast::{normalize_ty_lifetimes, GenericTypeConv, TypeName},
+        ast::{normalize_ty_lifetimes, DisplayToTokens, GenericTypeConv, TypeName},
         make_unique_rust_typename,
-        ty::RustTypeS,
+        ty::{ForeignTypesStorage, RustTypeS},
         validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
     },
 };
@@ -50,7 +50,7 @@ pub(in crate::typemap) fn parse(
 ) -> Result<TypeMap> {
     let mut ret = do_parse(code, target_pointer_width, traits_usage_code);
     if let Err(ref mut err) = ret {
-        err.register_src(name.into(), code.into());
+        err.register_src_if_no(name.into(), code.into());
     }
     ret
 }
@@ -68,7 +68,6 @@ fn do_parse(
 
     let mut ret = TypeMap {
         conv_graph: TypesConvGraph::new(),
-        foreign_names_map: FxHashMap::default(),
         rust_names_map: FxHashMap::default(),
         utils_code: Vec::with_capacity(file.items.len()),
         generic_edges: Vec::<GenericTypeConv>::new(),
@@ -76,6 +75,7 @@ fn do_parse(
         foreign_classes: Vec::new(),
         exported_enums: FxHashMap::default(),
         traits_usage_code,
+        ftypes_storage: ForeignTypesStorage::default(),
     };
 
     macro_rules! handle_attrs {
@@ -177,7 +177,7 @@ fn fill_foreign_types_map(item_mod: &syn::ItemMod, ret: &mut TypeMap) -> Result<
         let rust_name = rust_name.typename;
         let rust_names_map = &mut ret.rust_names_map;
         let conv_graph = &mut ret.conv_graph;
-        let graph_id = *rust_names_map.entry(rust_name.clone()).or_insert_with(|| {
+        let graph_idx = *rust_names_map.entry(rust_name.clone()).or_insert_with(|| {
             let idx = conv_graph.add_node(Rc::new(RustTypeS::new_without_graph_idx(
                 rust_ty, rust_name,
             )));
@@ -186,9 +186,8 @@ fn fill_foreign_types_map(item_mod: &syn::ItemMod, ret: &mut TypeMap) -> Result<
                 .graph_idx = idx;
             idx
         });
-        let foreign_name = foreign_name.typename;
-        assert!(!ret.foreign_names_map.contains_key(&foreign_name));
-        ret.foreign_names_map.insert(foreign_name, graph_id);
+
+        ret.add_foreign_rust_ty_idx(foreign_name, graph_idx)?;
     }
     Ok(())
 }
@@ -213,7 +212,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                 ..
             }) = meta_attr
             {
-                ftype = Some(TypeName::new(value.value().into(), value.span()));
+                ftype = Some(TypeName::new(value.value(), value.span()));
             } else {
                 return Err(DiagnosticError::new(
                     meta_attr.span(),
@@ -236,7 +235,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     ));
                 };
                 let span = attr_value.span();
-                let mut attr_value_tn = TypeName::new(attr_value.value().into(), span);
+                let mut attr_value_tn = TypeName::new(attr_value.value(), span);
 
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
                 attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
@@ -264,17 +263,14 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     ));
                 };
                 let span = attr_value.span();
-                let mut attr_value_tn = TypeName::new(attr_value.value().into(), span);
+                let mut attr_value_tn = TypeName::new(attr_value.value(), span);
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
                 attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
                 let unique_name =
                     make_unique_rust_typename(&attr_value_tn.typename, &ftype.typename);
                 names_map.insert(
                     ftype,
-                    (
-                        TypeName::new(unique_name.into(), Span::call_site()),
-                        rust_ty,
-                    ),
+                    (TypeName::new(unique_name, Span::call_site()), rust_ty),
                 );
             } else {
                 return Err(DiagnosticError::new(
@@ -288,10 +284,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
         } else {
             return Err(DiagnosticError::new(
                 a.span(),
-                format!(
-                    "Unexpected attribute: '{}'",
-                    a.into_token_stream().to_string()
-                ),
+                format!("Unexpected attribute: '{}'", DisplayToTokens(a)),
             ));
         }
     }
@@ -808,6 +801,19 @@ mod swig_foreign_types_map {
             FxHashMap::default(),
         )
         .unwrap();
+        let ftype_set = {
+            let mut set = FxHashSet::default();
+            for ftype in types_map.ftypes_storage.iter() {
+                let r1 = ftype.into_from_rust.as_ref().unwrap();
+                let r2 = ftype.from_into_rust.as_ref().unwrap();
+                assert_eq!(r1.rust_ty, r2.rust_ty);
+                set.insert((
+                    ftype.name.typename.clone(),
+                    types_map.conv_graph[r1.rust_ty].normalized_name.as_str(),
+                ));
+            }
+            set
+        };
 
         assert_eq!(
             {
@@ -816,13 +822,7 @@ mod swig_foreign_types_map {
                 set.insert(("int".into(), "jint"));
                 set
             },
-            {
-                let mut set = FxHashSet::default();
-                for (k, v) in types_map.foreign_names_map {
-                    set.insert((k, types_map.conv_graph[v].normalized_name.as_str()));
-                }
-                set
-            }
+            ftype_set
         );
     }
 

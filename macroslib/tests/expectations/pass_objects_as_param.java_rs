@@ -1,0 +1,24 @@
+r#"# [ no_mangle ] pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f1 ( env : * mut JNIEnv , _ : jclass , this : jlong , a_0 : jlong , ) -> ( ) {
+ let a_0 : & RefCell < Foo > = unsafe { jlong_to_pointer ::< RefCell < Foo >> ( a_0 ) . as_mut ( ) . unwrap ( ) } ;
+ let this : & TestPassObjectsAsParams = unsafe { jlong_to_pointer ::< TestPassObjectsAsParams > ( this ) . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : ( ) = TestPassObjectsAsParams :: f1 ( this , a_0 , ) ;
+ ret }"#;
+
+r#"# [ no_mangle ] pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f2 ( env : * mut JNIEnv , _ : jclass , this : jlong , a_0 : jlong , ) -> ( ) {
+ let a_0 : * mut RefCell < Foo > = unsafe { jlong_to_pointer ::< RefCell < Foo >> ( a_0 ) . as_mut ( ) . unwrap ( ) } ;
+ let a_0 : Box < RefCell < Foo >> = unsafe { Box :: from_raw ( a_0 ) } ;
+ let a_0 : RefCell < Foo > = * a_0 ; let this : & TestPassObjectsAsParams = unsafe { jlong_to_pointer ::< TestPassObjectsAsParams > ( this ) . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : ( ) = TestPassObjectsAsParams :: f2 ( this , a_0 , ) ;
+ ret }"#;
+
+r#"# [ no_mangle ] pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f3 ( env : * mut JNIEnv , _ : jclass , this : jlong , a_0 : jlong , ) -> ( ) {
+ let a_0 : & mut RefCell < Foo > = unsafe { jlong_to_pointer ::< RefCell < Foo >> ( a_0 ) . as_mut ( ) . unwrap ( ) } ;
+ let this : & TestPassObjectsAsParams = unsafe { jlong_to_pointer ::< TestPassObjectsAsParams > ( this ) . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : ( ) = TestPassObjectsAsParams :: f3 ( this , a_0 , ) ; ret }"#;
+
+r#"pub extern "C" fn Java_org_example_Foo_init ( env : * mut JNIEnv , _ : jclass , a_0 : jint , a_1 : jstring , ) -> jlong {
+ let mut a_0 : i32 = a_0 . swig_into ( env ) ;
+ let mut a_1 : JavaString = a_1 . swig_into ( env ) ;
+ let mut a_1 : & str = a_1 . swig_deref ( ) ;
+ let this : Rc < RefCell < Foo > > = Foo :: new ( a_0 , a_1 , ) ;
+ let this : * const RefCell < Foo > = Rc :: into_raw ( this ) ; this as jlong }"#;

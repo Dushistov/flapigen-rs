@@ -8,7 +8,7 @@ use std::{
     rc::Rc,
 };
 
-use log::{log_enabled, trace};
+use log::trace;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
 use rustc_hash::FxHashMap;
@@ -32,8 +32,8 @@ use crate::typemap::{
 
 #[derive(Debug)]
 pub(crate) struct TypeName {
-    pub typename: SmolStr,
-    pub span: Span,
+    pub(crate) typename: SmolStr,
+    pub(crate) span: Span,
 }
 
 impl PartialEq for TypeName {
@@ -50,9 +50,28 @@ impl Hash for TypeName {
     }
 }
 
+impl Display for TypeName {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
+        f.write_str(self.typename.as_str())
+    }
+}
+
 impl TypeName {
-    pub fn new(typename: SmolStr, span: Span) -> Self {
-        TypeName { typename, span }
+    pub(crate) fn new<S: Into<SmolStr>>(tn: S, span: Span) -> Self {
+        TypeName {
+            typename: tn.into(),
+            span,
+        }
+    }
+    #[inline]
+    pub(crate) fn as_str(&self) -> &str {
+        self.typename.as_str()
+    }
+}
+
+impl<'a> From<&'a Ident> for TypeName {
+    fn from(id: &'a Ident) -> Self {
+        TypeName::new(id.to_string(), id.span())
     }
 }
 
@@ -415,13 +434,13 @@ fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
             }
         }
     }
-    if log_enabled!(log::Level::Trace) {
-        trace!(
-            "replace_all_types_with in_ty {}, subst_map {:?}",
-            in_ty.into_token_stream().to_string(),
-            subst_map
-        );
-    }
+
+    trace!(
+        "replace_all_types_with in_ty {}, subst_map {:?}",
+        DisplayToTokens(in_ty),
+        subst_map
+    );
+
     let mut rt = ReplaceTypes { subst_map };
     let mut new_ty = in_ty.clone();
     rt.visit_type_mut(&mut new_ty);
@@ -639,7 +658,7 @@ where
     T: ToTokens,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
-        write!(f, "{}", self.0.into_token_stream().to_string())
+        f.write_str(&self.0.into_token_stream().to_string())
     }
 }
 

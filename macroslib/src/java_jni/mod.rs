@@ -7,7 +7,6 @@ use std::fmt;
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
-use quote::ToTokens;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
@@ -16,13 +15,13 @@ use crate::{
     error::{DiagnosticError, Result},
     typemap::ast::{
         fn_arg_type, if_option_return_some_type, if_result_return_ok_err_types,
-        if_ty_result_return_ok_type,
+        if_ty_result_return_ok_type, DisplayToTokens,
     },
     typemap::{
         ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
-    LanguageGenerator, MethodVariant, TypeMap,
+    LanguageGenerator, MethodVariant, SourceCode, TypeMap,
 };
 
 #[derive(Clone, Copy)]
@@ -92,10 +91,16 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 }
 
 impl LanguageGenerator for JavaConfig {
-    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
-        //register for future use
+    fn init(
+        &self,
+        conv_map: &mut TypeMap,
+        _code: &[SourceCode],
+    ) -> std::result::Result<(), String> {
         conv_map.find_or_alloc_rust_type(&parse_type! { jint });
         conv_map.find_or_alloc_rust_type(&parse_type! { jlong });
+        Ok(())
+    }
+    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.span(), &err))?;
@@ -121,7 +126,7 @@ impl LanguageGenerator for JavaConfig {
                     correspoding_rust_type: my_jobj_ti,
                     name: class.name.to_string().into(),
                 },
-            );
+            )?;
 
             conv_map.find_or_alloc_rust_type(constructor_ret_type);
 
@@ -213,7 +218,7 @@ impl LanguageGenerator for JavaConfig {
             &f_methods_sign,
             self.null_annotation_package.as_ref().map(String::as_str),
         )
-        .map_err(|err| DiagnosticError::new(class.span(), &err))?;
+        .map_err(|err| DiagnosticError::new(class.span(), err))?;
         debug!("generate: java code done");
         let ast_items =
             rust_code::generate_rust_code(conv_map, &self.package_name, class, &f_methods_sign)?;
@@ -272,7 +277,7 @@ impl LanguageGenerator for JavaConfig {
             &parse_type! { jobject },
             &interface.name.to_string(),
         );
-        conv_map.add_foreign(my_jobj_ti, interface.name.to_string().into());
+        conv_map.add_foreign(my_jobj_ti, (&interface.name).into())?;
         Ok(items)
     }
 }
@@ -449,13 +454,14 @@ fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignerClassInfo) -> Option
     if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
         Some(
             if_result_return_ok_err_types(
-                &tm.ty_to_rust_type(constructor_ret_type).unwrap_or_else(|| {
-                    panic!(
-                        "Internal error: constructor type {} for class {} unknown",
-                        constructor_ret_type.into_token_stream().to_string(),
-                        class.name
-                    );
-                }),
+                &tm.ty_to_rust_type_checked(constructor_ret_type)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Internal error: constructor type {} for class {} unknown",
+                            DisplayToTokens(constructor_ret_type),
+                            class.name
+                        );
+                    }),
             )
             .map(|(ok_ty, _err_ty)| ok_ty)
             .unwrap_or_else(|| constructor_ret_type.clone()),

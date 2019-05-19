@@ -18,8 +18,8 @@ use crate::{
     cpp::map_type::map_type,
     error::{DiagnosticError, Result},
     file_cache::FileWriteCache,
-    typemap::ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     typemap::{
+        ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens, TypeName},
         ty::RustType,
         unpack_unique_typename,
         utils::{
@@ -98,9 +98,6 @@ struct MethodContext<'a> {
 
 impl LanguageGenerator for CppConfig {
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
-        //for future use
-        conv_map.find_or_alloc_rust_type(&parse_type! { u32 });
-
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
@@ -119,7 +116,7 @@ impl LanguageGenerator for CppConfig {
                     correspoding_rust_type: void_ptr_rust_ty.clone(),
                     name: foreign_typename.into(),
                 },
-            );
+            )?;
 
             let const_void_ptr_ty = parse_type! { *const ::std::os::raw::c_void };
             let const_void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
@@ -133,7 +130,7 @@ impl LanguageGenerator for CppConfig {
                     correspoding_rust_type: const_void_ptr_rust_ty.clone(),
                     name: const_foreign_typename.into(),
                 },
-            );
+            )?;
 
             let this_type_ty = &this_type.ty;
             //handle foreigner_class as input arg
@@ -294,12 +291,18 @@ May be you need to use `private constructor = empty;` syntax?",
 
         let rust_ty = conv_map.find_or_alloc_rust_type(&rust_ty);
 
-        conv_map.add_foreign(rust_ty, c_struct_pointer.into());
+        conv_map.add_foreign(
+            rust_ty,
+            TypeName::new(c_struct_pointer, interface.name.span()),
+        )?;
 
         Ok(items)
     }
 
-    fn place_foreign_lang_helpers(&self, code: &[SourceCode]) -> std::result::Result<(), String> {
+    fn init(&self, conv_map: &mut TypeMap, code: &[SourceCode]) -> std::result::Result<(), String> {
+        //for enum
+        conv_map.find_or_alloc_rust_type(&parse_type! { u32 });
+
         for cu in code {
             let src_path = self.output_dir.join(&cu.id_of_code);
             let mut src_file = FileWriteCache::new(&src_path);
