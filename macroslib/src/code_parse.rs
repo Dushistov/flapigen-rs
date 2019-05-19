@@ -586,7 +586,7 @@ mod tests {
         let code = tokens.to_string();
         let class: T = syn::parse2(tokens).unwrap_or_else(|err| {
             let mut err: DiagnosticError = err.into();
-            err.register_src("test_parse".into(), code);
+            err.register_src_if_no("test_parse".into(), code);
             panic_on_parse_error(&err);
         });
         class

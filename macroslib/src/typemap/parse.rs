@@ -50,7 +50,7 @@ pub(in crate::typemap) fn parse(
 ) -> Result<TypeMap> {
     let mut ret = do_parse(code, target_pointer_width, traits_usage_code);
     if let Err(ref mut err) = ret {
-        err.register_src(name.into(), code.into());
+        err.register_src_if_no(name.into(), code.into());
     }
     ret
 }

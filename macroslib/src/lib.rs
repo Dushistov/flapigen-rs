@@ -307,7 +307,7 @@ impl Generator {
             )
         });
         if let Err(mut err) = self.expand_str(&src_cnt, dst) {
-            err.register_src(
+            err.register_src_if_no(
                 format!("{}: {}", crate_name, src.as_ref().display()),
                 src_cnt.into(),
             );
