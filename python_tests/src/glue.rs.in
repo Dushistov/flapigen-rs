@@ -17,20 +17,20 @@ pub struct TestStaticClass {
 }
 
 impl TestStaticClass {
-    pub fn print_hello() {
-        println!("Hello from rust");
+    pub fn hello() -> String {
+        "Hello from rust".to_owned()
     }
 
-    pub fn print_number(i: i32) {
-        println!("print_number: {}", i);
+    pub fn format_number(i: i32) -> String{
+        format!("format_number: {}", i)
     }
 
-    pub fn print_str(s: &str) {
-        println!("print_str: {}", s);
+    pub fn format_str(s: &str) -> String {
+        format!("format_str: {}", s)
     }
 
-    pub fn print_string(s: String) {
-        println!("print_str: {}", s);
+    pub fn format_string(s: String) -> String {
+        format!("format_string: {}", s)
     }
 
     pub fn reverse_enum(e: TestEnum) -> TestEnum {
@@ -40,8 +40,8 @@ impl TestStaticClass {
         }
     }
 
-    pub fn call_test_class_print(test_object: &TestClass) {
-        test_object.print();
+    pub fn call_test_class_format(test_object: &TestClass) -> String {
+        test_object.format()
     }
 
     pub fn add(a: f32, b: f32) -> f32 {
@@ -124,8 +124,8 @@ impl TestClass {
         }
     }
 
-    pub fn print(&self) {
-        println!("TestClass::i: {}", self.i);
+    pub fn format(&self) -> String {
+        format!("TestClass::i: {}", self.i)
     }
 
     pub fn get(&self) -> i32 {
@@ -140,12 +140,12 @@ impl TestClass {
 foreigner_class!(
     /// Test class containing static methods only.
     class TestStaticClass {
-        static_method TestStaticClass::print_hello();
-        static_method TestStaticClass::print_number(i: i32);
+        static_method TestStaticClass::hello() -> String;
+        static_method TestStaticClass::format_number(i: i32) -> String;
         static_method TestStaticClass::add(a: f32, b: f32) -> f32;
-        static_method TestStaticClass::print_str(s: &str);
-        static_method TestStaticClass::print_string(s: String);
-        static_method TestStaticClass::call_test_class_print(test_object: &TestClass);
+        static_method TestStaticClass::format_str(s: &str) -> String;
+        static_method TestStaticClass::format_string(s: String) -> String;
+        static_method TestStaticClass::call_test_class_format(test_object: &TestClass) -> String;
         static_method TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
         static_method TestStaticClass::increment_vec(v: Vec<f32>) -> Vec<f32>;
         static_method TestStaticClass::return_slice(v: &[f32]) -> &[f32];
@@ -163,7 +163,7 @@ foreigner_class!(
         self_type TestClass;
         constructor TestClass::new() -> TestClass;
         method TestClass::increment(&mut self);
-        method TestClass::print(&self);
+        method TestClass::format(&self) -> String;
         method TestClass::add(&mut self, i: i32);
         method TestClass::add_ref(&mut self, i: &i32);
         method TestClass::get(&self) -> i32;
