@@ -1,6 +1,7 @@
 mod cpp_code;
 mod map_type;
 
+use crate::typemap::ty::ForeignType;
 use std::{
     io::Write,
     path::Path,
@@ -45,6 +46,7 @@ struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
     c_converter: String,
     pub(in crate::cpp) cpp_converter: Option<CppConverter>,
+    pub(in crate::cpp) ftype: Option<ForeignType>,
 }
 
 impl AsRef<ForeignTypeInfo> for CppForeignTypeInfo {
@@ -73,6 +75,7 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
             },
             c_converter: String::new(),
             cpp_converter: None,
+            ftype: None,
         }
     }
 }

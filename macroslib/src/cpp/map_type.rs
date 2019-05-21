@@ -51,6 +51,7 @@ fn special_type(
                 input_converter: format!("{} ? 1 : 0", FROM_VAR_TEMPLATE),
                 output_converter: format!("{} != 0", FROM_VAR_TEMPLATE),
             }),
+            ftype: None,
         }));
     }
 
@@ -66,6 +67,7 @@ fn special_type(
                 input_converter: "#error".into(),
                 output_converter: format!("RustString{{{from_var}}}", from_var = FROM_VAR_TEMPLATE),
             }),
+            ftype: None,
         }));
     }
 
@@ -97,6 +99,7 @@ fn special_type(
                         output_converter,
                         input_converter: format!("UNREACHABLE {}", line!()),
                     }),
+                    ftype: None,
                 }));
             } else {
                 let cpp_type = format!("const {} &", foreign_class.name);
@@ -110,6 +113,7 @@ fn special_type(
                         output_converter: format!("UNREACHABLE {}", line!()),
                         input_converter,
                     }),
+                    ftype: None,
                 }));
             }
         }
@@ -174,6 +178,7 @@ fn special_type(
                         output_converter: "#error".to_string(),
                         input_converter,
                     }),
+                    ftype: None,
                 }));
             }
         }
@@ -205,6 +210,7 @@ fn special_type(
                 output_converter: format!("{}({})", foreign_class.name, FROM_VAR_TEMPLATE),
                 input_converter: format!("{}.release()", FROM_VAR_TEMPLATE),
             }),
+            ftype: None,
         }));
     }
     if let Some(elem_ty) = if_vec_return_elem_type(arg_ty) {
@@ -316,6 +322,7 @@ fn calc_converter_for_enum(
         },
         c_converter,
         cpp_converter: None,
+        ftype: None,
     }
 }
 
@@ -659,6 +666,7 @@ fn handle_result_type_as_return_type(
                     output_converter,
                     input_converter: String::new(),
                 }),
+                ftype: None,
             }));
         } else if let Some(err_class) =
             conv_map.find_foreigner_class_with_such_self_type(&err_rust_ty, false)
@@ -694,6 +702,7 @@ fn handle_result_type_as_return_type(
                     output_converter,
                     input_converter: "#error".into(),
                 }),
+                ftype: None,
             }));
         } else if let Some(err_enum) = conv_map.is_this_exported_enum(&err_rust_ty) {
             let foreign_info = conv_map
@@ -725,6 +734,7 @@ fn handle_result_type_as_return_type(
                     output_converter,
                     input_converter: String::new(),
                 }),
+                ftype: None,
             }));
         } else {
             return Ok(None);
@@ -894,6 +904,7 @@ fn handle_option_type_in_input(
                 output_converter: "#error".to_string(),
                 input_converter,
             }),
+            ftype: None,
         }));
     }
 
@@ -1021,6 +1032,7 @@ fn handle_option_type_in_return(
                 output_converter,
                 input_converter: "#error".to_string(),
             }),
+            ftype: None,
         }));
     }
 
@@ -1094,6 +1106,7 @@ fn handle_option_type_in_return(
                     output_converter,
                     input_converter: "#error".to_string(),
                 }),
+                ftype: None,
             }));
         }
     }
@@ -1244,6 +1257,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
                 output_converter,
                 input_converter: String::new(),
             }),
+            ftype: None,
         }))
     } else if let Some(err_class) =
         conv_map.find_foreigner_class_with_such_self_type(&err_rust_ty, false)
@@ -1274,6 +1288,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
                 output_converter,
                 input_converter: "#error".into(),
             }),
+            ftype: None,
         }))
     } else {
         Ok(None)
