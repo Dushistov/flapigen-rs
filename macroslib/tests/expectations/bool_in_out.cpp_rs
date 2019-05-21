@@ -4,3 +4,18 @@ r#"pub extern "C" fn Foo_f1 ( this : * mut Foo , a_0 : :: std :: os :: raw :: c_
  let mut ret : bool = f1 ( this , a_0 ) ;
  let mut ret : :: std :: os :: raw :: c_char = <:: std :: os :: raw :: c_char >:: swig_from ( ret ) ;
  ret }"#;
+r#"pub extern "C" fn Foo_new ( a_0 : :: std :: os :: raw :: c_char , ) -> * const :: std :: os :: raw :: c_void {
+ let mut a_0 : bool = a_0 . swig_into ( ) ;
+ let this : Foo = Foo :: new ( a_0 ) ;
+ let this : Box < Foo > = Box :: new ( this ) ;
+ let this : * mut Foo = Box :: into_raw ( this ) ;
+ this as * const :: std :: os :: raw :: c_void
+ }"#;
+r#"# [ no_mangle ]
+ pub extern "C" fn Foo_f2 ( a_0 : :: std :: os :: raw :: c_char , ) -> :: std :: os :: raw :: c_char {
+ let mut a_0 : bool = a_0 . swig_into ( ) ;
+ let mut ret : bool = f2 ( a_0 ) ;
+ let mut ret : :: std :: os :: raw :: c_char = <:: std :: os :: raw :: c_char >:: swig_from ( ret ) ;
+ ret }"#;
+
+r#"onStateChanged1 : extern "C" fn ( a_0 : i32 , a_1 : :: std :: os :: raw :: c_char , _ : * const :: std :: os :: raw :: c_void ) -> ( ) ,"#;
