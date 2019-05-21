@@ -1,5 +1,7 @@
-use crate::{error::DiagnosticError, typemap::ast::TypeName};
-use petgraph::graph::NodeIndex;
+use crate::{
+    error::DiagnosticError,
+    typemap::{ast::TypeName, RustTypeIdx},
+};
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -10,7 +12,7 @@ pub(crate) struct RustTypeS {
     pub ty: syn::Type,
     pub normalized_name: SmolStr,
     pub implements: ImplementsSet,
-    pub(in crate::typemap) graph_idx: NodeIndex,
+    pub(in crate::typemap) graph_idx: RustTypeIdx,
 }
 
 impl fmt::Display for RustTypeS {
@@ -28,7 +30,7 @@ impl RustTypeS {
             ty,
             normalized_name: norm_name.into(),
             implements: ImplementsSet::default(),
-            graph_idx: NodeIndex::new(0),
+            graph_idx: RustTypeIdx::new(0),
         }
     }
     pub(in crate::typemap) fn implements(mut self, trait_name: &str) -> RustTypeS {
@@ -106,13 +108,13 @@ pub(crate) struct ForeignTypeS {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationRule {
-    pub(crate) rust_ty: NodeIndex,
+    pub(crate) rust_ty: RustTypeIdx,
     pub(crate) intermediate: Option<ForeignConversationIntermediate>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationIntermediate {
-    pub(crate) intermediate_ty: NodeIndex,
+    pub(crate) intermediate_ty: RustTypeIdx,
     pub(crate) conv_code: String,
 }
 
@@ -129,7 +131,7 @@ impl ForeignTypesStorage {
     pub(in crate::typemap) fn alloc_new(
         &mut self,
         tn: TypeName,
-        binded_rust_ty: NodeIndex,
+        binded_rust_ty: RustTypeIdx,
     ) -> Result<ForeignType, DiagnosticError> {
         if let Some(ft) = self.name_to_ftype.get(tn.as_str()) {
             let mut err = DiagnosticError::new(

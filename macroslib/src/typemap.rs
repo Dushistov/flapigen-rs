@@ -68,7 +68,9 @@ pub(crate) trait ForeignMethodSignature {
     fn input(&self) -> &[Self::FI];
 }
 
-type RustTypeNameToGraphIdx = FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>;
+pub(crate) type RustTypeIdx = NodeIndex<TypeGraphIdx>;
+
+type RustTypeNameToGraphIdx = FxHashMap<SmolStr, RustTypeIdx>;
 
 #[derive(Debug)]
 pub(crate) struct TypeMap {
@@ -216,7 +218,7 @@ struct TypeGraphSnapshot<'a> {
     conv_graph: &'a mut TypesConvGraph,
     rust_names_map: &'a RustTypeNameToGraphIdx,
     new_nodes_names_map: RustTypeNameToGraphIdx,
-    new_nodes: SmallVec<[NodeIndex<TypeGraphIdx>; 32]>,
+    new_nodes: SmallVec<[RustTypeIdx; 32]>,
     new_edges: SmallVec<[EdgeIndex<TypeGraphIdx>; 32]>,
 }
 
@@ -231,7 +233,7 @@ impl<'a> TypeGraphSnapshot<'a> {
         }
     }
 
-    fn node_for_ty(&mut self, (ty, ty_name): (syn::Type, SmolStr)) -> NodeIndex<TypeGraphIdx> {
+    fn node_for_ty(&mut self, (ty, ty_name): (syn::Type, SmolStr)) -> RustTypeIdx {
         let graph = &mut self.conv_graph;
         let mut new_node = false;
         let idx = if let Some(idx) = self.rust_names_map.get(&ty_name) {
@@ -267,12 +269,7 @@ impl<'a> TypeGraphSnapshot<'a> {
             })
     }
 
-    fn add_edge(
-        &mut self,
-        from: NodeIndex<TypeGraphIdx>,
-        to: NodeIndex<TypeGraphIdx>,
-        edge: TypeConvEdge,
-    ) {
+    fn add_edge(&mut self, from: RustTypeIdx, to: RustTypeIdx, edge: TypeConvEdge) {
         if self.conv_graph.find_edge(from, to).is_none() {
             let edge_idx = self.conv_graph.add_edge(from, to, edge);
             self.new_edges.push(edge_idx);
@@ -988,8 +985,8 @@ fn apply_code_template(
 
 fn find_conversation_path(
     conv_graph: &TypesConvGraph,
-    from: NodeIndex<TypeGraphIdx>,
-    to: NodeIndex<TypeGraphIdx>,
+    from: RustTypeIdx,
+    to: RustTypeIdx,
     build_for_sp: Span,
 ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
     trace!(
