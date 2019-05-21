@@ -2,6 +2,7 @@
 #[macro_use] extern crate cpython;
 use cpython::{ObjectProtocol, PyObject, PythonObjectWithTypeObject};
 
+// It is currently unused.
 mod swig_foreign_types_map {
     #![swig_foreigner_type = "()"]
     #![swig_rust_type = "()"]

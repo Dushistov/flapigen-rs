@@ -1,19 +1,23 @@
 use crate::{
-    ast, error::Result, DiagnosticError, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo,
-    ForeignerMethod, LanguageGenerator, MethodVariant, PythonConfig, RustType, SelfTypeVariant,
+    error::Result, DiagnosticError, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo,
+    ForeignerMethod, LanguageGenerator, MethodVariant, PythonConfig, SelfTypeVariant,
     TypeMap,
 };
+use crate::typemap::ast;
+use crate::typemap::ty::RustType;
 use heck::SnakeCase;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use quote::ToTokens;
 use std::ops::Deref;
 use syn::parse_quote;
-use syn::spanned::Spanned;
 use syn::{Ident, Type};
 
 impl LanguageGenerator for PythonConfig {
-    fn register_class(&self, _conv_map: &mut TypeMap, _class: &ForeignerClassInfo) -> Result<()> {
+    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
+        if let Some(ref ty) = class.self_type {
+            conv_map.find_or_alloc_rust_type(ty);
+        }
         Ok(())
     }
 
@@ -131,7 +135,7 @@ fn generate_rust_instance_field_and_methods(
     class: &ForeignerClassInfo,
 ) -> Result<(TokenStream, TokenStream)> {
     if let Some(ref rust_self_type) = class.self_type {
-        let self_type = &rust_self_type.ty;
+        let self_type = &rust_self_type;
         let class_name = &class.name;
         Ok((
             quote! {
@@ -166,7 +170,7 @@ fn generate_rust_instance_field_and_methods(
 fn generate_method_code(
     class: &ForeignerClassInfo,
     method: &ForeignerMethod,
-    conv_map: &TypeMap,
+    conv_map: &mut TypeMap,
 ) -> Result<TokenStream> {
     if method.is_dummy_constructor() {
         return Ok(TokenStream::new());
@@ -187,7 +191,7 @@ fn generate_method_code(
         .map(|(i, a)| {
             let arg_name = format!("a_{}", i);
             generate_conversion_for_argument(
-                &ast::fn_arg_type(a).clone().into(),
+                &conv_map.find_or_alloc_rust_type(ast::fn_arg_type(a)),
                 method.span(),
                 conv_map,
                 &arg_name,
@@ -215,7 +219,7 @@ fn generate_method_code(
         TokenStream::new()
     };
     let (return_type, rust_call_with_return_conversion) = generate_conversion_for_return(
-        &extract_return_type(&method.fn_decl.output),
+        &conv_map.find_or_alloc_rust_type(&extract_return_type(&method.fn_decl.output)),
         method.span(),
         conv_map,
         quote!{
@@ -253,7 +257,7 @@ fn method_name(method: &ForeignerMethod) -> Result<syn::Ident> {
 fn self_type_conversion(
     class: &ForeignerClassInfo,
     method: &ForeignerMethod,
-    conv_map: &TypeMap,
+    conv_map: &mut TypeMap,
 ) -> Result<Option<TokenStream>> {
     if let MethodVariant::Method(self_variant) = method.variant {
         let self_type = &class
@@ -264,15 +268,14 @@ fn self_type_conversion(
                     class.span(),
                     "Class have non-static methods, but no self_type",
                 )
-            })?
-            .ty;
-        let self_type_ref = match self_variant {
+            })?;
+        let self_type_ty = match self_variant {
             SelfTypeVariant::Rptr => parse_type!{&#self_type},
             SelfTypeVariant::RptrMut => parse_type!{&mut #self_type},
             _ => parse_type!{#self_type},
         };
         Ok(Some(
-            generate_conversion_for_argument(&self_type_ref.into(), method.span(), conv_map, "self")?.1,
+            generate_conversion_for_argument(&conv_map.find_or_alloc_rust_type(&self_type_ty), method.span(), conv_map, "self")?.1,
         ))
     } else {
         Ok(None)
@@ -292,14 +295,14 @@ fn has_any_methods(class: &ForeignerClassInfo) -> bool {
 fn generate_conversion_for_argument(
     rust_type: &RustType,
     method_span: Span,
-    conv_map: &TypeMap,
+    conv_map: &mut TypeMap,
     arg_name: &str,
 ) -> Result<(Type, TokenStream)> {
     let arg_name_ident: TokenStream = syn::parse_str(arg_name)?;
     if is_cpython_supported_type(rust_type) {
         Ok((rust_type.ty.clone(), arg_name_ident))
     } else if let Some(foreign_class) =
-        conv_map.find_foreigner_class_with_such_self_type(&rust_type.ty, true)
+        conv_map.find_foreigner_class_with_such_self_type(&rust_type, true)
     {
         let class_name = foreign_class.name.to_string();
         let py_mod_str = py_wrapper_mod_name(&class_name);
@@ -326,7 +329,7 @@ fn generate_conversion_for_argument(
             ));
         };
         Ok((py_type, self_conversion_code))
-    } else if let Some(enum_info) = conv_map.is_this_exported_enum(&rust_type.ty) {
+    } else if let Some(enum_info) = conv_map.is_this_exported_enum(&rust_type) {
         let enum_py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&enum_info.name.to_string()))?;
         Ok((
             parse_type!(u32),
@@ -334,9 +337,9 @@ fn generate_conversion_for_argument(
                 super::#enum_py_mod::from_u32(py, #arg_name_ident)?
             }
         ))
-    } else if let Some(inner) = ast::if_option_return_some_type(&rust_type.ty) {
+    } else if let Some(inner) = ast::if_option_return_some_type(&rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
-            &inner.into(),
+            &conv_map.find_or_alloc_rust_type(&inner),
             method_span,
             conv_map,
             "inner",
@@ -352,7 +355,7 @@ fn generate_conversion_for_argument(
         ))
     } else if let Some(inner) = ast::if_type_slice_return_elem_type(&rust_type.ty, false) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
-            &inner.clone().into(),
+            &conv_map.find_or_alloc_rust_type(&inner),
             method_span,
             conv_map,
             "inner",
@@ -363,9 +366,9 @@ fn generate_conversion_for_argument(
                 &#arg_name_ident.into_iter().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
             }
         ))
-    } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type.ty) {
+    } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
-            &inner.clone().into(),
+            &conv_map.find_or_alloc_rust_type(&inner),
             method_span,
             conv_map,
             "inner",
@@ -381,7 +384,7 @@ fn generate_conversion_for_argument(
             return Err(DiagnosticError::new(method_span, "mutable reference is only supported for exported class types"));
         }
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
-            &inner.elem.deref().clone().into(),
+            &conv_map.find_or_alloc_rust_type(&inner.elem.deref()),
             method_span,
             conv_map,
             arg_name,
@@ -403,7 +406,7 @@ fn generate_conversion_for_argument(
 fn generate_conversion_for_return(
     rust_type: &RustType,
     method_span: Span,
-    conv_map: &TypeMap,
+    conv_map: &mut TypeMap,
     rust_call: TokenStream,
 ) -> Result<(Type, TokenStream)> {
     // let ret_name_ident: TokenStream = syn::parse_str(ret_name)?;
@@ -416,7 +419,7 @@ fn generate_conversion_for_return(
         ))
     } else if is_cpython_supported_type(rust_type) {
         Ok((rust_type.ty.clone(), rust_call))
-    } else if let Some(class) = conv_map.find_foreigner_class_with_such_this_type(&rust_type.ty) {
+    } else if let Some(class) = conv_map.find_foreigner_class_with_such_self_type(&rust_type, true) {
         let class_name = &class.name;
         let py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&class_name.to_string()))?;
         let conversion = if let Type::Reference(_) = rust_type.ty {
@@ -441,16 +444,16 @@ fn generate_conversion_for_return(
             parse_type!(super::#py_mod::#class_name),
             conversion,
         ))
-    } else if conv_map.is_this_exported_enum(&rust_type.ty).is_some() {
+    } else if conv_map.is_this_exported_enum(&rust_type).is_some() {
         Ok((
             parse_type!(u32),
             quote!{
                 #rust_call as u32
             }
         ))
-    } else if let Some(inner) = ast::if_option_return_some_type(&rust_type.ty) {
+    } else if let Some(inner) = ast::if_option_return_some_type(&rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
-            &inner.into(),
+            &conv_map.find_or_alloc_rust_type(&inner),
             method_span,
             conv_map,
             quote!{inner},
@@ -466,7 +469,7 @@ fn generate_conversion_for_return(
         ))
     } else if let Some(inner) = ast::if_type_slice_return_elem_type(&rust_type.ty, false) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
-            &inner.clone().into(),
+            &conv_map.find_or_alloc_rust_type(&inner),
             method_span,
             conv_map,
             quote!{inner},
@@ -477,9 +480,9 @@ fn generate_conversion_for_return(
                 #rust_call.iter().cloned().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
             }
         ))
-    } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type.ty) {
+    } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
-            &inner.clone().into(),
+            &conv_map.find_or_alloc_rust_type(&inner),
             method_span,
             conv_map,
             quote!{inner},
@@ -490,9 +493,9 @@ fn generate_conversion_for_return(
                 #rust_call.into_iter().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
             }
         ))
-    } else if let Some((inner_ok, _inner_err)) = ast::if_result_return_ok_err_types(&rust_type.ty) {
+    } else if let Some((inner_ok, _inner_err)) = ast::if_result_return_ok_err_types(&rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
-            &inner_ok.into(),
+            &conv_map.find_or_alloc_rust_type(&inner_ok),
             method_span,
             conv_map,
             quote!{ok_inner},
@@ -508,7 +511,7 @@ fn generate_conversion_for_return(
         ))
     } else if let Type::Reference(ref inner) = rust_type.ty {
         generate_conversion_for_return(
-            &inner.elem.deref().clone().into(),
+            &conv_map.find_or_alloc_rust_type(&inner.elem.deref()),
             method_span,
             conv_map,
             quote!{(#rust_call).clone()}
@@ -529,16 +532,13 @@ fn is_cpython_supported_type(rust_type: &RustType) -> bool {
     primitive_types.contains(&rust_type.normalized_name.as_str())
 }
 
-fn extract_return_type(syn_return_type: &syn::ReturnType) -> RustType {
+fn extract_return_type(syn_return_type: &syn::ReturnType) -> Type {
     match syn_return_type {
         syn::ReturnType::Default => {
-            let mut ty: Type = parse_type! { () };
-            ast::change_span(&mut ty, syn_return_type.span());
-            ty.into()
+            parse_type! { () }
         }
         syn::ReturnType::Type(_, ref ty) => {
-            let ty: Type = *ty.clone();
-            ty.into()
+            ty.deref().clone()
         }
     }
 }
