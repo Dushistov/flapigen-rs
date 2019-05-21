@@ -1,7 +1,8 @@
 use crate::{
     error::DiagnosticError,
-    typemap::{ast::TypeName, RustTypeIdx},
+    typemap::{ast::TypeName, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
 };
+use proc_macro2::Span;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -113,9 +114,25 @@ pub(crate) struct ForeignConversationRule {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct FtypeConvCode {
+    span: Span,
+    code: String,
+}
+
+impl FtypeConvCode {
+    /// # Panics
+    pub(crate) fn new<S: Into<String>>(code: S, span: Span) -> FtypeConvCode {
+        let code: String = code.into();
+        assert!(code.contains(TO_VAR_TEMPLATE));
+        assert!(code.contains(FROM_VAR_TEMPLATE));
+        FtypeConvCode { code, span }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationIntermediate {
     pub(crate) intermediate_ty: RustTypeIdx,
-    pub(crate) conv_code: String,
+    pub(crate) conv_code: FtypeConvCode,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -155,6 +172,7 @@ impl ForeignTypesStorage {
     }
 
     pub(in crate::typemap) fn add_new_ftype(&mut self, ft: ForeignTypeS) -> ForeignType {
+        assert!(self.name_to_ftype.get(ft.name.as_str()).is_none());
         let idx = ForeignType(self.ftypes.len());
         self.ftypes.push(ft);
         self.name_to_ftype

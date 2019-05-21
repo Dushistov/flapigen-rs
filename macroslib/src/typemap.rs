@@ -24,7 +24,10 @@ use crate::{
             check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
             DisplayToTokens, GenericTypeConv, TypeName,
         },
-        ty::{ForeignConversationRule, ForeignType, ForeignTypesStorage, RustType, RustTypeS},
+        ty::{
+            ForeignConversationRule, ForeignType, ForeignTypeS, ForeignTypesStorage, RustType,
+            RustTypeS,
+        },
     },
     ForeignEnumInfo, ForeignerClassInfo,
 };
@@ -922,6 +925,16 @@ impl TypeMap {
         self.rust_names_map
             .get(&name)
             .map(|idx| self.conv_graph[*idx].clone())
+    }
+
+    pub(crate) fn alloc_new_ftype(&mut self, fts: ForeignTypeS) -> Result<ForeignType> {
+        if let Some(ft) = self.ftypes_storage.find_ftype_by_name(fts.name.as_str()) {
+            return Err(DiagnosticError::new(
+                self.ftypes_storage[ft].name.span,
+                format!("Type {} already defined here", fts.name),
+            ));
+        }
+        Ok(self.ftypes_storage.add_new_ftype(fts))
     }
 }
 
