@@ -43,6 +43,9 @@ impl RustTypeS {
         self.normalized_name = other.normalized_name.clone();
         self.implements.insert_set(&other.implements);
     }
+    pub fn as_idx(&self) -> RustTypeIdx {
+        self.graph_idx
+    }
 }
 
 pub(crate) type RustType = Rc<RustTypeS>;
@@ -114,25 +117,24 @@ pub(crate) struct ForeignConversationRule {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct FtypeConvCode {
+pub(crate) struct FTypeConvCode {
     span: Span,
     code: String,
 }
 
-impl FtypeConvCode {
+impl FTypeConvCode {
     /// # Panics
-    pub(crate) fn new<S: Into<String>>(code: S, span: Span) -> FtypeConvCode {
+    pub(crate) fn new<S: Into<String>>(code: S, span: Span) -> FTypeConvCode {
         let code: String = code.into();
-        assert!(code.contains(TO_VAR_TEMPLATE));
-        assert!(code.contains(FROM_VAR_TEMPLATE));
-        FtypeConvCode { code, span }
+        assert!(code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE));
+        FTypeConvCode { code, span }
     }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationIntermediate {
     pub(crate) intermediate_ty: RustTypeIdx,
-    pub(crate) conv_code: FtypeConvCode,
+    pub(crate) conv_code: FTypeConvCode,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -202,6 +204,15 @@ impl ForeignTypesStorage {
 
     pub(in crate::typemap) fn iter(&self) -> impl Iterator<Item = &ForeignTypeS> {
         self.ftypes.iter()
+    }
+
+    pub(in crate::typemap) fn iter_enumerate(
+        &self,
+    ) -> impl Iterator<Item = (ForeignType, &ForeignTypeS)> {
+        self.ftypes
+            .iter()
+            .enumerate()
+            .map(|(idx, item)| (ForeignType(idx), item))
     }
 
     pub(in crate::typemap) fn into_iter(self) -> impl Iterator<Item = ForeignTypeS> {
