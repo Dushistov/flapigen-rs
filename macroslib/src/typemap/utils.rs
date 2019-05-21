@@ -2,9 +2,8 @@ use proc_macro2::TokenStream;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
-    ast::{fn_arg_type, RustType},
     error::{DiagnosticError, Result},
-    typemap::{ForeignMethodSignature, ForeignTypeInfo, TypeMap},
+    typemap::{ast::fn_arg_type, ty::RustType, ForeignMethodSignature, ForeignTypeInfo, TypeMap},
     ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
 };
 
@@ -29,8 +28,9 @@ pub(crate) fn foreign_from_rust_convert_method_output(
         syn::ReturnType::Type(_, ref p_ty) => (**p_ty).clone(),
     };
     let context_span = rust_ret_ty.span();
+    let rust_ret_ty = conv_map.find_or_alloc_rust_type(&rust_ret_ty);
     conv_map.convert_rust_types(
-        &rust_ret_ty.into(),
+        &rust_ret_ty,
         &f_output.correspoding_rust_type,
         var_name,
         func_ret_type,
@@ -64,7 +64,7 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
         .zip(f_method.input().iter())
         .zip(arg_names)
     {
-        let to: RustType = fn_arg_type(to_type).clone().into();
+        let to: RustType = conv_map.find_or_alloc_rust_type(fn_arg_type(to_type));
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             &f_from.as_ref().correspoding_rust_type,
             &to,
@@ -128,7 +128,7 @@ pub(crate) fn rust_to_foreign_convert_method_inputs<
         .zip(f_method.input().iter())
         .zip(arg_names)
     {
-        let from: RustType = fn_arg_type(from_ty).clone().into();
+        let from: RustType = conv_map.find_or_alloc_rust_type(fn_arg_type(from_ty));
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             &from,
             &to_f.as_ref().correspoding_rust_type,

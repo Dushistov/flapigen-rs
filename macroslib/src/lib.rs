@@ -14,7 +14,6 @@ macro_rules! parse_type {
     }}
 }
 
-mod ast;
 mod code_parse;
 mod cpp;
 mod error;
@@ -34,14 +33,12 @@ use std::{
 
 use log::{debug, trace};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::ToTokens;
 use rustc_hash::FxHashSet;
 use syn::{parse_quote, spanned::Spanned, Token, Type};
 
 use crate::{
-    ast::RustType,
     error::{panic_on_parse_error, DiagnosticError, Result},
-    typemap::TypeMap,
+    typemap::{ast::DisplayToTokens, TypeMap},
 };
 
 /// Calculate target pointer width from environment variable
@@ -335,7 +332,7 @@ impl Generator {
             )
         });
         if let Err(mut err) = self.expand_str(&src_cnt, dst) {
-            err.register_src(
+            err.register_src_if_no(
                 format!("{}: {}", crate_name, src.as_ref().display()),
                 src_cnt.into(),
             );
@@ -366,7 +363,7 @@ impl Generator {
         let mut file = file_cache::FileWriteCache::new(dst.as_ref());
 
         for item in items {
-            write!(&mut file, "{}", item.into_token_stream().to_string()).expect("mem I/O failed");
+            write!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
         }
 
         let mut output_code = vec![];
@@ -377,7 +374,7 @@ impl Generator {
                     .iter()
                     .any(|x| item_macro.mac.path.is_ident(x));
                 if !is_our_macro {
-                    writeln!(&mut file, "{}", item_macro.into_token_stream().to_string())
+                    writeln!(&mut file, "{}", DisplayToTokens(&item_macro))
                         .expect("mem I/O failed");
                     continue;
                 }
@@ -387,8 +384,8 @@ impl Generator {
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS) {
                     let fclass = code_parse::parse_foreigner_class(&self.config, tts)?;
                     debug!(
-                        "expand_foreigner_class: self {:?}, this_for_method {:?}, constructor {:?}",
-                        fclass.self_type, fclass.this_type_for_method, fclass.constructor_ret_type
+                        "expand_foreigner_class: self {:?}, constructor {:?}",
+                        fclass.self_type, fclass.constructor_ret_type
                     );
                     self.conv_map.register_foreigner_class(&fclass);
                     Generator::language_generator(&self.config)
@@ -442,8 +439,7 @@ impl Generator {
                     }
                 }
                 OutputCode::Item(item) => {
-                    writeln!(&mut file, "{}", item.into_token_stream().to_string())
-                        .expect("mem I/O failed");
+                    writeln!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
                 }
             }
         }
@@ -481,7 +477,7 @@ impl Generator {
         }
 
         Generator::language_generator(&self.config)
-            .place_foreign_lang_helpers(&self.foreign_lang_helpers)
+            .init(&mut self.conv_map, &self.foreign_lang_helpers)
             .map_err(|err| {
                 DiagnosticError::new(
                     Span::call_site(),
@@ -505,9 +501,7 @@ impl Generator {
 struct ForeignerClassInfo {
     name: Ident,
     methods: Vec<ForeignerMethod>,
-    self_type: Option<RustType>,
-    /// Not necessarily equal to self_type, may be for example Rc<self_type>
-    this_type_for_method: Option<Type>,
+    self_type: Option<Type>,
     foreigner_code: String,
     /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
     constructor_ret_type: Option<Type>,
@@ -519,16 +513,10 @@ impl ForeignerClassInfo {
     fn span(&self) -> Span {
         self.name.span()
     }
-    fn self_type_name(&self) -> &str {
-        self.self_type
-            .as_ref()
-            .map(|x| x.normalized_name.as_str())
-            .unwrap_or("")
-    }
     fn self_type_as_ty(&self) -> Type {
         self.self_type
             .as_ref()
-            .map(|x| x.ty.clone())
+            .cloned()
             .unwrap_or_else(|| parse_quote! { () })
     }
     /// common for several language binding generator code
@@ -567,8 +555,6 @@ struct ForeignerMethod {
     rust_id: syn::Path,
     fn_decl: FnDecl,
     name_alias: Option<Ident>,
-    /// cache if rust_fn_decl.output == Result
-    may_return_error: bool,
     access: MethodAccess,
     doc_comments: Vec<String>,
 }
@@ -578,12 +564,6 @@ struct FnDecl {
     span: Span,
     inputs: syn::punctuated::Punctuated<syn::FnArg, Token![,]>,
     output: syn::ReturnType,
-}
-
-impl FnDecl {
-    fn span(&self) -> Span {
-        self.span
-    }
 }
 
 impl From<syn::FnDecl> for crate::FnDecl {
@@ -715,7 +695,12 @@ trait LanguageGenerator {
         interace: &ForeignInterface,
     ) -> Result<Vec<TokenStream>>;
 
-    fn place_foreign_lang_helpers(&self, _: &[SourceCode]) -> std::result::Result<(), String> {
+    /// Called before any other methods and only once
+    fn init(
+        &self,
+        _type_map: &mut TypeMap,
+        _foreign_lang_helpers: &[SourceCode],
+    ) -> std::result::Result<(), String> {
         Ok(())
     }
     

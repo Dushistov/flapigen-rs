@@ -20,9 +20,11 @@ impl DiagnosticError {
     pub fn span_note<T: Display>(&mut self, sp: Span, err: T) {
         self.data.push(syn::Error::new(sp, err));
     }
-    pub fn register_src(&mut self, src_id: String, src: String) {
-        self.src_id = src_id;
-        self.src = src;
+    pub fn register_src_if_no(&mut self, src_id: String, src: String) {
+        if self.src_id.is_empty() {
+            self.src_id = src_id;
+            self.src = src;
+        }
     }
 }
 

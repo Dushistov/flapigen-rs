@@ -3,13 +3,11 @@ language: rust
 rust:
   - stable
   - beta
-  - nightly
 matrix:
   allow_failures:
     - rust: nightly
 os:
   - linux
-  - osx
 cache: cargo
 addons:
   apt:
@@ -40,4 +38,4 @@ script:
   - echo $RUSTC_WRAPPER
   - echo ${TRAVIS_RUST_VERSION}
   - ln -s workspace.Cargo.toml Cargo.toml
-  - python ci_build_and_test.py
+  - python ci_build_and_test.py --skip-android-tests

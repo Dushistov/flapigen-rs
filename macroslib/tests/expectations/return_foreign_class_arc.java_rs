@@ -1,2 +1,5 @@
-r#"pub extern "C" fn Java_org_example_Moo_do_1getBoo ( env : * mut JNIEnv , _ : jclass , this : jlong , ) -> jobject"#;
+r#"# [ no_mangle ] pub extern "C" fn Java_org_example_Moo_do_1getBoo ( env : * mut JNIEnv , _ : jclass , this : jlong , ) -> jobject {
+ let this : & Moo = unsafe { jlong_to_pointer ::< Moo > ( this ) . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : Arc < Mutex < Boo > > = TestPathAndResult :: get_boo ( this , ) ;
+ let mut ret : jobject = < jobject >:: swig_from ( ret , env ) ; ret }"#;
 

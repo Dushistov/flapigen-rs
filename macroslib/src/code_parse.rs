@@ -1,6 +1,5 @@
 use log::debug;
 use proc_macro2::{Ident, TokenStream};
-use quote::ToTokens;
 use syn::{
     braced, parenthesized,
     parse::{Parse, ParseStream},
@@ -11,8 +10,8 @@ use syn::{
 };
 
 use crate::{
-    ast::{if_result_return_ok_err_types, normalize_ty_lifetimes},
     error::Result,
+    typemap::ast::{normalize_ty_lifetimes, DisplayToTokens},
     ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod, ForeignerClassInfo,
     ForeignerMethod, LanguageConfig, MethodAccess, MethodVariant, SelfTypeVariant,
 };
@@ -126,9 +125,9 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
                 _ => {
                     return Err(syn::Error::new(
                         a.span(),
-                        &format!(
+                        format!(
                             "Expect doc attribute or doc comment or derive here, got {}",
-                            meta.into_token_stream().to_string()
+                            DisplayToTokens(&meta)
                         ),
                     ));
                 }
@@ -166,7 +165,6 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     let mut foreigner_code = String::new();
     let mut has_dummy_constructor = false;
     let mut constructor_ret_type: Option<Type> = None;
-    let mut this_type_for_method: Option<Type> = None;
     let mut methods = Vec::with_capacity(10);
 
     static CONSTRUCTOR: &str = "constructor";
@@ -238,21 +236,15 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 content.parse::<Token![->]>()?;
                 let ret_type: Type = content.parse()?;
                 debug!("constructor ret_ty {:?}", ret_type);
-                constructor_ret_type = Some(ret_type.clone());
-                this_type_for_method = Some(
-                    if_result_return_ok_err_types(constructor_ret_type.as_ref().unwrap())
-                        .unwrap_or_else(|| (ret_type.clone(), ret_type))
-                        .0,
-                );
+                constructor_ret_type = Some(ret_type);
             }
             content.parse::<Token![;]>()?;
             if access != MethodAccess::Private {
                 return Err(content.error("dummy constructor should be private"));
             }
-            if this_type_for_method.is_none() {
+            if constructor_ret_type.is_none() {
                 if let Some(rust_self_type) = rust_self_type.as_ref() {
                     let self_type: Type = (*rust_self_type).clone();
-                    this_type_for_method = Some(self_type.clone());
                     constructor_ret_type = Some(self_type);
                 } else {
                     return Err(syn::Error::new(
@@ -281,7 +273,6 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 rust_id: dummy_path,
                 fn_decl: dummy_func.into(),
                 name_alias: None,
-                may_return_error: false,
                 access,
                 doc_comments,
             });
@@ -333,7 +324,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 Some(first_arg) => {
                     return Err(content.error(format!(
                         "Can not parse type {} as self type",
-                        first_arg.into_token_stream().to_string()
+                        DisplayToTokens(first_arg)
                     )));
                 }
                 None => {
@@ -358,12 +349,9 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             content.parse::<Token![;]>()?;
         }
 
-        let (may_return_error, ret_type) = match out_type {
-            syn::ReturnType::Default => (false, None),
-            syn::ReturnType::Type(_, ref ptype) => (
-                if_result_return_ok_err_types(&*ptype).is_some(),
-                Some((*ptype).clone()),
-            ),
+        let ret_type = match out_type {
+            syn::ReturnType::Default => None,
+            syn::ReturnType::Type(_, ref ptype) => Some((*ptype).clone()),
         };
         if func_type == MethodVariant::Constructor {
             let ret_type = match ret_type {
@@ -379,11 +367,14 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 if normalize_ty_lifetimes(constructor_ret_type)
                     != normalize_ty_lifetimes(&*ret_type)
                 {
-                    return Err(content.error(format!(
-                        "mismatched types of construtors: got {} expect {}",
-                        constructor_ret_type.into_token_stream().to_string(),
-                        ret_type.into_token_stream().to_string()
-                    )));
+                    return Err(syn::Error::new(
+                        constructor_ret_type.span(),
+                        format!(
+                            "mismatched types of construtors: got {} expect {}",
+                            DisplayToTokens(constructor_ret_type),
+                            DisplayToTokens(&ret_type)
+                        ),
+                    ));
                 }
             } else {
                 debug!(
@@ -391,11 +382,6 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                     class_name, ret_type
                 );
                 constructor_ret_type = Some((*ret_type).clone());
-                this_type_for_method = Some(
-                    if_result_return_ok_err_types(constructor_ret_type.as_ref().unwrap())
-                        .unwrap_or_else(|| ((*ret_type).clone(), *ret_type))
-                        .0,
-                );
             }
         }
         let span = func_name.span();
@@ -408,7 +394,6 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 output: out_type,
             },
             name_alias: func_name_alias,
-            may_return_error,
             access,
             doc_comments,
         });
@@ -433,8 +418,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     Ok(ForeignerClassInfo {
         name: class_name,
         methods,
-        self_type: rust_self_type.map(|x| x.clone().into()),
-        this_type_for_method,
+        self_type: rust_self_type,
         foreigner_code,
         constructor_ret_type,
         doc_comments: class_doc_comments,
@@ -615,7 +599,7 @@ mod tests {
         let code = tokens.to_string();
         let class: T = syn::parse2(tokens).unwrap_or_else(|err| {
             let mut err: DiagnosticError = err.into();
-            err.register_src("test_parse".into(), code);
+            err.register_src_if_no("test_parse".into(), code);
             panic_on_parse_error(&err);
         });
         class

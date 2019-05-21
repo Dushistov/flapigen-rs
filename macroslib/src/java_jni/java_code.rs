@@ -5,6 +5,8 @@ use bitflags::bitflags;
 use crate::{
     file_cache::FileWriteCache,
     java_jni::{fmt_write_err_map, method_name, JniForeignMethodSignature, NullAnnotation},
+    typemap::ast::if_result_return_ok_err_types,
+    typemap::TypeMap,
     ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant,
 };
 
@@ -130,6 +132,7 @@ public interface {interface_name} {{
 }
 
 pub(in crate::java_jni) fn generate_java_code(
+    conv_map: &mut TypeMap,
     output_dir: &Path,
     package_name: &str,
     class: &ForeignerClassInfo,
@@ -167,7 +170,16 @@ public final class {class_name} {{
             doc_comments = doc_comments_to_java_comments(&method.doc_comments, false)
         )
         .map_err(&map_write_err)?;
-        let exception_spec = if method.may_return_error {
+
+        let may_return_error = match method.fn_decl.output {
+            syn::ReturnType::Default => false,
+            syn::ReturnType::Type(_, ref ptype) => {
+                let ret_rust_ty = conv_map.find_or_alloc_rust_type(ptype);
+                if_result_return_ok_err_types(&ret_rust_ty).is_some()
+            }
+        };
+
+        let exception_spec = if may_return_error {
             "throws Exception"
         } else {
             ""
@@ -463,7 +475,22 @@ fn doc_comments_to_java_comments(doc_comments: &[String], class_comments: bool) 
         if !class_comments {
             comments.push_str("    ");
         }
-        write!(&mut comments, "//{}", comment.trim()).unwrap();
+        if i == 0 {
+            comments.push_str("/**\n");
+            if !class_comments {
+                comments.push_str("    ");
+            }
+        }
+
+        write!(&mut comments, " * {}", comment.trim()).unwrap();
+
+        if i == doc_comments.len() - 1 {
+            comments.push('\n');
+            if !class_comments {
+                comments.push_str("    ");
+            }
+            comments.push_str(" */");
+        }
     }
     comments
 }

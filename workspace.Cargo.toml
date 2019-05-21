@@ -1,2 +1,6 @@
 [workspace]
-members = ["macroslib", "jni_tests", "c++_tests", "android-example", "python_tests"]
+members = ["macroslib", "jni_tests", "c++_tests", "android-example", "python_tests", "debug-util"]
+
+[profile.release]
+debug = true
+incremental = true
