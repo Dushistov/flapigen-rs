@@ -1,5 +1,8 @@
-use crate::{error::DiagnosticError, typemap::ast::TypeName};
-use petgraph::graph::NodeIndex;
+use crate::{
+    error::DiagnosticError,
+    typemap::{ast::TypeName, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
+};
+use proc_macro2::Span;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -10,7 +13,7 @@ pub(crate) struct RustTypeS {
     pub ty: syn::Type,
     pub normalized_name: SmolStr,
     pub implements: ImplementsSet,
-    pub(in crate::typemap) graph_idx: NodeIndex,
+    pub(in crate::typemap) graph_idx: RustTypeIdx,
 }
 
 impl fmt::Display for RustTypeS {
@@ -28,7 +31,7 @@ impl RustTypeS {
             ty,
             normalized_name: norm_name.into(),
             implements: ImplementsSet::default(),
-            graph_idx: NodeIndex::new(0),
+            graph_idx: RustTypeIdx::new(0),
         }
     }
     pub(in crate::typemap) fn implements(mut self, trait_name: &str) -> RustTypeS {
@@ -39,6 +42,9 @@ impl RustTypeS {
         self.ty = other.ty.clone();
         self.normalized_name = other.normalized_name.clone();
         self.implements.insert_set(&other.implements);
+    }
+    pub fn as_idx(&self) -> RustTypeIdx {
+        self.graph_idx
     }
 }
 
@@ -104,16 +110,43 @@ pub(crate) struct ForeignTypeS {
     pub(crate) from_into_rust: Option<ForeignConversationRule>,
 }
 
+impl ForeignTypeS {
+    pub(crate) fn span(&self) -> Span {
+        self.name.span
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationRule {
-    pub(crate) rust_ty: NodeIndex,
+    pub(crate) rust_ty: RustTypeIdx,
     pub(crate) intermediate: Option<ForeignConversationIntermediate>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationIntermediate {
-    pub(crate) intermediate_ty: NodeIndex,
-    pub(crate) conv_code: String,
+    pub(crate) intermediate_ty: RustTypeIdx,
+    pub(crate) conv_code: FTypeConvCode,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct FTypeConvCode {
+    span: Span,
+    code: String,
+}
+
+impl FTypeConvCode {
+    /// # Panics
+    pub(crate) fn new<S: Into<String>>(code: S, span: Span) -> FTypeConvCode {
+        let code: String = code.into();
+        assert!(code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE));
+        FTypeConvCode { code, span }
+    }
+}
+
+impl ToString for FTypeConvCode {
+    fn to_string(&self) -> String {
+        self.code.clone()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -129,7 +162,7 @@ impl ForeignTypesStorage {
     pub(in crate::typemap) fn alloc_new(
         &mut self,
         tn: TypeName,
-        binded_rust_ty: NodeIndex,
+        binded_rust_ty: RustTypeIdx,
     ) -> Result<ForeignType, DiagnosticError> {
         if let Some(ft) = self.name_to_ftype.get(tn.as_str()) {
             let mut err = DiagnosticError::new(
@@ -153,6 +186,7 @@ impl ForeignTypesStorage {
     }
 
     pub(in crate::typemap) fn add_new_ftype(&mut self, ft: ForeignTypeS) -> ForeignType {
+        assert!(self.name_to_ftype.get(ft.name.as_str()).is_none());
         let idx = ForeignType(self.ftypes.len());
         self.ftypes.push(ft);
         self.name_to_ftype
@@ -182,6 +216,15 @@ impl ForeignTypesStorage {
 
     pub(in crate::typemap) fn iter(&self) -> impl Iterator<Item = &ForeignTypeS> {
         self.ftypes.iter()
+    }
+
+    pub(in crate::typemap) fn iter_enumerate(
+        &self,
+    ) -> impl Iterator<Item = (ForeignType, &ForeignTypeS)> {
+        self.ftypes
+            .iter()
+            .enumerate()
+            .map(|(idx, item)| (ForeignType(idx), item))
     }
 
     pub(in crate::typemap) fn into_iter(self) -> impl Iterator<Item = ForeignTypeS> {

@@ -4,7 +4,7 @@ mod parse;
 pub mod ty;
 pub mod utils;
 
-use std::{cell::RefCell, fmt, mem, rc::Rc};
+use std::{cell::RefCell, fmt, mem, ops, rc::Rc};
 
 use log::{debug, log_enabled, trace, warn};
 use petgraph::{
@@ -24,7 +24,10 @@ use crate::{
             check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
             DisplayToTokens, GenericTypeConv, TypeName,
         },
-        ty::{ForeignConversationRule, ForeignType, ForeignTypesStorage, RustType, RustTypeS},
+        ty::{
+            ForeignConversationRule, ForeignType, ForeignTypeS, ForeignTypesStorage, RustType,
+            RustTypeS,
+        },
     },
     ForeignEnumInfo, ForeignerClassInfo,
 };
@@ -68,7 +71,9 @@ pub(crate) trait ForeignMethodSignature {
     fn input(&self) -> &[Self::FI];
 }
 
-type RustTypeNameToGraphIdx = FxHashMap<SmolStr, NodeIndex<TypeGraphIdx>>;
+pub(crate) type RustTypeIdx = NodeIndex<TypeGraphIdx>;
+
+type RustTypeNameToGraphIdx = FxHashMap<SmolStr, RustTypeIdx>;
 
 #[derive(Debug)]
 pub(crate) struct TypeMap {
@@ -216,7 +221,7 @@ struct TypeGraphSnapshot<'a> {
     conv_graph: &'a mut TypesConvGraph,
     rust_names_map: &'a RustTypeNameToGraphIdx,
     new_nodes_names_map: RustTypeNameToGraphIdx,
-    new_nodes: SmallVec<[NodeIndex<TypeGraphIdx>; 32]>,
+    new_nodes: SmallVec<[RustTypeIdx; 32]>,
     new_edges: SmallVec<[EdgeIndex<TypeGraphIdx>; 32]>,
 }
 
@@ -231,7 +236,7 @@ impl<'a> TypeGraphSnapshot<'a> {
         }
     }
 
-    fn node_for_ty(&mut self, (ty, ty_name): (syn::Type, SmolStr)) -> NodeIndex<TypeGraphIdx> {
+    fn node_for_ty(&mut self, (ty, ty_name): (syn::Type, SmolStr)) -> RustTypeIdx {
         let graph = &mut self.conv_graph;
         let mut new_node = false;
         let idx = if let Some(idx) = self.rust_names_map.get(&ty_name) {
@@ -267,12 +272,7 @@ impl<'a> TypeGraphSnapshot<'a> {
             })
     }
 
-    fn add_edge(
-        &mut self,
-        from: NodeIndex<TypeGraphIdx>,
-        to: NodeIndex<TypeGraphIdx>,
-        edge: TypeConvEdge,
-    ) {
+    fn add_edge(&mut self, from: RustTypeIdx, to: RustTypeIdx, edge: TypeConvEdge) {
         if self.conv_graph.find_edge(from, to).is_none() {
             let edge_idx = self.conv_graph.add_edge(from, to, edge);
             self.new_edges.push(edge_idx);
@@ -593,7 +593,36 @@ impl TypeMap {
         }
     }
 
-    /// find correspoint to rust foreign type
+    #[deprecated(note = "TODO: should be removed in the future")]
+    pub(crate) fn map_ftype_to_ftype_info(
+        &self,
+        direction: petgraph::Direction,
+        ftype: ForeignType,
+    ) -> ForeignTypeInfo {
+        let ftype = &self[ftype];
+        let rtype_idx = match direction {
+            petgraph::Direction::Outgoing => {
+                ftype
+                    .into_from_rust
+                    .as_ref()
+                    .expect("Internal error: into_from_rust not defined")
+                    .rust_ty
+            }
+            petgraph::Direction::Incoming => {
+                ftype
+                    .from_into_rust
+                    .as_ref()
+                    .expect("Internal error: from_into_rust not defined")
+                    .rust_ty
+            }
+        };
+        ForeignTypeInfo {
+            name: ftype.name.typename.clone(),
+            correspoding_rust_type: self.conv_graph[rtype_idx].clone(),
+        }
+    }
+
+    #[deprecated(note = "Use map_through_conversation_to_foreign_ext instead")]
     pub(crate) fn map_through_conversation_to_foreign<
         F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
     >(
@@ -603,17 +632,32 @@ impl TypeMap {
         build_for_sp: Span,
         calc_this_type_for_method: F,
     ) -> Option<ForeignTypeInfo> {
+        self.map_through_conversation_to_foreign_ext(
+            rust_ty,
+            direction,
+            build_for_sp,
+            calc_this_type_for_method,
+        )
+        .map(|ftype| self.map_ftype_to_ftype_info(direction, ftype))
+    }
+
+    /// find correspoint to rust foreign type (extended)
+    pub(crate) fn map_through_conversation_to_foreign_ext<
+        F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
+    >(
+        &mut self,
+        rust_ty: &RustType,
+        direction: petgraph::Direction,
+        build_for_sp: Span,
+        calc_this_type_for_method: F,
+    ) -> Option<ForeignType> {
         debug!("map foreign: {} {:?}", rust_ty, direction);
 
         if direction == petgraph::Direction::Outgoing {
             if let Some(ftype) = self.rust_to_foreign_cache.get(&rust_ty.normalized_name) {
-                let ftype = &self.ftypes_storage[*ftype];
-                if let Some(ref to_rule) = ftype.into_from_rust {
-                    let to = &self.conv_graph[to_rule.rust_ty];
-                    return Some(ForeignTypeInfo {
-                        name: ftype.name.typename.clone(),
-                        correspoding_rust_type: to.clone(),
-                    });
+                let fts = &self.ftypes_storage[*ftype];
+                if fts.into_from_rust.is_some() {
+                    return Some(*ftype);
                 }
             }
         }
@@ -632,8 +676,8 @@ impl TypeMap {
                 Ok(x) => Some(x),
                 Err(_) => None,
             };
-            let mut min_path: Option<(usize, NodeIndex, SmolStr)> = None;
-            for ftype in self.ftypes_storage.iter() {
+            let mut min_path: Option<(usize, RustTypeIdx, ForeignType)> = None;
+            for (ftype_idx, ftype) in self.ftypes_storage.iter_enumerate() {
                 let (related_rty_idx, path) = match direction {
                     petgraph::Direction::Outgoing => {
                         if let Some(rule) = ftype.into_from_rust.as_ref() {
@@ -656,8 +700,8 @@ impl TypeMap {
                         ftype.name,
                         self.conv_graph[related_rty_idx]
                     );
-                    let cur: (usize, NodeIndex, SmolStr) =
-                        (path.len(), related_rty_idx, ftype.name.typename.clone());
+                    let cur: (usize, RustTypeIdx, ForeignType) =
+                        (path.len(), related_rty_idx, ftype_idx);
                     min_path = Some(if let Some(x) = min_path {
                         if cur.0 < x.0 {
                             cur
@@ -669,18 +713,13 @@ impl TypeMap {
                     });
                 }
             }
-            if let Some(min_path) = min_path {
-                let node = &self.conv_graph[min_path.1];
-
+            if let Some((_path_len, rust_type_idx, ftype)) = min_path {
                 debug!(
-                    "map foreign: we found min path {} <-> {}",
-                    rust_ty, min_path.2
+                    "map foreign: we found min path {} <-> {} ({})",
+                    rust_ty, self.conv_graph[rust_type_idx], self[ftype].name
                 );
 
-                return Some(ForeignTypeInfo {
-                    name: min_path.2,
-                    correspoding_rust_type: node.clone(),
-                });
+                return Some(ftype);
             }
         }
 
@@ -747,9 +786,9 @@ impl TypeMap {
         }
 
         let from: RustType = rust_ty.clone().into();
-        let mut possible_paths = Vec::<(PossiblePath, SmolStr, NodeIndex)>::new();
+        let mut possible_paths = Vec::<(PossiblePath, ForeignType, RustTypeIdx)>::new();
         for max_steps in 1..=MAX_TRY_BUILD_PATH_STEPS {
-            for ftype in self.ftypes_storage.iter() {
+            for (ftype_idx, ftype) in self.ftypes_storage.iter_enumerate() {
                 let (path, related_rust_ty) = match direction {
                     petgraph::Direction::Outgoing => {
                         if let Some(rule) = ftype.into_from_rust.as_ref() {
@@ -793,23 +832,24 @@ impl TypeMap {
                     }
                 };
                 if let Some(path) = path {
-                    possible_paths.push((path, ftype.name.typename.clone(), related_rust_ty));
+                    possible_paths.push((path, ftype_idx, related_rust_ty));
                 }
             }
             if !possible_paths.is_empty() {
                 break;
             }
         }
-        let ret = possible_paths.into_iter().min_by_key(|pp| pp.0.len()).map(
-            |(pp, foreign_name, graph_idx)| {
+        let ret = possible_paths
+            .into_iter()
+            .min_by_key(|(path, _, _)| path.len())
+            .map(|(pp, ftype, rtype_idx)| {
                 merge_path_to_conv_map(pp, self);
-                let node = &self.conv_graph[graph_idx];
-                ForeignTypeInfo {
-                    name: foreign_name,
-                    correspoding_rust_type: node.clone(),
-                }
-            },
-        );
+                debug!(
+                    "map foreign: we found min path {} <-> {} ({})",
+                    rust_ty, self.conv_graph[rtype_idx], self[ftype].name
+                );
+                ftype
+            });
         if ret.is_none() {
             debug!(
                 "map to foreign failed, foreign_map {}\n conv_graph: {}",
@@ -926,6 +966,30 @@ impl TypeMap {
             .get(&name)
             .map(|idx| self.conv_graph[*idx].clone())
     }
+
+    pub(crate) fn alloc_new_ftype(&mut self, fts: ForeignTypeS) -> Result<ForeignType> {
+        if let Some(ft) = self.ftypes_storage.find_ftype_by_name(fts.name.as_str()) {
+            return Err(DiagnosticError::new(
+                self.ftypes_storage[ft].name.span,
+                format!("Type {} already defined here", fts.name),
+            ));
+        }
+        Ok(self.ftypes_storage.add_new_ftype(fts))
+    }
+}
+
+impl ops::Index<ForeignType> for TypeMap {
+    type Output = ForeignTypeS;
+    fn index(&self, idx: ForeignType) -> &Self::Output {
+        &self.ftypes_storage[idx]
+    }
+}
+
+impl ops::Index<RustTypeIdx> for TypeMap {
+    type Output = Rc<RustTypeS>;
+    fn index(&self, idx: RustTypeIdx) -> &Self::Output {
+        &self.conv_graph[idx]
+    }
 }
 
 pub(in crate::typemap) fn validate_code_template(sp: Span, code: &str) -> Result<()> {
@@ -988,8 +1052,8 @@ fn apply_code_template(
 
 fn find_conversation_path(
     conv_graph: &TypesConvGraph,
-    from: NodeIndex<TypeGraphIdx>,
-    to: NodeIndex<TypeGraphIdx>,
+    from: RustTypeIdx,
+    to: RustTypeIdx,
     build_for_sp: Span,
 ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
     trace!(
