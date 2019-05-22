@@ -206,6 +206,8 @@ public:
         .map_err(map_write_err!(cpp_path))?;
     }
 
+    let mut last_cpp_access = Some("public");
+
     let dummy_ty = parse_type! { () };
     let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
     let mut gen_code = Vec::new();
@@ -282,9 +284,15 @@ May be you need to use `private constructor = empty;` syntax?",
             MethodAccess::Public => "public",
             MethodAccess::Protected => "protected",
         };
+        if last_cpp_access
+            .map(|last| last != method_access)
+            .unwrap_or(true)
+        {
+            write!(cpp_include_f, "{}:\n", method_access).map_err(map_write_err!(cpp_path))?;
+        }
+        last_cpp_access = Some(method_access);
         let cpp_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false);
-        write!(cpp_include_f, "{}:\n{}", method_access, cpp_comments,)
-            .map_err(map_write_err!(cpp_path))?;
+        write!(cpp_include_f, "{}", cpp_comments,).map_err(map_write_err!(cpp_path))?;
         let c_func_name = c_func_name(class, method, f_method);
         let c_args_with_types = cpp_code::c_generate_args_with_types(f_method, false)
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
