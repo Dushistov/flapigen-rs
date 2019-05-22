@@ -41,12 +41,17 @@ pub(in crate::cpp) fn generate(
     let cpp_fwd_path = output_dir.join(format!("{}_fwd.hpp", class.name));
     let mut cpp_fwd_f = FileWriteCache::new(&cpp_fwd_path);
 
-    let map_write_err = |err| {
-        DiagnosticError::new(
-            class.span(),
-            format!("write to {:?} failed: {}", c_path, err),
-        )
-    };
+    macro_rules! map_write_err {
+        ($file_path:ident) => {
+            |err| {
+                DiagnosticError::new(
+                    class.span(),
+                    format!("write to {} failed: {}", $file_path.display(), err),
+                )
+            }
+        };
+    }
+
     let c_class_type = cpp_code::c_class_type(class);
     let class_doc_comments = cpp_code::doc_comments_to_c_comments(&class.doc_comments, true);
 
@@ -72,7 +77,7 @@ extern "C" {{
         c_class_type = c_class_type,
         sizeof_usize = mem::size_of::<usize>(),
     )
-    .map_err(&map_write_err)?;
+    .map_err(map_write_err!(c_path))?;
     let class_name = format!("{}Wrapper", class.name);
 
     write!(
@@ -134,7 +139,7 @@ public:
         class_dot_name = class.name,
         doc_comments = class_doc_comments,
         namespace = namespace_name,
-    ).map_err(&map_write_err)?;
+    ).map_err(map_write_err!(cpp_path))?;
 
     if !class.copy_derived {
         write!(
@@ -145,7 +150,7 @@ public:
 "#,
             class_name = class_name
         )
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(cpp_path))?;
     } else {
         let pos = class
             .methods
@@ -197,7 +202,7 @@ public:
             c_clone_func = c_clone_func,
             class_name = class_name
         )
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(cpp_path))?;
     }
 
     let dummy_ty = parse_type! { () };
@@ -269,7 +274,7 @@ May be you need to use `private constructor = empty;` syntax?",
             "{}",
             cpp_code::doc_comments_to_c_comments(&method.doc_comments, false)
         )
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(c_path))?;
 
         let method_access = match method.access {
             MethodAccess::Private => "private",
@@ -277,7 +282,8 @@ May be you need to use `private constructor = empty;` syntax?",
             MethodAccess::Protected => "protected",
         };
         let cpp_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false);
-        write!(cpp_include_f, "{}:\n{}", method_access, cpp_comments,).map_err(&map_write_err)?;
+        write!(cpp_include_f, "{}:\n{}", method_access, cpp_comments,)
+            .map_err(map_write_err!(cpp_path))?;
         let c_func_name = c_func_name(class, method, f_method);
         let c_args_with_types = cpp_code::c_generate_args_with_types(f_method, false)
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
@@ -334,7 +340,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     c_func_name = c_func_name,
                     args_with_types = c_args_with_types,
                 )
-                .map_err(&map_write_err)?;
+                .map_err(map_write_err!(c_path))?;
 
                 if f_method.output.as_ref().name != "void" {
                     write!(
@@ -346,7 +352,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         cpp_ret_type = cpp_ret_type,
                         cpp_args_with_types = cpp_args_with_types,
                     )
-                    .map_err(&map_write_err)?;
+                    .map_err(map_write_err!(cpp_path))?;
                     write!(
                         &mut inline_impl,
                         r#"
@@ -376,7 +382,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         method_name = method_name,
                         cpp_args_with_types = cpp_args_with_types,
                     )
-                    .map_err(&map_write_err)?;
+                    .map_err(map_write_err!(cpp_path))?;
                     write!(
                         &mut inline_impl,
                         r#"
@@ -413,7 +419,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     args_with_types = comma_c_args_with_types,
                     const_if_readonly = const_if_readonly,
                 )
-                .map_err(&map_write_err)?;
+                .map_err(map_write_err!(c_path))?;
 
                 if f_method.output.as_ref().name != "void" {
                     write!(
@@ -426,7 +432,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         cpp_args_with_types = cpp_args_with_types,
                         const_if_readonly = const_if_readonly,
                     )
-                    .map_err(&map_write_err)?;
+                    .map_err(map_write_err!(cpp_path))?;
                     write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
     inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly} noexcept
@@ -443,7 +449,7 @@ May be you need to use `private constructor = empty;` syntax?",
                            c_func_name = c_func_name,
                            cpp_args_with_types = cpp_args_with_types,
                                                    cpp_args_for_c = if args_names.is_empty() {
-                            "".to_string()
+                            String::new()
                         } else {
                             format!(", {}", cpp_args_for_c)
                                                    },
@@ -459,7 +465,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         cpp_args_with_types = cpp_args_with_types,
                         const_if_readonly = const_if_readonly,
                     )
-                    .map_err(&map_write_err)?;
+                    .map_err(map_write_err!(cpp_path))?;
                     write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
     inline void {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly} noexcept
@@ -472,7 +478,7 @@ May be you need to use `private constructor = empty;` syntax?",
                            class_name = class_name,
                            cpp_args_with_types = cpp_args_with_types,
                            cpp_args_for_c = if args_names.is_empty() {
-                            "".to_string()
+                               String::new()
                         } else {
                             format!(", {}", cpp_args_for_c)
                            },
@@ -498,7 +504,7 @@ May be you need to use `private constructor = empty;` syntax?",
 "#,
                         class_name = class_name,
                     )
-                    .map_err(&map_write_err)?;
+                    .map_err(map_write_err!(cpp_path))?;
                 } else {
                     write!(
                         c_include_f,
@@ -509,7 +515,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         func_name = c_func_name,
                         args_with_types = c_args_with_types,
                     )
-                    .map_err(&map_write_err)?;
+                    .map_err(map_write_err!(c_path))?;
 
                     write!(
                         cpp_include_f,
@@ -527,7 +533,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         class_name = class_name,
                         cpp_args_for_c = cpp_args_for_c,
                     )
-                    .map_err(&map_write_err)?;
+                    .map_err(map_write_err!(cpp_path))?;
 
                     let constructor_ret_type = class
                         .constructor_ret_type
@@ -580,7 +586,7 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
             c_class_type = c_class_type,
             c_destructor_name = c_destructor_name,
         )
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(c_path))?;
 
         write!(
             cpp_include_f,
@@ -602,7 +608,7 @@ public:
             c_destructor_name = c_destructor_name,
             class_name = class_name,
         )
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(cpp_path))?;
     } else {
         // not need_destructor
         write!(
@@ -614,7 +620,7 @@ private:
    }}
 "#,
         )
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(cpp_path))?;
     }
 
     write!(
@@ -626,7 +632,7 @@ private:
 
 "#
     )
-    .map_err(&map_write_err)?;
+    .map_err(map_write_err!(c_path))?;
 
     write!(
         cpp_include_f,
@@ -638,7 +644,7 @@ private:
 "#,
         foreigner_code = class.foreigner_code,
     )
-    .map_err(&map_write_err)?;
+    .map_err(map_write_err!(cpp_path))?;
 
     // Write method implementations.
     if separate_impl_headers {
@@ -650,7 +656,7 @@ private:
 "#,
             namespace = namespace_name
         )
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(cpp_path))?;
         let cpp_impl_path = output_dir.join(format!("{}_impl.hpp", class.name));
         let mut cpp_impl_f = FileWriteCache::new(&cpp_impl_path);
         write!(
@@ -665,15 +671,15 @@ namespace {namespace} {{
             class_name = class.name,
             namespace = namespace_name,
         )
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(cpp_impl_path))?;
         write_methods_impls(&mut cpp_impl_f, namespace_name, &inline_impl)
-            .map_err(&map_write_err)?;
+            .map_err(map_write_err!(cpp_impl_path))?;
         cpp_impl_f
             .update_file_if_necessary()
-            .map_err(&map_write_err)?;
+            .map_err(map_write_err!(cpp_impl_path))?;
     } else {
         write_methods_impls(&mut cpp_include_f, namespace_name, &inline_impl)
-            .map_err(&map_write_err)?;
+            .map_err(map_write_err!(cpp_path))?;
     }
 
     write!(
@@ -692,17 +698,17 @@ using {class_name}Ref = {base_class_name}<false>;
         class_name = class.name,
         base_class_name = class_name
     )
-    .map_err(&map_write_err)?;
+    .map_err(map_write_err!(cpp_fwd_path))?;
 
     cpp_fwd_f
         .update_file_if_necessary()
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(cpp_fwd_path))?;
     c_include_f
         .update_file_if_necessary()
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(c_path))?;
     cpp_include_f
         .update_file_if_necessary()
-        .map_err(&map_write_err)?;
+        .map_err(map_write_err!(cpp_path))?;
     Ok(gen_code)
 }
 
