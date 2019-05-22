@@ -649,7 +649,7 @@ impl TypeMap {
         if direction == petgraph::Direction::Outgoing {
             if let Some(ftype) = self.rust_to_foreign_cache.get(&rust_ty.normalized_name) {
                 let fts = &self.ftypes_storage[*ftype];
-                if let Some(ref to_rule) = fts.into_from_rust {
+                if fts.into_from_rust.is_some() {
                     return Some(*ftype);
                 }
             }
