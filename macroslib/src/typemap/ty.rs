@@ -110,10 +110,22 @@ pub(crate) struct ForeignTypeS {
     pub(crate) from_into_rust: Option<ForeignConversationRule>,
 }
 
+impl ForeignTypeS {
+    pub(crate) fn span(&self) -> Span {
+        self.name.span
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationRule {
     pub(crate) rust_ty: RustTypeIdx,
     pub(crate) intermediate: Option<ForeignConversationIntermediate>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ForeignConversationIntermediate {
+    pub(crate) intermediate_ty: RustTypeIdx,
+    pub(crate) conv_code: FTypeConvCode,
 }
 
 #[derive(Debug, Clone)]
@@ -131,10 +143,10 @@ impl FTypeConvCode {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct ForeignConversationIntermediate {
-    pub(crate) intermediate_ty: RustTypeIdx,
-    pub(crate) conv_code: FTypeConvCode,
+impl ToString for FTypeConvCode {
+    fn to_string(&self) -> String {
+        self.code.clone()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

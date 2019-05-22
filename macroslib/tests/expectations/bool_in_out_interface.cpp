@@ -14,6 +14,6 @@ r#"static char c_onStateChanged2(char a_0, double a_1, void *opaque)
         auto p = static_cast<SomeObserver *>(opaque);
         assert(p != nullptr);
         auto ret = p->onStateChanged2(a_0 != 0, a_1);
-        return ret != 0;
+        return ret ? 1 : 0;
    }"#;
 "char (*onStateChanged2)(char a_0, double a_1, void *opaque);";

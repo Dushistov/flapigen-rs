@@ -39,21 +39,6 @@ fn special_type(
         return Ok(Some(converter));
     }
 
-    if arg_ty.normalized_name == "bool" {
-        let fti = conv_map
-            .find_foreign_type_info_by_name("char")
-            .expect("expect to find `char` in type map");
-        return Ok(Some(CppForeignTypeInfo {
-            base: fti,
-            cpp_converter: Some(CppConverter {
-                typename: "bool".into(),
-                input_converter: format!("{} ? 1 : 0", FROM_VAR_TEMPLATE),
-                output_converter: format!("{} != 0", FROM_VAR_TEMPLATE),
-            }),
-            ftype: None,
-        }));
-    }
-
     if arg_ty.normalized_name == "String" && direction == Direction::Outgoing {
         let fti = conv_map
             .find_foreign_type_info_by_name("struct CRustString")
@@ -65,7 +50,6 @@ fn special_type(
                 input_converter: "#error".into(),
                 output_converter: format!("RustString{{{from_var}}}", from_var = FROM_VAR_TEMPLATE),
             }),
-            ftype: None,
         }));
     }
 
@@ -96,7 +80,6 @@ fn special_type(
                         output_converter,
                         input_converter: format!("UNREACHABLE {}", line!()),
                     }),
-                    ftype: None,
                 }));
             } else {
                 let cpp_type = format!("const {} &", foreign_class.name);
@@ -109,7 +92,6 @@ fn special_type(
                         output_converter: format!("UNREACHABLE {}", line!()),
                         input_converter,
                     }),
-                    ftype: None,
                 }));
             }
         }
@@ -173,7 +155,6 @@ fn special_type(
                         output_converter: "#error".to_string(),
                         input_converter,
                     }),
-                    ftype: None,
                 }));
             }
         }
@@ -204,7 +185,6 @@ fn special_type(
                 output_converter: format!("{}({})", foreign_class.name, FROM_VAR_TEMPLATE),
                 input_converter: format!("{}.release()", FROM_VAR_TEMPLATE),
             }),
-            ftype: None,
         }));
     }
     if let Some(elem_ty) = if_vec_return_elem_type(arg_ty) {
@@ -305,10 +285,6 @@ fn calc_converter_for_enum(
     foreign_enum: &ForeignEnumInfo,
 ) -> CppForeignTypeInfo {
     let u32_ti: RustType = conv_map.ty_to_rust_type(&parse_type! { u32 });
-    let c_converter: String = r#"
-        uint32_t {to_var} = {from_var};
-"#
-    .into();
     CppForeignTypeInfo {
         base: ForeignTypeInfo {
             name: "uint32_t".into(),
@@ -323,7 +299,6 @@ fn calc_converter_for_enum(
                 FROM_VAR_TEMPLATE
             ),
         }),
-        ftype: None,
     }
 }
 
@@ -361,8 +336,8 @@ fn map_ordinal_result_type(
     arg_ty: &RustType,
     arg_ty_span: Span,
 ) -> Result<CppForeignTypeInfo> {
-    Ok(conv_map
-        .map_through_conversation_to_foreign(
+    let ftype = conv_map
+        .map_through_conversation_to_foreign_ext(
             arg_ty,
             Direction::Outgoing,
             arg_ty_span,
@@ -377,8 +352,8 @@ fn map_ordinal_result_type(
                     arg_ty
                 ),
             )
-        })?
-        .into())
+        })?;
+    CppForeignTypeInfo::try_new(conv_map, Direction::Outgoing, ftype)
 }
 
 fn map_ordinal_input_type(
@@ -386,8 +361,8 @@ fn map_ordinal_input_type(
     arg_ty: &RustType,
     arg_ty_span: Span,
 ) -> Result<CppForeignTypeInfo> {
-    Ok(conv_map
-        .map_through_conversation_to_foreign(
+    let ftype = conv_map
+        .map_through_conversation_to_foreign_ext(
             arg_ty,
             Direction::Incoming,
             arg_ty_span,
@@ -402,8 +377,8 @@ fn map_ordinal_input_type(
                     arg_ty
                 ),
             )
-        })?
-        .into())
+        })?;
+    CppForeignTypeInfo::try_new(conv_map, Direction::Incoming, ftype)
 }
 
 fn map_arg_with_slice_type(
@@ -666,7 +641,6 @@ fn handle_result_type_as_return_type(
                     output_converter,
                     input_converter: String::new(),
                 }),
-                ftype: None,
             }));
         } else if let Some(err_class) =
             conv_map.find_foreigner_class_with_such_self_type(&err_rust_ty, false)
@@ -701,7 +675,6 @@ fn handle_result_type_as_return_type(
                     output_converter,
                     input_converter: "#error".into(),
                 }),
-                ftype: None,
             }));
         } else if let Some(err_enum) = conv_map.is_this_exported_enum(&err_rust_ty) {
             let foreign_info = conv_map
@@ -732,7 +705,6 @@ fn handle_result_type_as_return_type(
                     output_converter,
                     input_converter: String::new(),
                 }),
-                ftype: None,
             }));
         } else {
             return Ok(None);
@@ -901,7 +873,6 @@ fn handle_option_type_in_input(
                 output_converter: "#error".to_string(),
                 input_converter,
             }),
-            ftype: None,
         }));
     }
 
@@ -1028,7 +999,6 @@ fn handle_option_type_in_return(
                 output_converter,
                 input_converter: "#error".to_string(),
             }),
-            ftype: None,
         }));
     }
 
@@ -1101,7 +1071,6 @@ fn handle_option_type_in_return(
                     output_converter,
                     input_converter: "#error".to_string(),
                 }),
-                ftype: None,
             }));
         }
     }
@@ -1251,7 +1220,6 @@ fn handle_result_with_primitive_type_as_ok_ty(
                 output_converter,
                 input_converter: String::new(),
             }),
-            ftype: None,
         }))
     } else if let Some(err_class) =
         conv_map.find_foreigner_class_with_such_self_type(&err_rust_ty, false)
@@ -1281,13 +1249,15 @@ fn handle_result_with_primitive_type_as_ok_ty(
                 output_converter,
                 input_converter: "#error".into(),
             }),
-            ftype: None,
         }))
     } else {
         Ok(None)
     }
 }
 
-fn calc_this_type_for_method(_: &TypeMap, class: &ForeignerClassInfo) -> Option<Type> {
+pub(in crate::cpp) fn calc_this_type_for_method(
+    _: &TypeMap,
+    class: &ForeignerClassInfo,
+) -> Option<Type> {
     class.constructor_ret_type.clone()
 }

@@ -593,6 +593,35 @@ impl TypeMap {
         }
     }
 
+    #[deprecated(note = "TODO: should be removed in the future")]
+    pub(crate) fn map_ftype_to_ftype_info(
+        &self,
+        direction: petgraph::Direction,
+        ftype: ForeignType,
+    ) -> ForeignTypeInfo {
+        let ftype = &self[ftype];
+        let rtype_idx = match direction {
+            petgraph::Direction::Outgoing => {
+                ftype
+                    .into_from_rust
+                    .as_ref()
+                    .expect("Internal error: into_from_rust not defined")
+                    .rust_ty
+            }
+            petgraph::Direction::Incoming => {
+                ftype
+                    .from_into_rust
+                    .as_ref()
+                    .expect("Internal error: from_into_rust not defined")
+                    .rust_ty
+            }
+        };
+        ForeignTypeInfo {
+            name: ftype.name.typename.clone(),
+            correspoding_rust_type: self.conv_graph[rtype_idx].clone(),
+        }
+    }
+
     #[deprecated(note = "Use map_through_conversation_to_foreign_ext instead")]
     pub(crate) fn map_through_conversation_to_foreign<
         F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
@@ -609,29 +638,7 @@ impl TypeMap {
             build_for_sp,
             calc_this_type_for_method,
         )
-        .map(|ftype| {
-            let ftype = &self[ftype];
-            let rtype_idx = match direction {
-                petgraph::Direction::Outgoing => {
-                    ftype
-                        .into_from_rust
-                        .as_ref()
-                        .expect("Internal error: into_from_rust not defined")
-                        .rust_ty
-                }
-                petgraph::Direction::Incoming => {
-                    ftype
-                        .from_into_rust
-                        .as_ref()
-                        .expect("Internal error: from_into_rust not defined")
-                        .rust_ty
-                }
-            };
-            ForeignTypeInfo {
-                name: ftype.name.typename.clone(),
-                correspoding_rust_type: self.conv_graph[rtype_idx].clone(),
-            }
-        })
+        .map(|ftype| self.map_ftype_to_ftype_info(direction, ftype))
     }
 
     /// find correspoint to rust foreign type (extended)
@@ -975,6 +982,13 @@ impl ops::Index<ForeignType> for TypeMap {
     type Output = ForeignTypeS;
     fn index(&self, idx: ForeignType) -> &Self::Output {
         &self.ftypes_storage[idx]
+    }
+}
+
+impl ops::Index<RustTypeIdx> for TypeMap {
+    type Output = Rc<RustTypeS>;
+    fn index(&self, idx: RustTypeIdx) -> &Self::Output {
+        &self.conv_graph[idx]
     }
 }
 

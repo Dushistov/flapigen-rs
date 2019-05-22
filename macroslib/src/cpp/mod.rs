@@ -6,7 +6,7 @@ use std::{fmt, io::Write};
 
 use log::{debug, trace};
 use petgraph::Direction;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
@@ -17,10 +17,13 @@ use crate::{
     file_cache::FileWriteCache,
     typemap::{
         ast::{fn_arg_type, DisplayToTokens, TypeName},
-        ty::{ForeignType, RustType},
+        ty::{
+            FTypeConvCode, ForeignConversationIntermediate, ForeignConversationRule, ForeignType,
+            ForeignTypeS, RustType,
+        },
         unpack_unique_typename,
         utils::rust_to_foreign_convert_method_inputs,
-        ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        ForeignMethodSignature, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
     LanguageGenerator, MethodAccess, MethodVariant, SourceCode, TypeMap,
@@ -37,7 +40,68 @@ struct CppConverter {
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
     pub(in crate::cpp) cpp_converter: Option<CppConverter>,
-    pub(in crate::cpp) ftype: Option<ForeignType>,
+}
+
+impl CppForeignTypeInfo {
+    pub(in crate::cpp) fn try_new(
+        tmap: &mut TypeMap,
+        direction: petgraph::Direction,
+        ftype_idx: ForeignType,
+    ) -> Result<Self> {
+        let ftype = &tmap[ftype_idx];
+        let mut cpp_converter = None;
+
+        let rule = match direction {
+            petgraph::Direction::Outgoing => ftype.into_from_rust.as_ref(),
+            petgraph::Direction::Incoming => ftype.from_into_rust.as_ref(),
+        }
+        .ok_or_else(|| {
+            DiagnosticError::new(
+                ftype.span(),
+                format!(
+                    "No rule to convert foreign type {} as input/output type",
+                    ftype.name
+                ),
+            )
+        })?;
+
+        let base_rt;
+        let base_ft_name;
+        if let Some(intermediate) = rule.intermediate.as_ref() {
+            base_rt = intermediate.intermediate_ty;
+            let typename = ftype.name.typename.clone();
+            let converter = intermediate.conv_code.to_string();
+            let inter_ft = convert_rt_to_ft(tmap, intermediate.intermediate_ty)?;
+            base_ft_name = tmap[inter_ft].name.typename.clone();
+            let output_converter;
+            let input_converter;
+            match direction {
+                petgraph::Direction::Outgoing => {
+                    output_converter = converter.clone();
+                    input_converter = converter;
+                }
+                petgraph::Direction::Incoming => {
+                    output_converter = converter.clone();
+                    input_converter = converter;
+                }
+            }
+            cpp_converter = Some(CppConverter {
+                typename,
+                output_converter,
+                input_converter,
+            });
+        } else {
+            base_rt = rule.rust_ty;
+            base_ft_name = ftype.name.typename.clone();
+        }
+        Ok(CppForeignTypeInfo {
+            base: ForeignTypeInfo {
+                name: base_ft_name,
+                correspoding_rust_type: tmap[base_rt].clone(),
+            },
+            cpp_converter,
+        })
+    }
 }
 
 impl AsRef<ForeignTypeInfo> for CppForeignTypeInfo {
@@ -59,7 +123,6 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
                 correspoding_rust_type: x.correspoding_rust_type,
             },
             cpp_converter: None,
-            ftype: None,
         }
     }
 }
@@ -304,6 +367,36 @@ May be you need to use `private constructor = empty;` syntax?",
                 .update_file_if_necessary()
                 .map_err(|err| format!("update of {} failed: {}", src_path.display(), err))?;
         }
+
+        //TODO: move to cpp-include.rs
+        let bool_rt = conv_map.find_or_alloc_rust_type(&parse_type! { bool });
+        let c_char_rt = conv_map.find_or_alloc_rust_type(&parse_type! { ::std::os::raw::c_char });
+        conv_map
+            .alloc_new_ftype(ForeignTypeS {
+                name: TypeName::new("bool", Span::call_site()),
+                into_from_rust: Some(ForeignConversationRule {
+                    rust_ty: bool_rt.as_idx(),
+                    intermediate: Some(ForeignConversationIntermediate {
+                        intermediate_ty: c_char_rt.as_idx(),
+                        conv_code: FTypeConvCode::new(
+                            format!("{} != 0", FROM_VAR_TEMPLATE),
+                            Span::call_site(),
+                        ),
+                    }),
+                }),
+                from_into_rust: Some(ForeignConversationRule {
+                    rust_ty: bool_rt.as_idx(),
+                    intermediate: Some(ForeignConversationIntermediate {
+                        intermediate_ty: c_char_rt.as_idx(),
+                        conv_code: FTypeConvCode::new(
+                            format!("{} ? 1 : 0", FROM_VAR_TEMPLATE),
+                            Span::call_site(),
+                        ),
+                    }),
+                }),
+            })
+            .map_err(|err| err.to_string())?;
+
         Ok(())
     }
 }
@@ -574,7 +667,7 @@ fn find_suitable_ftypes_for_interace_methods(
     let void_sym = "void";
     let dummy_ty = parse_type! { () };
     let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
-    let mut f_methods = vec![];
+    let mut f_methods = Vec::with_capacity(interace.items.len());
 
     for method in &interace.items {
         let mut input = Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
@@ -814,4 +907,24 @@ impl Drop for {struct_with_funcs} {{
     gen_items.push(syn::parse_str(&code)?);
 
     Ok(gen_items)
+}
+
+fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> {
+    let rtype = tmap[rt].clone();
+    tmap.map_through_conversation_to_foreign_ext(
+        &rtype,
+        Direction::Outgoing,
+        rtype.ty.span(),
+        self::map_type::calc_this_type_for_method,
+    )
+    .ok_or_else(|| {
+        DiagnosticError::new(
+            rtype.ty.span(),
+            format!(
+                "Do not know conversation from \
+                 such rust type '{}' to foreign",
+                rtype
+            ),
+        )
+    })
 }
