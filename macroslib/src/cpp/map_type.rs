@@ -45,7 +45,6 @@ fn special_type(
             .expect("expect to find `char` in type map");
         return Ok(Some(CppForeignTypeInfo {
             base: fti,
-            c_converter: String::new(),
             cpp_converter: Some(CppConverter {
                 typename: "bool".into(),
                 input_converter: format!("{} ? 1 : 0", FROM_VAR_TEMPLATE),
@@ -61,7 +60,6 @@ fn special_type(
             .expect("expect to find `struct CRustString`  in type map");
         return Ok(Some(CppForeignTypeInfo {
             base: fti,
-            c_converter: String::new(),
             cpp_converter: Some(CppConverter {
                 typename: "RustString".into(),
                 input_converter: "#error".into(),
@@ -93,7 +91,6 @@ fn special_type(
                 let output_converter = format!("{}{{{}}}", cpp_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
-                    c_converter: String::new(),
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
                         output_converter,
@@ -107,7 +104,6 @@ fn special_type(
                 let input_converter = format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
-                    c_converter: String::new(),
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
                         output_converter: format!("UNREACHABLE {}", line!()),
@@ -172,7 +168,6 @@ fn special_type(
                         name: foreign_info.name,
                         correspoding_rust_type: my_mut_void_ptr_ti,
                     },
-                    c_converter: String::new(),
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
                         output_converter: "#error".to_string(),
@@ -204,7 +199,6 @@ fn special_type(
         let foreign_info = foreign_class_foreign_name(conv_map, foreign_class, arg_ty_span, false)?;
         return Ok(Some(CppForeignTypeInfo {
             base: foreign_info,
-            c_converter: String::new(),
             cpp_converter: Some(CppConverter {
                 typename: foreign_class.name.to_string().into(),
                 output_converter: format!("{}({})", foreign_class.name, FROM_VAR_TEMPLATE),
@@ -317,11 +311,18 @@ fn calc_converter_for_enum(
     .into();
     CppForeignTypeInfo {
         base: ForeignTypeInfo {
-            name: foreign_enum.name.to_string().into(),
+            name: "uint32_t".into(),
             correspoding_rust_type: u32_ti,
         },
-        c_converter,
-        cpp_converter: None,
+        cpp_converter: Some(CppConverter {
+            typename: foreign_enum.name.to_string().into(),
+            input_converter: format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
+            output_converter: format!(
+                "static_cast<{}>({})",
+                foreign_enum.name.to_string(),
+                FROM_VAR_TEMPLATE
+            ),
+        }),
         ftype: None,
     }
 }
@@ -660,7 +661,6 @@ fn handle_result_type_as_return_type(
             );
             return Ok(Some(CppForeignTypeInfo {
                 base: foreign_info,
-                c_converter: String::new(),
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
                     output_converter,
@@ -696,7 +696,6 @@ fn handle_result_type_as_return_type(
             );
             return Ok(Some(CppForeignTypeInfo {
                 base: foreign_info,
-                c_converter: String::new(),
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
                     output_converter,
@@ -728,7 +727,6 @@ fn handle_result_type_as_return_type(
             );
             return Ok(Some(CppForeignTypeInfo {
                 base: foreign_info,
-                c_converter: String::new(),
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
                     output_converter,
@@ -898,7 +896,6 @@ fn handle_option_type_in_input(
         };
         return Ok(Some(CppForeignTypeInfo {
             base: foreign_info,
-            c_converter: String::new(),
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
                 output_converter: "#error".to_string(),
@@ -1026,7 +1023,6 @@ fn handle_option_type_in_return(
         };
         return Ok(Some(CppForeignTypeInfo {
             base: foreign_info,
-            c_converter: String::new(),
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
                 output_converter,
@@ -1100,7 +1096,6 @@ fn handle_option_type_in_return(
             };
             return Ok(Some(CppForeignTypeInfo {
                 base: foreign_info,
-                c_converter: String::new(),
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
                     output_converter,
@@ -1251,7 +1246,6 @@ fn handle_result_with_primitive_type_as_ok_ty(
         }
         Ok(Some(CppForeignTypeInfo {
             base: foreign_info.base,
-            c_converter: String::new(),
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
                 output_converter,
@@ -1282,7 +1276,6 @@ fn handle_result_with_primitive_type_as_ok_ty(
         }
         Ok(Some(CppForeignTypeInfo {
             base: foreign_info.base,
-            c_converter: String::new(),
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
                 output_converter,

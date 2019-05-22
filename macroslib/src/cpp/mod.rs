@@ -36,7 +36,6 @@ struct CppConverter {
 #[derive(Debug)]
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
-    c_converter: String,
     pub(in crate::cpp) cpp_converter: Option<CppConverter>,
     pub(in crate::cpp) ftype: Option<ForeignType>,
 }
@@ -44,12 +43,6 @@ struct CppForeignTypeInfo {
 impl AsRef<ForeignTypeInfo> for CppForeignTypeInfo {
     fn as_ref(&self) -> &ForeignTypeInfo {
         &self.base
-    }
-}
-
-impl CppForeignTypeInfo {
-    fn c_need_conversation(&self) -> bool {
-        !self.c_converter.is_empty()
     }
 }
 
@@ -65,7 +58,6 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
                 name: x.name,
                 correspoding_rust_type: x.correspoding_rust_type,
             },
-            c_converter: String::new(),
             cpp_converter: None,
             ftype: None,
         }
@@ -373,31 +365,17 @@ fn find_suitable_foreign_types_for_methods(
     Ok(ret)
 }
 
-fn need_cpp_helper_for_input_or_output(f_method: &CppForeignMethodSignature) -> bool {
-    for ti in &f_method.input {
-        if ti.c_need_conversation() {
-            return true;
-        }
-    }
-    f_method.output.c_need_conversation()
-}
-
 fn c_func_name(
     class: &ForeignerClassInfo,
     method: &ForeignerMethod,
     f_method: &CppForeignMethodSignature,
 ) -> String {
     format!(
-        "{access}{internal}{class_name}_{func}",
+        "{access}{class_name}_{func}",
         access = match method.access {
             MethodAccess::Private => "private_",
             MethodAccess::Protected => "protected_",
             MethodAccess::Public => "",
-        },
-        internal = if need_cpp_helper_for_input_or_output(f_method) {
-            "internal_"
-        } else {
-            ""
         },
         class_name = class.name,
         func = method.short_name(),

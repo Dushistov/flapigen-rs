@@ -78,6 +78,7 @@ extern "C" {{
         sizeof_usize = mem::size_of::<usize>(),
     )
     .map_err(map_write_err!(c_path))?;
+
     let class_name = format!("{}Wrapper", class.name);
 
     write!(
