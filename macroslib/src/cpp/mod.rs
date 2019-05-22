@@ -32,8 +32,7 @@ use crate::{
 #[derive(Debug)]
 struct CppConverter {
     typename: SmolStr,
-    output_converter: String,
-    input_converter: String,
+    converter: String,
 }
 
 #[derive(Debug)]
@@ -73,22 +72,9 @@ impl CppForeignTypeInfo {
             let converter = intermediate.conv_code.to_string();
             let inter_ft = convert_rt_to_ft(tmap, intermediate.intermediate_ty)?;
             base_ft_name = tmap[inter_ft].name.typename.clone();
-            let output_converter;
-            let input_converter;
-            match direction {
-                petgraph::Direction::Outgoing => {
-                    output_converter = converter.clone();
-                    input_converter = converter;
-                }
-                petgraph::Direction::Incoming => {
-                    output_converter = converter.clone();
-                    input_converter = converter;
-                }
-            }
             cpp_converter = Some(CppConverter {
                 typename,
-                output_converter,
-                input_converter,
+                converter,
             });
         } else {
             base_rt = rule.rust_ty;
@@ -458,11 +444,7 @@ fn find_suitable_foreign_types_for_methods(
     Ok(ret)
 }
 
-fn c_func_name(
-    class: &ForeignerClassInfo,
-    method: &ForeignerMethod,
-    f_method: &CppForeignMethodSignature,
-) -> String {
+fn c_func_name(class: &ForeignerClassInfo, method: &ForeignerMethod) -> String {
     format!(
         "{access}{class_name}_{func}",
         access = match method.access {

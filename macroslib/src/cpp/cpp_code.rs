@@ -120,7 +120,7 @@ struct C_{interface_name} {{
         let (cpp_ret_type, cpp_out_conv) =
             if let Some(out_conv) = f_method.output.cpp_converter.as_ref() {
                 let conv_code = out_conv
-                    .output_converter
+                    .converter
                     .as_str()
                     .replace(FROM_VAR_TEMPLATE, "ret");
                 (out_conv.typename.clone(), conv_code)
@@ -165,7 +165,7 @@ struct C_{interface_name} {{
 "#,
                 method_name = method.name,
                 single_args_with_types = c_generate_args_with_types(f_method, true)?,
-                input_args = cpp_generate_args_to_call_c(f_method, true)?,
+                input_args = cpp_generate_args_to_call_c(f_method)?,
                 interface_name = interface.name,
             )
             .map_err(&map_write_err)?;
@@ -183,7 +183,7 @@ struct C_{interface_name} {{
 "#,
                 method_name = method.name,
                 single_args_with_types = c_generate_args_with_types(f_method, true)?,
-                input_args = cpp_generate_args_to_call_c(f_method, true)?,
+                input_args = cpp_generate_args_to_call_c(f_method)?,
                 interface_name = interface.name,
                 c_ret_type = c_ret_type,
                 cpp_out_conv = cpp_out_conv,
@@ -304,7 +304,6 @@ pub(in crate::cpp) fn cpp_generate_args_with_types(
 
 pub(in crate::cpp) fn cpp_generate_args_to_call_c(
     f_method: &CppForeignMethodSignature,
-    for_callback: bool,
 ) -> Result<String, String> {
     use std::fmt::Write;
     let mut ret = String::new();
@@ -314,15 +313,10 @@ pub(in crate::cpp) fn cpp_generate_args_to_call_c(
         }
         if let Some(conv) = f_type_info.cpp_converter.as_ref() {
             let arg_name = format!("a_{}", i);
-            let conv_arg = if !for_callback {
-                conv.input_converter
-                    .as_str()
-                    .replace(FROM_VAR_TEMPLATE, &arg_name)
-            } else {
-                conv.output_converter
-                    .as_str()
-                    .replace(FROM_VAR_TEMPLATE, &arg_name)
-            };
+            let conv_arg = conv
+                .converter
+                .as_str()
+                .replace(FROM_VAR_TEMPLATE, &arg_name);
             write!(&mut ret, "{}", conv_arg)
         } else {
             write!(&mut ret, "a_{}", i)

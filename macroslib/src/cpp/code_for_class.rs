@@ -173,7 +173,7 @@ public:
                     ),
                 )
             })?;
-        let c_clone_func = c_func_name(class, &class.methods[pos], &methods_sign[pos]);
+        let c_clone_func = c_func_name(class, &class.methods[pos]);
 
         write!(
             cpp_include_f,
@@ -293,7 +293,7 @@ May be you need to use `private constructor = empty;` syntax?",
         last_cpp_access = Some(method_access);
         let cpp_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false);
         write!(cpp_include_f, "{}", cpp_comments,).map_err(map_write_err!(cpp_path))?;
-        let c_func_name = c_func_name(class, method, f_method);
+        let c_func_name = c_func_name(class, method);
         let c_args_with_types = cpp_code::c_generate_args_with_types(f_method, false)
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
         let comma_c_args_with_types = if c_args_with_types.is_empty() {
@@ -305,7 +305,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
         let cpp_args_with_types = cpp_code::cpp_generate_args_with_types(f_method)
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
-        let cpp_args_for_c = cpp_code::cpp_generate_args_to_call_c(f_method, false)
+        let cpp_args_for_c = cpp_code::cpp_generate_args_to_call_c(f_method)
             .map_err(|err| DiagnosticError::new(class.span(), err))?;
         let real_output_typename = match method.fn_decl.output {
             syn::ReturnType::Default => "()",
@@ -328,9 +328,7 @@ May be you need to use `private constructor = empty;` syntax?",
             if let Some(cpp_converter) = f_method.output.cpp_converter.as_ref() {
                 (
                     cpp_converter.typename.clone(),
-                    cpp_converter
-                        .output_converter
-                        .replace(FROM_VAR_TEMPLATE, "ret"),
+                    cpp_converter.converter.replace(FROM_VAR_TEMPLATE, "ret"),
                 )
             } else {
                 (f_method.output.as_ref().name.clone(), "ret".to_string())

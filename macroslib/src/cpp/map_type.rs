@@ -35,7 +35,7 @@ fn special_type(
     );
 
     if let Some(foreign_enum) = conv_map.is_this_exported_enum(arg_ty) {
-        let converter = calc_converter_for_enum(conv_map, foreign_enum);
+        let converter = calc_converter_for_enum(conv_map, foreign_enum, direction);
         return Ok(Some(converter));
     }
 
@@ -47,8 +47,7 @@ fn special_type(
             base: fti,
             cpp_converter: Some(CppConverter {
                 typename: "RustString".into(),
-                input_converter: "#error".into(),
-                output_converter: format!("RustString{{{from_var}}}", from_var = FROM_VAR_TEMPLATE),
+                converter: format!("RustString{{{from_var}}}", from_var = FROM_VAR_TEMPLATE),
             }),
         }));
     }
@@ -72,25 +71,23 @@ fn special_type(
                 foreign_class_foreign_name(conv_map, foreign_class, arg_ty_span, true)?;
             if direction == Direction::Outgoing {
                 let cpp_type = format!("{}Ref", foreign_class.name);
-                let output_converter = format!("{}{{{}}}", cpp_type, FROM_VAR_TEMPLATE);
+                let converter = format!("{}{{{}}}", cpp_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
-                        output_converter,
-                        input_converter: format!("UNREACHABLE {}", line!()),
+                        converter,
                     }),
                 }));
             } else {
                 let cpp_type = format!("const {} &", foreign_class.name);
                 let c_type = &foreign_info.name;
-                let input_converter = format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE);
+                let converter = format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
-                        output_converter: format!("UNREACHABLE {}", line!()),
-                        input_converter,
+                        converter,
                     }),
                 }));
             }
@@ -144,7 +141,7 @@ fn special_type(
                     .expect("Internal Error (cpp): Can not find void * (this_type)");
                 let cpp_type = format!("{} &", foreign_class.name);
                 let c_type = &foreign_info.name;
-                let input_converter = format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE);
+                let converter = format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: ForeignTypeInfo {
                         name: foreign_info.name,
@@ -152,8 +149,7 @@ fn special_type(
                     },
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
-                        output_converter: "#error".to_string(),
-                        input_converter,
+                        converter,
                     }),
                 }));
             }
@@ -178,17 +174,20 @@ fn special_type(
             foreign_class.name
         );
         let foreign_info = foreign_class_foreign_name(conv_map, foreign_class, arg_ty_span, false)?;
+        let converter = match direction {
+            Direction::Outgoing => format!("{}({})", foreign_class.name, FROM_VAR_TEMPLATE),
+            Direction::Incoming => format!("{}.release()", FROM_VAR_TEMPLATE),
+        };
         return Ok(Some(CppForeignTypeInfo {
             base: foreign_info,
             cpp_converter: Some(CppConverter {
                 typename: foreign_class.name.to_string().into(),
-                output_converter: format!("{}({})", foreign_class.name, FROM_VAR_TEMPLATE),
-                input_converter: format!("{}.release()", FROM_VAR_TEMPLATE),
+                converter,
             }),
         }));
     }
     if let Some(elem_ty) = if_vec_return_elem_type(arg_ty) {
-        return map_type_vec(conv_map, cpp_cfg, arg_ty, &elem_ty, arg_ty_span);
+        return map_type_vec(conv_map, cpp_cfg, arg_ty, &elem_ty, arg_ty_span, direction);
     }
     if direction == Direction::Outgoing {
         if let Some((ok_ty, err_ty)) = if_result_return_ok_err_types(arg_ty) {
@@ -237,8 +236,7 @@ fn special_type(
                 ) {
                     ret.cpp_converter = Some(CppConverter {
                         typename: format!("std::pair<{}, {}>", fc1.name, fc2.name).into(),
-                        input_converter: "#error".into(),
-                        output_converter: format!(
+                        converter: format!(
                             "std::make_pair({FirstType}{{static_cast<{CFirstType} *>({from}.first)}},
  {SecondType}{{static_cast<{CSecondType} *>({from}.second)}})",
                             FirstType = fc1.name,
@@ -283,8 +281,17 @@ fn foreign_class_foreign_name(
 fn calc_converter_for_enum(
     conv_map: &TypeMap,
     foreign_enum: &ForeignEnumInfo,
+    direction: Direction,
 ) -> CppForeignTypeInfo {
     let u32_ti: RustType = conv_map.ty_to_rust_type(&parse_type! { u32 });
+    let converter = match direction {
+        Direction::Outgoing => format!(
+            "static_cast<{}>({})",
+            foreign_enum.name.to_string(),
+            FROM_VAR_TEMPLATE
+        ),
+        Direction::Incoming => format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
+    };
     CppForeignTypeInfo {
         base: ForeignTypeInfo {
             name: "uint32_t".into(),
@@ -292,12 +299,7 @@ fn calc_converter_for_enum(
         },
         cpp_converter: Some(CppConverter {
             typename: foreign_enum.name.to_string().into(),
-            input_converter: format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
-            output_converter: format!(
-                "static_cast<{}>({})",
-                foreign_enum.name.to_string(),
-                FROM_VAR_TEMPLATE
-            ),
+            converter,
         }),
     }
 }
@@ -395,8 +397,7 @@ fn map_arg_with_slice_type(
         let typename = format!("RustForeignSlice<{}Ref>", foreign_class.name);
         ftype_info.cpp_converter = Some(CppConverter {
             typename: typename.into(),
-            input_converter: FROM_VAR_TEMPLATE.to_string(),
-            output_converter: "#error".to_string(),
+            converter: FROM_VAR_TEMPLATE.to_string(),
         });
         return Ok(Some(ftype_info));
     } else {
@@ -416,15 +417,14 @@ fn map_return_slice_type(
         conv_map.find_foreigner_class_with_such_self_type(&elem_rust_ty, false)
     {
         let typename = format!("RustForeignSlice<{}Ref>", foreign_class.name);
-        let output_converter = format!(
+        let converter = format!(
             "{cpp_type}{{{var}}}",
             cpp_type = typename,
             var = FROM_VAR_TEMPLATE
         );
         ftype_info.cpp_converter = Some(CppConverter {
             typename: typename.into(),
-            output_converter,
-            input_converter: "#error".to_string(),
+            converter,
         });
         return Ok(Some(ftype_info));
     } else {
@@ -438,6 +438,7 @@ fn map_type_vec(
     arg_ty: &RustType,
     elem_ty: &Type,
     arg_ty_span: Span,
+    direction: Direction,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let mut ftype_info = map_ordinal_result_type(conv_map, arg_ty, arg_ty_span)?;
     let elem_rust_ty = conv_map.find_or_alloc_rust_type(elem_ty);
@@ -551,15 +552,17 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
                 .borrow_mut()
                 .insert(fc_vec_path);
         }
-        let output_converter = format!(
-            "{cpp_type}{{{var}}}",
-            cpp_type = typename,
-            var = FROM_VAR_TEMPLATE
-        );
+        let converter = match direction {
+            Direction::Outgoing => format!(
+                "{cpp_type}{{{var}}}",
+                cpp_type = typename,
+                var = FROM_VAR_TEMPLATE
+            ),
+            Direction::Incoming => format!("{var}.release()", var = FROM_VAR_TEMPLATE),
+        };
         ftype_info.cpp_converter = Some(CppConverter {
             typename: typename.into(),
-            output_converter,
-            input_converter: format!("{var}.release()", var = FROM_VAR_TEMPLATE),
+            converter,
         });
         return Ok(Some(ftype_info));
     }
@@ -577,14 +580,17 @@ pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std
         "CRustVecF64" => "RustVecF64",
         _ => unimplemented!(),
     };
-    ftype_info.cpp_converter = Some(CppConverter {
-        typename: typename.into(),
-        output_converter: format!(
+    let converter = match direction {
+        Direction::Outgoing => format!(
             "{cpp_type}{{{var}}}",
             cpp_type = typename,
             var = FROM_VAR_TEMPLATE
         ),
-        input_converter: format!("{var}.release()", var = FROM_VAR_TEMPLATE),
+        Direction::Incoming => format!("{var}.release()", var = FROM_VAR_TEMPLATE),
+    };
+    ftype_info.cpp_converter = Some(CppConverter {
+        typename: typename.into(),
+        converter,
     });
     Ok(Some(ftype_info))
 }
@@ -625,7 +631,7 @@ fn handle_result_type_as_return_type(
                 CppVariant::Std17 => format!("std::variant<{}, RustString>", foreign_class.name),
                 CppVariant::Boost => format!("boost::variant<{}, RustString>", foreign_class.name),
             };
-            let output_converter = format!(
+            let converter = format!(
                 "{var}.is_ok != 0 ?
  {VarType}{{{Type}(static_cast<{C_Type} *>({var}.data.ok))}} :
  {VarType}{{RustString{{{var}.data.err}}}}",
@@ -638,8 +644,7 @@ fn handle_result_type_as_return_type(
                 base: foreign_info,
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
-                    output_converter,
-                    input_converter: String::new(),
+                    converter,
                 }),
             }));
         } else if let Some(err_class) =
@@ -657,7 +662,7 @@ fn handle_result_type_as_return_type(
                     format!("boost::variant<{}, {}>", foreign_class.name, err_class.name)
                 }
             };
-            let output_converter = format!(
+            let converter = format!(
                 "{var}.is_ok != 0 ?
  {VarType} {{ {Type}(static_cast<{C_Type} *>({var}.data.ok))}} :
  {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err))}}",
@@ -672,8 +677,7 @@ fn handle_result_type_as_return_type(
                 base: foreign_info,
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
-                    output_converter,
-                    input_converter: "#error".into(),
+                    converter,
                 }),
             }));
         } else if let Some(err_enum) = conv_map.is_this_exported_enum(&err_rust_ty) {
@@ -688,7 +692,7 @@ fn handle_result_type_as_return_type(
                     format!("boost::variant<{}, {}>", foreign_class.name, err_enum.name,)
                 }
             };
-            let output_converter = format!(
+            let converter = format!(
                 "{var}.is_ok != 0 ?
  {VarType}{{{Type}(static_cast<{C_Type} *>({var}.data.ok))}} :
  {VarType}{{static_cast<{EnumName}>({var}.data.err)}}",
@@ -702,8 +706,7 @@ fn handle_result_type_as_return_type(
                 base: foreign_info,
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
-                    output_converter,
-                    input_converter: String::new(),
+                    converter,
                 }),
             }));
         } else {
@@ -735,7 +738,7 @@ fn handle_result_type_as_return_type(
                     CppVariant::Std17 => format!("std::variant<{}, RustString>", ok_typename),
                     CppVariant::Boost => format!("boost::variant<{}, RustString>", ok_typename),
                 };
-                let output_converter = format!(
+                let converter = format!(
                     "{var}.is_ok != 0 ?
  {VarType}{{{Type}{{{var}.data.ok}}}} :
  {VarType}{{RustString{{{var}.data.err}}}}",
@@ -745,8 +748,7 @@ fn handle_result_type_as_return_type(
                 );
                 f_type_info.cpp_converter = Some(CppConverter {
                     typename: typename.into(),
-                    output_converter,
-                    input_converter: "#error".to_string(),
+                    converter,
                 });
                 return Ok(Some(f_type_info));
             } else {
@@ -770,7 +772,7 @@ fn handle_result_type_as_return_type(
                         format!("boost::variant<{}, {}>", ok_typename, err_class.name)
                     }
                 };
-                let output_converter = format!(
+                let converter = format!(
                     "{var}.is_ok != 0 ?
  {VarType} {{ {Type}{{{var}.data.ok}} }} :
  {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err)) }}",
@@ -782,8 +784,7 @@ fn handle_result_type_as_return_type(
                 );
                 f_type_info.cpp_converter = Some(CppConverter {
                     typename: typename.into(),
-                    output_converter,
-                    input_converter: "#error".to_string(),
+                    converter,
                 });
                 return Ok(Some(f_type_info));
             } else {
@@ -801,7 +802,7 @@ fn handle_result_type_as_return_type(
                             format!("boost::variant<{}, {}>", ok_typename, err_class.name)
                         }
                     };
-                    let output_converter = format!(
+                    let converter = format!(
                         "{var}.is_ok != 0 ?
  {VarType} {{ {Type}{{{var}.data.ok}} }} :
  {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err)) }}",
@@ -813,8 +814,7 @@ fn handle_result_type_as_return_type(
                     );
                     f_type_info.cpp_converter = Some(CppConverter {
                         typename: typename.into(),
-                        output_converter,
-                        input_converter: "#error".to_string(),
+                        converter,
                     });
                     return Ok(Some(f_type_info));
                 }
@@ -850,7 +850,7 @@ fn handle_option_type_in_input(
     let opt_rust_ty = conv_map.find_or_alloc_rust_type(opt_ty);
     if let Some(fclass) = conv_map.find_foreigner_class_with_such_self_type(&opt_rust_ty, false) {
         let foreign_info = foreign_class_foreign_name(conv_map, fclass, opt_ty.span(), false)?;
-        let (typename, input_converter) = match cpp_cfg.cpp_optional {
+        let (typename, converter) = match cpp_cfg.cpp_optional {
             CppOptional::Std17 => (
                 format!("std::optional<{}>", fclass.name),
                 format!(
@@ -870,8 +870,7 @@ fn handle_option_type_in_input(
             base: foreign_info,
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
-                output_converter: "#error".to_string(),
-                input_converter,
+                converter,
             }),
         }));
     }
@@ -891,7 +890,7 @@ fn handle_option_type_in_input(
                 let mut cpp_info_opt = map_ordinal_input_type(conv_map, arg_ty, arg_ty_span)?;
                 let cpp_info_ty = map_ordinal_input_type(conv_map, &opt_rust_ty, opt_ty.span())?;
                 let f_opt_ty = cpp_info_ty.base.name;
-                let (typename, input_converter) = match cpp_cfg.cpp_optional {
+                let (typename, converter) = match cpp_cfg.cpp_optional {
                     CppOptional::Std17 => (
                         format!("std::optional<{}>", f_opt_ty),
                         format!("!!{var} ? *{var} : nullptr", var = FROM_VAR_TEMPLATE,),
@@ -903,8 +902,7 @@ fn handle_option_type_in_input(
                 };
                 cpp_info_opt.cpp_converter = Some(CppConverter {
                     typename: typename.into(),
-                    output_converter: "#error".to_string(),
-                    input_converter,
+                    converter,
                 });
                 return Ok(Some(cpp_info_opt));
             }
@@ -923,7 +921,7 @@ fn handle_option_type_in_input(
     } else {
         ""
     };
-    let (typename, input_converter) = match cpp_cfg.cpp_optional {
+    let (typename, converter) = match cpp_cfg.cpp_optional {
         CppOptional::Std17 => (
             format!("std::optional<{}>", f_opt_ty),
             format!(
@@ -945,8 +943,7 @@ fn handle_option_type_in_input(
     };
     cpp_info_opt.cpp_converter = Some(CppConverter {
         typename: typename.into(),
-        output_converter: "#error".to_string(),
-        input_converter,
+        converter,
     });
     Ok(Some(cpp_info_opt))
 }
@@ -974,7 +971,7 @@ fn handle_option_type_in_return(
             })?;
         let foreign_info =
             foreign_class_foreign_name(conv_map, foreign_class, opt_ty.span(), false)?;
-        let (typename, output_converter) = match cpp_cfg.cpp_optional {
+        let (typename, converter) = match cpp_cfg.cpp_optional {
             CppOptional::Std17 => (
                 format!("std::optional<{}>", foreign_class.name),
                 format!(
@@ -996,8 +993,7 @@ fn handle_option_type_in_return(
             base: foreign_info,
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
-                output_converter,
-                input_converter: "#error".to_string(),
+                converter,
             }),
         }));
     }
@@ -1046,7 +1042,7 @@ fn handle_option_type_in_return(
                 .into(),
             );
 
-            let (typename, output_converter) = match cpp_cfg.cpp_optional {
+            let (typename, converter) = match cpp_cfg.cpp_optional {
                 CppOptional::Std17 => (
                     format!("std::optional<{}Ref>", fclass.name),
                     format!(
@@ -1068,8 +1064,7 @@ fn handle_option_type_in_return(
                 base: foreign_info,
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
-                    output_converter,
-                    input_converter: "#error".to_string(),
+                    converter,
                 }),
             }));
         }
@@ -1083,7 +1078,7 @@ fn handle_option_type_in_return(
         "bool".into()
     };
     debug!("is_this_exported_enum {:?}", opt_ty);
-    let (typename, output_converter) =
+    let (typename, converter) =
         if let Some(foreign_enum) = conv_map.is_this_exported_enum(&opt_rust_ty) {
             match cpp_cfg.cpp_optional {
                 CppOptional::Std17 => (
@@ -1142,7 +1137,7 @@ fn handle_option_type_in_return(
                 .cpp_converter
                 .expect("C++ converter from C struct")
                 .typename;
-            let (typename, output_converter) = match cpp_cfg.cpp_optional {
+            let (typename, converter) = match cpp_cfg.cpp_optional {
                 CppOptional::Std17 => (
                     format!("std::optional<{}>", cpp_typename),
                     format!(
@@ -1162,16 +1157,14 @@ fn handle_option_type_in_return(
             };
             cpp_info_opt.cpp_converter = Some(CppConverter {
                 typename: typename.into(),
-                output_converter,
-                input_converter: "#error".to_string(),
+                converter,
             });
             return Ok(Some(cpp_info_opt));
         }
     }
     cpp_info_opt.cpp_converter = Some(CppConverter {
         typename: typename.into(),
-        output_converter,
-        input_converter: "#error".to_string(),
+        converter,
     });
     Ok(Some(cpp_info_opt))
 }
@@ -1202,7 +1195,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
             CppVariant::Std17 => format!("std::variant<{}, RustString>", c_ok_type_name),
             CppVariant::Boost => format!("boost::variant<{}, RustString>", c_ok_type_name),
         };
-        let output_converter = format!(
+        let converter = format!(
             "{var}.is_ok != 0 ?
  {VarType}{{{var}.data.ok}} :
  {VarType}{{RustString{{{var}.data.err}}}}",
@@ -1217,8 +1210,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
             base: foreign_info.base,
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
-                output_converter,
-                input_converter: String::new(),
+                converter,
             }),
         }))
     } else if let Some(err_class) =
@@ -1229,7 +1221,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
             CppVariant::Std17 => format!("std::variant<{}, {}>", c_ok_type_name, err_class.name),
             CppVariant::Boost => format!("boost::variant<{}, {}>", c_ok_type_name, err_class.name),
         };
-        let output_converter = format!(
+        let converter = format!(
             "{var}.is_ok != 0 ?
  {VarType} {{ {var}.data.ok }} :
  {VarType} {{ {ErrType}(static_cast<{C_ErrType} *>({var}.data.err)) }}",
@@ -1246,8 +1238,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
             base: foreign_info.base,
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
-                output_converter,
-                input_converter: "#error".into(),
+                converter,
             }),
         }))
     } else {
