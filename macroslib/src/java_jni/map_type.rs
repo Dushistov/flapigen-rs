@@ -1,12 +1,15 @@
 use log::trace;
-use proc_macro2::Span;
 use syn::{parse_quote, Type};
 
 use crate::{
-    error::{DiagnosticError, Result},
+    error::{DiagnosticError, Result, SourceIdSpan},
     java_jni::{calc_this_type_for_method, JavaForeignTypeInfo, NullAnnotation},
-    typemap::ast::{if_option_return_some_type, normalize_ty_lifetimes},
-    typemap::{ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
+    source_registry::SourceId,
+    typemap::{
+        ast::{if_option_return_some_type, normalize_ty_lifetimes},
+        ty::RustType,
+        ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+    },
     types::{ForeignEnumInfo, ForeignerClassInfo},
     TypeMap,
 };
@@ -14,7 +17,7 @@ use crate::{
 pub(in crate::java_jni) fn special_type(
     conv_map: &mut TypeMap,
     arg_ty: &RustType,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<Option<JavaForeignTypeInfo>> {
     let foreign_class_trait = "SwigForeignClass";
 
@@ -31,7 +34,8 @@ pub(in crate::java_jni) fn special_type(
             )
             .ok_or_else(|| {
                 DiagnosticError::new(
-                    arg_ty_span,
+                    arg_ty_span.0,
+                    arg_ty_span.1,
                     format!("Can not find foreigner_class for '{}'", arg_ty),
                 )
             })?;
@@ -70,7 +74,7 @@ pub(in crate::java_jni) fn special_type(
     }
 
     if let Some(ty) = if_option_return_some_type(arg_ty) {
-        return handle_option_type_in_input(conv_map, &ty);
+        return handle_option_type_in_input(conv_map, &ty, arg_ty_span.0);
     }
 
     trace!("special_type: oridinary type {}", arg_ty);
@@ -144,8 +148,9 @@ fn calc_converter_for_enum(
 fn handle_option_type_in_input(
     conv_map: &mut TypeMap,
     opt_inside_ty: &Type,
+    arg_src_id: SourceId,
 ) -> Result<Option<JavaForeignTypeInfo>> {
-    let opt_inside_rust_ty = conv_map.find_or_alloc_rust_type(opt_inside_ty);
+    let opt_inside_rust_ty = conv_map.find_or_alloc_rust_type(opt_inside_ty, arg_src_id);
     if let Some(fclass) =
         conv_map.find_foreigner_class_with_such_self_type(&opt_inside_rust_ty, false)
     {

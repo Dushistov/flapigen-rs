@@ -3,6 +3,7 @@ use std::io::Write;
 use log::{debug, trace};
 use petgraph::Direction;
 use proc_macro2::Span;
+use quote::ToTokens;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
@@ -11,8 +12,9 @@ use crate::{
         cpp_code::c_class_type,
         {CppConverter, CppForeignTypeInfo},
     },
-    error::{DiagnosticError, Result},
+    error::{panic_on_syn_error, DiagnosticError, Result, SourceIdSpan},
     file_cache::FileWriteCache,
+    source_registry::SourceId,
     typemap::ast::{
         if_option_return_some_type, if_result_return_ok_err_types, if_type_slice_return_elem_type,
         if_vec_return_elem_type,
@@ -27,7 +29,7 @@ fn special_type(
     cpp_cfg: &CppConfig,
     arg_ty: &RustType,
     direction: Direction,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<Option<CppForeignTypeInfo>> {
     trace!(
         "special_type: begin arg.ty({}) input {:?}",
@@ -59,7 +61,7 @@ fn special_type(
         ..
     }) = arg_ty.ty
     {
-        let ret_rust_ty = conv_map.find_or_alloc_rust_type(ret_ty);
+        let ret_rust_ty = conv_map.find_or_alloc_rust_type(ret_ty, arg_ty_span.0);
         if let Some(foreign_class) =
             conv_map.find_foreigner_class_with_such_self_type(&ret_rust_ty, false)
         {
@@ -101,7 +103,7 @@ fn special_type(
         ..
     }) = arg_ty.ty
     {
-        let ret_rust_ty = conv_map.find_or_alloc_rust_type(ret_ty);
+        let ret_rust_ty = conv_map.find_or_alloc_rust_type(ret_ty, arg_ty_span.0);
         if let Some(foreign_class) =
             conv_map.find_foreigner_class_with_such_self_type(&ret_rust_ty, false)
         {
@@ -114,7 +116,8 @@ fn special_type(
                 foreign_class_foreign_name(conv_map, foreign_class, arg_ty_span, true)?;
             if direction == Direction::Outgoing {
                 return Err(DiagnosticError::new(
-                    arg_ty_span,
+                    arg_ty_span.0,
+                    arg_ty_span.1,
                     format!(
                         "Not supported conversation &mut {} as return type to foreign",
                         foreign_class.name
@@ -127,7 +130,8 @@ fn special_type(
                     conv_map.ty_to_rust_type(this_type_for_method)
                 } else {
                     return Err(DiagnosticError::new(
-                        arg_ty_span,
+                        arg_ty_span.0,
+                        arg_ty_span.1,
                         format!(
                             "Unknown this type for method(s) of class {}",
                             foreign_class.name
@@ -165,7 +169,8 @@ fn special_type(
             )
             .ok_or_else(|| {
                 DiagnosticError::new(
-                    arg_ty_span,
+                    arg_ty_span.0,
+                    arg_ty_span.1,
                     format!("Can not find foreigner_class for '{:?}'", arg_ty),
                 )
             })?;
@@ -260,7 +265,7 @@ fn special_type(
 fn foreign_class_foreign_name(
     conv_map: &TypeMap,
     foreign_class: &ForeignerClassInfo,
-    foreign_class_span: Span,
+    foreign_class_span: SourceIdSpan,
     readonly_fptr: bool,
 ) -> Result<ForeignTypeInfo> {
     let c_type = c_class_type(foreign_class);
@@ -273,7 +278,8 @@ fn foreign_class_foreign_name(
         .find_foreign_type_info_by_name(&foreign_typename)
         .ok_or_else(|| {
             DiagnosticError::new(
-                foreign_class_span,
+                foreign_class_span.0,
+                foreign_class_span.1,
                 format!("type {} unknown", foreign_class.name),
             )
         })
@@ -310,7 +316,7 @@ pub(in crate::cpp) fn map_type(
     cpp_cfg: &CppConfig,
     arg_ty: &RustType,
     direction: Direction,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<CppForeignTypeInfo> {
     let ret: CppForeignTypeInfo = match direction {
         Direction::Incoming => {
@@ -337,18 +343,19 @@ pub(in crate::cpp) fn map_type(
 fn map_ordinal_result_type(
     conv_map: &mut TypeMap,
     arg_ty: &RustType,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<CppForeignTypeInfo> {
     let ftype = conv_map
         .map_through_conversation_to_foreign_ext(
             arg_ty,
             Direction::Outgoing,
-            arg_ty_span,
+            arg_ty_span.1,
             calc_this_type_for_method,
         )
         .ok_or_else(|| {
             DiagnosticError::new(
-                arg_ty_span,
+                arg_ty_span.0,
+                arg_ty_span.1,
                 format!(
                     "Do not know conversation from \
                      such rust type '{}' to foreign",
@@ -362,18 +369,19 @@ fn map_ordinal_result_type(
 fn map_ordinal_input_type(
     conv_map: &mut TypeMap,
     arg_ty: &RustType,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<CppForeignTypeInfo> {
     let ftype = conv_map
         .map_through_conversation_to_foreign_ext(
             arg_ty,
             Direction::Incoming,
-            arg_ty_span,
+            arg_ty_span.1,
             calc_this_type_for_method,
         )
         .ok_or_else(|| {
             DiagnosticError::new(
-                arg_ty_span,
+                arg_ty_span.0,
+                arg_ty_span.1,
                 format!(
                     "Do not know conversation from foreign \
                      to such rust type '{}'",
@@ -388,10 +396,10 @@ fn map_arg_with_slice_type(
     conv_map: &mut TypeMap,
     arg_ty: &RustType,
     elem_ty: &Type,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let mut ftype_info = map_ordinal_input_type(conv_map, arg_ty, arg_ty_span)?;
-    let elem_rust_ty = conv_map.find_or_alloc_rust_type(elem_ty);
+    let elem_rust_ty = conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
     if let Some(foreign_class) =
         conv_map.find_foreigner_class_with_such_self_type(&elem_rust_ty, false)
     {
@@ -410,10 +418,10 @@ fn map_return_slice_type(
     conv_map: &mut TypeMap,
     arg_ty: &RustType,
     elem_ty: &Type,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let mut ftype_info = map_ordinal_result_type(conv_map, arg_ty, arg_ty_span)?;
-    let elem_rust_ty = conv_map.find_or_alloc_rust_type(elem_ty);
+    let elem_rust_ty = conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
     if let Some(foreign_class) =
         conv_map.find_foreigner_class_with_such_self_type(&elem_rust_ty, false)
     {
@@ -438,11 +446,11 @@ fn map_type_vec(
     cpp_cfg: &CppConfig,
     arg_ty: &RustType,
     elem_ty: &Type,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
     direction: Direction,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let mut ftype_info = map_ordinal_result_type(conv_map, arg_ty, arg_ty_span)?;
-    let elem_rust_ty = conv_map.find_or_alloc_rust_type(elem_ty);
+    let elem_rust_ty = conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
     if let Some(foreign_class) =
         conv_map.find_foreigner_class_with_such_self_type(&elem_rust_ty, false)
     {
@@ -492,62 +500,70 @@ using {vec_type} = RustForeignVec<{class}Ref, CRustForeignVec,
             )
             .map_err(|err| {
                 DiagnosticError::new(
-                    arg_ty_span,
+                    arg_ty_span.0,
+                    arg_ty_span.1,
                     format!("write to {:?} failed: {}", fc_vec_path, err),
                 )
             })?;
             c_vec_f.update_file_if_necessary().map_err(|err| {
                 DiagnosticError::new(
-                    arg_ty_span,
+                    arg_ty_span.0,
+                    arg_ty_span.1,
                     format!("update of {:?} failed: {}", fc_vec_path, err),
                 )
             })?;
 
-            let self_rust_ty = conv_map.find_or_alloc_rust_type(&foreign_class.self_type_as_ty());
+            let self_rust_ty = conv_map
+                .find_or_alloc_rust_type(&foreign_class.self_type_as_ty(), foreign_class.src_id);
 
+            let func_id = syn::Ident::new(&free_mem_func, Span::call_site());
+            let self_type_id: Type =
+                syn::parse_str(&self_rust_ty.normalized_name).unwrap_or_else(|err| {
+                    panic_on_syn_error(
+                        "c++/internal self_rust_ty",
+                        self_rust_ty.normalized_name.clone().into(),
+                        err,
+                    )
+                });
+
+            let free_vec_func_item: syn::Item = parse_quote! {
+            #[allow(unused_variables, unused_mut, non_snake_case)]
+            #[no_mangle]
+            pub extern "C" fn #func_id(v: CRustForeignVec) {
+                assert_eq!(::std::mem::size_of::<#self_type_id>(), v.step);
+                drop_foreign_class_vec::<#self_type_id>(v.data as *mut #self_type_id, v.len, v.capacity);
+            }
+            };
             cpp_cfg
                 .to_generate
                 .borrow_mut()
-                .push(syn::parse_str(&format!(
-                    r#"
-#[allow(unused_variables, unused_mut, non_snake_case)]
-#[no_mangle]
-pub extern "C" fn {func_name}(v: CRustForeignVec) {{
-    assert_eq!(::std::mem::size_of::<{self_type}>(), v.step);
-    drop_foreign_class_vec::<{self_type}>(v.data as *mut {self_type}, v.len, v.capacity);
-}}
-"#,
-                    func_name = free_mem_func,
-                    self_type = self_rust_ty.normalized_name
-                ))?);
+                .push(free_vec_func_item.into_token_stream());
+
+            let func_id = syn::Ident::new(&push_func, Span::call_site());
+            let push_vec_func_item: syn::Item = parse_quote! {
+            #[allow(unused_variables, unused_mut, non_snake_case)]
+            #[no_mangle]
+            pub extern "C" fn #func_id(v: *mut CRustForeignVec, e: *mut ::std::os::raw::c_void) {
+                push_foreign_class_to_vec::<#self_type_id>(v, e);
+            }
+                        };
             cpp_cfg
                 .to_generate
                 .borrow_mut()
-                .push(syn::parse_str(&format!(
-                    r#"
-#[allow(unused_variables, unused_mut, non_snake_case)]
-#[no_mangle]
-pub extern "C" fn {func_name}(v: *mut CRustForeignVec, e: *mut ::std::os::raw::c_void) {{
-    push_foreign_class_to_vec::<{self_type}>(v, e);
-}}
-"#,
-                    func_name = push_func,
-                    self_type = self_rust_ty.normalized_name
-                ))?);
+                .push(push_vec_func_item.into_token_stream());
+
+            let func_id = syn::Ident::new(&remove_func, Span::call_site());
+            let remove_elem_func_item: syn::Item = parse_quote! {
+            #[allow(unused_variables, unused_mut, non_snake_case)]
+            #[no_mangle]
+            pub extern "C" fn #func_id(v: *mut CRustForeignVec, idx: usize) -> *mut ::std::os::raw::c_void {
+                remove_foreign_class_from_vec::<#self_type_id>(v, idx)
+            }
+            };
             cpp_cfg
                 .to_generate
                 .borrow_mut()
-                .push(syn::parse_str(&format!(
-                    r#"
-#[allow(unused_variables, unused_mut, non_snake_case)]
-#[no_mangle]
-pub extern "C" fn {func_name}(v: *mut CRustForeignVec, idx: usize) -> *mut ::std::os::raw::c_void {{
-    remove_foreign_class_from_vec::<{self_type}>(v, idx)
-}}
-"#,
-                    func_name = remove_func,
-                    self_type = self_rust_ty.normalized_name
-                ))?);
+                .push(remove_elem_func_item.into_token_stream());
             cpp_cfg
                 .generated_helper_files
                 .borrow_mut()
@@ -602,10 +618,10 @@ fn handle_result_type_as_return_type(
     arg_ty: &RustType,
     ok_ty: &Type,
     err_ty: &Type,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<Option<CppForeignTypeInfo>> {
-    let err_rust_ty = conv_map.find_or_alloc_rust_type(err_ty);
-    let ok_rust_ty = conv_map.find_or_alloc_rust_type(ok_ty);
+    let err_rust_ty = conv_map.find_or_alloc_rust_type(err_ty, arg_ty_span.0);
+    let ok_rust_ty = conv_map.find_or_alloc_rust_type(ok_ty, arg_ty_span.0);
     debug!(
         "handle_result_type_as_return_type: ok_ty: {:?}, err_ty: {}",
         ok_rust_ty, err_rust_ty
@@ -619,7 +635,8 @@ fn handle_result_type_as_return_type(
             )
             .ok_or_else(|| {
                 DiagnosticError::new(
-                    arg_ty_span,
+                    arg_ty_span.0,
+                    arg_ty_span.1,
                     format!("Can not find foreigner_class for '{:?}'", arg_ty),
                 )
             })?;
@@ -716,7 +733,7 @@ fn handle_result_type_as_return_type(
     }
 
     if let Some(elem_ty) = if_vec_return_elem_type(&ok_rust_ty) {
-        let elem_rust_ty = conv_map.find_or_alloc_rust_type(&elem_ty);
+        let elem_rust_ty = conv_map.find_or_alloc_rust_type(&elem_ty, arg_ty_span.0);
         trace!(
             "handle_result_type_as_return_type ok_ty is Vec, elem_ty {}",
             elem_rust_ty
@@ -726,7 +743,7 @@ fn handle_result_type_as_return_type(
             cpp_cfg,
             &ok_rust_ty,
             Direction::Outgoing,
-            ok_ty.span(),
+            (ok_rust_ty.src_id, ok_ty.span()),
         )?;
         let mut f_type_info = map_ordinal_result_type(conv_map, arg_ty, arg_ty_span)?;
         if err_rust_ty.normalized_name == "String" {
@@ -846,11 +863,16 @@ fn handle_option_type_in_input(
     cpp_cfg: &CppConfig,
     arg_ty: &RustType,
     opt_ty: &Type,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<Option<CppForeignTypeInfo>> {
-    let opt_rust_ty = conv_map.find_or_alloc_rust_type(opt_ty);
+    let opt_rust_ty = conv_map.find_or_alloc_rust_type(opt_ty, arg_ty_span.0);
     if let Some(fclass) = conv_map.find_foreigner_class_with_such_self_type(&opt_rust_ty, false) {
-        let foreign_info = foreign_class_foreign_name(conv_map, fclass, opt_ty.span(), false)?;
+        let foreign_info = foreign_class_foreign_name(
+            conv_map,
+            fclass,
+            (opt_rust_ty.src_id, opt_ty.span()),
+            false,
+        )?;
         let (typename, converter) = match cpp_cfg.cpp_optional {
             CppOptional::Std17 => (
                 format!("std::optional<{}>", fclass.name),
@@ -876,7 +898,7 @@ fn handle_option_type_in_input(
         }));
     }
 
-    let opt_rust_ty = conv_map.find_or_alloc_rust_type(opt_ty);
+    let opt_rust_ty = conv_map.find_or_alloc_rust_type(opt_ty, arg_ty_span.0);
 
     if let Type::Reference(syn::TypeReference {
         elem: ref ref_ty,
@@ -889,7 +911,11 @@ fn handle_option_type_in_input(
             if path.segments.len() == 1 && path.segments[0].ident == "str" {
                 trace!("Catch Option<&str>");
                 let mut cpp_info_opt = map_ordinal_input_type(conv_map, arg_ty, arg_ty_span)?;
-                let cpp_info_ty = map_ordinal_input_type(conv_map, &opt_rust_ty, opt_ty.span())?;
+                let cpp_info_ty = map_ordinal_input_type(
+                    conv_map,
+                    &opt_rust_ty,
+                    (opt_rust_ty.src_id, opt_ty.span()),
+                )?;
                 let f_opt_ty = cpp_info_ty.base.name;
                 let (typename, converter) = match cpp_cfg.cpp_optional {
                     CppOptional::Std17 => (
@@ -911,7 +937,8 @@ fn handle_option_type_in_input(
     }
     trace!("handle_option_type_in_input arg_ty {:?}", arg_ty);
     let mut cpp_info_opt = map_ordinal_input_type(conv_map, arg_ty, arg_ty_span)?;
-    let cpp_info_ty = map_ordinal_input_type(conv_map, &opt_rust_ty, opt_ty.span())?;
+    let cpp_info_ty =
+        map_ordinal_input_type(conv_map, &opt_rust_ty, (opt_rust_ty.src_id, opt_ty.span()))?;
     let f_opt_ty = cpp_info_ty.base.name;
     let mut c_option_name: &str = &cpp_info_opt.base.name;
     if c_option_name.starts_with("struct ") {
@@ -954,9 +981,9 @@ fn handle_option_type_in_return(
     cpp_cfg: &CppConfig,
     arg_ty: &RustType,
     opt_ty: &Type,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<Option<CppForeignTypeInfo>> {
-    let opt_rust_ty = conv_map.find_or_alloc_rust_type(opt_ty);
+    let opt_rust_ty = conv_map.find_or_alloc_rust_type(opt_ty, arg_ty_span.0);
     if opt_rust_ty.implements.contains("SwigForeignClass") {
         let foreign_class_this_ty = &opt_rust_ty;
         let foreign_class = conv_map
@@ -966,12 +993,17 @@ fn handle_option_type_in_return(
             )
             .ok_or_else(|| {
                 DiagnosticError::new(
-                    arg_ty_span,
+                    arg_ty_span.0,
+                    arg_ty_span.1,
                     format!("Can not find foreigner_class for '{:?}'", arg_ty),
                 )
             })?;
-        let foreign_info =
-            foreign_class_foreign_name(conv_map, foreign_class, opt_ty.span(), false)?;
+        let foreign_info = foreign_class_foreign_name(
+            conv_map,
+            foreign_class,
+            (foreign_class.src_id, opt_ty.span()),
+            false,
+        )?;
         let (typename, converter) = match cpp_cfg.cpp_optional {
             CppOptional::Std17 => (
                 format!("std::optional<{}>", foreign_class.name),
@@ -1006,15 +1038,20 @@ fn handle_option_type_in_return(
         ..
     }) = opt_ty
     {
-        let under_ref_rust_ty = conv_map.find_or_alloc_rust_type(under_ref_ty);
+        let under_ref_rust_ty = conv_map.find_or_alloc_rust_type(under_ref_ty, arg_ty_span.0);
         if let Some(fclass) = conv_map
             .find_foreigner_class_with_such_self_type(&under_ref_rust_ty, false)
             .cloned()
         {
-            let foreign_info =
-                foreign_class_foreign_name(conv_map, &fclass, under_ref_ty.span(), false)?;
+            let foreign_info = foreign_class_foreign_name(
+                conv_map,
+                &fclass,
+                (fclass.src_id, under_ref_ty.span()),
+                false,
+            )?;
             let this_type_for_method = fclass.constructor_ret_type.as_ref().ok_or_else(|| {
                 DiagnosticError::new(
+                    fclass.src_id,
                     fclass.span(),
                     format!(
                         "Class {} (namespace {}) return as reference, but there is no constructor",
@@ -1022,10 +1059,13 @@ fn handle_option_type_in_return(
                     ),
                 )
             })?;
-            let this_type: RustType = conv_map.find_or_alloc_rust_type(this_type_for_method);
+            let this_type: RustType = conv_map.ty_to_rust_type(this_type_for_method);
             let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
-            let my_void_ptr_ti = conv_map
-                .find_or_alloc_rust_type_with_suffix(&void_ptr_ty, &this_type.normalized_name);
+            let my_void_ptr_ti = conv_map.find_or_alloc_rust_type_with_suffix(
+                &void_ptr_ty,
+                &this_type.normalized_name,
+                SourceId::none(),
+            );
             conv_map.add_conversation_rule(
                 arg_ty.clone(),
                 my_void_ptr_ti,
@@ -1071,7 +1111,7 @@ fn handle_option_type_in_return(
         }
     }
     let mut cpp_info_opt = map_ordinal_result_type(conv_map, arg_ty, arg_ty_span)?;
-    let cpp_info_ty = map_ordinal_result_type(conv_map, &opt_rust_ty, opt_ty.span())?;
+    let cpp_info_ty = map_ordinal_result_type(conv_map, &opt_rust_ty, opt_rust_ty.src_id_span())?;
 
     let f_opt_ty = if *opt_ty != parse_type! {bool} {
         cpp_info_ty.base.name
@@ -1131,7 +1171,7 @@ fn handle_option_type_in_return(
                 cpp_cfg,
                 &opt_rust_ty,
                 Direction::Outgoing,
-                opt_ty.span(),
+                (arg_ty_span.0, opt_ty.span()),
             )?;
             let cpp_typename = cpp_info_ty
                 .expect("We should know how convert String as output type")
@@ -1176,17 +1216,17 @@ fn handle_result_with_primitive_type_as_ok_ty(
     arg_ty: &RustType,
     ok_ty: &Type,
     err_ty: &Type,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let empty_ok_ty = *ok_ty == parse_type! { () };
 
-    let err_rust_ty = conv_map.find_or_alloc_rust_type(err_ty);
+    let err_rust_ty = conv_map.find_or_alloc_rust_type(err_ty, arg_ty_span.0);
 
     let c_ok_type_name: SmolStr = if empty_ok_ty {
         "void *".into()
     } else {
-        let ok_rust_ty = conv_map.find_or_alloc_rust_type(ok_ty);
-        map_ordinal_result_type(conv_map, &ok_rust_ty, ok_ty.span())?
+        let ok_rust_ty = conv_map.find_or_alloc_rust_type(ok_ty, arg_ty_span.0);
+        map_ordinal_result_type(conv_map, &ok_rust_ty, (arg_ty_span.0, ok_ty.span()))?
             .base
             .name
     };

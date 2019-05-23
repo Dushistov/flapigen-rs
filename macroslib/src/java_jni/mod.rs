@@ -13,9 +13,10 @@ use syn::{parse_quote, spanned::Spanned, Type};
 use self::map_type::special_type;
 use crate::{
     error::{DiagnosticError, Result},
+    source_registry::SourceId,
     typemap::ast::{
         fn_arg_type, if_option_return_some_type, if_result_return_ok_err_types,
-        if_ty_result_return_ok_type, DisplayToTokens,
+        if_ty_result_return_ok_type, DisplayToTokens, TypeName,
     },
     typemap::{
         ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
@@ -98,20 +99,23 @@ impl LanguageGenerator for JavaConfig {
         conv_map: &mut TypeMap,
         _code: &[SourceCode],
     ) -> std::result::Result<(), String> {
-        conv_map.find_or_alloc_rust_type(&parse_type! { jint });
-        conv_map.find_or_alloc_rust_type(&parse_type! { jlong });
+        conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jint });
+        conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
         Ok(())
     }
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
             .validate_class()
-            .map_err(|err| DiagnosticError::new(class.span(), &err))?;
+            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
         if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
             let this_type_for_method = if_ty_result_return_ok_type(constructor_ret_type)
                 .unwrap_or_else(|| constructor_ret_type.clone());
 
-            let this_type: RustType = conv_map
-                .find_or_alloc_rust_type_that_implements(&this_type_for_method, "SwigForeignClass");
+            let this_type: RustType = conv_map.find_or_alloc_rust_type_that_implements(
+                &this_type_for_method,
+                "SwigForeignClass",
+                class.src_id,
+            );
             debug!(
                 "register_class: add implements SwigForeignClass for {}",
                 this_type
@@ -120,6 +124,7 @@ impl LanguageGenerator for JavaConfig {
             let my_jobj_ti = conv_map.find_or_alloc_rust_type_with_suffix(
                 &parse_type! { jobject },
                 &this_type.normalized_name,
+                SourceId::none(),
             );
 
             conv_map.cache_rust_to_foreign_conv(
@@ -130,15 +135,16 @@ impl LanguageGenerator for JavaConfig {
                 },
             )?;
 
-            conv_map.find_or_alloc_rust_type(constructor_ret_type);
+            conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
 
             let (this_type_for_method, _code_box_this) =
                 conv_map.convert_to_heap_pointer(&this_type, "this");
 
-            let jlong_ti: RustType = conv_map.find_or_alloc_rust_type(&parse_type! { jlong });
+            let jlong_ti: RustType =
+                conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
             let this_type_for_method_ty = &this_type_for_method.ty;
-            let this_type_ref =
-                conv_map.find_or_alloc_rust_type(&parse_type! { & #this_type_for_method_ty });
+            let this_type_ref = conv_map
+                .find_or_alloc_rust_type_no_src_id(&parse_type! { & #this_type_for_method_ty });
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 jlong_ti.clone(),
@@ -155,8 +161,8 @@ impl LanguageGenerator for JavaConfig {
                 )
                 .into(),
             );
-            let this_type_mut_ref =
-                conv_map.find_or_alloc_rust_type(&parse_type! { &mut #this_type_for_method_ty });
+            let this_type_mut_ref = conv_map
+                .find_or_alloc_rust_type_no_src_id(&parse_type! { &mut #this_type_for_method_ty });
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 jlong_ti.clone(),
@@ -195,7 +201,7 @@ impl LanguageGenerator for JavaConfig {
             );
         }
 
-        let _ = conv_map.find_or_alloc_rust_type(&class.self_type_as_ty());
+        let _ = conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
 
         Ok(())
     }
@@ -220,7 +226,7 @@ impl LanguageGenerator for JavaConfig {
             &f_methods_sign,
             self.null_annotation_package.as_ref().map(String::as_str),
         )
-        .map_err(|err| DiagnosticError::new(class.span(), err))?;
+        .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
         debug!("generate: java code done");
         let ast_items =
             rust_code::generate_rust_code(conv_map, &self.package_name, class, &f_methods_sign)?;
@@ -236,13 +242,14 @@ impl LanguageGenerator for JavaConfig {
     ) -> Result<Vec<TokenStream>> {
         if (enum_info.items.len() as u64) >= (i32::max_value() as u64) {
             return Err(DiagnosticError::new(
+                enum_info.src_id,
                 enum_info.span(),
                 "Too many items in enum",
             ));
         }
 
         java_code::generate_java_code_for_enum(&self.output_dir, &self.package_name, enum_info)
-            .map_err(|err| DiagnosticError::new(enum_info.span(), &err))?;
+            .map_err(|err| DiagnosticError::new(enum_info.src_id, enum_info.span(), &err))?;
 
         rust_code::generate_rust_code_for_enum(
             &self.package_name,
@@ -266,7 +273,7 @@ impl LanguageGenerator for JavaConfig {
             &f_methods,
             self.null_annotation_package.as_ref().map(String::as_str),
         )
-        .map_err(|err| DiagnosticError::new(interface.span(), err))?;
+        .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;
         let items = rust_code::generate_interface(
             &self.package_name,
             conv_map,
@@ -278,8 +285,12 @@ impl LanguageGenerator for JavaConfig {
         let my_jobj_ti = conv_map.find_or_alloc_rust_type_with_suffix(
             &parse_type! { jobject },
             &interface.name.to_string(),
+            SourceId::none(),
         );
-        conv_map.add_foreign(my_jobj_ti, (&interface.name).into())?;
+        conv_map.add_foreign(
+            my_jobj_ti,
+            TypeName::from_ident(&interface.name, interface.src_id),
+        )?;
         Ok(items)
     }
 }
@@ -301,13 +312,13 @@ fn find_suitable_ftypes_for_interace_methods(
 ) -> Result<Vec<JniForeignMethodSignature>> {
     let void_sym = "void";
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
     let mut f_methods = vec![];
 
     for method in &interace.items {
         let mut input = Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg));
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg), interace.src_id);
             let f_arg_type = conv_map
                 .map_through_conversation_to_foreign(
                     &arg_rust_ty,
@@ -317,6 +328,7 @@ fn find_suitable_ftypes_for_interace_methods(
                 )
                 .ok_or_else(|| {
                     DiagnosticError::new(
+                        interace.src_id,
                         fn_arg_type(arg).span(),
                         format!(
                             "Do not know conversation to foreign \
@@ -346,7 +358,7 @@ fn find_suitable_foreign_types_for_methods(
     let mut ret = Vec::<JniForeignMethodSignature>::with_capacity(class.methods.len());
     let empty_symbol = "";
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
 
     for method in &class.methods {
         //skip self argument
@@ -358,9 +370,12 @@ fn find_suitable_foreign_types_for_methods(
         let mut input =
             Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg));
-            if let Some(converter) = special_type(conv_map, &arg_rust_ty, fn_arg_type(arg).span())?
-            {
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg), class.src_id);
+            if let Some(converter) = special_type(
+                conv_map,
+                &arg_rust_ty,
+                (class.src_id, fn_arg_type(arg).span()),
+            )? {
                 input.push(converter);
                 continue;
             }
@@ -373,6 +388,7 @@ fn find_suitable_foreign_types_for_methods(
                 )
                 .ok_or_else(|| {
                     DiagnosticError::new(
+                        class.src_id,
                         fn_arg_type(arg).span(),
                         format!(
                             "Do not know conversation from foreign \
@@ -404,7 +420,7 @@ fn find_suitable_foreign_types_for_methods(
                     correspoding_rust_type: dummy_rust_ty.clone(),
                 },
                 syn::ReturnType::Type(_, ref rt) => {
-                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt);
+                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt, class.src_id);
                     conv_map
                         .map_through_conversation_to_foreign(
                             &ret_rust_ty,
@@ -414,6 +430,7 @@ fn find_suitable_foreign_types_for_methods(
                         )
                         .ok_or_else(|| {
                             DiagnosticError::new(
+                                class.src_id,
                                 rt.span(),
                                 format!(
                                     "Do not know conversation from \

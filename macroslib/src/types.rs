@@ -2,10 +2,14 @@ use proc_macro2::{Ident, Span};
 
 use syn::{parse_quote, spanned::Spanned, Token, Type};
 
-use crate::error::{DiagnosticError, Result};
+use crate::{
+    error::{DiagnosticError, Result, SourceIdSpan},
+    source_registry::SourceId,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignerClassInfo {
+    pub(crate) src_id: SourceId,
     pub(crate) name: Ident,
     pub(crate) methods: Vec<ForeignerMethod>,
     pub(crate) self_type: Option<Type>,
@@ -39,6 +43,7 @@ impl ForeignerClassInfo {
         }
         if self.self_type.is_none() && has_constructor {
             Err(DiagnosticError::new(
+                self.src_id,
                 self.span(),
                 format!(
                     "class {} has constructor, but no self_type defined",
@@ -47,6 +52,7 @@ impl ForeignerClassInfo {
             ))
         } else if self.self_type.is_none() && has_methods {
             Err(DiagnosticError::new(
+                self.src_id,
                 self.span(),
                 format!("class {} has methods, but no self_type defined", self.name),
             ))
@@ -137,6 +143,7 @@ impl SelfTypeVariant {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignEnumInfo {
+    pub(crate) src_id: SourceId,
     pub(crate) name: Ident,
     pub(crate) items: Vec<ForeignEnumItem>,
     pub(crate) doc_comments: Vec<String>,
@@ -159,6 +166,7 @@ pub(crate) struct ForeignEnumItem {
 }
 
 pub(crate) struct ForeignInterface {
+    pub(crate) src_id: SourceId,
     pub(crate) name: Ident,
     pub(crate) self_type: syn::Path,
     pub(crate) doc_comments: Vec<String>,
@@ -168,6 +176,9 @@ pub(crate) struct ForeignInterface {
 impl ForeignInterface {
     pub(crate) fn span(&self) -> Span {
         self.name.span()
+    }
+    pub(crate) fn src_id_span(&self) -> SourceIdSpan {
+        (self.src_id, self.name.span())
     }
 }
 

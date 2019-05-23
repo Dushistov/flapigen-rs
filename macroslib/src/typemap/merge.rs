@@ -7,6 +7,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     error::Result,
+    source_registry::SourceId,
     typemap::{
         ty::{ForeignTypeS, ForeignTypesStorage},
         TypeMap,
@@ -16,11 +17,11 @@ use crate::{
 impl TypeMap {
     pub(crate) fn merge(
         &mut self,
-        id_of_code: &str,
+        id_of_code: SourceId,
         code: &str,
         target_pointer_width: usize,
     ) -> Result<()> {
-        debug!("merging {} with our rules", id_of_code);
+        debug!("TypeMap::merge {:?} with our rules", id_of_code);
         self.rust_to_foreign_cache.clear();
         let mut was_traits_usage_code = FxHashMap::default();
         mem::swap(&mut was_traits_usage_code, &mut self.traits_usage_code);
@@ -172,7 +173,7 @@ mod tests {
         let mut types_map = TypeMap::default();
         types_map
             .merge(
-                "base",
+                SourceId::none(),
                 r#"
 mod swig_foreign_types_map {
     #![swig_foreigner_type="boolean"]
@@ -186,7 +187,7 @@ mod swig_foreign_types_map {
             .unwrap();
         types_map
             .merge(
-                "test_merge",
+                SourceId::none(),
                 r#"
 mod swig_foreign_types_map {
     #![swig_foreigner_type="boolean"]
@@ -249,7 +250,7 @@ fn helper3() {
                 set
             }
         );
-        let ty_i32 = types_map.find_or_alloc_rust_type(&parse_type! { i32 });
+        let ty_i32 = types_map.find_or_alloc_rust_type(&parse_type! { i32 }, SourceId::none());
         assert_eq!(
             types_map
                 .map_through_conversation_to_foreign(

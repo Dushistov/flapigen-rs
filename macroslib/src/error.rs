@@ -1,29 +1,49 @@
 use std::fmt::{Display, Write};
 
+use crate::{
+    source_registry::{SourceId, SourceRegistry},
+    SourceCode,
+};
 use proc_macro2::Span;
+
+pub(crate) type SourceIdSpan = (SourceId, Span);
+
+pub(crate) fn invalid_src_id_span() -> SourceIdSpan {
+    (SourceId::none(), Span::call_site())
+}
 
 #[derive(Debug)]
 pub(crate) struct DiagnosticError {
-    src_id: String,
-    src: String,
+    src_id: SourceId,
     data: Vec<syn::Error>,
 }
 
 impl DiagnosticError {
-    pub fn new<T: Display>(sp: Span, err: T) -> Self {
+    pub fn from_syn_err(src_id: SourceId, err: syn::Error) -> Self {
         DiagnosticError {
-            src_id: String::new(),
-            src: String::new(),
+            src_id,
+            data: vec![err],
+        }
+    }
+    pub fn new<T: Display>(src_id: SourceId, sp: Span, err: T) -> Self {
+        DiagnosticError {
+            src_id,
+            data: vec![syn::Error::new(sp, err)],
+        }
+    }
+    pub fn new2<T: Display>((src_id, sp): SourceIdSpan, err: T) -> Self {
+        DiagnosticError {
+            src_id,
             data: vec![syn::Error::new(sp, err)],
         }
     }
     pub fn span_note<T: Display>(&mut self, sp: Span, err: T) {
         self.data.push(syn::Error::new(sp, err));
     }
-    pub fn register_src_if_no(&mut self, src_id: String, src: String) {
-        if self.src_id.is_empty() {
-            self.src_id = src_id;
-            self.src = src;
+    pub fn new_without_src_info<T: Display>(err: T) -> Self {
+        DiagnosticError {
+            src_id: SourceId::none(),
+            data: vec![syn::Error::new(Span::call_site(), err)],
         }
     }
 }
@@ -37,20 +57,26 @@ impl Display for DiagnosticError {
     }
 }
 
-impl From<syn::Error> for DiagnosticError {
-    fn from(x: syn::Error) -> DiagnosticError {
-        DiagnosticError {
-            src_id: String::new(),
-            src: String::new(),
-            data: vec![x],
-        }
-    }
-}
-
 pub(crate) type Result<T> = std::result::Result<T, DiagnosticError>;
 
-pub(crate) fn panic_on_parse_error(main_err: &DiagnosticError) -> ! {
-    eprintln!("error in {}", main_err.src_id);
+pub(crate) fn panic_on_syn_error(id_of_code: &str, code: String, err: syn::Error) -> ! {
+    let mut src_reg = SourceRegistry::default();
+    let src_id = src_reg.register(SourceCode {
+        id_of_code: id_of_code.into(),
+        code,
+    });
+    panic_on_parse_error(&src_reg, &DiagnosticError::from_syn_err(src_id, err));
+}
+
+pub(crate) fn panic_on_parse_error(src_reg: &SourceRegistry, main_err: &DiagnosticError) -> ! {
+    if main_err.src_id.is_none() {
+        for err in &main_err.data {
+            eprintln!("{}", err);
+        }
+        panic!();
+    }
+    let src = &src_reg.src_with_id(main_err.src_id);
+    eprintln!("error in {}", src.id_of_code);
     for err in &main_err.data {
         let span = err.span();
         let start = span.start();
@@ -58,8 +84,8 @@ pub(crate) fn panic_on_parse_error(main_err: &DiagnosticError) -> ! {
 
         let mut code_problem = String::new();
         let nlines = end.line - start.line + 1;
-        for (i, line) in main_err
-            .src
+        for (i, line) in src
+            .code
             .lines()
             .skip(start.line - 1)
             .take(nlines)
@@ -91,7 +117,7 @@ pub(crate) fn panic_on_parse_error(main_err: &DiagnosticError) -> ! {
 
         eprintln!(
             "parsing of {name} failed\nerror: {err}\n{code_problem}\nAt {name}:{line_s}:{col_s}",
-            name = main_err.src_id,
+            name = src.id_of_code,
             err = err,
             code_problem = code_problem,
             line_s = start.line,

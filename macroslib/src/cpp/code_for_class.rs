@@ -9,7 +9,7 @@ use crate::{
         c_func_name, cpp_code, n_arguments_list, rust_generate_args_with_types,
         CppForeignMethodSignature, MethodContext,
     },
-    error::{DiagnosticError, Result},
+    error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
     typemap::{
         ast::{list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
@@ -46,6 +46,7 @@ pub(in crate::cpp) fn generate(
         ($file_path:ident) => {
             |err| {
                 DiagnosticError::new(
+                    class.src_id,
                     class.span(),
                     format!("write to {} failed: {}", $file_path.display(), err),
                 )
@@ -167,6 +168,7 @@ public:
             })
             .ok_or_else(|| {
                 DiagnosticError::new(
+                    class.src_id,
                     class.span(),
                     format!(
                         "Class {} (namespace {}) has derived Copy attribute, but no clone method",
@@ -210,13 +212,16 @@ public:
     let mut last_cpp_access = Some("public");
 
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
     let mut gen_code = Vec::new();
 
     let (this_type_for_method, code_box_this) =
         if let Some(this_type) = class.constructor_ret_type.as_ref() {
-            let this_type =
-                conv_map.find_or_alloc_rust_type_that_implements(this_type, "SwigForeignClass");
+            let this_type = conv_map.find_or_alloc_rust_type_that_implements(
+                this_type,
+                "SwigForeignClass",
+                class.src_id,
+            );
 
             let (this_type_for_method, code_box_this) =
                 conv_map.convert_to_heap_pointer(&this_type, "this");
@@ -232,7 +237,7 @@ public:
                 ret
             };
             let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-            gen_code.push(syn::parse_str(&format!(
+            let fclass_impl_code = format!(
                 r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
     fn c_class_name() -> *const ::std::os::raw::c_char {{
         swig_c_str!("{class_name}")
@@ -252,13 +257,17 @@ public:
                 code_box_this = code_box_this,
                 unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "p"),
                 this_type_for_method = this_type_for_method.normalized_name.clone()
-            ))?);
+            );
+            gen_code.push(syn::parse_str(&fclass_impl_code).unwrap_or_else(|err| {
+                panic_on_syn_error("internal foreign class impl code", fclass_impl_code, err)
+            }));
             (this_type_for_method, code_box_this)
         } else {
             (dummy_rust_ty.clone(), String::new())
         };
     let no_this_info = || {
         DiagnosticError::new(
+            class.src_id,
             class.span(),
             format!(
                 "Class {} (namespace {}) has methods, but there is no constructor\n
@@ -296,7 +305,7 @@ May be you need to use `private constructor = empty;` syntax?",
         write!(cpp_include_f, "{}", cpp_comments,).map_err(map_write_err!(cpp_path))?;
         let c_func_name = c_func_name(class, method);
         let c_args_with_types = cpp_code::c_generate_args_with_types(f_method, false)
-            .map_err(|err| DiagnosticError::new(class.span(), err))?;
+            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
         let comma_c_args_with_types = if c_args_with_types.is_empty() {
             String::new()
         } else {
@@ -305,17 +314,18 @@ May be you need to use `private constructor = empty;` syntax?",
         let args_names = n_arguments_list(f_method.input.len());
 
         let cpp_args_with_types = cpp_code::cpp_generate_args_with_types(f_method)
-            .map_err(|err| DiagnosticError::new(class.span(), err))?;
+            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
         let cpp_args_for_c = cpp_code::cpp_generate_args_to_call_c(f_method)
-            .map_err(|err| DiagnosticError::new(class.span(), err))?;
+            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
         let real_output_typename = match method.fn_decl.output {
             syn::ReturnType::Default => "()",
             syn::ReturnType::Type(_, ref t) => normalize_ty_lifetimes(&*t),
         };
 
         let rust_args_with_types = rust_generate_args_with_types(f_method)
-            .map_err(|err| DiagnosticError::new(class.span(), err))?;
+            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
         let method_ctx = MethodContext {
+            class,
             method,
             f_method,
             c_func_name: &c_func_name,
@@ -567,6 +577,7 @@ May be you need to use `private constructor = empty;` syntax?",
                 .constructor_ret_type
                 .as_ref()
                 .ok_or_else(&no_this_info)?,
+            class.src_id,
         );
 
         let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, "this", false);
@@ -585,7 +596,11 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
             this_type = this_type_for_method.normalized_name,
         );
         debug!("we generate and parse code: {}", code);
-        gen_code.push(syn::parse_str(&code)?);
+        gen_code.push(
+            syn::parse_str(&code).unwrap_or_else(|err| {
+                panic_on_syn_error("internal cpp desctructor code", code, err)
+            }),
+        );
         write!(
             c_include_f,
             r#"
@@ -730,6 +745,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
     );
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         conv_map,
+        mc.class.src_id,
         &mc.method.fn_decl.output,
         mc.f_method.output.as_ref(),
         "ret",
@@ -738,6 +754,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
     let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
+        mc.class.src_id,
         mc.method,
         mc.f_method,
         (0..n_args).map(|v| format!("a_{}", v)),
@@ -765,7 +782,10 @@ pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
-    gen_code.push(syn::parse_str(&code)?);
+    gen_code.push(
+        syn::parse_str(&code)
+            .unwrap_or_else(|err| panic_on_syn_error("cpp internal static method", code, err)),
+    );
     Ok(gen_code)
 }
 
@@ -786,6 +806,7 @@ fn generate_method(
     let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
+        mc.class.src_id,
         mc.method,
         mc.f_method,
         (0..n_args).map(|v| format!("a_{}", v)),
@@ -793,6 +814,7 @@ fn generate_method(
     )?;
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         conv_map,
+        mc.class.src_id,
         &mc.method.fn_decl.output,
         mc.f_method.output.as_ref(),
         "ret",
@@ -805,8 +827,8 @@ fn generate_method(
         &this_type_for_method.ty,
     );
 
-    let from_ty = conv_map.find_or_alloc_rust_type(&from_ty);
-    let to_ty = conv_map.find_or_alloc_rust_type(&to_ty);
+    let from_ty = conv_map.find_or_alloc_rust_type(&from_ty, class.src_id);
+    let to_ty = conv_map.find_or_alloc_rust_type(&to_ty, class.src_id);
 
     let (mut deps_this, convert_this) =
         conv_map.convert_rust_types(&from_ty, &to_ty, "this", &c_ret_type, mc.method.span())?;
@@ -841,7 +863,10 @@ pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_re
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
     gen_code.append(&mut deps_this);
-    gen_code.push(syn::parse_str(&code)?);
+    gen_code.push(
+        syn::parse_str(&code)
+            .unwrap_or_else(|err| panic_on_syn_error("cpp internal method", code, err)),
+    );
     Ok(gen_code)
 }
 
@@ -853,16 +878,17 @@ fn generate_constructor(
     code_box_this: &str,
 ) -> Result<Vec<TokenStream>> {
     let n_args = mc.f_method.input.len();
-    let this_type: RustType = conv_map.find_or_alloc_rust_type(&this_type);
+    let this_type: RustType = conv_map.ty_to_rust_type(&this_type);
     let ret_type_name = this_type.normalized_name.as_str();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
+        mc.class.src_id,
         mc.method,
         mc.f_method,
         (0..n_args).map(|v| format!("a_{}", v)),
         &ret_type_name,
     )?;
-    let construct_ret_type: RustType = conv_map.find_or_alloc_rust_type(&construct_ret_type);
+    let construct_ret_type: RustType = conv_map.ty_to_rust_type(&construct_ret_type);
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
         &construct_ret_type,
         &this_type,
@@ -894,7 +920,10 @@ pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_this);
-    gen_code.push(syn::parse_str(&code)?);
+    gen_code
+        .push(syn::parse_str(&code).unwrap_or_else(|err| {
+            panic_on_syn_error("cpp internal constructor method", code, err)
+        }));
     Ok(gen_code)
 }
 
