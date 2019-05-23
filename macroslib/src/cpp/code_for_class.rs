@@ -21,7 +21,8 @@ use crate::{
         },
         FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    ForeignerClassInfo, MethodAccess, MethodVariant, SelfTypeVariant, TypeMap,
+    types::{ForeignerClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
+    TypeMap,
 };
 
 pub(in crate::cpp) fn generate(

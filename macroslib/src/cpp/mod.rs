@@ -25,8 +25,11 @@ use crate::{
         utils::rust_to_foreign_convert_method_inputs,
         ForeignMethodSignature, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
-    LanguageGenerator, MethodAccess, MethodVariant, SourceCode, TypeMap,
+    types::{
+        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodAccess,
+        MethodVariant,
+    },
+    CppConfig, LanguageGenerator, SourceCode, TypeMap,
 };
 
 #[derive(Debug)]

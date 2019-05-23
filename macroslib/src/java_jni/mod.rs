@@ -20,8 +20,10 @@ use crate::{
     typemap::{
         ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
-    LanguageGenerator, MethodVariant, SourceCode, TypeMap,
+    types::{
+        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
+    },
+    JavaConfig, LanguageGenerator, SourceCode, TypeMap,
 };
 
 #[derive(Clone, Copy)]

@@ -7,7 +7,8 @@ use crate::{
     java_jni::{calc_this_type_for_method, JavaForeignTypeInfo, NullAnnotation},
     typemap::ast::{if_option_return_some_type, normalize_ty_lifetimes},
     typemap::{ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
-    ForeignEnumInfo, ForeignerClassInfo, TypeMap,
+    types::{ForeignEnumInfo, ForeignerClassInfo},
+    TypeMap,
 };
 
 pub(in crate::java_jni) fn special_type(

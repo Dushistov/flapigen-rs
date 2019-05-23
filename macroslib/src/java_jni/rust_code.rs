@@ -21,8 +21,11 @@ use crate::{
         },
         TO_VAR_TEMPLATE,
     },
-    ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
-    SelfTypeVariant, TypeMap,
+    types::{
+        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
+        SelfTypeVariant,
+    },
+    TypeMap,
 };
 
 struct MethodContext<'a> {

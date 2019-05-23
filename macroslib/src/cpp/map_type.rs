@@ -18,7 +18,8 @@ use crate::{
         if_vec_return_elem_type,
     },
     typemap::{ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
-    CppConfig, CppOptional, CppVariant, ForeignEnumInfo, ForeignerClassInfo, TypeMap,
+    types::{ForeignEnumInfo, ForeignerClassInfo},
+    CppConfig, CppOptional, CppVariant, TypeMap,
 };
 
 fn special_type(

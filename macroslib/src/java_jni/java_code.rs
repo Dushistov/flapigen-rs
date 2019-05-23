@@ -7,7 +7,7 @@ use crate::{
     java_jni::{fmt_write_err_map, method_name, JniForeignMethodSignature, NullAnnotation},
     typemap::ast::if_result_return_ok_err_types,
     typemap::TypeMap,
-    ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant,
+    types::{ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant},
 };
 
 bitflags! {

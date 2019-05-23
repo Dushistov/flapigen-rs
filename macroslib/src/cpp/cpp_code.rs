@@ -4,7 +4,7 @@ use crate::{
     cpp::{fmt_write_err_map, CppForeignMethodSignature},
     file_cache::FileWriteCache,
     typemap::FROM_VAR_TEMPLATE,
-    {ForeignEnumInfo, ForeignInterface, ForeignerClassInfo},
+    types::{ForeignEnumInfo, ForeignInterface, ForeignerClassInfo},
 };
 
 pub(in crate::cpp) fn generate_code_for_enum(

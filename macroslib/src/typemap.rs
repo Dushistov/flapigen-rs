@@ -29,7 +29,7 @@ use crate::{
             RustTypeS,
         },
     },
-    ForeignEnumInfo, ForeignerClassInfo,
+    types::{ForeignEnumInfo, ForeignerClassInfo},
 };
 
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";

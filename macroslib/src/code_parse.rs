@@ -12,8 +12,11 @@ use syn::{
 use crate::{
     error::Result,
     typemap::ast::{normalize_ty_lifetimes, DisplayToTokens},
-    ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod, ForeignerClassInfo,
-    ForeignerMethod, LanguageConfig, MethodAccess, MethodVariant, SelfTypeVariant,
+    types::{
+        ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
+        ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, SelfTypeVariant,
+    },
+    LanguageConfig,
 };
 
 pub(crate) fn parse_foreigner_class(
@@ -375,7 +378,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         methods.push(ForeignerMethod {
             variant: func_type,
             rust_id: func_name,
-            fn_decl: crate::FnDecl {
+            fn_decl: crate::types::FnDecl {
                 span,
                 inputs: args_in,
                 output: out_type,
@@ -484,7 +487,7 @@ impl Parse for ForeignInterfaceParser {
             items.push(ForeignInterfaceMethod {
                 name: func_name,
                 rust_name: rust_func_name,
-                fn_decl: crate::FnDecl {
+                fn_decl: crate::types::FnDecl {
                     span,
                     inputs: args_in,
                     output: out_type,

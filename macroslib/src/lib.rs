@@ -19,6 +19,7 @@ mod error;
 pub mod file_cache;
 mod java_jni;
 mod typemap;
+mod types;
 
 use std::{
     cell::RefCell,
@@ -30,13 +31,13 @@ use std::{
 };
 
 use log::{debug, trace};
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro2::{Span, TokenStream};
 use rustc_hash::FxHashSet;
-use syn::{parse_quote, spanned::Spanned, Token, Type};
 
 use crate::{
     error::{panic_on_parse_error, DiagnosticError, Result},
     typemap::{ast::DisplayToTokens, TypeMap},
+    types::{ForeignEnumInfo, ForeignInterface, ForeignerClassInfo},
 };
 
 /// Calculate target pointer width from environment variable
@@ -462,179 +463,6 @@ impl Generator {
             LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignerClassInfo {
-    name: Ident,
-    methods: Vec<ForeignerMethod>,
-    self_type: Option<Type>,
-    foreigner_code: String,
-    /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
-    constructor_ret_type: Option<Type>,
-    doc_comments: Vec<String>,
-    copy_derived: bool,
-}
-
-impl ForeignerClassInfo {
-    fn span(&self) -> Span {
-        self.name.span()
-    }
-    fn self_type_as_ty(&self) -> Type {
-        self.self_type
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| parse_quote! { () })
-    }
-    /// common for several language binding generator code
-    fn validate_class(&self) -> Result<()> {
-        let mut has_constructor = false;
-        let mut has_methods = false;
-        for x in &self.methods {
-            match x.variant {
-                MethodVariant::Constructor => has_constructor = true,
-                MethodVariant::Method(_) => has_methods = true,
-                _ => {}
-            }
-        }
-        if self.self_type.is_none() && has_constructor {
-            Err(DiagnosticError::new(
-                self.span(),
-                format!(
-                    "class {} has constructor, but no self_type defined",
-                    self.name
-                ),
-            ))
-        } else if self.self_type.is_none() && has_methods {
-            Err(DiagnosticError::new(
-                self.span(),
-                format!("class {} has methods, but no self_type defined", self.name),
-            ))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignerMethod {
-    variant: MethodVariant,
-    rust_id: syn::Path,
-    fn_decl: FnDecl,
-    name_alias: Option<Ident>,
-    access: MethodAccess,
-    doc_comments: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-struct FnDecl {
-    span: Span,
-    inputs: syn::punctuated::Punctuated<syn::FnArg, Token![,]>,
-    output: syn::ReturnType,
-}
-
-impl From<syn::FnDecl> for crate::FnDecl {
-    fn from(x: syn::FnDecl) -> Self {
-        crate::FnDecl {
-            span: x.fn_token.span(),
-            inputs: x.inputs,
-            output: x.output,
-        }
-    }
-}
-
-impl ForeignerMethod {
-    fn short_name(&self) -> String {
-        if let Some(ref name) = self.name_alias {
-            name.to_string()
-        } else {
-            match self.rust_id.segments.len() {
-                0 => String::new(),
-                n => self.rust_id.segments[n - 1].ident.to_string(),
-            }
-        }
-    }
-
-    fn span(&self) -> Span {
-        self.rust_id.span()
-    }
-
-    fn is_dummy_constructor(&self) -> bool {
-        self.rust_id.segments.is_empty()
-    }
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum MethodAccess {
-    Private,
-    Public,
-    Protected,
-}
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum MethodVariant {
-    Constructor,
-    Method(SelfTypeVariant),
-    StaticMethod,
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum SelfTypeVariant {
-    RptrMut,
-    Rptr,
-    Mut,
-    Default,
-}
-
-impl SelfTypeVariant {
-    fn is_read_only(self) -> bool {
-        match self {
-            SelfTypeVariant::RptrMut | SelfTypeVariant::Mut => false,
-            SelfTypeVariant::Default | SelfTypeVariant::Rptr => true,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignEnumInfo {
-    name: Ident,
-    items: Vec<ForeignEnumItem>,
-    doc_comments: Vec<String>,
-}
-
-impl ForeignEnumInfo {
-    fn rust_enum_name(&self) -> String {
-        self.name.to_string()
-    }
-    fn span(&self) -> Span {
-        self.name.span()
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignEnumItem {
-    name: Ident,
-    rust_name: syn::Path,
-    doc_comments: Vec<String>,
-}
-
-struct ForeignInterface {
-    name: Ident,
-    self_type: syn::Path,
-    doc_comments: Vec<String>,
-    items: Vec<ForeignInterfaceMethod>,
-}
-
-impl ForeignInterface {
-    fn span(&self) -> Span {
-        self.name.span()
-    }
-}
-
-struct ForeignInterfaceMethod {
-    name: Ident,
-    rust_name: syn::Path,
-    fn_decl: FnDecl,
-    doc_comments: Vec<String>,
 }
 
 trait LanguageGenerator {

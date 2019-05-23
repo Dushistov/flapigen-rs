@@ -4,7 +4,9 @@ use syn::{parse_quote, spanned::Spanned, Type};
 use crate::{
     error::{DiagnosticError, Result},
     typemap::{ast::fn_arg_type, ty::RustType, ForeignMethodSignature, ForeignTypeInfo, TypeMap},
-    ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
+    types::{
+        ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
+    },
 };
 
 pub(crate) fn foreign_from_rust_convert_method_output(
