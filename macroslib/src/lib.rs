@@ -3,7 +3,6 @@
 //! It is designed to be used from
 //! [cargo build scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html).
 //! The idea of this softwared based on [swig](http://www.swig.org).
-//! For macros expansion it uses [syntex](https://crates.io/crates/syntex).
 //! More details can be found at
 //! [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
 
