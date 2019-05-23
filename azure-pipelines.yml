@@ -88,6 +88,9 @@ steps:
       cmake --version
       echo "SCCACHE_BUCKET: $SCCACHE_BUCKET"
       sccache --start-server
+      cd macroslib
+      cargo build
+      cd ..
       cp workspace.Cargo.toml Cargo.toml
       python -c "fin = open('Cargo.toml', 'r'); res = fin.read().replace('debug = true', ''); fin.close(); fout = open('Cargo.toml', 'w'); fout.write(res + '\n'); fout.close();"
       python ci_build_and_test.py --skip-android-tests
