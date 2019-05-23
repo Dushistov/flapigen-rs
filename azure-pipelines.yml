@@ -23,18 +23,23 @@ pool:
 steps:
   - checkout: self
     submodules: true
-  - script: |
+  - bash: |
+      set -e
       curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain $RUSTUP_TOOLCHAIN
+      echo "##vso[task.prependpath]$HOME/.cargo/bin"
     condition: ne( variables['Agent.OS'], 'Windows_NT' )
     displayName: Install Rust on linux/mac
   - script: |
       curl -sSf -o rustup-init.exe https://win.rustup.rs
       rustup-init.exe -y --default-toolchain %RUSTUP_TOOLCHAIN%
+      echo ##vso[task.setvariable variable=PATH]%PATH%%USERPROFILE%\.cargo\bin;
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: Install Rust on windows
   - script: |
       curl http://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
       7z x llvm-installer.exe -oc:\llvm-binary
+      echo ##vso[task.setvariable variable=LIBCLANG_PATH]C:\llvm-binary\bin
+      echo ##vso[task.setvariable variable=PATH]%PATH%C:\llvm-binary\bin;
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: Install llvm on windows
   - script: |
@@ -42,56 +47,54 @@ steps:
       curl -L https://github.com/mozilla/sccache/releases/download/0.2.8/sccache-0.2.8-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
       7z x sccache.tar.gz
       7z x sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc.tar
-      copy /Y sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc\sccache.exe %USERPROFILE%\.cargo\bin
-      %USERPROFILE%\.cargo\bin\sccache.exe --version
+      copy /Y sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc\sccache.exe %USERPROFILE%\.cargo\bin\sccache.exe
+      echo ##vso[task.setvariable variable=SCCACHE_BUCKET]swig%PLATFORM%
+      echo ##vso[task.setvariable variable=RUSTC_WRAPPER]%USERPROFILE%\.cargo\bin\sccache.exe
+      sccache --version
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
-    displayName: Install sccache on windows
+    displayName: Setup sccache on windows
+  - bash: |
+      set -e
+      export SCCACHE_VER=0.2.8
+      curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl.tar.gz -o sccache.tar.gz
+      tar -xzvf sccache.tar.gz
+      cp -v sccache-$SCCACHE_VER-x86_64-unknown-linux-musl/sccache $HOME/.cargo/bin/
+      echo "##vso[task.setvariable variable=RUSTC_WRAPPER]$HOME/.cargo/bin/sccache"
+      echo "##vso[task.setvariable variable=SCCACHE_BUCKET]$IMAGENAME"
+      sccache --version
+    condition: eq( variables['Agent.OS'], 'Linux' )
+    displayName: Setup sccache on linux
+  - bash: |
+      set -e
+      curl -fo $HOME/.cargo/bin/sccache  https://s3-us-west-1.amazonaws.com/rust-lang-ci2/rust-ci-mirror/2018-04-02-sccache-x86_64-apple-darwin
+      chmod +x $HOME/.cargo/bin/sccache
+      echo "##vso[task.setvariable variable=RUSTC_WRAPPER]$HOME/.cargo/bin/sccache"
+      echo "##vso[task.setvariable variable=SCCACHE_BUCKET]$IMAGENAME"
+      sccache --version
+    condition: eq( variables['Agent.OS'], 'Darwin' )
+    displayName: Setup sccache on mac os
   - script: |
       export TAR="boost_1_66_0.tar.gz"
       curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.66.0/source/$TAR
       tar -xzf $TAR
+      echo "##vso[task.setvariable variable=BOOST_ROOT]$PWD/boost_1_66_0"
     condition: eq( variables['Agent.OS'], 'Darwin' )
     displayName: Install boost on mac os
   - script: |
-      export PATH=$PATH:$HOME/.cargo/bin
       clang --version
       rustc -vV
       cargo -vV
       javac -version
       cmake --version
-      cp workspace.Cargo.toml Cargo.toml
-      python ci_build_and_test.py --skip-android-tests
-    condition: eq( variables['Agent.OS'], 'Linux' )
-    displayName: Build and test on linux
-  - script: |
-      export PATH=$PATH:$HOME/.cargo/bin
-      export BOOST_ROOT=$PWD/boost_1_66_0
-      clang --version
-      rustc -vV
-      cargo -vV
-      javac -version
-      cmake --version
-      cp workspace.Cargo.toml Cargo.toml
-      python ci_build_and_test.py --skip-android-tests
-    condition: eq( variables['Agent.OS'], 'Darwin' )
-    displayName: Build and test on mac os
-  - script: |
-      set PATH=C:\llvm-binary\bin;%PATH%;%USERPROFILE%/.cargo/bin
-      set LIBCLANG_PATH=C:\llvm-binary\bin
-      clang --version
-      rustc -vV
-      cargo -vV
-      javac -version
-      cmake --version
-      set SCCACHE_BUCKET=swig%PLATFORM%
-      echo %SCCACHE_BUCKET%
+      echo "SCCACHE_BUCKET: $SCCACHE_BUCKET"
       sccache --start-server
-      set RUSTC_WRAPPER=%USERPROFILE%/.cargo/bin/sccache.exe
+      cd macroslib
+      cargo build
+      cd ..
       cp workspace.Cargo.toml Cargo.toml
       python -c "fin = open('Cargo.toml', 'r'); res = fin.read().replace('debug = true', ''); fin.close(); fout = open('Cargo.toml', 'w'); fout.write(res + '\n'); fout.close();"
       python ci_build_and_test.py --skip-android-tests
-    displayName: Build and test on windows
-    condition: eq( variables['Agent.OS'], 'Windows_NT' )
+    displayName: Build and run tests
     env:
       AWS_ACCESS_KEY_ID: $(S_AWS_ACCESS_KEY_ID)
       AWS_SECRET_ACCESS_KEY: $(S_AWS_SECRET_ACCESS_KEY)
