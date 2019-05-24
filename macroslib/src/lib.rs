@@ -34,6 +34,7 @@ use std::{
 use log::{debug, trace};
 use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
+use syn::spanned::Spanned;
 
 use crate::{
     error::{panic_on_parse_error, DiagnosticError, Result},
@@ -367,6 +368,16 @@ impl Generator {
                     continue;
                 }
                 trace!("Found {:?}", item_macro.mac.path);
+                if item_macro.mac.tts.is_empty() {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        item_macro.span(),
+                        format!(
+                            "missing tokens in call of macro '{}'",
+                            DisplayToTokens(&item_macro.mac.path)
+                        ),
+                    ));
+                }
                 let mut tts = TokenStream::new();
                 mem::swap(&mut tts, &mut item_macro.mac.tts);
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS) {
