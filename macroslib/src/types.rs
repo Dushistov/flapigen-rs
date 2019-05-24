@@ -34,11 +34,12 @@ impl ForeignerClassInfo {
     pub(crate) fn validate_class(&self) -> Result<()> {
         let mut has_constructor = false;
         let mut has_methods = false;
+        let mut has_static_methods = false;
         for x in &self.methods {
             match x.variant {
                 MethodVariant::Constructor => has_constructor = true,
                 MethodVariant::Method(_) => has_methods = true,
-                _ => {}
+                MethodVariant::StaticMethod => has_static_methods = true,
             }
         }
         if self.self_type.is_none() && has_constructor {
@@ -55,6 +56,19 @@ impl ForeignerClassInfo {
                 self.src_id,
                 self.span(),
                 format!("class {} has methods, but no self_type defined", self.name),
+            ))
+        } else if self.self_type.is_some()
+            && !has_static_methods
+            && !has_constructor
+            && !has_methods
+        {
+            Err(DiagnosticError::new(
+                self.src_id,
+                self.span(),
+                format!(
+                    "class {} has only self_type, but no methods or constructors",
+                    self.name
+                ),
             ))
         } else {
             Ok(())
