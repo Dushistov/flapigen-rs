@@ -1,10 +1,14 @@
 use proc_macro2::TokenStream;
-use syn::{parse_quote, spanned::Spanned, Type};
+use syn::{spanned::Spanned, Type};
 
 use crate::{
     error::{DiagnosticError, Result},
     source_registry::SourceId,
-    typemap::{ast::fn_arg_type, ty::RustType, ForeignMethodSignature, ForeignTypeInfo, TypeMap},
+    typemap::{
+        ast::{fn_arg_type, parse_ty_with_given_span_checked, DisplayToTokens},
+        ty::RustType,
+        ForeignMethodSignature, ForeignTypeInfo, TypeMap,
+    },
     types::{
         ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
     },
@@ -100,13 +104,25 @@ pub(crate) fn create_suitable_types_for_constructor_and_self(
             let self_type = class.self_type_as_ty();
             if self_variant == SelfTypeVariant::Rptr {
                 (
-                    parse_quote! { & #constructor_real_type },
-                    parse_quote! { & #self_type },
+                    parse_ty_with_given_span_checked(
+                        &format!("& {}", DisplayToTokens(constructor_real_type)),
+                        constructor_real_type.span(),
+                    ),
+                    parse_ty_with_given_span_checked(
+                        &format!("& {}", DisplayToTokens(&self_type)),
+                        self_type.span(),
+                    ),
                 )
             } else {
                 (
-                    parse_quote! { &mut #constructor_real_type },
-                    parse_quote! { &mut #self_type },
+                    parse_ty_with_given_span_checked(
+                        &format!("&mut {}", DisplayToTokens(constructor_real_type)),
+                        constructor_real_type.span(),
+                    ),
+                    parse_ty_with_given_span_checked(
+                        &format!("&mut {}", DisplayToTokens(&self_type)),
+                        self_type.span(),
+                    ),
                 )
             }
         }

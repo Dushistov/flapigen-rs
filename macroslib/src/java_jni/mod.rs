@@ -16,7 +16,7 @@ use crate::{
     source_registry::SourceId,
     typemap::ast::{
         fn_arg_type, if_option_return_some_type, if_result_return_ok_err_types,
-        if_ty_result_return_ok_type, DisplayToTokens, TypeName,
+        if_ty_result_return_ok_type, parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
     },
     typemap::{
         ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
@@ -143,8 +143,10 @@ impl LanguageGenerator for JavaConfig {
             let jlong_ti: RustType =
                 conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
             let this_type_for_method_ty = &this_type_for_method.ty;
-            let this_type_ref = conv_map
-                .find_or_alloc_rust_type_no_src_id(&parse_type! { & #this_type_for_method_ty });
+            let code = format!("& {}", DisplayToTokens(this_type_for_method_ty));
+            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method_ty.span());
+            let this_type_ref =
+                conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 jlong_ti.clone(),
@@ -161,8 +163,10 @@ impl LanguageGenerator for JavaConfig {
                 )
                 .into(),
             );
-            let this_type_mut_ref = conv_map
-                .find_or_alloc_rust_type_no_src_id(&parse_type! { &mut #this_type_for_method_ty });
+            let code = format!("&mut {}", DisplayToTokens(this_type_for_method_ty));
+            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method_ty.span());
+            let this_type_mut_ref =
+                conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 jlong_ti.clone(),
