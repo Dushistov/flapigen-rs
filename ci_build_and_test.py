@@ -9,6 +9,7 @@ import shutil
 
 JNI_TESTS = "jni_tests"
 CPP_TESTS = "c++_tests"
+PYTHON_TESTS = "python_tests"
 ANDROID_TESTS = "android-example"
 UNIT_TESTS = "unit_tests"
 DOC_TESTS = "doc_tests"

@@ -1,10 +1,9 @@
-use crate::{
-    error::Result, DiagnosticError, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo,
-    ForeignerMethod, LanguageGenerator, MethodVariant, PythonConfig, SelfTypeVariant,
-    TypeMap,
-};
 use crate::typemap::ast;
 use crate::typemap::ty::RustType;
+use crate::{
+    error::Result, DiagnosticError, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo,
+    ForeignerMethod, LanguageGenerator, MethodVariant, PythonConfig, SelfTypeVariant, TypeMap,
+};
 use heck::SnakeCase;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -53,7 +52,7 @@ impl LanguageGenerator for PythonConfig {
                 #rust_instance_getter
             }
         };
-        
+
         self.module_initialization_code.borrow_mut().push(quote! {
             {
                 m.add_class::<#wrapper_mod_name::#class_name>(py)?;
@@ -77,10 +76,14 @@ impl LanguageGenerator for PythonConfig {
             }
         });
         let foreign_variants = enum_info.items.iter().map(|item| &item.name);
-        let rust_variants = enum_info.items.iter().map(|item| &item.rust_name).collect::<Vec<_>>();
+        let rust_variants = enum_info
+            .items
+            .iter()
+            .map(|item| &item.rust_name)
+            .collect::<Vec<_>>();
         let rust_variants_ref_1 = &rust_variants;
         let rust_variants_ref_2 = &rust_variants;
-        let enum_name_str = enum_name.to_string();        
+        let enum_name_str = enum_name.to_string();
         let docstring = enum_info.doc_comments.as_slice().join("\n");
         let class_code = quote! {
             mod #wrapper_mod_name {
@@ -115,7 +118,8 @@ impl LanguageGenerator for PythonConfig {
         let module_initialization_code = &*module_initialization_code_cell;
         let module_name = syn::parse_str::<syn::Ident>(&self.module_name)?;
         let module_init = syn::parse_str::<syn::Ident>(&format!("init{}", &self.module_name))?;
-        let module_py_init = syn::parse_str::<syn::Ident>(&format!("PyInit_{}", &self.module_name))?;
+        let module_py_init =
+            syn::parse_str::<syn::Ident>(&format!("PyInit_{}", &self.module_name))?;
         let registration_code = vec![quote! {
             mod py_error {
                 py_exception!(#module_name, Error);
@@ -222,9 +226,9 @@ fn generate_method_code(
         &conv_map.find_or_alloc_rust_type(&extract_return_type(&method.fn_decl.output)),
         method.span(),
         conv_map,
-        quote!{
+        quote! {
             #method_rust_path(#( #args_convertions ),*)
-        }
+        },
     )?;
     Ok(quote! {
         #attribute def #method_name(
@@ -260,22 +264,25 @@ fn self_type_conversion(
     conv_map: &mut TypeMap,
 ) -> Result<Option<TokenStream>> {
     if let MethodVariant::Method(self_variant) = method.variant {
-        let self_type = &class
-            .self_type
-            .as_ref()
-            .ok_or_else(|| {
-                DiagnosticError::new(
-                    class.span(),
-                    "Class have non-static methods, but no self_type",
-                )
-            })?;
+        let self_type = &class.self_type.as_ref().ok_or_else(|| {
+            DiagnosticError::new(
+                class.span(),
+                "Class have non-static methods, but no self_type",
+            )
+        })?;
         let self_type_ty = match self_variant {
-            SelfTypeVariant::Rptr => parse_type!{&#self_type},
-            SelfTypeVariant::RptrMut => parse_type!{&mut #self_type},
-            _ => parse_type!{#self_type},
+            SelfTypeVariant::Rptr => parse_type! {&#self_type},
+            SelfTypeVariant::RptrMut => parse_type! {&mut #self_type},
+            _ => parse_type! {#self_type},
         };
         Ok(Some(
-            generate_conversion_for_argument(&conv_map.find_or_alloc_rust_type(&self_type_ty), method.span(), conv_map, "self")?.1,
+            generate_conversion_for_argument(
+                &conv_map.find_or_alloc_rust_type(&self_type_ty),
+                method.span(),
+                conv_map,
+                "self",
+            )?
+            .1,
         ))
     } else {
         Ok(None)
@@ -319,7 +326,7 @@ fn generate_conversion_for_argument(
                 }
             }
         } else if foreign_class.copy_derived {
-            quote!{
+            quote! {
                 super::#py_mod::rust_instance(#arg_name_ident, py).read().unwrap().clone()
             }
         } else {
@@ -333,9 +340,9 @@ fn generate_conversion_for_argument(
         let enum_py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&enum_info.name.to_string()))?;
         Ok((
             parse_type!(u32),
-            quote!{
+            quote! {
                 super::#enum_py_mod::from_u32(py, #arg_name_ident)?
-            }
+            },
         ))
     } else if let Some(inner) = ast::if_option_return_some_type(&rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
@@ -346,12 +353,12 @@ fn generate_conversion_for_argument(
         )?;
         Ok((
             parse_type!(Option<#inner_py_type>),
-            quote!{
+            quote! {
                 match #arg_name_ident {
                     Some(inner) => Some(#inner_conversion),
                     None => None,
                 }
-            }
+            },
         ))
     } else if let Some(inner) = ast::if_type_slice_return_elem_type(&rust_type.ty, false) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
@@ -362,9 +369,9 @@ fn generate_conversion_for_argument(
         )?;
         Ok((
             parse_type!(Vec<#inner_py_type>),
-            quote!{
+            quote! {
                 &#arg_name_ident.into_iter().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
-            }
+            },
         ))
     } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
@@ -375,13 +382,16 @@ fn generate_conversion_for_argument(
         )?;
         Ok((
             parse_type!(Vec<#inner_py_type>),
-            quote!{
+            quote! {
                 #arg_name_ident.into_iter().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
-            }
+            },
         ))
     } else if let Type::Reference(ref inner) = rust_type.ty {
         if inner.mutability.is_some() {
-            return Err(DiagnosticError::new(method_span, "mutable reference is only supported for exported class types"));
+            return Err(DiagnosticError::new(
+                method_span,
+                "mutable reference is only supported for exported class types",
+            ));
         }
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
             &conv_map.find_or_alloc_rust_type(&inner.elem.deref()),
@@ -391,14 +401,14 @@ fn generate_conversion_for_argument(
         )?;
         Ok((
             parse_type!(#inner_py_type),
-            quote!{
+            quote! {
                 &#inner_conversion
-            }
+            },
         ))
     } else {
         Err(DiagnosticError::new(
             method_span,
-            format!("Unsupported argument type: {:?}", rust_type.normalized_name)
+            format!("Unsupported argument type: {:?}", rust_type.normalized_name),
         ))
     }
 }
@@ -413,18 +423,19 @@ fn generate_conversion_for_return(
     if rust_type.normalized_name == "( )" {
         Ok((
             parse_type!(cpython::PyObject),
-            quote!{
+            quote! {
                 {#rust_call; py.None()}
-            }
+            },
         ))
     } else if is_cpython_supported_type(rust_type) {
         Ok((rust_type.ty.clone(), rust_call))
-    } else if let Some(class) = conv_map.find_foreigner_class_with_such_self_type(&rust_type, true) {
+    } else if let Some(class) = conv_map.find_foreigner_class_with_such_self_type(&rust_type, true)
+    {
         let class_name = &class.name;
         let py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&class_name.to_string()))?;
         let conversion = if let Type::Reference(_) = rust_type.ty {
             if class.copy_derived {
-                quote!{
+                quote! {
                     super::#py_mod::create_instance(py, std::sync::RwLock::new(#rust_call.clone()))?
                 }
             } else {
@@ -440,86 +451,105 @@ fn generate_conversion_for_return(
                 super::#py_mod::create_instance(py, std::sync::RwLock::new(#rust_call))?
             }
         };
-        Ok((
-            parse_type!(super::#py_mod::#class_name),
-            conversion,
-        ))
+        Ok((parse_type!(super::#py_mod::#class_name), conversion))
     } else if conv_map.is_this_exported_enum(&rust_type).is_some() {
         Ok((
             parse_type!(u32),
-            quote!{
+            quote! {
                 #rust_call as u32
-            }
+            },
         ))
     } else if let Some(inner) = ast::if_option_return_some_type(&rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
             &conv_map.find_or_alloc_rust_type(&inner),
             method_span,
             conv_map,
-            quote!{inner},
+            quote! {inner},
         )?;
         Ok((
             parse_type!(Option<#inner_py_type>),
-            quote!{
+            quote! {
                 match #rust_call {
                     Some(inner) => Some(#inner_conversion),
                     None => None
                 }
-            }
+            },
         ))
     } else if let Some(inner) = ast::if_type_slice_return_elem_type(&rust_type.ty, false) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
             &conv_map.find_or_alloc_rust_type(&inner),
             method_span,
             conv_map,
-            quote!{inner},
+            quote! {inner},
         )?;
         Ok((
             parse_type!(Vec<#inner_py_type>),
-            quote!{
+            quote! {
                 #rust_call.iter().cloned().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
-            }
+            },
         ))
     } else if let Some(inner) = ast::if_vec_return_elem_type(&rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
             &conv_map.find_or_alloc_rust_type(&inner),
             method_span,
             conv_map,
-            quote!{inner},
+            quote! {inner},
         )?;
         Ok((
             parse_type!(Vec<#inner_py_type>),
-            quote!{
+            quote! {
                 #rust_call.into_iter().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
-            }
+            },
         ))
     } else if let Some((inner_ok, _inner_err)) = ast::if_result_return_ok_err_types(&rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
             &conv_map.find_or_alloc_rust_type(&inner_ok),
             method_span,
             conv_map,
-            quote!{ok_inner},
+            quote! {ok_inner},
         )?;
         Ok((
             parse_type!(#inner_py_type),
-            quote!{
+            quote! {
                 match #rust_call {
                     Ok(ok_inner) => #inner_conversion,
                     Err(err_inner) => return Err(cpython::PyErr::new::<super::py_error::Error, _>(py, err_inner.to_string())),
                 }
-            }
+            },
         ))
+    } else if let Some(inner) = ast::check_if_smart_pointer_return_inner_type(&rust_type, "Arc") {
+        let foreign_ty = if let Some(inner_inner) = ast::check_if_smart_pointer_return_inner_type (
+            &conv_map.find_or_alloc_rust_type(&inner), "RwLock") {
+                inner_inner
+            } else {
+                inner
+            };
+        if let Some(class) = conv_map.find_foreigner_class_with_such_self_type(&rust_type, false) {
+            let class_name = &class.name;
+            let py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&class_name.to_string()))?;
+            Ok((
+                parse_type!(super::#py_mod::#class_name),
+                quote! {
+                    super::#py_mod::create_instance(py, #rust_call)?
+                }
+            ))
+        } else {
+            Err(DiagnosticError::new(
+                method_span,
+                format!("Unsupported return type: {:?}", rust_type.normalized_name),
+            ))
+        }
     } else if let Type::Reference(ref inner) = rust_type.ty {
         generate_conversion_for_return(
             &conv_map.find_or_alloc_rust_type(&inner.elem.deref()),
             method_span,
             conv_map,
-            quote!{(#rust_call).clone()}
+            quote! {(#rust_call).clone()},
         )
     } else {
         Err(DiagnosticError::new(
             method_span,
-            format!("Unsupported return type: {:?}", rust_type.normalized_name)
+            format!("Unsupported return type: {:?}", rust_type.normalized_name),
         ))
     }
 }
@@ -537,12 +567,105 @@ fn extract_return_type(syn_return_type: &syn::ReturnType) -> Type {
         syn::ReturnType::Default => {
             parse_type! { () }
         }
-        syn::ReturnType::Type(_, ref ty) => {
-            ty.deref().clone()
-        }
+        syn::ReturnType::Type(_, ref ty) => ty.deref().clone(),
     }
 }
 
 fn py_wrapper_mod_name(type_name: &str) -> String {
     format!("py_{}", type_name.to_snake_case())
+}
+
+enum PointerType {
+    ArcRwLock,
+    RwLock,
+    Arc,
+    Box,
+}
+
+struct SmartPointerInfo {
+    pointer_type: PointerType,
+    wrapped_ty: RustType,
+    inner_ty: RustType,
+    //class: &'a ForeignerClassInfo,
+    // in_ref_conversion: Option<TokenStream>,
+    // in_ref_mut_conversion: Option<TokenStream>,
+    // in_conversion: Option<TokenStream>,
+    // out_ref_conversion: Option<TokenStream>,
+    // out_conversion: Option<TokenStream>,
+    // is_shared: bool,
+}
+
+impl SmartPointerInfo {
+    fn new(
+        pointer_type: PointerType,
+        wrapped_ty: RustType,
+        inner_ty: RustType,
+        conv_map: &mut TypeMap,
+    ) -> SmartPointerInfo {
+        SmartPointerInfo{
+            pointer_type,
+            wrapped_ty,
+            conv_map,
+        })
+    }
+}
+
+struct ClassSmartPointer<'a> {
+    smart_pointer: SmartPointerInfo,
+    class: &'a ForeignerClassInfo,
+}
+
+// `rust_cpython` provides access only to non-mutable reference of the wrapped Rust object.
+// What's more `rust_cpytho`n requires the object to be `Send + 'static`, because Python VM
+// can move it between threads without any control from Rust.
+// As a result, we need to wrap the object in `RwLock` or `Mutex`, to provide mutability.
+// By default, `RwLock` is used.
+// This could be overriden by the smart pointer returned from the constructor.
+// Following smart pointers are supported:
+// - `Arc<RwLock<T>>`: wrapped Rust object is mutable and can be shared between Rust and Python,
+// - `RwLock<T>`: wrapped Rust object is mutable, but only Python owns it,
+// - `Arc<T>`: wrapped Rust object is immutable and can be shared between Rust and Python,
+// - `Box<T>`: wrapped Rust object is immutable and only Python owns it,
+// Note, that `Rc` is NOT supported. This is because it is not `Send`.
+// `RefCell` theoretically could be supported, but generated Python API would be thread unsafe
+// (it is `Send`, but no `Sync`), so it is intentionally omitted.
+fn smart_pointer(rust_type: &RustType, conv_map: &mut TypeMap) -> Result<SmartPointerInfo> {
+    if let Some(inner_ty) =
+        ast::check_if_smart_pointer_return_inner_type(rust_type, "Arc")
+    {
+        if let Some(_inner_inner_ty) = ast::check_if_smart_pointer_return_inner_type(
+            &conv_map.find_or_alloc_rust_type(&inner_ty),
+            "RwLock",
+        ) {
+            Ok(rust_type)
+        } else {
+            Ok(rust_type)
+        }
+    } else if let Some(_inner_ty) = ast::check_if_smart_pointer_return_inner_type(
+            &rust_type,
+            "RwLock",
+    ) {
+        Ok(rust_type)
+    } else if let Some(inner_ty) = ast::check_if_smart_pointer_return_inner_type(
+            &rust_type,
+            "Box",
+    ) {
+        // `rust_cpython` takes care of `Box`ing, so we use bare type.
+        Ok(conv_map.find_or_alloc_rust_type(&rust_type))
+    } else {
+        // By default, wrap in `RwLock`
+        Ok(None)
+    }
+}
+
+fn smart_pointer_for_class(class: &ForeignerClassInfo, conv_map: &mut TypeMap) -> Result<Option<StorageSmartPointer>> {
+    if let Some(constructor_ret_type_ty) = class.constructor_ret_type {
+        let constructor_ret_type = conv_map.find_or_alloc_rust_type(&constructor_ret_type_ty);
+        storage_smart_pointer(constructor_ret_ty, conv_map)
+    } else {
+        Err(DiagnosticError::new(
+            class.span(),
+            "Class doesn't define a type returned from constructor, nor self_type, but is not static"
+        ))
+    }
 }
