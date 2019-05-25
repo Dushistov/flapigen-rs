@@ -17,7 +17,10 @@ use crate::{
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
-        ast::{fn_arg_type, parse_ty_with_given_span, DisplayToTokens, TypeName},
+        ast::{
+            fn_arg_type, parse_ty_with_given_span, parse_ty_with_given_span_checked,
+            DisplayToTokens, TypeName,
+        },
         ty::{
             FTypeConvCode, ForeignConversationIntermediate, ForeignConversationRule, ForeignType,
             ForeignTypeS, RustType,
@@ -183,8 +186,10 @@ impl LanguageGenerator for CppConfig {
 
             let this_type_ty = &this_type.ty;
             //handle foreigner_class as input arg
-            let this_type_ref =
-                conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { & #this_type_ty });
+
+            let code = format!("& {}", DisplayToTokens(this_type_ty));
+            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
+            let this_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
             conv_map.add_conversation_rule(
                 const_void_ptr_rust_ty.clone(),
                 this_type_ref,
@@ -200,8 +205,9 @@ impl LanguageGenerator for CppConfig {
                 .into(),
             );
 
-            let this_type_mut_ref =
-                conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { &mut #this_type_ty });
+            let code = format!("&mut {}", DisplayToTokens(this_type_ty));
+            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
+            let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 void_ptr_rust_ty.clone(),
