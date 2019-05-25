@@ -122,12 +122,6 @@ pub(crate) struct ForeignTypeS {
 }
 
 impl ForeignTypeS {
-    pub(crate) fn span(&self) -> Span {
-        self.name.span.1
-    }
-    pub(crate) fn src_id(&self) -> SourceId {
-        self.name.span.0
-    }
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
         self.name.span
     }

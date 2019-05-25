@@ -62,9 +62,8 @@ impl CppForeignTypeInfo {
             petgraph::Direction::Incoming => ftype.from_into_rust.as_ref(),
         }
         .ok_or_else(|| {
-            DiagnosticError::new(
-                ftype.src_id(),
-                ftype.span(),
+            DiagnosticError::new2(
+                ftype.src_id_span(),
                 format!(
                     "No rule to convert foreign type {} as input/output type",
                     ftype.name
