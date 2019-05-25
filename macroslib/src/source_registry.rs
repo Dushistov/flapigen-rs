@@ -35,4 +35,8 @@ impl SourceId {
     pub(crate) const fn none() -> SourceId {
         SourceId(None)
     }
+    #[inline]
+    pub(crate) fn is_none(&self) -> bool {
+        self.0.is_none()
+    }
 }

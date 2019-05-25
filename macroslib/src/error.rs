@@ -67,6 +67,10 @@ pub(crate) fn panic_on_parse_error(src_reg: &SourceRegistry, main_err: &Diagnost
     let mut prev_err_src_id = None;
 
     for (src_id, err) in &main_err.data {
+        if src_id.is_none() {
+            eprintln!("Error (without location information): {}", err);
+            continue;
+        }
         let src = &src_reg.src_with_id(*src_id);
         if prev_err_src_id.map(|id| id != *src_id).unwrap_or(true) {
             eprintln!("error in {}", src.id_of_code);
