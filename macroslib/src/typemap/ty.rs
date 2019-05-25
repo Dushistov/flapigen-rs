@@ -1,5 +1,6 @@
 use crate::{
     error::DiagnosticError,
+    source_registry::SourceId,
     typemap::{ast::TypeName, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
 };
 use proc_macro2::Span;
@@ -7,9 +8,11 @@ use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 use std::{fmt, ops, rc::Rc};
+use syn::spanned::Spanned;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RustTypeS {
+    pub src_id: SourceId,
     pub ty: syn::Type,
     pub normalized_name: SmolStr,
     pub implements: ImplementsSet,
@@ -23,7 +26,11 @@ impl fmt::Display for RustTypeS {
 }
 
 impl RustTypeS {
-    pub(in crate::typemap) fn new_without_graph_idx<S>(ty: syn::Type, norm_name: S) -> RustTypeS
+    pub(in crate::typemap) fn new_without_graph_idx<S>(
+        ty: syn::Type,
+        norm_name: S,
+        src_id: SourceId,
+    ) -> RustTypeS
     where
         S: Into<SmolStr>,
     {
@@ -32,6 +39,7 @@ impl RustTypeS {
             normalized_name: norm_name.into(),
             implements: ImplementsSet::default(),
             graph_idx: RustTypeIdx::new(0),
+            src_id,
         }
     }
     pub(in crate::typemap) fn implements(mut self, trait_name: &str) -> RustTypeS {
@@ -43,8 +51,11 @@ impl RustTypeS {
         self.normalized_name = other.normalized_name.clone();
         self.implements.insert_set(&other.implements);
     }
-    pub fn as_idx(&self) -> RustTypeIdx {
+    pub(crate) fn as_idx(&self) -> RustTypeIdx {
         self.graph_idx
+    }
+    pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
+        (self.src_id, self.ty.span())
     }
 }
 
@@ -112,6 +123,12 @@ pub(crate) struct ForeignTypeS {
 
 impl ForeignTypeS {
     pub(crate) fn span(&self) -> Span {
+        self.name.span.1
+    }
+    pub(crate) fn src_id(&self) -> SourceId {
+        self.name.span.0
+    }
+    pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
         self.name.span
     }
 }
@@ -165,7 +182,7 @@ impl ForeignTypesStorage {
         binded_rust_ty: RustTypeIdx,
     ) -> Result<ForeignType, DiagnosticError> {
         if let Some(ft) = self.name_to_ftype.get(tn.as_str()) {
-            let mut err = DiagnosticError::new(
+            let mut err = DiagnosticError::new2(
                 self.ftypes[ft.0].name.span,
                 format!("Type {} already defined here", tn),
             );

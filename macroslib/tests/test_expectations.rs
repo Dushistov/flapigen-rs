@@ -111,18 +111,21 @@ foreigner_class!(class Foo {
     }
     for lang in &langs {
         let name = format!("class_with_methods_without_constructor {:?}", lang);
-        parse_code(
-            &name,
-            Source::Str(
-                r#"
+        let ret = panic::catch_unwind(|| {
+            parse_code(
+                &name,
+                Source::Str(
+                    r#"
     foreigner_class!(class Foo {
        self_type SomeType;
     });
     "#,
-            ),
-            *lang,
-        )
-        .expect(&name);
+                ),
+                *lang,
+            )
+            .expect(&name)
+        });
+        assert!(ret.is_err());
     }
 
     for lang in &langs {

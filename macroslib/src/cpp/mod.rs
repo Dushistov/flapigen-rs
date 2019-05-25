@@ -13,10 +13,14 @@ use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
     cpp::map_type::map_type,
-    error::{DiagnosticError, Result},
+    error::{invalid_src_id_span, panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
+    source_registry::SourceId,
     typemap::{
-        ast::{fn_arg_type, DisplayToTokens, TypeName},
+        ast::{
+            fn_arg_type, parse_ty_with_given_span, parse_ty_with_given_span_checked,
+            DisplayToTokens, TypeName,
+        },
         ty::{
             FTypeConvCode, ForeignConversationIntermediate, ForeignConversationRule, ForeignType,
             ForeignTypeS, RustType,
@@ -25,8 +29,11 @@ use crate::{
         utils::rust_to_foreign_convert_method_inputs,
         ForeignMethodSignature, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    CppConfig, ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod,
-    LanguageGenerator, MethodAccess, MethodVariant, SourceCode, TypeMap,
+    types::{
+        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodAccess,
+        MethodVariant,
+    },
+    CppConfig, LanguageGenerator, SourceCode, TypeMap,
 };
 
 #[derive(Debug)]
@@ -56,6 +63,7 @@ impl CppForeignTypeInfo {
         }
         .ok_or_else(|| {
             DiagnosticError::new(
+                ftype.src_id(),
                 ftype.span(),
                 format!(
                     "No rule to convert foreign type {} as input/output type",
@@ -124,6 +132,7 @@ impl ForeignMethodSignature for CppForeignMethodSignature {
 }
 
 struct MethodContext<'a> {
+    class: &'a ForeignerClassInfo,
     method: &'a ForeignerMethod,
     f_method: &'a CppForeignMethodSignature,
     c_func_name: &'a str,
@@ -136,15 +145,21 @@ impl LanguageGenerator for CppConfig {
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
             .validate_class()
-            .map_err(|err| DiagnosticError::new(class.span(), err))?;
+            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
         if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
             let this_type_for_method = constructor_ret_type;
-            let this_type = conv_map
-                .find_or_alloc_rust_type_that_implements(this_type_for_method, "SwigForeignClass");
+            let this_type = conv_map.find_or_alloc_rust_type_that_implements(
+                this_type_for_method,
+                "SwigForeignClass",
+                class.src_id,
+            );
 
             let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
-            let void_ptr_rust_ty = conv_map
-                .find_or_alloc_rust_type_with_suffix(&void_ptr_ty, &this_type.normalized_name);
+            let void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
+                &void_ptr_ty,
+                &this_type.normalized_name,
+                SourceId::none(),
+            );
             let foreign_typename = format!("{} *", cpp_code::c_class_type(class));
             conv_map.cache_rust_to_foreign_conv(
                 &this_type,
@@ -158,6 +173,7 @@ impl LanguageGenerator for CppConfig {
             let const_void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
                 &const_void_ptr_ty,
                 &this_type.normalized_name,
+                SourceId::none(),
             );
             let const_foreign_typename = format!("const {} *", cpp_code::c_class_type(class));
             conv_map.cache_rust_to_foreign_conv(
@@ -170,7 +186,10 @@ impl LanguageGenerator for CppConfig {
 
             let this_type_ty = &this_type.ty;
             //handle foreigner_class as input arg
-            let this_type_ref = conv_map.find_or_alloc_rust_type(&parse_type! { & #this_type_ty });
+
+            let code = format!("& {}", DisplayToTokens(this_type_ty));
+            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
+            let this_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
             conv_map.add_conversation_rule(
                 const_void_ptr_rust_ty.clone(),
                 this_type_ref,
@@ -186,8 +205,9 @@ impl LanguageGenerator for CppConfig {
                 .into(),
             );
 
-            let this_type_mut_ref =
-                conv_map.find_or_alloc_rust_type(&parse_type! { &mut #this_type_ty });
+            let code = format!("&mut {}", DisplayToTokens(this_type_ty));
+            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
+            let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
                 void_ptr_rust_ty.clone(),
@@ -209,7 +229,7 @@ impl LanguageGenerator for CppConfig {
                 this_type.normalized_name
             );
 
-            conv_map.find_or_alloc_rust_type(constructor_ret_type);
+            conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
 
             let (this_type_for_method, _code_box_this) =
                 conv_map.convert_to_heap_pointer(&this_type, "this");
@@ -232,7 +252,7 @@ impl LanguageGenerator for CppConfig {
                 .into(),
             );
         }
-        conv_map.find_or_alloc_rust_type(&class.self_type_as_ty());
+        conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
         Ok(())
     }
 
@@ -257,6 +277,7 @@ impl LanguageGenerator for CppConfig {
 
         if has_methods && !has_constructor {
             return Err(DiagnosticError::new(
+                class.src_id,
                 class.span(),
                 format!(
                     "namespace {}, class {}: has methods, but no constructor\n
@@ -287,17 +308,24 @@ May be you need to use `private constructor = empty;` syntax?",
     ) -> Result<Vec<TokenStream>> {
         if (enum_info.items.len() as u64) >= u64::from(u32::max_value()) {
             return Err(DiagnosticError::new(
+                enum_info.src_id,
                 enum_info.span(),
                 "Too many items in enum",
             ));
         }
 
         trace!("enum_ti: {}", enum_info.name);
-        let enum_ti: Type = syn::parse_str(&enum_info.rust_enum_name())?;
-        conv_map.find_or_alloc_rust_type_that_implements(&enum_ti, "SwigForeignEnum");
+        let enum_name = &enum_info.name;
+        let enum_ti: Type = parse_ty_with_given_span(&enum_name.to_string(), enum_info.name.span())
+            .map_err(|err| DiagnosticError::from_syn_err(enum_info.src_id, err))?;
+        conv_map.find_or_alloc_rust_type_that_implements(
+            &enum_ti,
+            "SwigForeignEnum",
+            enum_info.src_id,
+        );
 
         cpp_code::generate_code_for_enum(&self.output_dir, enum_info)
-            .map_err(|err| DiagnosticError::new(enum_info.span(), err))?;
+            .map_err(|err| DiagnosticError::new(enum_info.src_id, enum_info.span(), err))?;
         let code = generate_rust_code_for_enum(conv_map, pointer_target_width, enum_info)?;
         Ok(code)
     }
@@ -315,21 +343,22 @@ May be you need to use `private constructor = empty;` syntax?",
             interface,
             &f_methods,
         )
-        .map_err(|err| DiagnosticError::new(interface.span(), err))?;
+        .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;
 
         let items =
             rust_code_generate_interface(conv_map, pointer_target_width, interface, &f_methods)?;
 
         let c_struct_name = format!("C_{}", interface.name);
         let rust_struct_pointer = format!("*const {}", c_struct_name);
-        let rust_ty: Type = syn::parse_str(&rust_struct_pointer)?;
+        let rust_ty: Type = parse_ty_with_given_span(&rust_struct_pointer, interface.name.span())
+            .map_err(|err| DiagnosticError::from_syn_err(interface.src_id, err))?;
         let c_struct_pointer = format!("const struct {} * const", c_struct_name);
 
-        let rust_ty = conv_map.find_or_alloc_rust_type(&rust_ty);
+        let rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&rust_ty);
 
         conv_map.add_foreign(
             rust_ty,
-            TypeName::new(c_struct_pointer, interface.name.span()),
+            TypeName::new(c_struct_pointer, interface.src_id_span()),
         )?;
 
         Ok(items)
@@ -337,7 +366,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
     fn init(&self, conv_map: &mut TypeMap, code: &[SourceCode]) -> std::result::Result<(), String> {
         //for enum
-        conv_map.find_or_alloc_rust_type(&parse_type! { u32 });
+        conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { u32 });
 
         for cu in code {
             let src_path = self.output_dir.join(&cu.id_of_code);
@@ -355,11 +384,12 @@ May be you need to use `private constructor = empty;` syntax?",
         }
 
         //TODO: move to cpp-include.rs
-        let bool_rt = conv_map.find_or_alloc_rust_type(&parse_type! { bool });
-        let c_char_rt = conv_map.find_or_alloc_rust_type(&parse_type! { ::std::os::raw::c_char });
+        let bool_rt = conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { bool });
+        let c_char_rt =
+            conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { ::std::os::raw::c_char });
         conv_map
             .alloc_new_ftype(ForeignTypeS {
-                name: TypeName::new("bool", Span::call_site()),
+                name: TypeName::new("bool", invalid_src_id_span()),
                 into_from_rust: Some(ForeignConversationRule {
                     rust_ty: bool_rt.as_idx(),
                     intermediate: Some(ForeignConversationIntermediate {
@@ -394,7 +424,7 @@ fn find_suitable_foreign_types_for_methods(
 ) -> Result<Vec<CppForeignMethodSignature>> {
     let mut ret = Vec::<CppForeignMethodSignature>::with_capacity(class.methods.len());
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
 
     for method in &class.methods {
         //skip self argument
@@ -406,13 +436,13 @@ fn find_suitable_foreign_types_for_methods(
         let mut input =
             Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg));
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg), class.src_id);
             input.push(map_type(
                 conv_map,
                 cpp_cfg,
                 &arg_rust_ty,
                 Direction::Incoming,
-                fn_arg_type(arg).span(),
+                (class.src_id, fn_arg_type(arg).span()),
             )?);
         }
         let output: CppForeignTypeInfo = match method.variant {
@@ -428,13 +458,13 @@ fn find_suitable_foreign_types_for_methods(
                 }
                 .into(),
                 syn::ReturnType::Type(_, ref rt) => {
-                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt);
+                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt, class.src_id);
                     map_type(
                         conv_map,
                         cpp_cfg,
                         &ret_rust_ty,
                         Direction::Outgoing,
-                        rt.span(),
+                        (class.src_id, rt.span()),
                     )?
                 }
             },
@@ -579,7 +609,8 @@ impl SwigForeignEnum for {rust_enum_name} {{
     )
     .unwrap();
 
-    let trait_impl: syn::Item = syn::parse_str(&trait_impl)?;
+    let trait_impl: syn::Item = syn::parse_str(&trait_impl)
+        .unwrap_or_else(|err| panic_on_syn_error("trait_impl", trait_impl, err));
 
     write!(
         &mut code,
@@ -633,11 +664,7 @@ impl SwigFrom<Option<{rust_enum_name}>> for Option<u32> {{
     .unwrap();
 
     conv_map.register_exported_enum(enum_info);
-    conv_map.merge(
-        &*enum_info.rust_enum_name().as_str(),
-        &code,
-        pointer_target_width,
-    )?;
+    conv_map.merge(SourceId::none(), &code, pointer_target_width)?;
     Ok(vec![trait_impl.into_token_stream()])
 }
 
@@ -648,19 +675,19 @@ fn find_suitable_ftypes_for_interace_methods(
 ) -> Result<Vec<CppForeignMethodSignature>> {
     let void_sym = "void";
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
     let mut f_methods = Vec::with_capacity(interace.items.len());
 
     for method in &interace.items {
         let mut input = Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg));
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg), interace.src_id);
             input.push(map_type(
                 conv_map,
                 cpp_cfg,
                 &arg_rust_ty,
                 Direction::Outgoing,
-                fn_arg_type(arg).span(),
+                (interace.src_id, fn_arg_type(arg).span()),
             )?);
         }
         let output = match method.fn_decl.output {
@@ -670,13 +697,13 @@ fn find_suitable_ftypes_for_interace_methods(
             }
             .into(),
             syn::ReturnType::Type(_, ref ret_ty) => {
-                let ret_rust_ty = conv_map.find_or_alloc_rust_type(ret_ty);
+                let ret_rust_ty = conv_map.find_or_alloc_rust_type(ret_ty, interace.src_id);
                 map_type(
                     conv_map,
                     cpp_cfg,
                     &ret_rust_ty,
                     Direction::Incoming,
-                    ret_ty.span(),
+                    (interace.src_id, ret_ty.span()),
                 )?
             }
         };
@@ -722,6 +749,7 @@ pub struct {struct_with_funcs} {{
     for (method, f_method) in interface.items.iter().zip(methods_sign) {
         let args = rust_generate_args_with_types(f_method).map_err(|err| {
             DiagnosticError::new(
+                interface.src_id,
                 interface.span(),
                 format!("gen args with types error: {}", err),
             )
@@ -748,7 +776,10 @@ pub struct {struct_with_funcs} {{
 
     let mut gen_items = vec![];
 
-    gen_items.push(syn::parse_str(&code)?);
+    gen_items.push(
+        syn::parse_str(&code)
+            .unwrap_or_else(|err| panic_on_syn_error("cpp internal code", code.clone(), err)),
+    );
 
     code.clear();
     write!(
@@ -766,11 +797,7 @@ impl SwigFrom<*const {struct_with_funcs}> for Box<{trait_name}> {{
     )
     .unwrap();
 
-    conv_map.merge(
-        &format!("{}", DisplayToTokens(&interface.self_type)),
-        &code,
-        pointer_target_width,
-    )?;
+    conv_map.merge(SourceId::none(), &code, pointer_target_width)?;
 
     code.clear();
 
@@ -790,7 +817,11 @@ impl {trait_name} for {struct_with_funcs} {{
             .segments
             .last()
             .ok_or_else(|| {
-                DiagnosticError::new(method.rust_name.span(), "Empty trait function name")
+                DiagnosticError::new(
+                    interface.src_id,
+                    method.rust_name.span(),
+                    "Empty trait function name",
+                )
             })?
             .value()
             .ident
@@ -814,6 +845,7 @@ impl {trait_name} for {struct_with_funcs} {{
         let n_args = method.fn_decl.inputs.len() - 1;
         let (mut conv_deps, convert_args) = rust_to_foreign_convert_method_inputs(
             conv_map,
+            interface.src_id,
             method,
             f_method,
             (0..n_args).map(|v| format!("a_{}", v)),
@@ -823,13 +855,14 @@ impl {trait_name} for {struct_with_funcs} {{
         let (real_output_typename, output_conv) = match method.fn_decl.output {
             syn::ReturnType::Default => ("()".to_string(), String::new()),
             syn::ReturnType::Type(_, ref ret_ty) => {
-                let real_output_type: RustType = conv_map.find_or_alloc_rust_type(ret_ty);
+                let real_output_type: RustType =
+                    conv_map.find_or_alloc_rust_type(ret_ty, interface.src_id);
                 let (mut conv_deps, conv_code) = conv_map.convert_rust_types(
                     &f_method.output.base.correspoding_rust_type,
                     &real_output_type,
                     "ret",
                     &real_output_type.normalized_name.as_str(),
-                    ret_ty.span(),
+                    (interface.src_id, ret_ty.span()),
                 )?;
                 gen_items.append(&mut conv_deps);
                 (real_output_type.normalized_name.to_string(), conv_code)
@@ -886,7 +919,10 @@ impl Drop for {struct_with_funcs} {{
     )
     .unwrap();
 
-    gen_items.push(syn::parse_str(&code)?);
+    gen_items.push(
+        syn::parse_str(&code)
+            .unwrap_or_else(|err| panic_on_syn_error("cpp internal code", code, err)),
+    );
 
     Ok(gen_items)
 }
@@ -896,11 +932,12 @@ fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> 
     tmap.map_through_conversation_to_foreign_ext(
         &rtype,
         Direction::Outgoing,
-        rtype.ty.span(),
+        rtype.src_id_span(),
         self::map_type::calc_this_type_for_method,
     )
     .ok_or_else(|| {
         DiagnosticError::new(
+            rtype.src_id,
             rtype.ty.span(),
             format!(
                 "Do not know conversation from \

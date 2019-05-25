@@ -10,35 +10,51 @@ use syn::{
 };
 
 use crate::{
-    error::Result,
+    error::{DiagnosticError, Result},
+    source_registry::SourceId,
     typemap::ast::{normalize_ty_lifetimes, DisplayToTokens},
-    ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod, ForeignerClassInfo,
-    ForeignerMethod, LanguageConfig, MethodAccess, MethodVariant, SelfTypeVariant,
+    types::{
+        ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
+        ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, SelfTypeVariant,
+    },
+    LanguageConfig,
 };
 
 pub(crate) fn parse_foreigner_class(
+    src_id: SourceId,
     config: &LanguageConfig,
     tokens: TokenStream,
 ) -> Result<ForeignerClassInfo> {
     match config {
         LanguageConfig::CppConfig(_) => {
-            let class: CppClass = syn::parse2(tokens)?;
+            let mut class: CppClass =
+                syn::parse2(tokens).map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+            class.0.src_id = src_id;
             Ok(class.0)
         }
         LanguageConfig::JavaConfig(_) => {
-            let class: JavaClass = syn::parse2(tokens)?;
+            let mut class: JavaClass =
+                syn::parse2(tokens).map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+            class.0.src_id = src_id;
             Ok(class.0)
         }
     }
 }
 
-pub(crate) fn parse_foreign_enum(tokens: TokenStream) -> Result<ForeignEnumInfo> {
-    let f_enum: ForeignEnumInfoParser = syn::parse2(tokens)?;
+pub(crate) fn parse_foreign_enum(src_id: SourceId, tokens: TokenStream) -> Result<ForeignEnumInfo> {
+    let mut f_enum: ForeignEnumInfoParser =
+        syn::parse2(tokens).map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+    f_enum.0.src_id = src_id;
     Ok(f_enum.0)
 }
 
-pub(crate) fn parse_foreign_interface(tokens: TokenStream) -> Result<ForeignInterface> {
-    let f_interface: ForeignInterfaceParser = syn::parse2(tokens)?;
+pub(crate) fn parse_foreign_interface(
+    src_id: SourceId,
+    tokens: TokenStream,
+) -> Result<ForeignInterface> {
+    let mut f_interface: ForeignInterfaceParser =
+        syn::parse2(tokens).map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+    f_interface.0.src_id = src_id;
     Ok(f_interface.0)
 }
 
@@ -375,7 +391,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         methods.push(ForeignerMethod {
             variant: func_type,
             rust_id: func_name,
-            fn_decl: crate::FnDecl {
+            fn_decl: crate::types::FnDecl {
                 span,
                 inputs: args_in,
                 output: out_type,
@@ -403,6 +419,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     }
 
     Ok(ForeignerClassInfo {
+        src_id: SourceId::none(),
         name: class_name,
         methods,
         self_type: rust_self_type,
@@ -439,6 +456,7 @@ impl Parse for ForeignEnumInfoParser {
         }
 
         Ok(ForeignEnumInfoParser(ForeignEnumInfo {
+            src_id: SourceId::none(),
             name: enum_name,
             items,
             doc_comments: enum_doc_comments,
@@ -484,7 +502,7 @@ impl Parse for ForeignInterfaceParser {
             items.push(ForeignInterfaceMethod {
                 name: func_name,
                 rust_name: rust_func_name,
-                fn_decl: crate::FnDecl {
+                fn_decl: crate::types::FnDecl {
                     span,
                     inputs: args_in,
                     output: out_type,
@@ -498,6 +516,7 @@ impl Parse for ForeignInterfaceParser {
         })?;
 
         Ok(ForeignInterfaceParser(ForeignInterface {
+            src_id: SourceId::none(),
             name: interface_name,
             self_type,
             doc_comments: interface_doc_comments,
@@ -509,7 +528,7 @@ impl Parse for ForeignInterfaceParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::{panic_on_parse_error, DiagnosticError};
+    use crate::error::panic_on_syn_error;
 
     #[test]
     fn test_do_parse_foreigner_class() {
@@ -561,7 +580,8 @@ mod tests {
                 ITEM3 = MyEnum::Item3,
             })
         };
-        let _enum = parse_foreign_enum(mac.tts).unwrap();
+        let enum_ = parse_foreign_enum(SourceId::none(), mac.tts).unwrap();
+        assert_eq!("MyEnum", enum_.name.to_string());
     }
 
     #[test]
@@ -584,11 +604,8 @@ mod tests {
         T: Parse,
     {
         let code = tokens.to_string();
-        let class: T = syn::parse2(tokens).unwrap_or_else(|err| {
-            let mut err: DiagnosticError = err.into();
-            err.register_src_if_no("test_parse".into(), code);
-            panic_on_parse_error(&err);
-        });
+        let class: T =
+            syn::parse2(tokens).unwrap_or_else(|err| panic_on_syn_error("test_parse", code, err));
         class
     }
 

@@ -18,7 +18,9 @@ mod cpp;
 mod error;
 pub mod file_cache;
 mod java_jni;
+mod source_registry;
 mod typemap;
+mod types;
 
 use std::{
     cell::RefCell,
@@ -30,13 +32,15 @@ use std::{
 };
 
 use log::{debug, trace};
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
-use syn::{parse_quote, spanned::Spanned, Token, Type};
+use syn::spanned::Spanned;
 
 use crate::{
     error::{panic_on_parse_error, DiagnosticError, Result},
+    source_registry::{SourceId, SourceRegistry},
     typemap::{ast::DisplayToTokens, TypeMap},
+    types::{ForeignEnumInfo, ForeignInterface, ForeignerClassInfo},
 };
 
 /// Calculate target pointer width from environment variable
@@ -195,9 +199,10 @@ pub struct Generator {
     init_done: bool,
     config: LanguageConfig,
     conv_map: TypeMap,
-    conv_map_source: Vec<SourceCode>,
+    conv_map_source: Vec<SourceId>,
     foreign_lang_helpers: Vec<SourceCode>,
     pointer_target_width: usize,
+    src_reg: SourceRegistry,
 }
 
 struct SourceCode {
@@ -221,26 +226,32 @@ impl Generator {
         let pointer_target_width = target_pointer_width_from_env();
         let mut conv_map_source = Vec::new();
         let mut foreign_lang_helpers = Vec::new();
+        let mut src_reg = SourceRegistry::default();
         match config {
             LanguageConfig::JavaConfig(ref java_cfg) => {
-                conv_map_source.push(SourceCode {
-                    id_of_code: "jni-include.rs".into(),
-                    code: include_str!("java_jni/jni-include.rs")
-                        .replace(
-                            "java.util.Optional",
-                            &format!("{}.Optional", java_cfg.optional_package),
-                        )
-                        .replace(
-                            "java/util/Optional",
-                            &format!("{}/Optional", java_cfg.optional_package.replace('.', "/")),
-                        ),
-                });
+                conv_map_source.push(
+                    src_reg.register(SourceCode {
+                        id_of_code: "jni-include.rs".into(),
+                        code: include_str!("java_jni/jni-include.rs")
+                            .replace(
+                                "java.util.Optional",
+                                &format!("{}.Optional", java_cfg.optional_package),
+                            )
+                            .replace(
+                                "java/util/Optional",
+                                &format!(
+                                    "{}/Optional",
+                                    java_cfg.optional_package.replace('.', "/")
+                                ),
+                            ),
+                    }),
+                );
             }
             LanguageConfig::CppConfig(..) => {
-                conv_map_source.push(SourceCode {
+                conv_map_source.push(src_reg.register(SourceCode {
                     id_of_code: "cpp-include.rs".into(),
                     code: include_str!("cpp/cpp-include.rs").into(),
-                });
+                }));
                 foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_str.h".into(),
                     code: include_str!("cpp/rust_str.h").into(),
@@ -270,6 +281,7 @@ impl Generator {
             conv_map_source,
             foreign_lang_helpers,
             pointer_target_width: pointer_target_width.unwrap_or(0),
+            src_reg,
         }
     }
 
@@ -282,10 +294,10 @@ impl Generator {
 
     /// Add new foreign langauge type <-> Rust mapping
     pub fn merge_type_map(mut self, id_of_code: &str, code: &str) -> Generator {
-        self.conv_map_source.push(SourceCode {
+        self.conv_map_source.push(self.src_reg.register(SourceCode {
             id_of_code: id_of_code.into(),
             code: code.into(),
-        });
+        }));
         self
     }
 
@@ -293,7 +305,7 @@ impl Generator {
     ///
     /// # Panics
     /// Panics on error
-    pub fn expand<S, D>(self, crate_name: &str, src: S, dst: D)
+    pub fn expand<S, D>(mut self, crate_name: &str, src: S, dst: D)
     where
         S: AsRef<Path>,
         D: AsRef<Path>,
@@ -305,12 +317,14 @@ impl Generator {
                 err
             )
         });
-        if let Err(mut err) = self.expand_str(&src_cnt, dst) {
-            err.register_src_if_no(
-                format!("{}: {}", crate_name, src.as_ref().display()),
-                src_cnt.into(),
-            );
-            panic_on_parse_error(&err);
+
+        let src_id = self.src_reg.register(SourceCode {
+            id_of_code: format!("{}: {}", crate_name, src.as_ref().display()),
+            code: src_cnt.into(),
+        });
+
+        if let Err(err) = self.expand_str(src_id, dst) {
+            panic_on_parse_error(&self.src_reg, &err);
         }
     }
 
@@ -318,7 +332,7 @@ impl Generator {
     ///
     /// # Panics
     /// Panics on I/O errors
-    fn expand_str<D>(mut self, src: &str, dst: D) -> Result<()>
+    fn expand_str<D>(&mut self, src_id: SourceId, dst: D) -> Result<()>
     where
         D: AsRef<Path>,
     {
@@ -332,7 +346,8 @@ impl Generator {
         }
         let items = self.init_types_map(self.pointer_target_width)?;
 
-        let syn_file = syn::parse_file(src)?;
+        let syn_file = syn::parse_file(self.src_reg.src(src_id))
+            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
 
         let mut file = file_cache::FileWriteCache::new(dst.as_ref());
 
@@ -353,10 +368,20 @@ impl Generator {
                     continue;
                 }
                 trace!("Found {:?}", item_macro.mac.path);
+                if item_macro.mac.tts.is_empty() {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        item_macro.span(),
+                        format!(
+                            "missing tokens in call of macro '{}'",
+                            DisplayToTokens(&item_macro.mac.path)
+                        ),
+                    ));
+                }
                 let mut tts = TokenStream::new();
                 mem::swap(&mut tts, &mut item_macro.mac.tts);
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS) {
-                    let fclass = code_parse::parse_foreigner_class(&self.config, tts)?;
+                    let fclass = code_parse::parse_foreigner_class(src_id, &self.config, tts)?;
                     debug!(
                         "expand_foreigner_class: self {:?}, constructor {:?}",
                         fclass.self_type, fclass.constructor_ret_type
@@ -366,10 +391,10 @@ impl Generator {
                         .register_class(&mut self.conv_map, &fclass)?;
                     output_code.push(OutputCode::Class(fclass));
                 } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
-                    let fenum = code_parse::parse_foreign_enum(tts)?;
+                    let fenum = code_parse::parse_foreign_enum(src_id, tts)?;
                     output_code.push(OutputCode::Enum(fenum));
                 } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE) {
-                    let finterface = code_parse::parse_foreign_interface(tts)?;
+                    let finterface = code_parse::parse_foreign_interface(src_id, tts)?;
                     output_code.push(OutputCode::Interface(finterface));
                 } else {
                     unreachable!();
@@ -432,14 +457,13 @@ impl Generator {
             return Ok(vec![]);
         }
         self.init_done = true;
-        for code in &self.conv_map_source {
-            self.conv_map
-                .merge(&code.id_of_code, &code.code, target_pointer_width)?;
+        for code_id in &self.conv_map_source {
+            let code = self.src_reg.src(*code_id);
+            self.conv_map.merge(*code_id, code, target_pointer_width)?;
         }
 
         if self.conv_map.is_empty() {
-            return Err(DiagnosticError::new(
-                Span::call_site(),
+            return Err(DiagnosticError::new_without_src_info(
                 "After merge all \"types maps\" have no convertion code",
             ));
         }
@@ -447,10 +471,10 @@ impl Generator {
         Generator::language_generator(&self.config)
             .init(&mut self.conv_map, &self.foreign_lang_helpers)
             .map_err(|err| {
-                DiagnosticError::new(
-                    Span::call_site(),
-                    format!("Can not put/generate foreign lang helpers: {}", err),
-                )
+                DiagnosticError::new_without_src_info(format!(
+                    "Can not put/generate foreign lang helpers: {}",
+                    err
+                ))
             })?;
 
         Ok(self.conv_map.take_utils_code())
@@ -462,179 +486,6 @@ impl Generator {
             LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignerClassInfo {
-    name: Ident,
-    methods: Vec<ForeignerMethod>,
-    self_type: Option<Type>,
-    foreigner_code: String,
-    /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
-    constructor_ret_type: Option<Type>,
-    doc_comments: Vec<String>,
-    copy_derived: bool,
-}
-
-impl ForeignerClassInfo {
-    fn span(&self) -> Span {
-        self.name.span()
-    }
-    fn self_type_as_ty(&self) -> Type {
-        self.self_type
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| parse_quote! { () })
-    }
-    /// common for several language binding generator code
-    fn validate_class(&self) -> Result<()> {
-        let mut has_constructor = false;
-        let mut has_methods = false;
-        for x in &self.methods {
-            match x.variant {
-                MethodVariant::Constructor => has_constructor = true,
-                MethodVariant::Method(_) => has_methods = true,
-                _ => {}
-            }
-        }
-        if self.self_type.is_none() && has_constructor {
-            Err(DiagnosticError::new(
-                self.span(),
-                format!(
-                    "class {} has constructor, but no self_type defined",
-                    self.name
-                ),
-            ))
-        } else if self.self_type.is_none() && has_methods {
-            Err(DiagnosticError::new(
-                self.span(),
-                format!("class {} has methods, but no self_type defined", self.name),
-            ))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignerMethod {
-    variant: MethodVariant,
-    rust_id: syn::Path,
-    fn_decl: FnDecl,
-    name_alias: Option<Ident>,
-    access: MethodAccess,
-    doc_comments: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-struct FnDecl {
-    span: Span,
-    inputs: syn::punctuated::Punctuated<syn::FnArg, Token![,]>,
-    output: syn::ReturnType,
-}
-
-impl From<syn::FnDecl> for crate::FnDecl {
-    fn from(x: syn::FnDecl) -> Self {
-        crate::FnDecl {
-            span: x.fn_token.span(),
-            inputs: x.inputs,
-            output: x.output,
-        }
-    }
-}
-
-impl ForeignerMethod {
-    fn short_name(&self) -> String {
-        if let Some(ref name) = self.name_alias {
-            name.to_string()
-        } else {
-            match self.rust_id.segments.len() {
-                0 => String::new(),
-                n => self.rust_id.segments[n - 1].ident.to_string(),
-            }
-        }
-    }
-
-    fn span(&self) -> Span {
-        self.rust_id.span()
-    }
-
-    fn is_dummy_constructor(&self) -> bool {
-        self.rust_id.segments.is_empty()
-    }
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum MethodAccess {
-    Private,
-    Public,
-    Protected,
-}
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum MethodVariant {
-    Constructor,
-    Method(SelfTypeVariant),
-    StaticMethod,
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum SelfTypeVariant {
-    RptrMut,
-    Rptr,
-    Mut,
-    Default,
-}
-
-impl SelfTypeVariant {
-    fn is_read_only(self) -> bool {
-        match self {
-            SelfTypeVariant::RptrMut | SelfTypeVariant::Mut => false,
-            SelfTypeVariant::Default | SelfTypeVariant::Rptr => true,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignEnumInfo {
-    name: Ident,
-    items: Vec<ForeignEnumItem>,
-    doc_comments: Vec<String>,
-}
-
-impl ForeignEnumInfo {
-    fn rust_enum_name(&self) -> String {
-        self.name.to_string()
-    }
-    fn span(&self) -> Span {
-        self.name.span()
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignEnumItem {
-    name: Ident,
-    rust_name: syn::Path,
-    doc_comments: Vec<String>,
-}
-
-struct ForeignInterface {
-    name: Ident,
-    self_type: syn::Path,
-    doc_comments: Vec<String>,
-    items: Vec<ForeignInterfaceMethod>,
-}
-
-impl ForeignInterface {
-    fn span(&self) -> Span {
-        self.name.span()
-    }
-}
-
-struct ForeignInterfaceMethod {
-    name: Ident,
-    rust_name: syn::Path,
-    fn_decl: FnDecl,
-    doc_comments: Vec<String>,
 }
 
 trait LanguageGenerator {

@@ -7,7 +7,7 @@ use crate::{
     java_jni::{fmt_write_err_map, method_name, JniForeignMethodSignature, NullAnnotation},
     typemap::ast::if_result_return_ok_err_types,
     typemap::TypeMap,
-    ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant,
+    types::{ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant},
 };
 
 bitflags! {
@@ -174,7 +174,7 @@ public final class {class_name} {{
         let may_return_error = match method.fn_decl.output {
             syn::ReturnType::Default => false,
             syn::ReturnType::Type(_, ref ptype) => {
-                let ret_rust_ty = conv_map.find_or_alloc_rust_type(ptype);
+                let ret_rust_ty = conv_map.find_or_alloc_rust_type(ptype, class.src_id);
                 if_result_return_ok_err_types(&ret_rust_ty).is_some()
             }
         };

@@ -8,7 +8,6 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
 
     let cpp_gen_path = Path::new("c++").join("rust_interface");
-    println!("cargo:rerun-if-changed={}", cpp_gen_path.display());
     let cpp_cfg = if cfg!(feature = "boost") {
         CppConfig::new(cpp_gen_path, "rust".into()).use_boost()
     } else {

@@ -25,15 +25,19 @@ use syn::{
 };
 
 use self::subst_map::{TyParamsSubstItem, TyParamsSubstMap};
-use crate::typemap::{
-    make_unique_rust_typename, make_unique_rust_typename_if_need,
-    ty::{RustType, TraitNamesSet},
+use crate::{
+    error::{panic_on_syn_error, SourceIdSpan},
+    source_registry::SourceId,
+    typemap::{
+        make_unique_rust_typename, make_unique_rust_typename_if_need,
+        ty::{RustType, TraitNamesSet},
+    },
 };
 
 #[derive(Debug)]
 pub(crate) struct TypeName {
     pub(crate) typename: SmolStr,
-    pub(crate) span: Span,
+    pub(crate) span: SourceIdSpan,
 }
 
 impl PartialEq for TypeName {
@@ -57,21 +61,18 @@ impl Display for TypeName {
 }
 
 impl TypeName {
-    pub(crate) fn new<S: Into<SmolStr>>(tn: S, span: Span) -> Self {
+    pub(crate) fn new<S: Into<SmolStr>>(tn: S, span: SourceIdSpan) -> Self {
         TypeName {
             typename: tn.into(),
             span,
         }
     }
+    pub(crate) fn from_ident(id: &Ident, src_id: SourceId) -> Self {
+        TypeName::new(id.to_string(), (src_id, id.span()))
+    }
     #[inline]
     pub(crate) fn as_str(&self) -> &str {
         self.typename.as_str()
-    }
-}
-
-impl<'a> From<&'a Ident> for TypeName {
-    fn from(id: &'a Ident) -> Self {
-        TypeName::new(id.to_string(), id.span())
     }
 }
 
@@ -143,6 +144,7 @@ pub(crate) fn normalize_ty_lifetimes(ty: &syn::Type) -> &'static str {
 
 #[derive(Debug)]
 pub(crate) struct GenericTypeConv {
+    pub src_id: SourceId,
     pub from_ty: syn::Type,
     pub to_ty: syn::Type,
     pub code_template: String,
@@ -166,6 +168,7 @@ impl GenericTypeConv {
             generic_params,
             to_foreigner_hint: None,
             from_foreigner_hint: None,
+            src_id: SourceId::none(),
         }
     }
 
@@ -662,6 +665,19 @@ where
     }
 }
 
+pub(crate) fn parse_ty_with_given_span(
+    type_str: &str,
+    span: Span,
+) -> std::result::Result<Type, syn::Error> {
+    syn::LitStr::new(type_str, span).parse::<syn::Type>()
+}
+
+pub(crate) fn parse_ty_with_given_span_checked(type_str: &str, span: Span) -> Type {
+    parse_ty_with_given_span(type_str, span).unwrap_or_else(|err| {
+        panic_on_syn_error("internal parse_ty_with_given_span", type_str.into(), err)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -700,13 +716,17 @@ mod tests {
         };
 
         let foo_spec = Rc::new(
-            RustTypeS::new_without_graph_idx(str_to_ty("Foo"), "Foo")
+            RustTypeS::new_without_graph_idx(str_to_ty("Foo"), "Foo", SourceId::none())
                 .implements("SwigForeignClass"),
         );
 
         let refcell_foo_spec = Rc::new(
-            RustTypeS::new_without_graph_idx(str_to_ty("RefCell<Foo>"), "RefCell<Foo>")
-                .implements("SwigForeignClass"),
+            RustTypeS::new_without_graph_idx(
+                str_to_ty("RefCell<Foo>"),
+                "RefCell<Foo>",
+                SourceId::none(),
+            )
+            .implements("SwigForeignClass"),
         );
 
         fn check_subst<'a, FT: Fn(&str) -> Option<&'a RustType>>(
@@ -733,7 +753,11 @@ mod tests {
                 normalize_ty_lifetimes(&str_to_ty(expect_to_ty_name))
             );
 
-            Rc::new(RustTypeS::new_without_graph_idx(ret_ty, ret_ty_name))
+            Rc::new(RustTypeS::new_without_graph_idx(
+                ret_ty,
+                ret_ty_name,
+                SourceId::none(),
+            ))
         }
 
         let pair_generic = get_generic_params_from_code! {
@@ -745,11 +769,11 @@ mod tests {
         };
 
         let one_spec = Rc::new(
-            RustTypeS::new_without_graph_idx(str_to_ty("One"), "One")
+            RustTypeS::new_without_graph_idx(str_to_ty("One"), "One", SourceId::none())
                 .implements("SwigForeignClass"),
         );
         let two_spec = Rc::new(
-            RustTypeS::new_without_graph_idx(str_to_ty("One"), "One")
+            RustTypeS::new_without_graph_idx(str_to_ty("One"), "One", SourceId::none())
                 .implements("SwigForeignClass"),
         );
         check_subst(
@@ -1069,6 +1093,6 @@ mod tests {
     fn str_to_rust_ty(code: &str) -> RustType {
         let ty = syn::parse_str::<syn::Type>(code).unwrap();
         let name = normalize_ty_lifetimes(&ty);
-        Rc::new(RustTypeS::new_without_graph_idx(ty, name))
+        Rc::new(RustTypeS::new_without_graph_idx(ty, name, SourceId::none()))
     }
 }

@@ -1,7 +1,6 @@
 use std::{
     env,
     path::{Path, PathBuf},
-    time::Instant,
 };
 
 use rust_swig::{JavaConfig, LanguageConfig};
@@ -9,6 +8,24 @@ use rust_swig::{JavaConfig, LanguageConfig};
 fn main() {
     env_logger::init();
 
+    let out_dir = env::var("OUT_DIR").unwrap();
+
+    gen_jni_bindings(&out_dir);
+
+    let in_src = Path::new("src").join("lib.rs.in");
+    let out_src = Path::new(&out_dir).join("lib.rs");
+    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
+        Path::new("java").join("com").join("example").join("rust"),
+        "com.example.rust".into(),
+    )))
+    .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"));
+    swig_gen.expand("rust_swig_test_jni", &in_src, &out_src);
+
+    println!("cargo:rerun-if-changed={}", in_src.display());
+    println!("cargo:rerun-if-changed=src/chrono-include.rs");
+}
+
+fn gen_jni_bindings(out_dir: &str) {
     let java_home = env::var("JAVA_HOME").expect("JAVA_HOME env variable not settted");
 
     let java_include_dir = Path::new(&java_home).join("include");
@@ -28,26 +45,13 @@ fn main() {
     let jni_h_path =
         search_file_in_directory(&include_dirs[..], "jni.h").expect("Can not find jni.h");
     println!("cargo:rerun-if-changed={}", jni_h_path.display());
-    let out_dir = env::var("OUT_DIR").unwrap();
 
     gen_binding(
         &include_dirs[..],
         &jni_h_path,
-        &Path::new(&out_dir).join("jni_c_header.rs"),
+        &Path::new(out_dir).join("jni_c_header.rs"),
     )
     .expect("gen_binding failed");
-
-    let now = Instant::now();
-    let gen_path = Path::new(&out_dir).join("lib.rs");
-    rust_swig_expand(Path::new("src/lib.rs.in"), &gen_path);
-    let expand_time = now.elapsed();
-    println!(
-        "rust swig expand time: {}",
-        expand_time.as_secs() as f64 + (expand_time.subsec_nanos() as f64) / 1_000_000_000.
-    );
-    println!("cargo:rerun-if-changed=src");
-    //rebuild if user removes generated code
-    println!("cargo:rerun-if-changed={}", gen_path.display());
 }
 
 fn search_file_in_directory<P: AsRef<Path>>(dirs: &[P], file: &str) -> Result<PathBuf, ()> {
@@ -79,14 +83,4 @@ fn gen_binding<P: AsRef<Path>>(
         .map_err(|err| err.to_string())?;
 
     Ok(())
-}
-
-fn rust_swig_expand(from: &Path, out: &Path) {
-    println!("Run rust_swig_expand");
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
-        Path::new("java").join("com").join("example").join("rust"),
-        "com.example.rust".into(),
-    )))
-    .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"));
-    swig_gen.expand("rust_swig_test_jni", from, out);
 }

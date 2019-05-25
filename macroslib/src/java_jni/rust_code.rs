@@ -5,11 +5,12 @@ use rustc_hash::FxHashMap;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
-    error::{DiagnosticError, Result},
+    error::{panic_on_syn_error, DiagnosticError, Result},
     java_jni::{
         calc_this_type_for_method, fmt_write_err_map, java_class_full_name, java_class_name_to_jni,
         method_name, ForeignTypeInfo, JniForeignMethodSignature,
     },
+    source_registry::SourceId,
     typemap::ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     typemap::{
         ty::RustType,
@@ -21,11 +22,15 @@ use crate::{
         },
         TO_VAR_TEMPLATE,
     },
-    ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
-    SelfTypeVariant, TypeMap,
+    types::{
+        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
+        SelfTypeVariant,
+    },
+    TypeMap,
 };
 
 struct MethodContext<'a> {
+    class: &'a ForeignerClassInfo,
     method: &'a ForeignerMethod,
     f_method: &'a JniForeignMethodSignature,
     jni_func_name: &'a str,
@@ -48,13 +53,16 @@ pub(in crate::java_jni) fn generate_rust_code(
     }
 
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
 
     let mut gen_code = Vec::<TokenStream>::new();
     let (this_type_for_method, code_box_this) =
         if let Some(this_type) = calc_this_type_for_method(conv_map, class) {
-            let this_type =
-                conv_map.find_or_alloc_rust_type_that_implements(&this_type, "SwigForeignClass");
+            let this_type = conv_map.find_or_alloc_rust_type_that_implements(
+                &this_type,
+                "SwigForeignClass",
+                class.src_id,
+            );
             debug!(
                 "generate_rust_code: add implements SwigForeignClass for {}",
                 this_type.normalized_name
@@ -78,7 +86,7 @@ pub(in crate::java_jni) fn generate_rust_code(
 
             let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
 
-            gen_code.push(syn::parse_str(&format!(
+            let fclass_impl_code = format!(
                 r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
     fn jni_class_name() -> *const ::std::os::raw::c_char {{
         swig_c_str!("{jni_class_name}")
@@ -101,7 +109,11 @@ pub(in crate::java_jni) fn generate_rust_code(
                 code_box_this = code_box_this,
                 unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "x"),
                 this_type = this_type_for_method.normalized_name,
-            ))?);
+            );
+
+            gen_code.push(syn::parse_str(&fclass_impl_code).unwrap_or_else(|err| {
+                panic_on_syn_error("java internal fclass impl code", fclass_impl_code, err)
+            }));
 
             (this_type_for_method, code_box_this)
         } else {
@@ -110,6 +122,7 @@ pub(in crate::java_jni) fn generate_rust_code(
 
     let no_this_info = || {
         DiagnosticError::new(
+            class.src_id,
             class.span(),
             format!(
                 "Class {} (package {}) has methods, but there is no constructor\n
@@ -141,13 +154,14 @@ May be you need to use `private constructor = empty;` syntax?",
             .fold(String::new(), |acc, x| acc + &x);
 
         let decl_func_args = generate_jni_args_with_types(f_method)
-            .map_err(|err| DiagnosticError::new(class.span(), &err))?;
+            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
         let real_output_typename = match method.fn_decl.output {
             syn::ReturnType::Default => "()",
             syn::ReturnType::Type(_, ref ty) => normalize_ty_lifetimes(&*ty),
         };
 
         let method_ctx = MethodContext {
+            class,
             method,
             f_method,
             jni_func_name: &jni_func_name,
@@ -164,7 +178,6 @@ May be you need to use `private constructor = empty;` syntax?",
                 gen_code.append(&mut generate_method(
                     conv_map,
                     &method_ctx,
-                    class,
                     *self_variant,
                     &this_type_for_method,
                 )?);
@@ -194,6 +207,7 @@ May be you need to use `private constructor = empty;` syntax?",
     if have_constructor {
         let this_type: RustType = conv_map.find_or_alloc_rust_type(
             &calc_this_type_for_method(conv_map, class).ok_or_else(&no_this_info)?,
+            class.src_id,
         );
 
         let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, "this", false);
@@ -228,7 +242,11 @@ pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong
             this_type = this_type_for_method.normalized_name,
         );
         debug!("we generate and parse code: {}", code);
-        gen_code.push(syn::parse_str(&code)?);
+        gen_code.push(
+            syn::parse_str(&code).unwrap_or_else(|err| {
+                panic_on_syn_error("java/jni internal desctructor", code, err)
+            }),
+        );
     }
 
     Ok(gen_code)
@@ -328,11 +346,7 @@ impl SwigFrom<{rust_enum_name}> for jobject {{
     )
     .unwrap();
     conv_map.register_exported_enum(enum_info);
-    conv_map.merge(
-        &*enum_info.rust_enum_name().as_str(),
-        &code,
-        pointer_target_width,
-    )?;
+    conv_map.merge(SourceId::none(), &code, pointer_target_width)?;
     Ok(vec![])
 }
 
@@ -384,11 +398,7 @@ impl SwigFrom<jobject> for Box<{trait_name}> {{
 "#
     )
     .unwrap();
-    conv_map.merge(
-        &format!("{}", DisplayToTokens(&interface.self_type)),
-        &new_conv_code,
-        pointer_target_width,
-    )?;
+    conv_map.merge(SourceId::none(), &new_conv_code, pointer_target_width)?;
 
     let mut gen_items = Vec::<TokenStream>::new();
 
@@ -405,7 +415,11 @@ impl {trait_name} for JavaCallback {{
             .segments
             .last()
             .ok_or_else(|| {
-                DiagnosticError::new(method.rust_name.span(), "Empty trait function name")
+                DiagnosticError::new(
+                    interface.src_id,
+                    method.rust_name.span(),
+                    "Empty trait function name",
+                )
             })?
             .value()
             .ident;
@@ -428,6 +442,7 @@ impl {trait_name} for JavaCallback {{
         let (args, type_size_asserts) = convert_args_for_variadic_function_call(f_method);
         let (mut conv_deps, convert_args) = rust_to_foreign_convert_method_inputs(
             conv_map,
+            interface.src_id,
             method,
             f_method,
             (0..n_args).map(|v| format!("a_{}", v)),
@@ -473,7 +488,9 @@ impl {trait_name} for JavaCallback {{
 "#
     )
     .unwrap();
-    gen_items.push(syn::parse_str(&impl_trait_code)?);
+    gen_items.push(syn::parse_str(&impl_trait_code).unwrap_or_else(|err| {
+        panic_on_syn_error("java/jni internal impl_trait_code", impl_trait_code, err)
+    }));
     Ok(gen_items)
 }
 
@@ -544,6 +561,7 @@ fn generate_jni_func_name(
                 .get(type_name)
                 .ok_or_else(|| {
                     DiagnosticError::new(
+                        class.src_id,
                         class.span(),
                         format!(
                             "Can not generate JNI function name for overload method '{}',\
@@ -584,6 +602,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
         unpack_unique_typename(&mc.f_method.output.correspoding_rust_type.normalized_name);
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         conv_map,
+        mc.class.src_id,
         &mc.method.fn_decl.output,
         &mc.f_method.output,
         "ret",
@@ -592,6 +611,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
     let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
+        mc.class.src_id,
         mc.method,
         mc.f_method,
         (0..n_args).map(|v| format!("a_{}", v)),
@@ -620,7 +640,10 @@ pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> 
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
-    gen_code.push(syn::parse_str(&code)?);
+    gen_code
+        .push(syn::parse_str(&code).unwrap_or_else(|err| {
+            panic_on_syn_error("java/jni internal static method", code, err)
+        }));
     Ok(gen_code)
 }
 
@@ -634,21 +657,22 @@ fn generate_constructor(
     let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
+        mc.class.src_id,
         mc.method,
         mc.f_method,
         (0..n_args).map(|v| format!("a_{}", v)),
         "jlong",
     )?;
 
-    let this_type: RustType = conv_map.find_or_alloc_rust_type(&this_type);
-    let construct_ret_type = conv_map.find_or_alloc_rust_type(&construct_ret_type);
+    let this_type = conv_map.ty_to_rust_type(&this_type);
+    let construct_ret_type = conv_map.ty_to_rust_type(&construct_ret_type);
 
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
         &construct_ret_type,
         &this_type,
         "this",
         "jlong",
-        mc.method.span(),
+        (mc.class.src_id, mc.method.span()),
     )?;
 
     let code = format!(
@@ -674,14 +698,16 @@ pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> 
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_this);
-    gen_code.push(syn::parse_str(&code)?);
+    gen_code.push(
+        syn::parse_str(&code)
+            .unwrap_or_else(|err| panic_on_syn_error("java/jni internal constructor", code, err)),
+    );
     Ok(gen_code)
 }
 
 fn generate_method(
     conv_map: &mut TypeMap,
     mc: &MethodContext,
-    class: &ForeignerClassInfo,
     self_variant: SelfTypeVariant,
     this_type_for_method: &RustType,
 ) -> Result<Vec<TokenStream>> {
@@ -690,6 +716,7 @@ fn generate_method(
     let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
+        mc.class.src_id,
         mc.method,
         mc.f_method,
         (0..n_args).map(|v| format!("a_{}", v)),
@@ -698,6 +725,7 @@ fn generate_method(
 
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         conv_map,
+        mc.class.src_id,
         &mc.method.fn_decl.output,
         &mc.f_method.output,
         "ret",
@@ -708,15 +736,20 @@ fn generate_method(
 
     let (from_ty, to_ty): (Type, Type) = create_suitable_types_for_constructor_and_self(
         self_variant,
-        class,
+        mc.class,
         &this_type_for_method.ty,
     );
-    let from_ty = conv_map.find_or_alloc_rust_type(&from_ty);
+    let from_ty = conv_map.find_or_alloc_rust_type(&from_ty, mc.class.src_id);
     let this_type_ref = from_ty.normalized_name.as_str();
-    let to_ty = conv_map.find_or_alloc_rust_type(&to_ty);
+    let to_ty = conv_map.find_or_alloc_rust_type(&to_ty, mc.class.src_id);
 
-    let (mut deps_this, convert_this) =
-        conv_map.convert_rust_types(&from_ty, &to_ty, "this", jni_ret_type, mc.method.span())?;
+    let (mut deps_this, convert_this) = conv_map.convert_rust_types(
+        &from_ty,
+        &to_ty,
+        "this",
+        jni_ret_type,
+        (mc.class.src_id, mc.method.span()),
+    )?;
 
     let code = format!(
         r#"
@@ -749,7 +782,10 @@ pub extern "C"
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
     gen_code.append(&mut deps_this);
-    gen_code.push(syn::parse_str(&code)?);
+    gen_code.push(
+        syn::parse_str(&code)
+            .unwrap_or_else(|err| panic_on_syn_error("java/jni internal method", code, err)),
+    );
     Ok(gen_code)
 }
 

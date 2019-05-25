@@ -7,6 +7,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     error::Result,
+    source_registry::SourceId,
     typemap::{
         ty::{ForeignTypeS, ForeignTypesStorage},
         TypeMap,
@@ -16,11 +17,11 @@ use crate::{
 impl TypeMap {
     pub(crate) fn merge(
         &mut self,
-        id_of_code: &str,
+        id_of_code: SourceId,
         code: &str,
         target_pointer_width: usize,
     ) -> Result<()> {
-        debug!("merging {} with our rules", id_of_code);
+        debug!("TypeMap::merge {:?} with our rules", id_of_code);
         self.rust_to_foreign_cache.clear();
         let mut was_traits_usage_code = FxHashMap::default();
         mem::swap(&mut was_traits_usage_code, &mut self.traits_usage_code);
@@ -162,8 +163,7 @@ fn ftype_merge(our: &mut ForeignTypeS, extrn_ft: ForeignTypeS) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::typemap::find_conversation_path;
-    use proc_macro2::Span;
+    use crate::{error::invalid_src_id_span, typemap::find_conversation_path};
     use rustc_hash::FxHashSet;
     use syn::{parse_quote, Type};
 
@@ -172,7 +172,7 @@ mod tests {
         let mut types_map = TypeMap::default();
         types_map
             .merge(
-                "base",
+                SourceId::none(),
                 r#"
 mod swig_foreign_types_map {
     #![swig_foreigner_type="boolean"]
@@ -186,7 +186,7 @@ mod swig_foreign_types_map {
             .unwrap();
         types_map
             .merge(
-                "test_merge",
+                SourceId::none(),
                 r#"
 mod swig_foreign_types_map {
     #![swig_foreigner_type="boolean"]
@@ -249,13 +249,13 @@ fn helper3() {
                 set
             }
         );
-        let ty_i32 = types_map.find_or_alloc_rust_type(&parse_type! { i32 });
+        let ty_i32 = types_map.find_or_alloc_rust_type(&parse_type! { i32 }, SourceId::none());
         assert_eq!(
             types_map
                 .map_through_conversation_to_foreign(
                     &ty_i32,
                     petgraph::Direction::Outgoing,
-                    Span::call_site(),
+                    invalid_src_id_span(),
                     |_, fc| fc.constructor_ret_type.clone(),
                 )
                 .unwrap()
@@ -275,14 +275,14 @@ fn helper3() {
         let from = types_map.rust_names_map["jboolean"];
         let to = types_map.rust_names_map["bool"];
         assert_eq!(
-            find_conversation_path(&types_map.conv_graph, from, to, Span::call_site()).unwrap(),
+            find_conversation_path(&types_map.conv_graph, from, to, invalid_src_id_span()).unwrap(),
             vec![types_map.conv_graph.find_edge(from, to).unwrap()]
         );
 
         let from = types_map.rust_names_map["bool"];
         let to = types_map.rust_names_map["jboolean"];
         assert_eq!(
-            find_conversation_path(&types_map.conv_graph, from, to, Span::call_site()).unwrap(),
+            find_conversation_path(&types_map.conv_graph, from, to, invalid_src_id_span()).unwrap(),
             vec![types_map.conv_graph.find_edge(from, to).unwrap()]
         );
         assert_eq!(
