@@ -43,7 +43,7 @@ pub(crate) fn foreign_from_rust_convert_method_output(
         &f_output.correspoding_rust_type,
         var_name,
         func_ret_type,
-        context_span,
+        (src_id, context_span),
     )
 }
 
@@ -80,7 +80,7 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
             &to,
             &arg_name,
             func_ret_type,
-            to_type.span(),
+            (src_id, to_type.span()),
         )?;
         code_deps.append(&mut cur_deps);
         ret_code.push_str(&cur_code);
@@ -157,7 +157,7 @@ pub(crate) fn rust_to_foreign_convert_method_inputs<
             &to_f.as_ref().correspoding_rust_type,
             &arg_name,
             func_ret_type,
-            from_ty.span(),
+            (src_id, from_ty.span()),
         )?;
         code_deps.append(&mut cur_deps);
         ret_code.push_str(&cur_code);

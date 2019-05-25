@@ -163,8 +163,7 @@ fn ftype_merge(our: &mut ForeignTypeS, extrn_ft: ForeignTypeS) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::typemap::find_conversation_path;
-    use proc_macro2::Span;
+    use crate::{error::invalid_src_id_span, typemap::find_conversation_path};
     use rustc_hash::FxHashSet;
     use syn::{parse_quote, Type};
 
@@ -256,7 +255,7 @@ fn helper3() {
                 .map_through_conversation_to_foreign(
                     &ty_i32,
                     petgraph::Direction::Outgoing,
-                    Span::call_site(),
+                    invalid_src_id_span(),
                     |_, fc| fc.constructor_ret_type.clone(),
                 )
                 .unwrap()
@@ -276,14 +275,14 @@ fn helper3() {
         let from = types_map.rust_names_map["jboolean"];
         let to = types_map.rust_names_map["bool"];
         assert_eq!(
-            find_conversation_path(&types_map.conv_graph, from, to, Span::call_site()).unwrap(),
+            find_conversation_path(&types_map.conv_graph, from, to, invalid_src_id_span()).unwrap(),
             vec![types_map.conv_graph.find_edge(from, to).unwrap()]
         );
 
         let from = types_map.rust_names_map["bool"];
         let to = types_map.rust_names_map["jboolean"];
         assert_eq!(
-            find_conversation_path(&types_map.conv_graph, from, to, Span::call_site()).unwrap(),
+            find_conversation_path(&types_map.conv_graph, from, to, invalid_src_id_span()).unwrap(),
             vec![types_map.conv_graph.find_edge(from, to).unwrap()]
         );
         assert_eq!(

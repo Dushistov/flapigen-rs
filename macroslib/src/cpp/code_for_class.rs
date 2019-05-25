@@ -830,8 +830,13 @@ fn generate_method(
     let from_ty = conv_map.find_or_alloc_rust_type(&from_ty, class.src_id);
     let to_ty = conv_map.find_or_alloc_rust_type(&to_ty, class.src_id);
 
-    let (mut deps_this, convert_this) =
-        conv_map.convert_rust_types(&from_ty, &to_ty, "this", &c_ret_type, mc.method.span())?;
+    let (mut deps_this, convert_this) = conv_map.convert_rust_types(
+        &from_ty,
+        &to_ty,
+        "this",
+        &c_ret_type,
+        (mc.class.src_id, mc.method.span()),
+    )?;
     let code = format!(
         r#"
 #[allow(non_snake_case, unused_variables, unused_mut)]
@@ -894,7 +899,7 @@ fn generate_constructor(
         &this_type,
         "this",
         &ret_type_name,
-        mc.method.span(),
+        (mc.class.src_id, mc.method.span()),
     )?;
 
     let code = format!(

@@ -327,7 +327,7 @@ fn find_suitable_ftypes_for_interace_methods(
                 .map_through_conversation_to_foreign(
                     &arg_rust_ty,
                     Direction::Outgoing,
-                    fn_arg_type(arg).span(),
+                    (interace.src_id, fn_arg_type(arg).span()),
                     calc_this_type_for_method,
                 )
                 .ok_or_else(|| {
@@ -387,7 +387,7 @@ fn find_suitable_foreign_types_for_methods(
                 .map_through_conversation_to_foreign(
                     &arg_rust_ty,
                     Direction::Incoming,
-                    fn_arg_type(arg).span(),
+                    (class.src_id, fn_arg_type(arg).span()),
                     calc_this_type_for_method,
                 )
                 .ok_or_else(|| {
@@ -429,7 +429,7 @@ fn find_suitable_foreign_types_for_methods(
                         .map_through_conversation_to_foreign(
                             &ret_rust_ty,
                             Direction::Outgoing,
-                            rt.span(),
+                            (class.src_id, rt.span()),
                             calc_this_type_for_method,
                         )
                         .ok_or_else(|| {

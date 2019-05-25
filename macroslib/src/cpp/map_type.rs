@@ -349,13 +349,12 @@ fn map_ordinal_result_type(
         .map_through_conversation_to_foreign_ext(
             arg_ty,
             Direction::Outgoing,
-            arg_ty_span.1,
+            arg_ty_span,
             calc_this_type_for_method,
         )
         .ok_or_else(|| {
-            DiagnosticError::new(
-                arg_ty_span.0,
-                arg_ty_span.1,
+            DiagnosticError::new2(
+                arg_ty_span,
                 format!(
                     "Do not know conversation from \
                      such rust type '{}' to foreign",
@@ -375,13 +374,12 @@ fn map_ordinal_input_type(
         .map_through_conversation_to_foreign_ext(
             arg_ty,
             Direction::Incoming,
-            arg_ty_span.1,
+            arg_ty_span,
             calc_this_type_for_method,
         )
         .ok_or_else(|| {
-            DiagnosticError::new(
-                arg_ty_span.0,
-                arg_ty_span.1,
+            DiagnosticError::new2(
+                arg_ty_span,
                 format!(
                     "Do not know conversation from foreign \
                      to such rust type '{}'",

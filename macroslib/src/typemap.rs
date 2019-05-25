@@ -11,11 +11,11 @@ use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     Graph,
 };
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use smol_str::SmolStr;
-use syn::{parse_quote, spanned::Spanned, Ident, Type};
+use syn::{parse_quote, Ident, Type};
 
 use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result, SourceIdSpan},
@@ -529,7 +529,7 @@ impl TypeMap {
         to: &RustType,
         var_name: &str,
         function_ret_type: &str,
-        build_for_sp: Span,
+        build_for_sp: SourceIdSpan,
     ) -> Result<(Vec<TokenStream>, String)> {
         let path = match self.find_path(from, to, build_for_sp) {
             Ok(x) => x,
@@ -565,7 +565,7 @@ impl TypeMap {
         &self,
         from: &RustType,
         to: &RustType,
-        build_for_sp: Span,
+        build_for_sp: SourceIdSpan,
     ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
         debug!("find_path: begin {} -> {}", from, to);
         if from.normalized_name == to.normalized_name {
@@ -578,7 +578,7 @@ impl TypeMap {
         &mut self,
         start_from: &RustType,
         goal_to: &RustType,
-        build_for_sp: Span,
+        build_for_sp: SourceIdSpan,
     ) {
         debug!(
             "build_path_if_possible begin {}\n {} -> {}",
@@ -635,7 +635,7 @@ impl TypeMap {
         &mut self,
         rust_ty: &RustType,
         direction: petgraph::Direction,
-        build_for_sp: Span,
+        build_for_sp: SourceIdSpan,
         calc_this_type_for_method: F,
     ) -> Option<ForeignTypeInfo> {
         self.map_through_conversation_to_foreign_ext(
@@ -654,7 +654,7 @@ impl TypeMap {
         &mut self,
         rust_ty: &RustType,
         direction: petgraph::Direction,
-        build_for_sp: Span,
+        build_for_sp: SourceIdSpan,
         calc_this_type_for_method: F,
     ) -> Option<ForeignType> {
         debug!("map foreign: {} {:?}", rust_ty, direction);
@@ -677,7 +677,7 @@ impl TypeMap {
                 &self.conv_graph,
                 from,
                 to,
-                Span::call_site(),
+                invalid_src_id_span(),
             ) {
                 Ok(x) => Some(x),
                 Err(_) => None,
@@ -1072,7 +1072,7 @@ fn find_conversation_path(
     conv_graph: &TypesConvGraph,
     from: RustTypeIdx,
     to: RustTypeIdx,
-    build_for_sp: Span,
+    build_for_sp: SourceIdSpan,
 ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
     trace!(
         "find_conversation_path: begin {} -> {}",
@@ -1102,7 +1102,7 @@ fn find_conversation_path(
             format!("Can not find conversation from type '{}'", conv_graph[from]),
         );
         err.span_note(
-            conv_graph[to].ty.span(),
+            conv_graph[to].src_id_span(),
             format!("to type '{}'", conv_graph[to]),
         );
         err.span_note(build_for_sp, "In this context");
@@ -1127,7 +1127,7 @@ fn merge_path_to_conv_map(path: PossiblePath, conv_map: &mut TypeMap) {
 fn try_build_path(
     start_from: &RustType,
     goal_to: &RustType,
-    build_for_sp: Span,
+    build_for_sp: SourceIdSpan,
     conv_graph: &mut TypesConvGraph,
     rust_names_map: &RustTypeNameToGraphIdx,
     generic_edges: &[GenericTypeConv],
@@ -1240,6 +1240,7 @@ fn try_build_path(
 mod tests {
     use super::*;
     use crate::{source_registry::SourceRegistry, SourceCode};
+    use proc_macro2::Span;
 
     #[test]
     fn test_try_build_path() {
@@ -1285,7 +1286,7 @@ mod tests {
                     &foo_ref_ty,
                     "a0",
                     "jlong",
-                    Span::call_site()
+                    invalid_src_id_span(),
                 )
                 .expect("path from &mut Rc<RefCell<Foo>> to &mut Foo NOT exists")
                 .1,
@@ -1305,7 +1306,7 @@ mod tests {
                     &foo_ref_ty,
                     "a0",
                     "jlong",
-                    Span::call_site()
+                    invalid_src_id_span(),
                 )
                 .expect("path from &RefCell<Foo> to &Foo NOT exists")
                 .1
@@ -1320,7 +1321,7 @@ mod tests {
                 .map_through_conversation_to_foreign(
                     &vec_foo_ty,
                     petgraph::Direction::Outgoing,
-                    Span::call_site(),
+                    invalid_src_id_span(),
                     |_, fc| fc.constructor_ret_type.clone(),
                 )
                 .unwrap()
@@ -1330,7 +1331,7 @@ mod tests {
         assert!(try_build_path(
             &types_map.find_or_alloc_rust_type(&parse_type! { Vec<i32> }, SourceId::none()),
             &types_map.find_or_alloc_rust_type(&parse_type! { jlong }, SourceId::none()),
-            Span::call_site(),
+            invalid_src_id_span(),
             &mut types_map.conv_graph,
             &mut types_map.rust_names_map,
             &types_map.generic_edges,

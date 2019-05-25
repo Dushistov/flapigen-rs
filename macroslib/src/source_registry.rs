@@ -27,16 +27,12 @@ impl SourceRegistry {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct SourceId(Option<usize>);
 
 impl SourceId {
     #[inline]
     pub(crate) const fn none() -> SourceId {
         SourceId(None)
-    }
-    #[inline]
-    pub(crate) fn is_none(&self) -> bool {
-        self.0.is_none()
     }
 }

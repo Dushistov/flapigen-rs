@@ -186,7 +186,7 @@ impl ForeignTypesStorage {
                 self.ftypes[ft.0].name.span,
                 format!("Type {} already defined here", tn),
             );
-            err.span_note(tn.span.1, format!("second mention of type {}", tn));
+            err.span_note(tn.span, format!("second mention of type {}", tn));
             return Err(err);
         }
 

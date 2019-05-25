@@ -856,7 +856,7 @@ impl {trait_name} for {struct_with_funcs} {{
                     &real_output_type,
                     "ret",
                     &real_output_type.normalized_name.as_str(),
-                    ret_ty.span(),
+                    (interface.src_id, ret_ty.span()),
                 )?;
                 gen_items.append(&mut conv_deps);
                 (real_output_type.normalized_name.to_string(), conv_code)
@@ -926,7 +926,7 @@ fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> 
     tmap.map_through_conversation_to_foreign_ext(
         &rtype,
         Direction::Outgoing,
-        rtype.ty.span(),
+        rtype.src_id_span(),
         self::map_type::calc_this_type_for_method,
     )
     .ok_or_else(|| {
