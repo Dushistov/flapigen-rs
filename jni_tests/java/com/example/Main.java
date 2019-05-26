@@ -23,6 +23,8 @@ import com.example.rust.MyObserver;
 import com.example.rust.TestOptional;
 import com.example.rust.CircularDepsA;
 import com.example.rust.CircularDepsB;
+import com.example.rust.EffectBuilder;
+import com.example.rust.Gamepad;
 
 class Main {
     private static void testDoubleOverload() {
@@ -149,6 +151,7 @@ class Main {
             testReturnOfEnum();
             testOptional();
             testCircularDeps();
+	    testBuilderPattern();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -392,5 +395,15 @@ class Main {
         assert s.equals("This is A17");
         String s2 = b.b(a);
         assert s2.equals("17This is A");
+    }
+
+    private static void testBuilderPattern() {
+	EffectBuilder builder = new EffectBuilder();
+	builder.add_gamepad(new Gamepad("Builder"))
+	    .add_gamepad(new Gamepad("Pattern"));
+	String[] l = builder.tag();
+	assert l.length == 2;
+	assert l[0].equals("Builder");
+	assert l[1].equals("Pattern");
     }
 }

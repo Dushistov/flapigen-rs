@@ -849,6 +849,22 @@ TEST(TestCopy, smokeTest)
     EXPECT_EQ(std::string("Chuvava"), tst3.get().to_std_string());
 }
 
+TEST(RustString, Copy)
+{
+    Foo foo(1, "AAAA");
+    auto s = foo.ret_string();
+    ASSERT_EQ("AAAA", s.to_std_string());
+    RustString s2(s);
+    ASSERT_EQ("AAAA", s.to_std_string());
+    ASSERT_EQ("AAAA", s2.to_std_string());
+    RustString s3;
+    s3 = s2;
+    s3 = s;
+    ASSERT_EQ("AAAA", s.to_std_string());
+    ASSERT_EQ("AAAA", s2.to_std_string());
+    ASSERT_EQ("AAAA", s3.to_std_string());
+}
+
 int main(int argc, char *argv[])
 {
     ::testing::InitGoogleTest(&argc, argv);

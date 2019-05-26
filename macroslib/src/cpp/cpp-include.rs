@@ -589,6 +589,15 @@ pub extern "C" fn crust_string_free(x: CRustString) {
     drop(s);
 }
 
+#[allow(private_no_mangle_fns)]
+#[no_mangle]
+pub extern "C" fn crust_string_clone(x: CRustString) -> CRustString {
+    let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
+    let ret = CRustString::from_string(s.clone());
+    ::std::mem::forget(s);
+    ret
+}
+
 #[allow(dead_code)]
 impl CRustString {
     pub fn from_string(s: String) -> CRustString {
