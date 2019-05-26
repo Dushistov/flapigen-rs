@@ -791,3 +791,54 @@ foreigner_class!(class CircularDepsB {
     constructor CircularDepsB::new(_: f64) -> CircularDepsB;
     method CircularDepsB::b(&self, a: &CircularDepsA) -> String;
 });
+
+struct Gamepad(String);
+impl Gamepad {
+    fn new(s: &str) -> Self {
+        Gamepad(s.into())
+    }
+}
+
+foreigner_class!(class Gamepad {
+    self_type Gamepad;
+    constructor Gamepad::new(s: &str) -> Gamepad;
+});
+
+#[derive(Default)]
+struct EffectBuilder {
+    tag: Vec<String>,
+}
+
+impl EffectBuilder {
+    fn tag(&self) -> Vec<String> {
+        self.tag.clone()
+    }
+    fn add_gamepad(&mut self, gamepad: Gamepad) -> &mut EffectBuilder {
+        self.tag.push(gamepad.0);
+        self
+    }
+}
+
+struct EffectBuilderWrapper(Rc<RefCell<EffectBuilder>>);
+
+impl EffectBuilderWrapper {
+    fn new() -> Self {
+        EffectBuilderWrapper(Rc::new(RefCell::new(EffectBuilder::default())))
+    }
+    fn add_gamepad(&self, gamepad: Gamepad) -> EffectBuilderWrapper {
+        self.0.borrow_mut().add_gamepad(gamepad);
+        EffectBuilderWrapper(self.0.clone())
+    }
+    fn tag(&self) -> Vec<String> {
+        self.0.borrow().tag()
+    }
+}
+
+foreigner_class!(
+    class EffectBuilder {
+        self_type EffectBuilderWrapper;
+        constructor EffectBuilderWrapper::new() -> EffectBuilderWrapper;
+        method EffectBuilderWrapper::add_gamepad(&self, gamepad: Gamepad) -> EffectBuilderWrapper;
+        method EffectBuilderWrapper::tag(&self) -> Vec<String>;
+    }
+);
