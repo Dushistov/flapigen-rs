@@ -1,6 +1,7 @@
 pub mod ast;
 mod merge;
 mod parse;
+mod parse_typemap_macro;
 pub mod ty;
 pub mod utils;
 

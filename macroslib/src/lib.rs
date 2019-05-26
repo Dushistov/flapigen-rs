@@ -6,6 +6,8 @@
 //! More details can be found at
 //! [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
 
+#![recursion_limit = "128"]
+
 macro_rules! parse_type {
     ($($tt:tt)*) => {{
         let ty: Type = parse_quote! { $($tt)* };

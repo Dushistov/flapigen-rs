@@ -145,11 +145,21 @@ pub(crate) struct FTypeConvCode {
     code: String,
 }
 
+impl PartialEq for FTypeConvCode {
+    fn eq(&self, o: &Self) -> bool {
+        self.code == o.code
+    }
+}
+
 impl FTypeConvCode {
     /// # Panics
     pub(crate) fn new<S: Into<String>>(code: S, span: Span) -> FTypeConvCode {
         let code: String = code.into();
-        assert!(code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE));
+        assert!(
+            code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE),
+            "code: '{}'",
+            code
+        );
         FTypeConvCode { code, span }
     }
 }
