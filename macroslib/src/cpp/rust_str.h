@@ -34,6 +34,7 @@ struct CRustString {
 };
 
 void crust_string_free(struct CRustString str);
+struct CRustString crust_string_clone(struct CRustString str);
 #ifdef __cplusplus
 }
 #endif
@@ -51,9 +52,22 @@ public:
         len = o.len;
         capacity = o.capacity;
     }
-    RustString() = delete;
-    RustString(const RustString &) = delete;
-    RustString &operator=(const RustString &) = delete;
+    RustString() noexcept { reset(*this); }
+    RustString(const RustString &o) noexcept
+        : RustString(crust_string_clone(o))
+    {
+    }
+    RustString &operator=(const RustString &o) noexcept
+    {
+        if (this != &o) {
+            free_mem();
+            auto copy = crust_string_clone(o);
+            data = copy.data;
+            len = copy.len;
+            capacity = copy.capacity;
+        }
+        return *this;
+    }
     RustString(RustString &&o) noexcept
     {
         data = o.data;
