@@ -597,12 +597,6 @@ impl CRustString {
     }
 }
 
-impl SwigFrom<String> for CRustString {
-    fn swig_from(s: String) -> CRustString {
-        CRustString::from_string(s)
-    }
-}
-
 #[swig_to_foreigner_hint = "T"]
 impl<T: SwigForeignClass> SwigFrom<Option<T>> for *mut ::std::os::raw::c_void {
     fn swig_from(x: Option<T>) -> Self {
@@ -1296,7 +1290,14 @@ foreign_typemap!(
     };
     ($pin:f_type) => "bool" "($pin != 0)";
     ($pin:r_type) bool <= ::std::os::raw::c_char {
-        $out = ($pin != 0)
+        $out = $pin != 0
     };
     ($pin:f_type) <= "bool" "$pin ? 1 : 0";
+);
+
+foreign_typemap!(
+    ($pin:r_type) String => CRustString {
+        $out = CRustString::from_string($pin)
+    };
+    ($pin:f_type) => "RustString" "RustString{$pin}";
 );

@@ -1,11 +1,11 @@
 r#"pub extern "C" fn Foo_f1 ( this : * mut Foo , a_0 : :: std :: os :: raw :: c_char , ) -> :: std :: os :: raw :: c_char {
- let a_0 : bool = ( a_0 != 0 ) ;
+ let a_0 : bool = a_0 != 0 ;
  let this : & mut Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : bool = f1 ( this , a_0 ) ;
  let ret : :: std :: os :: raw :: c_char = if ret { 1 } else { 0 } ;
  ret }"#;
 r#"pub extern "C" fn Foo_new ( a_0 : :: std :: os :: raw :: c_char , ) -> * const :: std :: os :: raw :: c_void {
- let a_0 : bool = ( a_0 != 0 ) ;
+ let a_0 : bool = a_0 != 0 ;
  let this : Foo = Foo :: new ( a_0 ) ;
  let this : Box < Foo > = Box :: new ( this ) ;
  let this : * mut Foo = Box :: into_raw ( this ) ;
@@ -13,7 +13,7 @@ r#"pub extern "C" fn Foo_new ( a_0 : :: std :: os :: raw :: c_char , ) -> * cons
  }"#;
 r#"# [ no_mangle ]
  pub extern "C" fn Foo_f2 ( a_0 : :: std :: os :: raw :: c_char , ) -> :: std :: os :: raw :: c_char {
- let a_0 : bool = ( a_0 != 0 ) ;
+ let a_0 : bool = a_0 != 0 ;
  let mut ret : bool = f2 ( a_0 ) ;
  let ret : :: std :: os :: raw :: c_char = if ret { 1 } else { 0 } ;
  ret }"#;

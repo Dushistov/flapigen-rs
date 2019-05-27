@@ -194,7 +194,7 @@ impl TypeMap {
             ));
         }
 
-        let ftype = match (ft_into_from_rust, ft_from_into_rust) {
+        match (ft_into_from_rust, ft_from_into_rust) {
             (Some((ft1, into_from_rust)), Some((ft2, from_into_rust))) => {
                 if ft1 != ft2 {
                     return Err(DiagnosticError::new(
@@ -220,7 +220,7 @@ impl TypeMap {
                 self.ftypes_storage[ftype_idx].from_into_rust = Some(from_into_rust);
             }
             (None, None) => {}
-        };
+        }
 
         Ok(())
     }

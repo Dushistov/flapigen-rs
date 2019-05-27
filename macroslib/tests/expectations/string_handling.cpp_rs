@@ -1,1 +1,8 @@
-"a_2 : String = a_2 . swig_into ( ) ;";
+r#"# [ no_mangle ] pub extern "C" fn Foo_f ( this : * mut Foo , a_0 : i32 , a_1 : i32 , a_2 : * const :: std :: os :: raw :: c_char , ) -> CRustString {
+ let mut a_2 : & :: std :: ffi :: CStr = a_2 . swig_into ( ) ;
+ let mut a_2 : & str = a_2 . swig_deref ( ) ;
+ let mut a_2 : String = a_2 . swig_into ( ) ;
+ let this : & Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : String = Foo :: f ( this , a_0 , a_1 , a_2 ) ;
+ let ret : CRustString = CRustString :: from_string ( ret ) ;
+ ret }"#;

@@ -42,19 +42,6 @@ fn special_type(
         return Ok(Some(converter));
     }
 
-    if arg_ty.normalized_name == "String" && direction == Direction::Outgoing {
-        let fti = conv_map
-            .find_foreign_type_info_by_name("struct CRustString")
-            .expect("expect to find `struct CRustString`  in type map");
-        return Ok(Some(CppForeignTypeInfo {
-            base: fti,
-            cpp_converter: Some(CppConverter {
-                typename: "RustString".into(),
-                converter: format!("RustString{{{from_var}}}", from_var = FROM_VAR_TEMPLATE),
-            }),
-        }));
-    }
-
     if let syn::Type::Reference(syn::TypeReference {
         elem: ref ret_ty,
         mutability: None,
@@ -1164,15 +1151,9 @@ fn handle_option_type_in_return(
     if let Type::Path(syn::TypePath { ref path, .. }) = opt_ty {
         if path.segments.len() == 1 && path.segments[0].ident == "String" {
             trace!("Catch return of Option<String>");
-            let cpp_info_ty = special_type(
-                conv_map,
-                cpp_cfg,
-                &opt_rust_ty,
-                Direction::Outgoing,
-                (arg_ty_span.0, opt_ty.span()),
-            )?;
+            let cpp_info_ty =
+                map_ordinal_result_type(conv_map, &opt_rust_ty, (arg_ty_span.0, opt_ty.span()))?;
             let cpp_typename = cpp_info_ty
-                .expect("We should know how convert String as output type")
                 .cpp_converter
                 .expect("C++ converter from C struct")
                 .typename;

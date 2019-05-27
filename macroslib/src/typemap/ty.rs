@@ -51,9 +51,6 @@ impl RustTypeS {
         self.normalized_name = other.normalized_name.clone();
         self.implements.insert_set(&other.implements);
     }
-    pub(crate) fn as_idx(&self) -> RustTypeIdx {
-        self.graph_idx
-    }
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
         (self.src_id, self.ty.span())
     }
