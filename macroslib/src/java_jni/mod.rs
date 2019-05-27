@@ -35,9 +35,13 @@ enum NullAnnotation {
 
 struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,
-    pub java_transition_type: Option<SmolStr>,
-    java_converter: String,
+    pub java_converter: Option<JavaConverter>,
     annotation: Option<NullAnnotation>,
+}
+
+struct JavaConverter {
+    java_transition_type: SmolStr,
+    converter: String,
 }
 
 impl AsRef<ForeignTypeInfo> for JavaForeignTypeInfo {
@@ -47,15 +51,14 @@ impl AsRef<ForeignTypeInfo> for JavaForeignTypeInfo {
 }
 
 impl JavaForeignTypeInfo {
-    fn java_need_conversation(&self) -> bool {
-        !self.java_converter.is_empty()
-    }
-    fn java_convert<NameArg: Fn() -> (String, String)>(&self, name_arg: NameArg) -> Option<String> {
-        if !self.java_converter.is_empty() {
+    fn java_convert<NameArg>(&self, name_arg: NameArg) -> Option<String>
+    where
+        NameArg: Fn() -> (String, String),
+    {
+        if let Some(code) = self.java_converter.as_ref().map(|x| &x.converter) {
             let (from_name, to_name) = name_arg();
             Some(
-                self.java_converter
-                    .replace(TO_VAR_TEMPLATE, &to_name)
+                code.replace(TO_VAR_TEMPLATE, &to_name)
                     .replace(FROM_VAR_TEMPLATE, &from_name),
             )
         } else {
@@ -71,8 +74,7 @@ impl From<ForeignTypeInfo> for JavaForeignTypeInfo {
                 name: x.name,
                 correspoding_rust_type: x.correspoding_rust_type,
             },
-            java_transition_type: None,
-            java_converter: String::new(),
+            java_converter: None,
             annotation: None,
         }
     }
@@ -300,7 +302,7 @@ impl LanguageGenerator for JavaConfig {
 }
 
 fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -> String {
-    let need_conv = f_method.input.iter().any(|v| v.java_need_conversation());
+    let need_conv = f_method.input.iter().any(|v| v.java_converter.is_some());
     match method.variant {
         MethodVariant::StaticMethod if !need_conv => method.short_name().as_str().to_string(),
         MethodVariant::Method(_) | MethodVariant::StaticMethod => {

@@ -552,11 +552,12 @@ fn generate_jni_func_name(
     if overloaded {
         output.push_str("__");
         for arg in &f_method.input {
-            let type_name = if arg.java_need_conversation() {
-                arg.java_transition_type.as_ref().unwrap()
-            } else {
-                arg.as_ref().name.as_str()
-            };
+            let type_name = arg
+                .java_converter
+                .as_ref()
+                .map(|x| x.java_transition_type.as_str())
+                .unwrap_or_else(|| arg.as_ref().name.as_str());
+
             let type_name = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
                 .get(type_name)
                 .ok_or_else(|| {

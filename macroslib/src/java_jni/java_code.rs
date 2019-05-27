@@ -398,11 +398,11 @@ fn args_with_java_types(
     let external = flags.contains(ArgsFormatFlags::EXTERNAL);
 
     for (i, arg) in method.input.iter().enumerate() {
-        let type_name = if flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_need_conversation()
-        {
-            arg.java_transition_type.as_ref().unwrap()
-        } else {
-            arg.as_ref().name.as_str()
+        let type_name = match arg.java_converter.as_ref() {
+            Some(converter) if flags.contains(ArgsFormatFlags::INTERNAL) => {
+                &converter.java_transition_type
+            }
+            _ => arg.as_ref().name.as_str(),
         };
         let annotation = match arg.annotation {
             Some(NullAnnotation::NonNull) if external && use_null_annotation => "@NonNull ",
@@ -437,7 +437,7 @@ fn list_of_args_for_call_method(
     }
 
     for (i, arg) in f_method.input.iter().enumerate() {
-        let need_conv = flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_need_conversation();
+        let need_conv = flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_converter.is_some();
         if i == (f_method.input.len() - 1) {
             if need_conv {
                 write!(&mut res, "a{}C0", i)

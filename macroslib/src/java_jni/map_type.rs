@@ -4,7 +4,7 @@ use syn::{parse_quote, Type};
 
 use crate::{
     error::{DiagnosticError, Result, SourceIdSpan},
-    java_jni::{calc_this_type_for_method, JavaForeignTypeInfo, NullAnnotation},
+    java_jni::{calc_this_type_for_method, JavaConverter, JavaForeignTypeInfo, NullAnnotation},
     source_registry::SourceId,
     typemap::{
         ast::{if_option_return_some_type, normalize_ty_lifetimes},
@@ -107,12 +107,14 @@ pub(in crate::java_jni) fn special_type(
                 name: foreign_class.name.to_string().into(),
                 correspoding_rust_type: jlong_ti,
             },
-            java_transition_type: Some("long".into()),
-            java_converter: format!(
-                "        long {to_var} = {from_var}.mNativeObj;",
-                to_var = TO_VAR_TEMPLATE,
-                from_var = FROM_VAR_TEMPLATE
-            ),
+            java_converter: Some(JavaConverter {
+                converter: format!(
+                    "        long {to_var} = {from_var}.mNativeObj;",
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE
+                ),
+                java_transition_type: "long".into(),
+            }),
             annotation: Some(NullAnnotation::NonNull),
         };
         return Ok(Some(converter));
@@ -134,7 +136,7 @@ fn calc_converter_for_foreign_class_arg(
     let this_ty = calc_this_type_for_method(conv_map, foreigner_class).unwrap();
     let this_ty = conv_map.ty_to_rust_type(&this_ty);
 
-    let java_converter = if this_ty.normalized_name == arg_ty.normalized_name {
+    let converter = if this_ty.normalized_name == arg_ty.normalized_name {
         format!(
             r#"
         long {to_var} = {from_var}.mNativeObj;
@@ -161,8 +163,10 @@ fn calc_converter_for_foreign_class_arg(
             name: foreigner_class.name.to_string().into(),
             correspoding_rust_type: jlong_ti,
         },
-        java_transition_type: Some("long".into()),
-        java_converter,
+        java_converter: Some(JavaConverter {
+            java_transition_type: "long".into(),
+            converter,
+        }),
         annotation: Some(NullAnnotation::NonNull),
     }
 }
@@ -172,7 +176,7 @@ fn calc_converter_for_enum(
     foreign_enum: &ForeignEnumInfo,
 ) -> JavaForeignTypeInfo {
     let jint_ti = conv_map.ty_to_rust_type(&parse_type! { jint });
-    let java_converter: String = format!(
+    let converter = format!(
         r#"
         int {to_var} = {from_var}.getValue();
 "#,
@@ -184,8 +188,10 @@ fn calc_converter_for_enum(
             name: foreign_enum.name.to_string().into(),
             correspoding_rust_type: jint_ti,
         },
-        java_transition_type: Some("int".into()),
-        java_converter,
+        java_converter: Some(JavaConverter {
+            java_transition_type: "int".into(),
+            converter,
+        }),
         annotation: Some(NullAnnotation::NonNull),
     }
 }
@@ -205,18 +211,20 @@ fn handle_option_type_in_input(
                 name: fclass.name.to_string().into(),
                 correspoding_rust_type: jlong_ti,
             },
-            java_transition_type: Some("long".into()),
-            java_converter: format!(
-                r#"
+            java_converter: Some(JavaConverter {
+                converter: format!(
+                    r#"
         long {to_var} = 0;//TODO: use ptr::null() for corresponding constant
         if ({from_var} != null) {{
             {to_var} = {from_var}.mNativeObj;
             {from_var}.mNativeObj = 0;
         }}
 "#,
-                to_var = TO_VAR_TEMPLATE,
-                from_var = FROM_VAR_TEMPLATE
-            ),
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE
+                ),
+                java_transition_type: "long".into(),
+            }),
             annotation: Some(NullAnnotation::Nullable),
         }))
     } else {
