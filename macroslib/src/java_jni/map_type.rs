@@ -1,4 +1,5 @@
 use log::trace;
+use petgraph::Direction;
 use syn::{parse_quote, Type};
 
 use crate::{
@@ -13,6 +14,50 @@ use crate::{
     types::{ForeignEnumInfo, ForeignerClassInfo},
     TypeMap,
 };
+
+pub(in crate::java_jni) fn map_type(
+    conv_map: &mut TypeMap,
+    arg_ty: &RustType,
+    direction: Direction,
+    arg_ty_span: SourceIdSpan,
+) -> Result<JavaForeignTypeInfo> {
+    if direction == Direction::Incoming {
+        if let Some(fti) = special_type(conv_map, &arg_ty, arg_ty_span)? {
+            return Ok(fti);
+        }
+    }
+
+    let fti = conv_map
+        .map_through_conversation_to_foreign(
+            &arg_ty,
+            direction,
+            arg_ty_span,
+            calc_this_type_for_method,
+        )
+        .ok_or_else(|| {
+            DiagnosticError::new2(
+                arg_ty_span,
+                format!(
+                    "can not find conversation Java type {} \
+                     such Rust type '{}'",
+                    match direction {
+                        Direction::Outgoing => "=>",
+                        Direction::Incoming => "<=",
+                    },
+                    arg_ty,
+                ),
+            )
+        })?;
+    let mut fti: JavaForeignTypeInfo = fti.into();
+    if !is_primitive_type(&fti.base.name) {
+        fti.annotation = Some(if if_option_return_some_type(arg_ty).is_none() {
+            NullAnnotation::NonNull
+        } else {
+            NullAnnotation::Nullable
+        });
+    }
+    Ok(fti)
+}
 
 pub(in crate::java_jni) fn special_type(
     conv_map: &mut TypeMap,
@@ -176,5 +221,12 @@ fn handle_option_type_in_input(
         }))
     } else {
         Ok(None)
+    }
+}
+
+fn is_primitive_type(type_name: &str) -> bool {
+    match type_name {
+        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => true,
+        _ => false,
     }
 }

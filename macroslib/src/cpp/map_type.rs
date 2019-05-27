@@ -344,7 +344,7 @@ fn map_ordinal_result_type(
                 arg_ty_span,
                 format!(
                     "Do not know conversation from \
-                     such rust type '{}' to foreign",
+                     such rust type '{}' to C++ type",
                     arg_ty
                 ),
             )
@@ -368,7 +368,7 @@ fn map_ordinal_input_type(
             DiagnosticError::new2(
                 arg_ty_span,
                 format!(
-                    "Do not know conversation from foreign \
+                    "Do not know conversation from C++ type \
                      to such rust type '{}'",
                     arg_ty
                 ),

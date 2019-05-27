@@ -2,6 +2,6 @@
 r#"public interface SomeObserver {
 
 
-    void onStateChanged(String a0);
+    void onStateChanged(@NonNull String a0);
 
 }"#;
