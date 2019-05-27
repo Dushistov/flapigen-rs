@@ -36,6 +36,10 @@ impl DiagnosticError {
     pub fn span_note<T: Display>(&mut self, sp: SourceIdSpan, err: T) {
         self.data.push((sp.0, syn::Error::new(sp.1, err)));
     }
+    pub fn add_span_note<T: Display>(mut self, sp: SourceIdSpan, err: T) -> Self {
+        self.span_note(sp, err);
+        self
+    }
     pub fn new_without_src_info<T: Display>(err: T) -> Self {
         DiagnosticError {
             data: vec![(SourceId::none(), syn::Error::new(Span::call_site(), err))],

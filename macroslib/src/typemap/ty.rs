@@ -162,11 +162,27 @@ impl FTypeConvCode {
         );
         FTypeConvCode { code, span }
     }
+    /// # Panics
+    pub(crate) fn new2<S: Into<String>>(code: S, span: Span) -> FTypeConvCode {
+        let code: String = code.into();
+        assert!(
+            code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE),
+            "code: '{}'",
+            code
+        );
+        FTypeConvCode { code, span }
+    }
 }
 
 impl ToString for FTypeConvCode {
     fn to_string(&self) -> String {
         self.code.clone()
+    }
+}
+
+impl From<FTypeConvCode> for String {
+    fn from(x: FTypeConvCode) -> Self {
+        x.code
     }
 }
 

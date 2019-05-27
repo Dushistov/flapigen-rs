@@ -1,4 +1,4 @@
-use crate::typemap::{ty::FTypeConvCode, FROM_VAR_TEMPLATE};
+use crate::typemap::{ty::FTypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE};
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use smol_str::SmolStr;
@@ -8,30 +8,61 @@ use syn::{
 
 #[derive(Debug)]
 pub(in crate::typemap) struct TypeMapConvRuleInfo {
-    rtype_left_to_right: Option<RTypeConvRule>,
-    rtype_right_to_left: Option<RTypeConvRule>,
-    ftype_left_to_right: Option<FTypeConvRule>,
-    ftype_right_to_left: Option<FTypeConvRule>,
+    pub rtype_left_to_right: Option<RTypeConvRule>,
+    pub rtype_right_to_left: Option<RTypeConvRule>,
+    pub ftype_left_to_right: Option<FTypeConvRule>,
+    pub ftype_right_to_left: Option<FTypeConvRule>,
+}
+
+impl TypeMapConvRuleInfo {
+    pub(in crate::typemap) fn if_simple_rtype_ftype_map(&self) -> Option<(&Type, &FTypeName)> {
+        if self.rtype_right_to_left.is_some() || self.ftype_right_to_left.is_some() {
+            return None;
+        }
+        match (
+            self.rtype_left_to_right.as_ref(),
+            self.ftype_left_to_right.as_ref(),
+        ) {
+            (
+                Some(RTypeConvRule {
+                    left_ty: ref r_ty,
+                    right_ty: None,
+                    code: None,
+                }),
+                Some(FTypeConvRule {
+                    left_right_ty: FTypeLeftRightPair::OnlyLeft(ref f_ty),
+                    code: None,
+                }),
+            ) => Some((r_ty, f_ty)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
-struct RTypeConvRule {
-    left_ty: Type,
-    right_ty: Option<Type>,
-    code: Option<FTypeConvCode>,
+pub(in crate::typemap) struct RTypeConvRule {
+    pub left_ty: Type,
+    pub right_ty: Option<Type>,
+    pub code: Option<FTypeConvCode>,
 }
 
 #[derive(Debug, PartialEq)]
-struct FTypeConvRule {
-    left_ty: Option<FTypeName>,
-    right_ty: Option<FTypeName>,
-    code: Option<FTypeConvCode>,
+pub(in crate::typemap) struct FTypeConvRule {
+    pub left_right_ty: FTypeLeftRightPair,
+    pub code: Option<FTypeConvCode>,
 }
 
-#[derive(Debug)]
-struct FTypeName {
-    name: SmolStr,
-    sp: Span,
+#[derive(Debug, PartialEq)]
+pub(in crate::typemap) enum FTypeLeftRightPair {
+    OnlyLeft(FTypeName),
+    OnlyRight(FTypeName),
+    Both(FTypeName, FTypeName),
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::typemap) struct FTypeName {
+    pub name: SmolStr,
+    pub sp: Span,
 }
 
 impl PartialEq for FTypeName {
@@ -61,6 +92,7 @@ enum RuleType {
     FType(kw::f_type),
 }
 
+#[derive(Debug)]
 enum ConvertRuleType<T> {
     LeftToRight(T),
     RightToLeft(T),
@@ -97,6 +129,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 match rule {
                     RuleType::RType(keyword) => {
                         let left_ty = input.parse::<Type>()?;
+
                         let mut conv_rule_type = None;
                         if input.peek(Token![=>]) {
                             input.parse::<Token![=>]>()?;
@@ -117,12 +150,26 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                             let var_name = var_name.ok_or_else(|| {
                                 syn::Error::new(keyword.span(), "there is conversation code, but name of input variable not defined here")
                             })?;
-                            //because of $var most likely will be reformated to "$ var"
-                            let var_name: TokenStream = parse_quote!($#var_name);
-                            code = Some(FTypeConvCode::new(
-                                conv_body
-                                    .to_string()
-                                    .replace(&var_name.to_string(), FROM_VAR_TEMPLATE),
+                            //because of $var most likely will be reformated to "$ var", so
+                            //without clue how syn formatted token -> string, just convert text to tokens and back
+                            let d_var_name: TokenStream = parse_quote!($#var_name);
+                            let d_var_name = d_var_name.to_string();
+                            let out_var: TokenStream = parse_quote!($out);
+                            let out_var = out_var.to_string();
+                            let mut code_str = conv_body.to_string();
+                            if !code_str.contains(&d_var_name) || !code_str.contains(&out_var) {
+                                return Err(syn::Error::new(
+                                    conv_body.span(),
+                                    format!("no $out or ${} in conversation code", var_name),
+                                ));
+                            }
+                            code_str.push(';');
+
+                            code = Some(FTypeConvCode::new2(
+                                code_str.replace(&d_var_name, FROM_VAR_TEMPLATE).replace(
+                                    &out_var,
+                                    &format!("let {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),
+                                ),
                                 conv_body.span(),
                             ));
                         }
@@ -206,8 +253,11 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                                     ));
                                 }
                                 ftype_left_to_right = Some(FTypeConvRule {
-                                    left_ty,
-                                    right_ty: Some(right_ty),
+                                    left_right_ty: if let Some(left_ty) = left_ty {
+                                        FTypeLeftRightPair::Both(left_ty, right_ty)
+                                    } else {
+                                        FTypeLeftRightPair::OnlyRight(right_ty)
+                                    },
                                     code,
                                 });
                             }
@@ -219,8 +269,11 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                                     ));
                                 }
                                 ftype_right_to_left = Some(FTypeConvRule {
-                                    left_ty,
-                                    right_ty: Some(right_ty),
+                                    left_right_ty: if let Some(left_ty) = left_ty {
+                                        FTypeLeftRightPair::Both(left_ty, right_ty)
+                                    } else {
+                                        FTypeLeftRightPair::OnlyRight(right_ty)
+                                    },
                                     code,
                                 });
                             }
@@ -231,15 +284,14 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                                         "duplicate of f_type left to right rule",
                                     ));
                                 }
-                                if left_ty.is_none() {
-                                    return Err(syn::Error::new(
+                                let left_ty = left_ty.ok_or_else(|| {
+                                    syn::Error::new(
                                         keyword.span(),
                                         "expect type name in this kind of f_type rule",
-                                    ));
-                                }
+                                    )
+                                })?;
                                 ftype_left_to_right = Some(FTypeConvRule {
-                                    left_ty,
-                                    right_ty: None,
+                                    left_right_ty: FTypeLeftRightPair::OnlyLeft(left_ty),
                                     code: None,
                                 });
                             }
@@ -248,8 +300,8 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 }
             } else {
                 let mac: syn::Macro = input.parse()?;
-                input.parse::<Token![;]>()?;
             }
+            input.parse::<Token![;]>()?;
         }
         Ok(TypeMapConvRuleInfo {
             rtype_left_to_right,
@@ -268,25 +320,17 @@ mod tests {
 
     #[test]
     fn test_foreign_typemap_qdatetime() {
-        let _rule = macro_to_conv_rule(parse_quote! {
+        let rule = macro_to_conv_rule(parse_quote! {
             foreign_typemap!(
                 ($pin:r_type) DateTime<Utc> => i64 {
-                    $pin.timestamp()
-                }
+                    $out = $pin.timestamp()
+                };
                 ($pin:f_type) => "QDateTime" r#"
 $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
-        "#
+        "#;
             )
         });
-        /*
-        assert_eq!("QDateTime", rule.f_type.name);
-                assert_eq!(
-                    "i64",
-                    rule.f_type
-                        .correspoding_rust_type
-                        .into_token_stream()
-                        .to_string()
-                );*/
+        assert!(!rule.if_simple_rtype_ftype_map().is_some());
     }
 
     #[test]
@@ -294,22 +338,23 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
         let rule = macro_to_conv_rule(parse_quote! {
             foreign_typemap!(
                 ($pin:r_type) bool => ::std::os::raw::c_char {
-                    if $pin  { 1 } else { 0 }
-                }
-                ($pin:f_type) => "bool" "$out = ($pin != 0);"
+                    $out = if $pin  { 1 } else { 0 }
+                };
+                ($pin:f_type) => "bool" "$out = ($pin != 0);";
                 ($pin:r_type) bool <= ::std::os::raw::c_char {
-                    $pin != 0
-                }
-                ($pin:f_type) <= "bool" "$out = $pin ? 1 : 0"
+                    $out = ($pin != 0)
+                };
+                ($pin:f_type) <= "bool" "$out = $pin ? 1 : 0;";
             )
         });
 
+        assert!(!rule.if_simple_rtype_ftype_map().is_some());
         assert_eq!(
             RTypeConvRule {
                 left_ty: parse_type!(bool),
                 right_ty: Some(parse_type!(::std::os::raw::c_char)),
                 code: Some(FTypeConvCode::new(
-                    "if {from_var} { 1 } else { 0 }",
+                    "let {to_var}: {to_var_type} = if {from_var} { 1 } else { 0 };",
                     Span::call_site()
                 )),
             },
@@ -320,15 +365,17 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
             RTypeConvRule {
                 left_ty: parse_type!(bool),
                 right_ty: Some(parse_type!(::std::os::raw::c_char)),
-                code: Some(FTypeConvCode::new("{from_var} != 0", Span::call_site())),
+                code: Some(FTypeConvCode::new(
+                    "let {to_var}: {to_var_type} = ( {from_var} != 0 );",
+                    Span::call_site()
+                )),
             },
             rule.rtype_right_to_left.unwrap()
         );
 
         assert_eq!(
             FTypeConvRule {
-                left_ty: None,
-                right_ty: Some(FTypeName {
+                left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
                     name: "bool".into(),
                     sp: Span::call_site(),
                 }),
@@ -339,6 +386,20 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
             },
             rule.ftype_left_to_right.unwrap()
         );
+
+        assert_eq!(
+            FTypeConvRule {
+                left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
+                    name: "bool".into(),
+                    sp: Span::call_site(),
+                }),
+                code: Some(FTypeConvCode::new(
+                    "$out = {from_var} ? 1 : 0;",
+                    Span::call_site()
+                )),
+            },
+            rule.ftype_right_to_left.unwrap()
+        );
     }
 
     #[test]
@@ -346,12 +407,13 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
         let rule = macro_to_conv_rule(parse_quote! {
             foreign_typemap!(
                 ($rin:r_type) &str => RustStrView {
-                    RustStrView::from_str($rin)
-                }
+                    $out = RustStrView::from_str($rin)
+                };
                 ($pin:f_type) => "QString" r#"
 $out = QString::fromUtf8($pin.data, $pin.len);
-"#)
+"#;)
         });
+        assert!(!rule.if_simple_rtype_ftype_map().is_some());
     }
 
     #[ignore]
@@ -368,8 +430,8 @@ $out = QString::fromUtf8($pin.data, $pin.len);
 
                 ($pin:r_type) <T, F: FnOnce(T)> F <= concat_ident!(CFnOnce, swig_i_type!(T))
                 {
-                    |x| $pin.cb(convert_to_c!(x), $pin.ctx)
-                }
+                    $out = |x| $pin.cb(convert_to_c!(x), $pin.ctx)
+                };
 
                 define_helper_f_helper!(
                     void concat_ident!(result_ready, swig_i_type!(T))(swig_i_type!(T) ret, void *ctx)
@@ -391,9 +453,10 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         cb.ctx = fi;
         $out = fi->future();
         $pin = cb;
- }"#
+ }"#;
             )
         });
+        assert!(!rule.if_simple_rtype_ftype_map().is_some());
     }
 
     #[test]
@@ -405,10 +468,11 @@ $out = QString::fromUtf8($pin.data, $pin.len);
                     $out = (since_unix_epoch.as_secs() * 1_000
                             + (since_unix_epoch.subsec_nanos() / 1_000_000) as u64)
                         as jlong;
-                }
-                ($pin:f_type) => "java.util.Date" "$out = new java.util.Date($pin);"
+                };
+                ($pin:f_type) => "java.util.Date" "$out = new java.util.Date($pin);";
             )
         });
+        assert!(!rule.if_simple_rtype_ftype_map().is_some());
     }
 
     #[ignore]
@@ -419,10 +483,46 @@ $out = QString::fromUtf8($pin.data, $pin.len);
                 ($pin:r_type, $jstr:variable) &str <= jstring {
                     $jstr = JavaString::new(env, $pin);
                     $out = $jstr.to_str();
-                }
-                ($pin:f_type, non_null) <= "String"
+                };
+                ($pin:f_type, non_null) <= "String";
             )
         });
+        assert!(!rule.if_simple_rtype_ftype_map().is_some());
+    }
+
+    #[test]
+    fn test_foreign_typemap_simple_typemap() {
+        let rule = macro_to_conv_rule(parse_quote! {
+            foreign_typemap!(
+                (r_type) jlong;
+                (f_type) "long";
+            )
+        });
+        assert!(rule.if_simple_rtype_ftype_map().is_some());
+
+        assert_eq!(
+            RTypeConvRule {
+                left_ty: parse_type!(jlong),
+                right_ty: None,
+                code: None,
+            },
+            rule.rtype_left_to_right.unwrap()
+        );
+
+        assert_eq!(None, rule.rtype_right_to_left);
+
+        assert_eq!(
+            FTypeConvRule {
+                left_right_ty: FTypeLeftRightPair::OnlyLeft(FTypeName {
+                    name: "long".into(),
+                    sp: Span::call_site(),
+                }),
+                code: None,
+            },
+            rule.ftype_left_to_right.unwrap()
+        );
+
+        assert_eq!(None, rule.ftype_right_to_left);
     }
 
     fn macro_to_conv_rule(mac: syn::Macro) -> TypeMapConvRuleInfo {

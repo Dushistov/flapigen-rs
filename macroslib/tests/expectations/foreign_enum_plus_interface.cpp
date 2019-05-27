@@ -21,5 +21,5 @@ r#"static void c_onSessionUpdate(uint32_t a_0, char a_1, void *opaque)
    {
         auto p = static_cast<ControlStateObserver *>(opaque);
         assert(p != nullptr);
-        p->onSessionUpdate(static_cast<ControlItem>(a_0), a_1 != 0);
+        p->onSessionUpdate(static_cast<ControlItem>(a_0), (a_1 != 0));
    }"#;

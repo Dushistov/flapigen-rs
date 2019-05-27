@@ -4,13 +4,16 @@ use std::{mem, rc::Rc};
 use log::{debug, info};
 use petgraph::graph::NodeIndex;
 use rustc_hash::FxHashMap;
+use syn::spanned::Spanned;
 
 use crate::{
-    error::Result,
+    error::{DiagnosticError, Result},
     source_registry::SourceId,
     typemap::{
-        ty::{ForeignTypeS, ForeignTypesStorage},
-        TypeMap,
+        ast::TypeName,
+        parse_typemap_macro::{FTypeLeftRightPair, TypeMapConvRuleInfo},
+        ty::{ForeignConversationIntermediate, ForeignTypeS, ForeignTypesStorage},
+        TypeConvEdge, TypeMap,
     },
 };
 
@@ -47,6 +50,178 @@ impl TypeMap {
         self.utils_code.append(&mut new_utils_code);
         //TODO: more intellect to process new generics
         self.generic_edges.append(&mut new_generic_edges);
+        Ok(())
+    }
+
+    pub(in crate::typemap) fn merge_conv_rule(
+        &mut self,
+        src_id: SourceId,
+        ri: TypeMapConvRuleInfo,
+    ) -> Result<()> {
+        if let Some((r_ty, f_ty)) = ri.if_simple_rtype_ftype_map() {
+            let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
+
+            self.add_foreign_rust_ty_idx(
+                TypeName::new(f_ty.name.clone(), (src_id, f_ty.sp)),
+                r_ty,
+            )?;
+            return Ok(());
+        }
+
+        let mut rtype_left_to_right = None;
+        if let Some(rule) = ri.rtype_left_to_right {
+            let (right_ty, code) = if let (Some(right_ty), Some(code)) = (rule.right_ty, rule.code)
+            {
+                (right_ty, code)
+            } else {
+                return Err(DiagnosticError::new2(
+                    (src_id, rule.left_ty.span()),
+                    "rule (r_type 'from type' => 'to type') is not simple, but no code or 'to type'",
+                ));
+            };
+
+            let from_ty = self
+                .find_or_alloc_rust_type(&rule.left_ty, src_id)
+                .graph_idx;
+            let to_ty = self.find_or_alloc_rust_type(&right_ty, src_id).graph_idx;
+            self.conv_graph
+                .update_edge(from_ty, to_ty, TypeConvEdge::new(code.into(), None));
+            rtype_left_to_right = Some((from_ty, to_ty));
+        }
+
+        let mut rtype_right_to_left = None;
+        if let Some(rule) = ri.rtype_right_to_left {
+            let (right_ty, code) = if let (Some(right_ty), Some(code)) = (rule.right_ty, rule.code)
+            {
+                (right_ty, code)
+            } else {
+                return Err(DiagnosticError::new(
+                    src_id, rule.left_ty.span(),
+                     "rule (r_type 'to type' <= 'from type') is not simple, but no code or 'from type'",
+                ));
+            };
+
+            let to_ty = self
+                .find_or_alloc_rust_type(&rule.left_ty, src_id)
+                .graph_idx;
+            let from_ty = self.find_or_alloc_rust_type(&right_ty, src_id).graph_idx;
+            self.conv_graph
+                .update_edge(from_ty, to_ty, TypeConvEdge::new(code.into(), None));
+            rtype_right_to_left = Some((from_ty, to_ty));
+        }
+
+        let mut ft_into_from_rust = None;
+        if let Some(rule) = ri.ftype_left_to_right {
+            let right_fty = match rule.left_right_ty {
+                FTypeLeftRightPair::OnlyLeft(left_ty) => {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        left_ty.sp,
+                        "rule (f_type 'from type' => 'to type') is not simple, but no 'to type'",
+                    ));
+                }
+                FTypeLeftRightPair::Both(left_ty, _right_ty) => {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        left_ty.sp,
+                        "not supported rule type: f_type 'from_type' => 'to type'",
+                    ));
+                }
+                FTypeLeftRightPair::OnlyRight(right_ty) => right_ty,
+            };
+            let (rty_left, rty_right) = rtype_left_to_right.ok_or_else(|| {
+                DiagnosticError::new(
+                    src_id,
+                    right_fty.sp,
+                    "no r_type corresponding to this f_type rule",
+                )
+            })?;
+            let conv_code = rule.code.ok_or_else(|| {
+                DiagnosticError::new(src_id, right_fty.sp, "expect conversation code here")
+            })?;
+
+            ft_into_from_rust = Some((
+                right_fty,
+                ForeignConversationRule {
+                    rust_ty: rty_left,
+                    intermediate: Some(ForeignConversationIntermediate {
+                        intermediate_ty: rty_right,
+                        conv_code,
+                    }),
+                },
+            ));
+        }
+
+        let mut ft_from_into_rust = None;
+        if let Some(rule) = ri.ftype_right_to_left {
+            let right_fty = match rule.left_right_ty {
+                FTypeLeftRightPair::OnlyLeft(left_ty) => {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        left_ty.sp,
+                        "rule (f_type 'to type' <= 'from type') is not simple, but no 'from type'",
+                    ));
+                }
+                FTypeLeftRightPair::Both(left_ty, _right_ty) => {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        left_ty.sp,
+                        "not supported rule type: f_type 'to type' <= 'from type'",
+                    ));
+                }
+                FTypeLeftRightPair::OnlyRight(right_ty) => right_ty,
+            };
+            let (rty_right, rty_left) = rtype_right_to_left.ok_or_else(|| {
+                DiagnosticError::new(
+                    src_id,
+                    right_fty.sp,
+                    "no r_type corresponding to this f_type rule",
+                )
+            })?;
+            let conv_code = rule.code.ok_or_else(|| {
+                DiagnosticError::new(src_id, right_fty.sp, "expect conversation code here")
+            })?;
+
+            ft_from_into_rust = Some((
+                right_fty,
+                ForeignConversationRule {
+                    rust_ty: rty_left,
+                    intermediate: Some(ForeignConversationIntermediate {
+                        intermediate_ty: rty_right,
+                        conv_code,
+                    }),
+                },
+            ));
+        }
+
+        let ftype = match (ft_into_from_rust, ft_from_into_rust) {
+            (Some((ft1, into_from_rust)), Some((ft2, from_into_rust))) => {
+                if ft1 != ft2 {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        ft1.sp,
+                        format!("types name mismatch, one type is {}", ft1.name),
+                    )
+                    .add_span_note((src_id, ft2.sp), format!("another type is {}", ft2.name)));
+                }
+                let name = TypeName::new(ft1.name, (src_id, ft1.sp));
+                let ftype_idx = self.ftypes_storage.find_or_alloc(name);
+                self.ftypes_storage[ftype_idx].into_from_rust = Some(into_from_rust);
+                self.ftypes_storage[ftype_idx].from_into_rust = Some(from_into_rust);
+            }
+            (Some((ft, into_from_rust)), None) => {
+                let name = TypeName::new(ft.name, (src_id, ft.sp));
+                let ftype_idx = self.ftypes_storage.find_or_alloc(name);
+                self.ftypes_storage[ftype_idx].into_from_rust = Some(into_from_rust);
+            }
+            (None, Some((ft, from_into_rust))) => {
+                let name = TypeName::new(ft.name, (src_id, ft.sp));
+                let ftype_idx = self.ftypes_storage.find_or_alloc(name);
+                self.ftypes_storage[ftype_idx].from_into_rust = Some(from_into_rust);
+            }
+            (None, None) => {}
+        };
+
         Ok(())
     }
 }

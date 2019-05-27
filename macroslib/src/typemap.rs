@@ -984,16 +984,6 @@ impl TypeMap {
             .get(&name)
             .map(|idx| self.conv_graph[*idx].clone())
     }
-
-    pub(crate) fn alloc_new_ftype(&mut self, fts: ForeignTypeS) -> Result<ForeignType> {
-        if let Some(ft) = self.ftypes_storage.find_ftype_by_name(fts.name.as_str()) {
-            return Err(DiagnosticError::new2(
-                self.ftypes_storage[ft].src_id_span(),
-                format!("Type {} already defined here", fts.name),
-            ));
-        }
-        Ok(self.ftypes_storage.add_new_ftype(fts))
-    }
 }
 
 impl ops::Index<ForeignType> for TypeMap {
