@@ -96,7 +96,7 @@ impl fmt::Display for TestError {
 
 impl std::error::Error for TestError {}
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TestClass {
     i: i32,
 }
@@ -176,6 +176,7 @@ foreigner_class!(
         method TestClass::get_ref(&self) -> &i32;
         method TestClass::maybe_add(&mut self, i: Option<i32>) -> Option<i32>;
         method TestClass::clone(&self) -> TestClass;
+        method TestClass::eq(&self, other: &TestClass) -> bool;
     }
 );
 

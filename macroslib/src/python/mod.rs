@@ -262,7 +262,12 @@ fn method_name(method: &ForeignerMethod) -> Result<syn::Ident> {
     if method.variant == MethodVariant::Constructor {
         Ok(syn::parse_str("__new__")?)
     } else {
-        standard_method_name(method)
+        let name = standard_method_name(method)?;
+        let name_str = name.to_string();
+        match name_str.as_ref() {
+            "to_string" => Ok(syn::parse_str("__str__")?),
+            _ => Ok(name)
+        }
     }
 }
 
