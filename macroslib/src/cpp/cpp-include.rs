@@ -140,22 +140,6 @@ trait SwigDerefMut {
     fn swig_deref_mut(&mut self) -> &mut Self::Target;
 }
 
-impl SwigInto<bool> for ::std::os::raw::c_char {
-    fn swig_into(self) -> bool {
-        self != 0
-    }
-}
-
-impl SwigFrom<bool> for ::std::os::raw::c_char {
-    fn swig_from(x: bool) -> Self {
-        if x {
-            1
-        } else {
-            0
-        }
-    }
-}
-
 impl<'a> SwigInto<&'a ::std::ffi::CStr> for *const ::std::os::raw::c_char {
     fn swig_into(self) -> &'a ::std::ffi::CStr {
         assert!(!self.is_null());
@@ -610,12 +594,6 @@ impl CRustString {
             len,
             capacity,
         }
-    }
-}
-
-impl SwigFrom<String> for CRustString {
-    fn swig_from(s: String) -> CRustString {
-        CRustString::from_string(s)
     }
 }
 
@@ -1305,3 +1283,21 @@ impl<T1: SwigForeignClass, T2: SwigForeignClass> SwigFrom<(T1, T2)> for CRustObj
         }
     }
 }
+
+foreign_typemap!(
+    ($pin:r_type) bool => ::std::os::raw::c_char {
+        $out = if $pin  { 1 } else { 0 }
+    };
+    ($pin:f_type) => "bool" "($pin != 0)";
+    ($pin:r_type) bool <= ::std::os::raw::c_char {
+        $out = $pin != 0
+    };
+    ($pin:f_type) <= "bool" "$pin ? 1 : 0";
+);
+
+foreign_typemap!(
+    ($pin:r_type) String => CRustString {
+        $out = CRustString::from_string($pin)
+    };
+    ($pin:f_type) => "RustString" "RustString{$pin}";
+);

@@ -6,14 +6,14 @@ use std::{fmt, io::Write};
 
 use log::{debug, trace};
 use petgraph::Direction;
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::ToTokens;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
     cpp::map_type::map_type,
-    error::{invalid_src_id_span, panic_on_syn_error, DiagnosticError, Result},
+    error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
@@ -21,10 +21,7 @@ use crate::{
             fn_arg_type, parse_ty_with_given_span, parse_ty_with_given_span_checked,
             DisplayToTokens, TypeName,
         },
-        ty::{
-            FTypeConvCode, ForeignConversationIntermediate, ForeignConversationRule, ForeignType,
-            ForeignTypeS, RustType,
-        },
+        ty::{ForeignType, RustType},
         unpack_unique_typename,
         utils::rust_to_foreign_convert_method_inputs,
         ForeignMethodSignature, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
@@ -62,9 +59,8 @@ impl CppForeignTypeInfo {
             petgraph::Direction::Incoming => ftype.from_into_rust.as_ref(),
         }
         .ok_or_else(|| {
-            DiagnosticError::new(
-                ftype.src_id(),
-                ftype.span(),
+            DiagnosticError::new2(
+                ftype.src_id_span(),
                 format!(
                     "No rule to convert foreign type {} as input/output type",
                     ftype.name
@@ -382,36 +378,6 @@ May be you need to use `private constructor = empty;` syntax?",
                 .update_file_if_necessary()
                 .map_err(|err| format!("update of {} failed: {}", src_path.display(), err))?;
         }
-
-        //TODO: move to cpp-include.rs
-        let bool_rt = conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { bool });
-        let c_char_rt =
-            conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { ::std::os::raw::c_char });
-        conv_map
-            .alloc_new_ftype(ForeignTypeS {
-                name: TypeName::new("bool", invalid_src_id_span()),
-                into_from_rust: Some(ForeignConversationRule {
-                    rust_ty: bool_rt.as_idx(),
-                    intermediate: Some(ForeignConversationIntermediate {
-                        intermediate_ty: c_char_rt.as_idx(),
-                        conv_code: FTypeConvCode::new(
-                            format!("{} != 0", FROM_VAR_TEMPLATE),
-                            Span::call_site(),
-                        ),
-                    }),
-                }),
-                from_into_rust: Some(ForeignConversationRule {
-                    rust_ty: bool_rt.as_idx(),
-                    intermediate: Some(ForeignConversationIntermediate {
-                        intermediate_ty: c_char_rt.as_idx(),
-                        conv_code: FTypeConvCode::new(
-                            format!("{} ? 1 : 0", FROM_VAR_TEMPLATE),
-                            Span::call_site(),
-                        ),
-                    }),
-                }),
-            })
-            .map_err(|err| err.to_string())?;
 
         Ok(())
     }
@@ -929,7 +895,7 @@ impl Drop for {struct_with_funcs} {{
 
 fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> {
     let rtype = tmap[rt].clone();
-    tmap.map_through_conversation_to_foreign_ext(
+    tmap.map_through_conversation_to_foreign(
         &rtype,
         Direction::Outgoing,
         rtype.src_id_span(),

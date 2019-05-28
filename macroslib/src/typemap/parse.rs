@@ -21,6 +21,7 @@ use crate::{
             TypeName,
         },
         make_unique_rust_typename,
+        parse_typemap_macro::TypeMapConvRuleInfo,
         ty::{ForeignTypesStorage, RustTypeS},
         validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
     },
@@ -54,7 +55,6 @@ pub(in crate::typemap) fn parse(
 ) -> Result<TypeMap> {
     let file = syn::parse_str::<syn::File>(code)
         .map_err(|err| DiagnosticError::from_syn_err(name, err))?;
-
     let sym_foreign_types_map = Ident::new(MOD_NAME_WITH_FOREIGN_TYPES, Span::call_site());
 
     let mut types_map_span: Option<Span> = None;
@@ -145,13 +145,20 @@ pub(in crate::typemap) fn parse(
                 handle_deref_impl(name, &swig_attrs, item_impl, &mut ret)?;
             }
             Item::Macro(mut item_macro) => {
-                let swig_attrs = handle_attrs!(item_macro);
-                if swig_attrs.is_empty() {
-                    ret.utils_code.push(Item::Macro(item_macro));
+                if item_macro.mac.path.is_ident("foreign_typemap") {
+                    let tmap_conv_rule: TypeMapConvRuleInfo = syn::parse2(item_macro.mac.tts)
+                        .map_err(|err| DiagnosticError::from_syn_err(name, err))?;
+
+                    ret.merge_conv_rule(name, tmap_conv_rule)?;
                 } else {
-                    let mut filter = FilterSwigAttrs;
-                    filter.visit_item_macro_mut(&mut item_macro);
-                    handle_macro(name, &swig_attrs, item_macro, &mut ret)?;
+                    let swig_attrs = handle_attrs!(item_macro);
+                    if swig_attrs.is_empty() {
+                        ret.utils_code.push(Item::Macro(item_macro));
+                    } else {
+                        let mut filter = FilterSwigAttrs;
+                        filter.visit_item_macro_mut(&mut item_macro);
+                        handle_macro(name, &swig_attrs, item_macro, &mut ret)?;
+                    }
                 }
             }
             _ => {
@@ -1326,5 +1333,23 @@ macro_rules! jni_unpack_return {
 "#,
             code
         );
+    }
+
+    #[test]
+    fn test_parse_main_lang_typemaps() {
+        parse(
+            SourceId::none(),
+            include_str!("../java_jni/jni-include.rs"),
+            64,
+            FxHashMap::default(),
+        )
+        .unwrap();
+        parse(
+            SourceId::none(),
+            include_str!("../cpp/cpp-include.rs"),
+            64,
+            FxHashMap::default(),
+        )
+        .unwrap();
     }
 }

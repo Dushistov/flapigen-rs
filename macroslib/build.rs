@@ -28,8 +28,17 @@ fn main() {
         Path::new("src/java_jni/jni-include.rs"),
         Path::new("src/cpp/cpp-include.rs"),
     ] {
-        let src_cnt = std::fs::read_to_string(include_path)
+        let src_cnt_tail = std::fs::read_to_string(include_path)
             .expect(&format!("Error during read {}", include_path.display()));
+        let mut src_cnt = r#"
+        macro_rules! foreign_typemap {
+            ($($tree:tt)*) => {};
+        }
+"#
+        .to_string();
+
+        src_cnt.push_str(&src_cnt_tail);
+
         let mut file = syn::parse_file(&src_cnt)
             .expect(&format!("Error during parse {}", include_path.display()));
 

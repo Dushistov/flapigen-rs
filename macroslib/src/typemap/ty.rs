@@ -51,9 +51,6 @@ impl RustTypeS {
         self.normalized_name = other.normalized_name.clone();
         self.implements.insert_set(&other.implements);
     }
-    pub(crate) fn as_idx(&self) -> RustTypeIdx {
-        self.graph_idx
-    }
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
         (self.src_id, self.ty.span())
     }
@@ -122,12 +119,6 @@ pub(crate) struct ForeignTypeS {
 }
 
 impl ForeignTypeS {
-    pub(crate) fn span(&self) -> Span {
-        self.name.span.1
-    }
-    pub(crate) fn src_id(&self) -> SourceId {
-        self.name.span.0
-    }
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
         self.name.span
     }
@@ -151,11 +142,31 @@ pub(crate) struct FTypeConvCode {
     code: String,
 }
 
+impl PartialEq for FTypeConvCode {
+    fn eq(&self, o: &Self) -> bool {
+        self.code == o.code
+    }
+}
+
 impl FTypeConvCode {
     /// # Panics
     pub(crate) fn new<S: Into<String>>(code: S, span: Span) -> FTypeConvCode {
         let code: String = code.into();
-        assert!(code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE));
+        assert!(
+            code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE),
+            "code: '{}'",
+            code
+        );
+        FTypeConvCode { code, span }
+    }
+    /// # Panics
+    pub(crate) fn new2<S: Into<String>>(code: S, span: Span) -> FTypeConvCode {
+        let code: String = code.into();
+        assert!(
+            code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE),
+            "code: '{}'",
+            code
+        );
         FTypeConvCode { code, span }
     }
 }
@@ -163,6 +174,12 @@ impl FTypeConvCode {
 impl ToString for FTypeConvCode {
     fn to_string(&self) -> String {
         self.code.clone()
+    }
+}
+
+impl From<FTypeConvCode> for String {
+    fn from(x: FTypeConvCode) -> Self {
+        x.code
     }
 }
 

@@ -10,13 +10,13 @@ use proc_macro2::TokenStream;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
-use self::map_type::special_type;
+use self::map_type::map_type;
 use crate::{
     error::{DiagnosticError, Result},
     source_registry::SourceId,
     typemap::ast::{
-        fn_arg_type, if_option_return_some_type, if_result_return_ok_err_types,
-        if_ty_result_return_ok_type, parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
+        fn_arg_type, if_result_return_ok_err_types, if_ty_result_return_ok_type,
+        parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
     },
     typemap::{
         ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
@@ -35,9 +35,13 @@ enum NullAnnotation {
 
 struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,
-    pub java_transition_type: Option<SmolStr>,
-    java_converter: String,
+    pub java_converter: Option<JavaConverter>,
     annotation: Option<NullAnnotation>,
+}
+
+struct JavaConverter {
+    java_transition_type: SmolStr,
+    converter: String,
 }
 
 impl AsRef<ForeignTypeInfo> for JavaForeignTypeInfo {
@@ -47,15 +51,14 @@ impl AsRef<ForeignTypeInfo> for JavaForeignTypeInfo {
 }
 
 impl JavaForeignTypeInfo {
-    fn java_need_conversation(&self) -> bool {
-        !self.java_converter.is_empty()
-    }
-    fn java_convert<NameArg: Fn() -> (String, String)>(&self, name_arg: NameArg) -> Option<String> {
-        if !self.java_converter.is_empty() {
+    fn java_convert<NameArg>(&self, name_arg: NameArg) -> Option<String>
+    where
+        NameArg: Fn() -> (String, String),
+    {
+        if let Some(code) = self.java_converter.as_ref().map(|x| &x.converter) {
             let (from_name, to_name) = name_arg();
             Some(
-                self.java_converter
-                    .replace(TO_VAR_TEMPLATE, &to_name)
+                code.replace(TO_VAR_TEMPLATE, &to_name)
                     .replace(FROM_VAR_TEMPLATE, &from_name),
             )
         } else {
@@ -71,8 +74,7 @@ impl From<ForeignTypeInfo> for JavaForeignTypeInfo {
                 name: x.name,
                 correspoding_rust_type: x.correspoding_rust_type,
             },
-            java_transition_type: None,
-            java_converter: String::new(),
+            java_converter: None,
             annotation: None,
         }
     }
@@ -300,7 +302,7 @@ impl LanguageGenerator for JavaConfig {
 }
 
 fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -> String {
-    let need_conv = f_method.input.iter().any(|v| v.java_need_conversation());
+    let need_conv = f_method.input.iter().any(|v| v.java_converter.is_some());
     match method.variant {
         MethodVariant::StaticMethod if !need_conv => method.short_name().as_str().to_string(),
         MethodVariant::Method(_) | MethodVariant::StaticMethod => {
@@ -323,25 +325,14 @@ fn find_suitable_ftypes_for_interace_methods(
         let mut input = Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
             let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg), interace.src_id);
-            let f_arg_type = conv_map
-                .map_through_conversation_to_foreign(
-                    &arg_rust_ty,
-                    Direction::Outgoing,
-                    (interace.src_id, fn_arg_type(arg).span()),
-                    calc_this_type_for_method,
-                )
-                .ok_or_else(|| {
-                    DiagnosticError::new(
-                        interace.src_id,
-                        fn_arg_type(arg).span(),
-                        format!(
-                            "Do not know conversation to foreign \
-                             from such rust type '{}'",
-                            arg_rust_ty
-                        ),
-                    )
-                })?;
-            input.push(f_arg_type.into());
+            let f_arg_type = map_type(
+                conv_map,
+                &arg_rust_ty,
+                Direction::Outgoing,
+                (interace.src_id, fn_arg_type(arg).span()),
+            )?;
+
+            input.push(f_arg_type);
         }
         let output = match method.fn_decl.output {
             syn::ReturnType::Default => ForeignTypeInfo {
@@ -375,43 +366,14 @@ fn find_suitable_foreign_types_for_methods(
             Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
             let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg), class.src_id);
-            if let Some(converter) = special_type(
+
+            let fti = map_type(
                 conv_map,
                 &arg_rust_ty,
+                Direction::Incoming,
                 (class.src_id, fn_arg_type(arg).span()),
-            )? {
-                input.push(converter);
-                continue;
-            }
-            let f_arg_type = conv_map
-                .map_through_conversation_to_foreign(
-                    &arg_rust_ty,
-                    Direction::Incoming,
-                    (class.src_id, fn_arg_type(arg).span()),
-                    calc_this_type_for_method,
-                )
-                .ok_or_else(|| {
-                    DiagnosticError::new(
-                        class.src_id,
-                        fn_arg_type(arg).span(),
-                        format!(
-                            "Do not know conversation from foreign \
-                             to such rust type '{}'",
-                            arg_rust_ty,
-                        ),
-                    )
-                })?;
-
-            let mut f_arg_type: JavaForeignTypeInfo = f_arg_type.into();
-            if !primitive_type(&f_arg_type.base.name) {
-                f_arg_type.annotation =
-                    Some(if if_option_return_some_type(&arg_rust_ty).is_none() {
-                        NullAnnotation::NonNull
-                    } else {
-                        NullAnnotation::Nullable
-                    });
-            }
-            input.push(f_arg_type);
+            )?;
+            input.push(fti);
         }
         let output = match method.variant {
             MethodVariant::Constructor => ForeignTypeInfo {
@@ -425,24 +387,13 @@ fn find_suitable_foreign_types_for_methods(
                 },
                 syn::ReturnType::Type(_, ref rt) => {
                     let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt, class.src_id);
-                    conv_map
-                        .map_through_conversation_to_foreign(
-                            &ret_rust_ty,
-                            Direction::Outgoing,
-                            (class.src_id, rt.span()),
-                            calc_this_type_for_method,
-                        )
-                        .ok_or_else(|| {
-                            DiagnosticError::new(
-                                class.src_id,
-                                rt.span(),
-                                format!(
-                                    "Do not know conversation from \
-                                     such rust type '{}' to foreign",
-                                    ret_rust_ty,
-                                ),
-                            )
-                        })?
+                    let fti = map_type(
+                        conv_map,
+                        &ret_rust_ty,
+                        Direction::Outgoing,
+                        (class.src_id, rt.span()),
+                    )?;
+                    fti.base
                 }
             },
         };
@@ -464,13 +415,6 @@ fn java_class_full_name(package_name: &str, class_name: &str) -> String {
 
 fn java_class_name_to_jni(full_name: &str) -> String {
     full_name.replace(".", "/")
-}
-
-fn primitive_type(type_name: &str) -> bool {
-    match type_name {
-        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => true,
-        _ => false,
-    }
 }
 
 fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignerClassInfo) -> Option<Type> {
