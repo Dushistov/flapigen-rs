@@ -1,4 +1,5 @@
 use std::fmt;
+use std::sync::{Arc, RwLock};
 
 pub enum TestEnum {
     A,
@@ -170,5 +171,102 @@ foreigner_class!(
         method TestClass::get_ref(&self) -> &i32;
         method TestClass::maybe_add(&mut self, i: Option<i32>) -> Option<i32>;
         method TestClass::clone(&self) -> TestClass;
+    }
+);
+
+pub struct TestArc {
+    i: i32,
+}
+
+impl TestArc {
+    pub fn new() -> Arc<TestArc> {
+        Arc::new(TestArc{
+            i: 0
+        })
+    }
+
+    pub fn to_string(&self) -> String {
+        self.i.to_string()
+    }
+
+    pub fn to_string_arc(this: Arc<TestArc>) -> String {
+        this.i.to_string()
+    }
+
+    pub fn to_string_ref_arc(this: &Arc<TestArc>) -> String {
+        this.i.to_string()
+    }
+}
+
+foreigner_class!(
+    class TestArc {
+        self_type TestArc;
+        constructor TestArc::new() -> Arc<TestArc>;
+        method TestArc::to_string(&self) -> String;
+        static_method TestArc::to_string_arc(Arc<TestArc>) -> String;
+        static_method TestArc::to_string_ref_arc(&Arc<TestArc>) -> String;
+    }
+);
+
+pub struct TestArcRwLock {
+    i: i32,
+}
+
+impl TestArcRwLock {
+    pub fn new() -> Arc<RwLock<TestArcRwLock>> {
+        Arc::new(RwLock::new(TestArcRwLock{
+            i: 0
+        }))
+    }
+
+    pub fn to_string(&self) -> String {
+        self.i.to_string()
+    }
+
+    pub fn inc(&mut self) {
+        self.i += 1;
+    }
+
+    pub fn to_string_arc(this: Arc<RwLock<TestArcRwLock>>) -> String {
+        this.read().unwrap().i.to_string()
+    }
+
+    pub fn to_string_ref_arc(this: &Arc<RwLock<TestArcRwLock>>) -> String {
+        this.read().unwrap().i.to_string()
+    }
+}
+
+foreigner_class!(
+    class TestArcRwLock {
+        self_type TestArcRwLock;
+        constructor TestArcRwLock::new() -> Arc<RwLock<TestArcRwLock>>;
+        method TestArcRwLock::to_string(&self) -> String;
+        method TestArcRwLock::inc(&mut self);
+        static_method TestArcRwLock::to_string_arc(Arc<RwLock<TestArcRwLock>>) -> String;
+        static_method TestArcRwLock::to_string_ref_arc(&Arc<RwLock<TestArcRwLock>>) -> String;
+    }
+);
+
+pub struct TestBox {
+    i: i32,
+}
+
+impl TestBox {
+    pub fn new() -> Box<TestBox> {
+        Box::new(TestBox{
+            i: 0
+        })
+    }
+
+    pub fn to_string(&self) -> String {
+        self.i.to_string()
+    }
+}
+
+foreigner_class!(
+    class TestBox {
+        self_type TestBox;
+        constructor TestBox::new() -> Box<TestBox>;
+        method TestBox::to_string(&self) -> String;
     }
 );
