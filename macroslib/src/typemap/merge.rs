@@ -425,18 +425,15 @@ fn helper3() {
             }
         );
         let ty_i32 = types_map.find_or_alloc_rust_type(&parse_type! { i32 }, SourceId::none());
-        assert_eq!(
-            types_map
-                .map_through_conversation_to_foreign(
-                    &ty_i32,
-                    petgraph::Direction::Outgoing,
-                    invalid_src_id_span(),
-                    |_, fc| fc.constructor_ret_type.clone(),
-                )
-                .unwrap()
-                .name,
-            "int"
-        );
+        let fti = types_map
+            .map_through_conversation_to_foreign(
+                &ty_i32,
+                petgraph::Direction::Outgoing,
+                invalid_src_id_span(),
+                |_, fc| fc.constructor_ret_type.clone(),
+            )
+            .unwrap();
+        assert_eq!("int", types_map[fti].name.as_str(),);
         assert_eq!(
             "let mut {to_var}: {to_var_type} = {from_var}.swig_into(env);",
             {

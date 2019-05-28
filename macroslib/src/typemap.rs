@@ -600,56 +600,8 @@ impl TypeMap {
         }
     }
 
-    #[deprecated(note = "TODO: should be removed in the future")]
-    pub(crate) fn map_ftype_to_ftype_info(
-        &self,
-        direction: petgraph::Direction,
-        ftype: ForeignType,
-    ) -> ForeignTypeInfo {
-        let ftype = &self[ftype];
-        let rtype_idx = match direction {
-            petgraph::Direction::Outgoing => {
-                ftype
-                    .into_from_rust
-                    .as_ref()
-                    .expect("Internal error: into_from_rust not defined")
-                    .rust_ty
-            }
-            petgraph::Direction::Incoming => {
-                ftype
-                    .from_into_rust
-                    .as_ref()
-                    .expect("Internal error: from_into_rust not defined")
-                    .rust_ty
-            }
-        };
-        ForeignTypeInfo {
-            name: ftype.name.typename.clone(),
-            correspoding_rust_type: self.conv_graph[rtype_idx].clone(),
-        }
-    }
-
-    #[deprecated(note = "Use map_through_conversation_to_foreign_ext instead")]
-    pub(crate) fn map_through_conversation_to_foreign<
-        F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
-    >(
-        &mut self,
-        rust_ty: &RustType,
-        direction: petgraph::Direction,
-        build_for_sp: SourceIdSpan,
-        calc_this_type_for_method: F,
-    ) -> Option<ForeignTypeInfo> {
-        self.map_through_conversation_to_foreign_ext(
-            rust_ty,
-            direction,
-            build_for_sp,
-            calc_this_type_for_method,
-        )
-        .map(|ftype| self.map_ftype_to_ftype_info(direction, ftype))
-    }
-
     /// find correspoint to rust foreign type (extended)
-    pub(crate) fn map_through_conversation_to_foreign_ext<
+    pub(crate) fn map_through_conversation_to_foreign<
         F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
     >(
         &mut self,
@@ -1306,18 +1258,15 @@ mod tests {
         let vec_foo_ty =
             types_map.find_or_alloc_rust_type(&parse_type! { Vec<Foo> }, SourceId::none());
 
-        assert_eq!(
-            "Foo []",
-            types_map
-                .map_through_conversation_to_foreign(
-                    &vec_foo_ty,
-                    petgraph::Direction::Outgoing,
-                    invalid_src_id_span(),
-                    |_, fc| fc.constructor_ret_type.clone(),
-                )
-                .unwrap()
-                .name
-        );
+        let fti = types_map
+            .map_through_conversation_to_foreign(
+                &vec_foo_ty,
+                petgraph::Direction::Outgoing,
+                invalid_src_id_span(),
+                |_, fc| fc.constructor_ret_type.clone(),
+            )
+            .unwrap();
+        assert_eq!("Foo []", types_map[fti].name.as_str());
 
         assert!(try_build_path(
             &types_map.find_or_alloc_rust_type(&parse_type! { Vec<i32> }, SourceId::none()),

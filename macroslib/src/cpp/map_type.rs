@@ -333,7 +333,7 @@ fn map_ordinal_result_type(
     arg_ty_span: SourceIdSpan,
 ) -> Result<CppForeignTypeInfo> {
     let ftype = conv_map
-        .map_through_conversation_to_foreign_ext(
+        .map_through_conversation_to_foreign(
             arg_ty,
             Direction::Outgoing,
             arg_ty_span,
@@ -358,7 +358,7 @@ fn map_ordinal_input_type(
     arg_ty_span: SourceIdSpan,
 ) -> Result<CppForeignTypeInfo> {
     let ftype = conv_map
-        .map_through_conversation_to_foreign_ext(
+        .map_through_conversation_to_foreign(
             arg_ty,
             Direction::Incoming,
             arg_ty_span,

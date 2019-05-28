@@ -27,27 +27,50 @@ pub(in crate::java_jni) fn map_type(
         }
     }
 
-    let fti = conv_map
-        .map_through_conversation_to_foreign(
-            &arg_ty,
-            direction,
-            arg_ty_span,
-            calc_this_type_for_method,
-        )
-        .ok_or_else(|| {
-            DiagnosticError::new2(
+    let fti = {
+        let fti = conv_map
+            .map_through_conversation_to_foreign(
+                &arg_ty,
+                direction,
                 arg_ty_span,
-                format!(
-                    "can not find conversation Java type {} \
-                     such Rust type '{}'",
-                    match direction {
-                        Direction::Outgoing => "=>",
-                        Direction::Incoming => "<=",
-                    },
-                    arg_ty,
-                ),
+                calc_this_type_for_method,
             )
-        })?;
+            .ok_or_else(|| {
+                DiagnosticError::new2(
+                    arg_ty_span,
+                    format!(
+                        "can not find conversation Java type {} \
+                         Rust type '{}'",
+                        match direction {
+                            Direction::Outgoing => "=>",
+                            Direction::Incoming => "<=",
+                        },
+                        arg_ty,
+                    ),
+                )
+            })?;
+        let ftype = &conv_map[fti];
+        let rtype_idx = match direction {
+            petgraph::Direction::Outgoing => {
+                ftype
+                    .into_from_rust
+                    .as_ref()
+                    .expect("Internal error: into_from_rust not defined")
+                    .rust_ty
+            }
+            petgraph::Direction::Incoming => {
+                ftype
+                    .from_into_rust
+                    .as_ref()
+                    .expect("Internal error: from_into_rust not defined")
+                    .rust_ty
+            }
+        };
+        ForeignTypeInfo {
+            name: ftype.name.typename.clone(),
+            correspoding_rust_type: conv_map[rtype_idx].clone(),
+        }
+    };
     let mut fti: JavaForeignTypeInfo = fti.into();
     if !is_primitive_type(&fti.base.name) {
         fti.annotation = Some(if if_option_return_some_type(arg_ty).is_none() {

@@ -895,7 +895,7 @@ impl Drop for {struct_with_funcs} {{
 
 fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> {
     let rtype = tmap[rt].clone();
-    tmap.map_through_conversation_to_foreign_ext(
+    tmap.map_through_conversation_to_foreign(
         &rtype,
         Direction::Outgoing,
         rtype.src_id_span(),
