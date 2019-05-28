@@ -491,6 +491,26 @@ fn generate_conversion_for_return(
             conv_map,
             quote! {(#rust_call).clone()},
         )
+    } else if let Type::Tuple(ref tuple) = rust_type.ty {
+        let (types, conversions): (Vec<_>, Vec<_>) = tuple.elems.iter().enumerate().map(|(i, ty)| {
+            generate_conversion_for_return(
+                &conv_map.find_or_alloc_rust_type(ty),
+                method_span,
+                conv_map,
+                quote!{tuple.#i}
+            )
+        }).collect::<Result<Vec<_>>>()?.into_iter().unzip();
+        Ok((
+            parse_type!{( #( #types, )* )},
+            quote!{
+                {
+                    let tuple = #rust_call;
+                    (
+                        #( #conversions, )*
+                    )
+                }
+            }
+        ))
     } else {
         Err(DiagnosticError::new(
             method_span,

@@ -72,6 +72,10 @@ impl TestStaticClass {
     pub fn test_result_err() -> Result<i32, TestError> {
         Err(TestError::new())
     }
+
+    pub fn get_tuple() -> (i32, String) {
+        (0, "0".to_owned())
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -154,6 +158,7 @@ foreigner_class!(
         static_method TestStaticClass::test_result_str_err() -> Result<(), String>;
         static_method TestStaticClass::test_result_ok() -> Result<i32, TestError>;
         static_method TestStaticClass::test_result_err() -> Result<i32, TestError>;
+        static_method TestStaticClass::get_tuple() -> (i32, String);
     }
 );
 

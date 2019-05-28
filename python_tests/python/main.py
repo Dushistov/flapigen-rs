@@ -8,6 +8,7 @@ def test_static_methods():
     assert TestStaticClass.format_str("python str") == "format_str: python str"
     assert TestStaticClass.format_string("python string") == "format_string: python string"
     assert TestStaticClass.add(1, 2) == 3
+    assert TestStaticClass.get_tuple() == (0, "0")
 
 def test_enum():
     assert TestEnum.A == 0
