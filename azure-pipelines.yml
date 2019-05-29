@@ -25,21 +25,29 @@ steps:
     submodules: true
   - bash: |
       set -e
+      export RUSTUP_HOME=$HOME/.rustup
+      export CARGO_HOME=$HOME/.cargo
+      echo ##vso[task.setvariable variable=RUSTUP_HOME]$HOME/.rustup
+      echo ##vso[task.setvariable variable=CARGO_HOME]$HOME/.cargo
       curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain $RUSTUP_TOOLCHAIN
       echo "##vso[task.prependpath]$HOME/.cargo/bin"
     condition: ne( variables['Agent.OS'], 'Windows_NT' )
     displayName: Install Rust on linux/mac
   - script: |
+      set RUSTUP_HOME=%USERPROFILE%\.rustup
+      set CARGO_HOME=%USERPROFILE%\.cargo
+      echo ##vso[task.setvariable variable=RUSTUP_HOME]%USERPROFILE%\.rustup
+      echo ##vso[task.setvariable variable=CARGO_HOME]%USERPROFILE%\.cargo
       curl -sSf -o rustup-init.exe https://win.rustup.rs
       rustup-init.exe -y --default-toolchain %RUSTUP_TOOLCHAIN%
-      echo ##vso[task.setvariable variable=PATH]%PATH%;%USERPROFILE%\.cargo\bin;
+      echo ##vso[task.setvariable variable=PATH]%PATH%;%USERPROFILE%\.cargo\bin
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: Install Rust on windows
   - script: |
       curl http://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
       7z x llvm-installer.exe -oc:\llvm-binary
       echo ##vso[task.setvariable variable=LIBCLANG_PATH]C:\llvm-binary\bin
-      echo ##vso[task.setvariable variable=PATH]%PATH%C:\llvm-binary\bin;
+      echo ##vso[task.setvariable variable=PATH]%PATH%;C:\llvm-binary\bin
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: Install llvm on windows
   - script: |
@@ -50,6 +58,10 @@ steps:
       copy /Y sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc\sccache.exe %USERPROFILE%\.cargo\bin\sccache.exe
       echo ##vso[task.setvariable variable=SCCACHE_BUCKET]swig%PLATFORM%
       echo ##vso[task.setvariable variable=RUSTC_WRAPPER]%USERPROFILE%\.cargo\bin\sccache.exe
+      echo %PATH%
+      echo %USERPROFILE%
+      dir C:\Users\VssAdministrator\.cargo\bin
+      sccache.exe --version
       sccache --version
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: Setup sccache on windows
