@@ -1,3 +1,5 @@
+use std::mem;
+
 use rustc_hash::FxHashSet;
 
 use crate::{
@@ -110,13 +112,9 @@ pub(in crate::cpp) fn cpp_list_required_includes(
     let mut includes = FxHashSet::<String>::default();
     for m in methods {
         for p in &mut m.input {
-            if let Some(inc) = p.provides_by_module.take() {
-                includes.insert(inc);
-            }
+            includes.extend(mem::replace(&mut p.provides_by_module, Vec::new()).into_iter());
         }
-        if let Some(inc) = m.output.provides_by_module.take() {
-            includes.insert(inc);
-        }
+        includes.extend(mem::replace(&mut m.output.provides_by_module, Vec::new()).into_iter());
     }
 
     let mut ret: Vec<_> = includes.into_iter().collect();

@@ -47,7 +47,6 @@
 #endif
 #include "rust_interface/TestError.hpp"
 #if !defined(NO_HAVE_STD17_VARIANT) || defined(USE_BOOST)
-#include "rust_interface/c_ErrorEnum.h"
 #include "rust_interface/TestResult.hpp"
 #endif
 #include "rust_interface/Position.hpp"

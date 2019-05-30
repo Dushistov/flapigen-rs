@@ -115,7 +115,9 @@ impl<'a> TraitNamesSet<'a> {
 pub(crate) struct ForeignTypeS {
     pub(crate) name: TypeName,
     /// specify which foreign module provides this type
-    pub(crate) provides_by_module: Option<String>,
+    /// it is possible that provided by multiplines modules
+    /// for example C++ `std::variant<TypeA, TypeB>
+    pub(crate) provides_by_module: Vec<String>,
     pub(crate) into_from_rust: Option<ForeignConversationRule>,
     pub(crate) from_into_rust: Option<ForeignConversationRule>,
 }
@@ -215,7 +217,7 @@ impl ForeignTypesStorage {
         };
         let idx = self.add_new_ftype(ForeignTypeS {
             name: tn,
-            provides_by_module: None,
+            provides_by_module: Vec::new(),
             into_from_rust: Some(rule.clone()),
             from_into_rust: Some(rule),
         });
@@ -238,7 +240,7 @@ impl ForeignTypesStorage {
             let idx = ForeignType(self.ftypes.len());
             self.ftypes.push(ForeignTypeS {
                 name: ftype_name,
-                provides_by_module: None,
+                provides_by_module: Vec::new(),
                 into_from_rust: None,
                 from_into_rust: None,
             });

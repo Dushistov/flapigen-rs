@@ -42,7 +42,7 @@ struct CppConverter {
 #[derive(Debug)]
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
-    provides_by_module: Option<String>,
+    provides_by_module: Vec<String>,
     pub(in crate::cpp) cpp_converter: Option<CppConverter>,
 }
 
@@ -123,7 +123,7 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
                 name: x.name,
                 correspoding_rust_type: x.correspoding_rust_type,
             },
-            provides_by_module: None,
+            provides_by_module: Vec::new(),
             cpp_converter: None,
         }
     }
