@@ -207,6 +207,7 @@ fn generate_method_code(
                 method.span(),
                 conv_map,
                 &arg_name,
+                true,
             )
         })
         .collect::<Result<Vec<_>>>()?
@@ -294,6 +295,7 @@ fn self_type_conversion(
                 method.span(),
                 conv_map,
                 "self",
+                true,
             )?
             .1,
         ))
@@ -317,6 +319,7 @@ fn generate_conversion_for_argument(
     method_span: Span,
     conv_map: &mut TypeMap,
     arg_name: &str,
+    reference_allowed: bool,
 ) -> Result<(Type, TokenStream)> {
     let arg_name_ident: TokenStream = syn::parse_str(arg_name)?;
     if is_cpython_supported_type(rust_type) {
@@ -326,6 +329,7 @@ fn generate_conversion_for_argument(
         conv_map,
         &arg_name_ident,
         method_span,
+        reference_allowed,
     )? {
         Ok((ty, conversion))
     } else if let Some(enum_info) = conv_map.is_this_exported_enum(&rust_type) {
@@ -342,6 +346,7 @@ fn generate_conversion_for_argument(
             method_span,
             conv_map,
             "inner",
+            false,
         )?;
         Ok((
             parse_type!(Option<#inner_py_type>),
@@ -358,6 +363,7 @@ fn generate_conversion_for_argument(
             method_span,
             conv_map,
             "inner",
+            false
         )?;
         Ok((
             parse_type!(Vec<#inner_py_type>),
@@ -371,6 +377,7 @@ fn generate_conversion_for_argument(
             method_span,
             conv_map,
             "inner",
+            false,
         )?;
         Ok((
             parse_type!(Vec<#inner_py_type>),
@@ -390,6 +397,7 @@ fn generate_conversion_for_argument(
             method_span,
             conv_map,
             arg_name,
+            false,
         )?;
         Ok((
             parse_type!(#inner_py_type),
@@ -498,11 +506,15 @@ fn generate_conversion_for_return(
         )
     } else if let Type::Tuple(ref tuple) = rust_type.ty {
         let (types, conversions): (Vec<_>, Vec<_>) = tuple.elems.iter().enumerate().map(|(i, ty)| {
+            let i_ident = syn::Index {
+                index: i as u32,
+                span: Span::call_site(),
+            };
             generate_conversion_for_return(
                 &conv_map.find_or_alloc_rust_type(ty),
                 method_span,
                 conv_map,
-                quote!{tuple.#i}
+                quote!{tuple.#i_ident}
             )
         }).collect::<Result<Vec<_>>>()?.into_iter().unzip();
         Ok((
@@ -809,6 +821,7 @@ fn if_exported_class_generate_argument_conversion(
     conv_map: &mut TypeMap,
     arg_name_ident: &TokenStream,
     method_span: Span,
+    reference_allowed: bool,
 ) -> Result<Option<(Type, TokenStream)>> {
     let (reference_type, rust_type_unref) = get_reference_info_and_inner_type(rust_type, conv_map);
     let smart_pointer_info = smart_pointer(&rust_type_unref, conv_map);
@@ -822,10 +835,20 @@ fn if_exported_class_generate_argument_conversion(
     let class_name = class.name.to_string();
     let py_mod_str = py_wrapper_mod_name(&class_name);
     let py_mod: Ident = syn::parse_str(&py_mod_str)?;
-    let py_type: Type = syn::parse_str(&format!("&super::{}::{}", &py_mod_str, &class_name))?;
+    let py_type: Type = if reference_allowed {
+        syn::parse_str(&format!("&super::{}::{}", &py_mod_str, &class_name))?
+    } else {
+        syn::parse_str(&format!("super::{}::{}", &py_mod_str, &class_name))?
+    };
 
-    let rust_instance_code = quote! {
-        super::#py_mod::rust_instance(#arg_name_ident, py)
+    let rust_instance_code = if reference_allowed {
+        quote! {
+            super::#py_mod::rust_instance(#arg_name_ident, py)
+        }
+    } else {
+        quote! {
+            super::#py_mod::rust_instance(&#arg_name_ident, py)
+        }
     };
     let deref_code = match class_smart_pointer.pointer_type {
         PointerType::ArcRwLock => generate_deref_for_arc_rwlock(

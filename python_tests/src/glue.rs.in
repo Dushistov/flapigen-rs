@@ -57,6 +57,10 @@ impl TestStaticClass {
         v
     }
 
+    pub fn count_slice_of_objects(objs: &[TestClass]) -> usize {
+        objs.len()
+    }
+
     pub fn test_result_str_ok() -> Result<(), String> {
         Ok(())
     }
@@ -154,6 +158,7 @@ foreigner_class!(
         static_method TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
         static_method TestStaticClass::increment_vec(v: Vec<f32>) -> Vec<f32>;
         static_method TestStaticClass::return_slice(v: &[f32]) -> &[f32];
+        static_method TestStaticClass::count_slice_of_objects(objs: &[TestClass]) -> usize;
         static_method TestStaticClass::test_result_str_ok() -> Result<(), String>;
         static_method TestStaticClass::test_result_str_err() -> Result<(), String>;
         static_method TestStaticClass::test_result_ok() -> Result<i32, TestError>;

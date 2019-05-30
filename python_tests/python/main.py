@@ -44,6 +44,7 @@ def test_options():
 def test_arrays():
     assert TestStaticClass.increment_vec([1, 2]) == [2, 3]
     assert TestStaticClass.return_slice([3, 4]) == [3, 4]
+    assert TestStaticClass.count_slice_of_objects([TestClass(), TestClass()]) == 2
 
 def test_results():
     TestStaticClass.test_result_str_ok()
@@ -89,4 +90,5 @@ test_results()
 test_arc()
 test_arc_rwlock()
 test_box()
+
 print("Testing python API successful")
