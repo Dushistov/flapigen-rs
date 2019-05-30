@@ -276,9 +276,8 @@ fn foreign_class_foreign_name(
     conv_map
         .find_foreign_type_info_by_name(&foreign_typename)
         .ok_or_else(|| {
-            DiagnosticError::new(
-                foreign_class_span.0,
-                foreign_class_span.1,
+            DiagnosticError::new2(
+                foreign_class_span,
                 format!("type {} unknown", foreign_class.name),
             )
         })

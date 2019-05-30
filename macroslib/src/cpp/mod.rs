@@ -23,7 +23,7 @@ use crate::{
         },
         ty::{ForeignType, RustType},
         unpack_unique_typename,
-        utils::{rust_to_foreign_convert_method_inputs, ForeignMethodSignature},
+        utils::{rust_to_foreign_convert_method_inputs, ForeignMethodSignature, ForeignTypeInfoT},
         ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
@@ -43,6 +43,15 @@ struct CppConverter {
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
     pub(in crate::cpp) cpp_converter: Option<CppConverter>,
+}
+
+impl ForeignTypeInfoT for CppForeignTypeInfo {
+    fn name(&self) -> &str {
+        self.base.name.as_str()
+    }
+    fn correspoding_rust_type(&self) -> &RustType {
+        &self.base.correspoding_rust_type
+    }
 }
 
 impl CppForeignTypeInfo {
@@ -119,7 +128,7 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
 
 impl ForeignMethodSignature for CppForeignMethodSignature {
     type FI = CppForeignTypeInfo;
-    fn output(&self) -> &ForeignTypeInfo {
+    fn output(&self) -> &ForeignTypeInfoT {
         &self.output.base
     }
     fn input(&self) -> &[CppForeignTypeInfo] {

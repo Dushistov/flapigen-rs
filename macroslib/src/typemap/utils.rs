@@ -14,9 +14,23 @@ use crate::{
     },
 };
 
+pub(crate) trait ForeignTypeInfoT {
+    fn name(&self) -> &str;
+    fn correspoding_rust_type(&self) -> &RustType;
+}
+
+impl ForeignTypeInfoT for ForeignTypeInfo {
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+    fn correspoding_rust_type(&self) -> &RustType {
+        &self.correspoding_rust_type
+    }
+}
+
 pub(crate) trait ForeignMethodSignature {
-    type FI: AsRef<ForeignTypeInfo>;
-    fn output(&self) -> &ForeignTypeInfo;
+    type FI: ForeignTypeInfoT;
+    fn output(&self) -> &ForeignTypeInfoT;
     fn input(&self) -> &[Self::FI];
 }
 
@@ -24,17 +38,17 @@ pub(crate) fn foreign_from_rust_convert_method_output(
     conv_map: &mut TypeMap,
     src_id: SourceId,
     rust_ret_ty: &syn::ReturnType,
-    f_output: &ForeignTypeInfo,
+    f_output: &ForeignTypeInfoT,
     var_name: &str,
     func_ret_type: &str,
 ) -> Result<(Vec<TokenStream>, String)> {
     let rust_ret_ty: Type = match *rust_ret_ty {
         syn::ReturnType::Default => {
-            if f_output.name != "void" {
+            if f_output.name() != "void" {
                 return Err(DiagnosticError::new(
                     src_id,
                     rust_ret_ty.span(),
-                    format!("Rust type `()` mapped to not void ({})", f_output.name),
+                    format!("Rust type `()` mapped to not void ({})", f_output.name()),
                 ));
             } else {
                 return Ok((Vec::new(), String::new()));
@@ -46,7 +60,7 @@ pub(crate) fn foreign_from_rust_convert_method_output(
     let rust_ret_ty = conv_map.find_or_alloc_rust_type(&rust_ret_ty, src_id);
     conv_map.convert_rust_types(
         &rust_ret_ty,
-        &f_output.correspoding_rust_type,
+        f_output.correspoding_rust_type(),
         var_name,
         func_ret_type,
         (src_id, context_span),
@@ -54,7 +68,7 @@ pub(crate) fn foreign_from_rust_convert_method_output(
 }
 
 pub(crate) fn foreign_to_rust_convert_method_inputs<
-    FTI: AsRef<ForeignTypeInfo>,
+    FTI: ForeignTypeInfoT,
     GI: Iterator<Item = String>,
 >(
     conv_map: &mut TypeMap,
@@ -82,7 +96,7 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
     {
         let to: RustType = conv_map.find_or_alloc_rust_type(fn_arg_type(to_type), src_id);
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
-            &f_from.as_ref().correspoding_rust_type,
+            f_from.correspoding_rust_type(),
             &to,
             &arg_name,
             func_ret_type,
@@ -137,7 +151,7 @@ pub(crate) fn create_suitable_types_for_constructor_and_self(
 
 pub(crate) fn rust_to_foreign_convert_method_inputs<
     GI: Iterator<Item = String>,
-    FTI: AsRef<ForeignTypeInfo>,
+    FTI: ForeignTypeInfoT,
 >(
     conv_map: &mut TypeMap,
     src_id: SourceId,
@@ -160,7 +174,7 @@ pub(crate) fn rust_to_foreign_convert_method_inputs<
         let from: RustType = conv_map.find_or_alloc_rust_type(fn_arg_type(from_ty), src_id);
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             &from,
-            &to_f.as_ref().correspoding_rust_type,
+            to_f.correspoding_rust_type(),
             &arg_name,
             func_ret_type,
             (src_id, from_ty.span()),

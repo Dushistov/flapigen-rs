@@ -19,8 +19,9 @@ use crate::{
         parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
     },
     typemap::{
-        ty::RustType, utils::ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE,
-        TO_VAR_TEMPLATE,
+        ty::RustType,
+        utils::{ForeignMethodSignature, ForeignTypeInfoT},
+        ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
@@ -39,6 +40,15 @@ struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,
     pub java_converter: Option<JavaConverter>,
     annotation: Option<NullAnnotation>,
+}
+
+impl ForeignTypeInfoT for JavaForeignTypeInfo {
+    fn name(&self) -> &str {
+        self.base.name.as_str()
+    }
+    fn correspoding_rust_type(&self) -> &RustType {
+        &self.base.correspoding_rust_type
+    }
 }
 
 struct JavaConverter {
@@ -89,7 +99,7 @@ struct JniForeignMethodSignature {
 
 impl ForeignMethodSignature for JniForeignMethodSignature {
     type FI = JavaForeignTypeInfo;
-    fn output(&self) -> &ForeignTypeInfo {
+    fn output(&self) -> &ForeignTypeInfoT {
         &self.output
     }
     fn input(&self) -> &[JavaForeignTypeInfo] {
