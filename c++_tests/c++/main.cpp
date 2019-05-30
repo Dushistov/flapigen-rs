@@ -37,7 +37,6 @@
 #include "rust_interface/rust_tuple.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
-#include "rust_interface/c_SomeObserver.h"
 #include "rust_interface/SomeObserver.hpp"
 #include "rust_interface/ClassCooperationTest.hpp"
 #include "rust_interface/TestObjectLifetime.hpp"

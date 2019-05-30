@@ -37,7 +37,7 @@ pub(in crate::cpp) fn generate(
 
     let c_path = output_dir.join(format!("c_{}.h", class.name));
     let mut c_include_f = FileWriteCache::new(&c_path);
-    let cpp_path = output_dir.join(format!("{}.hpp", class.name));
+    let cpp_path = output_dir.join(cpp_code::cpp_header_name(class));
     let mut cpp_include_f = FileWriteCache::new(&cpp_path);
     let cpp_fwd_path = output_dir.join(format!("{}_fwd.hpp", class.name));
     let mut cpp_fwd_f = FileWriteCache::new(&cpp_fwd_path);

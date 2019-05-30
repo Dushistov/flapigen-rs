@@ -11,7 +11,7 @@ pub(in crate::cpp) fn generate_code_for_enum(
     output_dir: &Path,
     enum_info: &ForeignEnumInfo,
 ) -> Result<(), String> {
-    let c_path = output_dir.join(format!("c_{}.h", enum_info.name));
+    let c_path = output_dir.join(cpp_header_name_for_enum(enum_info));
     let mut file = FileWriteCache::new(&c_path);
     let enum_doc_comments = doc_comments_to_c_comments(&enum_info.doc_comments, true);
 
@@ -324,4 +324,12 @@ pub(in crate::cpp) fn cpp_generate_args_to_call_c(
         .map_err(fmt_write_err_map)?;
     }
     Ok(ret)
+}
+
+pub(in crate::cpp) fn cpp_header_name(class: &ForeignerClassInfo) -> String {
+    format!("{}.hpp", class.name)
+}
+
+pub(in crate::cpp) fn cpp_header_name_for_enum(enum_info: &ForeignEnumInfo) -> String {
+    format!("c_{}.h", enum_info.name)
 }

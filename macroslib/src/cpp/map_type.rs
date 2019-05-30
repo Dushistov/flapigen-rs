@@ -9,7 +9,7 @@ use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
     cpp::{
-        cpp_code::c_class_type,
+        cpp_code::{c_class_type, cpp_header_name, cpp_header_name_for_enum},
         {CppConverter, CppForeignTypeInfo},
     },
     error::{panic_on_syn_error, DiagnosticError, Result, SourceIdSpan},
@@ -64,6 +64,7 @@ fn special_type(
                 let converter = format!("{}{{{}}}", cpp_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
+                    provides_by_module: Some(cpp_header_name(foreign_class)),
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
                         converter,
@@ -75,6 +76,7 @@ fn special_type(
                 let converter = format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
+                    provides_by_module: Some(cpp_header_name(foreign_class)),
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
                         converter,
@@ -139,6 +141,7 @@ fn special_type(
                         name: foreign_info.name,
                         correspoding_rust_type: my_mut_void_ptr_ti,
                     },
+                    provides_by_module: Some(cpp_header_name(foreign_class)),
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
                         converter,
@@ -173,6 +176,7 @@ fn special_type(
         };
         return Ok(Some(CppForeignTypeInfo {
             base: foreign_info,
+            provides_by_module: Some(cpp_header_name(foreign_class)),
             cpp_converter: Some(CppConverter {
                 typename: foreign_class.name.to_string().into(),
                 converter,
@@ -298,6 +302,7 @@ fn calc_converter_for_enum(
         Direction::Incoming => format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
     };
     CppForeignTypeInfo {
+        provides_by_module: Some(cpp_header_name_for_enum(foreign_enum)),
         base: ForeignTypeInfo {
             name: "uint32_t".into(),
             correspoding_rust_type: u32_ti,
@@ -656,6 +661,7 @@ fn handle_result_type_as_return_type(
             );
             return Ok(Some(CppForeignTypeInfo {
                 base: foreign_info,
+                provides_by_module: Some("rust_result.h".into()),
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
                     converter,
@@ -689,6 +695,7 @@ fn handle_result_type_as_return_type(
             );
             return Ok(Some(CppForeignTypeInfo {
                 base: foreign_info,
+                provides_by_module: Some("rust_result.h".into()),
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
                     converter,
@@ -718,6 +725,7 @@ fn handle_result_type_as_return_type(
             );
             return Ok(Some(CppForeignTypeInfo {
                 base: foreign_info,
+                provides_by_module: Some("rust_result.h".into()),
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
                     converter,
@@ -886,6 +894,7 @@ fn handle_option_type_in_input(
             ),
         };
         return Ok(Some(CppForeignTypeInfo {
+            provides_by_module: Some("rust_option.h".into()),
             base: foreign_info,
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
@@ -1018,6 +1027,7 @@ fn handle_option_type_in_return(
             ),
         };
         return Ok(Some(CppForeignTypeInfo {
+            provides_by_module: Some("rust_option.h".into()),
             base: foreign_info,
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
@@ -1097,6 +1107,7 @@ fn handle_option_type_in_return(
                 ),
             };
             return Ok(Some(CppForeignTypeInfo {
+                provides_by_module: Some("rust_option.h".into()),
                 base: foreign_info,
                 cpp_converter: Some(CppConverter {
                     typename: typename.into(),
@@ -1236,6 +1247,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
             assert_eq!(foreign_info.base.name, "struct CResultObjectString");
         }
         Ok(Some(CppForeignTypeInfo {
+            provides_by_module: Some("rust_result.h".into()),
             base: foreign_info.base,
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
@@ -1265,6 +1277,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
         }
         Ok(Some(CppForeignTypeInfo {
             base: foreign_info.base,
+            provides_by_module: Some("rust_result.h".into()),
             cpp_converter: Some(CppConverter {
                 typename: typename.into(),
                 converter,

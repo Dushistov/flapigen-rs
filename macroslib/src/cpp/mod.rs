@@ -42,6 +42,7 @@ struct CppConverter {
 #[derive(Debug)]
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
+    provides_by_module: Option<String>,
     pub(in crate::cpp) cpp_converter: Option<CppConverter>,
 }
 
@@ -76,7 +77,7 @@ impl CppForeignTypeInfo {
                 ),
             )
         })?;
-
+        let provides_by_module = ftype.provides_by_module.clone();
         let base_rt;
         let base_ft_name;
         if let Some(intermediate) = rule.intermediate.as_ref() {
@@ -98,6 +99,7 @@ impl CppForeignTypeInfo {
                 name: base_ft_name,
                 correspoding_rust_type: tmap[base_rt].clone(),
             },
+            provides_by_module,
             cpp_converter,
         })
     }
@@ -121,6 +123,7 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
                 name: x.name,
                 correspoding_rust_type: x.correspoding_rust_type,
             },
+            provides_by_module: None,
             cpp_converter: None,
         }
     }

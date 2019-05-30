@@ -114,6 +114,8 @@ impl<'a> TraitNamesSet<'a> {
 #[derive(Debug)]
 pub(crate) struct ForeignTypeS {
     pub(crate) name: TypeName,
+    /// specify which foreign module provides this type
+    pub(crate) provides_by_module: Option<String>,
     pub(crate) into_from_rust: Option<ForeignConversationRule>,
     pub(crate) from_into_rust: Option<ForeignConversationRule>,
 }
@@ -213,6 +215,7 @@ impl ForeignTypesStorage {
         };
         let idx = self.add_new_ftype(ForeignTypeS {
             name: tn,
+            provides_by_module: None,
             into_from_rust: Some(rule.clone()),
             from_into_rust: Some(rule),
         });
@@ -235,6 +238,7 @@ impl ForeignTypesStorage {
             let idx = ForeignType(self.ftypes.len());
             self.ftypes.push(ForeignTypeS {
                 name: ftype_name,
+                provides_by_module: None,
                 into_from_rust: None,
                 from_into_rust: None,
             });
