@@ -202,3 +202,9 @@ pub(crate) struct ForeignInterfaceMethod {
     pub(crate) fn_decl: FnDecl,
     pub(crate) doc_comments: Vec<String>,
 }
+
+pub(crate) enum ItemToExpand {
+    Class(ForeignerClassInfo),
+    Interface(ForeignInterface),
+    Enum(ForeignEnumInfo),
+}

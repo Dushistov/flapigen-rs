@@ -27,8 +27,8 @@ use crate::{
         ForeignMethodSignature, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
-        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodAccess,
-        MethodVariant,
+        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
+        MethodAccess, MethodVariant,
     },
     CppConfig, LanguageGenerator, SourceCode, TypeMap,
 };
@@ -137,7 +137,7 @@ struct MethodContext<'a> {
     real_output_typename: &'a str,
 }
 
-impl LanguageGenerator for CppConfig {
+impl CppConfig {
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
             .validate_class()
@@ -255,7 +255,6 @@ impl LanguageGenerator for CppConfig {
     fn generate(
         &self,
         conv_map: &mut TypeMap,
-        _: usize,
         class: &ForeignerClassInfo,
     ) -> Result<Vec<TokenStream>> {
         debug!(
@@ -380,6 +379,40 @@ May be you need to use `private constructor = empty;` syntax?",
         }
 
         Ok(())
+    }
+}
+
+impl LanguageGenerator for CppConfig {
+    fn expand_items(
+        &self,
+        conv_map: &mut TypeMap,
+        pointer_target_width: usize,
+        code: &[SourceCode],
+        items: Vec<ItemToExpand>,
+    ) -> Result<Vec<TokenStream>> {
+        self.init(conv_map, code).map_err(|err| {
+            DiagnosticError::new_without_src_info(format!("C++ initialization failure: {}", err))
+        })?;
+        for item in &items {
+            if let ItemToExpand::Class(ref fclass) = item {
+                self.register_class(conv_map, fclass)?;
+            }
+        }
+        let mut ret = Vec::with_capacity(items.len());
+        for item in items {
+            match item {
+                ItemToExpand::Class(fclass) => ret.append(&mut self.generate(conv_map, &fclass)?),
+                ItemToExpand::Enum(fenum) => {
+                    ret.append(&mut self.generate_enum(conv_map, pointer_target_width, &fenum)?)
+                }
+                ItemToExpand::Interface(finterface) => ret.append(&mut self.generate_interface(
+                    conv_map,
+                    pointer_target_width,
+                    &finterface,
+                )?),
+            }
+        }
+        Ok(ret)
     }
 }
 
