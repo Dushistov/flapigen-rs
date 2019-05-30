@@ -12,8 +12,8 @@ fn main() {
 
     gen_jni_bindings(&out_dir);
 
-    let in_src = Path::new("src").join("lib.rs.in");
-    let out_src = Path::new(&out_dir).join("lib.rs");
+    let in_src = Path::new("src").join("java_glue.rs.in");
+    let out_src = Path::new(&out_dir).join("java_glue.rs");
     let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
         Path::new("java").join("com").join("example").join("rust"),
         "com.example.rust".into(),

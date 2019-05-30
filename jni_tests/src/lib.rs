@@ -1,3 +1,3 @@
+mod java_glue;
 mod jni_c_header;
-
-include!(concat!(env!("OUT_DIR"), "/lib.rs"));
+pub use crate::java_glue::*;

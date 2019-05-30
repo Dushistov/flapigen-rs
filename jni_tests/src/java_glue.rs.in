@@ -546,7 +546,7 @@ foreigner_class!(class TestPassObjectsAsParams {
                                                           -> TestPassObjectsAsParams;
 });
 
-struct GnssInfo {
+pub struct GnssInfo {
     pub x: f64,
 }
 
@@ -554,10 +554,10 @@ struct GnssInfo {
 mod Position {
     use super::*;
 
-    pub(crate) fn timeStamp(_: &GnssInfo) -> SystemTime {
+    pub fn timeStamp(_: &GnssInfo) -> SystemTime {
         SystemTime::now()
     }
-    pub(crate) fn getLatitude(gi: &GnssInfo) -> f64 {
+    pub fn getLatitude(gi: &GnssInfo) -> f64 {
         gi.x
     }
 }
@@ -608,7 +608,7 @@ impl Moo {
     }
 
     fn next_enum(v: MyEnum) -> MyEnum {
-        use crate::MyEnum::*;
+        use MyEnum::*;
         match v {
             Item1 => Item2,
             Item2 => Item3,

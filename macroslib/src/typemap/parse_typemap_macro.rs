@@ -141,8 +141,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                                 Some(ConvertRuleType::RightToLeft(input.parse::<Type>()?));
                         }
 
-                        let mut code = None;
-                        if conv_rule_type.is_some() && input.peek(syn::token::Brace) {
+                        let code = if conv_rule_type.is_some() && input.peek(syn::token::Brace) {
                             let content;
                             braced!(content in input);
                             let conv_body = content.parse::<TokenStream>()?;
@@ -165,14 +164,16 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                             }
                             code_str.push(';');
 
-                            code = Some(FTypeConvCode::new2(
+                            Some(FTypeConvCode::new2(
                                 code_str.replace(&d_var_name, FROM_VAR_TEMPLATE).replace(
                                     &out_var,
                                     &format!("let {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),
                                 ),
                                 conv_body.span(),
-                            ));
-                        }
+                            ))
+                        } else {
+                            None
+                        };
                         match conv_rule_type {
                             Some(ConvertRuleType::LeftToRight(right_ty)) => {
                                 if rtype_left_to_right.is_some() {
@@ -216,10 +217,11 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                         }
                     }
                     RuleType::FType(keyword) => {
-                        let mut left_ty = None;
-                        if input.peek(LitStr) {
-                            left_ty = Some(input.parse::<LitStr>()?.into());
-                        }
+                        let left_ty = if input.peek(LitStr) {
+                            Some(input.parse::<LitStr>()?.into())
+                        } else {
+                            None
+                        };
                         let mut conv_rule_type = None;
                         if input.peek(Token![=>]) {
                             input.parse::<Token![=>]>()?;
@@ -232,18 +234,19 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                                 input.parse::<LitStr>()?.into(),
                             ));
                         }
-                        let mut code = None;
-                        if conv_rule_type.is_some() && input.peek(LitStr) {
+                        let code = if conv_rule_type.is_some() && input.peek(LitStr) {
                             let code_str = input.parse::<LitStr>()?;
                             let var_name = var_name.ok_or_else(|| {
                                 syn::Error::new(keyword.span(), "there is conversation code, but name of input variable not defined here")
                             })?;
                             let var_name = format!("${}", var_name);
-                            code = Some(FTypeConvCode::new(
+                            Some(FTypeConvCode::new(
                                 code_str.value().replace(&var_name, FROM_VAR_TEMPLATE),
                                 code_str.span(),
-                            ));
-                        }
+                            ))
+                        } else {
+                            None
+                        };
                         match conv_rule_type {
                             Some(ConvertRuleType::LeftToRight(right_ty)) => {
                                 if ftype_left_to_right.is_some() {

@@ -315,7 +315,7 @@ impl Generator {
 
         let src_id = self.src_reg.register(SourceCode {
             id_of_code: format!("{}: {}", crate_name, src.as_ref().display()),
-            code: src_cnt.into(),
+            code: src_cnt,
         });
 
         if let Err(err) = self.expand_str(src_id, dst) {
