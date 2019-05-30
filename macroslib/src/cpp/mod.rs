@@ -294,13 +294,15 @@ May be you need to use `private constructor = empty;` syntax?",
             ));
         }
 
-        let m_sigs = fclass::find_suitable_foreign_types_for_methods(conv_map, class, self)?;
+        let mut m_sigs = fclass::find_suitable_foreign_types_for_methods(conv_map, class, self)?;
+        let req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
         let mut code_items = fclass::generate(
             conv_map,
             &self.output_dir,
             &self.namespace_name,
             self.separate_impl_headers,
             class,
+            &req_includes,
             &m_sigs,
         )?;
         code_items.append(&mut self.to_generate.borrow_mut());
@@ -343,12 +345,14 @@ May be you need to use `private constructor = empty;` syntax?",
         pointer_target_width: usize,
         interface: &ForeignInterface,
     ) -> Result<Vec<TokenStream>> {
-        let f_methods =
+        let mut f_methods =
             finterface::find_suitable_ftypes_for_interace_methods(conv_map, interface, self)?;
+        let req_includes = cpp_code::cpp_list_required_includes(&mut f_methods);
         finterface::generate_for_interface(
             &self.output_dir,
             &self.namespace_name,
             interface,
+            &req_includes,
             &f_methods,
         )
         .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;

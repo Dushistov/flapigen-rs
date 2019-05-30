@@ -1,3 +1,5 @@
+use rustc_hash::FxHashSet;
+
 use crate::{
     cpp::{fmt_write_err_map, CppForeignMethodSignature},
     typemap::FROM_VAR_TEMPLATE,
@@ -100,4 +102,24 @@ pub(in crate::cpp) fn cpp_header_name(class: &ForeignerClassInfo) -> String {
 
 pub(in crate::cpp) fn cpp_header_name_for_enum(enum_info: &ForeignEnumInfo) -> String {
     format!("c_{}.h", enum_info.name)
+}
+
+pub(in crate::cpp) fn cpp_list_required_includes(
+    methods: &mut [CppForeignMethodSignature],
+) -> Vec<String> {
+    let mut includes = FxHashSet::<String>::default();
+    for m in methods {
+        for p in &mut m.input {
+            if let Some(inc) = p.provides_by_module.take() {
+                includes.insert(inc);
+            }
+        }
+        if let Some(inc) = m.output.provides_by_module.take() {
+            includes.insert(inc);
+        }
+    }
+
+    let mut ret: Vec<_> = includes.into_iter().collect();
+    ret.sort();
+    ret
 }
