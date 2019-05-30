@@ -1,28 +1,29 @@
 use std::{io::Write, mem, path::Path};
 
 use log::debug;
+use petgraph::Direction;
 use proc_macro2::TokenStream;
-use syn::{parse_quote, Type};
+use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
     cpp::{
-        c_func_name, cpp_code, n_arguments_list, rust_generate_args_with_types,
-        CppForeignMethodSignature, MethodContext,
+        c_func_name, cpp_code, map_type::map_type, n_arguments_list, rust_generate_args_with_types,
+        CppForeignMethodSignature, CppForeignTypeInfo, MethodContext,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
     typemap::{
-        ast::{list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
+        ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
         ty::RustType,
         unpack_unique_typename,
         utils::{
             create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
         },
-        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{ForeignerClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
-    TypeMap,
+    CppConfig, TypeMap,
 };
 
 pub(in crate::cpp) fn generate(
@@ -946,4 +947,61 @@ fn write_methods_impls(
         namespace = namespace_name,
         inline_impl = inline_impl,
     )
+}
+
+pub(in crate::cpp) fn find_suitable_foreign_types_for_methods(
+    conv_map: &mut TypeMap,
+    class: &ForeignerClassInfo,
+    cpp_cfg: &CppConfig,
+) -> Result<Vec<CppForeignMethodSignature>> {
+    let mut ret = Vec::<CppForeignMethodSignature>::with_capacity(class.methods.len());
+    let dummy_ty = parse_type! { () };
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
+
+    for method in &class.methods {
+        //skip self argument
+        let skip_n = match method.variant {
+            MethodVariant::Method(_) => 1,
+            _ => 0,
+        };
+        assert!(method.fn_decl.inputs.len() >= skip_n);
+        let mut input =
+            Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
+        for arg in method.fn_decl.inputs.iter().skip(skip_n) {
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg), class.src_id);
+            input.push(map_type(
+                conv_map,
+                cpp_cfg,
+                &arg_rust_ty,
+                Direction::Incoming,
+                (class.src_id, fn_arg_type(arg).span()),
+            )?);
+        }
+        let output: CppForeignTypeInfo = match method.variant {
+            MethodVariant::Constructor => ForeignTypeInfo {
+                name: "".into(),
+                correspoding_rust_type: dummy_rust_ty.clone(),
+            }
+            .into(),
+            _ => match method.fn_decl.output {
+                syn::ReturnType::Default => ForeignTypeInfo {
+                    name: "void".into(),
+                    correspoding_rust_type: dummy_rust_ty.clone(),
+                }
+                .into(),
+                syn::ReturnType::Type(_, ref rt) => {
+                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt, class.src_id);
+                    map_type(
+                        conv_map,
+                        cpp_cfg,
+                        &ret_rust_ty,
+                        Direction::Outgoing,
+                        (class.src_id, rt.span()),
+                    )?
+                }
+            },
+        };
+        ret.push(CppForeignMethodSignature { output, input });
+    }
+    Ok(ret)
 }
