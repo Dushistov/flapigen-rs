@@ -19,7 +19,8 @@ use crate::{
         parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
     },
     typemap::{
-        ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        ty::RustType, utils::ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE,
+        TO_VAR_TEMPLATE,
     },
     types::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,

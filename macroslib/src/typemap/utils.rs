@@ -7,12 +7,18 @@ use crate::{
     typemap::{
         ast::{fn_arg_type, parse_ty_with_given_span_checked, DisplayToTokens},
         ty::RustType,
-        ForeignMethodSignature, ForeignTypeInfo, TypeMap,
+        ForeignTypeInfo, TypeMap,
     },
     types::{
         ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
     },
 };
+
+pub(crate) trait ForeignMethodSignature {
+    type FI: AsRef<ForeignTypeInfo>;
+    fn output(&self) -> &ForeignTypeInfo;
+    fn input(&self) -> &[Self::FI];
+}
 
 pub(crate) fn foreign_from_rust_convert_method_output(
     conv_map: &mut TypeMap,

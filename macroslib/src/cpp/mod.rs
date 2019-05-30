@@ -23,8 +23,8 @@ use crate::{
         },
         ty::{ForeignType, RustType},
         unpack_unique_typename,
-        utils::rust_to_foreign_convert_method_inputs,
-        ForeignMethodSignature, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        utils::{rust_to_foreign_convert_method_inputs, ForeignMethodSignature},
+        ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,

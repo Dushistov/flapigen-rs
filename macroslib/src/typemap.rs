@@ -67,12 +67,6 @@ impl TypeConvEdge {
 pub(crate) type TypeGraphIdx = u32;
 pub(crate) type TypesConvGraph = Graph<RustType, TypeConvEdge, petgraph::Directed, TypeGraphIdx>;
 
-pub(crate) trait ForeignMethodSignature {
-    type FI: AsRef<ForeignTypeInfo>;
-    fn output(&self) -> &ForeignTypeInfo;
-    fn input(&self) -> &[Self::FI];
-}
-
 pub(crate) type RustTypeIdx = NodeIndex<TypeGraphIdx>;
 
 type RustTypeNameToGraphIdx = FxHashMap<SmolStr, RustTypeIdx>;
