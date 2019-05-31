@@ -1,9 +1,13 @@
-use crate::typemap::{ty::FTypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE};
-use proc_macro2::Span;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use smol_str::SmolStr;
 use syn::{
-    braced, parenthesized, parse_quote, spanned::Spanned, token, Ident, LitStr, Token, Type,
+    braced, bracketed, parenthesized, parse_quote, spanned::Spanned, token, Ident, LitStr, Token,
+    Type,
+};
+
+use crate::typemap::{
+    ast::DisplayToTokens, ty::FTypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+    TO_VAR_TYPE_TEMPLATE,
 };
 
 #[derive(Debug)]
@@ -12,6 +16,9 @@ pub(in crate::typemap) struct TypeMapConvRuleInfo {
     pub rtype_right_to_left: Option<RTypeConvRule>,
     pub ftype_left_to_right: Option<FTypeConvRule>,
     pub ftype_right_to_left: Option<FTypeConvRule>,
+    /// empty and none is different, because of if none
+    /// we don't touch, if empty we override req_modules
+    pub ftype_req_modules: Option<Vec<String>>,
 }
 
 impl TypeMapConvRuleInfo {
@@ -85,6 +92,7 @@ mod kw {
 
     custom_keyword!(r_type);
     custom_keyword!(f_type);
+    custom_keyword!(req_modules);
 }
 
 enum RuleType {
@@ -104,6 +112,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
         let mut rtype_right_to_left: Option<RTypeConvRule> = None;
         let mut ftype_left_to_right: Option<FTypeConvRule> = None;
         let mut ftype_right_to_left: Option<FTypeConvRule> = None;
+        let mut ftype_req_modules = None;
 
         while !input.is_empty() {
             if input.peek(token::Paren) {
@@ -117,14 +126,54 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                     params.parse::<Token![:]>()?;
                 }
 
-                let rule;
                 let kw_la = params.lookahead1();
-                if kw_la.peek(kw::r_type) {
-                    rule = RuleType::RType(params.parse::<kw::r_type>()?);
+                let rule = if kw_la.peek(kw::r_type) {
+                    RuleType::RType(params.parse::<kw::r_type>()?)
                 } else if kw_la.peek(kw::f_type) {
-                    rule = RuleType::FType(params.parse::<kw::f_type>()?);
+                    RuleType::FType(params.parse::<kw::f_type>()?)
                 } else {
                     return Err(kw_la.error());
+                };
+                if params.peek(Token![,]) {
+                    params.parse::<Token![,]>()?;
+                    let la = params.lookahead1();
+                    if la.peek(kw::req_modules) {
+                        if let RuleType::RType(ref keyword) = rule {
+                            return Err(syn::Error::new(
+                                keyword.span(),
+                                format!(
+                                    "{} may be used only with f_type",
+                                    DisplayToTokens(&kw::req_modules::default())
+                                ),
+                            ));
+                        }
+                        params.parse::<kw::req_modules>()?;
+                        params.parse::<Token![=]>()?;
+                        let modules;
+                        bracketed!(modules in params);
+                        while !modules.is_empty() {
+                            if ftype_req_modules.is_none() {
+                                ftype_req_modules = Some(Vec::with_capacity(3));
+                            }
+                            ftype_req_modules
+                                .as_mut()
+                                .unwrap()
+                                .push(modules.parse::<LitStr>()?.value());
+                            if modules.peek(Token![,]) {
+                                modules.parse::<Token![,]>()?;
+                            }
+                            if !modules.is_empty() {
+                                return Err(modules.error(format!(
+                                    "expect end of {} here",
+                                    DisplayToTokens(&kw::req_modules::default())
+                                )));
+                            } else {
+                                break;
+                            }
+                        }
+                    } else {
+                        return Err(la.error());
+                    }
                 }
                 match rule {
                     RuleType::RType(keyword) => {
@@ -307,6 +356,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
             input.parse::<Token![;]>()?;
         }
         Ok(TypeMapConvRuleInfo {
+            ftype_req_modules,
             rtype_left_to_right,
             rtype_right_to_left,
             ftype_left_to_right,
@@ -526,6 +576,38 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         );
 
         assert_eq!(None, rule.ftype_right_to_left);
+    }
+
+    #[test]
+    fn test_foreign_typemap_cpp_ruststring() {
+        let rule = macro_to_conv_rule(parse_quote! {
+                    foreign_typemap!(
+                        define_c_type!(module = "rust_str.h"
+                            #[repr(C)]
+                            struct CRustString {
+                                data: *const ::std::os::raw::c_char,
+                                len: usize,
+                                capacity: usize,
+                            }
+                        );/*
+                        #[cfg(swig_option="boost")]
+                        foreigner_code!(module = "rust_str.h";
+                                        r#"
+        namespace $RUST_SWIG_USER_NAMESPACE {
+        class RustString final : private CRustString {
+        public:
+
+        };
+        }
+        "#
+                                        );*/
+                        ($pin:r_type) String => CRustString {
+                            $out = CRustString::from_string($pin)
+                        };
+                        ($pin:f_type, req_modules = ["rust_str.h"]) => "RustString" "RustString{$pin}";
+                    )
+                });
+        assert!(!rule.if_simple_rtype_ftype_map().is_some());
     }
 
     fn macro_to_conv_rule(mac: syn::Macro) -> TypeMapConvRuleInfo {
