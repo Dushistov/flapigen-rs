@@ -31,19 +31,14 @@
 #include <gtest/gtest.h>
 
 #include "rust_interface/rust_str.h"
-#include "rust_interface/rust_vec.h"
-#include "rust_interface/rust_result.h"
-#include "rust_interface/rust_option.h"
 #include "rust_interface/rust_tuple.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
-#include "rust_interface/c_SomeObserver.h"
 #include "rust_interface/SomeObserver.hpp"
 #include "rust_interface/ClassCooperationTest.hpp"
 #include "rust_interface/TestObjectLifetime.hpp"
 #include "rust_interface/RustForeignVecFoo.h"
 #include "rust_interface/TestWorkWithVec.hpp"
-#include "rust_interface/c_MyEnum.h"
 #include "rust_interface/TestEnumClass.hpp"
 #include "rust_interface/TestPassPathAsParam.hpp"
 #if defined(HAS_STDCXX_17) || defined(USE_BOOST)
@@ -52,7 +47,6 @@
 #endif
 #include "rust_interface/TestError.hpp"
 #if !defined(NO_HAVE_STD17_VARIANT) || defined(USE_BOOST)
-#include "rust_interface/c_ErrorEnum.h"
 #include "rust_interface/TestResult.hpp"
 #endif
 #include "rust_interface/Position.hpp"

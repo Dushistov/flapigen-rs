@@ -33,7 +33,7 @@ use std::{
     str::FromStr,
 };
 
-use log::{debug, trace};
+use log::debug;
 use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
 use syn::spanned::Spanned;
@@ -42,7 +42,7 @@ use crate::{
     error::{panic_on_parse_error, DiagnosticError, Result},
     source_registry::{SourceId, SourceRegistry},
     typemap::{ast::DisplayToTokens, TypeMap},
-    types::{ForeignEnumInfo, ForeignInterface, ForeignerClassInfo},
+    types::ItemToExpand,
 };
 
 /// Calculate target pointer width from environment variable
@@ -216,13 +216,6 @@ static FOREIGNER_CLASS: &str = "foreigner_class";
 static FOREIGN_ENUM: &str = "foreign_enum";
 static FOREIGN_INTERFACE: &str = "foreign_interface";
 
-enum OutputCode {
-    Item(syn::Item),
-    Class(ForeignerClassInfo),
-    Interface(ForeignInterface),
-    Enum(ForeignEnumInfo),
-}
-
 impl Generator {
     pub fn new(config: LanguageConfig) -> Generator {
         let pointer_target_width = target_pointer_width_from_env();
@@ -322,7 +315,7 @@ impl Generator {
 
         let src_id = self.src_reg.register(SourceCode {
             id_of_code: format!("{}: {}", crate_name, src.as_ref().display()),
-            code: src_cnt.into(),
+            code: src_cnt,
         });
 
         if let Err(err) = self.expand_str(src_id, dst) {
@@ -357,7 +350,8 @@ impl Generator {
             write!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
         }
 
-        let mut output_code = vec![];
+        // n / 2 - just guess
+        let mut items_to_expand = Vec::with_capacity(syn_file.items.len() / 2);
 
         for item in syn_file.items {
             if let syn::Item::Macro(mut item_macro) = item {
@@ -369,7 +363,7 @@ impl Generator {
                         .expect("mem I/O failed");
                     continue;
                 }
-                trace!("Found {:?}", item_macro.mac.path);
+                debug!("Found {}", DisplayToTokens(&item_macro.mac.path));
                 if item_macro.mac.tts.is_empty() {
                     return Err(DiagnosticError::new(
                         src_id,
@@ -389,59 +383,29 @@ impl Generator {
                         fclass.self_type, fclass.constructor_ret_type
                     );
                     self.conv_map.register_foreigner_class(&fclass);
-                    Generator::language_generator(&self.config)
-                        .register_class(&mut self.conv_map, &fclass)?;
-                    output_code.push(OutputCode::Class(fclass));
+                    items_to_expand.push(ItemToExpand::Class(fclass));
                 } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
                     let fenum = code_parse::parse_foreign_enum(src_id, tts)?;
-                    output_code.push(OutputCode::Enum(fenum));
+                    items_to_expand.push(ItemToExpand::Enum(fenum));
                 } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE) {
                     let finterface = code_parse::parse_foreign_interface(src_id, tts)?;
-                    output_code.push(OutputCode::Interface(finterface));
+                    items_to_expand.push(ItemToExpand::Interface(finterface));
                 } else {
                     unreachable!();
                 }
             } else {
-                output_code.push(OutputCode::Item(item));
+                writeln!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
             }
         }
 
-        for code_item in output_code {
-            match code_item {
-                OutputCode::Class(fclass) => {
-                    let code = Generator::language_generator(&self.config).generate(
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &fclass,
-                    )?;
-                    for elem in code {
-                        writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
-                    }
-                }
-                OutputCode::Enum(fenum) => {
-                    let code = Generator::language_generator(&self.config).generate_enum(
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &fenum,
-                    )?;
-                    for elem in code {
-                        writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
-                    }
-                }
-                OutputCode::Interface(finterface) => {
-                    let code = Generator::language_generator(&self.config).generate_interface(
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &finterface,
-                    )?;
-                    for elem in code {
-                        writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
-                    }
-                }
-                OutputCode::Item(item) => {
-                    writeln!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
-                }
-            }
+        let code = Generator::language_generator(&self.config).expand_items(
+            &mut self.conv_map,
+            self.pointer_target_width,
+            &self.foreign_lang_helpers,
+            items_to_expand,
+        )?;
+        for elem in code {
+            writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
         }
 
         file.update_file_if_necessary().unwrap_or_else(|err| {
@@ -470,15 +434,6 @@ impl Generator {
             ));
         }
 
-        Generator::language_generator(&self.config)
-            .init(&mut self.conv_map, &self.foreign_lang_helpers)
-            .map_err(|err| {
-                DiagnosticError::new_without_src_info(format!(
-                    "Can not put/generate foreign lang helpers: {}",
-                    err
-                ))
-            })?;
-
         Ok(self.conv_map.take_utils_code())
     }
 
@@ -491,35 +446,11 @@ impl Generator {
 }
 
 trait LanguageGenerator {
-    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()>;
-
-    fn generate(
+    fn expand_items(
         &self,
         conv_map: &mut TypeMap,
         pointer_target_width: usize,
-        class: &ForeignerClassInfo,
+        code: &[SourceCode],
+        items: Vec<ItemToExpand>,
     ) -> Result<Vec<TokenStream>>;
-
-    fn generate_enum(
-        &self,
-        conv_map: &mut TypeMap,
-        pointer_target_width: usize,
-        enum_info: &ForeignEnumInfo,
-    ) -> Result<Vec<TokenStream>>;
-
-    fn generate_interface(
-        &self,
-        conv_map: &mut TypeMap,
-        pointer_target_width: usize,
-        interace: &ForeignInterface,
-    ) -> Result<Vec<TokenStream>>;
-
-    /// Called before any other methods and only once
-    fn init(
-        &self,
-        _type_map: &mut TypeMap,
-        _foreign_lang_helpers: &[SourceCode],
-    ) -> std::result::Result<(), String> {
-        Ok(())
-    }
 }

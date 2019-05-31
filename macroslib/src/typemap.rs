@@ -67,12 +67,6 @@ impl TypeConvEdge {
 pub(crate) type TypeGraphIdx = u32;
 pub(crate) type TypesConvGraph = Graph<RustType, TypeConvEdge, petgraph::Directed, TypeGraphIdx>;
 
-pub(crate) trait ForeignMethodSignature {
-    type FI: AsRef<ForeignTypeInfo>;
-    fn output(&self) -> &ForeignTypeInfo;
-    fn input(&self) -> &[Self::FI];
-}
-
 pub(crate) type RustTypeIdx = NodeIndex<TypeGraphIdx>;
 
 type RustTypeNameToGraphIdx = FxHashMap<SmolStr, RustTypeIdx>;
@@ -445,19 +439,17 @@ impl TypeMap {
     pub(crate) fn is_ty_implements(&self, ty: &RustType, trait_name: &str) -> Option<RustType> {
         if ty.implements.contains(trait_name) {
             Some(ty.clone())
+        } else if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = ty.ty {
+            let ty_name = normalize_ty_lifetimes(&*elem);
+            self.rust_names_map.get(ty_name).and_then(|idx| {
+                if self.conv_graph[*idx].implements.contains(trait_name) {
+                    Some(self.conv_graph[*idx].clone())
+                } else {
+                    None
+                }
+            })
         } else {
-            if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = ty.ty {
-                let ty_name = normalize_ty_lifetimes(&*elem);
-                self.rust_names_map.get(ty_name).and_then(|idx| {
-                    if self.conv_graph[*idx].implements.contains(trait_name) {
-                        Some(self.conv_graph[*idx].clone())
-                    } else {
-                        None
-                    }
-                })
-            } else {
-                None
-            }
+            None
         }
     }
 
@@ -744,7 +736,7 @@ impl TypeMap {
             }
         }
 
-        let from: RustType = rust_ty.clone().into();
+        let from: RustType = rust_ty.clone();
         let mut possible_paths = Vec::<(PossiblePath, ForeignType, RustTypeIdx)>::new();
         for max_steps in 1..=MAX_TRY_BUILD_PATH_STEPS {
             for (ftype_idx, ftype) in self.ftypes_storage.iter_enumerate() {
@@ -1054,10 +1046,7 @@ fn find_conversation_path(
 }
 
 fn merge_path_to_conv_map(path: PossiblePath, conv_map: &mut TypeMap) {
-    let PossiblePath {
-        new_edges,
-        path_len: _,
-    } = path;
+    let PossiblePath { new_edges, .. } = path;
 
     for (from, to, conv_rule) in new_edges {
         let from_idx = conv_map.add_node(from.normalized_name.clone(), || (*from).clone());

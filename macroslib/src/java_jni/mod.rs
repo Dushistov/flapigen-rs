@@ -19,10 +19,13 @@ use crate::{
         parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
     },
     typemap::{
-        ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        ty::RustType,
+        utils::{ForeignMethodSignature, ForeignTypeInfoT},
+        ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
-        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
+        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
+        MethodVariant,
     },
     JavaConfig, LanguageGenerator, SourceCode, TypeMap,
 };
@@ -37,6 +40,15 @@ struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,
     pub java_converter: Option<JavaConverter>,
     annotation: Option<NullAnnotation>,
+}
+
+impl ForeignTypeInfoT for JavaForeignTypeInfo {
+    fn name(&self) -> &str {
+        self.base.name.as_str()
+    }
+    fn correspoding_rust_type(&self) -> &RustType {
+        &self.base.correspoding_rust_type
+    }
 }
 
 struct JavaConverter {
@@ -87,7 +99,7 @@ struct JniForeignMethodSignature {
 
 impl ForeignMethodSignature for JniForeignMethodSignature {
     type FI = JavaForeignTypeInfo;
-    fn output(&self) -> &ForeignTypeInfo {
+    fn output(&self) -> &ForeignTypeInfoT {
         &self.output
     }
     fn input(&self) -> &[JavaForeignTypeInfo] {
@@ -95,15 +107,10 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
     }
 }
 
-impl LanguageGenerator for JavaConfig {
-    fn init(
-        &self,
-        conv_map: &mut TypeMap,
-        _code: &[SourceCode],
-    ) -> std::result::Result<(), String> {
+impl JavaConfig {
+    fn init(&self, conv_map: &mut TypeMap, _code: &[SourceCode]) {
         conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jint });
         conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
-        Ok(())
     }
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
@@ -215,7 +222,6 @@ impl LanguageGenerator for JavaConfig {
     fn generate(
         &self,
         conv_map: &mut TypeMap,
-        _: usize,
         class: &ForeignerClassInfo,
     ) -> Result<Vec<TokenStream>> {
         debug!(
@@ -298,6 +304,38 @@ impl LanguageGenerator for JavaConfig {
             TypeName::from_ident(&interface.name, interface.src_id),
         )?;
         Ok(items)
+    }
+}
+
+impl LanguageGenerator for JavaConfig {
+    fn expand_items(
+        &self,
+        conv_map: &mut TypeMap,
+        pointer_target_width: usize,
+        code: &[SourceCode],
+        items: Vec<ItemToExpand>,
+    ) -> Result<Vec<TokenStream>> {
+        self.init(conv_map, code);
+        for item in &items {
+            if let ItemToExpand::Class(ref fclass) = item {
+                self.register_class(conv_map, fclass)?;
+            }
+        }
+        let mut ret = Vec::with_capacity(items.len());
+        for item in items {
+            match item {
+                ItemToExpand::Class(fclass) => ret.append(&mut self.generate(conv_map, &fclass)?),
+                ItemToExpand::Enum(fenum) => {
+                    ret.append(&mut self.generate_enum(conv_map, pointer_target_width, &fenum)?)
+                }
+                ItemToExpand::Interface(finterface) => ret.append(&mut self.generate_interface(
+                    conv_map,
+                    pointer_target_width,
+                    &finterface,
+                )?),
+            }
+        }
+        Ok(ret)
     }
 }
 
