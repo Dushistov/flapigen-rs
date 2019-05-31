@@ -1299,5 +1299,5 @@ foreign_typemap!(
     ($pin:r_type) String => CRustString {
         $out = CRustString::from_string($pin)
     };
-    ($pin:f_type, req_modules = ["rust_str.h"]) => "RustString" "RustString{$pin}";
+    ($pin:f_type, req_modules = ["\"rust_str.h\""]) => "RustString" "RustString{$pin}";
 );

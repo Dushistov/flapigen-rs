@@ -13,20 +13,8 @@
 #include <iostream>
 #include <sstream>
 #include <utility>
-#ifdef HAS_STDCXX_17
-#ifndef NO_HAVE_STD17_OPTIONAL
-#include <optional>
-#endif
-#ifndef NO_HAVE_STD17_VARIANT
-#include <variant>
-#endif
-#endif
-#ifdef USE_BOOST
-#include <boost/optional.hpp>
-#include <boost/variant.hpp>
-#ifdef HAS_BOOST_STRING_VIEW_HPP
+#if defined(USE_BOOST) && defined(HAS_BOOST_STRING_VIEW_HPP)
 #include <boost/utility/string_view.hpp>
-#endif
 #endif
 #include <gtest/gtest.h>
 
@@ -41,18 +29,16 @@
 #include "rust_interface/TestWorkWithVec.hpp"
 #include "rust_interface/TestEnumClass.hpp"
 #include "rust_interface/TestPassPathAsParam.hpp"
-#if defined(HAS_STDCXX_17) || defined(USE_BOOST)
-#if !defined(NO_HAVE_STD17_OPTIONAL)
+#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_OPTIONAL)) || defined(USE_BOOST)
 #include "rust_interface/TestOptional.hpp"
 #endif
 #include "rust_interface/TestError.hpp"
-#if !defined(NO_HAVE_STD17_VARIANT) || defined(USE_BOOST)
+#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)) || defined(USE_BOOST)
 #include "rust_interface/TestResult.hpp"
 #endif
 #include "rust_interface/Position.hpp"
-#if !defined(NO_HAVE_STD17_VARIANT)
+#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)) || defined(USE_BOOST)
 #include "rust_interface/LocationService.hpp"
-#endif
 #endif
 #include "rust_interface/TestReferences.hpp"
 #include "rust_interface/TestOnlyStaticMethods.hpp"

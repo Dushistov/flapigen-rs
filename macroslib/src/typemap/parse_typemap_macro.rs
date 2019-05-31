@@ -582,7 +582,7 @@ $out = QString::fromUtf8($pin.data, $pin.len);
     fn test_foreign_typemap_cpp_ruststring() {
         let rule = macro_to_conv_rule(parse_quote! {
                     foreign_typemap!(
-                        define_c_type!(module = "rust_str.h"
+                        define_c_type!(module = "rust_str.h";
                             #[repr(C)]
                             struct CRustString {
                                 data: *const ::std::os::raw::c_char,
