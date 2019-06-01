@@ -17,7 +17,7 @@ use crate::{
         ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
         ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, SelfTypeVariant,
     },
-    LanguageConfig,
+    LanguageConfig, FOREIGNER_CODE, FOREIGN_CODE,
 };
 
 pub(crate) fn parse_foreigner_class(
@@ -197,7 +197,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             continue;
         }
 
-        if func_type_name == "foreigner_code" {
+        if func_type_name == FOREIGNER_CODE || func_type_name == FOREIGN_CODE {
             let lit: syn::LitStr = content.parse()?;
             debug!("foreigner_code {:?}", lit);
             foreigner_code.push_str(&lit.value());

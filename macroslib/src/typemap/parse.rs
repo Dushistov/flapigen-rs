@@ -69,7 +69,7 @@ pub(in crate::typemap) fn parse(
         exported_enums: FxHashMap::default(),
         traits_usage_code,
         ftypes_storage: ForeignTypesStorage::default(),
-        c_types: vec![],
+        not_merged_data: vec![],
     };
 
     macro_rules! handle_attrs {

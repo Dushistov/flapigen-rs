@@ -11,6 +11,7 @@ use crate::{
         ast::DisplayToTokens, ty::FTypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
         TO_VAR_TYPE_TEMPLATE,
     },
+    FOREIGNER_CODE, FOREIGN_CODE,
 };
 
 #[derive(Debug)]
@@ -99,6 +100,7 @@ mod kw {
     custom_keyword!(f_type);
     custom_keyword!(req_modules);
     custom_keyword!(module);
+    custom_keyword!(swig_option);
 }
 
 enum RuleType {
@@ -360,12 +362,16 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 }
             } else {
                 let mac: syn::Macro = input.parse()?;
-                let is_our_macro = [DEFINE_C_TYPE].iter().any(|x| mac.path.is_ident(x));
+                let is_our_macro = [DEFINE_C_TYPE, FOREIGNER_CODE, FOREIGN_CODE]
+                    .iter()
+                    .any(|x| mac.path.is_ident(x));
                 if !is_our_macro {
                     return Err(syn::Error::new(mac.span(), "unknown macro in this context"));
                 }
                 if mac.path.is_ident(DEFINE_C_TYPE) {
                     c_types = Some(syn::parse2(mac.tts)?);
+                } else if mac.path.is_ident(FOREIGN_CODE) || mac.path.is_ident(FOREIGNER_CODE) {
+                    let f_code: ForeignCode = syn::parse2(mac.tts)?;
                 }
             }
             input.parse::<Token![;]>()?;
@@ -389,7 +395,7 @@ pub(crate) enum CType {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CTypes {
-    pub header_name: String,
+    pub header_name: SmolStr,
     pub src_id: SourceId,
     pub types: Vec<CType>,
 }
@@ -406,7 +412,7 @@ impl syn::parse::Parse for CTypes {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
-        let header_name = module_name.value();
+        let header_name: SmolStr = module_name.value().into();
         input.parse::<Token![;]>()?;
         let mut types = vec![];
         while !input.is_empty() {
@@ -438,6 +444,39 @@ impl syn::parse::Parse for CTypes {
 fn has_repr_c_attr(attrs: &[syn::Attribute]) -> bool {
     let repr_c_attr: syn::Attribute = parse_quote! { #[repr(C)] };
     attrs.iter().any(|a| *a == repr_c_attr)
+}
+
+#[derive(Debug)]
+pub(crate) struct ForeignCode {
+    pub module_name: SmolStr,
+    pub cfg_option: Option<SmolStr>,
+    pub code: String,
+}
+
+impl syn::parse::Parse for ForeignCode {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<kw::module>()?;
+        input.parse::<Token![=]>()?;
+        let module_name: LitStr = input.parse()?;
+        let module_name: SmolStr = module_name.value().into();
+        input.parse::<Token![;]>()?;
+        let cfg_option: Option<SmolStr> = if input.peek(kw::swig_option) {
+            input.parse::<kw::swig_option>()?;
+            input.parse::<Token![=]>()?;
+            let cfg_option: LitStr = input.parse()?;
+            input.parse::<Token![;]>()?;
+            Some(cfg_option.value().into())
+        } else {
+            None
+        };
+        let code: LitStr = input.parse()?;
+
+        Ok(ForeignCode {
+            module_name,
+            cfg_option,
+            code: code.value(),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -656,18 +695,18 @@ $out = QString::fromUtf8($pin.data, $pin.len);
     #[test]
     fn test_foreign_typemap_cpp_ruststring() {
         let rule = macro_to_conv_rule(parse_quote! {
-                    foreign_typemap!(
-                        define_c_type!(module = "rust_str.h";
-                            #[repr(C)]
-                            struct CRustString {
-                                data: *const ::std::os::raw::c_char,
-                                len: usize,
-                                capacity: usize,
-                            }
-                        );/*
-                        #[cfg(swig_option="boost")]
-                        foreigner_code!(module = "rust_str.h";
-                                        r#"
+            foreign_typemap!(
+                define_c_type!(module = "rust_str.h";
+                    #[repr(C)]
+                    struct CRustString {
+                        data: *const ::std::os::raw::c_char,
+                        len: usize,
+                        capacity: usize,
+                    }
+                );
+                foreigner_code!(module = "rust_str.h";
+                                swig_option="boost";
+                                r#"
         namespace $RUST_SWIG_USER_NAMESPACE {
         class RustString final : private CRustString {
         public:
@@ -675,13 +714,13 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         };
         }
         "#
-                                        );*/
-                        ($pin:r_type) String => CRustString {
-                            $out = CRustString::from_string($pin)
-                        };
-                        ($pin:f_type, req_modules = ["rust_str.h"]) => "RustString" "RustString{$pin}";
-                    )
-                });
+                                );
+                ($pin:r_type) String => CRustString {
+                    $out = CRustString::from_string($pin)
+                };
+                ($pin:f_type, req_modules = ["rust_str.h"]) => "RustString" "RustString{$pin}";
+            )
+        });
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
         assert_eq!(
             CTypes {

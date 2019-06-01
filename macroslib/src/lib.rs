@@ -215,6 +215,8 @@ struct SourceCode {
 static FOREIGNER_CLASS: &str = "foreigner_class";
 static FOREIGN_ENUM: &str = "foreign_enum";
 static FOREIGN_INTERFACE: &str = "foreign_interface";
+static FOREIGNER_CODE: &str = "foreigner_code";
+static FOREIGN_CODE: &str = "foreign_code";
 
 impl Generator {
     pub fn new(config: LanguageConfig) -> Generator {
