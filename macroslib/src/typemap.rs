@@ -34,6 +34,7 @@ use crate::{
     types::{ForeignEnumInfo, ForeignerClassInfo},
 };
 
+pub(crate) use parse_typemap_macro::{CType, CTypes};
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
 pub(in crate::typemap) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
@@ -83,6 +84,7 @@ pub(crate) struct TypeMap {
     exported_enums: FxHashMap<SmolStr, ForeignEnumInfo>,
     /// How to use trait to convert types, Trait Name -> Code
     traits_usage_code: FxHashMap<Ident, String>,
+    c_types: Vec<CTypes>,
 }
 
 impl Default for TypeMap {
@@ -140,6 +142,7 @@ impl Default for TypeMap {
             exported_enums: FxHashMap::default(),
             traits_usage_code: FxHashMap::default(),
             ftypes_storage: ForeignTypesStorage::default(),
+            c_types: Vec::new(),
         }
     }
 }

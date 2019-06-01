@@ -5,9 +5,12 @@ use syn::{
     Type,
 };
 
-use crate::typemap::{
-    ast::DisplayToTokens, ty::FTypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
-    TO_VAR_TYPE_TEMPLATE,
+use crate::{
+    source_registry::SourceId,
+    typemap::{
+        ast::DisplayToTokens, ty::FTypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        TO_VAR_TYPE_TEMPLATE,
+    },
 };
 
 #[derive(Debug)]
@@ -19,6 +22,8 @@ pub(in crate::typemap) struct TypeMapConvRuleInfo {
     /// empty and none is different, because of if none
     /// we don't touch, if empty we override req_modules
     pub ftype_req_modules: Option<Vec<String>>,
+    /// For C++ case it is possible to introduce some C types
+    pub c_types: Option<CTypes>,
 }
 
 impl TypeMapConvRuleInfo {
@@ -93,6 +98,7 @@ mod kw {
     custom_keyword!(r_type);
     custom_keyword!(f_type);
     custom_keyword!(req_modules);
+    custom_keyword!(module);
 }
 
 enum RuleType {
@@ -108,11 +114,13 @@ enum ConvertRuleType<T> {
 
 impl syn::parse::Parse for TypeMapConvRuleInfo {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        static DEFINE_C_TYPE: &str = "define_c_type";
         let mut rtype_left_to_right: Option<RTypeConvRule> = None;
         let mut rtype_right_to_left: Option<RTypeConvRule> = None;
         let mut ftype_left_to_right: Option<FTypeConvRule> = None;
         let mut ftype_right_to_left: Option<FTypeConvRule> = None;
         let mut ftype_req_modules = None;
+        let mut c_types = None;
 
         while !input.is_empty() {
             if input.peek(token::Paren) {
@@ -352,15 +360,68 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 }
             } else {
                 let mac: syn::Macro = input.parse()?;
+                let is_our_macro = [DEFINE_C_TYPE].iter().any(|x| mac.path.is_ident(x));
+                if !is_our_macro {
+                    return Err(syn::Error::new(mac.span(), "not supported macro"));
+                }
+                if mac.path.is_ident(DEFINE_C_TYPE) {
+                    c_types = Some(syn::parse2(mac.tts)?);
+                }
             }
             input.parse::<Token![;]>()?;
         }
         Ok(TypeMapConvRuleInfo {
+            c_types,
             ftype_req_modules,
             rtype_left_to_right,
             rtype_right_to_left,
             ftype_left_to_right,
             ftype_right_to_left,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum CType {
+    Struct(syn::ItemStruct),
+    Union(syn::ItemUnion),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CTypes {
+    pub header_name: String,
+    pub src_id: SourceId,
+    pub types: Vec<CType>,
+}
+
+#[cfg(test)]
+impl PartialEq for CTypes {
+    fn eq(&self, o: &CTypes) -> bool {
+        self.header_name == o.header_name && self.types == o.types
+    }
+}
+
+impl syn::parse::Parse for CTypes {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<kw::module>()?;
+        input.parse::<Token![=]>()?;
+        let module_name: LitStr = input.parse()?;
+        let header_name = module_name.value();
+        input.parse::<Token![;]>()?;
+        let mut types = vec![];
+        while !input.is_empty() {
+            let item: syn::Item = input.parse()?;
+            match item {
+                syn::Item::Struct(s) => types.push(CType::Struct(s)),
+                syn::Item::Union(u) => types.push(CType::Union(u)),
+                _ => return Err(syn::Error::new(item.span(), "Expect struct or union here")),
+            }
+        }
+        //TODO: check repr(C) and sizeof members
+        Ok(CTypes {
+            src_id: SourceId::none(),
+            header_name,
+            types,
         })
     }
 }
@@ -608,6 +669,21 @@ $out = QString::fromUtf8($pin.data, $pin.len);
                     )
                 });
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
+        assert_eq!(
+            CTypes {
+                src_id: SourceId::none(),
+                header_name: "rust_str.h".into(),
+                types: vec![CType::Struct(parse_quote! {
+                    #[repr(C)]
+                        struct CRustString {
+                            data: *const ::std::os::raw::c_char,
+                            len: usize,
+                            capacity: usize,
+                        }
+                }),],
+            },
+            rule.c_types.unwrap()
+        );
     }
 
     fn macro_to_conv_rule(mac: syn::Macro) -> TypeMapConvRuleInfo {

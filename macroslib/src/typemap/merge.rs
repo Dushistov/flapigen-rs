@@ -43,6 +43,7 @@ impl TypeMap {
             ftypes_storage: new_ftypes_storage,
             generic_edges: mut new_generic_edges,
             utils_code: mut new_utils_code,
+            c_types: mut new_c_types,
             ..
         } = new_data;
         add_new_ftypes(new_ftypes_storage, self, &new_node_to_our_map);
@@ -50,6 +51,8 @@ impl TypeMap {
         self.utils_code.append(&mut new_utils_code);
         //TODO: more intellect to process new generics
         self.generic_edges.append(&mut new_generic_edges);
+        //TODO: add more checks
+        self.c_types.append(&mut new_c_types);
         Ok(())
     }
 
@@ -229,6 +232,11 @@ impl TypeMap {
                 }
             }
             (None, None) => {}
+        }
+
+        if let Some(mut c_types) = ri.c_types {
+            c_types.src_id = src_id;
+            self.c_types.push(c_types);
         }
 
         Ok(())
