@@ -410,7 +410,7 @@ struct C_{interface_name} {{
 
     let mut includes = String::new();
     for inc in req_includes {
-        writeln!(&mut includes, r#"#include "{}""#, inc).map_err(fmt_write_err_map)?;
+        writeln!(&mut includes, r#"#include {}"#, inc).map_err(fmt_write_err_map)?;
     }
 
     write!(

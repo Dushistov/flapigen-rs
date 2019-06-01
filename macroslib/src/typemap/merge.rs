@@ -208,16 +208,25 @@ impl TypeMap {
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 self.ftypes_storage[ftype_idx].into_from_rust = Some(into_from_rust);
                 self.ftypes_storage[ftype_idx].from_into_rust = Some(from_into_rust);
+                if let Some(req_modules) = ri.ftype_req_modules {
+                    self.ftypes_storage[ftype_idx].provides_by_module = req_modules;
+                }
             }
             (Some((ft, into_from_rust)), None) => {
                 let name = TypeName::new(ft.name, (src_id, ft.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 self.ftypes_storage[ftype_idx].into_from_rust = Some(into_from_rust);
+                if let Some(req_modules) = ri.ftype_req_modules {
+                    self.ftypes_storage[ftype_idx].provides_by_module = req_modules;
+                }
             }
             (None, Some((ft, from_into_rust))) => {
                 let name = TypeName::new(ft.name, (src_id, ft.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 self.ftypes_storage[ftype_idx].from_into_rust = Some(from_into_rust);
+                if let Some(req_modules) = ri.ftype_req_modules {
+                    self.ftypes_storage[ftype_idx].provides_by_module = req_modules;
+                }
             }
             (None, None) => {}
         }

@@ -87,7 +87,7 @@ extern "C" {{
 
     let mut includes = String::new();
     for inc in req_includes {
-        writeln!(&mut includes, r#"#include "{}""#, inc).unwrap();
+        writeln!(&mut includes, r#"#include {}"#, inc).unwrap();
     }
 
     write!(

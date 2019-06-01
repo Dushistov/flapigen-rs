@@ -5,3 +5,7 @@ r#"template<bool OWN_DATA>
         struct CRustString ret = Foo_f(this->self_, a_0, a_1, a_2);
         return RustString{ret};
     }"#;
+r#"
+#include "rust_str.h"
+
+#include "c_Foo.h""#;
