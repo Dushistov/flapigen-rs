@@ -362,7 +362,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 let mac: syn::Macro = input.parse()?;
                 let is_our_macro = [DEFINE_C_TYPE].iter().any(|x| mac.path.is_ident(x));
                 if !is_our_macro {
-                    return Err(syn::Error::new(mac.span(), "not supported macro"));
+                    return Err(syn::Error::new(mac.span(), "unknown macro in this context"));
                 }
                 if mac.path.is_ident(DEFINE_C_TYPE) {
                     c_types = Some(syn::parse2(mac.tts)?);
@@ -412,18 +412,32 @@ impl syn::parse::Parse for CTypes {
         while !input.is_empty() {
             let item: syn::Item = input.parse()?;
             match item {
-                syn::Item::Struct(s) => types.push(CType::Struct(s)),
-                syn::Item::Union(u) => types.push(CType::Union(u)),
+                syn::Item::Struct(s) => {
+                    if !has_repr_c_attr(&s.attrs) {
+                        return Err(syn::Error::new(s.span(), "struct has no repr(C) attribute"));
+                    }
+                    types.push(CType::Struct(s));
+                }
+                syn::Item::Union(u) => {
+                    if !has_repr_c_attr(&u.attrs) {
+                        return Err(syn::Error::new(u.span(), "union has no repr(C) attribute"));
+                    }
+                    types.push(CType::Union(u));
+                }
                 _ => return Err(syn::Error::new(item.span(), "Expect struct or union here")),
             }
         }
-        //TODO: check repr(C) and sizeof members
         Ok(CTypes {
             src_id: SourceId::none(),
             header_name,
             types,
         })
     }
+}
+
+fn has_repr_c_attr(attrs: &[syn::Attribute]) -> bool {
+    let repr_c_attr: syn::Attribute = parse_quote! { #[repr(C)] };
+    attrs.iter().any(|a| *a == repr_c_attr)
 }
 
 #[cfg(test)]
