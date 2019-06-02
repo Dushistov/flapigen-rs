@@ -54,6 +54,9 @@ impl RustTypeS {
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
         (self.src_id, self.ty.span())
     }
+    pub(crate) fn to_idx(&self) -> RustTypeIdx {
+        self.graph_idx
+    }
 }
 
 pub(crate) type RustType = Rc<RustTypeS>;

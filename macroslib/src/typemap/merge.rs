@@ -240,6 +240,11 @@ impl TypeMap {
                 .push(NotMergedData::CTypeDefines(c_types));
         }
 
+        if let Some(f_code) = ri.f_code {
+            self.not_merged_data
+                .extend(f_code.into_iter().map(|x| NotMergedData::ForeignCode(x)));
+        }
+
         Ok(())
     }
 }

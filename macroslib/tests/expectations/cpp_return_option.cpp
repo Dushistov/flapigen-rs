@@ -12,7 +12,7 @@
 
 "std::optional<uint64_t> f7()";
 
-"std::optional< RustStrView> f8()";
+"std::optional< CRustStrView> f8()";
 
 "std::optional<RustString> f9()";
 

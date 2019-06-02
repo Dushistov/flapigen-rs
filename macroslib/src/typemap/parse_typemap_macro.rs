@@ -25,6 +25,7 @@ pub(in crate::typemap) struct TypeMapConvRuleInfo {
     pub ftype_req_modules: Option<Vec<String>>,
     /// For C++ case it is possible to introduce some C types
     pub c_types: Option<CTypes>,
+    pub f_code: Option<Vec<ForeignCode>>,
 }
 
 impl TypeMapConvRuleInfo {
@@ -123,6 +124,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
         let mut ftype_right_to_left: Option<FTypeConvRule> = None;
         let mut ftype_req_modules = None;
         let mut c_types = None;
+        let mut f_code: Option<Vec<ForeignCode>> = None;
 
         while !input.is_empty() {
             if input.peek(token::Paren) {
@@ -371,13 +373,19 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 if mac.path.is_ident(DEFINE_C_TYPE) {
                     c_types = Some(syn::parse2(mac.tts)?);
                 } else if mac.path.is_ident(FOREIGN_CODE) || mac.path.is_ident(FOREIGNER_CODE) {
-                    let f_code: ForeignCode = syn::parse2(mac.tts)?;
+                    let fc_elem = syn::parse2::<ForeignCode>(mac.tts)?;
+                    if let Some(fc) = f_code.as_mut() {
+                        fc.push(fc_elem);
+                    } else {
+                        f_code = Some(vec![fc_elem]);
+                    }
                 }
             }
             input.parse::<Token![;]>()?;
         }
         Ok(TypeMapConvRuleInfo {
             c_types,
+            f_code,
             ftype_req_modules,
             rtype_left_to_right,
             rtype_right_to_left,

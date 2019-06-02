@@ -34,7 +34,7 @@ use crate::{
     types::{ForeignEnumInfo, ForeignerClassInfo},
 };
 
-pub(crate) use parse_typemap_macro::{CTypes, ForeignCode};
+pub(crate) use parse_typemap_macro::{CType, CTypes, ForeignCode};
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
 pub(in crate::typemap) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
@@ -352,6 +352,30 @@ impl TypeMap {
         } else {
             None
         }
+    }
+
+    pub(crate) fn find_foreign_type_related_to_rust_ty(
+        &self,
+        rust_ty: RustTypeIdx,
+    ) -> Option<ForeignType> {
+        for (idx, ft) in self.ftypes_storage.iter_enumerate() {
+            if let (
+                Some(ForeignConversationRule {
+                    rust_ty: into,
+                    intermediate: None,
+                }),
+                Some(ForeignConversationRule {
+                    rust_ty: from,
+                    intermediate: None,
+                }),
+            ) = (ft.into_from_rust.as_ref(), ft.from_into_rust.as_ref())
+            {
+                if *into == *from && *into == rust_ty {
+                    return Some(idx);
+                }
+            }
+        }
+        None
     }
 
     pub(crate) fn cache_rust_to_foreign_conv(

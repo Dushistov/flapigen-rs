@@ -250,10 +250,6 @@ impl Generator {
                     code: include_str!("cpp/cpp-include.rs").into(),
                 }));
                 foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_str.h".into(),
-                    code: include_str!("cpp/rust_str.h").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_vec.h".into(),
                     code: include_str!("cpp/rust_vec.h").into(),
                 });

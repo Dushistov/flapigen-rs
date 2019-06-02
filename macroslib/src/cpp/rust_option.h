@@ -45,7 +45,7 @@ struct CRustOptionUSize {
 };
 
 struct CRustOptionStr {
-    RustStrView val;
+    struct CRustStrView val;
     uint8_t is_some;
 };
 

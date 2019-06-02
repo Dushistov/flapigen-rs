@@ -29,8 +29,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "*const ::std::os::raw::c_char"]
     #![swig_foreigner_type = "int"]
     #![swig_rust_type = "::std::os::raw::c_int"]
-    #![swig_foreigner_type = "struct RustStrView"]
-    #![swig_rust_type = "RustStrView"]
     #![swig_foreigner_type = "struct CRustVecU8"]
     #![swig_rust_type = "CRustVecU8"]
     #![swig_foreigner_type = "struct CRustVecI32"]
@@ -45,8 +43,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustVecF64"]
     #![swig_foreigner_type = "struct CRustForeignVec"]
     #![swig_rust_type = "CRustForeignVec"]
-    #![swig_foreigner_type = "struct CRustString"]
-    #![swig_rust_type = "CRustString"]
     #![swig_foreigner_type = "struct CResultObjectString"]
     #![swig_rust_type = "CResultObjectString"]
     #![swig_foreigner_type = "struct CResultCRustForeignVecString"]
@@ -172,24 +168,18 @@ impl<'a> SwigInto<Option<&'a str>> for *const ::std::os::raw::c_char {
 
 #[allow(dead_code)]
 #[repr(C)]
-pub struct RustStrView {
+pub struct CRustStrView {
     data: *const ::std::os::raw::c_char,
     len: usize,
 }
 
 #[allow(dead_code)]
-impl RustStrView {
-    fn from_str(s: &str) -> RustStrView {
-        RustStrView {
+impl CRustStrView {
+    fn from_str(s: &str) -> CRustStrView {
+        CRustStrView {
             data: s.as_ptr() as *const ::std::os::raw::c_char,
             len: s.len(),
         }
-    }
-}
-
-impl<'a> SwigFrom<&'a str> for RustStrView {
-    fn swig_from(s: &'a str) -> RustStrView {
-        RustStrView::from_str(s)
     }
 }
 
@@ -1025,7 +1015,7 @@ impl SwigInto<Option<usize>> for CRustOptionUSize {
 #[allow(dead_code)]
 #[repr(C)]
 pub struct CRustOptionStr {
-    val: RustStrView,
+    val: CRustStrView,
     is_some: u8,
 }
 
@@ -1033,7 +1023,7 @@ impl<'a> SwigFrom<Option<&'a str>> for CRustOptionStr {
     fn swig_from(x: Option<&'a str>) -> Self {
         match x {
             Some(x) => CRustOptionStr {
-                val: RustStrView::from_str(x),
+                val: CRustStrView::from_str(x),
                 is_some: 1,
             },
             None => CRustOptionStr {
@@ -1296,6 +1286,147 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
+    define_c_type!(module = "rust_str.h";
+                   #[repr(C)]
+                   pub struct CRustStrView {
+                       data: *const ::std::os::raw::c_char,
+                       len: usize,
+                   }
+    );
+    foreigner_code!(module = "rust_str.h";
+                    r##"
+#ifdef __cplusplus
+
+#include <string>
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+struct RustStrView final : public CRustStrView {
+    RustStrView() noexcept { data = nullptr; len = 0; }
+    explicit RustStrView(CRustStrView val) noexcept { data = val.data; len = val.len; }
+    RustStrView(const RustStrView &) noexcept = default;
+    RustStrView &operator=(const RustStrView &) noexcept = default;
+    RustStrView(RustStrView &&) noexcept = default;
+    RustStrView &operator=(RustStrView &&) noexcept = default;
+    size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
+    std::string to_std_string() const { return std::string{ data, len }; }
+#if __cplusplus >= 201703L
+    std::string_view to_string_view() const { return std::string_view{ data, len }; }
+#endif
+#ifdef BOOST_STRING_VIEW_HPP
+    boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
+#endif
+#if QT_VERSION >= 0x050000 && defined(QSTRING_H)
+    QString to_qstring() const { return QString::fromUtf8(data, len); }
+#endif
+};
+} // $RUST_SWIG_USER_NAMESPACE
+#endif // __cplusplus
+"##);
+    ($p:r_type) &str => CRustStrView {
+        $out = CRustStrView::from_str($p)
+    };
+    ($p:f_type, req_modules = ["\"rust_str.h\""]) => "RustStrView"
+        "RustStrView { $p }";
+);
+
+foreign_typemap!(
+    define_c_type!(module = "rust_str.h";
+        #[repr(C)]
+        struct CRustString {
+            data: *const ::std::os::raw::c_char,
+            len: usize,
+            capacity: usize,
+        }
+    );
+    foreigner_code!(module = "rust_str.h";
+                    r##"
+#ifdef __cplusplus
+extern "C" {
+#endif
+void crust_string_free(struct CRustString str);
+struct CRustString crust_string_clone(struct CRustString str);
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+
+#ifdef __cplusplus
+namespace $RUST_SWIG_USER_NAMESPACE {
+class RustString final : private CRustString {
+public:
+    explicit RustString(const CRustString &o) noexcept
+    {
+        data = o.data;
+        len = o.len;
+        capacity = o.capacity;
+    }
+    RustString() noexcept { reset(*this); }
+    RustString(const RustString &o) noexcept
+        : RustString(crust_string_clone(o))
+    {
+    }
+    RustString &operator=(const RustString &o) noexcept
+    {
+        if (this != &o) {
+            free_mem();
+            auto copy = crust_string_clone(o);
+            data = copy.data;
+            len = copy.len;
+            capacity = copy.capacity;
+        }
+        return *this;
+    }
+    RustString(RustString &&o) noexcept
+    {
+        data = o.data;
+        len = o.len;
+        capacity = o.capacity;
+
+        reset(o);
+    }
+    RustString &operator=(RustString &&o) noexcept
+    {
+        free_mem();
+        data = o.data;
+        len = o.len;
+        capacity = o.capacity;
+
+        reset(o);
+        return *this;
+    }
+    ~RustString() noexcept { free_mem(); }
+    std::string to_std_string() const { return std::string(data, len); }
+    size_t size() const noexcept { return this->len; }
+    bool empty() const noexcept { return this->len == 0; }
+#if __cplusplus >= 201703L
+    std::string_view to_string_view() const { return std::string_view(data, len); }
+#endif
+
+#ifdef BOOST_STRING_VIEW_HPP
+    boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
+#endif
+#if QT_VERSION >= 0x050000 && defined(QSTRING_H)
+    QString to_qstring() const { return QString::fromUtf8(data, len); }
+#endif
+private:
+    void free_mem() noexcept
+    {
+        if (data != nullptr) {
+            crust_string_free(*this);
+            reset(*this);
+        }
+    }
+    static void reset(RustString &o) noexcept
+    {
+        o.data = nullptr;
+        o.len = 0;
+        o.capacity = 0;
+    }
+};
+} // namespace $RUST_SWIG_USER_NAMESPACE
+#endif // __cplusplus
+"##
+                    );
     ($pin:r_type) String => CRustString {
         $out = CRustString::from_string($pin)
     };

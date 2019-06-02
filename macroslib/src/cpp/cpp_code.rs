@@ -1,10 +1,12 @@
-use std::mem;
+use std::{io, mem};
 
 use rustc_hash::FxHashSet;
+use syn::spanned::Spanned;
 
 use crate::{
-    cpp::{fmt_write_err_map, CppForeignMethodSignature},
-    typemap::FROM_VAR_TEMPLATE,
+    cpp::{fmt_write_err_map, map_any_err_to_our_err, CppForeignMethodSignature},
+    error::DiagnosticError,
+    typemap::{CType, CTypes, TypeMap, FROM_VAR_TEMPLATE},
     types::{ForeignEnumInfo, ForeignerClassInfo},
 };
 
@@ -120,4 +122,57 @@ pub(in crate::cpp) fn cpp_list_required_includes(
     let mut ret: Vec<_> = includes.into_iter().collect();
     ret.sort();
     ret
+}
+
+pub(in crate::cpp) fn generate_c_type(
+    tmap: &TypeMap,
+    c_types: &CTypes,
+    out: &mut io::Write,
+) -> Result<(), DiagnosticError> {
+    for c_type in &c_types.types {
+        match c_type {
+            CType::Struct(ref s) => {
+                writeln!(out, "struct {} {{", s.ident).map_err(map_any_err_to_our_err)?;
+                let fields = match s.fields {
+                    syn::Fields::Named(ref x) => x,
+                    _ => {
+                        return Err(DiagnosticError::new(
+                            c_types.src_id,
+                            s.fields.span(),
+                            "only fields with names accepted in this context",
+                        ))
+                    }
+                };
+                for f in &fields.named {
+                    let id = f.ident.as_ref().ok_or_else(|| {
+                        DiagnosticError::new(
+                            c_types.src_id,
+                            f.span(),
+                            "only fields with names accepted in this context",
+                        )
+                    })?;
+                    let field_rty = tmap.ty_to_rust_type_checked(&f.ty).ok_or_else(|| {
+                        DiagnosticError::new(c_types.src_id, f.ty.span(), "unknown Rust type")
+                    })?;
+                    let field_fty = tmap
+                        .find_foreign_type_related_to_rust_ty(field_rty.to_idx())
+                        .ok_or_else(|| {
+                            DiagnosticError::new(
+                                c_types.src_id,
+                                f.ty.span(),
+                                "no foreign type related to this type",
+                            )
+                        })?;
+                    writeln!(out, "    {} {};", tmap[field_fty].name.as_str(), id)
+                        .map_err(map_any_err_to_our_err)?;
+                }
+                out.write_all(b"};\n").map_err(map_any_err_to_our_err)?;
+            }
+            CType::Union(ref u) => {
+                unimplemented!();
+            }
+        }
+    }
+
+    Ok(())
 }
