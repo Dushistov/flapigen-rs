@@ -1,12 +1,13 @@
-use std::{io, mem};
+use std::{fmt::Write, io, mem};
 
+use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
 use syn::spanned::Spanned;
 
 use crate::{
     cpp::{fmt_write_err_map, map_any_err_to_our_err, CppForeignMethodSignature},
-    error::DiagnosticError,
-    typemap::{CType, CTypes, TypeMap, FROM_VAR_TEMPLATE},
+    error::{panic_on_syn_error, DiagnosticError},
+    typemap::{ast::DisplayToTokens, CType, CTypes, TypeMap, FROM_VAR_TEMPLATE},
     types::{ForeignEnumInfo, ForeignerClassInfo},
 };
 
@@ -128,10 +129,22 @@ pub(in crate::cpp) fn generate_c_type(
     tmap: &TypeMap,
     c_types: &CTypes,
     out: &mut io::Write,
-) -> Result<(), DiagnosticError> {
+) -> Result<Vec<TokenStream>, DiagnosticError> {
+    let mut rust_code = vec![];
+
     for c_type in &c_types.types {
         match c_type {
             CType::Struct(ref s) => {
+                let mut rust_layout_test = format!(
+                    r#"
+#[allow(non_snake_case)]
+#[test]
+fn test_{name}_layout() {{
+#[repr(C)]
+struct My{name} {{
+"#,
+                    name = s.ident,
+                );
                 writeln!(out, "struct {} {{", s.ident).map_err(map_any_err_to_our_err)?;
                 let fields = match s.fields {
                     syn::Fields::Named(ref x) => x,
@@ -165,8 +178,25 @@ pub(in crate::cpp) fn generate_c_type(
                         })?;
                     writeln!(out, "    {} {};", tmap[field_fty].name.as_str(), id)
                         .map_err(map_any_err_to_our_err)?;
+                    writeln!(&mut rust_layout_test, "{}: {},", id, DisplayToTokens(&f.ty))
+                        .map_err(map_any_err_to_our_err)?;
                 }
                 out.write_all(b"};\n").map_err(map_any_err_to_our_err)?;
+
+                writeln!(
+                    &mut rust_layout_test,
+                    r#"}}
+    assert_eq!(::std::mem::size_of::<My{name}>(), ::std::mem::size_of::<{name}>());
+    assert_eq!(::std::mem::align_of::<My{name}>(), ::std::mem::align_of::<{name}>());
+}}
+"#,
+                    name = s.ident
+                )
+                .map_err(map_any_err_to_our_err)?;
+                let tt: TokenStream = syn::parse_str(&rust_layout_test).unwrap_or_else(|err| {
+                    panic_on_syn_error("Internal: layout unit test", rust_layout_test, err)
+                });
+                rust_code.push(tt);
             }
             CType::Union(ref u) => {
                 unimplemented!();
@@ -174,5 +204,5 @@ pub(in crate::cpp) fn generate_c_type(
         }
     }
 
-    Ok(())
+    Ok(rust_code)
 }

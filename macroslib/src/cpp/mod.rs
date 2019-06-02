@@ -381,7 +381,8 @@ May be you need to use `private constructor = empty;` syntax?",
         Ok(items)
     }
 
-    fn init(&self, conv_map: &mut TypeMap, code: &[SourceCode]) -> Result<()> {
+    fn init(&self, conv_map: &mut TypeMap, code: &[SourceCode]) -> Result<Vec<TokenStream>> {
+        let mut ret = vec![];
         //for enum
         conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { u32 });
 
@@ -430,7 +431,11 @@ extern "C" {{
             for elem in &data {
                 if let NotMergedData::CTypeDefines(ref ctypes) = elem {
                     register_c_type(conv_map, ctypes)?;
-                    cpp_code::generate_c_type(conv_map, ctypes, &mut c_header_f)?;
+                    ret.append(&mut cpp_code::generate_c_type(
+                        conv_map,
+                        ctypes,
+                        &mut c_header_f,
+                    )?);
                 }
             }
 
@@ -467,7 +472,7 @@ extern "C" {{
             })?;
         }
 
-        Ok(())
+        Ok(ret)
     }
 }
 
@@ -479,13 +484,13 @@ impl LanguageGenerator for CppConfig {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
     ) -> Result<Vec<TokenStream>> {
-        self.init(conv_map, code)?;
+        let mut ret = Vec::with_capacity(items.len());
+        ret.append(&mut self.init(conv_map, code)?);
         for item in &items {
             if let ItemToExpand::Class(ref fclass) = item {
                 self.register_class(conv_map, fclass)?;
             }
         }
-        let mut ret = Vec::with_capacity(items.len());
         for item in items {
             match item {
                 ItemToExpand::Class(fclass) => ret.append(&mut self.generate(conv_map, &fclass)?),
