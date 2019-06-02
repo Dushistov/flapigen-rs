@@ -156,6 +156,7 @@ struct My{name} {{
                         ))
                     }
                 };
+                let mut fields_asserts_code = String::new();
                 for f in &fields.named {
                     let id = f.ident.as_ref().ok_or_else(|| {
                         DiagnosticError::new(
@@ -180,6 +181,23 @@ struct My{name} {{
                         .map_err(map_any_err_to_our_err)?;
                     writeln!(&mut rust_layout_test, "{}: {},", id, DisplayToTokens(&f.ty))
                         .map_err(map_any_err_to_our_err)?;
+
+                    writeln!(
+                        &mut fields_asserts_code,
+                        r#"
+#[allow(dead_code)]
+fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} {{
+    &s.{field_name}
+}}
+    let offset_our = ((&our_s.{field_name} as *const {field_type}) as usize) - ((&our_s as *const My{struct_name}) as usize);
+    let offset_user = ((&user_s.{field_name} as *const {field_type}) as usize) - ((&user_s as *const {struct_name}) as usize);
+    assert_eq!(offset_our, offset_user);
+"#,
+                        struct_name = s.ident,
+                        field_name = id,
+                        field_type = DisplayToTokens(&f.ty),
+                    )
+                    .map_err(map_any_err_to_our_err)?;
                 }
                 out.write_all(b"};\n").map_err(map_any_err_to_our_err)?;
 
@@ -188,9 +206,14 @@ struct My{name} {{
                     r#"}}
     assert_eq!(::std::mem::size_of::<My{name}>(), ::std::mem::size_of::<{name}>());
     assert_eq!(::std::mem::align_of::<My{name}>(), ::std::mem::align_of::<{name}>());
+    let our_s: My{name} = unsafe {{ ::std::mem::zeroed() }};
+    let user_s: {name} = unsafe {{ ::std::mem::zeroed() }};
+
+{fields_asserts}
 }}
 "#,
-                    name = s.ident
+                    name = s.ident,
+                    fields_asserts = fields_asserts_code,
                 )
                 .map_err(map_any_err_to_our_err)?;
                 let tt: TokenStream = syn::parse_str(&rust_layout_test).unwrap_or_else(|err| {
