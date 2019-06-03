@@ -1133,7 +1133,7 @@ fn handle_option_type_in_return(
                 .into(),
             );
 
-            let (typename, converter) = match cpp_cfg.cpp_optional {
+            let (typename, converter, opt_inc) = match cpp_cfg.cpp_optional {
                 CppOptional::Std17 => (
                     format!("std::optional<{}Ref>", fclass.name),
                     format!(
@@ -1141,6 +1141,7 @@ fn handle_option_type_in_return(
                         Type = fclass.name,
                         var = FROM_VAR_TEMPLATE,
                     ),
+                    "<optional>".into(),
                 ),
                 CppOptional::Boost => (
                     format!("boost::optional<{}Ref>", fclass.name),
@@ -1149,12 +1150,14 @@ fn handle_option_type_in_return(
                         Type = fclass.name,
                         var = FROM_VAR_TEMPLATE,
                     ),
+                    "<boost/optional.hpp>".into(),
                 ),
             };
             return Ok(Some(CppForeignTypeInfo {
                 provides_by_module: vec![
                     "\"rust_option.h\"".into(),
                     format!("\"{}\"", cpp_header_name(&fclass)),
+                    opt_inc,
                 ],
                 base: foreign_info,
                 cpp_converter: Some(CppConverter {
@@ -1225,7 +1228,7 @@ fn handle_option_type_in_return(
                 .cpp_converter
                 .expect("C++ converter from C struct")
                 .typename;
-            let (typename, converter) = match cpp_cfg.cpp_optional {
+            let (typename, converter, opt_inc) = match cpp_cfg.cpp_optional {
                 CppOptional::Std17 => (
                     format!("std::optional<{}>", cpp_typename),
                     format!(
@@ -1233,6 +1236,7 @@ fn handle_option_type_in_return(
                         var = FROM_VAR_TEMPLATE,
                         ty = cpp_typename
                     ),
+                    "<optional>".into(),
                 ),
                 CppOptional::Boost => (
                     format!("boost::optional<{}>", cpp_typename),
@@ -1241,12 +1245,15 @@ fn handle_option_type_in_return(
                         var = FROM_VAR_TEMPLATE,
                         ty = cpp_typename
                     ),
+                    "<boost/optional.hpp>".into(),
                 ),
             };
             cpp_info_opt.cpp_converter = Some(CppConverter {
                 typename: typename.into(),
                 converter,
             });
+            cpp_info_opt.provides_by_module =
+                vec!["\"rust_option.h\"".into(), "\"rust_str.h\"".into(), opt_inc];
             return Ok(Some(cpp_info_opt));
         }
     }
