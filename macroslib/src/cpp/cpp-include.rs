@@ -1298,6 +1298,9 @@ foreign_typemap!(
 #ifdef __cplusplus
 
 #include <string>
+#if __cplusplus >= 201703L
+#include <string_view>
+#endif
 
 namespace $RUST_SWIG_USER_NAMESPACE {
 struct RustStrView final : public CRustStrView {
@@ -1315,9 +1318,6 @@ struct RustStrView final : public CRustStrView {
 #endif
 #ifdef BOOST_STRING_VIEW_HPP
     boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
-#endif
-#if QT_VERSION >= 0x050000 && defined(QSTRING_H)
-    QString to_qstring() const { return QString::fromUtf8(data, len); }
 #endif
 };
 } // $RUST_SWIG_USER_NAMESPACE
@@ -1351,6 +1351,12 @@ struct CRustString crust_string_clone(struct CRustString str);
 #endif
 
 #ifdef __cplusplus
+
+#include <string>
+#if __cplusplus >= 201703L
+#include <string_view>
+#endif
+
 namespace $RUST_SWIG_USER_NAMESPACE {
 class RustString final : private CRustString {
 public:
@@ -1404,9 +1410,6 @@ public:
 
 #ifdef BOOST_STRING_VIEW_HPP
     boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
-#endif
-#if QT_VERSION >= 0x050000 && defined(QSTRING_H)
-    QString to_qstring() const { return QString::fromUtf8(data, len); }
 #endif
 private:
     void free_mem() noexcept
