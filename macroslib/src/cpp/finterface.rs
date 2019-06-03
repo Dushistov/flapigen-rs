@@ -2,6 +2,7 @@ use std::{io::Write, path::Path};
 
 use petgraph::Direction;
 use proc_macro2::TokenStream;
+use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
@@ -273,7 +274,7 @@ pub(in crate::cpp) fn generate_for_interface(
     output_dir: &Path,
     namespace_name: &str,
     interface: &ForeignInterface,
-    req_includes: &[String],
+    req_includes: &[SmolStr],
     f_methods: &[CppForeignMethodSignature],
 ) -> std::result::Result<(), String> {
     use std::fmt::Write;

@@ -64,7 +64,9 @@ fn special_type(
                 let converter = format!("{}{{{}}}", cpp_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
-                    provides_by_module: vec![format!("\"{}\"", cpp_header_name(foreign_class))],
+                    provides_by_module: vec![
+                        format!("\"{}\"", cpp_header_name(foreign_class)).into()
+                    ],
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
                         converter,
@@ -76,7 +78,9 @@ fn special_type(
                 let converter = format!("static_cast<{}>({})", c_type, FROM_VAR_TEMPLATE);
                 return Ok(Some(CppForeignTypeInfo {
                     base: foreign_info,
-                    provides_by_module: vec![format!("\"{}\"", cpp_header_name(foreign_class))],
+                    provides_by_module: vec![
+                        format!("\"{}\"", cpp_header_name(foreign_class)).into()
+                    ],
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
                         converter,
@@ -141,7 +145,9 @@ fn special_type(
                         name: foreign_info.name,
                         correspoding_rust_type: my_mut_void_ptr_ti,
                     },
-                    provides_by_module: vec![format!("\"{}\"", cpp_header_name(foreign_class))],
+                    provides_by_module: vec![
+                        format!("\"{}\"", cpp_header_name(foreign_class)).into()
+                    ],
                     cpp_converter: Some(CppConverter {
                         typename: cpp_type.into(),
                         converter,
@@ -176,7 +182,7 @@ fn special_type(
         };
         return Ok(Some(CppForeignTypeInfo {
             base: foreign_info,
-            provides_by_module: vec![format!("\"{}\"", cpp_header_name(foreign_class))],
+            provides_by_module: vec![format!("\"{}\"", cpp_header_name(foreign_class)).into()],
             cpp_converter: Some(CppConverter {
                 typename: foreign_class.name.to_string().into(),
                 converter,
@@ -302,7 +308,7 @@ fn calc_converter_for_enum(
         Direction::Incoming => format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
     };
     CppForeignTypeInfo {
-        provides_by_module: vec![format!("\"{}\"", cpp_header_name_for_enum(foreign_enum))],
+        provides_by_module: vec![format!("\"{}\"", cpp_header_name_for_enum(foreign_enum)).into()],
         base: ForeignTypeInfo {
             name: "uint32_t".into(),
             correspoding_rust_type: u32_ti,
@@ -669,7 +675,7 @@ fn handle_result_type_as_return_type(
                 provides_by_module: vec![
                     "\"rust_result.h\"".into(),
                     "\"rust_str.h\"".into(),
-                    format!("\"{}\"", cpp_header_name(foreign_class)),
+                    format!("\"{}\"", cpp_header_name(foreign_class)).into(),
                     var_include,
                 ],
                 cpp_converter: Some(CppConverter {
@@ -709,8 +715,8 @@ fn handle_result_type_as_return_type(
                 base: foreign_info,
                 provides_by_module: vec![
                     "\"rust_result.h\"".into(),
-                    format!("\"{}\"", cpp_header_name(foreign_class)),
-                    format!("\"{}\"", cpp_header_name(err_class)),
+                    format!("\"{}\"", cpp_header_name(foreign_class)).into(),
+                    format!("\"{}\"", cpp_header_name(err_class)).into(),
                     var_inc,
                 ],
                 cpp_converter: Some(CppConverter {
@@ -747,8 +753,8 @@ fn handle_result_type_as_return_type(
                 base: foreign_info,
                 provides_by_module: vec![
                     "\"rust_result.h\"".into(),
-                    format!("\"{}\"", cpp_header_name(foreign_class)),
-                    format!("\"{}\"", cpp_header_name_for_enum(err_enum)),
+                    format!("\"{}\"", cpp_header_name(foreign_class)).into(),
+                    format!("\"{}\"", cpp_header_name_for_enum(err_enum)).into(),
                     var_inc,
                 ],
                 cpp_converter: Some(CppConverter {
@@ -934,7 +940,7 @@ fn handle_option_type_in_input(
         return Ok(Some(CppForeignTypeInfo {
             provides_by_module: vec![
                 "\"rust_option.h\"".into(),
-                format!("\"{}\"", cpp_header_name(fclass)),
+                format!("\"{}\"", cpp_header_name(fclass)).into(),
                 opt_inc,
             ],
             base: foreign_info,
@@ -1071,7 +1077,7 @@ fn handle_option_type_in_return(
         return Ok(Some(CppForeignTypeInfo {
             provides_by_module: vec![
                 "\"rust_option.h\"".into(),
-                format!("\"{}\"", cpp_header_name(foreign_class)),
+                format!("\"{}\"", cpp_header_name(foreign_class)).into(),
             ],
             base: foreign_info,
             cpp_converter: Some(CppConverter {
@@ -1156,7 +1162,7 @@ fn handle_option_type_in_return(
             return Ok(Some(CppForeignTypeInfo {
                 provides_by_module: vec![
                     "\"rust_option.h\"".into(),
-                    format!("\"{}\"", cpp_header_name(&fclass)),
+                    format!("\"{}\"", cpp_header_name(&fclass)).into(),
                     opt_inc,
                 ],
                 base: foreign_info,
@@ -1326,7 +1332,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
             ErrType = err_class.name,
             C_ErrType = c_err_class,
         );
-        let err_cpp_header = format!("\"{}\"", cpp_header_name(err_class));
+        let err_cpp_header: SmolStr = format!("\"{}\"", cpp_header_name(err_class)).into();
         let foreign_info = map_ordinal_result_type(conv_map, arg_ty, arg_ty_span)?;
         if empty_ok_ty {
             assert_eq!(foreign_info.base.name, "struct CResultObjectObject");

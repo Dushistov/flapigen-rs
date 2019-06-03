@@ -150,7 +150,7 @@ pub(in crate::typemap) fn parse(
                     let tmap_conv_rule: TypeMapConvRuleInfo = syn::parse2(item_macro.mac.tts)
                         .map_err(|err| DiagnosticError::from_syn_err(name, err))?;
 
-                    ret.merge_conv_rule(name, tmap_conv_rule)?;
+                    ret.may_be_merge_conv_rule(name, tmap_conv_rule)?;
                 } else {
                     let swig_attrs = handle_attrs!(item_macro);
                     if swig_attrs.is_empty() {

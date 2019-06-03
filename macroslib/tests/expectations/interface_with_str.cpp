@@ -1,5 +1,5 @@
 "void f1(const struct C_SomeObserver * const a_0)  noexcept";
-"virtual void onStateChanged(RustStrView a_0) = 0;";
+"virtual void onStateChanged(std::string_view a_0) = 0;";
 "static void c_onStateChanged(struct CRustStrView a_0, void *opaque)";
 r#"struct C_SomeObserver {
     void *opaque;

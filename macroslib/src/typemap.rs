@@ -322,10 +322,9 @@ impl TypeMap {
         &mut self,
         foreign_name: TypeName,
         correspoding_rty: NodeIndex,
-    ) -> Result<()> {
+    ) -> Result<ForeignType> {
         self.ftypes_storage
-            .alloc_new(foreign_name, correspoding_rty)?;
-        Ok(())
+            .alloc_new(foreign_name, correspoding_rty)
     }
     //TODO: should be removed in the future
     pub(crate) fn find_foreign_type_info_by_name(

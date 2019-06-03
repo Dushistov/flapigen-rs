@@ -3,6 +3,7 @@ use std::{io::Write, path::Path};
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
+use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
@@ -33,7 +34,7 @@ pub(in crate::cpp) fn generate(
     target_pointer_width: usize,
     separate_impl_headers: bool,
     class: &ForeignerClassInfo,
-    req_includes: &[String],
+    req_includes: &[SmolStr],
     methods_sign: &[CppForeignMethodSignature],
 ) -> Result<Vec<TokenStream>> {
     use std::fmt::Write;

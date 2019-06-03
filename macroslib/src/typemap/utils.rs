@@ -1,4 +1,5 @@
 use proc_macro2::TokenStream;
+use rustc_hash::FxHashSet;
 use syn::{spanned::Spanned, Type};
 
 use crate::{
@@ -6,6 +7,7 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{fn_arg_type, parse_ty_with_given_span_checked, DisplayToTokens},
+        parse_typemap_macro::{FTypeConvRule, TypeMapConvRuleInfo},
         ty::RustType,
         ForeignTypeInfo, TypeMap,
     },
@@ -183,4 +185,48 @@ pub(crate) fn rust_to_foreign_convert_method_inputs<
         ret_code.push_str(&cur_code);
     }
     Ok((code_deps, ret_code))
+}
+
+pub(crate) fn validate_cfg_otpions(
+    rule: &TypeMapConvRuleInfo,
+    avaible_opts: &FxHashSet<&'static str>,
+) -> Result<()> {
+    let validate_f_type_rules_opts = |rules: &[FTypeConvRule]| -> Result<()> {
+        for r in rules {
+            if let Some(ref opt) = r.cfg_option {
+                if !avaible_opts.contains(opt.as_str()) {
+                    return Err(DiagnosticError::new(
+                        rule.src_id,
+                        opt.sp,
+                        format!(
+                            "unsupported option {}, avaible options {:?}",
+                            opt.as_str(),
+                            avaible_opts
+                        ),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    };
+    validate_f_type_rules_opts(&rule.ftype_left_to_right)?;
+    validate_f_type_rules_opts(&rule.ftype_right_to_left)?;
+
+    for fcode in rule.f_code.iter() {
+        if let Some(ref opt) = fcode.cfg_option {
+            if !avaible_opts.contains(opt.as_str()) {
+                return Err(DiagnosticError::new(
+                    rule.src_id,
+                    opt.sp,
+                    format!(
+                        "unsupported option {}, avaible options {:?}",
+                        opt.as_str(),
+                        avaible_opts
+                    ),
+                ));
+            }
+        }
+    }
+
+    Ok(())
 }

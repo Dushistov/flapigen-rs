@@ -56,23 +56,35 @@ impl TypeMap {
         Ok(())
     }
 
-    pub(crate) fn merge_conv_rule(
+    pub(crate) fn may_be_merge_conv_rule(
         &mut self,
         src_id: SourceId,
         mut ri: TypeMapConvRuleInfo,
     ) -> Result<()> {
         ri.src_id = src_id;
-        if ri.f_code.is_some() || ri.c_types.is_some() {
+        if ri.contains_data_for_language_backend() {
             self.not_merged_data.push(ri);
             return Ok(());
         }
-        if let Some((r_ty, f_ty)) = ri.if_simple_rtype_ftype_map() {
+        self.merge_conv_rule(src_id, ri)
+    }
+
+    pub(crate) fn merge_conv_rule(
+        &mut self,
+        src_id: SourceId,
+        mut ri: TypeMapConvRuleInfo,
+    ) -> Result<()> {
+        assert!(!ri.contains_data_for_language_backend());
+        if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map() {
             let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
 
-            self.add_foreign_rust_ty_idx(
+            let ftype_idx = self.add_foreign_rust_ty_idx(
                 TypeName::new(f_ty.name.clone(), (src_id, f_ty.sp)),
                 r_ty,
             )?;
+            self.ftypes_storage[ftype_idx].provides_by_module =
+                req_modules.iter().cloned().collect();
+
             return Ok(());
         }
 
@@ -118,8 +130,13 @@ impl TypeMap {
             rtype_right_to_left = Some((from_ty, to_ty));
         }
 
+        let mut req_modules = vec![];
+
         let mut ft_into_from_rust = None;
-        if let Some(rule) = ri.ftype_left_to_right {
+        assert!(ri.ftype_left_to_right.len() <= 1);
+        if !ri.ftype_left_to_right.is_empty() {
+            let mut rule = ri.ftype_left_to_right.remove(0);
+            req_modules.append(&mut rule.req_modules);
             let right_fty = match rule.left_right_ty {
                 FTypeLeftRightPair::OnlyLeft(left_ty) => {
                     return Err(DiagnosticError::new(
@@ -161,7 +178,10 @@ impl TypeMap {
         }
 
         let mut ft_from_into_rust = None;
-        if let Some(rule) = ri.ftype_right_to_left {
+        assert!(ri.ftype_right_to_left.len() <= 1);
+        if !ri.ftype_right_to_left.is_empty() {
+            let mut rule = ri.ftype_right_to_left.remove(0);
+            req_modules.append(&mut rule.req_modules);
             let right_fty = match rule.left_right_ty {
                 FTypeLeftRightPair::OnlyLeft(left_ty) => {
                     return Err(DiagnosticError::new(
@@ -214,27 +234,22 @@ impl TypeMap {
                 }
                 let name = TypeName::new(ft1.name, (src_id, ft1.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
-                self.ftypes_storage[ftype_idx].into_from_rust = Some(into_from_rust);
-                self.ftypes_storage[ftype_idx].from_into_rust = Some(from_into_rust);
-                if let Some(req_modules) = ri.ftype_req_modules {
-                    self.ftypes_storage[ftype_idx].provides_by_module = req_modules;
-                }
+                let res_ftype = &mut self.ftypes_storage[ftype_idx];
+                res_ftype.into_from_rust = Some(into_from_rust);
+                res_ftype.from_into_rust = Some(from_into_rust);
+                res_ftype.provides_by_module = req_modules;
             }
             (Some((ft, into_from_rust)), None) => {
                 let name = TypeName::new(ft.name, (src_id, ft.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 self.ftypes_storage[ftype_idx].into_from_rust = Some(into_from_rust);
-                if let Some(req_modules) = ri.ftype_req_modules {
-                    self.ftypes_storage[ftype_idx].provides_by_module = req_modules;
-                }
+                self.ftypes_storage[ftype_idx].provides_by_module = req_modules;
             }
             (None, Some((ft, from_into_rust))) => {
                 let name = TypeName::new(ft.name, (src_id, ft.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 self.ftypes_storage[ftype_idx].from_into_rust = Some(from_into_rust);
-                if let Some(req_modules) = ri.ftype_req_modules {
-                    self.ftypes_storage[ftype_idx].provides_by_module = req_modules;
-                }
+                self.ftypes_storage[ftype_idx].provides_by_module = req_modules;
             }
             (None, None) => {}
         }

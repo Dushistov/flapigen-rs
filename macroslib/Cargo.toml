@@ -21,6 +21,8 @@ lazy_static = "1.0.2"
 smallvec = "0.6.9"
 rustc-hash = "1.0.1"
 smol_str = "0.1.10"
+strum = "0.15.0"
+strum_macros = "0.15.0"
 
 [dev-dependencies]
 env_logger = "0.6"

@@ -76,6 +76,30 @@ impl TypeName {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct SpannedSmolStr {
+    pub sp: Span,
+    pub value: SmolStr,
+}
+
+impl SpannedSmolStr {
+    pub(crate) fn as_str(&self) -> &str {
+        self.value.as_str()
+    }
+}
+
+impl PartialEq for SpannedSmolStr {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl PartialEq<SmolStr> for SpannedSmolStr {
+    fn eq(&self, other: &SmolStr) -> bool {
+        self.value == *other
+    }
+}
+
 struct NormalizeTyLifetimesCache {
     inner: FxHashMap<syn::Type, Box<str>>,
 }

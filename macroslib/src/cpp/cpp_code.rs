@@ -2,6 +2,7 @@ use std::{fmt::Write, io, mem};
 
 use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
+use smol_str::SmolStr;
 use syn::spanned::Spanned;
 
 use crate::{
@@ -111,8 +112,8 @@ pub(in crate::cpp) fn cpp_header_name_for_enum(enum_info: &ForeignEnumInfo) -> S
 
 pub(in crate::cpp) fn cpp_list_required_includes(
     methods: &mut [CppForeignMethodSignature],
-) -> Vec<String> {
-    let mut includes = FxHashSet::<String>::default();
+) -> Vec<SmolStr> {
+    let mut includes = FxHashSet::<SmolStr>::default();
     for m in methods {
         for p in &mut m.input {
             includes.extend(mem::replace(&mut p.provides_by_module, Vec::new()).into_iter());

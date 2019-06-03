@@ -1293,41 +1293,13 @@ foreign_typemap!(
                        len: usize,
                    }
     );
-    foreigner_code!(module = "rust_str.h";
-                    r##"
-#ifdef __cplusplus
-
-#include <string>
-#if __cplusplus >= 201703L
-#include <string_view>
-#endif
-
-namespace $RUST_SWIG_USER_NAMESPACE {
-struct RustStrView final : public CRustStrView {
-    RustStrView() noexcept { data = nullptr; len = 0; }
-    explicit RustStrView(CRustStrView val) noexcept { data = val.data; len = val.len; }
-    RustStrView(const RustStrView &) noexcept = default;
-    RustStrView &operator=(const RustStrView &) noexcept = default;
-    RustStrView(RustStrView &&) noexcept = default;
-    RustStrView &operator=(RustStrView &&) noexcept = default;
-    size_t size() const noexcept { return this->len; }
-    bool empty() const noexcept { return this->len == 0; }
-    std::string to_std_string() const { return std::string{ data, len }; }
-#if __cplusplus >= 201703L
-    std::string_view to_string_view() const { return std::string_view{ data, len }; }
-#endif
-#ifdef BOOST_STRING_VIEW_HPP
-    boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
-#endif
-};
-} // $RUST_SWIG_USER_NAMESPACE
-#endif // __cplusplus
-"##);
     ($p:r_type) &str => CRustStrView {
         $out = CRustStrView::from_str($p)
     };
-    ($p:f_type, req_modules = ["\"rust_str.h\""]) => "RustStrView"
-        "RustStrView { $p }";
+    ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_str.h\"", "<boost/utility/string_view.hpp>"]) => "boost::string_view"
+        "boost::string_view{ $p.data, $p.len }";
+    ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_str.h\"", "<string_view>"]) => "std::string_view"
+        "std::string_view{ $p.data, $p.len }";
 );
 
 foreign_typemap!(
@@ -1344,8 +1316,10 @@ foreign_typemap!(
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 void crust_string_free(struct CRustString str);
 struct CRustString crust_string_clone(struct CRustString str);
+
 #ifdef __cplusplus
 } // extern "C" {
 #endif
@@ -1353,10 +1327,20 @@ struct CRustString crust_string_clone(struct CRustString str);
 #ifdef __cplusplus
 
 #include <string>
-#if __cplusplus >= 201703L
+"##
+    );
+    foreigner_code!(module = "rust_str.h";
+                    option = "CppStrView::Std17";
+                    r##"
 #include <string_view>
-#endif
-
+"##);
+    foreigner_code!(module = "rust_str.h";
+                    option = "CppStrView::Boost";
+                    r##"
+#include <boost/utility/string_view.hpp>
+"##);
+    foreigner_code!(module = "rust_str.h";
+                    r##"
 namespace $RUST_SWIG_USER_NAMESPACE {
 class RustString final : private CRustString {
 public:
@@ -1404,13 +1388,19 @@ public:
     std::string to_std_string() const { return std::string(data, len); }
     size_t size() const noexcept { return this->len; }
     bool empty() const noexcept { return this->len == 0; }
-#if __cplusplus >= 201703L
+"##);
+    foreigner_code!(module = "rust_str.h";
+                    option = "CppStrView::Std17";
+                    r##"
     std::string_view to_string_view() const { return std::string_view(data, len); }
-#endif
-
-#ifdef BOOST_STRING_VIEW_HPP
+"##);
+    foreigner_code!(module = "rust_str.h";
+                    option = "CppStrView::Boost";
+                    r#"
     boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
-#endif
+"#);
+    foreigner_code!(module = "rust_str.h";
+                    r##"
 private:
     void free_mem() noexcept
     {
