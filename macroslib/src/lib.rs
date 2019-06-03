@@ -177,6 +177,8 @@ impl CppConfig {
             ..self
         }
     }
+    /// Use boost for that fit: Result -> boost::variant,
+    /// Option -> boost::optional, etc
     pub fn use_boost(self) -> CppConfig {
         CppConfig {
             cpp_variant: CppVariant::Boost,
