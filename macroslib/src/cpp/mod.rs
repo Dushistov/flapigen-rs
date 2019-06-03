@@ -4,7 +4,7 @@ mod fenum;
 mod finterface;
 mod map_type;
 
-use std::{fmt, io::Write, mem};
+use std::{fmt, io::Write};
 
 use log::{debug, trace};
 use petgraph::Direction;
@@ -268,6 +268,7 @@ impl CppConfig {
     fn generate(
         &self,
         conv_map: &mut TypeMap,
+        target_pointer_width: usize,
         class: &ForeignerClassInfo,
     ) -> Result<Vec<TokenStream>> {
         debug!(
@@ -301,6 +302,7 @@ May be you need to use `private constructor = empty;` syntax?",
             conv_map,
             &self.output_dir,
             &self.namespace_name,
+            target_pointer_width,
             self.separate_impl_headers,
             class,
             &req_includes,
@@ -381,7 +383,12 @@ May be you need to use `private constructor = empty;` syntax?",
         Ok(items)
     }
 
-    fn init(&self, conv_map: &mut TypeMap, code: &[SourceCode]) -> Result<Vec<TokenStream>> {
+    fn init(
+        &self,
+        conv_map: &mut TypeMap,
+        target_pointer_width: usize,
+        code: &[SourceCode],
+    ) -> Result<Vec<TokenStream>> {
         let mut ret = vec![];
         //for enum
         conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { u32 });
@@ -424,7 +431,7 @@ static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * {sizeof_usize},
 extern "C" {{
 #endif
 "##,
-                sizeof_usize = mem::size_of::<usize>(),
+                sizeof_usize = target_pointer_width / 8,
             )
             .map_err(map_any_err_to_our_err)?;
 
@@ -485,7 +492,7 @@ impl LanguageGenerator for CppConfig {
         items: Vec<ItemToExpand>,
     ) -> Result<Vec<TokenStream>> {
         let mut ret = Vec::with_capacity(items.len());
-        ret.append(&mut self.init(conv_map, code)?);
+        ret.append(&mut self.init(conv_map, pointer_target_width, code)?);
         for item in &items {
             if let ItemToExpand::Class(ref fclass) = item {
                 self.register_class(conv_map, fclass)?;
@@ -493,7 +500,9 @@ impl LanguageGenerator for CppConfig {
         }
         for item in items {
             match item {
-                ItemToExpand::Class(fclass) => ret.append(&mut self.generate(conv_map, &fclass)?),
+                ItemToExpand::Class(fclass) => {
+                    ret.append(&mut self.generate(conv_map, pointer_target_width, &fclass)?)
+                }
                 ItemToExpand::Enum(fenum) => {
                     ret.append(&mut self.generate_enum(conv_map, pointer_target_width, &fenum)?)
                 }
