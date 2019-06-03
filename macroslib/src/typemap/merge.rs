@@ -13,7 +13,7 @@ use crate::{
         ast::TypeName,
         parse_typemap_macro::{FTypeLeftRightPair, TypeMapConvRuleInfo},
         ty::{ForeignConversationIntermediate, ForeignTypeS, ForeignTypesStorage},
-        NotMergedData, TypeConvEdge, TypeMap,
+        TypeConvEdge, TypeMap,
     },
 };
 
@@ -56,11 +56,16 @@ impl TypeMap {
         Ok(())
     }
 
-    pub(in crate::typemap) fn merge_conv_rule(
+    pub(crate) fn merge_conv_rule(
         &mut self,
         src_id: SourceId,
-        ri: TypeMapConvRuleInfo,
+        mut ri: TypeMapConvRuleInfo,
     ) -> Result<()> {
+        ri.src_id = src_id;
+        if ri.f_code.is_some() || ri.c_types.is_some() {
+            self.not_merged_data.push(ri);
+            return Ok(());
+        }
         if let Some((r_ty, f_ty)) = ri.if_simple_rtype_ftype_map() {
             let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
 
@@ -232,17 +237,6 @@ impl TypeMap {
                 }
             }
             (None, None) => {}
-        }
-
-        if let Some(mut c_types) = ri.c_types {
-            c_types.src_id = src_id;
-            self.not_merged_data
-                .push(NotMergedData::CTypeDefines(c_types));
-        }
-
-        if let Some(f_code) = ri.f_code {
-            self.not_merged_data
-                .extend(f_code.into_iter().map(|x| NotMergedData::ForeignCode(x)));
         }
 
         Ok(())

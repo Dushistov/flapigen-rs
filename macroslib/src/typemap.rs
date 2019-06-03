@@ -34,7 +34,7 @@ use crate::{
     types::{ForeignEnumInfo, ForeignerClassInfo},
 };
 
-pub(crate) use parse_typemap_macro::{CType, CTypes, ForeignCode};
+pub(crate) use parse_typemap_macro::{CType, CTypes, TypeMapConvRuleInfo};
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
 pub(in crate::typemap) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
@@ -84,15 +84,9 @@ pub(crate) struct TypeMap {
     exported_enums: FxHashMap<SmolStr, ForeignEnumInfo>,
     /// How to use trait to convert types, Trait Name -> Code
     traits_usage_code: FxHashMap<Ident, String>,
-    not_merged_data: Vec<NotMergedData>,
-}
-
-/// code that parsed, but not yet integrated to TypeMap,
-/// because of it is possible only on code generation stage
-#[derive(Debug)]
-pub(crate) enum NotMergedData {
-    CTypeDefines(CTypes),
-    ForeignCode(ForeignCode),
+    /// code that parsed, but not yet integrated to TypeMap,
+    /// because of it is possible only in langauge backend
+    not_merged_data: Vec<TypeMapConvRuleInfo>,
 }
 
 impl Default for TypeMap {
@@ -964,18 +958,8 @@ impl TypeMap {
             .map(|idx| self.conv_graph[*idx].clone())
     }
 
-    pub(crate) fn take_not_merged_data(&mut self) -> Vec<(SmolStr, Vec<NotMergedData>)> {
-        let data = mem::replace(&mut self.not_merged_data, vec![]);
-        let mut ret = FxHashMap::<SmolStr, Vec<NotMergedData>>::default();
-        for item in data {
-            let key = match item {
-                NotMergedData::CTypeDefines(ref d) => d.header_name.clone(),
-                NotMergedData::ForeignCode(ref f) => f.module_name.clone(),
-            };
-            let ret_item = ret.entry(key).or_insert_with(|| vec![]);
-            ret_item.push(item);
-        }
-        ret.into_iter().collect()
+    pub(crate) fn take_not_merged_data(&mut self) -> Vec<TypeMapConvRuleInfo> {
+        mem::replace(&mut self.not_merged_data, vec![])
     }
 }
 

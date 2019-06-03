@@ -15,7 +15,8 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub(in crate::typemap) struct TypeMapConvRuleInfo {
+pub(crate) struct TypeMapConvRuleInfo {
+    pub src_id: SourceId,
     pub rtype_left_to_right: Option<RTypeConvRule>,
     pub rtype_right_to_left: Option<RTypeConvRule>,
     pub ftype_left_to_right: Option<FTypeConvRule>,
@@ -54,27 +55,27 @@ impl TypeMapConvRuleInfo {
 }
 
 #[derive(Debug, PartialEq)]
-pub(in crate::typemap) struct RTypeConvRule {
+pub(crate) struct RTypeConvRule {
     pub left_ty: Type,
     pub right_ty: Option<Type>,
     pub code: Option<FTypeConvCode>,
 }
 
 #[derive(Debug, PartialEq)]
-pub(in crate::typemap) struct FTypeConvRule {
+pub(crate) struct FTypeConvRule {
     pub left_right_ty: FTypeLeftRightPair,
     pub code: Option<FTypeConvCode>,
 }
 
 #[derive(Debug, PartialEq)]
-pub(in crate::typemap) enum FTypeLeftRightPair {
+pub(crate) enum FTypeLeftRightPair {
     OnlyLeft(FTypeName),
     OnlyRight(FTypeName),
     Both(FTypeName, FTypeName),
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::typemap) struct FTypeName {
+pub(crate) struct FTypeName {
     pub name: SmolStr,
     pub sp: Span,
 }
@@ -384,6 +385,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
             input.parse::<Token![;]>()?;
         }
         Ok(TypeMapConvRuleInfo {
+            src_id: SourceId::none(),
             c_types,
             f_code,
             ftype_req_modules,
