@@ -340,6 +340,23 @@ impl Generator {
         }
     }
 
+    /// process string `src` and save result of macro expansion to `dst`
+    ///
+    /// # Panics
+    /// Panics on error
+    pub fn expand_from_str<D>(self, crate_name: &str, src: &str, dst: D)
+    where
+        D: AsRef<Path>,
+    {
+        if let Err(mut err) = self.expand_str(&src, dst) {
+            err.register_src_if_no(
+                format!("{}", crate_name),
+                src.into(),
+            );
+            panic_on_parse_error(&err);
+        }
+    }
+
     /// process `src` and save result of macro expansion to `dst`
     ///
     /// # Panics
