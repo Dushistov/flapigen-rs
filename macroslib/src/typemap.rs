@@ -34,6 +34,7 @@ use crate::{
     types::{ForeignEnumInfo, ForeignerClassInfo},
 };
 
+pub(crate) use parse_typemap_macro::{CType, CTypes, TypeMapConvRuleInfo};
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
 pub(in crate::typemap) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
@@ -83,6 +84,9 @@ pub(crate) struct TypeMap {
     exported_enums: FxHashMap<SmolStr, ForeignEnumInfo>,
     /// How to use trait to convert types, Trait Name -> Code
     traits_usage_code: FxHashMap<Ident, String>,
+    /// code that parsed, but not yet integrated to TypeMap,
+    /// because of it is possible only in langauge backend
+    not_merged_data: Vec<TypeMapConvRuleInfo>,
 }
 
 impl Default for TypeMap {
@@ -140,6 +144,7 @@ impl Default for TypeMap {
             exported_enums: FxHashMap::default(),
             traits_usage_code: FxHashMap::default(),
             ftypes_storage: ForeignTypesStorage::default(),
+            not_merged_data: vec![],
         }
     }
 }
@@ -317,10 +322,9 @@ impl TypeMap {
         &mut self,
         foreign_name: TypeName,
         correspoding_rty: NodeIndex,
-    ) -> Result<()> {
+    ) -> Result<ForeignType> {
         self.ftypes_storage
-            .alloc_new(foreign_name, correspoding_rty)?;
-        Ok(())
+            .alloc_new(foreign_name, correspoding_rty)
     }
     //TODO: should be removed in the future
     pub(crate) fn find_foreign_type_info_by_name(
@@ -341,6 +345,30 @@ impl TypeMap {
         } else {
             None
         }
+    }
+
+    pub(crate) fn find_foreign_type_related_to_rust_ty(
+        &self,
+        rust_ty: RustTypeIdx,
+    ) -> Option<ForeignType> {
+        for (idx, ft) in self.ftypes_storage.iter_enumerate() {
+            if let (
+                Some(ForeignConversationRule {
+                    rust_ty: into,
+                    intermediate: None,
+                }),
+                Some(ForeignConversationRule {
+                    rust_ty: from,
+                    intermediate: None,
+                }),
+            ) = (ft.into_from_rust.as_ref(), ft.from_into_rust.as_ref())
+            {
+                if *into == *from && *into == rust_ty {
+                    return Some(idx);
+                }
+            }
+        }
+        None
     }
 
     pub(crate) fn cache_rust_to_foreign_conv(
@@ -927,6 +955,10 @@ impl TypeMap {
         self.rust_names_map
             .get(&name)
             .map(|idx| self.conv_graph[*idx].clone())
+    }
+
+    pub(crate) fn take_not_merged_data(&mut self) -> Vec<TypeMapConvRuleInfo> {
+        mem::replace(&mut self.not_merged_data, vec![])
     }
 }
 

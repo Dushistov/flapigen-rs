@@ -1,8 +1,9 @@
-use std::{io::Write, mem, path::Path};
+use std::{io::Write, path::Path};
 
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
+use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
@@ -30,9 +31,10 @@ pub(in crate::cpp) fn generate(
     conv_map: &mut TypeMap,
     output_dir: &Path,
     namespace_name: &str,
+    target_pointer_width: usize,
     separate_impl_headers: bool,
     class: &ForeignerClassInfo,
-    req_includes: &[String],
+    req_includes: &[SmolStr],
     methods_sign: &[CppForeignMethodSignature],
 ) -> Result<Vec<TokenStream>> {
     use std::fmt::Write;
@@ -79,7 +81,7 @@ extern "C" {{
 "##,
         doc_comments = class_doc_comments,
         c_class_type = c_class_type,
-        sizeof_usize = mem::size_of::<usize>(),
+        sizeof_usize = target_pointer_width / 8,
     )
     .map_err(map_write_err!(c_path))?;
 

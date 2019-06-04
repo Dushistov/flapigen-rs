@@ -5,30 +5,41 @@ use syn::{
     Type,
 };
 
-use crate::typemap::{
-    ast::DisplayToTokens, ty::FTypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
-    TO_VAR_TYPE_TEMPLATE,
+use crate::{
+    source_registry::SourceId,
+    typemap::{
+        ast::{DisplayToTokens, SpannedSmolStr},
+        ty::FTypeConvCode,
+        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
+    },
+    FOREIGNER_CODE, FOREIGN_CODE,
 };
 
 #[derive(Debug)]
-pub(in crate::typemap) struct TypeMapConvRuleInfo {
+pub(crate) struct TypeMapConvRuleInfo {
+    pub src_id: SourceId,
     pub rtype_left_to_right: Option<RTypeConvRule>,
     pub rtype_right_to_left: Option<RTypeConvRule>,
-    pub ftype_left_to_right: Option<FTypeConvRule>,
-    pub ftype_right_to_left: Option<FTypeConvRule>,
-    /// empty and none is different, because of if none
-    /// we don't touch, if empty we override req_modules
-    pub ftype_req_modules: Option<Vec<String>>,
+    pub ftype_left_to_right: Vec<FTypeConvRule>,
+    pub ftype_right_to_left: Vec<FTypeConvRule>,
+    /// For C++ case it is possible to introduce some C types
+    pub c_types: Option<CTypes>,
+    pub f_code: Vec<ForeignCode>,
 }
 
 impl TypeMapConvRuleInfo {
-    pub(in crate::typemap) fn if_simple_rtype_ftype_map(&self) -> Option<(&Type, &FTypeName)> {
-        if self.rtype_right_to_left.is_some() || self.ftype_right_to_left.is_some() {
+    pub(in crate::typemap) fn if_simple_rtype_ftype_map(
+        &self,
+    ) -> Option<(&Type, &FTypeName, &[SmolStr])> {
+        if self.rtype_right_to_left.is_some() || !self.ftype_right_to_left.is_empty() {
+            return None;
+        }
+        if self.ftype_left_to_right.len() > 1 {
             return None;
         }
         match (
             self.rtype_left_to_right.as_ref(),
-            self.ftype_left_to_right.as_ref(),
+            self.ftype_left_to_right.get(0),
         ) {
             (
                 Some(RTypeConvRule {
@@ -39,35 +50,65 @@ impl TypeMapConvRuleInfo {
                 Some(FTypeConvRule {
                     left_right_ty: FTypeLeftRightPair::OnlyLeft(ref f_ty),
                     code: None,
+                    ref req_modules,
+                    ..
                 }),
-            ) => Some((r_ty, f_ty)),
+            ) => Some((r_ty, f_ty, req_modules.as_slice())),
             _ => None,
         }
+    }
+
+    pub(in crate::typemap) fn contains_data_for_language_backend(&self) -> bool {
+        !self.f_code.is_empty()
+            || self.c_types.is_some()
+            || self
+                .ftype_left_to_right
+                .iter()
+                .any(|x| x.cfg_option.is_some())
+            || self
+                .ftype_right_to_left
+                .iter()
+                .any(|x| x.cfg_option.is_some())
+            || self.ftype_left_to_right.len() > 1
+            || self.ftype_right_to_left.len() > 1
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub(in crate::typemap) struct RTypeConvRule {
+pub(crate) struct RTypeConvRule {
     pub left_ty: Type,
     pub right_ty: Option<Type>,
     pub code: Option<FTypeConvCode>,
 }
 
 #[derive(Debug, PartialEq)]
-pub(in crate::typemap) struct FTypeConvRule {
+pub(crate) struct FTypeConvRule {
+    pub req_modules: Vec<SmolStr>,
+    pub cfg_option: Option<SpannedSmolStr>,
     pub left_right_ty: FTypeLeftRightPair,
     pub code: Option<FTypeConvCode>,
 }
 
 #[derive(Debug, PartialEq)]
-pub(in crate::typemap) enum FTypeLeftRightPair {
+pub(crate) enum FTypeLeftRightPair {
     OnlyLeft(FTypeName),
     OnlyRight(FTypeName),
     Both(FTypeName, FTypeName),
 }
 
+impl FTypeLeftRightPair {
+    pub(crate) fn span(&self) -> Span {
+        use FTypeLeftRightPair::*;
+        match self {
+            OnlyRight(ref x) => x.sp,
+            OnlyLeft(ref x) => x.sp,
+            Both(ref x, _) => x.sp,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub(in crate::typemap) struct FTypeName {
+pub(crate) struct FTypeName {
     pub name: SmolStr,
     pub sp: Span,
 }
@@ -93,6 +134,8 @@ mod kw {
     custom_keyword!(r_type);
     custom_keyword!(f_type);
     custom_keyword!(req_modules);
+    custom_keyword!(module);
+    custom_keyword!(option);
 }
 
 enum RuleType {
@@ -108,11 +151,13 @@ enum ConvertRuleType<T> {
 
 impl syn::parse::Parse for TypeMapConvRuleInfo {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        static DEFINE_C_TYPE: &str = "define_c_type";
         let mut rtype_left_to_right: Option<RTypeConvRule> = None;
         let mut rtype_right_to_left: Option<RTypeConvRule> = None;
-        let mut ftype_left_to_right: Option<FTypeConvRule> = None;
-        let mut ftype_right_to_left: Option<FTypeConvRule> = None;
-        let mut ftype_req_modules = None;
+        let mut ftype_left_to_right = Vec::<FTypeConvRule>::new();
+        let mut ftype_right_to_left = Vec::<FTypeConvRule>::new();
+        let mut c_types = None;
+        let mut f_code = Vec::<ForeignCode>::new();
 
         while !input.is_empty() {
             if input.peek(token::Paren) {
@@ -134,7 +179,9 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 } else {
                     return Err(kw_la.error());
                 };
-                if params.peek(Token![,]) {
+                let mut ftype_cfg: Option<SpannedSmolStr> = None;
+                let mut ftype_req_modules = Vec::<SmolStr>::new();
+                while !params.is_empty() && params.peek(Token![,]) {
                     params.parse::<Token![,]>()?;
                     let la = params.lookahead1();
                     if la.peek(kw::req_modules) {
@@ -152,25 +199,30 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                         let modules;
                         bracketed!(modules in params);
                         while !modules.is_empty() {
-                            if ftype_req_modules.is_none() {
-                                ftype_req_modules = Some(Vec::with_capacity(3));
-                            }
-                            ftype_req_modules
-                                .as_mut()
-                                .unwrap()
-                                .push(modules.parse::<LitStr>()?.value());
+                            ftype_req_modules.push(modules.parse::<LitStr>()?.value().into());
                             if modules.peek(Token![,]) {
                                 modules.parse::<Token![,]>()?;
-                            }
-                            if !modules.is_empty() {
+                            } else if !modules.is_empty() {
                                 return Err(modules.error(format!(
                                     "expect end of {} here",
                                     DisplayToTokens(&kw::req_modules::default())
                                 )));
-                            } else {
-                                break;
                             }
                         }
+                    } else if la.peek(kw::option) {
+                        if let RuleType::RType(ref rule) = rule {
+                            return Err(syn::Error::new(
+                                rule.span(),
+                                "option allowed only for f_type",
+                            ));
+                        }
+                        params.parse::<kw::option>()?;
+                        params.parse::<Token![=]>()?;
+                        let lit_str = params.parse::<LitStr>()?;
+                        ftype_cfg = Some(SpannedSmolStr {
+                            sp: lit_str.span(),
+                            value: lit_str.value().into(),
+                        });
                     } else {
                         return Err(la.error());
                     }
@@ -298,13 +350,18 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                         };
                         match conv_rule_type {
                             Some(ConvertRuleType::LeftToRight(right_ty)) => {
-                                if ftype_left_to_right.is_some() {
+                                if ftype_left_to_right
+                                    .iter()
+                                    .any(|x| x.cfg_option == ftype_cfg)
+                                {
                                     return Err(syn::Error::new(
                                         keyword.span(),
-                                        "duplicate of f_type left to right rule",
+                                        "duplicate of f_type left to right rule with the same option",
                                     ));
                                 }
-                                ftype_left_to_right = Some(FTypeConvRule {
+                                ftype_left_to_right.push(FTypeConvRule {
+                                    req_modules: ftype_req_modules,
+                                    cfg_option: ftype_cfg,
                                     left_right_ty: if let Some(left_ty) = left_ty {
                                         FTypeLeftRightPair::Both(left_ty, right_ty)
                                     } else {
@@ -314,13 +371,18 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                                 });
                             }
                             Some(ConvertRuleType::RightToLeft(right_ty)) => {
-                                if ftype_right_to_left.is_some() {
+                                if ftype_right_to_left
+                                    .iter()
+                                    .any(|x| x.cfg_option == ftype_cfg)
+                                {
                                     return Err(syn::Error::new(
                                         keyword.span(),
-                                        "duplicate of f_type right to left rule",
+                                        "duplicate of f_type right to left rule with the same option",
                                     ));
                                 }
-                                ftype_right_to_left = Some(FTypeConvRule {
+                                ftype_right_to_left.push(FTypeConvRule {
+                                    cfg_option: ftype_cfg,
+                                    req_modules: ftype_req_modules,
                                     left_right_ty: if let Some(left_ty) = left_ty {
                                         FTypeLeftRightPair::Both(left_ty, right_ty)
                                     } else {
@@ -330,10 +392,13 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                                 });
                             }
                             None => {
-                                if ftype_left_to_right.is_some() {
+                                if ftype_left_to_right
+                                    .iter()
+                                    .any(|x| x.cfg_option == ftype_cfg)
+                                {
                                     return Err(syn::Error::new(
                                         keyword.span(),
-                                        "duplicate of f_type left to right rule",
+                                        "duplicate of f_type left to right rule with the same option",
                                     ));
                                 }
                                 let left_ty = left_ty.ok_or_else(|| {
@@ -342,7 +407,9 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                                         "expect type name in this kind of f_type rule",
                                     )
                                 })?;
-                                ftype_left_to_right = Some(FTypeConvRule {
+                                ftype_left_to_right.push(FTypeConvRule {
+                                    req_modules: ftype_req_modules,
+                                    cfg_option: ftype_cfg,
                                     left_right_ty: FTypeLeftRightPair::OnlyLeft(left_ty),
                                     code: None,
                                 });
@@ -352,15 +419,124 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 }
             } else {
                 let mac: syn::Macro = input.parse()?;
+                let is_our_macro = [DEFINE_C_TYPE, FOREIGNER_CODE, FOREIGN_CODE]
+                    .iter()
+                    .any(|x| mac.path.is_ident(x));
+                if !is_our_macro {
+                    return Err(syn::Error::new(mac.span(), "unknown macro in this context"));
+                }
+                if mac.path.is_ident(DEFINE_C_TYPE) {
+                    c_types = Some(syn::parse2(mac.tts)?);
+                } else if mac.path.is_ident(FOREIGN_CODE) || mac.path.is_ident(FOREIGNER_CODE) {
+                    let fc_elem = syn::parse2::<ForeignCode>(mac.tts)?;
+                    f_code.push(fc_elem);
+                }
             }
             input.parse::<Token![;]>()?;
         }
         Ok(TypeMapConvRuleInfo {
-            ftype_req_modules,
+            src_id: SourceId::none(),
+            c_types,
+            f_code,
             rtype_left_to_right,
             rtype_right_to_left,
             ftype_left_to_right,
             ftype_right_to_left,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum CType {
+    Struct(syn::ItemStruct),
+    Union(syn::ItemUnion),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CTypes {
+    pub header_name: SmolStr,
+    pub src_id: SourceId,
+    pub types: Vec<CType>,
+}
+
+#[cfg(test)]
+impl PartialEq for CTypes {
+    fn eq(&self, o: &CTypes) -> bool {
+        self.header_name == o.header_name && self.types == o.types
+    }
+}
+
+impl syn::parse::Parse for CTypes {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<kw::module>()?;
+        input.parse::<Token![=]>()?;
+        let module_name: LitStr = input.parse()?;
+        let header_name: SmolStr = module_name.value().into();
+        input.parse::<Token![;]>()?;
+        let mut types = vec![];
+        while !input.is_empty() {
+            let item: syn::Item = input.parse()?;
+            match item {
+                syn::Item::Struct(s) => {
+                    if !has_repr_c_attr(&s.attrs) {
+                        return Err(syn::Error::new(s.span(), "struct has no repr(C) attribute"));
+                    }
+                    types.push(CType::Struct(s));
+                }
+                syn::Item::Union(u) => {
+                    if !has_repr_c_attr(&u.attrs) {
+                        return Err(syn::Error::new(u.span(), "union has no repr(C) attribute"));
+                    }
+                    types.push(CType::Union(u));
+                }
+                _ => return Err(syn::Error::new(item.span(), "Expect struct or union here")),
+            }
+        }
+        Ok(CTypes {
+            src_id: SourceId::none(),
+            header_name,
+            types,
+        })
+    }
+}
+
+fn has_repr_c_attr(attrs: &[syn::Attribute]) -> bool {
+    let repr_c_attr: syn::Attribute = parse_quote! { #[repr(C)] };
+    attrs.iter().any(|a| *a == repr_c_attr)
+}
+
+#[derive(Debug)]
+pub(crate) struct ForeignCode {
+    pub module_name: SmolStr,
+    pub cfg_option: Option<SpannedSmolStr>,
+    pub code: String,
+}
+
+impl syn::parse::Parse for ForeignCode {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<kw::module>()?;
+        input.parse::<Token![=]>()?;
+        let module_name: LitStr = input.parse()?;
+        let module_name: SmolStr = module_name.value().into();
+        input.parse::<Token![;]>()?;
+        let cfg_option: Option<SpannedSmolStr> = if input.peek(kw::option) {
+            input.parse::<kw::option>()?;
+            input.parse::<Token![=]>()?;
+            let cfg_option: LitStr = input.parse()?;
+            input.parse::<Token![;]>()?;
+            Some(SpannedSmolStr {
+                sp: cfg_option.span(),
+                value: cfg_option.value().into(),
+            })
+        } else {
+            None
+        };
+        let code: LitStr = input.parse()?;
+
+        Ok(ForeignCode {
+            module_name,
+            cfg_option,
+            code: code.value(),
         })
     }
 }
@@ -384,6 +560,7 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
             )
         });
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
+        assert!(!rule.contains_data_for_language_backend());
     }
 
     #[test]
@@ -402,6 +579,8 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
         });
 
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
+        assert!(!rule.contains_data_for_language_backend());
+
         assert_eq!(
             RTypeConvRule {
                 left_ty: parse_type!(bool),
@@ -427,7 +606,8 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
         );
 
         assert_eq!(
-            FTypeConvRule {
+            vec![FTypeConvRule {
+                req_modules: vec![],
                 left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
                     name: "bool".into(),
                     sp: Span::call_site(),
@@ -436,12 +616,14 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
                     "$out = ({from_var} != 0);",
                     Span::call_site()
                 )),
-            },
-            rule.ftype_left_to_right.unwrap()
+                cfg_option: None,
+            }],
+            rule.ftype_left_to_right
         );
 
         assert_eq!(
-            FTypeConvRule {
+            vec![FTypeConvRule {
+                req_modules: vec![],
                 left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
                     name: "bool".into(),
                     sp: Span::call_site(),
@@ -450,8 +632,9 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
                     "$out = {from_var} ? 1 : 0;",
                     Span::call_site()
                 )),
-            },
-            rule.ftype_right_to_left.unwrap()
+                cfg_option: None,
+            }],
+            rule.ftype_right_to_left
         );
     }
 
@@ -467,6 +650,7 @@ $out = QString::fromUtf8($pin.data, $pin.len);
 "#;)
         });
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
+        assert!(!rule.contains_data_for_language_backend());
     }
 
     #[ignore]
@@ -510,6 +694,7 @@ $out = QString::fromUtf8($pin.data, $pin.len);
             )
         });
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
+        assert!(rule.contains_data_for_language_backend());
     }
 
     #[test]
@@ -526,6 +711,7 @@ $out = QString::fromUtf8($pin.data, $pin.len);
             )
         });
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
+        assert!(!rule.contains_data_for_language_backend());
     }
 
     #[ignore]
@@ -541,6 +727,7 @@ $out = QString::fromUtf8($pin.data, $pin.len);
             )
         });
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
+        assert!(rule.contains_data_for_language_backend());
     }
 
     #[test]
@@ -552,6 +739,7 @@ $out = QString::fromUtf8($pin.data, $pin.len);
             )
         });
         assert!(rule.if_simple_rtype_ftype_map().is_some());
+        assert!(!rule.contains_data_for_language_backend());
 
         assert_eq!(
             RTypeConvRule {
@@ -565,34 +753,36 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         assert_eq!(None, rule.rtype_right_to_left);
 
         assert_eq!(
-            FTypeConvRule {
+            vec![FTypeConvRule {
+                req_modules: vec![],
                 left_right_ty: FTypeLeftRightPair::OnlyLeft(FTypeName {
                     name: "long".into(),
                     sp: Span::call_site(),
                 }),
                 code: None,
-            },
-            rule.ftype_left_to_right.unwrap()
+                cfg_option: None,
+            }],
+            rule.ftype_left_to_right
         );
 
-        assert_eq!(None, rule.ftype_right_to_left);
+        assert_eq!(Vec::<FTypeConvRule>::new(), rule.ftype_right_to_left);
     }
 
     #[test]
     fn test_foreign_typemap_cpp_ruststring() {
         let rule = macro_to_conv_rule(parse_quote! {
-                    foreign_typemap!(
-                        define_c_type!(module = "rust_str.h";
-                            #[repr(C)]
-                            struct CRustString {
-                                data: *const ::std::os::raw::c_char,
-                                len: usize,
-                                capacity: usize,
-                            }
-                        );/*
-                        #[cfg(swig_option="boost")]
-                        foreigner_code!(module = "rust_str.h";
-                                        r#"
+            foreign_typemap!(
+                define_c_type!(module = "rust_str.h";
+                    #[repr(C)]
+                    struct CRustString {
+                        data: *const ::std::os::raw::c_char,
+                        len: usize,
+                        capacity: usize,
+                    }
+                );
+                foreigner_code!(module = "rust_str.h";
+                                option="boost";
+                                r#"
         namespace $RUST_SWIG_USER_NAMESPACE {
         class RustString final : private CRustString {
         public:
@@ -600,14 +790,54 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         };
         }
         "#
-                                        );*/
-                        ($pin:r_type) String => CRustString {
-                            $out = CRustString::from_string($pin)
-                        };
-                        ($pin:f_type, req_modules = ["rust_str.h"]) => "RustString" "RustString{$pin}";
-                    )
+                                );
+                ($pin:r_type) String => CRustString {
+                    $out = CRustString::from_string($pin)
+                };
+                ($pin:f_type, req_modules = ["rust_str.h"]) => "RustString" "RustString{$pin}";
+            )
+        });
+        assert!(!rule.if_simple_rtype_ftype_map().is_some());
+        assert!(rule.contains_data_for_language_backend());
+        assert_eq!(
+            CTypes {
+                src_id: SourceId::none(),
+                header_name: "rust_str.h".into(),
+                types: vec![CType::Struct(parse_quote! {
+                    #[repr(C)]
+                        struct CRustString {
+                            data: *const ::std::os::raw::c_char,
+                            len: usize,
+                            capacity: usize,
+                        }
+                }),],
+            },
+            rule.c_types.unwrap()
+        );
+    }
+
+    #[test]
+    fn test_foreign_typemap_cpp_str() {
+        let rule = macro_to_conv_rule(parse_quote! {
+                    foreign_typemap!(
+            define_c_type!(module = "rust_str.h";
+                           #[repr(C)]
+                           pub struct CRustStrView {
+                               data: *const ::std::os::raw::c_char,
+                               len: usize,
+                           }
+            );
+            ($p:r_type) &str => CRustStrView {
+                $out = CRustStrView::from_str($p)
+            };
+            ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_str.h\"", "<boost/utility/string_view.hpp>"]) => "boost::string_view"
+                "boost::string_view{ $p.data, $p.len }";
+            ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_str.h\"", "<string_view>"]) => "std::string_view"
+                "std::string_view{ $p.data, $p.len }";
+        )
                 });
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
+        assert!(rule.contains_data_for_language_backend());
     }
 
     fn macro_to_conv_rule(mac: syn::Macro) -> TypeMapConvRuleInfo {

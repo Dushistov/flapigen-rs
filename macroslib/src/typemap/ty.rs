@@ -54,6 +54,9 @@ impl RustTypeS {
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
         (self.src_id, self.ty.span())
     }
+    pub(crate) fn to_idx(&self) -> RustTypeIdx {
+        self.graph_idx
+    }
 }
 
 pub(crate) type RustType = Rc<RustTypeS>;
@@ -117,7 +120,7 @@ pub(crate) struct ForeignTypeS {
     /// specify which foreign module provides this type
     /// it is possible that provided by multiplines modules
     /// for example C++ `std::variant<TypeA, TypeB>
-    pub(crate) provides_by_module: Vec<String>,
+    pub(crate) provides_by_module: Vec<SmolStr>,
     pub(crate) into_from_rust: Option<ForeignConversationRule>,
     pub(crate) from_into_rust: Option<ForeignConversationRule>,
 }

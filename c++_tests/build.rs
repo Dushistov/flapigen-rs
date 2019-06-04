@@ -1,6 +1,6 @@
 use std::{env, path::Path};
 
-use rust_swig::{CppConfig, CppOptional, CppVariant, LanguageConfig};
+use rust_swig::{CppConfig, CppOptional, CppStrView, CppVariant, LanguageConfig};
 
 fn main() {
     env_logger::init();
@@ -13,12 +13,16 @@ fn main() {
     } else {
         let mut cfg = CppConfig::new(cpp_gen_path, "rust".into())
             .cpp_optional(CppOptional::Boost)
-            .cpp_variant(CppVariant::Boost);
+            .cpp_variant(CppVariant::Boost)
+            .cpp_str_view(CppStrView::Boost);
         if cfg!(feature = "cpp17_optional") {
             cfg = cfg.cpp_optional(CppOptional::Std17);
         }
         if cfg!(feature = "cpp17_variant") {
             cfg = cfg.cpp_variant(CppVariant::Std17);
+        }
+        if cfg!(feature = "cpp17_string_view") {
+            cfg = cfg.cpp_str_view(CppStrView::Std17);
         }
         cfg
     };

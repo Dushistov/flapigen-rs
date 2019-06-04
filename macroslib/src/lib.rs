@@ -8,6 +8,9 @@
 
 #![recursion_limit = "128"]
 
+#[macro_use]
+extern crate strum_macros;
+
 macro_rules! parse_type {
     ($($tt:tt)*) => {{
         let ty: Type = parse_quote! { $($tt)* };
@@ -126,6 +129,7 @@ pub struct CppConfig {
     namespace_name: String,
     cpp_optional: CppOptional,
     cpp_variant: CppVariant,
+    cpp_str_view: CppStrView,
     generated_helper_files: RefCell<FxHashSet<PathBuf>>,
     to_generate: RefCell<Vec<TokenStream>>,
     /// Create separate *_impl.hpp files with methods implementations.
@@ -134,6 +138,7 @@ pub struct CppConfig {
 }
 
 /// To which `C++` type map `std::option::Option`
+#[derive(Clone, Copy, EnumIter)]
 pub enum CppOptional {
     /// `std::optional` from C++17 standard
     Std17,
@@ -141,12 +146,49 @@ pub enum CppOptional {
     Boost,
 }
 
+impl From<CppOptional> for &'static str {
+    fn from(x: CppOptional) -> Self {
+        match x {
+            CppOptional::Std17 => "CppOptional::Std17",
+            CppOptional::Boost => "CppOptional::Boost",
+        }
+    }
+}
+
 /// To which `C++` type map `std::result::Result`
+#[derive(Clone, Copy, EnumIter)]
 pub enum CppVariant {
     /// `std::variant` from C++17 standard
     Std17,
     /// `boost::variant`
     Boost,
+}
+
+impl From<CppVariant> for &'static str {
+    fn from(x: CppVariant) -> Self {
+        match x {
+            CppVariant::Std17 => "CppVariant::Std17",
+            CppVariant::Boost => "CppVariant::Boost",
+        }
+    }
+}
+
+/// To whcih `C++` type map `&str`
+#[derive(Clone, Copy, EnumIter)]
+pub enum CppStrView {
+    /// `std::string_view` from C++17 standard
+    Std17,
+    /// `boost::string_view`
+    Boost,
+}
+
+impl From<CppStrView> for &'static str {
+    fn from(x: CppStrView) -> Self {
+        match x {
+            CppStrView::Std17 => "CppStrView::Std17",
+            CppStrView::Boost => "CppStrView::Boost",
+        }
+    }
 }
 
 impl CppConfig {
@@ -160,6 +202,7 @@ impl CppConfig {
             namespace_name,
             cpp_optional: CppOptional::Std17,
             cpp_variant: CppVariant::Std17,
+            cpp_str_view: CppStrView::Std17,
             generated_helper_files: RefCell::new(FxHashSet::default()),
             to_generate: RefCell::new(vec![]),
             separate_impl_headers: false,
@@ -177,10 +220,19 @@ impl CppConfig {
             ..self
         }
     }
+    pub fn cpp_str_view(self, cpp_str_view: CppStrView) -> CppConfig {
+        CppConfig {
+            cpp_str_view,
+            ..self
+        }
+    }
+    /// Use boost for that fit: Result -> boost::variant,
+    /// Option -> boost::optional, &str -> boost::string_view
     pub fn use_boost(self) -> CppConfig {
         CppConfig {
             cpp_variant: CppVariant::Boost,
             cpp_optional: CppOptional::Boost,
+            cpp_str_view: CppStrView::Boost,
             ..self
         }
     }
@@ -215,6 +267,8 @@ struct SourceCode {
 static FOREIGNER_CLASS: &str = "foreigner_class";
 static FOREIGN_ENUM: &str = "foreign_enum";
 static FOREIGN_INTERFACE: &str = "foreign_interface";
+static FOREIGNER_CODE: &str = "foreigner_code";
+static FOREIGN_CODE: &str = "foreign_code";
 
 impl Generator {
     pub fn new(config: LanguageConfig) -> Generator {
@@ -247,10 +301,6 @@ impl Generator {
                     id_of_code: "cpp-include.rs".into(),
                     code: include_str!("cpp/cpp-include.rs").into(),
                 }));
-                foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_str.h".into(),
-                    code: include_str!("cpp/rust_str.h").into(),
-                });
                 foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_vec.h".into(),
                     code: include_str!("cpp/rust_vec.h").into(),

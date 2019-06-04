@@ -12,12 +12,8 @@
 #include <iostream>
 #include <sstream>
 #include <utility>
-#if defined(USE_BOOST) && defined(HAS_BOOST_STRING_VIEW_HPP)
-#include <boost/utility/string_view.hpp>
-#endif
 #include <gtest/gtest.h>
 
-#include "rust_interface/rust_str.h"
 #include "rust_interface/rust_tuple.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
@@ -28,17 +24,11 @@
 #include "rust_interface/TestWorkWithVec.hpp"
 #include "rust_interface/TestEnumClass.hpp"
 #include "rust_interface/TestPassPathAsParam.hpp"
-#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_OPTIONAL)) || defined(USE_BOOST)
 #include "rust_interface/TestOptional.hpp"
-#endif
 #include "rust_interface/TestError.hpp"
-#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)) || defined(USE_BOOST)
 #include "rust_interface/TestResult.hpp"
-#endif
 #include "rust_interface/Position.hpp"
-#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)) || defined(USE_BOOST)
 #include "rust_interface/LocationService.hpp"
-#endif
 #include "rust_interface/TestReferences.hpp"
 #include "rust_interface/TestOnlyStaticMethods.hpp"
 #include "rust_interface/Interface.hpp"
@@ -90,7 +80,7 @@ static char c_simple_cb_is_odd(int32_t x, void *opaque)
 TEST(c_Foo, Simple)
 {
     auto foo = Foo_new(1, "a");
-    ASSERT_NE(foo, nullptr);
+    ASSERT_TRUE(foo != nullptr);
 
     EXPECT_EQ(3, Foo_f(foo, 1, 1));
     auto name = Foo_getName(foo);
@@ -114,8 +104,8 @@ TEST(Foo, Simple)
     Foo foo(1, "b");
     EXPECT_EQ(3, foo.f(1, 1));
     {
-        RustStrView name = foo.getName();
-        EXPECT_EQ(std::string("b"), std::string(name.data, name.len));
+        auto name = foo.getName();
+        EXPECT_EQ(std::string("b"), std::string(name.data(), name.size()));
     }
     EXPECT_NEAR(std::hypot(1., 1.) + 1., foo.f_double(1., 1.), 1e-10);
     EXPECT_NEAR(std::hypot(1.0, 1.0), Foo::fHypot(1.0, 1.0), 1e-10);
@@ -135,7 +125,7 @@ TEST(Foo, Simple)
         Foo f2(17, "");
         EXPECT_EQ(19, f2.f(1, 1));
         auto name = f2.getName();
-        EXPECT_EQ(std::string(""), std::string(name.data, name.len));
+        EXPECT_EQ(std::string(""), std::string(name.data(), name.size()));
     }
 
     EXPECT_EQ(4u, foo.cpp_func(std::string("abcd")));
@@ -218,16 +208,16 @@ TEST(ClassCooperationTest, smokeTest)
 {
     ClassCooperationTest x;
     auto f1 = x.get(0);
-    EXPECT_EQ(std::string("5"), f1.getName().to_std_string());
+    EXPECT_EQ(std::string("5"), f1.getName());
     EXPECT_EQ(5, f1.f(0, 0));
     auto f2 = x.get(1);
-    EXPECT_EQ(std::string("7"), f2.getName().to_std_string());
+    EXPECT_EQ(std::string("7"), f2.getName());
     EXPECT_EQ(6, f2.f(0, 0));
 
     Foo new_f2{ 437, "437" };
     x.set(1, std::move(new_f2));
     f2 = x.get(1);
-    EXPECT_EQ(std::string("437"), f2.getName().to_std_string());
+    EXPECT_EQ(std::string("437"), f2.getName());
     EXPECT_EQ(437, f2.f(0, 0));
 }
 
@@ -248,7 +238,7 @@ static void validate_create_foo_vec(size_t n, const RustForeignVecFoo &vec)
     for (auto &&elem : vec) {
         ASSERT_EQ(static_cast<int32_t>(i), elem.f(0, 0));
         fmt << i;
-        ASSERT_EQ(fmt.str(), elem.getName().to_std_string());
+        ASSERT_EQ(fmt.str(), elem.getName());
         fmt.str(std::string());
         fmt.clear();
         ++i;
@@ -308,21 +298,21 @@ TEST(TestWorkWithVec, smokeTest)
     RustForeignVecFoo vec_foo = t.get_vec_foo();
     ASSERT_EQ(tag_len, vec_foo.size());
     for (size_t i = 0; i < vec_foo.size(); ++i) {
-        EXPECT_EQ(std::string(tag), vec_foo[i].getName().to_std_string());
+        EXPECT_EQ(std::string(tag), vec_foo[i].getName());
         EXPECT_TRUE(vec_foo[i].f(0, 0) >= 0);
         EXPECT_EQ(i, size_t(vec_foo[i].f(0, 0)));
     }
     vec_foo.push(Foo{ 57, "boo" });
     ASSERT_EQ(tag_len + 1, vec_foo.size());
     EXPECT_EQ(57, vec_foo[vec_foo.size() - 1].f(0, 0));
-    EXPECT_EQ(std::string("boo"), vec_foo[vec_foo.size() - 1].getName().to_std_string());
+    EXPECT_EQ(std::string("boo"), vec_foo[vec_foo.size() - 1].getName());
     {
         auto elem = vec_foo.remove(tag_len);
         EXPECT_EQ(tag_len, vec_foo.size());
         EXPECT_EQ(57, elem.f(0, 0));
-        EXPECT_EQ(std::string("boo"), elem.getName().to_std_string());
+        EXPECT_EQ(std::string("boo"), elem.getName());
         for (size_t i = 0; i < vec_foo.size(); ++i) {
-            EXPECT_EQ(std::string(tag), vec_foo[i].getName().to_std_string());
+            EXPECT_EQ(std::string(tag), vec_foo[i].getName());
             EXPECT_TRUE(vec_foo[i].f(0, 0) >= 0);
             EXPECT_EQ(i, size_t(vec_foo[i].f(0, 0)));
         }
@@ -408,13 +398,13 @@ TEST(TestWorkWithVec, iterator)
     auto slice_foo = t.get_slice_foo();
     ASSERT_EQ(tag_len, slice_foo.size());
     for (size_t i = 0; i < slice_foo.size(); ++i) {
-        EXPECT_EQ(std::string(tag), slice_foo[i].getName().to_std_string());
+        EXPECT_EQ(std::string(tag), slice_foo[i].getName());
         EXPECT_TRUE(slice_foo[i].f(0, 0) >= 0);
         EXPECT_EQ(i, size_t(slice_foo[i].f(0, 0)));
     }
     size_t i = 0;
     for (auto foo : slice_foo) {
-        EXPECT_EQ(std::string(tag), foo.getName().to_std_string());
+        EXPECT_EQ(std::string(tag), foo.getName());
         EXPECT_TRUE(foo.f(0, 0) >= 0);
         EXPECT_EQ(i, size_t(foo.f(0, 0)));
         ++i;
@@ -443,14 +433,14 @@ TEST(TestPassPathAsParam, smokeTest)
 {
     TestPassPathAsParam x;
     x.set_path("/tmp/a.txt");
-    ASSERT_EQ("\"/tmp/a.txt\"", x.path().to_std_string());
+    ASSERT_EQ("\"/tmp/a.txt\"", x.path());
 }
 
 TEST(TestRustStringReturn, smokeTest)
 {
     auto try_ret = [](const char *word) {
         Foo foo(1, word);
-        EXPECT_EQ(std::string(word), foo.getName().to_std_string());
+        EXPECT_EQ(std::string(word), foo.getName());
         EXPECT_EQ(std::string(word), foo.ret_string().to_std_string());
     };
     try_ret("Word");
@@ -469,7 +459,7 @@ TEST(TestOptional, smokeTest)
         auto foo = x.f1(true);
         ASSERT_TRUE(!!foo);
         EXPECT_EQ(17, foo->f(0, 0));
-        EXPECT_EQ(std::string("17"), foo->getName().to_std_string());
+        EXPECT_EQ(std::string("17"), foo->getName());
     }
     {
         auto foo = x.f1(false);
@@ -498,7 +488,7 @@ TEST(TestOptional, smokeTest)
         ASSERT_TRUE(!!val);
         FooRef foo = std::move(*val);
         EXPECT_EQ(5, foo.f(0, 0));
-        EXPECT_EQ(std::string("aaa"), foo.getName().to_std_string());
+        EXPECT_EQ(std::string("aaa"), foo.getName());
     }
     {
         auto foo = x.f5(false);
@@ -512,7 +502,7 @@ TEST(TestOptional, smokeTest)
         ASSERT_TRUE(!!val);
         FooRef foor = std::move(*val);
         EXPECT_EQ(17, foor.f(0, 0));
-        EXPECT_EQ(std::string("17"), foor.getName().to_std_string());
+        EXPECT_EQ(std::string("17"), foor.getName());
         x.f6({});
     }
 
@@ -531,11 +521,10 @@ TEST(TestOptional, smokeTest)
         TestOptional y;
         auto val = y.f10(true);
         ASSERT_TRUE(!!val);
-        EXPECT_EQ(std::string("aaa"), val->to_std_string());
+        EXPECT_EQ(std::string("aaa"), *val);
         auto val2 = y.f10(false);
         EXPECT_TRUE(!val2);
     }
-
     {
         TestOptional y;
         auto val = y.f11(17, true);
@@ -587,65 +576,65 @@ TEST(TestResult, smokeTest)
 {
 #if defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)
     std::variant<TestResult, RustString> res = TestResult::new_with_err();
-    EXPECT_EQ(nullptr, std::get_if<TestResult>(&res));
-    EXPECT_NE(nullptr, std::get_if<RustString>(&res));
+    EXPECT_TRUE(nullptr == std::get_if<TestResult>(&res));
+    EXPECT_TRUE(nullptr != std::get_if<RustString>(&res));
     EXPECT_EQ(std::string_view("this is error"), std::get<RustString>(res).to_string_view());
     auto res2 = TestResult::f(true);
-    EXPECT_EQ(nullptr, std::get_if<RustString>(&res2));
-    EXPECT_NE(nullptr, std::get_if<void *>(&res2));
+    EXPECT_TRUE(nullptr == std::get_if<RustString>(&res2));
+    EXPECT_TRUE(nullptr != std::get_if<void *>(&res2));
     auto res3 = TestResult::f(false);
-    EXPECT_NE(nullptr, std::get_if<RustString>(&res3));
-    EXPECT_EQ(nullptr, std::get_if<void *>(&res3));
+    EXPECT_TRUE(nullptr != std::get_if<RustString>(&res3));
+    EXPECT_TRUE(nullptr == std::get_if<void *>(&res3));
     EXPECT_EQ(std::string_view("Not ok"), std::get<RustString>(res3).to_string_view());
 
     auto res_vec = TestResult::f_vec(true);
-    EXPECT_EQ(nullptr, std::get_if<RustString>(&res_vec));
-    EXPECT_NE(nullptr, std::get_if<RustForeignVecFoo>(&res_vec));
+    EXPECT_TRUE(nullptr == std::get_if<RustString>(&res_vec));
+    EXPECT_TRUE(nullptr != std::get_if<RustForeignVecFoo>(&res_vec));
     auto vec = std::get<RustForeignVecFoo>(std::move(res_vec));
     ASSERT_EQ(2u, vec.size());
-    EXPECT_EQ(std::string_view("15"), vec[0].getName().to_string_view());
+    EXPECT_EQ(std::string("15"), vec[0].getName());
     EXPECT_EQ(15, vec[0].f(0, 0));
-    EXPECT_EQ(std::string_view("13"), vec[1].getName().to_string_view());
+    EXPECT_EQ(std::string("13"), vec[1].getName());
     EXPECT_EQ(13, vec[1].f(0, 0));
     res_vec = TestResult::f_vec(false);
-    EXPECT_NE(nullptr, std::get_if<RustString>(&res_vec));
-    EXPECT_EQ(nullptr, std::get_if<RustForeignVecFoo>(&res_vec));
+    EXPECT_TRUE(nullptr != std::get_if<RustString>(&res_vec));
+    EXPECT_TRUE(nullptr == std::get_if<RustForeignVecFoo>(&res_vec));
     EXPECT_EQ(std::string_view("Not ok"), std::get<RustString>(res_vec).to_string_view());
 
     auto f2_ok = TestResult::f2(true);
-    EXPECT_NE(nullptr, std::get_if<Foo>(&f2_ok));
-    EXPECT_EQ(nullptr, std::get_if<TestError>(&f2_ok));
+    EXPECT_TRUE(nullptr != std::get_if<Foo>(&f2_ok));
+    EXPECT_TRUE(nullptr == std::get_if<TestError>(&f2_ok));
     Foo f2_ok_ret = std::get<Foo>(std::move(f2_ok));
     ASSERT_EQ(17, f2_ok_ret.f(0, 0));
-    ASSERT_EQ(std::string_view("ok"), f2_ok_ret.getName().to_string_view());
+    ASSERT_EQ(std::string_view("ok"), f2_ok_ret.getName());
 
     auto f2_err = TestResult::f2(false);
-    EXPECT_EQ(nullptr, std::get_if<Foo>(&f2_err));
-    EXPECT_NE(nullptr, std::get_if<TestError>(&f2_err));
+    EXPECT_TRUE(nullptr == std::get_if<Foo>(&f2_err));
+    EXPECT_TRUE(nullptr != std::get_if<TestError>(&f2_err));
     TestError f2_err_ret = std::get<TestError>(std::move(f2_err));
     ASSERT_EQ(std::string_view("Not ok"), RustString{ f2_err_ret.to_string() }.to_string_view());
 
     auto f3_ok = TestResult::f3(true);
-    EXPECT_NE(nullptr, std::get_if<RustForeignVecFoo>(&f3_ok));
-    EXPECT_EQ(nullptr, std::get_if<TestError>(&f3_ok));
+    EXPECT_TRUE(nullptr != std::get_if<RustForeignVecFoo>(&f3_ok));
+    EXPECT_TRUE(nullptr == std::get_if<TestError>(&f3_ok));
     auto f3_vec = std::get<RustForeignVecFoo>(std::move(f3_ok));
 
     ASSERT_EQ(2u, f3_vec.size());
-    EXPECT_EQ(std::string_view("40"), f3_vec[0].getName().to_string_view());
+    EXPECT_EQ(std::string_view("40"), f3_vec[0].getName());
     EXPECT_EQ(40, f3_vec[0].f(0, 0));
-    EXPECT_EQ(std::string_view(""), f3_vec[1].getName().to_string_view());
+    EXPECT_EQ(std::string_view(""), f3_vec[1].getName());
     EXPECT_EQ(60, f3_vec[1].f(0, 0));
 
     auto f3_err = TestResult::f3(false);
-    EXPECT_EQ(nullptr, std::get_if<RustForeignVecFoo>(&f3_err));
-    EXPECT_NE(nullptr, std::get_if<TestError>(&f3_err));
+    EXPECT_TRUE(nullptr == std::get_if<RustForeignVecFoo>(&f3_err));
+    EXPECT_TRUE(nullptr != std::get_if<TestError>(&f3_err));
     TestError f3_err_ret = std::get<TestError>(std::move(f3_err));
     ASSERT_EQ(std::string_view("Not ok"), RustString{ f3_err_ret.to_string() }.to_string_view());
 
     {
         auto f4_ok = TestResult::f4(true);
-        EXPECT_NE(nullptr, std::get_if<RustVecU8>(&f4_ok));
-        EXPECT_EQ(nullptr, std::get_if<TestError>(&f4_ok));
+        EXPECT_TRUE(nullptr != std::get_if<RustVecU8>(&f4_ok));
+        EXPECT_TRUE(nullptr == std::get_if<TestError>(&f4_ok));
         auto f4_vec = std::get<RustVecU8>(std::move(f4_ok));
         ASSERT_EQ(2u, f4_vec.size());
         EXPECT_EQ(17, f4_vec[0]);
@@ -653,27 +642,27 @@ TEST(TestResult, smokeTest)
     }
     {
         auto f5_ok = TestResult::f5(true);
-        EXPECT_NE(nullptr, std::get_if<Foo>(&f5_ok));
-        EXPECT_EQ(nullptr, std::get_if<ErrorEnum>(&f5_ok));
+        EXPECT_TRUE(nullptr != std::get_if<Foo>(&f5_ok));
+        EXPECT_TRUE(nullptr == std::get_if<ErrorEnum>(&f5_ok));
         auto f5_ok_ret = std::get<Foo>(std::move(f5_ok));
         ASSERT_EQ(17, f5_ok_ret.f(0, 0));
-        ASSERT_EQ(std::string_view("ok"), f5_ok_ret.getName().to_string_view());
+        ASSERT_EQ(std::string_view("ok"), f5_ok_ret.getName());
         auto f5_err = TestResult::f5(false);
-        EXPECT_EQ(nullptr, std::get_if<Foo>(&f5_err));
-        EXPECT_NE(nullptr, std::get_if<ErrorEnum>(&f5_err));
+        EXPECT_TRUE(nullptr == std::get_if<Foo>(&f5_err));
+        EXPECT_TRUE(nullptr != std::get_if<ErrorEnum>(&f5_err));
         auto f5_err_ret = std::get<ErrorEnum>(std::move(f5_err));
         EXPECT_EQ(eeB, f5_err_ret);
     }
     {
         auto ok = TestResult::f6(true, 1000 * 1000);
-        EXPECT_NE(nullptr, std::get_if<int64_t>(&ok));
-        EXPECT_EQ(nullptr, std::get_if<TestError>(&ok));
+        EXPECT_TRUE(nullptr != std::get_if<int64_t>(&ok));
+        EXPECT_TRUE(nullptr == std::get_if<TestError>(&ok));
         auto ok_ret = std::get<int64_t>(std::move(ok));
         ASSERT_EQ((1000 * 1000 + 1), ok_ret);
 
         auto err = TestResult::f6(false, -1);
-        EXPECT_EQ(nullptr, std::get_if<int64_t>(&err));
-        EXPECT_NE(nullptr, std::get_if<TestError>(&err));
+        EXPECT_TRUE(nullptr == std::get_if<int64_t>(&err));
+        EXPECT_TRUE(nullptr != std::get_if<TestError>(&err));
         TestError err_ret = std::get<TestError>(std::move(err));
         ASSERT_EQ(std::string_view("Not ok"), RustString{ err_ret.to_string() }.to_string_view());
     }
@@ -706,13 +695,10 @@ TEST(TestResult, smokeTest)
         EXPECT_NE(nullptr, boost::get<RustForeignVecFoo>(&res_vec));
         auto vec = std::move(boost::get<RustForeignVecFoo>(std::move(res_vec)));
         ASSERT_EQ(2u, vec.size());
-#ifdef HAS_BOOST_STRING_VIEW_HPP
-        EXPECT_EQ(boost::string_view("15"), vec[0].getName().to_boost_string_view());
-        EXPECT_EQ(boost::string_view("13"), vec[1].getName().to_boost_string_view());
-#else
-        EXPECT_EQ(std::string("15"), vec[0].getName().to_std_string());
-        EXPECT_EQ(std::string("13"), vec[1].getName().to_std_string());
-#endif
+
+        EXPECT_EQ(std::string("15"), vec[0].getName());
+        EXPECT_EQ(std::string("13"), vec[1].getName());
+
         EXPECT_EQ(15, vec[0].f(0, 0));
         EXPECT_EQ(13, vec[1].f(0, 0));
     }
@@ -747,19 +733,19 @@ TEST(TestReferences, smokeTest)
     TestReferences tr(500, "bugaga");
     auto foo = tr.get_foo_ref();
     EXPECT_EQ(502, foo.f(1, 1));
-    EXPECT_EQ(std::string("bugaga"), foo.getName().to_std_string());
+    EXPECT_EQ(std::string("bugaga"), foo.getName());
 
     Foo new_foo(100, "100");
     tr.update_foo(new_foo);
     foo = tr.get_foo_ref();
     EXPECT_EQ(102, foo.f(1, 1));
-    EXPECT_EQ(std::string("100"), foo.getName().to_std_string());
+    EXPECT_EQ(std::string("100"), foo.getName());
 
     Foo foo2(200, "200");
     tr.update_mut_foo(foo2);
     foo = tr.get_foo_ref();
     EXPECT_EQ(202, foo.f(1, 1));
-    EXPECT_EQ(std::string("200A"), foo2.getName().to_std_string());
+    EXPECT_EQ(std::string("200A"), foo2.getName());
 }
 
 TEST(TestOnlyStaticMethods, smokeTest) { EXPECT_EQ(4, TestOnlyStaticMethods::add_func(2, 2)); }
@@ -769,11 +755,11 @@ TEST(TestDummyConstructor, smokeTest)
 {
     auto res = LocationService::position();
 #ifdef HAS_STDCXX_17
-    ASSERT_NE(nullptr, std::get_if<Position>(&res));
+    ASSERT_TRUE(nullptr != std::get_if<Position>(&res));
     auto pos = std::get<Position>(std::move(res));
 #endif // HAS_STDCXX_17
 #ifdef USE_BOOST
-    ASSERT_NE(nullptr, boost::get<Position>(&res));
+    ASSERT_TRUE(nullptr != boost::get<Position>(&res));
     auto pos = boost::get<Position>(std::move(res));
 #endif // USE_BOOST
     EXPECT_NEAR(0.1, pos.latitude(), 1e-10);
@@ -793,10 +779,10 @@ TEST(RecursiveStruct, smokeTest)
 {
     RecursiveStruct s{ "aaa", "aaa/bbb", "aaa/ccc" };
 
-    EXPECT_EQ(std::string{ "aaa" }, s.tag().to_std_string());
+    EXPECT_EQ(std::string{ "aaa" }, s.tag());
     ASSERT_EQ(2u, s.childs().size());
-    EXPECT_EQ(std::string{ "aaa/bbb" }, s.childs()[0].tag().to_std_string());
-    EXPECT_EQ(std::string{ "aaa/ccc" }, s.childs()[1].tag().to_std_string());
+    EXPECT_EQ(std::string{ "aaa/bbb" }, s.childs()[0].tag());
+    EXPECT_EQ(std::string{ "aaa/ccc" }, s.childs()[1].tag());
 }
 
 TEST(TestReturnTuple, smokeTest)
@@ -804,28 +790,28 @@ TEST(TestReturnTuple, smokeTest)
     const auto pair = TestReturnTuple::return_pair();
     EXPECT_EQ(17, pair.second.f());
     EXPECT_EQ(5, pair.first.f(0, 0));
-    EXPECT_EQ(std::string("FooName"), pair.first.getName().to_std_string());
+    EXPECT_EQ(std::string("FooName"), pair.first.getName());
 }
 
 TEST(TestCopy, smokeTest)
 {
     TestCopy tst1{ "aaaaB" };
-    EXPECT_EQ(std::string("aaaaB"), tst1.get().to_std_string());
+    EXPECT_EQ(std::string("aaaaB"), tst1.get());
     TestCopy tst2(tst1);
 
-    EXPECT_EQ(std::string("aaaaB"), tst1.get().to_std_string());
-    EXPECT_EQ(std::string("aaaaB"), tst2.get().to_std_string());
+    EXPECT_EQ(std::string("aaaaB"), tst1.get());
+    EXPECT_EQ(std::string("aaaaB"), tst2.get());
 
     TestCopy tst3{ "Chuvava" };
-    EXPECT_EQ(std::string("aaaaB"), tst1.get().to_std_string());
-    EXPECT_EQ(std::string("aaaaB"), tst2.get().to_std_string());
-    EXPECT_EQ(std::string("Chuvava"), tst3.get().to_std_string());
+    EXPECT_EQ(std::string("aaaaB"), tst1.get());
+    EXPECT_EQ(std::string("aaaaB"), tst2.get());
+    EXPECT_EQ(std::string("Chuvava"), tst3.get());
 
     tst2 = tst3;
 
-    EXPECT_EQ(std::string("aaaaB"), tst1.get().to_std_string());
-    EXPECT_EQ(std::string("Chuvava"), tst2.get().to_std_string());
-    EXPECT_EQ(std::string("Chuvava"), tst3.get().to_std_string());
+    EXPECT_EQ(std::string("aaaaB"), tst1.get());
+    EXPECT_EQ(std::string("Chuvava"), tst2.get());
+    EXPECT_EQ(std::string("Chuvava"), tst3.get());
 }
 
 TEST(RustString, Copy)
