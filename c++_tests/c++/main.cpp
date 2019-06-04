@@ -24,17 +24,11 @@
 #include "rust_interface/TestWorkWithVec.hpp"
 #include "rust_interface/TestEnumClass.hpp"
 #include "rust_interface/TestPassPathAsParam.hpp"
-#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_OPTIONAL)) || defined(USE_BOOST)
 #include "rust_interface/TestOptional.hpp"
-#endif
 #include "rust_interface/TestError.hpp"
-#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)) || defined(USE_BOOST)
 #include "rust_interface/TestResult.hpp"
-#endif
 #include "rust_interface/Position.hpp"
-#if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)) || defined(USE_BOOST)
 #include "rust_interface/LocationService.hpp"
-#endif
 #include "rust_interface/TestReferences.hpp"
 #include "rust_interface/TestOnlyStaticMethods.hpp"
 #include "rust_interface/Interface.hpp"
