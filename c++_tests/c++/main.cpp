@@ -80,7 +80,7 @@ static char c_simple_cb_is_odd(int32_t x, void *opaque)
 TEST(c_Foo, Simple)
 {
     auto foo = Foo_new(1, "a");
-    ASSERT_NE(foo, nullptr);
+    ASSERT_TRUE(foo != nullptr);
 
     EXPECT_EQ(3, Foo_f(foo, 1, 1));
     auto name = Foo_getName(foo);
@@ -581,20 +581,20 @@ TEST(TestResult, smokeTest)
 {
 #if defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)
     std::variant<TestResult, RustString> res = TestResult::new_with_err();
-    EXPECT_EQ(nullptr, std::get_if<TestResult>(&res));
-    EXPECT_NE(nullptr, std::get_if<RustString>(&res));
+    EXPECT_TRUE(nullptr == std::get_if<TestResult>(&res));
+    EXPECT_TRUE(nullptr != std::get_if<RustString>(&res));
     EXPECT_EQ(std::string_view("this is error"), std::get<RustString>(res).to_string_view());
     auto res2 = TestResult::f(true);
-    EXPECT_EQ(nullptr, std::get_if<RustString>(&res2));
-    EXPECT_NE(nullptr, std::get_if<void *>(&res2));
+    EXPECT_TRUE(nullptr == std::get_if<RustString>(&res2));
+    EXPECT_TRUE(nullptr != std::get_if<void *>(&res2));
     auto res3 = TestResult::f(false);
-    EXPECT_NE(nullptr, std::get_if<RustString>(&res3));
-    EXPECT_EQ(nullptr, std::get_if<void *>(&res3));
+    EXPECT_TRUE(nullptr != std::get_if<RustString>(&res3));
+    EXPECT_TRUE(nullptr == std::get_if<void *>(&res3));
     EXPECT_EQ(std::string_view("Not ok"), std::get<RustString>(res3).to_string_view());
 
     auto res_vec = TestResult::f_vec(true);
-    EXPECT_EQ(nullptr, std::get_if<RustString>(&res_vec));
-    EXPECT_NE(nullptr, std::get_if<RustForeignVecFoo>(&res_vec));
+    EXPECT_TRUE(nullptr == std::get_if<RustString>(&res_vec));
+    EXPECT_TRUE(nullptr != std::get_if<RustForeignVecFoo>(&res_vec));
     auto vec = std::get<RustForeignVecFoo>(std::move(res_vec));
     ASSERT_EQ(2u, vec.size());
     EXPECT_EQ(std::string("15"), vec[0].getName());
@@ -602,26 +602,26 @@ TEST(TestResult, smokeTest)
     EXPECT_EQ(std::string("13"), vec[1].getName());
     EXPECT_EQ(13, vec[1].f(0, 0));
     res_vec = TestResult::f_vec(false);
-    EXPECT_NE(nullptr, std::get_if<RustString>(&res_vec));
-    EXPECT_EQ(nullptr, std::get_if<RustForeignVecFoo>(&res_vec));
+    EXPECT_TRUE(nullptr != std::get_if<RustString>(&res_vec));
+    EXPECT_TRUE(nullptr == std::get_if<RustForeignVecFoo>(&res_vec));
     EXPECT_EQ(std::string_view("Not ok"), std::get<RustString>(res_vec).to_string_view());
 
     auto f2_ok = TestResult::f2(true);
-    EXPECT_NE(nullptr, std::get_if<Foo>(&f2_ok));
-    EXPECT_EQ(nullptr, std::get_if<TestError>(&f2_ok));
+    EXPECT_TRUE(nullptr != std::get_if<Foo>(&f2_ok));
+    EXPECT_TRUE(nullptr == std::get_if<TestError>(&f2_ok));
     Foo f2_ok_ret = std::get<Foo>(std::move(f2_ok));
     ASSERT_EQ(17, f2_ok_ret.f(0, 0));
     ASSERT_EQ(std::string_view("ok"), f2_ok_ret.getName());
 
     auto f2_err = TestResult::f2(false);
-    EXPECT_EQ(nullptr, std::get_if<Foo>(&f2_err));
-    EXPECT_NE(nullptr, std::get_if<TestError>(&f2_err));
+    EXPECT_TRUE(nullptr == std::get_if<Foo>(&f2_err));
+    EXPECT_TRUE(nullptr != std::get_if<TestError>(&f2_err));
     TestError f2_err_ret = std::get<TestError>(std::move(f2_err));
     ASSERT_EQ(std::string_view("Not ok"), RustString{ f2_err_ret.to_string() }.to_string_view());
 
     auto f3_ok = TestResult::f3(true);
-    EXPECT_NE(nullptr, std::get_if<RustForeignVecFoo>(&f3_ok));
-    EXPECT_EQ(nullptr, std::get_if<TestError>(&f3_ok));
+    EXPECT_TRUE(nullptr != std::get_if<RustForeignVecFoo>(&f3_ok));
+    EXPECT_TRUE(nullptr == std::get_if<TestError>(&f3_ok));
     auto f3_vec = std::get<RustForeignVecFoo>(std::move(f3_ok));
 
     ASSERT_EQ(2u, f3_vec.size());
@@ -631,15 +631,15 @@ TEST(TestResult, smokeTest)
     EXPECT_EQ(60, f3_vec[1].f(0, 0));
 
     auto f3_err = TestResult::f3(false);
-    EXPECT_EQ(nullptr, std::get_if<RustForeignVecFoo>(&f3_err));
-    EXPECT_NE(nullptr, std::get_if<TestError>(&f3_err));
+    EXPECT_TRUE(nullptr == std::get_if<RustForeignVecFoo>(&f3_err));
+    EXPECT_TRUE(nullptr != std::get_if<TestError>(&f3_err));
     TestError f3_err_ret = std::get<TestError>(std::move(f3_err));
     ASSERT_EQ(std::string_view("Not ok"), RustString{ f3_err_ret.to_string() }.to_string_view());
 
     {
         auto f4_ok = TestResult::f4(true);
-        EXPECT_NE(nullptr, std::get_if<RustVecU8>(&f4_ok));
-        EXPECT_EQ(nullptr, std::get_if<TestError>(&f4_ok));
+        EXPECT_TRUE(nullptr != std::get_if<RustVecU8>(&f4_ok));
+        EXPECT_TRUE(nullptr == std::get_if<TestError>(&f4_ok));
         auto f4_vec = std::get<RustVecU8>(std::move(f4_ok));
         ASSERT_EQ(2u, f4_vec.size());
         EXPECT_EQ(17, f4_vec[0]);
@@ -647,27 +647,27 @@ TEST(TestResult, smokeTest)
     }
     {
         auto f5_ok = TestResult::f5(true);
-        EXPECT_NE(nullptr, std::get_if<Foo>(&f5_ok));
-        EXPECT_EQ(nullptr, std::get_if<ErrorEnum>(&f5_ok));
+        EXPECT_TRUE(nullptr != std::get_if<Foo>(&f5_ok));
+        EXPECT_TRUE(nullptr == std::get_if<ErrorEnum>(&f5_ok));
         auto f5_ok_ret = std::get<Foo>(std::move(f5_ok));
         ASSERT_EQ(17, f5_ok_ret.f(0, 0));
         ASSERT_EQ(std::string_view("ok"), f5_ok_ret.getName());
         auto f5_err = TestResult::f5(false);
-        EXPECT_EQ(nullptr, std::get_if<Foo>(&f5_err));
-        EXPECT_NE(nullptr, std::get_if<ErrorEnum>(&f5_err));
+        EXPECT_TRUE(nullptr == std::get_if<Foo>(&f5_err));
+        EXPECT_TRUE(nullptr != std::get_if<ErrorEnum>(&f5_err));
         auto f5_err_ret = std::get<ErrorEnum>(std::move(f5_err));
         EXPECT_EQ(eeB, f5_err_ret);
     }
     {
         auto ok = TestResult::f6(true, 1000 * 1000);
-        EXPECT_NE(nullptr, std::get_if<int64_t>(&ok));
-        EXPECT_EQ(nullptr, std::get_if<TestError>(&ok));
+        EXPECT_TRUE(nullptr != std::get_if<int64_t>(&ok));
+        EXPECT_TRUE(nullptr == std::get_if<TestError>(&ok));
         auto ok_ret = std::get<int64_t>(std::move(ok));
         ASSERT_EQ((1000 * 1000 + 1), ok_ret);
 
         auto err = TestResult::f6(false, -1);
-        EXPECT_EQ(nullptr, std::get_if<int64_t>(&err));
-        EXPECT_NE(nullptr, std::get_if<TestError>(&err));
+        EXPECT_TRUE(nullptr == std::get_if<int64_t>(&err));
+        EXPECT_TRUE(nullptr != std::get_if<TestError>(&err));
         TestError err_ret = std::get<TestError>(std::move(err));
         ASSERT_EQ(std::string_view("Not ok"), RustString{ err_ret.to_string() }.to_string_view());
     }
@@ -760,11 +760,11 @@ TEST(TestDummyConstructor, smokeTest)
 {
     auto res = LocationService::position();
 #ifdef HAS_STDCXX_17
-    ASSERT_NE(nullptr, std::get_if<Position>(&res));
+    ASSERT_TRUE(nullptr != std::get_if<Position>(&res));
     auto pos = std::get<Position>(std::move(res));
 #endif // HAS_STDCXX_17
 #ifdef USE_BOOST
-    ASSERT_NE(nullptr, boost::get<Position>(&res));
+    ASSERT_TRUE(nullptr != boost::get<Position>(&res));
     auto pos = boost::get<Position>(std::move(res));
 #endif // USE_BOOST
     EXPECT_NEAR(0.1, pos.latitude(), 1e-10);

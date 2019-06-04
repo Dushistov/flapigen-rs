@@ -49,14 +49,11 @@ if (NOT USE_BOOST)
       check_cxx_compiler_flag("/std:c++17" VC_HAS_STDCXX_17)
       if (VC_HAS_STDCXX_17)
 	message(STATUS "Compiler has c++17 support")
-#	set(CXX_17_STD ON CACHE BOOL "Override option" FORCE)
+	set(CXX_17_STD ON CACHE BOOL "Override option" FORCE)
       else ()
 	message(STATUS "Compiler has NO c++17 support")
+	set(CXX_17_STD OFF CACHE BOOL "Override option" FORCE)
       endif ()
-      # disable by default, because of __cplusplus is not setted correctly
-      # see https://devblogs.microsoft.com/cppblog/msvc-now-correctly-reports-__cplusplus/
-      # TODO: revisit when we not depend on __cplusplus
-      set(CXX_17_STD OFF CACHE BOOL "Override option" FORCE)
     endif ()
   endif (NOT DEFINED CXX_17_STD)
 
