@@ -12,7 +12,14 @@
 
 "std::optional<uint64_t> f7()";
 
-"std::optional< CRustStrView> f8()";
+"std::optional<std::string_view> f8()";
+
+r#"template<bool OWN_DATA>
+    inline std::optional<std::string_view> FooWrapper<OWN_DATA>::f8() const  noexcept
+    {
+        struct CRustOptionStr ret = Foo_f8(this->self_);
+        return ret.is_some ? std::string_view{ret.val.data, ret.val.len} : std::optional<std::string_view>();
+    }"#;
 
 "std::optional<RustString> f9()";
 

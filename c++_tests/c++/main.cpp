@@ -517,19 +517,14 @@ TEST(TestOptional, smokeTest)
         auto val2 = x.f9({});
         EXPECT_EQ(std::string("None"), val2.to_std_string());
     }
-#ifdef __GNUC__
-#warning "temporary disabled test"
-#endif
-#if 0
     {
         TestOptional y;
         auto val = y.f10(true);
         ASSERT_TRUE(!!val);
-        EXPECT_EQ(std::string("aaa"), val->to_std_string());
+        EXPECT_EQ(std::string("aaa"), *val);
         auto val2 = y.f10(false);
         EXPECT_TRUE(!val2);
     }
-#endif
     {
         TestOptional y;
         auto val = y.f11(17, true);

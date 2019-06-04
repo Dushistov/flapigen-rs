@@ -1263,6 +1263,43 @@ fn handle_option_type_in_return(
             return Ok(Some(cpp_info_opt));
         }
     }
+
+    if opt_rust_ty.normalized_name == "& str" {
+        trace!("Catch return of Option<&str>");
+        let cpp_info_ty = map_ordinal_result_type(conv_map, &opt_rust_ty, arg_ty_span)?;
+        let cpp_typename = cpp_info_ty
+            .cpp_converter
+            .expect("C++ converter from C struct")
+            .typename;
+        let (typename, converter, opt_inc) = match cpp_cfg.cpp_optional {
+            CppOptional::Std17 => (
+                format!("std::optional<{}>", cpp_typename),
+                format!(
+                    "{var}.is_some ? {ty}{{{var}.val.data, {var}.val.len}} : std::optional<{ty}>()",
+                    var = FROM_VAR_TEMPLATE,
+                    ty = cpp_typename
+                ),
+                "<optional>".into(),
+            ),
+            CppOptional::Boost => (
+                format!("boost::optional<{}>", cpp_typename),
+                format!(
+                    "{var}.is_some ? {ty}{{{var}.val.data, {var}.val.len}} : boost::optional<{ty}>()",
+                    var = FROM_VAR_TEMPLATE,
+                    ty = cpp_typename
+                ),
+                "<boost/optional.hpp>".into(),
+            ),
+        };
+        cpp_info_opt.cpp_converter = Some(CppConverter {
+            typename: typename.into(),
+            converter,
+        });
+        cpp_info_opt.provides_by_module =
+            vec!["\"rust_option.h\"".into(), "\"rust_str.h\"".into(), opt_inc];
+        return Ok(Some(cpp_info_opt));
+    }
+
     cpp_info_opt.cpp_converter = Some(CppConverter {
         typename: typename.into(),
         converter,
