@@ -18,3 +18,5 @@ rust_swig = { path = "../macroslib" }
 default = ["cpp17"]
 cpp17 = []
 boost = []
+cpp17_optional = []
+cpp17_variant = []

@@ -1,6 +1,6 @@
 use std::{env, path::Path};
 
-use rust_swig::{CppConfig, LanguageConfig};
+use rust_swig::{CppConfig, CppOptional, CppVariant, LanguageConfig};
 
 fn main() {
     env_logger::init();
@@ -11,7 +11,16 @@ fn main() {
     let cpp_cfg = if cfg!(feature = "boost") {
         CppConfig::new(cpp_gen_path, "rust".into()).use_boost()
     } else {
-        CppConfig::new(cpp_gen_path, "rust".into())
+        let mut cfg = CppConfig::new(cpp_gen_path, "rust".into())
+            .cpp_optional(CppOptional::Boost)
+            .cpp_variant(CppVariant::Boost);
+        if cfg!(feature = "cpp17_optional") {
+            cfg = cfg.cpp_optional(CppOptional::Std17);
+        }
+        if cfg!(feature = "cpp17_variant") {
+            cfg = cfg.cpp_variant(CppVariant::Std17);
+        }
+        cfg
     };
 
     let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));

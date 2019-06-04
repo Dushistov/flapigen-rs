@@ -2,7 +2,6 @@
 #include <atomic>
 #include <cassert>
 #include <cmath>
-#include <cstdbool>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
