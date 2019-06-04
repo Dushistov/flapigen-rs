@@ -3,6 +3,10 @@ strategy:
     linux-stable:
       imageName: 'ubuntu-16.04'
       rustup_toolchain: stable
+    linux-stable-gcc-8:
+      imageName: 'ubuntu-16.04'
+      rustup_toolchain: stable
+      gcc_variant: gcc-8
     mac-stable:
       imageName: 'macos-10.14'
       rustup_toolchain: stable
@@ -76,6 +80,13 @@ steps:
       sccache --version
     condition: eq( variables['Agent.OS'], 'Linux' )
     displayName: Setup sccache on linux
+  - bash: |
+      set -e
+      if [ "$GCC_VARIANT" == "gcc-8" ]; then sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt-get update -qq && sudo apt-get install -qq g++-8 && sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 90; fi
+      gcc --version
+      g++ --version
+    condition: eq( variables['Agent.OS'], 'Linux' )
+    displayName: Install gcc-8 if required
   - bash: |
       set -e
       curl -fo $HOME/.cargo/bin/sccache  https://s3-us-west-1.amazonaws.com/rust-lang-ci2/rust-ci-mirror/2018-04-02-sccache-x86_64-apple-darwin
