@@ -16,7 +16,7 @@ foreigner_class!(class TestPassObjectsAsParams {
     method TestPassObjectsAsParams::f1(&self, _: &Foo);
     method TestPassObjectsAsParams::f2(&self, _: Foo);
     method TestPassObjectsAsParams::f3(&self, _: &mut Foo);
-    method TestPassObjectsAsParams::f3_5(&self, _: &mut Moo<'a>);
+    method TestPassObjectsAsParams::f3_a(&self, _: &mut Moo<'a>);
     static_method TestPassObjectsAsParams::f4(_: &Foo);
     static_method TestPassObjectsAsParams::f5(_: Foo);
 });
