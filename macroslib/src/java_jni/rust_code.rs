@@ -14,7 +14,6 @@ use crate::{
     typemap::ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     typemap::{
         ty::RustType,
-        unpack_unique_typename,
         utils::{
             create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
@@ -591,7 +590,7 @@ fn generate_jni_args_with_types(
             &mut buf,
             "a_{}: {}, ",
             i,
-            unpack_unique_typename(&f_type_info.as_ref().correspoding_rust_type.normalized_name)
+            f_type_info.as_ref().correspoding_rust_type.typename()
         )
         .map_err(fmt_write_err_map)?;
     }
@@ -599,8 +598,7 @@ fn generate_jni_args_with_types(
 }
 
 fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<Vec<TokenStream>> {
-    let jni_ret_type =
-        unpack_unique_typename(&mc.f_method.output.correspoding_rust_type.normalized_name);
+    let jni_ret_type = mc.f_method.output.correspoding_rust_type.typename();
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         conv_map,
         mc.class.src_id,
@@ -712,8 +710,7 @@ fn generate_method(
     self_variant: SelfTypeVariant,
     this_type_for_method: &RustType,
 ) -> Result<Vec<TokenStream>> {
-    let jni_ret_type =
-        unpack_unique_typename(&mc.f_method.output.correspoding_rust_type.normalized_name);
+    let jni_ret_type = mc.f_method.output.correspoding_rust_type.typename();
     let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,

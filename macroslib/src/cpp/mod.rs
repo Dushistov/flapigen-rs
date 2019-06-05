@@ -24,7 +24,6 @@ use crate::{
             parse_ty_with_given_span, parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
         },
         ty::{ForeignType, RustType},
-        unpack_unique_typename,
         utils::{validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT},
         CType, CTypes, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
@@ -533,7 +532,7 @@ fn rust_generate_args_with_types(
             &mut buf,
             "a_{}: {}, ",
             i,
-            unpack_unique_typename(&f_type_info.as_ref().correspoding_rust_type.normalized_name),
+            f_type_info.as_ref().correspoding_rust_type.typename(),
         )
         .map_err(fmt_write_err_map)?;
     }

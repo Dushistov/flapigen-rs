@@ -20,7 +20,6 @@ use crate::{
             normalize_ty_lifetimes, parse_ty_with_given_span, DisplayToTokens, GenericTypeConv,
             TypeName,
         },
-        make_unique_rust_typename,
         parse_typemap_macro::TypeMapConvRuleInfo,
         ty::{ForeignTypesStorage, RustTypeS},
         validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
@@ -288,7 +287,7 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
                     .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
                 attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
                 let unique_name =
-                    make_unique_rust_typename(&attr_value_tn.typename, &ftype.typename);
+                    RustTypeS::make_unique_typename(&attr_value_tn.typename, &ftype.typename);
                 names_map.insert(
                     ftype,
                     (TypeName::new(unique_name, invalid_src_id_span()), rust_ty),

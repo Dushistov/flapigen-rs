@@ -577,7 +577,7 @@ impl TypeMap {
 
         for edge in path {
             let (_, target) = self.conv_graph.edge_endpoints(edge).unwrap();
-            let target_type = self.conv_graph[target].normalized_name.clone();
+            let target_typename: SmolStr = self.conv_graph[target].typename().into();
             let edge = &mut self.conv_graph[edge];
             if let Some(dep) = edge.dependency.borrow_mut().take() {
                 code_deps.push(dep);
@@ -586,7 +586,7 @@ impl TypeMap {
                 &edge.code_template,
                 var_name,
                 var_name,
-                &unpack_unique_typename(&target_type),
+                &target_typename,
                 function_ret_type,
             );
             ret_code.push_str(&code);
@@ -925,7 +925,8 @@ impl TypeMap {
         suffix: &str,
         src_id: SourceId,
     ) -> RustType {
-        let name: SmolStr = make_unique_rust_typename(normalize_ty_lifetimes(ty), suffix).into();
+        let name: SmolStr =
+            RustTypeS::make_unique_typename(normalize_ty_lifetimes(ty), suffix).into();
         let idx = self.add_node(name.clone(), || {
             RustTypeS::new_without_graph_idx(ty.clone(), name, src_id)
         });
@@ -963,7 +964,8 @@ impl TypeMap {
     }
 
     pub(crate) fn find_rust_type_with_suffix(&self, ty: &Type, suffix: &str) -> Option<RustType> {
-        let name: SmolStr = make_unique_rust_typename(normalize_ty_lifetimes(ty), suffix).into();
+        let name: SmolStr =
+            RustTypeS::make_unique_typename(normalize_ty_lifetimes(ty), suffix).into();
         self.rust_names_map
             .get(&name)
             .map(|idx| self.conv_graph[*idx].clone())
@@ -1003,30 +1005,6 @@ pub(in crate::typemap) fn validate_code_template(sp: SourceIdSpan, code: &str) -
                 code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE
             ),
         ))
-    }
-}
-
-pub(crate) fn make_unique_rust_typename(
-    not_unique_name: &str,
-    suffix_to_make_unique: &str,
-) -> String {
-    format!("{}{}{}", not_unique_name, 0 as char, suffix_to_make_unique)
-}
-
-pub(crate) fn make_unique_rust_typename_if_need(
-    rust_typename: String,
-    suffix: Option<String>,
-) -> String {
-    match suffix {
-        Some(s) => make_unique_rust_typename(&rust_typename, &s),
-        None => rust_typename,
-    }
-}
-
-pub(crate) fn unpack_unique_typename(name: &str) -> &str {
-    match name.find('\0') {
-        Some(pos) => &name[0..pos],
-        None => name,
     }
 }
 

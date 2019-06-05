@@ -57,6 +57,31 @@ impl RustTypeS {
     pub(crate) fn to_idx(&self) -> RustTypeIdx {
         self.graph_idx
     }
+
+    pub(crate) fn make_unique_typename(
+        not_unique_name: &str,
+        suffix_to_make_unique: &str,
+    ) -> String {
+        format!("{}{}{}", not_unique_name, 0 as char, suffix_to_make_unique)
+    }
+
+    pub(crate) fn make_unique_typename_if_need(
+        rust_typename: String,
+        suffix: Option<String>,
+    ) -> String {
+        match suffix {
+            Some(s) => RustTypeS::make_unique_typename(&rust_typename, &s),
+            None => rust_typename,
+        }
+    }
+
+    pub(crate) fn typename(&self) -> &str {
+        let name = self.normalized_name.as_str();
+        match name.find('\0') {
+            Some(pos) => &name[0..pos],
+            None => name,
+        }
+    }
 }
 
 pub(crate) type RustType = Rc<RustTypeS>;
