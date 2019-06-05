@@ -353,7 +353,7 @@ impl TypeMap {
         }
     }
 
-    pub(crate) fn alloc_foreign_type(&mut self, ft: ForeignTypeS) -> ForeignType {
+    pub(crate) fn alloc_foreign_type(&mut self, ft: ForeignTypeS) -> Result<ForeignType> {
         self.ftypes_storage.add_new_ftype(ft)
     }
 

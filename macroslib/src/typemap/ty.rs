@@ -205,35 +205,35 @@ impl ForeignTypesStorage {
         tn: TypeName,
         binded_rust_ty: RustTypeIdx,
     ) -> Result<ForeignType, DiagnosticError> {
-        if let Some(ft) = self.name_to_ftype.get(tn.as_str()) {
-            let mut err = DiagnosticError::new2(
-                self.ftypes[ft.0].name.span,
-                format!("Type {} already defined here", tn),
-            );
-            err.span_note(tn.span, format!("second mention of type {}", tn));
-            return Err(err);
-        }
-
         let rule = ForeignConversationRule {
             rust_ty: binded_rust_ty,
             intermediate: None,
         };
-        let idx = self.add_new_ftype(ForeignTypeS {
+        self.add_new_ftype(ForeignTypeS {
             name: tn,
             provides_by_module: Vec::new(),
             into_from_rust: Some(rule.clone()),
             from_into_rust: Some(rule),
-        });
-        Ok(idx)
+        })
     }
 
-    pub(in crate::typemap) fn add_new_ftype(&mut self, ft: ForeignTypeS) -> ForeignType {
-        assert!(self.name_to_ftype.get(ft.name.as_str()).is_none());
+    pub(in crate::typemap) fn add_new_ftype(
+        &mut self,
+        ft: ForeignTypeS,
+    ) -> Result<ForeignType, DiagnosticError> {
+        if let Some(ft2) = self.name_to_ftype.get(ft.name.as_str()) {
+            let mut err = DiagnosticError::new2(
+                self.ftypes[ft2.0].name.span,
+                format!("Type {} already defined here", ft.name),
+            );
+            err.span_note(ft.name.span, format!("second mention of type {}", ft.name));
+            return Err(err);
+        }
         let idx = ForeignType(self.ftypes.len());
         self.ftypes.push(ft);
         self.name_to_ftype
             .insert(self.ftypes[idx.0].name.typename.clone(), idx);
-        idx
+        Ok(idx)
     }
 
     pub(in crate::typemap) fn find_or_alloc(&mut self, ftype_name: TypeName) -> ForeignType {
