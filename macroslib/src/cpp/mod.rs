@@ -164,103 +164,7 @@ impl CppConfig {
                 class.src_id,
             );
 
-            let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
-            let void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
-                &void_ptr_ty,
-                &this_type.normalized_name,
-                SourceId::none(),
-            );
-            let foreign_typename = format!("{} *", cpp_code::c_class_type(class));
-            conv_map.cache_rust_to_foreign_conv(
-                &this_type,
-                ForeignTypeInfo {
-                    correspoding_rust_type: void_ptr_rust_ty.clone(),
-                    name: foreign_typename.into(),
-                },
-            )?;
-
-            let const_void_ptr_ty = parse_type! { *const ::std::os::raw::c_void };
-            let const_void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
-                &const_void_ptr_ty,
-                &this_type.normalized_name,
-                SourceId::none(),
-            );
-            let const_foreign_typename = format!("const {} *", cpp_code::c_class_type(class));
-            conv_map.cache_rust_to_foreign_conv(
-                &this_type,
-                ForeignTypeInfo {
-                    correspoding_rust_type: const_void_ptr_rust_ty.clone(),
-                    name: const_foreign_typename.into(),
-                },
-            )?;
-
-            let this_type_ty = &this_type.ty;
-            //handle foreigner_class as input arg
-
-            let code = format!("& {}", DisplayToTokens(this_type_ty));
-            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
-            let this_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
-            conv_map.add_conversation_rule(
-                const_void_ptr_rust_ty.clone(),
-                this_type_ref,
-                format!(
-                    r#"
-    assert!(!{from_var}.is_null());
-    let {to_var}: &{this_type} = unsafe {{ &*({from_var} as *const {this_type}) }};
-"#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type.normalized_name.clone(),
-                )
-                .into(),
-            );
-
-            let code = format!("&mut {}", DisplayToTokens(this_type_ty));
-            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
-            let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
-            //handle foreigner_class as input arg
-            conv_map.add_conversation_rule(
-                void_ptr_rust_ty.clone(),
-                this_type_mut_ref,
-                format!(
-                    r#"
-    assert!(!{from_var}.is_null());
-    let {to_var}: &mut {this_type} = unsafe {{ &mut *({from_var} as *mut {this_type}) }};
-"#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type.normalized_name,
-                )
-                .into(),
-            );
-
-            debug!(
-                "register class: add implements SwigForeignClass for {}",
-                this_type.normalized_name
-            );
-
-            conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
-
-            let (this_type_for_method, _code_box_this) =
-                conv_map.convert_to_heap_pointer(&this_type, "this");
-            let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-            let this_type_name = this_type_for_method.normalized_name.clone();
-            conv_map.add_conversation_rule(
-                void_ptr_rust_ty,
-                this_type,
-                format!(
-                    r#"
-            assert!(!{from_var}.is_null());
-            let {to_var}: *mut {this_type} = {from_var} as *mut {this_type};
-        {unpack_code}
-        "#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_name,
-                    unpack_code = unpack_code,
-                )
-                .into(),
-            );
+            register_typemap_for_self_type(conv_map, class, this_type, constructor_ret_type)?;
         }
         conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
         Ok(())
@@ -698,5 +602,111 @@ fn register_c_type(tmap: &mut TypeMap, c_types: &CTypes) -> Result<()> {
             TypeName::new(f_type, (c_types.src_id, f_ident.span())),
         )?;
     }
+    Ok(())
+}
+
+fn register_typemap_for_self_type(
+    conv_map: &mut TypeMap,
+    class: &ForeignerClassInfo,
+    this_type: RustType,
+    constructor_ret_type: &Type,
+) -> Result<()> {
+    let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
+    let void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
+        &void_ptr_ty,
+        &this_type.normalized_name,
+        SourceId::none(),
+    );
+    let foreign_typename = format!("{} *", cpp_code::c_class_type(class));
+    conv_map.cache_rust_to_foreign_conv(
+        &this_type,
+        ForeignTypeInfo {
+            correspoding_rust_type: void_ptr_rust_ty.clone(),
+            name: foreign_typename.into(),
+        },
+    )?;
+
+    let const_void_ptr_ty = parse_type! { *const ::std::os::raw::c_void };
+    let const_void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
+        &const_void_ptr_ty,
+        &this_type.normalized_name,
+        SourceId::none(),
+    );
+    let const_foreign_typename = format!("const {} *", cpp_code::c_class_type(class));
+    conv_map.cache_rust_to_foreign_conv(
+        &this_type,
+        ForeignTypeInfo {
+            correspoding_rust_type: const_void_ptr_rust_ty.clone(),
+            name: const_foreign_typename.into(),
+        },
+    )?;
+
+    let this_type_ty = &this_type.ty;
+    //handle foreigner_class as input arg
+
+    let code = format!("& {}", DisplayToTokens(this_type_ty));
+    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
+    let this_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+    conv_map.add_conversation_rule(
+        const_void_ptr_rust_ty.clone(),
+        this_type_ref,
+        format!(
+            r#"
+    assert!(!{from_var}.is_null());
+    let {to_var}: &{this_type} = unsafe {{ &*({from_var} as *const {this_type}) }};
+"#,
+            to_var = TO_VAR_TEMPLATE,
+            from_var = FROM_VAR_TEMPLATE,
+            this_type = this_type.normalized_name.clone(),
+        )
+        .into(),
+    );
+
+    let code = format!("&mut {}", DisplayToTokens(this_type_ty));
+    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
+    let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+    //handle foreigner_class as input arg
+    conv_map.add_conversation_rule(
+        void_ptr_rust_ty.clone(),
+        this_type_mut_ref,
+        format!(
+            r#"
+    assert!(!{from_var}.is_null());
+    let {to_var}: &mut {this_type} = unsafe {{ &mut *({from_var} as *mut {this_type}) }};
+"#,
+            to_var = TO_VAR_TEMPLATE,
+            from_var = FROM_VAR_TEMPLATE,
+            this_type = this_type.normalized_name,
+        )
+        .into(),
+    );
+
+    debug!(
+        "register class: add implements SwigForeignClass for {}",
+        this_type.normalized_name
+    );
+
+    conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
+
+    let (this_type_for_method, _code_box_this) =
+        conv_map.convert_to_heap_pointer(&this_type, "this");
+    let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+    let this_type_name = this_type_for_method.normalized_name.clone();
+    conv_map.add_conversation_rule(
+        void_ptr_rust_ty,
+        this_type,
+        format!(
+            r#"
+            assert!(!{from_var}.is_null());
+            let {to_var}: *mut {this_type} = {from_var} as *mut {this_type};
+        {unpack_code}
+        "#,
+            to_var = TO_VAR_TEMPLATE,
+            from_var = FROM_VAR_TEMPLATE,
+            this_type = this_type_name,
+            unpack_code = unpack_code,
+        )
+        .into(),
+    );
     Ok(())
 }

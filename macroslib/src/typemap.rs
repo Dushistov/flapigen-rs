@@ -312,10 +312,10 @@ impl TypeMap {
         &mut self,
         correspoding_rty: RustType,
         foreign_name: TypeName,
-    ) -> Result<()> {
+    ) -> Result<ForeignType> {
+        trace!("add_foreign: {} / {}", foreign_name, correspoding_rty);
         self.ftypes_storage
-            .alloc_new(foreign_name, correspoding_rty.graph_idx)?;
-        Ok(())
+            .alloc_new(foreign_name, correspoding_rty.graph_idx)
     }
 
     pub(crate) fn add_foreign_rust_ty_idx(
@@ -323,9 +323,15 @@ impl TypeMap {
         foreign_name: TypeName,
         correspoding_rty: NodeIndex,
     ) -> Result<ForeignType> {
+        trace!(
+            "add_foreign_rust_ty_idx: {} / {}",
+            foreign_name,
+            self[correspoding_rty]
+        );
         self.ftypes_storage
             .alloc_new(foreign_name, correspoding_rty)
     }
+
     //TODO: should be removed in the future
     pub(crate) fn find_foreign_type_info_by_name(
         &self,
@@ -345,6 +351,10 @@ impl TypeMap {
         } else {
             None
         }
+    }
+
+    pub(crate) fn alloc_foreign_type(&mut self, ft: ForeignTypeS) -> ForeignType {
+        self.ftypes_storage.add_new_ftype(ft)
     }
 
     pub(crate) fn find_foreign_type_related_to_rust_ty(
@@ -371,11 +381,13 @@ impl TypeMap {
         None
     }
 
+    //TODO: deprecate and remove this method
     pub(crate) fn cache_rust_to_foreign_conv(
         &mut self,
         from: &RustType,
         to: ForeignTypeInfo,
     ) -> Result<()> {
+        trace!("cache_rust_to_foreign_conv: {} / {}", to.name, from);
         let to_id = to.correspoding_rust_type.graph_idx;
         let ftype = self.ftypes_storage.alloc_new(
             TypeName::new(
@@ -675,7 +687,7 @@ impl TypeMap {
                 };
                 if let Some(path) = path {
                     trace!(
-                        "map foreign: we find path {} <-> {}",
+                        "map foreign: path found: {} / {}",
                         ftype.name,
                         self.conv_graph[related_rty_idx]
                     );
@@ -1042,7 +1054,7 @@ fn find_conversation_path(
     build_for_sp: SourceIdSpan,
 ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
     trace!(
-        "find_conversation_path: begin {} -> {}",
+        "find_conversation_path: search path {} -> {}",
         conv_graph[from],
         conv_graph[to]
     );
