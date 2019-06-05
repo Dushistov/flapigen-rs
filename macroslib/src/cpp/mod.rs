@@ -25,7 +25,7 @@ use crate::{
         },
         ty::{ForeignType, RustType},
         unpack_unique_typename,
-        utils::{validate_cfg_otpions, ForeignMethodSignature, ForeignTypeInfoT},
+        utils::{validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT},
         CType, CTypes, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
@@ -461,7 +461,7 @@ static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * {sizeof_usize},
 
         let not_merged_data = conv_map.take_not_merged_data();
         for mut rule in not_merged_data {
-            validate_cfg_otpions(&rule, &all_options)?;
+            validate_cfg_options(&rule, &all_options)?;
 
             if let Some(c_types) = rule.c_types.take() {
                 let module_name = c_types.header_name.clone();

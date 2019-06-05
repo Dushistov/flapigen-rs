@@ -187,7 +187,7 @@ pub(crate) fn rust_to_foreign_convert_method_inputs<
     Ok((code_deps, ret_code))
 }
 
-pub(crate) fn validate_cfg_otpions(
+pub(crate) fn validate_cfg_options(
     rule: &TypeMapConvRuleInfo,
     avaible_opts: &FxHashSet<&'static str>,
 ) -> Result<()> {
