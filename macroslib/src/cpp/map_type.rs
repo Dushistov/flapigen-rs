@@ -117,8 +117,10 @@ fn special_type(
                     ),
                 ));
             } else {
-                let this_type = if let Some(this_type_for_method) =
-                    foreign_class.constructor_ret_type.as_ref()
+                let this_type = if let Some(this_type_for_method) = foreign_class
+                    .self_desc
+                    .as_ref()
+                    .map(|x| &x.constructor_ret_type)
                 {
                     conv_map.ty_to_rust_type(this_type_for_method)
                 } else {
@@ -1105,7 +1107,11 @@ fn handle_option_type_in_return(
                 (fclass.src_id, under_ref_ty.span()),
                 false,
             )?;
-            let this_type_for_method = fclass.constructor_ret_type.as_ref().ok_or_else(|| {
+            let this_type_for_method = fclass
+                .self_desc
+                .as_ref()
+                .map(|x| &x.constructor_ret_type)
+                .ok_or_else(|| {
                 DiagnosticError::new(
                     fclass.src_id,
                     fclass.span(),
@@ -1391,5 +1397,8 @@ pub(in crate::cpp) fn calc_this_type_for_method(
     _: &TypeMap,
     class: &ForeignerClassInfo,
 ) -> Option<Type> {
-    class.constructor_ret_type.clone()
+    class
+        .self_desc
+        .as_ref()
+        .map(|x| x.constructor_ret_type.clone())
 }

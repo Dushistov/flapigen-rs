@@ -224,7 +224,7 @@ public:
     let mut gen_code = Vec::new();
 
     let (this_type_for_method, code_box_this) =
-        if let Some(this_type) = class.constructor_ret_type.as_ref() {
+        if let Some(this_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
             let this_type = conv_map.find_or_alloc_rust_type_that_implements(
                 this_type,
                 "SwigForeignClass",
@@ -562,8 +562,9 @@ May be you need to use `private constructor = empty;` syntax?",
                     .map_err(map_write_err!(cpp_path))?;
 
                     let constructor_ret_type = class
-                        .constructor_ret_type
+                        .self_desc
                         .as_ref()
+                        .map(|x| &x.constructor_ret_type)
                         .ok_or_else(&no_this_info)?
                         .clone();
                     let this_type = constructor_ret_type.clone();
@@ -582,8 +583,9 @@ May be you need to use `private constructor = empty;` syntax?",
     if need_destructor {
         let this_type: RustType = conv_map.find_or_alloc_rust_type(
             class
-                .constructor_ret_type
+                .self_desc
                 .as_ref()
+                .map(|x| &x.constructor_ret_type)
                 .ok_or_else(&no_this_info)?,
             class.src_id,
         );

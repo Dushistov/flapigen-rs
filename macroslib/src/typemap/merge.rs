@@ -463,7 +463,11 @@ fn helper3() {
                 &ty_i32,
                 petgraph::Direction::Outgoing,
                 invalid_src_id_span(),
-                |_, fc| fc.constructor_ret_type.clone(),
+                |_, fc| {
+                    fc.self_desc
+                        .as_ref()
+                        .map(|x| x.constructor_ret_type.clone())
+                },
             )
             .unwrap();
         assert_eq!("int", types_map[fti].name.as_str(),);

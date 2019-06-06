@@ -1198,7 +1198,7 @@ fn try_build_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{source_registry::SourceRegistry, SourceCode};
+    use crate::{source_registry::SourceRegistry, types::SelfTypeDesc, SourceCode};
     use proc_macro2::Span;
 
     #[test]
@@ -1221,9 +1221,11 @@ mod tests {
             src_id: SourceId::none(),
             name: Ident::new("Foo", Span::call_site()),
             methods: vec![],
-            self_type: None,
+            self_desc: Some(SelfTypeDesc {
+                self_type: foo_rt.ty.clone(),
+                constructor_ret_type: foo_rt.ty.clone(),
+            }),
             foreigner_code: String::new(),
-            constructor_ret_type: Some(foo_rt.ty.clone()),
             doc_comments: vec![],
             copy_derived: false,
         });
@@ -1279,7 +1281,11 @@ mod tests {
                 &vec_foo_ty,
                 petgraph::Direction::Outgoing,
                 invalid_src_id_span(),
-                |_, fc| fc.constructor_ret_type.clone(),
+                |_, fc| {
+                    fc.self_desc
+                        .as_ref()
+                        .map(|x| x.constructor_ret_type.clone())
+                },
             )
             .unwrap();
         assert_eq!("Foo []", types_map[fti].name.as_str());

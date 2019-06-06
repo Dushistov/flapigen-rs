@@ -116,7 +116,9 @@ impl JavaConfig {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
-        if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+        if let Some(constructor_ret_type) =
+            class.self_desc.as_ref().map(|x| &x.constructor_ret_type)
+        {
             let this_type_for_method = if_ty_result_return_ok_type(constructor_ret_type)
                 .unwrap_or_else(|| constructor_ret_type.clone());
 
@@ -226,7 +228,7 @@ impl JavaConfig {
     ) -> Result<Vec<TokenStream>> {
         debug!(
             "generate: begin for {}, this_type_for_method {:?}",
-            class.name, class.constructor_ret_type
+            class.name, class.self_desc
         );
 
         let f_methods_sign = find_suitable_foreign_types_for_methods(conv_map, class)?;
@@ -456,7 +458,7 @@ fn java_class_name_to_jni(full_name: &str) -> String {
 }
 
 fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignerClassInfo) -> Option<Type> {
-    if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+    if let Some(constructor_ret_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
         Some(
             if_result_return_ok_err_types(
                 &tm.ty_to_rust_type_checked(constructor_ret_type)

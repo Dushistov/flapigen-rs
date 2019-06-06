@@ -155,7 +155,8 @@ impl CppConfig {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
-        if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+        if let Some(self_desc) = class.self_desc.as_ref() {
+            let constructor_ret_type = &self_desc.constructor_ret_type;
             let this_type_for_method = constructor_ret_type;
             let this_type = conv_map.find_or_alloc_rust_type_that_implements(
                 this_type_for_method,
@@ -177,7 +178,7 @@ impl CppConfig {
     ) -> Result<Vec<TokenStream>> {
         debug!(
             "generate: begin for {}, this_type_for_method {:?}",
-            class.name, class.constructor_ret_type
+            class.name, class.self_desc
         );
         let has_methods = class.methods.iter().any(|m| match m.variant {
             MethodVariant::Method(_) => true,

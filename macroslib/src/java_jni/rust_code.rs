@@ -185,8 +185,9 @@ May be you need to use `private constructor = empty;` syntax?",
                 have_constructor = true;
                 if !method.is_dummy_constructor() {
                     let constructor_ret_type = class
-                        .constructor_ret_type
+                        .self_desc
                         .as_ref()
+                        .map(|x| &x.constructor_ret_type)
                         .ok_or_else(&no_this_info)?
                         .clone();
                     let this_type =

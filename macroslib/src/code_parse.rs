@@ -15,7 +15,8 @@ use crate::{
     typemap::ast::{normalize_ty_lifetimes, DisplayToTokens},
     types::{
         ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
-        ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, SelfTypeVariant,
+        ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, SelfTypeDesc,
+        SelfTypeVariant,
     },
     LanguageConfig, FOREIGNER_CODE, FOREIGN_CODE,
 };
@@ -418,13 +419,32 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         ));
     }
 
+    let self_desc = match (rust_self_type, constructor_ret_type) {
+        (Some(self_type), Some(constructor_ret_type)) => Some(SelfTypeDesc {
+            self_type,
+            constructor_ret_type,
+        }),
+        (None, None) => None,
+        (Some(_), None) => {
+            return Err(syn::Error::new(
+                class_name.span(),
+                "if self_type is defined you should add at least one constructor",
+            ))
+        }
+        (None, Some(_)) => {
+            return Err(syn::Error::new(
+                class_name.span(),
+                "there is constructor, you should define self_type",
+            ))
+        }
+    };
+
     Ok(ForeignerClassInfo {
         src_id: SourceId::none(),
         name: class_name,
         methods,
-        self_type: rust_self_type,
+        self_desc,
         foreigner_code,
-        constructor_ret_type,
         doc_comments: class_doc_comments,
         copy_derived,
     })
