@@ -560,12 +560,12 @@ fn py_wrapper_mod_name(type_name: &str) -> String {
 // `rust_cpython` provides access only to non-mutable reference of the wrapped Rust object.
 // What's more `rust_cpytho`n requires the object to be `Send + 'static`, because Python VM
 // can move it between threads without any control from Rust.
-// As a result, we need to wrap the object in `RwLock` or `Mutex`, to provide mutability.
-// By default, `RwLock` is used.
+// As a result, we need to wrap the object in `Mutex`, to provide mutability.
+// By default, `Mutex` is used.
 // This could be overriden by the smart pointer returned from the constructor.
 // Following smart pointers are supported:
-// - `Arc<RwLock<T>>`: wrapped Rust object is mutable and can be shared between Rust and Python,
-// - `RwLock<T>`: wrapped Rust object is mutable, but only Python owns it,
+// - `Arc<Mutex<T>>`: wrapped Rust object is mutable and can be shared between Rust and Python,
+// - `Mutex<T>`: wrapped Rust object is mutable, but only Python owns it,
 // - `Arc<T>`: wrapped Rust object is immutable and can be shared between Rust and Python,
 // - `Box<T>`: wrapped Rust object is immutable and only Python owns it,
 // Note, that `Rc` is NOT supported. This is because it is not `Send`.
@@ -573,8 +573,8 @@ fn py_wrapper_mod_name(type_name: &str) -> String {
 // (it is `Send`, but no `Sync`), so it is intentionally omitted.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum PointerType {
-    ArcRwLock,
-    RwLock,
+    ArcMutex,
+    Mutex,
     Arc,
     Box,
     None,
@@ -582,7 +582,7 @@ enum PointerType {
 
 impl PointerType {
     fn is_shared(self) -> bool {
-        self == PointerType::Arc || self == PointerType::ArcRwLock
+        self == PointerType::Arc || self == PointerType::ArcMutex
     }
 }
 
@@ -607,20 +607,20 @@ fn smart_pointer(rust_type: &RustType, conv_map: &mut TypeMap) -> SmartPointerIn
     if let Some(inner_ty) = ast::check_if_smart_pointer_return_inner_type(rust_type, "Arc") {
         let rust_inner_ty = conv_map.find_or_alloc_rust_type(&inner_ty);
         if let Some(inner_inner_ty) =
-            ast::check_if_smart_pointer_return_inner_type(&rust_inner_ty, "RwLock")
+            ast::check_if_smart_pointer_return_inner_type(&rust_inner_ty, "Mutex")
         {
             SmartPointerInfo::new(
-                PointerType::ArcRwLock,
+                PointerType::ArcMutex,
                 conv_map.find_or_alloc_rust_type(&inner_inner_ty),
             )
         } else {
             SmartPointerInfo::new(PointerType::Arc, rust_inner_ty)
         }
     } else if let Some(inner_ty) =
-        ast::check_if_smart_pointer_return_inner_type(&rust_type, "RwLock")
+        ast::check_if_smart_pointer_return_inner_type(&rust_type, "Mutex")
     {
         SmartPointerInfo::new(
-            PointerType::RwLock,
+            PointerType::Mutex,
             conv_map.find_or_alloc_rust_type(&inner_ty),
         )
     } else if let Some(inner_ty) = ast::check_if_smart_pointer_return_inner_type(&rust_type, "Box")
@@ -678,11 +678,11 @@ fn if_exported_class_generate_return_conversion(
     };
     let class_smart_pointer = storage_smart_pointer_for_class(&class, conv_map)?;
     let rust_call_with_deref = if reference_type != Reference::None {
-        if smart_pointer_info.pointer_type == PointerType::RwLock {
+        if smart_pointer_info.pointer_type == PointerType::Mutex {
             return Err(DiagnosticError::new(
                 method_span,
                "Returning a rust object into python by reference is not safe, so the copy of the object needs to be make.\
-However, `RwLock` doesn't implement `Clone`, so it can't be returned by reference."
+However, `Mutex` doesn't implement `Clone`, so it can't be returned by reference."
             ));
         } else if class.copy_derived || smart_pointer_info.pointer_type.is_shared() {
             quote! {
@@ -702,13 +702,13 @@ Thus, the returned type must marked with `#[derive(Copy)]` inside its `foreigner
     let class_name = &class.name;
     let py_mod: Ident = syn::parse_str(&py_wrapper_mod_name(&class_name.to_string()))?;
     let rust_call_with_wrapper = match class_smart_pointer.pointer_type {
-        PointerType::RwLock => generate_wrapper_constructor_for_rwlock(
+        PointerType::Mutex => generate_wrapper_constructor_for_mutex(
             &class,
             &smart_pointer_info,
             rust_call_with_deref,
             method_span,
         )?,
-        PointerType::ArcRwLock => generate_wrapper_constructor_for_arc_rwlock(
+        PointerType::ArcMutex => generate_wrapper_constructor_for_arc_mutex(
             &class,
             &smart_pointer_info,
             rust_call_with_deref,
@@ -734,41 +734,41 @@ Thus, the returned type must marked with `#[derive(Copy)]` inside its `foreigner
     Ok(Some((parse_type!(super::#py_mod::#class_name), conversion)))
 }
 
-fn generate_wrapper_constructor_for_rwlock(
+fn generate_wrapper_constructor_for_mutex(
     class: &ForeignerClassInfo,
     returned_smart_pointer: &SmartPointerInfo,
     rust_call: TokenStream,
     method_span: Span,
 ) -> Result<TokenStream> {
     match returned_smart_pointer.pointer_type {
-        PointerType::RwLock => Ok(rust_call),
-        PointerType::None => Ok(quote! {std::sync::RwLock::new(#rust_call)}),
+        PointerType::Mutex => Ok(rust_call),
+        PointerType::None => Ok(quote! {std::sync::Mutex::new(#rust_call)}),
         _ => Err(DiagnosticError::new(
             method_span,
             format!(
                 "Unsupported conversion for smart pointer. \
-Foreigner class {} is stored as `RwLock` and can be returned eiter as `RwLock` or bare type",
+Foreigner class {} is stored as `Mutex` and can be returned eiter as `Mutex` or bare type",
                 class.name
             ),
         )),
     }
 }
 
-fn generate_wrapper_constructor_for_arc_rwlock(
+fn generate_wrapper_constructor_for_arc_mutex(
     class: &ForeignerClassInfo,
     returned_smart_pointer: &SmartPointerInfo,
     rust_call: TokenStream,
     method_span: Span,
 ) -> Result<TokenStream> {
     match returned_smart_pointer.pointer_type {
-        PointerType::ArcRwLock => Ok(rust_call),
+        PointerType::ArcMutex => Ok(rust_call),
         _ => Err(DiagnosticError::new(
             method_span,
             format!(
                 "Unsupported conversion for smart pointer. \
-Foreigner class {} is stored as `Arc<RwLock<T>>`, so it is intended for sharing between Rust and Python.\
-Thus, it must always be returned from Rust literally by `Arc<RwLock<T>>` \
-(or reference to `Arc<RwLock<T>>`) for any sharing to occur.",
+Foreigner class {} is stored as `Arc<Mutex<T>>`, so it is intended for sharing between Rust and Python.\
+Thus, it must always be returned from Rust literally by `Arc<Mutex<T>>` \
+(or reference to `Arc<Mutex<T>>`) for any sharing to occur.",
                 class.name
             ),
         ))
@@ -851,7 +851,7 @@ fn if_exported_class_generate_argument_conversion(
         }
     };
     let deref_code = match class_smart_pointer.pointer_type {
-        PointerType::ArcRwLock => generate_deref_for_arc_rwlock(
+        PointerType::ArcMutex => generate_deref_for_arc_mutex(
             &class,
             smart_pointer_info.pointer_type,
             reference_type,
@@ -865,7 +865,7 @@ fn if_exported_class_generate_argument_conversion(
             rust_instance_code,
             method_span,
         )?,
-        PointerType::RwLock => generate_deref_for_rwlock(
+        PointerType::Mutex => generate_deref_for_mutex(
             &class,
             smart_pointer_info.pointer_type,
             reference_type,
@@ -885,7 +885,7 @@ fn if_exported_class_generate_argument_conversion(
     Ok(Some((py_type, deref_code)))
 }
 
-fn generate_deref_for_rwlock(
+fn generate_deref_for_mutex(
     class: &ForeignerClassInfo,
     arg_smart_pointer: PointerType,
     arg_reference: Reference,
@@ -894,29 +894,29 @@ fn generate_deref_for_rwlock(
 ) -> Result<TokenStream> {
     match arg_smart_pointer {
         PointerType::None => match arg_reference {
-            Reference::MutRef => Ok(quote!{(&mut *#rust_instance_code.write().unwrap())}),
-            Reference::Ref => Ok(quote!{(&*#rust_instance_code.read().unwrap())}),
-            Reference::None => append_clone_if_supported(class, quote!{*#rust_instance_code.read().unwrap()}, method_span),
+            Reference::MutRef => Ok(quote!{(&mut *#rust_instance_code.lock().unwrap())}),
+            Reference::Ref => Ok(quote!{(&*#rust_instance_code.lock().unwrap())}),
+            Reference::None => append_clone_if_supported(class, quote!{*#rust_instance_code.lock().unwrap()}, method_span),
         },
-        PointerType::RwLock => match arg_reference {
+        PointerType::Mutex => match arg_reference {
             Reference::Ref => Ok(rust_instance_code),
             _ => Err(DiagnosticError::new(
                 method_span,
-                "RwLock can be passed to function only by const reference `RwLock`",
+                "Mutex can be passed to function only by const reference `Mutex`",
             ))
         }
         _ => Err(DiagnosticError::new(
             method_span,
             format!(
                 "Unsupported conversion for smart pointer. \
-Foreigner class {} is stored as `RwLock` and can be passed to function either as `RwLock` reference or bare type",
+Foreigner class {} is stored as `Mutex` and can be passed to function either as `Mutex` reference or bare type",
                 class.name
             ),
         ))
     }
 }
 
-fn generate_deref_for_arc_rwlock(
+fn generate_deref_for_arc_mutex(
     class: &ForeignerClassInfo,
     arg_smart_pointer: PointerType,
     arg_reference: Reference,
@@ -925,23 +925,23 @@ fn generate_deref_for_arc_rwlock(
 ) -> Result<TokenStream> {
     match arg_smart_pointer {
         PointerType::None => match arg_reference {
-            Reference::MutRef => Ok(quote!{(&mut *#rust_instance_code.write().unwrap())}),
-            Reference::Ref => Ok(quote!{(&*#rust_instance_code.read().unwrap())}),
-            Reference::None => append_clone_if_supported(class, quote!{*#rust_instance_code.read().unwrap()}, method_span),
+            Reference::MutRef => Ok(quote!{(&mut *#rust_instance_code.lock().unwrap())}),
+            Reference::Ref => Ok(quote!{(&*#rust_instance_code.lock().unwrap())}),
+            Reference::None => append_clone_if_supported(class, quote!{*#rust_instance_code.lock().unwrap()}, method_span),
         },
-        PointerType::ArcRwLock => match arg_reference {
+        PointerType::ArcMutex => match arg_reference {
             Reference::Ref => Ok(rust_instance_code),
             Reference::None => Ok(quote!{#rust_instance_code.clone()}),
             _ => Err(DiagnosticError::new(
                 method_span,
-                "Arc<RwLock<T>> can't be passed to function by mut reference. It doesn't make sense anyway.",
+                "Arc<Mutex<T>> can't be passed to function by mut reference. It doesn't make sense anyway.",
             ))
         }
         _ => Err(DiagnosticError::new(
             method_span,
             format!(
                 "Unsupported conversion for smart pointer. \
-Foreigner class {} is stored as `Arc<RwLock<T>>` and can be passed to function either as `Arc<RwLock<T>>` or bare type",
+Foreigner class {} is stored as `Arc<Mutex<T>>` and can be passed to function either as `Arc<Mutex<T>>` or bare type",
                 class.name
             ),
         ))
@@ -961,7 +961,7 @@ fn generate_deref_for_arc(
             Reference::None => append_clone_if_supported(class, quote!{*#rust_instance_code}, method_span),
             Reference::MutRef => Err(DiagnosticError::new(
                 method_span,
-                "Object is stored in `Arc`, so it is immutable. If you need mutability, use Arc<RwLock<T>> for constructor type",
+                "Object is stored in `Arc`, so it is immutable. If you need mutability, use Arc<Mutex<T>> for constructor type",
             ))
         },
         PointerType::Arc => match arg_reference {
@@ -996,7 +996,7 @@ fn generate_deref_for_box(
             Reference::None => append_clone_if_supported(class, rust_instance_code, method_span),
             Reference::MutRef => Err(DiagnosticError::new(
                 method_span,
-                "Object is stored in `Box`, so it is immutable. If you need mutability, use `RwLock` for constructor type",
+                "Object is stored in `Box`, so it is immutable. If you need mutability, use `Mutex` for constructor type",
             ))
         },
         _ => Err(DiagnosticError::new(
@@ -1034,8 +1034,8 @@ fn storage_smart_pointer_for_class(
         let constructor_ret_rust_type = conv_map.find_or_alloc_rust_type(constructor_ret_type_ty);
         let pointer = smart_pointer(&constructor_ret_rust_type, conv_map);
         match pointer.pointer_type {
-            // Default wrapper type for storage is `RwLock`.
-            PointerType::None => Ok(SmartPointerInfo::new(PointerType::RwLock, pointer.inner_ty)),
+            // Default wrapper type for storage is `Mutex`.
+            PointerType::None => Ok(SmartPointerInfo::new(PointerType::Mutex, pointer.inner_ty)),
             _ => Ok(pointer),
         }
     } else {
@@ -1048,9 +1048,9 @@ fn storage_smart_pointer_for_class(
 
 fn wrap_type_for_class(self_type: &Type, storage_pointer: PointerType) -> TokenStream {
     match storage_pointer {
-        PointerType::ArcRwLock => quote!{std::sync::Arc<std::sync::RwLock<super::#self_type>>},
+        PointerType::ArcMutex => quote!{std::sync::Arc<std::sync::Mutex<super::#self_type>>},
         PointerType::Arc => quote!{std::sync::Arc<super::#self_type>},
-        PointerType::RwLock => quote!{std::sync::RwLock<super::#self_type>},
+        PointerType::Mutex => quote!{std::sync::Mutex<super::#self_type>},
         PointerType::Box => quote!{super::#self_type},
         PointerType::None => unreachable!("None pointer for object storage"),
     }

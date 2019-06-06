@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from rust_swig_test_python import TestStaticClass, TestEnum, TestClass, TestArc, TestArcRwLock, TestBox, Error as TestError
+from rust_swig_test_python import TestStaticClass, TestEnum, TestClass, TestArc, TestArcMutex, TestBox, Error as TestError
 
 def test_static_methods():
     assert TestStaticClass.hello() == "Hello from rust"
@@ -69,12 +69,12 @@ def test_arc():
     assert TestArc.to_string_arc(arc) == "0"
     assert TestArc.to_string_ref_arc(arc) == "0"
 
-def test_arc_rwlock():
-    arc = TestArcRwLock()
+def test_arc_mutex():
+    arc = TestArcMutex()
     assert str(arc) == "0"
     arc.inc()
-    assert TestArcRwLock.to_string_arc(arc) == "1"
-    assert TestArcRwLock.to_string_ref_arc(arc) == "1"
+    assert TestArcMutex.to_string_arc(arc) == "1"
+    assert TestArcMutex.to_string_ref_arc(arc) == "1"
 
 def test_box():
     box = TestBox()
@@ -88,7 +88,7 @@ test_options()
 test_arrays()
 test_results()
 test_arc()
-test_arc_rwlock()
+test_arc_mutex()
 test_box()
 
 print("Testing python API successful")

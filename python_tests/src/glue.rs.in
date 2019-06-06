@@ -1,5 +1,5 @@
 use std::fmt;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 
 pub enum TestEnum {
     A,
@@ -219,13 +219,13 @@ foreigner_class!(
     }
 );
 
-pub struct TestArcRwLock {
+pub struct TestArcMutex {
     i: i32,
 }
 
-impl TestArcRwLock {
-    pub fn new() -> Arc<RwLock<TestArcRwLock>> {
-        Arc::new(RwLock::new(TestArcRwLock{
+impl TestArcMutex {
+    pub fn new() -> Arc<Mutex<TestArcMutex>> {
+        Arc::new(Mutex::new(TestArcMutex{
             i: 0
         }))
     }
@@ -238,23 +238,23 @@ impl TestArcRwLock {
         self.i += 1;
     }
 
-    pub fn to_string_arc(this: Arc<RwLock<TestArcRwLock>>) -> String {
-        this.read().unwrap().i.to_string()
+    pub fn to_string_arc(this: Arc<Mutex<TestArcMutex>>) -> String {
+        this.lock().unwrap().i.to_string()
     }
 
-    pub fn to_string_ref_arc(this: &Arc<RwLock<TestArcRwLock>>) -> String {
-        this.read().unwrap().i.to_string()
+    pub fn to_string_ref_arc(this: &Arc<Mutex<TestArcMutex>>) -> String {
+        this.lock().unwrap().i.to_string()
     }
 }
 
 foreigner_class!(
-    class TestArcRwLock {
-        self_type TestArcRwLock;
-        constructor TestArcRwLock::new() -> Arc<RwLock<TestArcRwLock>>;
-        method TestArcRwLock::to_string(&self) -> String;
-        method TestArcRwLock::inc(&mut self);
-        static_method TestArcRwLock::to_string_arc(Arc<RwLock<TestArcRwLock>>) -> String;
-        static_method TestArcRwLock::to_string_ref_arc(&Arc<RwLock<TestArcRwLock>>) -> String;
+    class TestArcMutex {
+        self_type TestArcMutex;
+        constructor TestArcMutex::new() -> Arc<Mutex<TestArcMutex>>;
+        method TestArcMutex::to_string(&self) -> String;
+        method TestArcMutex::inc(&mut self);
+        static_method TestArcMutex::to_string_arc(Arc<Mutex<TestArcMutex>>) -> String;
+        static_method TestArcMutex::to_string_ref_arc(&Arc<Mutex<TestArcMutex>>) -> String;
     }
 );
 
