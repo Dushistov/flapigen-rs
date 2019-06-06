@@ -7,7 +7,7 @@ pub mod utils;
 
 use std::{cell::RefCell, fmt, mem, ops, rc::Rc};
 
-use log::{debug, log_enabled, trace, warn};
+use log::{debug, log_enabled, trace};
 use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     Graph,
@@ -744,7 +744,10 @@ impl TypeMap {
                                     TypeName::new(foreign_name, (class.src_id, class.name.span())),
                                 ));
                             } else {
-                                warn!("No foreign_class for type '{}'", rust_ty.normalized_name);
+                                println!(
+                                    "warning=No foreign_class for type '{}'",
+                                    rust_ty.normalized_name
+                                );
                             }
                         }
                     }
@@ -759,21 +762,23 @@ impl TypeMap {
                 foreign_name
             );
             let rust_ty = self.find_or_alloc_rust_type_with_suffix(&ty, &suffix, SourceId::none());
+            let fname = foreign_name.typename.clone();
             let ftype_idx = self.ftypes_storage.find_or_alloc(foreign_name);
-            match direction {
-                petgraph::Direction::Outgoing => {
-                    self.ftypes_storage[ftype_idx].into_from_rust = Some(ForeignConversationRule {
-                        rust_ty: rust_ty.graph_idx,
-                        intermediate: None,
-                    });
-                }
-                petgraph::Direction::Incoming => {
-                    self.ftypes_storage[ftype_idx].from_into_rust = Some(ForeignConversationRule {
-                        rust_ty: rust_ty.graph_idx,
-                        intermediate: None,
-                    });
-                }
+            let conv_rule = match direction {
+                petgraph::Direction::Outgoing => &mut self.ftypes_storage[ftype_idx].into_from_rust,
+                petgraph::Direction::Incoming => &mut self.ftypes_storage[ftype_idx].from_into_rust,
+            };
+            if let Some(r) = conv_rule {
+                println!(
+                    "warning=attempt to rewrite rule {}/{} with {}/{}",
+                    fname, self.conv_graph[r.rust_ty], fname, rust_ty
+                );
+                continue;
             }
+            *conv_rule = Some(ForeignConversationRule {
+                rust_ty: rust_ty.graph_idx,
+                intermediate: None,
+            });
         }
 
         let from: RustType = rust_ty.clone();
