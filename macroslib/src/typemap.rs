@@ -1114,9 +1114,9 @@ fn try_build_path(
             use std::fmt::Write;
             let mut step_types = String::new();
             for from_ty in &cur_step {
-                write!(step_types, "{} ", ty_graph.conv_graph[*from_ty]).unwrap();
+                write!(step_types, "{} | ", ty_graph.conv_graph[*from_ty]).unwrap();
             }
-            debug!("try_build_path: cur_step {}", step_types);
+            debug!("try_build_path: step({}): {}", step, step_types);
         }
         for from_ty in &cur_step {
             let from: RustType = ty_graph.conv_graph[*from_ty].clone();
