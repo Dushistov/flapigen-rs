@@ -1,6 +1,16 @@
-fn create_interface() -> Box<Box<Interface>> {
-    Box::new(Box::new(InterfaceImpl { base: 17 }))
-}
+// Foo and TestWorkWithVec here to reproduce bug
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32, _: &str) -> Foo;
+});
+
+foreigner_class!(class TestWorkWithVec {
+    self_type TestWorkWithVec;
+    constructor TestWorkWithVec::new(_: &str) -> TestWorkWithVec;
+    method TestWorkWithVec::get_bytes(&self, n: u32) -> Vec<u8>;
+
+    static_method TestWorkWithVec::sort_foo_slice(v: &mut [Foo]);
+});
 
 foreigner_class!(class Interface {
     self_type Interface;
