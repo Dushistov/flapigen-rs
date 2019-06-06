@@ -785,50 +785,32 @@ impl TypeMap {
         let mut possible_paths = Vec::<(PossiblePath, ForeignType, RustTypeIdx)>::new();
         for max_steps in 1..=MAX_TRY_BUILD_PATH_STEPS {
             for (ftype_idx, ftype) in self.ftypes_storage.iter_enumerate() {
-                let (path, related_rust_ty) = match direction {
-                    petgraph::Direction::Outgoing => {
-                        if let Some(rule) = ftype.into_from_rust.as_ref() {
-                            let related_rust_ty = rule.rust_ty;
-                            let other = self.conv_graph[related_rust_ty].clone();
-                            (
-                                try_build_path(
-                                    &from,
-                                    &other,
-                                    build_for_sp,
-                                    &mut self.conv_graph,
-                                    &self.rust_names_map,
-                                    &self.generic_edges,
-                                    max_steps,
-                                ),
-                                related_rust_ty,
-                            )
-                        } else {
-                            continue;
-                        }
-                    }
-                    petgraph::Direction::Incoming => {
-                        if let Some(rule) = ftype.from_into_rust.as_ref() {
-                            let related_rust_ty = rule.rust_ty;
-                            let other = self.conv_graph[related_rust_ty].clone();
-                            (
-                                try_build_path(
-                                    &other,
-                                    &from,
-                                    build_for_sp,
-                                    &mut self.conv_graph,
-                                    &self.rust_names_map,
-                                    &self.generic_edges,
-                                    max_steps,
-                                ),
-                                related_rust_ty,
-                            )
-                        } else {
-                            continue;
-                        }
-                    }
+                let rule = match direction {
+                    petgraph::Direction::Outgoing => ftype.into_from_rust.as_ref(),
+                    petgraph::Direction::Incoming => ftype.from_into_rust.as_ref(),
                 };
+
+                let rule = match rule {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let other = self.conv_graph[rule.rust_ty].clone();
+                let (from, to) = match direction {
+                    petgraph::Direction::Outgoing => (&from, &other),
+                    petgraph::Direction::Incoming => (&other, &from),
+                };
+                let path = try_build_path(
+                    from,
+                    to,
+                    build_for_sp,
+                    &mut self.conv_graph,
+                    &self.rust_names_map,
+                    &self.generic_edges,
+                    max_steps,
+                );
+
                 if let Some(path) = path {
-                    possible_paths.push((path, ftype_idx, related_rust_ty));
+                    possible_paths.push((path, ftype_idx, rule.rust_ty));
                 }
             }
             if !possible_paths.is_empty() {
