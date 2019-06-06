@@ -1,4 +1,4 @@
-use std::{io::Write, path::Path};
+use std::io::Write;
 
 use log::debug;
 use petgraph::Direction;
@@ -28,21 +28,19 @@ use crate::{
 
 pub(in crate::cpp) fn generate(
     conv_map: &mut TypeMap,
-    output_dir: &Path,
-    namespace_name: &str,
+    cfg: &CppConfig,
     target_pointer_width: usize,
-    separate_impl_headers: bool,
     class: &ForeignerClassInfo,
     req_includes: &[SmolStr],
     methods_sign: &[CppForeignMethodSignature],
 ) -> Result<Vec<TokenStream>> {
     use std::fmt::Write;
 
-    let c_path = output_dir.join(format!("c_{}.h", class.name));
+    let c_path = cfg.output_dir.join(format!("c_{}.h", class.name));
     let mut c_include_f = FileWriteCache::new(&c_path);
-    let cpp_path = output_dir.join(cpp_code::cpp_header_name(class));
+    let cpp_path = cfg.output_dir.join(cpp_code::cpp_header_name(class));
     let mut cpp_include_f = FileWriteCache::new(&cpp_path);
-    let cpp_fwd_path = output_dir.join(format!("{}_fwd.hpp", class.name));
+    let cpp_fwd_path = cfg.output_dir.join(format!("{}_fwd.hpp", class.name));
     let mut cpp_fwd_f = FileWriteCache::new(&cpp_fwd_path);
 
     macro_rules! map_write_err {
@@ -151,7 +149,7 @@ public:
         class_dot_name = class.name,
         includes = includes,
         doc_comments = class_doc_comments,
-        namespace = namespace_name,
+        namespace = cfg.namespace_name,
     ).map_err(map_write_err!(cpp_path))?;
 
     if !class.copy_derived {
@@ -182,7 +180,7 @@ public:
                     class.span(),
                     format!(
                         "Class {} (namespace {}) has derived Copy attribute, but no clone method",
-                        class.name, namespace_name,
+                        class.name, cfg.namespace_name,
                     ),
                 )
             })?;
@@ -282,7 +280,7 @@ public:
             format!(
                 "Class {} (namespace {}) has methods, but there is no constructor\n
 May be you need to use `private constructor = empty;` syntax?",
-                class.name, namespace_name,
+                class.name, cfg.namespace_name,
             ),
         )
     };
@@ -680,17 +678,17 @@ private:
     .map_err(map_write_err!(cpp_path))?;
 
     // Write method implementations.
-    if separate_impl_headers {
+    if cfg.separate_impl_headers {
         write!(
             cpp_include_f,
             r#"
 
 }} // namespace {namespace}
 "#,
-            namespace = namespace_name
+            namespace = cfg.namespace_name
         )
         .map_err(map_write_err!(cpp_path))?;
-        let cpp_impl_path = output_dir.join(format!("{}_impl.hpp", class.name));
+        let cpp_impl_path = cfg.output_dir.join(format!("{}_impl.hpp", class.name));
         let mut cpp_impl_f = FileWriteCache::new(&cpp_impl_path);
         write!(
             cpp_impl_f,
@@ -702,16 +700,16 @@ private:
 namespace {namespace} {{
 "#,
             class_name = class.name,
-            namespace = namespace_name,
+            namespace = cfg.namespace_name,
         )
         .map_err(map_write_err!(cpp_impl_path))?;
-        write_methods_impls(&mut cpp_impl_f, namespace_name, &inline_impl)
+        write_methods_impls(&mut cpp_impl_f, &cfg.namespace_name, &inline_impl)
             .map_err(map_write_err!(cpp_impl_path))?;
         cpp_impl_f
             .update_file_if_necessary()
             .map_err(map_write_err!(cpp_impl_path))?;
     } else {
-        write_methods_impls(&mut cpp_include_f, namespace_name, &inline_impl)
+        write_methods_impls(&mut cpp_include_f, &cfg.namespace_name, &inline_impl)
             .map_err(map_write_err!(cpp_path))?;
     }
 
@@ -727,7 +725,7 @@ using {class_name} = {base_class_name}<true>;
 using {class_name}Ref = {base_class_name}<false>;
 }} // namespace {namespace}
 "#,
-        namespace = namespace_name,
+        namespace = cfg.namespace_name,
         class_name = class.name,
         base_class_name = class_name
     )

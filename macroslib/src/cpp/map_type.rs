@@ -32,7 +32,7 @@ fn special_type(
     arg_ty_span: SourceIdSpan,
 ) -> Result<Option<CppForeignTypeInfo>> {
     trace!(
-        "special_type: begin arg.ty({}) input {:?}",
+        "special_type: begin arg.ty({}) direction {:?}",
         arg_ty,
         direction
     );
@@ -267,7 +267,7 @@ fn special_type(
         }
     }
 
-    trace!("Oridinary type {:?}", arg_ty);
+    trace!("special_type: oridinary type {:?}", arg_ty);
     Ok(None)
 }
 

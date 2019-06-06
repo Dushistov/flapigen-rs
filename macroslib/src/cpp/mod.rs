@@ -204,10 +204,8 @@ May be you need to use `private constructor = empty;` syntax?",
         let req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
         let mut code_items = fclass::generate(
             conv_map,
-            &self.output_dir,
-            &self.namespace_name,
+            self,
             target_pointer_width,
-            self.separate_impl_headers,
             class,
             &req_includes,
             &m_sigs,
