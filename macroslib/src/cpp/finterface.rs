@@ -157,10 +157,10 @@ impl {trait_name} for {struct_with_funcs} {{
                 let real_output_type: RustType =
                     conv_map.find_or_alloc_rust_type(ret_ty, interface.src_id);
                 let (mut conv_deps, conv_code) = conv_map.convert_rust_types(
-                    &f_method.output.base.correspoding_rust_type,
-                    &real_output_type,
+                    f_method.output.base.correspoding_rust_type.to_idx(),
+                    real_output_type.to_idx(),
                     "ret",
-                    &real_output_type.normalized_name.as_str(),
+                    real_output_type.normalized_name.as_str(),
                     (interface.src_id, ret_ty.span()),
                 )?;
                 gen_items.append(&mut conv_deps);

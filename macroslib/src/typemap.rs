@@ -558,8 +558,8 @@ impl TypeMap {
 
     pub(crate) fn convert_rust_types(
         &mut self,
-        from: &RustType,
-        to: &RustType,
+        from: RustTypeIdx,
+        to: RustTypeIdx,
         var_name: &str,
         function_ret_type: &str,
         build_for_sp: SourceIdSpan,
@@ -596,28 +596,28 @@ impl TypeMap {
 
     fn find_path(
         &self,
-        from: &RustType,
-        to: &RustType,
+        from: RustTypeIdx,
+        to: RustTypeIdx,
         build_for_sp: SourceIdSpan,
     ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
-        debug!("find_path: begin {} -> {}", from, to);
-        if from.normalized_name == to.normalized_name {
+        debug!("find_path: begin {} -> {}", self[from], self[to]);
+        if from == to {
             return Ok(vec![]);
         }
-        find_conversation_path(&self.conv_graph, from.graph_idx, to.graph_idx, build_for_sp)
+        find_conversation_path(&self.conv_graph, from, to, build_for_sp)
     }
 
     fn build_path_if_possible(
         &mut self,
-        start_from: &RustType,
-        goal_to: &RustType,
+        start_from: RustTypeIdx,
+        goal_to: RustTypeIdx,
         build_for_sp: SourceIdSpan,
     ) {
         debug!(
             "build_path_if_possible begin {}\n {} -> {}",
             DisplayTypesConvGraph(&self.conv_graph),
-            start_from,
-            goal_to
+            self[start_from],
+            self[goal_to]
         );
         if let Some(path) = try_build_path(
             start_from,
@@ -658,14 +658,8 @@ impl TypeMap {
                 "map foreign: graph node {:?}",
                 self.conv_graph[rust_ty.graph_idx]
             );
-            let find_path = |from, to| match find_conversation_path(
-                &self.conv_graph,
-                from,
-                to,
-                invalid_src_id_span(),
-            ) {
-                Ok(x) => Some(x),
-                Err(_) => None,
+            let find_path = |from, to| {
+                find_conversation_path(&self.conv_graph, from, to, invalid_src_id_span()).ok()
             };
             let mut min_path: Option<(usize, RustTypeIdx, ForeignType)> = None;
             for (ftype_idx, ftype) in self.ftypes_storage.iter_enumerate() {
@@ -800,8 +794,8 @@ impl TypeMap {
                     petgraph::Direction::Incoming => (&other, &from),
                 };
                 let path = try_build_path(
-                    from,
-                    to,
+                    from.to_idx(),
+                    to.to_idx(),
                     build_for_sp,
                     &mut self.conv_graph,
                     &self.rust_names_map,
@@ -1066,27 +1060,24 @@ fn merge_path_to_conv_map(path: PossiblePath, conv_map: &mut TypeMap) {
 }
 
 fn try_build_path(
-    start_from: &RustType,
-    goal_to: &RustType,
+    start_from_idx: RustTypeIdx,
+    goal_to_idx: RustTypeIdx,
     build_for_sp: SourceIdSpan,
     conv_graph: &mut TypesConvGraph,
     rust_names_map: &RustTypeNameToGraphIdx,
     generic_edges: &[GenericTypeConv],
     max_steps: usize,
 ) -> Option<PossiblePath> {
+    let goal_to = conv_graph[goal_to_idx].clone();
     debug!(
         "try_build_path: from {} to {}, ty names len {}, graph nodes {}, edges {}",
-        start_from,
+        conv_graph[start_from_idx],
         goal_to,
         rust_names_map.len(),
         conv_graph.node_count(),
         conv_graph.edge_count()
     );
     let mut ty_graph = TypeGraphSnapshot::new(conv_graph, &rust_names_map);
-
-    let start_from_idx = start_from.graph_idx;
-
-    let goal_to_idx = goal_to.graph_idx;
 
     let mut cur_step = FxHashSet::default();
     cur_step.insert(start_from_idx);
@@ -1121,7 +1112,7 @@ fn try_build_path(
                     from
                 );
                 if let Some((to_ty, to_ty_name)) =
-                    edge.is_conv_possible(&from, Some(goal_to), |name| {
+                    edge.is_conv_possible(&from, Some(&goal_to), |name| {
                         ty_graph.find_type_by_name(name)
                     })
                 {
@@ -1225,8 +1216,8 @@ mod tests {
 "#,
             types_map
                 .convert_rust_types(
-                    &rc_refcell_foo_ty,
-                    &foo_ref_ty,
+                    rc_refcell_foo_ty.to_idx(),
+                    foo_ref_ty.to_idx(),
                     "a0",
                     "jlong",
                     invalid_src_id_span(),
@@ -1245,8 +1236,8 @@ mod tests {
 "#,
             types_map
                 .convert_rust_types(
-                    &rc_refcell_foo_ty,
-                    &foo_ref_ty,
+                    rc_refcell_foo_ty.to_idx(),
+                    foo_ref_ty.to_idx(),
                     "a0",
                     "jlong",
                     invalid_src_id_span(),
@@ -1273,8 +1264,12 @@ mod tests {
         assert_eq!("Foo []", types_map[fti].name.as_str());
 
         assert!(try_build_path(
-            &types_map.find_or_alloc_rust_type(&parse_type! { Vec<i32> }, SourceId::none()),
-            &types_map.find_or_alloc_rust_type(&parse_type! { jlong }, SourceId::none()),
+            types_map
+                .find_or_alloc_rust_type(&parse_type! { Vec<i32> }, SourceId::none())
+                .to_idx(),
+            types_map
+                .find_or_alloc_rust_type(&parse_type! { jlong }, SourceId::none())
+                .to_idx(),
             invalid_src_id_span(),
             &mut types_map.conv_graph,
             &mut types_map.rust_names_map,

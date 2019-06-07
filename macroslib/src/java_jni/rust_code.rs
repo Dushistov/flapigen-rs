@@ -668,8 +668,8 @@ fn generate_constructor(
     let construct_ret_type = conv_map.ty_to_rust_type(&construct_ret_type);
 
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
-        &construct_ret_type,
-        &this_type,
+        construct_ret_type.to_idx(),
+        this_type.to_idx(),
         "this",
         "jlong",
         (mc.class.src_id, mc.method.span()),
@@ -743,8 +743,8 @@ fn generate_method(
     let to_ty = conv_map.find_or_alloc_rust_type(&to_ty, mc.class.src_id);
 
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
-        &from_ty,
-        &to_ty,
+        from_ty.to_idx(),
+        to_ty.to_idx(),
         "this",
         jni_ret_type,
         (mc.class.src_id, mc.method.span()),
