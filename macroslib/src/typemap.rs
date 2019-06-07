@@ -556,14 +556,12 @@ impl TypeMap {
             .any(|fc| fc.name == foreign_name)
     }
 
-    pub(crate) fn convert_rust_types(
+    fn find_or_build_path(
         &mut self,
         from: RustTypeIdx,
         to: RustTypeIdx,
-        var_name: &str,
-        function_ret_type: &str,
         build_for_sp: SourceIdSpan,
-    ) -> Result<(Vec<TokenStream>, String)> {
+    ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
         let path = match self.find_path(from, to, build_for_sp) {
             Ok(x) => x,
             Err(_err) => {
@@ -572,6 +570,18 @@ impl TypeMap {
                 self.find_path(from, to, build_for_sp)?
             }
         };
+        Ok(path)
+    }
+
+    pub(crate) fn convert_rust_types(
+        &mut self,
+        from: RustTypeIdx,
+        to: RustTypeIdx,
+        var_name: &str,
+        function_ret_type: &str,
+        build_for_sp: SourceIdSpan,
+    ) -> Result<(Vec<TokenStream>, String)> {
+        let path = self.find_or_build_path(from, to, build_for_sp)?;
         let mut ret_code = String::new();
         let mut code_deps = Vec::<TokenStream>::new();
 
@@ -776,7 +786,8 @@ impl TypeMap {
         }
 
         let from: RustType = rust_ty.clone();
-        let mut possible_paths = Vec::<(PossiblePath, ForeignType, RustTypeIdx)>::new();
+        let mut possible_paths =
+            Vec::<(PossiblePath, ForeignType, RustTypeIdx, Option<RustTypeIdx>)>::new();
         for max_steps in 1..=MAX_TRY_BUILD_PATH_STEPS {
             for (ftype_idx, ftype) in self.ftypes_storage.iter_enumerate() {
                 let rule = match direction {
@@ -788,14 +799,14 @@ impl TypeMap {
                     Some(x) => x,
                     None => continue,
                 };
-                let other = self.conv_graph[rule.rust_ty].clone();
+                let other = rule.rust_ty;
                 let (from, to) = match direction {
-                    petgraph::Direction::Outgoing => (&from, &other),
-                    petgraph::Direction::Incoming => (&other, &from),
+                    petgraph::Direction::Outgoing => (from.to_idx(), other),
+                    petgraph::Direction::Incoming => (other, from.to_idx()),
                 };
                 let path = try_build_path(
-                    from.to_idx(),
-                    to.to_idx(),
+                    from,
+                    to,
                     build_for_sp,
                     &mut self.conv_graph,
                     &self.rust_names_map,
@@ -804,7 +815,12 @@ impl TypeMap {
                 );
 
                 if let Some(path) = path {
-                    possible_paths.push((path, ftype_idx, rule.rust_ty));
+                    possible_paths.push((
+                        path,
+                        ftype_idx,
+                        rule.rust_ty,
+                        rule.intermediate.as_ref().map(|x| x.intermediate_ty),
+                    ));
                 }
             }
             if !possible_paths.is_empty() {
@@ -813,8 +829,32 @@ impl TypeMap {
         }
         let ret = possible_paths
             .into_iter()
-            .min_by_key(|(path, _, _)| path.len())
-            .map(|(pp, ftype, rtype_idx)| {
+            .min_by_key(|(path, ftype_idx, other, inter_ty)| {
+                let mut addon_path_len = 0;
+                if let Some(inter_ty) = inter_ty {
+                    let addon_path = match direction {
+                        petgraph::Direction::Outgoing => {
+                            self.find_or_build_path(*other, *inter_ty, invalid_src_id_span())
+                        }
+                        petgraph::Direction::Incoming => {
+                            self.find_or_build_path(*inter_ty, *other, invalid_src_id_span())
+                        }
+                    };
+                    addon_path_len = match addon_path {
+                        Ok(addon_path) => addon_path.len(),
+                        Err(_err) => {
+                            println!(
+                                "warning=can not build path between foreign type
+ '{}' / '{}' and it's intermidiate '{}'",
+                                self[*ftype_idx].name, self[*other], self[*inter_ty]
+                            );
+                            0_usize
+                        }
+                    };
+                }
+                path.len() + addon_path_len
+            })
+            .map(|(pp, ftype, rtype_idx, _)| {
                 merge_path_to_conv_map(pp, self);
                 debug!(
                     "map foreign: we found min path {} <-> {} ({})",
