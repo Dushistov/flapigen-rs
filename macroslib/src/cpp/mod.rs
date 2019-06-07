@@ -87,17 +87,17 @@ impl CppForeignTypeInfo {
         let base_ft_name;
         if let Some(intermediate) = rule.intermediate.as_ref() {
             base_rt = intermediate.intermediate_ty;
-            let typename = ftype.name.typename.clone();
+            let typename = ftype.typename();
             let converter = intermediate.conv_code.to_string();
             let inter_ft = convert_rt_to_ft(tmap, intermediate.intermediate_ty)?;
-            base_ft_name = tmap[inter_ft].name.typename.clone();
+            base_ft_name = tmap[inter_ft].typename();
             cpp_converter = Some(CppConverter {
                 typename,
                 converter,
             });
         } else {
             base_rt = rule.rust_ty;
-            base_ft_name = ftype.name.typename.clone();
+            base_ft_name = ftype.typename();
         }
         trace!(
             "CppForeignTypeInfo::try_new base_ft_name {}, cpp_converter {:?}",
@@ -661,10 +661,13 @@ fn register_typemap_for_self_type(
         this_type_mut_ref.to_idx(),
     )?;
 
+    let self_type = conv_map.find_or_alloc_rust_type(&self_desc.self_type, class.src_id);
+
     register_main_foreign_types(
         conv_map,
         class,
         this_type.to_idx(),
+        self_type.to_idx(),
         void_ptr_rust_ty.to_idx(),
         const_void_ptr_rust_ty.to_idx(),
         this_type_ref.to_idx(),
@@ -693,6 +696,7 @@ fn register_intermidiate_pointer_types(
             rust_ty: void_ptr_rust_ty,
             intermediate: None,
         }),
+        name_prefix: None,
     };
     conv_map.alloc_foreign_type(c_ftype)?;
 
@@ -710,6 +714,7 @@ fn register_intermidiate_pointer_types(
             rust_ty: const_void_ptr_rust_ty,
             intermediate: None,
         }),
+        name_prefix: None,
     };
     conv_map.alloc_foreign_type(c_const_ftype)?;
     Ok(())
@@ -822,6 +827,7 @@ fn register_main_foreign_types(
     conv_map: &mut TypeMap,
     class: &ForeignerClassInfo,
     this_type: RustTypeIdx,
+    self_type: RustTypeIdx,
     void_ptr_rust_ty: RustTypeIdx,
     const_void_ptr_rust_ty: RustTypeIdx,
     this_type_ref: RustTypeIdx,
@@ -850,6 +856,7 @@ fn register_main_foreign_types(
                 ),
             }),
         }),
+        name_prefix: None,
     };
     conv_map.alloc_foreign_type(class_ftype)?;
 
@@ -874,6 +881,7 @@ fn register_main_foreign_types(
             }),
         }),
         into_from_rust: None,
+        name_prefix: None,
     };
     conv_map.alloc_foreign_type(class_ftype_ref_in)?;
 
@@ -894,6 +902,7 @@ fn register_main_foreign_types(
             }),
         }),
         from_into_rust: None,
+        name_prefix: None,
     };
     conv_map.alloc_foreign_type(class_ftype_ref_out)?;
 
@@ -918,8 +927,73 @@ fn register_main_foreign_types(
             }),
         }),
         into_from_rust: None,
+        name_prefix: None,
     };
     conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
+
+    if self_type != this_type {
+        let self_type = conv_map[self_type].clone();
+        {
+            let code = format!("&mut {}", self_type);
+            let gen_ty = parse_ty_with_given_span_checked(&code, self_type.ty.span());
+            let self_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+
+            let class_ftype_mut_ref_in = ForeignTypeS {
+                name: TypeName::new(
+                    format!("/**/{} &", class.name),
+                    (class.src_id, class.name.span()),
+                ),
+                provides_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+                from_into_rust: Some(ForeignConversationRule {
+                    rust_ty: self_type_mut_ref.to_idx(),
+                    intermediate: Some(ForeignConversationIntermediate {
+                        intermediate_ty: void_ptr_rust_ty,
+                        conv_code: FTypeConvCode::new(
+                            format!(
+                                "static_cast<{} *>({})",
+                                cpp_code::c_class_type(class),
+                                FROM_VAR_TEMPLATE
+                            ),
+                            Span::call_site(),
+                        ),
+                    }),
+                }),
+                into_from_rust: None,
+                name_prefix: Some("/**/"),
+            };
+            conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
+        }
+        {
+            let code = format!("& {}", self_type);
+            let gen_ty = parse_ty_with_given_span_checked(&code, self_type.ty.span());
+            let self_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+
+            let class_ftype_ref_in = ForeignTypeS {
+                name: TypeName::new(
+                    format!("/**/const {} &", class.name),
+                    (class.src_id, class.name.span()),
+                ),
+                provides_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+                from_into_rust: Some(ForeignConversationRule {
+                    rust_ty: self_type_ref.to_idx(),
+                    intermediate: Some(ForeignConversationIntermediate {
+                        intermediate_ty: const_void_ptr_rust_ty,
+                        conv_code: FTypeConvCode::new(
+                            format!(
+                                "static_cast<const {} *>({})",
+                                cpp_code::c_class_type(class),
+                                FROM_VAR_TEMPLATE
+                            ),
+                            Span::call_site(),
+                        ),
+                    }),
+                }),
+                into_from_rust: None,
+                name_prefix: Some("/**/"),
+            };
+            conv_map.alloc_foreign_type(class_ftype_ref_in)?;
+        }
+    }
 
     Ok(())
 }

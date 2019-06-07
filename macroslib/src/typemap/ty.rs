@@ -141,18 +141,30 @@ impl<'a> TraitNamesSet<'a> {
 
 #[derive(Debug)]
 pub(crate) struct ForeignTypeS {
-    pub(crate) name: TypeName,
+    pub name: TypeName,
     /// specify which foreign module provides this type
     /// it is possible that provided by multiplines modules
     /// for example C++ `std::variant<TypeA, TypeB>
-    pub(crate) provides_by_module: Vec<SmolStr>,
-    pub(crate) into_from_rust: Option<ForeignConversationRule>,
-    pub(crate) from_into_rust: Option<ForeignConversationRule>,
+    pub provides_by_module: Vec<SmolStr>,
+    pub into_from_rust: Option<ForeignConversationRule>,
+    pub from_into_rust: Option<ForeignConversationRule>,
+    /// sometimes you need make unique typename,
+    /// but do not show user this "uniqueness"
+    pub name_prefix: Option<&'static str>,
 }
 
 impl ForeignTypeS {
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
         self.name.span
+    }
+    pub(crate) fn typename(&self) -> SmolStr {
+        match self.name_prefix {
+            None => self.name.typename.clone(),
+            Some(prefix) => {
+                debug_assert!(self.name.typename.as_str().starts_with(prefix));
+                self.name.typename.as_str()[prefix.len()..].into()
+            }
+        }
     }
 }
 
@@ -239,6 +251,7 @@ impl ForeignTypesStorage {
             provides_by_module: Vec::new(),
             into_from_rust: Some(rule.clone()),
             from_into_rust: Some(rule),
+            name_prefix: None,
         })
     }
 
@@ -271,6 +284,7 @@ impl ForeignTypesStorage {
                 provides_by_module: Vec::new(),
                 into_from_rust: None,
                 from_into_rust: None,
+                name_prefix: None,
             });
             self.name_to_ftype
                 .insert(self.ftypes[idx.0].name.typename.clone(), idx);

@@ -672,6 +672,13 @@ impl TestReferences {
         self.foo = foo.clone();
         foo.name.push('A');
     }
+    fn check_rc_pass1(x: &CheckPrimitiveTypesClass) -> i32 {
+        x.a
+    }
+    fn check_rc_pass2(x: &mut CheckPrimitiveTypesClass) -> i32 {
+        x.a += 42;
+        x.a
+    }
 }
 
 foreigner_class!(class TestReferences {
@@ -680,6 +687,8 @@ foreigner_class!(class TestReferences {
     method TestReferences::get_foo_ref(&self) -> &Foo;
     method TestReferences::update_foo(&mut self, foo: &Foo);
     method TestReferences::update_mut_foo(&mut self, foo: &mut Foo);
+    static_method TestReferences::check_rc_pass1(x: &CheckPrimitiveTypesClass) -> i32;
+    static_method TestReferences::check_rc_pass2(x: &mut CheckPrimitiveTypesClass) -> i32;
 });
 
 fn add_func(a: i32, b: i32) -> i32 {

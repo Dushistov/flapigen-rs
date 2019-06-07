@@ -460,7 +460,7 @@ impl TypeMap {
         rule: TypeConvEdge,
     ) {
         debug!(
-            "TypesConvMap::add_conversation_rule {} -> {}: {:?}",
+            "TypesConvMap::add_conversation_rule '{}' -> '{}': {:?}",
             self[from], self[to], rule
         );
         self.conv_graph.update_edge(from, to, rule);
