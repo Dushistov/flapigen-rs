@@ -980,8 +980,8 @@ fn handle_option_type_in_return(
                 SourceId::none(),
             );
             conv_map.add_conversation_rule(
-                arg_ty.clone(),
-                my_void_ptr_ti,
+                arg_ty.to_idx(),
+                my_void_ptr_ti.to_idx(),
                 format!(
                     r#"
     let {to_var}: *mut ::std::os::raw::c_void = match {from_var} {{

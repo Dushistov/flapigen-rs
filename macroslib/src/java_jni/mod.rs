@@ -160,8 +160,8 @@ impl JavaConfig {
                 conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
-                jlong_ti.clone(),
-                this_type_ref,
+                jlong_ti.to_idx(),
+                this_type_ref.to_idx(),
                 format!(
                     r#"
         let {to_var}: &{this_type} = unsafe {{
@@ -180,8 +180,8 @@ impl JavaConfig {
                 conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
-                jlong_ti.clone(),
-                this_type_mut_ref,
+                jlong_ti.to_idx(),
+                this_type_mut_ref.to_idx(),
                 format!(
                     r#"
         let {to_var}: &mut {this_type} = unsafe {{
@@ -198,8 +198,8 @@ impl JavaConfig {
             let unpack_code =
                 TypeMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
             conv_map.add_conversation_rule(
-                jlong_ti,
-                this_type,
+                jlong_ti.to_idx(),
+                this_type.to_idx(),
                 format!(
                     r#"
         let {to_var}: *mut {this_type} = unsafe {{

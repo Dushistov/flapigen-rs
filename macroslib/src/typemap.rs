@@ -530,16 +530,14 @@ impl TypeMap {
 
     pub(crate) fn add_conversation_rule(
         &mut self,
-        from: RustType,
-        to: RustType,
+        from: RustTypeIdx,
+        to: RustTypeIdx,
         rule: TypeConvEdge,
     ) {
         debug!(
             "TypesConvMap::add_conversation_rule {} -> {}: {:?}",
-            from, to, rule
+            self[from], self[to], rule
         );
-        let from = from.graph_idx;
-        let to = to.graph_idx;
         self.conv_graph.update_edge(from, to, rule);
     }
 
