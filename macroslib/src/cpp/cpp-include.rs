@@ -264,20 +264,6 @@ impl<T: SwigForeignClass> SwigDerefMut for T {
     }
 }
 
-#[swig_to_foreigner_hint = "T"]
-impl<T: SwigForeignClass> SwigFrom<T> for *mut ::std::os::raw::c_void {
-    fn swig_from(x: T) -> Self {
-        <T>::box_object(x)
-    }
-}
-
-#[swig_to_foreigner_hint = "T"]
-impl<'a, T: SwigForeignClass> SwigFrom<&'a T> for *const ::std::os::raw::c_void {
-    fn swig_from(x: &'a T) -> Self {
-        (x as *const T) as *const ::std::os::raw::c_void
-    }
-}
-
 #[allow(dead_code)]
 #[repr(C)]
 #[derive(Copy, Clone)]

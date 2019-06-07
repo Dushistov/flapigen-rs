@@ -2,8 +2,8 @@
 
 "void TestPassObjectsAsParams_f1(const TestPassObjectsAsParamsOpaque * const self, const FooOpaque * a_0);";
 "void TestPassObjectsAsParams_f2(const TestPassObjectsAsParamsOpaque * const self, FooOpaque * a_0);";
-"void TestPassObjectsAsParams_f3(const TestPassObjectsAsParamsOpaque * const self, const FooOpaque * a_0);";
-"void TestPassObjectsAsParams_f3_a(const TestPassObjectsAsParamsOpaque * const self, const BooOpaque * a_0);";
+"void TestPassObjectsAsParams_f3(const TestPassObjectsAsParamsOpaque * const self, FooOpaque * a_0);";
+"void TestPassObjectsAsParams_f3_a(const TestPassObjectsAsParamsOpaque * const self, BooOpaque * a_0);";
 "void TestPassObjectsAsParams_f4(const FooOpaque * a_0);";
 "void TestPassObjectsAsParams_f5(FooOpaque * a_0);";
 
@@ -26,13 +26,13 @@ r#"inline void TestPassObjectsAsParamsWrapper<OWN_DATA>::f2(Foo a_0) const  noex
     
     r#"inline void TestPassObjectsAsParamsWrapper<OWN_DATA>::f3(Foo & a_0) const  noexcept
     {
-        TestPassObjectsAsParams_f3(this->self_, static_cast<const FooOpaque *>(a_0));
+        TestPassObjectsAsParams_f3(this->self_, static_cast<FooOpaque *>(a_0));
     }"#;
 
 r#"template<bool OWN_DATA>
     inline void TestPassObjectsAsParamsWrapper<OWN_DATA>::f3_a(Boo & a_0) const  noexcept
     {
-        TestPassObjectsAsParams_f3_a(this->self_, static_cast<const BooOpaque *>(a_0));
+        TestPassObjectsAsParams_f3_a(this->self_, static_cast<BooOpaque *>(a_0));
     }"#;
 
 r#"template<bool OWN_DATA>

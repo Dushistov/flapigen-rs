@@ -8,7 +8,7 @@ use std::{fmt, io::Write, mem};
 
 use log::{debug, trace};
 use petgraph::Direction;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use strum::IntoEnumIterator;
@@ -23,7 +23,10 @@ use crate::{
         ast::{
             parse_ty_with_given_span, parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
         },
-        ty::{ForeignType, RustType},
+        ty::{
+            FTypeConvCode, ForeignConversationIntermediate, ForeignConversationRule, ForeignType,
+            ForeignTypeS, RustType,
+        },
         utils::{validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT},
         CType, CTypes, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
@@ -95,6 +98,11 @@ impl CppForeignTypeInfo {
             base_rt = rule.rust_ty;
             base_ft_name = ftype.name.typename.clone();
         }
+        trace!(
+            "CppForeignTypeInfo::try_new base_ft_name {}, cpp_converter {:?}",
+            base_ft_name,
+            cpp_converter
+        );
         Ok(CppForeignTypeInfo {
             base: ForeignTypeInfo {
                 name: base_ft_name,
@@ -609,45 +617,74 @@ fn register_typemap_for_self_type(
     this_type: RustType,
     constructor_ret_type: &Type,
 ) -> Result<()> {
-    let void_ptr_ty = parse_type! { *mut ::std::os::raw::c_void };
+    let this_type_ty = &this_type.ty;
+    let void_ptr_ty =
+        parse_ty_with_given_span_checked("*mut ::std::os::raw::c_void", this_type_ty.span());
     let void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
         &void_ptr_ty,
         &this_type.normalized_name,
         SourceId::none(),
     );
-    let foreign_typename = format!("{} *", cpp_code::c_class_type(class));
-    conv_map.cache_rust_to_foreign_conv(
-        &this_type,
-        ForeignTypeInfo {
-            correspoding_rust_type: void_ptr_rust_ty.clone(),
-            name: foreign_typename.into(),
-        },
-    )?;
 
-    let const_void_ptr_ty = parse_type! { *const ::std::os::raw::c_void };
+    let const_void_ptr_ty =
+        parse_ty_with_given_span_checked("*const ::std::os::raw::c_void", this_type_ty.span());
     let const_void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
         &const_void_ptr_ty,
         &this_type.normalized_name,
         SourceId::none(),
     );
-    let const_foreign_typename = format!("const {} *", cpp_code::c_class_type(class));
-    conv_map.cache_rust_to_foreign_conv(
-        &this_type,
-        ForeignTypeInfo {
-            correspoding_rust_type: const_void_ptr_rust_ty.clone(),
-            name: const_foreign_typename.into(),
-        },
-    )?;
-
-    let this_type_ty = &this_type.ty;
-    //handle foreigner_class as input arg
 
     let code = format!("& {}", DisplayToTokens(this_type_ty));
     let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
     let this_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+
+    let code = format!("&mut {}", DisplayToTokens(this_type_ty));
+    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
+    let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+
+    register_intermidiate_pointer_types(
+        conv_map,
+        class,
+        void_ptr_rust_ty.clone(),
+        const_void_ptr_rust_ty.clone(),
+    )?;
+    register_rust_ty_conversation_rules(
+        conv_map,
+        class,
+        this_type.clone(),
+        constructor_ret_type,
+        void_ptr_rust_ty.clone(),
+        const_void_ptr_rust_ty.clone(),
+        this_type_ref.clone(),
+        this_type_mut_ref.clone(),
+    )?;
+
+    register_main_foreign_types(
+        conv_map,
+        class,
+        this_type.clone(),
+        void_ptr_rust_ty,
+        const_void_ptr_rust_ty,
+        this_type_ref,
+        this_type_mut_ref,
+    )?;
+    Ok(())
+}
+
+fn register_rust_ty_conversation_rules(
+    conv_map: &mut TypeMap,
+    class: &ForeignerClassInfo,
+    this_type: RustType,
+    constructor_ret_type: &Type,
+    void_ptr_rust_ty: RustType,
+    const_void_ptr_rust_ty: RustType,
+    this_type_ref: RustType,
+    this_type_mut_ref: RustType,
+) -> Result<()> {
+    // *const c_void -> &"class"
     conv_map.add_conversation_rule(
         const_void_ptr_rust_ty.clone(),
-        this_type_ref,
+        this_type_ref.clone(),
         format!(
             r#"
     assert!(!{from_var}.is_null());
@@ -660,10 +697,7 @@ fn register_typemap_for_self_type(
         .into(),
     );
 
-    let code = format!("&mut {}", DisplayToTokens(this_type_ty));
-    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
-    let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
-    //handle foreigner_class as input arg
+    // *mut c_void -> &mut "class"
     conv_map.add_conversation_rule(
         void_ptr_rust_ty.clone(),
         this_type_mut_ref,
@@ -679,32 +713,212 @@ fn register_typemap_for_self_type(
         .into(),
     );
 
-    debug!(
-        "register class: add implements SwigForeignClass for {}",
-        this_type.normalized_name
-    );
-
+    // *const c_void -> "class", two steps to make it more expensive
+    // for type graph path search
     conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
-
     let (this_type_for_method, _code_box_this) =
         conv_map.convert_to_heap_pointer(&this_type, "this");
-    let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-    let this_type_name = this_type_for_method.normalized_name.clone();
+
+    let code = format!("*mut {}", this_type_for_method);
+    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method.ty.span());
+    let this_type_mut_ptr = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
     conv_map.add_conversation_rule(
-        void_ptr_rust_ty,
-        this_type,
+        void_ptr_rust_ty.clone(),
+        this_type_mut_ptr.clone(),
         format!(
             r#"
             assert!(!{from_var}.is_null());
             let {to_var}: *mut {this_type} = {from_var} as *mut {this_type};
-        {unpack_code}
         "#,
             to_var = TO_VAR_TEMPLATE,
             from_var = FROM_VAR_TEMPLATE,
-            this_type = this_type_name,
-            unpack_code = unpack_code,
+            this_type = this_type_for_method.normalized_name,
         )
         .into(),
     );
+
+    let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+    conv_map.add_conversation_rule(
+        this_type_mut_ptr,
+        this_type.clone(),
+        format!("\n{}\n", unpack_code,).into(),
+    );
+
+    //"class" -> *mut void
+    conv_map.add_conversation_rule(
+        this_type,
+        void_ptr_rust_ty.clone(),
+        format!(
+            "let {to_var}: {ptr_type} = <{this_type}>::box_object({from_var});",
+            to_var = TO_VAR_TEMPLATE,
+            ptr_type = void_ptr_rust_ty.typename(),
+            this_type = this_type_for_method.normalized_name,
+            from_var = FROM_VAR_TEMPLATE
+        )
+        .into(),
+    );
+
+    //&"class" -> *const void
+    conv_map.add_conversation_rule(
+        this_type_ref,
+        const_void_ptr_rust_ty.clone(),
+        format!(
+            "let {to_var}: {ptr_type} = ({from_var} as *const {this_type}) as {ptr_type};",
+            to_var = TO_VAR_TEMPLATE,
+            ptr_type = void_ptr_rust_ty.typename(),
+            this_type = this_type_for_method.normalized_name,
+            from_var = FROM_VAR_TEMPLATE,
+        )
+        .into(),
+    );
+
+    Ok(())
+}
+
+fn register_intermidiate_pointer_types(
+    conv_map: &mut TypeMap,
+    class: &ForeignerClassInfo,
+    void_ptr_rust_ty: RustType,
+    const_void_ptr_rust_ty: RustType,
+) -> Result<(RustType, RustType)> {
+    let c_ftype = ForeignTypeS {
+        name: TypeName::new(
+            format!("{} *", cpp_code::c_class_type(class)),
+            (class.src_id, class.name.span()),
+        ),
+        provides_by_module: vec![format!("\"{}\"", cpp_code::c_header_name(class)).into()],
+        into_from_rust: Some(ForeignConversationRule {
+            rust_ty: void_ptr_rust_ty.to_idx(),
+            intermediate: None,
+        }),
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: void_ptr_rust_ty.to_idx(),
+            intermediate: None,
+        }),
+    };
+    conv_map.alloc_foreign_type(c_ftype)?;
+
+    let c_const_ftype = ForeignTypeS {
+        name: TypeName::new(
+            format!("const {} *", cpp_code::c_class_type(class)),
+            (class.src_id, class.name.span()),
+        ),
+        provides_by_module: vec![format!("\"{}\"", cpp_code::c_header_name(class)).into()],
+        into_from_rust: Some(ForeignConversationRule {
+            rust_ty: const_void_ptr_rust_ty.to_idx(),
+            intermediate: None,
+        }),
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: const_void_ptr_rust_ty.to_idx(),
+            intermediate: None,
+        }),
+    };
+    conv_map.alloc_foreign_type(c_const_ftype)?;
+    Ok((void_ptr_rust_ty, const_void_ptr_rust_ty))
+}
+
+fn register_main_foreign_types(
+    conv_map: &mut TypeMap,
+    class: &ForeignerClassInfo,
+    this_type: RustType,
+    void_ptr_rust_ty: RustType,
+    const_void_ptr_rust_ty: RustType,
+    this_type_ref: RustType,
+    this_type_mut_ref: RustType,
+) -> Result<()> {
+    let class_ftype = ForeignTypeS {
+        name: TypeName::new(class.name.to_string(), (class.src_id, class.name.span())),
+        provides_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+        into_from_rust: Some(ForeignConversationRule {
+            rust_ty: this_type.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                intermediate_ty: void_ptr_rust_ty.to_idx(),
+                conv_code: FTypeConvCode::new(
+                    format!("{}({})", class.name, FROM_VAR_TEMPLATE),
+                    Span::call_site(),
+                ),
+            }),
+        }),
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: this_type.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                intermediate_ty: void_ptr_rust_ty.to_idx(),
+                conv_code: FTypeConvCode::new(
+                    format!("{}.release()", FROM_VAR_TEMPLATE),
+                    Span::call_site(),
+                ),
+            }),
+        }),
+    };
+    conv_map.alloc_foreign_type(class_ftype)?;
+
+    let class_ftype_ref_in = ForeignTypeS {
+        name: TypeName::new(
+            format!("const {} &", class.name),
+            (class.src_id, class.name.span()),
+        ),
+        provides_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: this_type_ref.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                intermediate_ty: const_void_ptr_rust_ty.to_idx(),
+                conv_code: FTypeConvCode::new(
+                    format!(
+                        "static_cast<const {} *>({})",
+                        cpp_code::c_class_type(class),
+                        FROM_VAR_TEMPLATE
+                    ),
+                    Span::call_site(),
+                ),
+            }),
+        }),
+        into_from_rust: None,
+    };
+    conv_map.alloc_foreign_type(class_ftype_ref_in)?;
+
+    let class_ftype_ref_out = ForeignTypeS {
+        name: TypeName::new(
+            format!("{}Ref", class.name),
+            (class.src_id, class.name.span()),
+        ),
+        provides_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+        into_from_rust: Some(ForeignConversationRule {
+            rust_ty: this_type_ref.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                intermediate_ty: const_void_ptr_rust_ty.to_idx(),
+                conv_code: FTypeConvCode::new(
+                    format!("{}Ref{{{}}}", class.name, FROM_VAR_TEMPLATE),
+                    Span::call_site(),
+                ),
+            }),
+        }),
+        from_into_rust: None,
+    };
+    conv_map.alloc_foreign_type(class_ftype_ref_out)?;
+
+    let class_ftype_mut_ref_in = ForeignTypeS {
+        name: TypeName::new(
+            format!("{} &", class.name),
+            (class.src_id, class.name.span()),
+        ),
+        provides_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: this_type_mut_ref.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                intermediate_ty: void_ptr_rust_ty.to_idx(),
+                conv_code: FTypeConvCode::new(
+                    format!(
+                        "static_cast<{} *>({})",
+                        cpp_code::c_class_type(class),
+                        FROM_VAR_TEMPLATE
+                    ),
+                    Span::call_site(),
+                ),
+            }),
+        }),
+        into_from_rust: None,
+    };
+    conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
+
     Ok(())
 }

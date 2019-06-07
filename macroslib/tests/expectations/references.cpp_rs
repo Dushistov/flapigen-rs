@@ -1,7 +1,7 @@
 r##"# [ no_mangle ] pub extern "C" fn TestReferences_get_foo_ref ( this : * mut TestReferences , ) -> * const :: std :: os :: raw :: c_void {
  let this : & TestReferences = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : & Foo = TestReferences :: get_foo_ref ( this , ) ;
- let mut ret : * const :: std :: os :: raw :: c_void = <* const :: std :: os :: raw :: c_void >:: swig_from ( ret ) ;
+ let ret : * mut :: std :: os :: raw :: c_void = ( ret as * const Foo ) as * mut :: std :: os :: raw :: c_void ;
  ret }"##;
 
 r##"# [ no_mangle ] pub extern "C" fn TestReferences_update_foo ( this : * mut TestReferences , a_0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {

@@ -7,7 +7,7 @@ pub mod utils;
 
 use std::{cell::RefCell, fmt, mem, ops, rc::Rc};
 
-use log::{debug, log_enabled, trace};
+use log::{debug, log_enabled, trace, warn};
 use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     Graph,
@@ -156,7 +156,12 @@ impl<'a> fmt::Display for DisplayTypesConvGraph<'a> {
         let conv_graph = self.0;
         writeln!(f, "conversation graph begin")?;
         for node in conv_graph.node_indices() {
-            write!(f, "node {}: ", conv_graph[node].normalized_name)?;
+            write!(
+                f,
+                "node({}) {}: ",
+                node.index(),
+                conv_graph[node].normalized_name
+            )?;
             let mut edges = conv_graph
                 .neighbors_directed(node, petgraph::Outgoing)
                 .detach();
@@ -708,10 +713,10 @@ impl TypeMap {
                     });
                 }
             }
-            if let Some((_path_len, rust_type_idx, ftype)) = min_path {
+            if let Some((path_len, rust_type_idx, ftype)) = min_path {
                 debug!(
-                    "map foreign: we found min path {} <-> {} ({})",
-                    rust_ty, self.conv_graph[rust_type_idx], self[ftype].name
+                    "map foreign: we found min path ({}) {} <-> {} ({})",
+                    path_len, rust_ty, self.conv_graph[rust_type_idx], self[ftype].name
                 );
 
                 return Some(ftype);
@@ -773,8 +778,8 @@ impl TypeMap {
                 petgraph::Direction::Incoming => &mut self.ftypes_storage[ftype_idx].from_into_rust,
             };
             if let Some(r) = conv_rule {
-                println!(
-                    "warning=attempt to rewrite rule {}/{} with {}/{}",
+                warn!(
+                    "attempt to rewrite rule {}/{} with {}/{}",
                     fname, self.conv_graph[r.rust_ty], fname, rust_ty
                 );
                 continue;
@@ -855,10 +860,11 @@ impl TypeMap {
                 path.len() + addon_path_len
             })
             .map(|(pp, ftype, rtype_idx, _)| {
+                let path_len = pp.len();
                 merge_path_to_conv_map(pp, self);
                 debug!(
-                    "map foreign: we found min path {} <-> {} ({})",
-                    rust_ty, self.conv_graph[rtype_idx], self[ftype].name
+                    "map foreign: we found min path ({}) '{}' <-> '{}' ({})",
+                    path_len, rust_ty, self.conv_graph[rtype_idx], self[ftype].name
                 );
                 ftype
             });
@@ -981,14 +987,6 @@ impl TypeMap {
         let name = normalize_ty_lifetimes(ty);
         self.rust_names_map
             .get(name)
-            .map(|idx| self.conv_graph[*idx].clone())
-    }
-
-    pub(crate) fn find_rust_type_with_suffix(&self, ty: &Type, suffix: &str) -> Option<RustType> {
-        let name: SmolStr =
-            RustTypeS::make_unique_typename(normalize_ty_lifetimes(ty), suffix).into();
-        self.rust_names_map
-            .get(&name)
             .map(|idx| self.conv_graph[*idx].clone())
     }
 
@@ -1188,7 +1186,7 @@ fn try_build_path(
                                 if let Some((from, to)) = ty_graph.conv_graph.edge_endpoints(*edge)
                                 {
                                     debug!(
-                                        "try_build_path: path: {} -> {}",
+                                        "try_build_path: path: '{}' -> '{}'",
                                         ty_graph.conv_graph[from], ty_graph.conv_graph[to]
                                     );
                                 }

@@ -36,7 +36,7 @@ pub(in crate::cpp) fn generate(
 ) -> Result<Vec<TokenStream>> {
     use std::fmt::Write;
 
-    let c_path = cfg.output_dir.join(format!("c_{}.h", class.name));
+    let c_path = cfg.output_dir.join(cpp_code::c_header_name(class));
     let mut c_include_f = FileWriteCache::new(&c_path);
     let cpp_path = cfg.output_dir.join(cpp_code::cpp_header_name(class));
     let mut cpp_include_f = FileWriteCache::new(&cpp_path);

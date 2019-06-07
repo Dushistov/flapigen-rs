@@ -106,6 +106,10 @@ pub(in crate::cpp) fn cpp_header_name(class: &ForeignerClassInfo) -> String {
     format!("{}.hpp", class.name)
 }
 
+pub(in crate::cpp) fn c_header_name(class: &ForeignerClassInfo) -> String {
+    format!("c_{}.h", class.name)
+}
+
 pub(in crate::cpp) fn cpp_header_name_for_enum(enum_info: &ForeignEnumInfo) -> String {
     format!("c_{}.h", enum_info.name)
 }

@@ -18,9 +18,9 @@ r#"template<bool OWN_DATA>
 r#"template<bool OWN_DATA>
     inline void TestReferencesWrapper<OWN_DATA>::update_mut_foo(Foo & a_0)  noexcept
     {
-        TestReferences_update_mut_foo(this->self_, static_cast<const FooOpaque *>(a_0));
+        TestReferences_update_mut_foo(this->self_, static_cast<FooOpaque *>(a_0));
     }"#;
 
 "const FooOpaque * TestReferences_get_foo_ref(const TestReferencesOpaque * const self);";
 "void TestReferences_update_foo(TestReferencesOpaque * const self, const FooOpaque * a_0);";
-"void TestReferences_update_mut_foo(TestReferencesOpaque * const self, const FooOpaque * a_0);";
+"void TestReferences_update_mut_foo(TestReferencesOpaque * const self, FooOpaque * a_0);";

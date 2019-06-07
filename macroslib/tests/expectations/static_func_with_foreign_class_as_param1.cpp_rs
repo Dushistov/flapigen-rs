@@ -1,4 +1,5 @@
-r##"# [ no_mangle ] pub extern "C" fn Foo_static_foo ( a_0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
+r##"# [ no_mangle ]
+ pub extern "C" fn Foo_static_foo ( a_0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
  assert ! ( ! a_0 . is_null ( ) ) ;
  let a_0 : & Rc < RefCell < Boo > > = unsafe { &* ( a_0 as * const Rc < RefCell < Boo > > ) } ;
  let mut a_0 : & RefCell < Boo > = a_0 . swig_deref ( ) ;
