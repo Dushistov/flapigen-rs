@@ -8,6 +8,7 @@ use syn::spanned::Spanned;
 use crate::{
     cpp::{fmt_write_err_map, map_any_err_to_our_err, CppForeignMethodSignature},
     error::{panic_on_syn_error, DiagnosticError},
+    source_registry::SourceId,
     typemap::{ast::DisplayToTokens, CType, CTypes, TypeMap, FROM_VAR_TEMPLATE},
     types::{ForeignEnumInfo, ForeignerClassInfo},
 };
@@ -133,6 +134,7 @@ pub(in crate::cpp) fn cpp_list_required_includes(
 pub(in crate::cpp) fn generate_c_type(
     tmap: &TypeMap,
     c_types: &CTypes,
+    src_id: SourceId,
     out: &mut io::Write,
 ) -> Result<Vec<TokenStream>, DiagnosticError> {
     let mut rust_code = vec![];
@@ -155,7 +157,7 @@ struct My{name} {{
                     syn::Fields::Named(ref x) => x,
                     _ => {
                         return Err(DiagnosticError::new(
-                            c_types.src_id,
+                            src_id,
                             s.fields.span(),
                             "only fields with names accepted in this context",
                         ))
@@ -165,19 +167,19 @@ struct My{name} {{
                 for f in &fields.named {
                     let id = f.ident.as_ref().ok_or_else(|| {
                         DiagnosticError::new(
-                            c_types.src_id,
+                            src_id,
                             f.span(),
                             "only fields with names accepted in this context",
                         )
                     })?;
                     let field_rty = tmap.ty_to_rust_type_checked(&f.ty).ok_or_else(|| {
-                        DiagnosticError::new(c_types.src_id, f.ty.span(), "unknown Rust type")
+                        DiagnosticError::new(src_id, f.ty.span(), "unknown Rust type")
                     })?;
                     let field_fty = tmap
                         .find_foreign_type_related_to_rust_ty(field_rty.to_idx())
                         .ok_or_else(|| {
                             DiagnosticError::new(
-                                c_types.src_id,
+                                src_id,
                                 f.ty.span(),
                                 "no foreign type related to this type",
                             )

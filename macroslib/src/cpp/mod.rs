@@ -386,10 +386,11 @@ extern "C" {
 "##,
                     )
                     .map_err(map_any_err_to_our_err)?;
-                register_c_type(conv_map, &c_types)?;
+                register_c_type(conv_map, &c_types, rule.src_id)?;
                 ret.append(&mut cpp_code::generate_c_type(
                     conv_map,
                     &c_types,
+                    rule.src_id,
                     &mut c_header_f,
                 )?);
                 c_header_f
@@ -592,7 +593,7 @@ fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> 
     })
 }
 
-fn register_c_type(tmap: &mut TypeMap, c_types: &CTypes) -> Result<()> {
+fn register_c_type(tmap: &mut TypeMap, c_types: &CTypes, src_id: SourceId) -> Result<()> {
     for c_type in &c_types.types {
         let f_ident = match c_type {
             CType::Struct(ref s) => &s.ident,
@@ -600,14 +601,11 @@ fn register_c_type(tmap: &mut TypeMap, c_types: &CTypes) -> Result<()> {
         };
         let struct_name = f_ident.to_string();
         let rust_ty = parse_ty_with_given_span(&struct_name, f_ident.span())
-            .map_err(|err| DiagnosticError::from_syn_err(c_types.src_id, err))?;
-        let rust_ty = tmap.find_or_alloc_rust_type(&rust_ty, c_types.src_id);
+            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        let rust_ty = tmap.find_or_alloc_rust_type(&rust_ty, src_id);
         let f_type = format!("struct {}", struct_name);
         debug!("init::c_types add {} / {}", rust_ty, f_type);
-        tmap.add_foreign(
-            rust_ty,
-            TypeName::new(f_type, (c_types.src_id, f_ident.span())),
-        )?;
+        tmap.add_foreign(rust_ty, TypeName::new(f_type, (src_id, f_ident.span())))?;
     }
     Ok(())
 }

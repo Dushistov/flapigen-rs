@@ -452,18 +452,10 @@ pub(crate) enum CType {
     Union(syn::ItemUnion),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CTypes {
     pub header_name: SmolStr,
-    pub src_id: SourceId,
     pub types: Vec<CType>,
-}
-
-#[cfg(test)]
-impl PartialEq for CTypes {
-    fn eq(&self, o: &CTypes) -> bool {
-        self.header_name == o.header_name && self.types == o.types
-    }
 }
 
 impl syn::parse::Parse for CTypes {
@@ -492,11 +484,7 @@ impl syn::parse::Parse for CTypes {
                 _ => return Err(syn::Error::new(item.span(), "Expect struct or union here")),
             }
         }
-        Ok(CTypes {
-            src_id: SourceId::none(),
-            header_name,
-            types,
-        })
+        Ok(CTypes { header_name, types })
     }
 }
 
@@ -801,7 +789,6 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         assert!(rule.contains_data_for_language_backend());
         assert_eq!(
             CTypes {
-                src_id: SourceId::none(),
                 header_name: "rust_str.h".into(),
                 types: vec![CType::Struct(parse_quote! {
                     #[repr(C)]
