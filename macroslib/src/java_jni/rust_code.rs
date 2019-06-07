@@ -15,9 +15,9 @@ use crate::{
     typemap::{
         ty::RustType,
         utils::{
-            create_suitable_types_for_constructor_and_self,
+            convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
-            rust_to_foreign_convert_method_inputs,
+            rust_to_foreign_convert_method_inputs, unpack_from_heap_pointer,
         },
         TO_VAR_TEMPLATE,
     },
@@ -68,7 +68,7 @@ pub(in crate::java_jni) fn generate_rust_code(
             );
 
             let (this_type_for_method, code_box_this) =
-                conv_map.convert_to_heap_pointer(&this_type, "this");
+                convert_to_heap_pointer(conv_map, &this_type, "this");
             let class_name_for_user = java_class_full_name(package_name, &class.name.to_string());
             let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
             let lifetimes = {
@@ -83,7 +83,7 @@ pub(in crate::java_jni) fn generate_rust_code(
                 ret
             };
 
-            let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
 
             let fclass_impl_code = format!(
                 r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
@@ -210,7 +210,7 @@ May be you need to use `private constructor = empty;` syntax?",
             class.src_id,
         );
 
-        let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, "this", false);
+        let unpack_code = unpack_from_heap_pointer(&this_type, "this", false);
 
         let jni_destructor_name = generate_jni_func_name(
             package_name,

@@ -23,8 +23,7 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{
-            check_if_smart_pointer_return_inner_type, get_trait_bounds, normalize_ty_lifetimes,
-            DisplayToTokens, GenericTypeConv, TypeName,
+            get_trait_bounds, normalize_ty_lifetimes, DisplayToTokens, GenericTypeConv, TypeName,
         },
         ty::{
             ForeignConversationRule, ForeignType, ForeignTypeS, ForeignTypesStorage, RustType,
@@ -405,80 +404,6 @@ impl TypeMap {
         self.rust_to_foreign_cache
             .insert(from.normalized_name.clone(), ftype);
         Ok(())
-    }
-
-    pub(crate) fn convert_to_heap_pointer(
-        &mut self,
-        from: &RustType,
-        var_name: &str,
-    ) -> (RustType, String) {
-        for smart_pointer in &["Box", "Rc", "Arc"] {
-            if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, *smart_pointer) {
-                let inner_ty: RustType = self.find_or_alloc_rust_type(&inner_ty, from.src_id);
-                let code = format!(
-                    r#"
-    let {var_name}: *const {inner_ty} = {smart_pointer}::into_raw({var_name});
-"#,
-                    var_name = var_name,
-                    inner_ty = inner_ty.normalized_name,
-                    smart_pointer = *smart_pointer,
-                );
-                return (inner_ty, code);
-            }
-        }
-
-        let inner_ty = from.clone();
-        let inner_ty_str = normalize_ty_lifetimes(&inner_ty.ty);
-        (
-            inner_ty,
-            format!(
-                r#"
-    let {var_name}: Box<{inner_ty}> = Box::new({var_name});
-    let {var_name}: *mut {inner_ty} = Box::into_raw({var_name});
-"#,
-                var_name = var_name,
-                inner_ty = inner_ty_str
-            ),
-        )
-    }
-
-    pub(crate) fn unpack_from_heap_pointer(
-        from: &RustType,
-        var_name: &str,
-        unbox_if_boxed: bool,
-    ) -> String {
-        for smart_pointer in &["Box", "Rc", "Arc"] {
-            if check_if_smart_pointer_return_inner_type(from, *smart_pointer).is_some() {
-                return format!(
-                    r#"
-    let {var_name}: {rc_type}  = unsafe {{ {smart_pointer}::from_raw({var_name}) }};
-"#,
-                    var_name = var_name,
-                    rc_type = from.normalized_name,
-                    smart_pointer = *smart_pointer,
-                );
-            }
-        }
-        let unbox_code = if unbox_if_boxed {
-            format!(
-                r#"
-    let {var_name}: {inside_box_type} = *{var_name};
-"#,
-                var_name = var_name,
-                inside_box_type = from.normalized_name
-            )
-        } else {
-            String::new()
-        };
-        format!(
-            r#"
-    let {var_name}: Box<{inside_box_type}> = unsafe {{ Box::from_raw({var_name}) }};
-{unbox_code}
-"#,
-            var_name = var_name,
-            inside_box_type = from.normalized_name,
-            unbox_code = unbox_code
-        )
     }
 
     pub(crate) fn is_ty_implements(&self, ty: &RustType, trait_name: &str) -> Option<RustType> {

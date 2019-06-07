@@ -20,7 +20,10 @@ use crate::{
     },
     typemap::{
         ty::RustType,
-        utils::{ForeignMethodSignature, ForeignTypeInfoT},
+        utils::{
+            convert_to_heap_pointer, unpack_from_heap_pointer, ForeignMethodSignature,
+            ForeignTypeInfoT,
+        },
         ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
@@ -149,7 +152,7 @@ impl JavaConfig {
             conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
 
             let (this_type_for_method, _code_box_this) =
-                conv_map.convert_to_heap_pointer(&this_type, "this");
+                convert_to_heap_pointer(conv_map, &this_type, "this");
 
             let jlong_ti: RustType =
                 conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
@@ -196,7 +199,7 @@ impl JavaConfig {
             );
 
             let unpack_code =
-                TypeMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
+                unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
             conv_map.add_conversation_rule(
                 jlong_ti.to_idx(),
                 this_type.to_idx(),

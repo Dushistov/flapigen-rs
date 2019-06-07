@@ -27,7 +27,10 @@ use crate::{
             FTypeConvCode, ForeignConversationIntermediate, ForeignConversationRule, ForeignType,
             ForeignTypeS, RustType,
         },
-        utils::{validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT},
+        utils::{
+            convert_to_heap_pointer, unpack_from_heap_pointer, validate_cfg_options,
+            ForeignMethodSignature, ForeignTypeInfoT,
+        },
         CType, CTypes, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
@@ -718,7 +721,7 @@ fn register_rust_ty_conversation_rules(
     // for type graph path search
     conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
     let (this_type_for_method, _code_box_this) =
-        conv_map.convert_to_heap_pointer(&this_type, "this");
+        convert_to_heap_pointer(conv_map, &this_type, "this");
 
     let code = format!("*mut {}", this_type_for_method);
     let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method.ty.span());
@@ -739,7 +742,7 @@ fn register_rust_ty_conversation_rules(
         .into(),
     );
 
-    let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+    let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
     conv_map.add_conversation_rule(
         this_type_mut_ptr.to_idx(),
         this_type.to_idx(),

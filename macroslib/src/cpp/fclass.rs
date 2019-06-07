@@ -17,8 +17,9 @@ use crate::{
         ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
         ty::RustType,
         utils::{
-            create_suitable_types_for_constructor_and_self,
+            convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
+            unpack_from_heap_pointer,
         },
         ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
@@ -232,7 +233,7 @@ public:
             );
 
             let (this_type_for_method, code_box_this) =
-                conv_map.convert_to_heap_pointer(&this_type, "this");
+                convert_to_heap_pointer(conv_map, &this_type, "this");
             let lifetimes = {
                 let mut ret = String::new();
                 let lifetimes = list_lifetimes(&this_type.ty);
@@ -244,7 +245,7 @@ public:
                 }
                 ret
             };
-            let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
             let fclass_impl_code = format!(
                 r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
     fn c_class_name() -> *const ::std::os::raw::c_char {{
@@ -590,7 +591,7 @@ May be you need to use `private constructor = empty;` syntax?",
             class.src_id,
         );
 
-        let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, "this", false);
+        let unpack_code = unpack_from_heap_pointer(&this_type, "this", false);
         let c_destructor_name = format!("{}_delete", class.name);
         let code = format!(
             r#"
