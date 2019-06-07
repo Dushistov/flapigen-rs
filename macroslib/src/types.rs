@@ -9,15 +9,23 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignerClassInfo {
-    pub(crate) src_id: SourceId,
-    pub(crate) name: Ident,
-    pub(crate) methods: Vec<ForeignerMethod>,
-    pub(crate) self_type: Option<Type>,
-    pub(crate) foreigner_code: String,
-    /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
-    pub(crate) constructor_ret_type: Option<Type>,
-    pub(crate) doc_comments: Vec<String>,
-    pub(crate) copy_derived: bool,
+    pub src_id: SourceId,
+    pub name: Ident,
+    pub methods: Vec<ForeignerMethod>,
+    pub self_desc: Option<SelfTypeDesc>,
+    pub foreigner_code: String,
+    pub doc_comments: Vec<String>,
+    pub copy_derived: bool,
+}
+
+/// Two types instead of one, to simplify live to developer
+/// For example, it is possible to use `Rc<RefCell<T>>` as constructor
+/// return type, and `T` as self type, and we generate all code to convert
+/// back and forth pointer to `RefCell<T>>` and `T`
+#[derive(Debug, Clone)]
+pub(crate) struct SelfTypeDesc {
+    pub self_type: Type,
+    pub constructor_ret_type: Type,
 }
 
 impl ForeignerClassInfo {
@@ -25,9 +33,9 @@ impl ForeignerClassInfo {
         self.name.span()
     }
     pub(crate) fn self_type_as_ty(&self) -> Type {
-        self.self_type
+        self.self_desc
             .as_ref()
-            .cloned()
+            .map(|x| x.self_type.clone())
             .unwrap_or_else(|| parse_quote! { () })
     }
     /// common for several language binding generator code
@@ -42,26 +50,14 @@ impl ForeignerClassInfo {
                 MethodVariant::StaticMethod => has_static_methods = true,
             }
         }
-        if self.self_type.is_none() && has_constructor {
-            Err(DiagnosticError::new(
-                self.src_id,
-                self.span(),
-                format!(
-                    "class {} has constructor, but no self_type defined",
-                    self.name
-                ),
-            ))
-        } else if self.self_type.is_none() && has_methods {
+        let self_type_is_some = self.self_desc.is_some();
+        if !self_type_is_some && has_methods {
             Err(DiagnosticError::new(
                 self.src_id,
                 self.span(),
                 format!("class {} has methods, but no self_type defined", self.name),
             ))
-        } else if self.self_type.is_some()
-            && !has_static_methods
-            && !has_constructor
-            && !has_methods
-        {
+        } else if self_type_is_some && !has_static_methods && !has_constructor && !has_methods {
             Err(DiagnosticError::new(
                 self.src_id,
                 self.span(),

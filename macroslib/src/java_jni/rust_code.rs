@@ -14,11 +14,10 @@ use crate::{
     typemap::ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     typemap::{
         ty::RustType,
-        unpack_unique_typename,
         utils::{
-            create_suitable_types_for_constructor_and_self,
+            convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
-            rust_to_foreign_convert_method_inputs,
+            rust_to_foreign_convert_method_inputs, unpack_from_heap_pointer,
         },
         TO_VAR_TEMPLATE,
     },
@@ -69,7 +68,7 @@ pub(in crate::java_jni) fn generate_rust_code(
             );
 
             let (this_type_for_method, code_box_this) =
-                conv_map.convert_to_heap_pointer(&this_type, "this");
+                convert_to_heap_pointer(conv_map, &this_type, "this");
             let class_name_for_user = java_class_full_name(package_name, &class.name.to_string());
             let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
             let lifetimes = {
@@ -84,7 +83,7 @@ pub(in crate::java_jni) fn generate_rust_code(
                 ret
             };
 
-            let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
 
             let fclass_impl_code = format!(
                 r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
@@ -186,8 +185,9 @@ May be you need to use `private constructor = empty;` syntax?",
                 have_constructor = true;
                 if !method.is_dummy_constructor() {
                     let constructor_ret_type = class
-                        .constructor_ret_type
+                        .self_desc
                         .as_ref()
+                        .map(|x| &x.constructor_ret_type)
                         .ok_or_else(&no_this_info)?
                         .clone();
                     let this_type =
@@ -210,7 +210,7 @@ May be you need to use `private constructor = empty;` syntax?",
             class.src_id,
         );
 
-        let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, "this", false);
+        let unpack_code = unpack_from_heap_pointer(&this_type, "this", false);
 
         let jni_destructor_name = generate_jni_func_name(
             package_name,
@@ -591,7 +591,7 @@ fn generate_jni_args_with_types(
             &mut buf,
             "a_{}: {}, ",
             i,
-            unpack_unique_typename(&f_type_info.as_ref().correspoding_rust_type.normalized_name)
+            f_type_info.as_ref().correspoding_rust_type.typename()
         )
         .map_err(fmt_write_err_map)?;
     }
@@ -599,8 +599,7 @@ fn generate_jni_args_with_types(
 }
 
 fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<Vec<TokenStream>> {
-    let jni_ret_type =
-        unpack_unique_typename(&mc.f_method.output.correspoding_rust_type.normalized_name);
+    let jni_ret_type = mc.f_method.output.correspoding_rust_type.typename();
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         conv_map,
         mc.class.src_id,
@@ -669,8 +668,8 @@ fn generate_constructor(
     let construct_ret_type = conv_map.ty_to_rust_type(&construct_ret_type);
 
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
-        &construct_ret_type,
-        &this_type,
+        construct_ret_type.to_idx(),
+        this_type.to_idx(),
         "this",
         "jlong",
         (mc.class.src_id, mc.method.span()),
@@ -712,8 +711,7 @@ fn generate_method(
     self_variant: SelfTypeVariant,
     this_type_for_method: &RustType,
 ) -> Result<Vec<TokenStream>> {
-    let jni_ret_type =
-        unpack_unique_typename(&mc.f_method.output.correspoding_rust_type.normalized_name);
+    let jni_ret_type = mc.f_method.output.correspoding_rust_type.typename();
     let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
@@ -745,8 +743,8 @@ fn generate_method(
     let to_ty = conv_map.find_or_alloc_rust_type(&to_ty, mc.class.src_id);
 
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
-        &from_ty,
-        &to_ty,
+        from_ty.to_idx(),
+        to_ty.to_idx(),
         "this",
         jni_ret_type,
         (mc.class.src_id, mc.method.span()),

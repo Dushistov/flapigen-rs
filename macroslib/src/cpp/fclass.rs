@@ -1,4 +1,4 @@
-use std::{io::Write, path::Path};
+use std::io::Write;
 
 use log::debug;
 use petgraph::Direction;
@@ -16,10 +16,10 @@ use crate::{
     typemap::{
         ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
         ty::RustType,
-        unpack_unique_typename,
         utils::{
-            create_suitable_types_for_constructor_and_self,
+            convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
+            unpack_from_heap_pointer,
         },
         ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
@@ -29,21 +29,19 @@ use crate::{
 
 pub(in crate::cpp) fn generate(
     conv_map: &mut TypeMap,
-    output_dir: &Path,
-    namespace_name: &str,
+    cfg: &CppConfig,
     target_pointer_width: usize,
-    separate_impl_headers: bool,
     class: &ForeignerClassInfo,
     req_includes: &[SmolStr],
     methods_sign: &[CppForeignMethodSignature],
 ) -> Result<Vec<TokenStream>> {
     use std::fmt::Write;
 
-    let c_path = output_dir.join(format!("c_{}.h", class.name));
+    let c_path = cfg.output_dir.join(cpp_code::c_header_name(class));
     let mut c_include_f = FileWriteCache::new(&c_path);
-    let cpp_path = output_dir.join(cpp_code::cpp_header_name(class));
+    let cpp_path = cfg.output_dir.join(cpp_code::cpp_header_name(class));
     let mut cpp_include_f = FileWriteCache::new(&cpp_path);
-    let cpp_fwd_path = output_dir.join(format!("{}_fwd.hpp", class.name));
+    let cpp_fwd_path = cfg.output_dir.join(format!("{}_fwd.hpp", class.name));
     let mut cpp_fwd_f = FileWriteCache::new(&cpp_fwd_path);
 
     macro_rules! map_write_err {
@@ -152,7 +150,7 @@ public:
         class_dot_name = class.name,
         includes = includes,
         doc_comments = class_doc_comments,
-        namespace = namespace_name,
+        namespace = cfg.namespace_name,
     ).map_err(map_write_err!(cpp_path))?;
 
     if !class.copy_derived {
@@ -183,7 +181,7 @@ public:
                     class.span(),
                     format!(
                         "Class {} (namespace {}) has derived Copy attribute, but no clone method",
-                        class.name, namespace_name,
+                        class.name, cfg.namespace_name,
                     ),
                 )
             })?;
@@ -227,7 +225,7 @@ public:
     let mut gen_code = Vec::new();
 
     let (this_type_for_method, code_box_this) =
-        if let Some(this_type) = class.constructor_ret_type.as_ref() {
+        if let Some(this_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
             let this_type = conv_map.find_or_alloc_rust_type_that_implements(
                 this_type,
                 "SwigForeignClass",
@@ -235,7 +233,7 @@ public:
             );
 
             let (this_type_for_method, code_box_this) =
-                conv_map.convert_to_heap_pointer(&this_type, "this");
+                convert_to_heap_pointer(conv_map, &this_type, "this");
             let lifetimes = {
                 let mut ret = String::new();
                 let lifetimes = list_lifetimes(&this_type.ty);
@@ -247,7 +245,7 @@ public:
                 }
                 ret
             };
-            let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
             let fclass_impl_code = format!(
                 r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
     fn c_class_name() -> *const ::std::os::raw::c_char {{
@@ -283,7 +281,7 @@ public:
             format!(
                 "Class {} (namespace {}) has methods, but there is no constructor\n
 May be you need to use `private constructor = empty;` syntax?",
-                class.name, namespace_name,
+                class.name, cfg.namespace_name,
             ),
         )
     };
@@ -565,8 +563,9 @@ May be you need to use `private constructor = empty;` syntax?",
                     .map_err(map_write_err!(cpp_path))?;
 
                     let constructor_ret_type = class
-                        .constructor_ret_type
+                        .self_desc
                         .as_ref()
+                        .map(|x| &x.constructor_ret_type)
                         .ok_or_else(&no_this_info)?
                         .clone();
                     let this_type = constructor_ret_type.clone();
@@ -585,13 +584,14 @@ May be you need to use `private constructor = empty;` syntax?",
     if need_destructor {
         let this_type: RustType = conv_map.find_or_alloc_rust_type(
             class
-                .constructor_ret_type
+                .self_desc
                 .as_ref()
+                .map(|x| &x.constructor_ret_type)
                 .ok_or_else(&no_this_info)?,
             class.src_id,
         );
 
-        let unpack_code = TypeMap::unpack_from_heap_pointer(&this_type, "this", false);
+        let unpack_code = unpack_from_heap_pointer(&this_type, "this", false);
         let c_destructor_name = format!("{}_delete", class.name);
         let code = format!(
             r#"
@@ -681,17 +681,17 @@ private:
     .map_err(map_write_err!(cpp_path))?;
 
     // Write method implementations.
-    if separate_impl_headers {
+    if cfg.separate_impl_headers {
         write!(
             cpp_include_f,
             r#"
 
 }} // namespace {namespace}
 "#,
-            namespace = namespace_name
+            namespace = cfg.namespace_name
         )
         .map_err(map_write_err!(cpp_path))?;
-        let cpp_impl_path = output_dir.join(format!("{}_impl.hpp", class.name));
+        let cpp_impl_path = cfg.output_dir.join(format!("{}_impl.hpp", class.name));
         let mut cpp_impl_f = FileWriteCache::new(&cpp_impl_path);
         write!(
             cpp_impl_f,
@@ -703,16 +703,16 @@ private:
 namespace {namespace} {{
 "#,
             class_name = class.name,
-            namespace = namespace_name,
+            namespace = cfg.namespace_name,
         )
         .map_err(map_write_err!(cpp_impl_path))?;
-        write_methods_impls(&mut cpp_impl_f, namespace_name, &inline_impl)
+        write_methods_impls(&mut cpp_impl_f, &cfg.namespace_name, &inline_impl)
             .map_err(map_write_err!(cpp_impl_path))?;
         cpp_impl_f
             .update_file_if_necessary()
             .map_err(map_write_err!(cpp_impl_path))?;
     } else {
-        write_methods_impls(&mut cpp_include_f, namespace_name, &inline_impl)
+        write_methods_impls(&mut cpp_include_f, &cfg.namespace_name, &inline_impl)
             .map_err(map_write_err!(cpp_path))?;
     }
 
@@ -728,7 +728,7 @@ using {class_name} = {base_class_name}<true>;
 using {class_name}Ref = {base_class_name}<false>;
 }} // namespace {namespace}
 "#,
-        namespace = namespace_name,
+        namespace = cfg.namespace_name,
         class_name = class.name,
         base_class_name = class_name
     )
@@ -747,13 +747,12 @@ using {class_name}Ref = {base_class_name}<false>;
 }
 
 fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<Vec<TokenStream>> {
-    let c_ret_type = unpack_unique_typename(
-        &mc.f_method
-            .output
-            .as_ref()
-            .correspoding_rust_type
-            .normalized_name,
-    );
+    let c_ret_type = mc
+        .f_method
+        .output
+        .as_ref()
+        .correspoding_rust_type
+        .typename();
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         conv_map,
         mc.class.src_id,
@@ -807,13 +806,12 @@ fn generate_method(
     self_variant: SelfTypeVariant,
     this_type_for_method: &RustType,
 ) -> Result<Vec<TokenStream>> {
-    let c_ret_type = unpack_unique_typename(
-        &mc.f_method
-            .output
-            .as_ref()
-            .correspoding_rust_type
-            .normalized_name,
-    );
+    let c_ret_type = mc
+        .f_method
+        .output
+        .as_ref()
+        .correspoding_rust_type
+        .typename();
     let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
@@ -842,8 +840,8 @@ fn generate_method(
     let to_ty = conv_map.find_or_alloc_rust_type(&to_ty, class.src_id);
 
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
-        &from_ty,
-        &to_ty,
+        from_ty.to_idx(),
+        to_ty.to_idx(),
         "this",
         &c_ret_type,
         (mc.class.src_id, mc.method.span()),
@@ -906,8 +904,8 @@ fn generate_constructor(
     )?;
     let construct_ret_type: RustType = conv_map.ty_to_rust_type(&construct_ret_type);
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
-        &construct_ret_type,
-        &this_type,
+        construct_ret_type.to_idx(),
+        this_type.to_idx(),
         "this",
         &ret_type_name,
         (mc.class.src_id, mc.method.span()),
@@ -915,8 +913,8 @@ fn generate_constructor(
 
     let code = format!(
         r#"
-#[no_mangle]
 #[allow(unused_variables, unused_mut, non_snake_case)]
+#[no_mangle]
 pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void {{
 {convert_input_code}
     let this: {real_output_typename} = {rust_func_name}({args_names});

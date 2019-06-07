@@ -11,7 +11,9 @@ use tempfile::tempdir;
 
 #[test]
 fn test_expectations_main() {
-    let _ = env_logger::try_init();
+    let _ = env_logger::builder()
+        .default_format_timestamp(false)
+        .try_init();
 
     let test_cases: Vec<PathBuf> = fs::read_dir(Path::new("tests").join("expectations"))
         .expect("read_dir failed")
@@ -87,7 +89,7 @@ fn test_expectations_main() {
         }
     }
 
-    assert_eq!(43, ntests);
+    assert_eq!(44, ntests);
 }
 
 #[test]

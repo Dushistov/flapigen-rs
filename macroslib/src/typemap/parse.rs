@@ -20,7 +20,6 @@ use crate::{
             normalize_ty_lifetimes, parse_ty_with_given_span, DisplayToTokens, GenericTypeConv,
             TypeName,
         },
-        make_unique_rust_typename,
         parse_typemap_macro::TypeMapConvRuleInfo,
         ty::{ForeignTypesStorage, RustTypeS},
         validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
@@ -288,7 +287,7 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
                     .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
                 attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
                 let unique_name =
-                    make_unique_rust_typename(&attr_value_tn.typename, &ftype.typename);
+                    RustTypeS::make_unique_typename(&attr_value_tn.typename, &ftype.typename);
                 names_map.insert(
                     ftype,
                     (TypeName::new(unique_name, invalid_src_id_span()), rust_ty),
@@ -1122,12 +1121,24 @@ impl SwigFrom<bool> for jboolean {
         let bool_ty = conv_map.find_or_alloc_rust_type(&parse_type! { bool }, SourceId::none());
 
         let (_, code) = conv_map
-            .convert_rust_types(&jboolean_ty, &bool_ty, "a0", "jlong", invalid_src_id_span())
+            .convert_rust_types(
+                jboolean_ty.to_idx(),
+                bool_ty.to_idx(),
+                "a0",
+                "jlong",
+                invalid_src_id_span(),
+            )
             .unwrap();
         assert_eq!("    let a0: bool = a0.swig_into(env);\n".to_string(), code);
 
         let (_, code) = conv_map
-            .convert_rust_types(&bool_ty, &jboolean_ty, "a0", "jlong", invalid_src_id_span())
+            .convert_rust_types(
+                bool_ty.to_idx(),
+                jboolean_ty.to_idx(),
+                "a0",
+                "jlong",
+                invalid_src_id_span(),
+            )
             .unwrap();
 
         assert_eq!(
@@ -1162,7 +1173,13 @@ impl SwigDeref for String {
         let string_ty = conv_map.find_or_alloc_rust_type(&parse_type! { String }, SourceId::none());
         let str_ty = conv_map.find_or_alloc_rust_type(&parse_type! { &str }, SourceId::none());
         let (_, code) = conv_map
-            .convert_rust_types(&string_ty, &str_ty, "a0", "jlong", invalid_src_id_span())
+            .convert_rust_types(
+                string_ty.to_idx(),
+                str_ty.to_idx(),
+                "a0",
+                "jlong",
+                invalid_src_id_span(),
+            )
             .unwrap();
         assert_eq!("    let a0: & str = a0.swig_deref();\n".to_string(), code);
     }
@@ -1229,8 +1246,8 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
 
         let (_, code) = conv_map
             .convert_rust_types(
-                &arc_mutex_foo,
-                &foo_ref,
+                arc_mutex_foo.to_idx(),
+                foo_ref.to_idx(),
                 "a0",
                 "jlong",
                 invalid_src_id_span(),
@@ -1302,8 +1319,8 @@ macro_rules! jni_unpack_return {
 
         let (_, code) = conv_map
             .convert_rust_types(
-                &result_foo_str_ty,
-                &foo_ty,
+                result_foo_str_ty.to_idx(),
+                foo_ty.to_idx(),
                 "a0",
                 "jlong",
                 invalid_src_id_span(),
@@ -1321,8 +1338,8 @@ macro_rules! jni_unpack_return {
 
         let (_, code) = conv_map
             .convert_rust_types(
-                &result_u8_str_ty,
-                &jshort_ty,
+                result_u8_str_ty.to_idx(),
+                jshort_ty.to_idx(),
                 "a0",
                 "jlong",
                 invalid_src_id_span(),

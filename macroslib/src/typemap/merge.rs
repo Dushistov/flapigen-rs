@@ -46,7 +46,7 @@ impl TypeMap {
             not_merged_data: mut new_not_merged_data,
             ..
         } = new_data;
-        add_new_ftypes(new_ftypes_storage, self, &new_node_to_our_map);
+        add_new_ftypes(new_ftypes_storage, self, &new_node_to_our_map)?;
 
         self.utils_code.append(&mut new_utils_code);
         //TODO: more intellect to process new generics
@@ -315,7 +315,7 @@ fn add_new_ftypes(
     new_ftypes_storage: ForeignTypesStorage,
     data: &mut TypeMap,
     new_node_to_our_map: &FxHashMap<NodeIndex, NodeIndex>,
-) {
+) -> Result<()> {
     for mut new_ftype in new_ftypes_storage.into_iter() {
         ftype_map_rust_types(&mut new_ftype, new_node_to_our_map);
         match data
@@ -326,10 +326,11 @@ fn add_new_ftypes(
                 ftype_merge(&mut data.ftypes_storage[ftype_idx], new_ftype);
             }
             None => {
-                data.ftypes_storage.add_new_ftype(new_ftype);
+                data.ftypes_storage.add_new_ftype(new_ftype)?;
             }
         }
     }
+    Ok(())
 }
 
 fn ftype_map_rust_types(
@@ -462,7 +463,11 @@ fn helper3() {
                 &ty_i32,
                 petgraph::Direction::Outgoing,
                 invalid_src_id_span(),
-                |_, fc| fc.constructor_ret_type.clone(),
+                |_, fc| {
+                    fc.self_desc
+                        .as_ref()
+                        .map(|x| x.constructor_ret_type.clone())
+                },
             )
             .unwrap();
         assert_eq!("int", types_map[fti].name.as_str(),);

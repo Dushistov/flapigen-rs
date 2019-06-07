@@ -746,6 +746,12 @@ TEST(TestReferences, smokeTest)
     foo = tr.get_foo_ref();
     EXPECT_EQ(202, foo.f(1, 1));
     EXPECT_EQ(std::string("200A"), foo2.getName());
+
+    CheckPrimitiveTypesClass p1;
+    p1.setA(15);
+    EXPECT_EQ(15, TestReferences::check_rc_pass1(p1));
+    EXPECT_EQ(15 + 42, TestReferences::check_rc_pass2(p1));
+    EXPECT_EQ(15 + 42, p1.getA());
 }
 
 TEST(TestOnlyStaticMethods, smokeTest) { EXPECT_EQ(4, TestOnlyStaticMethods::add_func(2, 2)); }

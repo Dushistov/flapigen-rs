@@ -428,10 +428,7 @@ impl Generator {
                 mem::swap(&mut tts, &mut item_macro.mac.tts);
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS) {
                     let fclass = code_parse::parse_foreigner_class(src_id, &self.config, tts)?;
-                    debug!(
-                        "expand_foreigner_class: self {:?}, constructor {:?}",
-                        fclass.self_type, fclass.constructor_ret_type
-                    );
+                    debug!("expand_foreigner_class: self_desc {:?}", fclass.self_desc);
                     self.conv_map.register_foreigner_class(&fclass);
                     items_to_expand.push(ItemToExpand::Class(fclass));
                 } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {

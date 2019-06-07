@@ -20,7 +20,10 @@ use crate::{
     },
     typemap::{
         ty::RustType,
-        utils::{ForeignMethodSignature, ForeignTypeInfoT},
+        utils::{
+            convert_to_heap_pointer, unpack_from_heap_pointer, ForeignMethodSignature,
+            ForeignTypeInfoT,
+        },
         ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
@@ -116,7 +119,9 @@ impl JavaConfig {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
-        if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+        if let Some(constructor_ret_type) =
+            class.self_desc.as_ref().map(|x| &x.constructor_ret_type)
+        {
             let this_type_for_method = if_ty_result_return_ok_type(constructor_ret_type)
                 .unwrap_or_else(|| constructor_ret_type.clone());
 
@@ -147,7 +152,7 @@ impl JavaConfig {
             conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
 
             let (this_type_for_method, _code_box_this) =
-                conv_map.convert_to_heap_pointer(&this_type, "this");
+                convert_to_heap_pointer(conv_map, &this_type, "this");
 
             let jlong_ti: RustType =
                 conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
@@ -158,8 +163,8 @@ impl JavaConfig {
                 conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
-                jlong_ti.clone(),
-                this_type_ref,
+                jlong_ti.to_idx(),
+                this_type_ref.to_idx(),
                 format!(
                     r#"
         let {to_var}: &{this_type} = unsafe {{
@@ -178,8 +183,8 @@ impl JavaConfig {
                 conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
-                jlong_ti.clone(),
-                this_type_mut_ref,
+                jlong_ti.to_idx(),
+                this_type_mut_ref.to_idx(),
                 format!(
                     r#"
         let {to_var}: &mut {this_type} = unsafe {{
@@ -194,10 +199,10 @@ impl JavaConfig {
             );
 
             let unpack_code =
-                TypeMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
+                unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
             conv_map.add_conversation_rule(
-                jlong_ti,
-                this_type,
+                jlong_ti.to_idx(),
+                this_type.to_idx(),
                 format!(
                     r#"
         let {to_var}: *mut {this_type} = unsafe {{
@@ -226,7 +231,7 @@ impl JavaConfig {
     ) -> Result<Vec<TokenStream>> {
         debug!(
             "generate: begin for {}, this_type_for_method {:?}",
-            class.name, class.constructor_ret_type
+            class.name, class.self_desc
         );
 
         let f_methods_sign = find_suitable_foreign_types_for_methods(conv_map, class)?;
@@ -456,7 +461,7 @@ fn java_class_name_to_jni(full_name: &str) -> String {
 }
 
 fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignerClassInfo) -> Option<Type> {
-    if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+    if let Some(constructor_ret_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
         Some(
             if_result_return_ok_err_types(
                 &tm.ty_to_rust_type_checked(constructor_ret_type)
