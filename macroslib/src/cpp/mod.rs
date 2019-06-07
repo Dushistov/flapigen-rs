@@ -20,16 +20,14 @@ use crate::{
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
-        ast::{
-            parse_ty_with_given_span, parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
-        },
+        ast::{parse_ty_with_given_span, parse_ty_with_given_span_checked, TypeName},
         ty::{
             FTypeConvCode, ForeignConversationIntermediate, ForeignConversationRule, ForeignType,
             ForeignTypeS, RustType,
         },
         utils::{
-            convert_to_heap_pointer, unpack_from_heap_pointer, validate_cfg_options,
-            ForeignMethodSignature, ForeignTypeInfoT,
+            boxed_type, unpack_from_heap_pointer, validate_cfg_options, ForeignMethodSignature,
+            ForeignTypeInfoT,
         },
         CType, CTypes, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
@@ -620,10 +618,8 @@ fn register_typemap_for_self_type(
     this_type: RustType,
     self_desc: &SelfTypeDesc,
 ) -> Result<()> {
-    let constructor_ret_type = &self_desc.constructor_ret_type;
-    let this_type_ty = &this_type.ty;
     let void_ptr_ty =
-        parse_ty_with_given_span_checked("*mut ::std::os::raw::c_void", this_type_ty.span());
+        parse_ty_with_given_span_checked("*mut ::std::os::raw::c_void", this_type.ty.span());
     let void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
         &void_ptr_ty,
         &this_type.normalized_name,
@@ -631,19 +627,21 @@ fn register_typemap_for_self_type(
     );
 
     let const_void_ptr_ty =
-        parse_ty_with_given_span_checked("*const ::std::os::raw::c_void", this_type_ty.span());
+        parse_ty_with_given_span_checked("*const ::std::os::raw::c_void", this_type.ty.span());
     let const_void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
         &const_void_ptr_ty,
         &this_type.normalized_name,
         SourceId::none(),
     );
 
-    let code = format!("& {}", DisplayToTokens(this_type_ty));
-    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
+    let this_type_inner = boxed_type(conv_map, &this_type);
+
+    let code = format!("& {}", this_type_inner);
+    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_inner.ty.span());
     let this_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
-    let code = format!("&mut {}", DisplayToTokens(this_type_ty));
-    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_ty.span());
+    let code = format!("&mut {}", this_type_inner);
+    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_inner.ty.span());
     let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
     register_intermidiate_pointer_types(
@@ -656,7 +654,7 @@ fn register_typemap_for_self_type(
         conv_map,
         class,
         this_type.clone(),
-        constructor_ret_type,
+        this_type_inner.to_idx(),
         void_ptr_rust_ty.to_idx(),
         const_void_ptr_rust_ty.to_idx(),
         this_type_ref.to_idx(),
@@ -672,111 +670,6 @@ fn register_typemap_for_self_type(
         this_type_ref.to_idx(),
         this_type_mut_ref.to_idx(),
     )?;
-    Ok(())
-}
-
-fn register_rust_ty_conversation_rules(
-    conv_map: &mut TypeMap,
-    class: &ForeignerClassInfo,
-    this_type: RustType,
-    constructor_ret_type: &Type,
-    void_ptr_rust_ty: RustTypeIdx,
-    const_void_ptr_rust_ty: RustTypeIdx,
-    this_type_ref: RustTypeIdx,
-    this_type_mut_ref: RustTypeIdx,
-) -> Result<()> {
-    // *const c_void -> &"class"
-    conv_map.add_conversation_rule(
-        const_void_ptr_rust_ty,
-        this_type_ref,
-        format!(
-            r#"
-    assert!(!{from_var}.is_null());
-    let {to_var}: &{this_type} = unsafe {{ &*({from_var} as *const {this_type}) }};
-"#,
-            to_var = TO_VAR_TEMPLATE,
-            from_var = FROM_VAR_TEMPLATE,
-            this_type = this_type.normalized_name.clone(),
-        )
-        .into(),
-    );
-
-    // *mut c_void -> &mut "class"
-    conv_map.add_conversation_rule(
-        void_ptr_rust_ty,
-        this_type_mut_ref,
-        format!(
-            r#"
-    assert!(!{from_var}.is_null());
-    let {to_var}: &mut {this_type} = unsafe {{ &mut *({from_var} as *mut {this_type}) }};
-"#,
-            to_var = TO_VAR_TEMPLATE,
-            from_var = FROM_VAR_TEMPLATE,
-            this_type = this_type.normalized_name,
-        )
-        .into(),
-    );
-
-    // *const c_void -> "class", two steps to make it more expensive
-    // for type graph path search
-    conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
-    let (this_type_for_method, _code_box_this) =
-        convert_to_heap_pointer(conv_map, &this_type, "this");
-
-    let code = format!("*mut {}", this_type_for_method);
-    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method.ty.span());
-    let this_type_mut_ptr = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
-
-    conv_map.add_conversation_rule(
-        void_ptr_rust_ty,
-        this_type_mut_ptr.to_idx(),
-        format!(
-            r#"
-            assert!(!{from_var}.is_null());
-            let {to_var}: *mut {this_type} = {from_var} as *mut {this_type};
-        "#,
-            to_var = TO_VAR_TEMPLATE,
-            from_var = FROM_VAR_TEMPLATE,
-            this_type = this_type_for_method.normalized_name,
-        )
-        .into(),
-    );
-
-    let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-    conv_map.add_conversation_rule(
-        this_type_mut_ptr.to_idx(),
-        this_type.to_idx(),
-        format!("\n{}\n", unpack_code,).into(),
-    );
-
-    //"class" -> *mut void
-    conv_map.add_conversation_rule(
-        this_type.to_idx(),
-        void_ptr_rust_ty,
-        format!(
-            "let {to_var}: {ptr_type} = <{this_type}>::box_object({from_var});",
-            to_var = TO_VAR_TEMPLATE,
-            ptr_type = conv_map[void_ptr_rust_ty].typename(),
-            this_type = this_type_for_method.normalized_name,
-            from_var = FROM_VAR_TEMPLATE
-        )
-        .into(),
-    );
-
-    //&"class" -> *const void
-    conv_map.add_conversation_rule(
-        this_type_ref,
-        const_void_ptr_rust_ty,
-        format!(
-            "let {to_var}: {ptr_type} = ({from_var} as *const {this_type}) as {ptr_type};",
-            to_var = TO_VAR_TEMPLATE,
-            ptr_type = conv_map[const_void_ptr_rust_ty].typename(),
-            this_type = this_type_for_method.normalized_name,
-            from_var = FROM_VAR_TEMPLATE,
-        )
-        .into(),
-    );
-
     Ok(())
 }
 
@@ -819,6 +712,109 @@ fn register_intermidiate_pointer_types(
         }),
     };
     conv_map.alloc_foreign_type(c_const_ftype)?;
+    Ok(())
+}
+
+fn register_rust_ty_conversation_rules(
+    conv_map: &mut TypeMap,
+    class: &ForeignerClassInfo,
+    this_type: RustType,
+    this_type_inner: RustTypeIdx,
+    void_ptr_rust_ty: RustTypeIdx,
+    const_void_ptr_rust_ty: RustTypeIdx,
+    this_type_ref: RustTypeIdx,
+    this_type_mut_ref: RustTypeIdx,
+) -> Result<()> {
+    // *const c_void -> &"class"
+    conv_map.add_conversation_rule(
+        const_void_ptr_rust_ty,
+        this_type_ref,
+        format!(
+            r#"
+    assert!(!{from_var}.is_null());
+    let {to_var}: {this_type_ref} = unsafe {{ &*({from_var} as *const {this_type_inner}) }};
+"#,
+            to_var = TO_VAR_TEMPLATE,
+            from_var = FROM_VAR_TEMPLATE,
+            this_type_ref = conv_map[this_type_ref],
+            this_type_inner = conv_map[this_type_inner],
+        )
+        .into(),
+    );
+
+    // *mut c_void -> &mut "class"
+    conv_map.add_conversation_rule(
+        void_ptr_rust_ty,
+        this_type_mut_ref,
+        format!(
+            r#"
+    assert!(!{from_var}.is_null());
+    let {to_var}: {this_type_mut_ref} = unsafe {{ &mut *({from_var} as *mut {this_type_inner}) }};
+"#,
+            to_var = TO_VAR_TEMPLATE,
+            from_var = FROM_VAR_TEMPLATE,
+            this_type_mut_ref = conv_map[this_type_mut_ref],
+            this_type_inner = conv_map[this_type_inner],
+        )
+        .into(),
+    );
+
+    // *const c_void -> "class", two steps to make it more expensive
+    // for type graph path search
+    let code = format!("*mut {}", conv_map[this_type_inner]);
+    let gen_ty = parse_ty_with_given_span_checked(&code, conv_map[this_type_inner].ty.span());
+    let this_type_mut_ptr = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+
+    conv_map.add_conversation_rule(
+        void_ptr_rust_ty,
+        this_type_mut_ptr.to_idx(),
+        format!(
+            r#"
+            assert!(!{from_var}.is_null());
+            let {to_var}: {this_type_mut_ptr} = {from_var} as {this_type_mut_ptr};
+        "#,
+            to_var = TO_VAR_TEMPLATE,
+            from_var = FROM_VAR_TEMPLATE,
+            this_type_mut_ptr = this_type_mut_ptr,
+        )
+        .into(),
+    );
+
+    let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+    conv_map.add_conversation_rule(
+        this_type_mut_ptr.to_idx(),
+        this_type.to_idx(),
+        format!("\n{}\n", unpack_code,).into(),
+    );
+
+    //"class" -> *mut void
+    conv_map.add_conversation_rule(
+        this_type.to_idx(),
+        void_ptr_rust_ty,
+        format!(
+            "let {to_var}: {ptr_type} = <{this_type}>::box_object({from_var});",
+            to_var = TO_VAR_TEMPLATE,
+            ptr_type = conv_map[void_ptr_rust_ty].typename(),
+            this_type = this_type,
+            from_var = FROM_VAR_TEMPLATE
+        )
+        .into(),
+    );
+
+    //&"class" -> *const void
+    conv_map.add_conversation_rule(
+        this_type_ref,
+        const_void_ptr_rust_ty,
+        format!(
+            "let {to_var}: {ptr_type} = ({from_var} as *const {this_type}) as {ptr_type};",
+            to_var = TO_VAR_TEMPLATE,
+            ptr_type = conv_map[const_void_ptr_rust_ty].typename(),
+            this_type = conv_map[this_type_inner],
+            from_var = FROM_VAR_TEMPLATE,
+        )
+        .into(),
+    );
+
     Ok(())
 }
 

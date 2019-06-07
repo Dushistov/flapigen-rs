@@ -234,6 +234,16 @@ pub(crate) fn validate_cfg_options(
     Ok(())
 }
 
+pub(crate) fn boxed_type(tmap: &mut TypeMap, from: &RustType) -> RustType {
+    for smart_pointer in &["Box", "Rc", "Arc"] {
+        if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, *smart_pointer) {
+            let inner_ty: RustType = tmap.find_or_alloc_rust_type(&inner_ty, from.src_id);
+            return inner_ty;
+        }
+    }
+    from.clone()
+}
+
 pub(crate) fn convert_to_heap_pointer(
     tmap: &mut TypeMap,
     from: &RustType,

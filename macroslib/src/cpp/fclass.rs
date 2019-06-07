@@ -913,8 +913,8 @@ fn generate_constructor(
 
     let code = format!(
         r#"
-#[no_mangle]
 #[allow(unused_variables, unused_mut, non_snake_case)]
+#[no_mangle]
 pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void {{
 {convert_input_code}
     let this: {real_output_typename} = {rust_func_name}({args_names});
