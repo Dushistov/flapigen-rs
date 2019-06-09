@@ -15,6 +15,8 @@ use crate::{
     FOREIGNER_CODE, FOREIGN_CODE,
 };
 
+static GENERIC_ALIAS: &str = "generic_alias";
+
 #[derive(Debug)]
 pub(crate) struct TypeMapConvRuleInfo {
     pub src_id: SourceId,
@@ -24,7 +26,9 @@ pub(crate) struct TypeMapConvRuleInfo {
     pub ftype_right_to_left: Vec<FTypeConvRule>,
     /// For C++ case it is possible to introduce some C types
     pub c_types: Option<CTypes>,
+    pub generic_c_types: Option<GenericCTypes>,
     pub f_code: Vec<ForeignCode>,
+    pub generic_aliases: Vec<GenericAlias>,
 }
 
 impl TypeMapConvRuleInfo {
@@ -43,6 +47,7 @@ impl TypeMapConvRuleInfo {
         ) {
             (
                 Some(RTypeConvRule {
+                    generics: None,
                     left_ty: ref r_ty,
                     right_ty: None,
                     code: None,
@@ -59,7 +64,8 @@ impl TypeMapConvRuleInfo {
     }
 
     pub(in crate::typemap) fn contains_data_for_language_backend(&self) -> bool {
-        !self.f_code.is_empty()
+        self.is_generic()
+            || !self.f_code.is_empty()
             || self.c_types.is_some()
             || self
                 .ftype_left_to_right
@@ -72,10 +78,23 @@ impl TypeMapConvRuleInfo {
             || self.ftype_left_to_right.len() > 1
             || self.ftype_right_to_left.len() > 1
     }
+
+    pub(crate) fn is_generic(&self) -> bool {
+        self.rtype_right_to_left
+            .as_ref()
+            .map(|x| x.generics.is_some())
+            .unwrap_or(false)
+            || self
+                .rtype_left_to_right
+                .as_ref()
+                .map(|x| x.generics.is_some())
+                .unwrap_or(false)
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct RTypeConvRule {
+    pub generics: Option<syn::Generics>,
     pub left_ty: Type,
     pub right_ty: Option<Type>,
     pub code: Option<FTypeConvCode>,
@@ -158,6 +177,8 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
         let mut ftype_right_to_left = Vec::<FTypeConvRule>::new();
         let mut c_types = None;
         let mut f_code = Vec::<ForeignCode>::new();
+        let mut generic_aliases = vec![];
+        let mut generic_c_types = None;
 
         while !input.is_empty() {
             if input.peek(token::Paren) {
@@ -229,93 +250,13 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 }
                 match rule {
                     RuleType::RType(keyword) => {
-                        let left_ty = input.parse::<Type>()?;
-
-                        let mut conv_rule_type = None;
-                        if input.peek(Token![=>]) {
-                            input.parse::<Token![=>]>()?;
-                            conv_rule_type =
-                                Some(ConvertRuleType::LeftToRight(input.parse::<Type>()?));
-                        } else if input.peek(Token![<=]) {
-                            input.parse::<Token![<=]>()?;
-                            conv_rule_type =
-                                Some(ConvertRuleType::RightToLeft(input.parse::<Type>()?));
-                        }
-
-                        let code = if conv_rule_type.is_some() && input.peek(syn::token::Brace) {
-                            let content;
-                            braced!(content in input);
-                            let conv_body = content.parse::<TokenStream>()?;
-
-                            let var_name = var_name.ok_or_else(|| {
-                                syn::Error::new(keyword.span(), "there is conversation code, but name of input variable not defined here")
-                            })?;
-                            //because of $var most likely will be reformated to "$ var", so
-                            //without clue how syn formatted token -> string, just convert text to tokens and back
-                            let d_var_name: TokenStream = parse_quote!($#var_name);
-                            let d_var_name = d_var_name.to_string();
-                            let out_var: TokenStream = parse_quote!($out);
-                            let out_var = out_var.to_string();
-                            let mut code_str = conv_body.to_string();
-                            if !code_str.contains(&d_var_name) || !code_str.contains(&out_var) {
-                                return Err(syn::Error::new(
-                                    conv_body.span(),
-                                    format!("no $out or ${} in conversation code", var_name),
-                                ));
-                            }
-                            code_str.push(';');
-
-                            Some(FTypeConvCode::new2(
-                                code_str.replace(&d_var_name, FROM_VAR_TEMPLATE).replace(
-                                    &out_var,
-                                    &format!("let {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),
-                                ),
-                                conv_body.span(),
-                            ))
-                        } else {
-                            None
-                        };
-                        match conv_rule_type {
-                            Some(ConvertRuleType::LeftToRight(right_ty)) => {
-                                if rtype_left_to_right.is_some() {
-                                    return Err(syn::Error::new(
-                                        keyword.span(),
-                                        "duplicate of r_type left to right rule",
-                                    ));
-                                }
-                                rtype_left_to_right = Some(RTypeConvRule {
-                                    left_ty,
-                                    right_ty: Some(right_ty),
-                                    code,
-                                });
-                            }
-                            Some(ConvertRuleType::RightToLeft(right_ty)) => {
-                                if rtype_right_to_left.is_some() {
-                                    return Err(syn::Error::new(
-                                        keyword.span(),
-                                        "duplicate of r_type right to left rule",
-                                    ));
-                                }
-                                rtype_right_to_left = Some(RTypeConvRule {
-                                    left_ty,
-                                    right_ty: Some(right_ty),
-                                    code,
-                                });
-                            }
-                            None => {
-                                if rtype_left_to_right.is_some() {
-                                    return Err(syn::Error::new(
-                                        keyword.span(),
-                                        "duplicate of r_type left to right rule",
-                                    ));
-                                }
-                                rtype_left_to_right = Some(RTypeConvRule {
-                                    left_ty,
-                                    right_ty: None,
-                                    code: None,
-                                });
-                            }
-                        }
+                        parse_r_type_rule(
+                            input,
+                            var_name,
+                            keyword,
+                            &mut rtype_left_to_right,
+                            &mut rtype_right_to_left,
+                        )?;
                     }
                     RuleType::FType(keyword) => {
                         let left_ty = if input.peek(LitStr) {
@@ -419,22 +360,44 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 }
             } else {
                 let mac: syn::Macro = input.parse()?;
-                let is_our_macro = [DEFINE_C_TYPE, FOREIGNER_CODE, FOREIGN_CODE]
+                let is_our_macro = [DEFINE_C_TYPE, FOREIGNER_CODE, FOREIGN_CODE, GENERIC_ALIAS]
                     .iter()
                     .any(|x| mac.path.is_ident(x));
                 if !is_our_macro {
                     return Err(syn::Error::new(mac.span(), "unknown macro in this context"));
                 }
                 if mac.path.is_ident(DEFINE_C_TYPE) {
-                    c_types = Some(syn::parse2(mac.tts)?);
+                    match syn::parse2::<CTypes>(mac.tts.clone()) {
+                        Ok(x) => {
+                            if c_types.is_some() {
+                                return Err(input
+                                    .error(format!("{} should be used only once", DEFINE_C_TYPE)));
+                            }
+                            c_types = Some(x);
+                        }
+                        Err(_) => {
+                            if generic_c_types.is_some() {
+                                return Err(input.error(format!(
+                                    "generic {} should be used only once",
+                                    DEFINE_C_TYPE
+                                )));
+                            }
+                            generic_c_types = Some(syn::parse2::<GenericCTypes>(mac.tts)?);
+                        }
+                    }
                 } else if mac.path.is_ident(FOREIGN_CODE) || mac.path.is_ident(FOREIGNER_CODE) {
                     let fc_elem = syn::parse2::<ForeignCode>(mac.tts)?;
                     f_code.push(fc_elem);
+                } else if mac.path.is_ident(GENERIC_ALIAS) {
+                    generic_aliases.push(syn::parse2::<GenericAlias>(mac.tts)?);
+                } else {
+                    unreachable!();
                 }
             }
             input.parse::<Token![;]>()?;
         }
-        Ok(TypeMapConvRuleInfo {
+
+        let rule = TypeMapConvRuleInfo {
             src_id: SourceId::none(),
             c_types,
             f_code,
@@ -442,8 +405,132 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
             rtype_right_to_left,
             ftype_left_to_right,
             ftype_right_to_left,
-        })
+            generic_aliases,
+            generic_c_types,
+        };
+
+        if !rule.generic_aliases.is_empty() && !rule.is_generic() {
+            Err(syn::Error::new(
+                rule.generic_aliases[0].alias.span(),
+                format!("there is {}, but r_type is not generic", GENERIC_ALIAS),
+            ))
+        } else if rule.generic_c_types.is_some() && !rule.is_generic() {
+            Err(syn::Error::new(
+                rule.generic_aliases[0].alias.span(),
+                format!(
+                    "there is generic {}, but r_type is not generic",
+                    DEFINE_C_TYPE
+                ),
+            ))
+        } else {
+            Ok(rule)
+        }
     }
+}
+
+fn parse_r_type_rule(
+    input: syn::parse::ParseStream,
+    var_name: Option<syn::Ident>,
+    keyword: kw::r_type,
+    rtype_left_to_right: &mut Option<RTypeConvRule>,
+    rtype_right_to_left: &mut Option<RTypeConvRule>,
+) -> syn::Result<()> {
+    let generics = if input.peek(Token![<]) {
+        Some(input.parse::<syn::Generics>()?)
+    } else {
+        None
+    };
+    let left_ty = input.parse::<Type>()?;
+    let mut conv_rule_type = None;
+    if input.peek(Token![=>]) {
+        input.parse::<Token![=>]>()?;
+        conv_rule_type = Some(ConvertRuleType::LeftToRight(input.parse::<Type>()?));
+    } else if input.peek(Token![<=]) {
+        input.parse::<Token![<=]>()?;
+        conv_rule_type = Some(ConvertRuleType::RightToLeft(input.parse::<Type>()?));
+    }
+
+    let code = if conv_rule_type.is_some() && input.peek(syn::token::Brace) {
+        let content;
+        braced!(content in input);
+        let conv_body = content.parse::<TokenStream>()?;
+
+        let var_name = var_name.ok_or_else(|| {
+            syn::Error::new(
+                keyword.span(),
+                "there is conversation code, but name of input variable not defined here",
+            )
+        })?;
+        //because of $var most likely will be reformated to "$ var", so
+        //without clue how syn formatted token -> string, just convert text to tokens and back
+        let d_var_name: TokenStream = parse_quote!($#var_name);
+        let d_var_name = d_var_name.to_string();
+        let out_var: TokenStream = parse_quote!($out);
+        let out_var = out_var.to_string();
+        let mut code_str = conv_body.to_string();
+        if !code_str.contains(&d_var_name) || !code_str.contains(&out_var) {
+            return Err(syn::Error::new(
+                conv_body.span(),
+                format!("no $out or ${} in conversation code", var_name),
+            ));
+        }
+        code_str.push(';');
+
+        Some(FTypeConvCode::new2(
+            code_str.replace(&d_var_name, FROM_VAR_TEMPLATE).replace(
+                &out_var,
+                &format!("let {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),
+            ),
+            conv_body.span(),
+        ))
+    } else {
+        None
+    };
+    match conv_rule_type {
+        Some(ConvertRuleType::LeftToRight(right_ty)) => {
+            if rtype_left_to_right.is_some() {
+                return Err(syn::Error::new(
+                    keyword.span(),
+                    "duplicate of r_type left to right rule",
+                ));
+            }
+            *rtype_left_to_right = Some(RTypeConvRule {
+                generics,
+                left_ty,
+                right_ty: Some(right_ty),
+                code,
+            });
+        }
+        Some(ConvertRuleType::RightToLeft(right_ty)) => {
+            if rtype_right_to_left.is_some() {
+                return Err(syn::Error::new(
+                    keyword.span(),
+                    "duplicate of r_type right to left rule",
+                ));
+            }
+            *rtype_right_to_left = Some(RTypeConvRule {
+                generics,
+                left_ty,
+                right_ty: Some(right_ty),
+                code,
+            });
+        }
+        None => {
+            if rtype_left_to_right.is_some() {
+                return Err(syn::Error::new(
+                    keyword.span(),
+                    "duplicate of r_type left to right rule",
+                ));
+            }
+            *rtype_left_to_right = Some(RTypeConvRule {
+                generics,
+                left_ty,
+                right_ty: None,
+                code: None,
+            });
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -529,6 +616,39 @@ impl syn::parse::Parse for ForeignCode {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct GenericAlias {
+    pub alias: syn::Ident,
+    pub value: TokenStream,
+}
+
+impl syn::parse::Parse for GenericAlias {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let alias = input.parse()?;
+        input.parse::<Token![=]>()?;
+        let value = input.parse()?;
+        Ok(GenericAlias { alias, value })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct GenericCTypes {
+    pub header_name: SmolStr,
+    pub types: TokenStream,
+}
+
+impl syn::parse::Parse for GenericCTypes {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<kw::module>()?;
+        input.parse::<Token![=]>()?;
+        let module_name: LitStr = input.parse()?;
+        let header_name: SmolStr = module_name.value().into();
+        input.parse::<Token![;]>()?;
+        let types = input.parse()?;
+        Ok(GenericCTypes { header_name, types })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -565,12 +685,14 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
                 ($pin:f_type) <= "bool" "$out = $pin ? 1 : 0;";
             )
         });
-
+        println!("rule {:?}", rule);
+        assert!(!rule.is_generic());
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
         assert!(!rule.contains_data_for_language_backend());
 
         assert_eq!(
             RTypeConvRule {
+                generics: None,
                 left_ty: parse_type!(bool),
                 right_ty: Some(parse_type!(::std::os::raw::c_char)),
                 code: Some(FTypeConvCode::new(
@@ -583,6 +705,7 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
 
         assert_eq!(
             RTypeConvRule {
+                generics: None,
                 left_ty: parse_type!(bool),
                 right_ty: Some(parse_type!(::std::os::raw::c_char)),
                 code: Some(FTypeConvCode::new(
@@ -731,6 +854,7 @@ $out = QString::fromUtf8($pin.data, $pin.len);
 
         assert_eq!(
             RTypeConvRule {
+                generics: None,
                 left_ty: parse_type!(jlong),
                 right_ty: None,
                 code: None,
@@ -825,6 +949,65 @@ $out = QString::fromUtf8($pin.data, $pin.len);
                 });
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
         assert!(rule.contains_data_for_language_backend());
+    }
+
+    #[test]
+    fn test_foreign_typemap_cpp_pair() {
+        let rule = macro_to_conv_rule(parse_quote! {
+            foreign_typemap!(
+                generic_alias!(CRustPair = swig_concat_idents!(CRustPair, swig_i_type!(T1), swig_i_type!(T2)));
+                define_c_type!(
+                    module = "rust_tuple.h";
+                    #[repr(C)]
+                    pub struct CRustPair! {
+                        first: swig_i_type!(T1),
+                        second: swig_i_type!(T2),
+                    }
+                );
+            ($p:r_type) <T1, T2> (T1, T2) => CRustPair!() {
+                $out = CRustPair!() {
+                    first: swig_from_rust_to_i_type!(T1, $p.0),
+                    second: swig_from_rust_to_i_type!(T2, $p.1),
+                }
+            };
+            ($p:r_type) <T1, T2> (T1, T2) <= CRustPair!() {
+                $out = (swig_from_rust_i_type_to!(T1, $p.first), swig_from_rust_i_type_to!(T2, $p.second))
+            };
+            ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+                    "std::make_pair(swig_foreign_from_i_type!(T1, $p.first), swig_foreign_from_i_type!(T2, $p.second))";
+            ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+                "CRustPair! { swig_foreign_to_i_type!(T1, $p.first), swig_foreign_to_i_type!(T2, $p.second) }";
+        )
+        });
+        println!("rule!!!: {:?}", rule);
+        assert!(!rule.if_simple_rtype_ftype_map().is_some());
+        assert!(rule.contains_data_for_language_backend());
+
+        assert_eq!(
+            RTypeConvRule {
+                generics: Some(parse_quote! { <T1, T2> }),
+                left_ty: parse_type! {(T1, T2)},
+                right_ty: Some(parse_type! { CRustPair!() }),
+                code: Some(FTypeConvCode::new(
+                    "let {to_var}: {to_var_type} = CRustPair ! ( ) { first : swig_from_rust_to_i_type ! ( T1 , {from_var} . 0 ) , second : swig_from_rust_to_i_type ! ( T2 , {from_var} . 1 ) , };",
+                    Span::call_site()
+                )),
+            },
+            rule.rtype_left_to_right.unwrap()
+        );
+
+        assert_eq!(
+            RTypeConvRule {
+                generics: Some(parse_quote! { <T1, T2> }),
+                left_ty: parse_type! { (T1, T2) },
+                right_ty: Some(parse_type! { CRustPair!() }),
+                code: Some(FTypeConvCode::new(
+                    "let {to_var}: {to_var_type} = ( swig_from_rust_i_type_to ! ( T1 , {from_var} . first ) , swig_from_rust_i_type_to ! ( T2 , {from_var} . second ) );",
+                    Span::call_site()
+                )),
+            },
+            rule.rtype_right_to_left.unwrap()
+        );
     }
 
     fn macro_to_conv_rule(mac: syn::Macro) -> TypeMapConvRuleInfo {

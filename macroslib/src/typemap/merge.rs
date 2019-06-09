@@ -75,6 +75,7 @@ impl TypeMap {
         mut ri: TypeMapConvRuleInfo,
     ) -> Result<()> {
         assert!(!ri.contains_data_for_language_backend());
+        assert!(!ri.is_generic());
         if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map() {
             let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
 
