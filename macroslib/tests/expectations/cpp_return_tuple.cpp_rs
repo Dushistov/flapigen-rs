@@ -1,0 +1,7 @@
+r##"# [ no_mangle ]
+ pub extern "C" fn Foo_f ( this : * mut Foo , ) -> CRustObjectPair {
+ let this : & Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : ( One , Two ) = Foo :: f ( this , ) ;
+ let mut ret : CRustObjectPair = < CRustObjectPair >:: swig_from ( ret ) ;
+ ret
+ }"##;
