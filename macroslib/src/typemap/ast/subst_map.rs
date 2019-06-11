@@ -35,7 +35,12 @@ impl<'a> TyParamsSubstMap<'a> {
     pub(crate) fn len(&self) -> usize {
         self.inner.len()
     }
-
+    pub fn get(&self, k: &Ident) -> Option<Option<&syn::Type>> {
+        match self.inner.iter().position(|it| it.ident == k) {
+            Some(idx) => Some(self.inner[idx].ty.as_ref()),
+            None => None,
+        }
+    }
     pub fn get_mut(&mut self, k: &Ident) -> Option<&mut Option<syn::Type>> {
         match self.inner.iter().position(|it| it.ident == k) {
             Some(idx) => Some(&mut self.inner[idx].ty),
@@ -48,9 +53,9 @@ impl<'a> TyParamsSubstMap<'a> {
             None => None,
         }
     }
-    pub fn get(&self, k: &str) -> Option<&Option<syn::Type>> {
+    pub fn get_by_str(&self, k: &str) -> Option<Option<&syn::Type>> {
         match self.inner.iter().position(|it| it.ident == k) {
-            Some(idx) => Some(&self.inner[idx].ty),
+            Some(idx) => Some(self.inner[idx].ty.as_ref()),
             None => None,
         }
     }

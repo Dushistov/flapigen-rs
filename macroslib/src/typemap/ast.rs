@@ -457,7 +457,7 @@ fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
     impl<'a, 'b> VisitMut for ReplaceTypes<'a, 'b> {
         fn visit_type_mut(&mut self, t: &mut Type) {
             let ty_name = normalize_ty_lifetimes(t);
-            if let Some(&Some(ref subst)) = self.subst_map.get(&ty_name) {
+            if let Some(Some(subst)) = self.subst_map.get_by_str(&ty_name) {
                 *t = subst.clone();
             } else {
                 visit_type_mut(self, t);
