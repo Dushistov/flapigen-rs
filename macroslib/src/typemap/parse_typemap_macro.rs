@@ -20,6 +20,7 @@ static GENERIC_ALIAS: &str = "generic_alias";
 #[derive(Debug)]
 pub(crate) struct TypeMapConvRuleInfo {
     pub src_id: SourceId,
+    pub rtype_generics: Option<syn::Generics>,
     pub rtype_left_to_right: Option<RTypeConvRule>,
     pub rtype_right_to_left: Option<RTypeConvRule>,
     pub ftype_left_to_right: Vec<FTypeConvRule>,
@@ -47,7 +48,6 @@ impl TypeMapConvRuleInfo {
         ) {
             (
                 Some(RTypeConvRule {
-                    generics: None,
                     left_ty: ref r_ty,
                     right_ty: None,
                     code: None,
@@ -80,21 +80,12 @@ impl TypeMapConvRuleInfo {
     }
 
     pub(crate) fn is_generic(&self) -> bool {
-        self.rtype_right_to_left
-            .as_ref()
-            .map(|x| x.generics.is_some())
-            .unwrap_or(false)
-            || self
-                .rtype_left_to_right
-                .as_ref()
-                .map(|x| x.generics.is_some())
-                .unwrap_or(false)
+        self.rtype_generics.is_some()
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct RTypeConvRule {
-    pub generics: Option<syn::Generics>,
     pub left_ty: Type,
     pub right_ty: Option<Type>,
     pub code: Option<FTypeConvCode>,
@@ -179,6 +170,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
         let mut f_code = Vec::<ForeignCode>::new();
         let mut generic_aliases = vec![];
         let mut generic_c_types = None;
+        let mut rtype_generics = None;
 
         while !input.is_empty() {
             if input.peek(token::Paren) {
@@ -256,6 +248,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                             keyword,
                             &mut rtype_left_to_right,
                             &mut rtype_right_to_left,
+                            &mut rtype_generics,
                         )?;
                     }
                     RuleType::FType(keyword) => {
@@ -399,6 +392,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
 
         let rule = TypeMapConvRuleInfo {
             src_id: SourceId::none(),
+            rtype_generics,
             c_types,
             f_code,
             rtype_left_to_right,
@@ -434,12 +428,21 @@ fn parse_r_type_rule(
     keyword: kw::r_type,
     rtype_left_to_right: &mut Option<RTypeConvRule>,
     rtype_right_to_left: &mut Option<RTypeConvRule>,
+    generics: &mut Option<syn::Generics>,
 ) -> syn::Result<()> {
-    let generics = if input.peek(Token![<]) {
-        Some(input.parse::<syn::Generics>()?)
-    } else {
-        None
-    };
+    if input.peek(Token![<]) {
+        let new_generics = input.parse::<syn::Generics>()?;
+        if let Some(prev_generics) = generics.as_ref() {
+            if *prev_generics != new_generics {
+                return Err(syn::Error::new(
+                    new_generics.span(),
+                    "generic descriptions are different for r_type <= and r_type =>",
+                ));
+            }
+        } else {
+            *generics = Some(new_generics);
+        }
+    }
     let left_ty = input.parse::<Type>()?;
     let mut conv_rule_type = None;
     if input.peek(Token![=>]) {
@@ -486,6 +489,7 @@ fn parse_r_type_rule(
     } else {
         None
     };
+
     match conv_rule_type {
         Some(ConvertRuleType::LeftToRight(right_ty)) => {
             if rtype_left_to_right.is_some() {
@@ -495,7 +499,6 @@ fn parse_r_type_rule(
                 ));
             }
             *rtype_left_to_right = Some(RTypeConvRule {
-                generics,
                 left_ty,
                 right_ty: Some(right_ty),
                 code,
@@ -509,7 +512,6 @@ fn parse_r_type_rule(
                 ));
             }
             *rtype_right_to_left = Some(RTypeConvRule {
-                generics,
                 left_ty,
                 right_ty: Some(right_ty),
                 code,
@@ -523,7 +525,6 @@ fn parse_r_type_rule(
                 ));
             }
             *rtype_left_to_right = Some(RTypeConvRule {
-                generics,
                 left_ty,
                 right_ty: None,
                 code: None,
@@ -692,7 +693,6 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
 
         assert_eq!(
             RTypeConvRule {
-                generics: None,
                 left_ty: parse_type!(bool),
                 right_ty: Some(parse_type!(::std::os::raw::c_char)),
                 code: Some(FTypeConvCode::new(
@@ -705,7 +705,6 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
 
         assert_eq!(
             RTypeConvRule {
-                generics: None,
                 left_ty: parse_type!(bool),
                 right_ty: Some(parse_type!(::std::os::raw::c_char)),
                 code: Some(FTypeConvCode::new(
@@ -854,7 +853,6 @@ $out = QString::fromUtf8($pin.data, $pin.len);
 
         assert_eq!(
             RTypeConvRule {
-                generics: None,
                 left_ty: parse_type!(jlong),
                 right_ty: None,
                 code: None,
@@ -982,10 +980,10 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         println!("rule!!!: {:?}", rule);
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
         assert!(rule.contains_data_for_language_backend());
-
+        let generics: syn::Generics = parse_quote! { <T1, T2> };
+        assert_eq!(Some(generics), rule.rtype_generics);
         assert_eq!(
             RTypeConvRule {
-                generics: Some(parse_quote! { <T1, T2> }),
                 left_ty: parse_type! {(T1, T2)},
                 right_ty: Some(parse_type! { CRustPair!() }),
                 code: Some(FTypeConvCode::new(
@@ -998,7 +996,6 @@ $out = QString::fromUtf8($pin.data, $pin.len);
 
         assert_eq!(
             RTypeConvRule {
-                generics: Some(parse_quote! { <T1, T2> }),
                 left_ty: parse_type! { (T1, T2) },
                 right_ty: Some(parse_type! { CRustPair!() }),
                 code: Some(FTypeConvCode::new(
