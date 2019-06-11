@@ -1,3 +1,4 @@
+use petgraph::Direction;
 use proc_macro2::{Span, TokenStream};
 use smol_str::SmolStr;
 use syn::{
@@ -8,7 +9,7 @@ use syn::{
 use crate::{
     source_registry::SourceId,
     typemap::{
-        ast::{DisplayToTokens, SpannedSmolStr},
+        ast::{is_second_subst_of_first, DisplayToTokens, SpannedSmolStr, TyParamsSubstMap},
         ty::FTypeConvCode,
         FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
@@ -81,6 +82,33 @@ impl TypeMapConvRuleInfo {
 
     pub(crate) fn is_generic(&self) -> bool {
         self.rtype_generics.is_some()
+    }
+
+    pub(crate) fn is_ty_subst_of_my_generic_rtype(
+        &self,
+        ty: &Type,
+        direction: Direction,
+    ) -> Option<TyParamsSubstMap> {
+        assert!(self.is_generic());
+        let rule = match direction {
+            Direction::Incoming => self.rtype_right_to_left.as_ref(),
+            Direction::Outgoing => self.rtype_left_to_right.as_ref(),
+        };
+        let rule = rule?;
+
+        let generics = self
+            .rtype_generics
+            .as_ref()
+            .expect("Internal error: should used only for generics");
+        let mut subst_map = TyParamsSubstMap::default();
+        for ty_p in generics.type_params() {
+            subst_map.insert(&ty_p.ident, None);
+        }
+        if !is_second_subst_of_first(&rule.left_ty, ty, &mut subst_map) {
+            return None;
+        }
+
+        Some(subst_map)
     }
 }
 
@@ -980,6 +1008,25 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         println!("rule!!!: {:?}", rule);
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
         assert!(rule.contains_data_for_language_backend());
+
+        assert!(rule
+            .is_ty_subst_of_my_generic_rtype(&parse_type! {i32}, Direction::Outgoing)
+            .is_none());
+        assert!(rule
+            .is_ty_subst_of_my_generic_rtype(&parse_type! {()}, Direction::Outgoing)
+            .is_none());
+        let t1 = syn::Ident::new("T1", Span::call_site());
+        let t2 = syn::Ident::new("T2", Span::call_site());
+        assert_eq!(
+            Some({
+                let mut subst_map = TyParamsSubstMap::default();
+                subst_map.insert(&t1, Some(parse_type! {i32}));
+                subst_map.insert(&t2, Some(parse_type! {f32}));
+                subst_map
+            }),
+            rule.is_ty_subst_of_my_generic_rtype(&parse_type! {(i32, f32)}, Direction::Outgoing)
+        );
+
         let generics: syn::Generics = parse_quote! { <T1, T2> };
         assert_eq!(Some(generics), rule.rtype_generics);
         assert_eq!(

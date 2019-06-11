@@ -24,7 +24,7 @@ use syn::{
     Type,
 };
 
-use self::subst_map::{TyParamsSubstItem, TyParamsSubstMap};
+pub(in crate::typemap) use self::subst_map::{TyParamsSubstItem, TyParamsSubstMap};
 use crate::{
     error::{panic_on_syn_error, SourceIdSpan},
     source_registry::SourceId,
@@ -308,7 +308,11 @@ impl GenericTypeConv {
 }
 
 /// for example true for Result<T, E> Result<u8, u8>
-fn is_second_subst_of_first(ty1: &Type, ty2: &Type, subst_map: &mut TyParamsSubstMap) -> bool {
+pub(in crate::typemap) fn is_second_subst_of_first(
+    ty1: &Type,
+    ty2: &Type,
+    subst_map: &mut TyParamsSubstMap,
+) -> bool {
     trace!("is_second_substitude_of_first {:?} vs {:?}", ty1, ty2);
     match (ty1, ty2) {
         (

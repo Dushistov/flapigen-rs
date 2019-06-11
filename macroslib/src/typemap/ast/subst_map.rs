@@ -9,13 +9,13 @@ impl<'a> PartialEq<IdentRef<'_>> for Ident {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct TyParamsSubstItem<'a> {
     pub(crate) ident: &'a Ident,
     pub(crate) ty: Option<syn::Type>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub(crate) struct TyParamsSubstMap<'a> {
     inner: SmallVec<[TyParamsSubstItem<'a>; 10]>,
 }
