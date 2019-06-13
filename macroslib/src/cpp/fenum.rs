@@ -4,13 +4,12 @@ use proc_macro2::TokenStream;
 use quote::ToTokens;
 
 use crate::{
-    cpp::{cpp_code, map_write_err},
+    cpp::{cpp_code, map_write_err, CppContext},
     error::{panic_on_syn_error, Result},
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::ast::DisplayToTokens,
     types::ForeignEnumInfo,
-    TypeMap,
 };
 
 pub(in crate::cpp) fn generate_code_for_enum(
@@ -56,8 +55,7 @@ enum {enum_name} {{
 }
 
 pub(in crate::cpp) fn generate_rust_code_for_enum(
-    conv_map: &mut TypeMap,
-    pointer_target_width: usize,
+    ctx: &mut CppContext,
     enum_info: &ForeignEnumInfo,
 ) -> Result<Vec<TokenStream>> {
     use std::fmt::Write;
@@ -209,7 +207,8 @@ impl SwigFrom<Option<{rust_enum_name}>> for Option<u32> {{
     )
     .unwrap();
 
-    conv_map.register_exported_enum(enum_info);
-    conv_map.merge(SourceId::none(), &code, pointer_target_width)?;
+    ctx.conv_map.register_exported_enum(enum_info);
+    ctx.conv_map
+        .merge(SourceId::none(), &code, ctx.target_pointer_width)?;
     Ok(vec![trait_impl.into_token_stream()])
 }
