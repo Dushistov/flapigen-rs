@@ -34,7 +34,7 @@ mod fenum;
 mod finterface;
 mod map_type;
 
-use std::{cell::RefCell, fmt, io::Write, mem};
+use std::{fmt, io::Write, mem};
 
 use log::{debug, trace};
 use petgraph::Direction;
@@ -216,7 +216,7 @@ struct CppContext<'a> {
     conv_map: &'a mut TypeMap,
     target_pointer_width: usize,
     rust_code: &'a mut Vec<TokenStream>,
-    common_files: RefCell<&'a mut FxHashMap<SmolStr, FileWriteCache>>,
+    common_files: &'a mut FxHashMap<SmolStr, FileWriteCache>,
 }
 
 impl LanguageGenerator for CppConfig {
@@ -236,7 +236,7 @@ impl LanguageGenerator for CppConfig {
                 conv_map,
                 target_pointer_width,
                 rust_code: &mut ret,
-                common_files: RefCell::new(&mut files),
+                common_files: &mut files,
             };
             init(&mut ctx, code)?;
             for item in &items {
@@ -761,7 +761,7 @@ fn merge_rule(
     if let Some(c_types) = rule.c_types.take() {
         register_c_type(ctx.conv_map, &c_types, rule.src_id)?;
         let module_name = &c_types.header_name;
-        let mut common_files = ctx.common_files.borrow_mut();
+        let common_files = &mut ctx.common_files;
         let mut c_header_f = file_for_module!(ctx, common_files, module_name);
         c_header_f
             .write_all(
@@ -792,7 +792,7 @@ extern "C" {
     let f_codes = mem::replace(&mut rule.f_code, vec![]);
     for fcode in f_codes {
         let module_name = &fcode.module_name;
-        let mut common_files = ctx.common_files.borrow_mut();
+        let mut common_files = &mut ctx.common_files;
         let c_header_f = file_for_module!(ctx, common_files, module_name);
         let use_fcode = fcode
             .cfg_option

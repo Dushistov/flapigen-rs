@@ -292,13 +292,13 @@ fn map_type_vec(
         let typename = format!("RustForeignVec{}", foreign_class.name);
         let vec_module_name: SmolStr = format!("{}.h", typename).into();
 
-        if ctx.common_files.borrow().get(&vec_module_name).is_none() {
+        if ctx.common_files.get(&vec_module_name).is_none() {
             debug!(
                 "map_result_type_vec: we generate code for {}",
                 vec_module_name
             );
             let module_name = &vec_module_name;
-            let mut common_files = ctx.common_files.borrow_mut();
+            let common_files = &mut ctx.common_files;
             let c_vec_f = file_for_module!(ctx, common_files, module_name);
             let free_mem_func = format!("{}_free", typename);
             let push_func = format!("{}_push", typename);
