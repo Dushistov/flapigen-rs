@@ -1,7 +1,6 @@
 use std::io::Write;
 
 use petgraph::Direction;
-use proc_macro2::TokenStream;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
@@ -26,7 +25,7 @@ pub(in crate::cpp) fn rust_code_generate_interface(
     ctx: &mut CppContext,
     interface: &ForeignInterface,
     methods_sign: &[CppForeignMethodSignature],
-) -> Result<Vec<TokenStream>> {
+) -> Result<()> {
     use std::fmt::Write;
 
     let struct_with_funcs = format!("C_{}", interface.name);
@@ -71,9 +70,7 @@ pub struct {struct_with_funcs} {{
     )
     .unwrap();
 
-    let mut gen_items = vec![];
-
-    gen_items.push(
+    ctx.rust_code.push(
         syn::parse_str(&code)
             .unwrap_or_else(|err| panic_on_syn_error("cpp internal code", code.clone(), err)),
     );
@@ -149,7 +146,7 @@ impl {trait_name} for {struct_with_funcs} {{
             (0..n_args).map(|v| format!("a_{}", v)),
             "()",
         )?;
-        gen_items.append(&mut conv_deps);
+        ctx.rust_code.append(&mut conv_deps);
         let (real_output_typename, output_conv) = match method.fn_decl.output {
             syn::ReturnType::Default => ("()".to_string(), String::new()),
             syn::ReturnType::Type(_, ref ret_ty) => {
@@ -163,7 +160,7 @@ impl {trait_name} for {struct_with_funcs} {{
                     real_output_type.normalized_name.as_str(),
                     (interface.src_id, ret_ty.span()),
                 )?;
-                gen_items.append(&mut conv_deps);
+                ctx.rust_code.append(&mut conv_deps);
                 (real_output_type.normalized_name.to_string(), conv_code)
             }
         };
@@ -218,12 +215,12 @@ impl Drop for {struct_with_funcs} {{
     )
     .unwrap();
 
-    gen_items.push(
+    ctx.rust_code.push(
         syn::parse_str(&code)
             .unwrap_or_else(|err| panic_on_syn_error("cpp internal code", code, err)),
     );
 
-    Ok(gen_items)
+    Ok(())
 }
 
 pub(in crate::cpp) fn find_suitable_ftypes_for_interace_methods(

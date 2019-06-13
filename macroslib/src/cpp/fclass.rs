@@ -31,7 +31,7 @@ pub(in crate::cpp) fn generate(
     class: &ForeignerClassInfo,
     req_includes: &[SmolStr],
     methods_sign: &[CppForeignMethodSignature],
-) -> Result<Vec<TokenStream>> {
+) -> Result<()> {
     use std::fmt::Write;
 
     let c_path = ctx.cfg.output_dir.join(cpp_code::c_header_name(class));
@@ -219,7 +219,6 @@ public:
 
     let dummy_ty = parse_type! { () };
     let dummy_rust_ty = ctx.conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
-    let mut gen_code = Vec::new();
 
     let (this_type_for_method, code_box_this) =
         if let Some(this_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
@@ -264,9 +263,10 @@ public:
                 unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "p"),
                 this_type_for_method = this_type_for_method.normalized_name.clone()
             );
-            gen_code.push(syn::parse_str(&fclass_impl_code).unwrap_or_else(|err| {
-                panic_on_syn_error("internal foreign class impl code", fclass_impl_code, err)
-            }));
+            ctx.rust_code
+                .push(syn::parse_str(&fclass_impl_code).unwrap_or_else(|err| {
+                    panic_on_syn_error("internal foreign class impl code", fclass_impl_code, err)
+                }));
             (this_type_for_method, code_box_this)
         } else {
             (dummy_rust_ty.clone(), String::new())
@@ -424,7 +424,8 @@ May be you need to use `private constructor = empty;` syntax?",
                     )
                     .unwrap();
                 }
-                gen_code.append(&mut generate_static_method(ctx.conv_map, &method_ctx)?);
+                ctx.rust_code
+                    .append(&mut generate_static_method(ctx.conv_map, &method_ctx)?);
             }
             MethodVariant::Method(ref self_variant) => {
                 let const_if_readonly = if self_variant.is_read_only() {
@@ -510,7 +511,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     ).unwrap();
                 }
 
-                gen_code.append(&mut generate_method(
+                ctx.rust_code.append(&mut generate_method(
                     ctx.conv_map,
                     &method_ctx,
                     class,
@@ -566,7 +567,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         .ok_or_else(&no_this_info)?
                         .clone();
                     let this_type = constructor_ret_type.clone();
-                    gen_code.append(&mut generate_constructor(
+                    ctx.rust_code.append(&mut generate_constructor(
                         ctx.conv_map,
                         &method_ctx,
                         constructor_ret_type,
@@ -604,7 +605,7 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
             this_type = this_type_for_method.normalized_name,
         );
         debug!("we generate and parse code: {}", code);
-        gen_code.push(
+        ctx.rust_code.push(
             syn::parse_str(&code).unwrap_or_else(|err| {
                 panic_on_syn_error("internal cpp desctructor code", code, err)
             }),
@@ -740,7 +741,7 @@ using {class_name}Ref = {base_class_name}<false>;
     cpp_include_f
         .update_file_if_necessary()
         .map_err(map_write_err!(cpp_path))?;
-    Ok(gen_code)
+    Ok(())
 }
 
 fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<Vec<TokenStream>> {

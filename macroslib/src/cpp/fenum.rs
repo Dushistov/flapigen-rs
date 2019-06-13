@@ -1,6 +1,5 @@
 use std::{io::Write, path::Path};
 
-use proc_macro2::TokenStream;
 use quote::ToTokens;
 
 use crate::{
@@ -57,7 +56,7 @@ enum {enum_name} {{
 pub(in crate::cpp) fn generate_rust_code_for_enum(
     ctx: &mut CppContext,
     enum_info: &ForeignEnumInfo,
-) -> Result<Vec<TokenStream>> {
+) -> Result<()> {
     use std::fmt::Write;
 
     let rust_enum_name = enum_info.rust_enum_name();
@@ -210,5 +209,6 @@ impl SwigFrom<Option<{rust_enum_name}>> for Option<u32> {{
     ctx.conv_map.register_exported_enum(enum_info);
     ctx.conv_map
         .merge(SourceId::none(), &code, ctx.target_pointer_width)?;
-    Ok(vec![trait_impl.into_token_stream()])
+    ctx.rust_code.push(trait_impl.into_token_stream());
+    Ok(())
 }

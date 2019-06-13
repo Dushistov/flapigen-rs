@@ -792,7 +792,7 @@ extern "C" {
     let f_codes = mem::replace(&mut rule.f_code, vec![]);
     for fcode in f_codes {
         let module_name = &fcode.module_name;
-        let mut common_files = &mut ctx.common_files;
+        let common_files = &mut ctx.common_files;
         let c_header_f = file_for_module!(ctx, common_files, module_name);
         let use_fcode = fcode
             .cfg_option
@@ -929,8 +929,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
     let mut m_sigs = fclass::find_suitable_foreign_types_for_methods(ctx, class)?;
     let req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
-    let mut rust_code = fclass::generate(ctx, class, &req_includes, &m_sigs)?;
-    ctx.rust_code.append(&mut rust_code);
+    fclass::generate(ctx, class, &req_includes, &m_sigs)?;
     Ok(())
 }
 
@@ -955,8 +954,7 @@ fn generate_enum(ctx: &mut CppContext, enum_info: &ForeignEnumInfo) -> Result<()
 
     fenum::generate_code_for_enum(&ctx.cfg.output_dir, enum_info)
         .map_err(|err| DiagnosticError::new(enum_info.src_id, enum_info.span(), err))?;
-    let mut rust_code = fenum::generate_rust_code_for_enum(ctx, enum_info)?;
-    ctx.rust_code.append(&mut rust_code);
+    fenum::generate_rust_code_for_enum(ctx, enum_info)?;
     Ok(())
 }
 
@@ -965,8 +963,7 @@ fn generate_interface(ctx: &mut CppContext, interface: &ForeignInterface) -> Res
     let req_includes = cpp_code::cpp_list_required_includes(&mut f_methods);
     finterface::generate_for_interface(ctx, interface, &req_includes, &f_methods)
         .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;
-    let mut rust_code = finterface::rust_code_generate_interface(ctx, interface, &f_methods)?;
-    ctx.rust_code.append(&mut rust_code);
+    finterface::rust_code_generate_interface(ctx, interface, &f_methods)?;
 
     let c_struct_name = format!("C_{}", interface.name);
     let rust_struct_pointer = format!("*const {}", c_struct_name);
