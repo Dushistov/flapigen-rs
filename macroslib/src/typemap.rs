@@ -33,7 +33,9 @@ use crate::{
     types::{ForeignEnumInfo, ForeignerClassInfo},
 };
 
-pub(crate) use parse_typemap_macro::{CType, CTypes, TypeMapConvRuleInfo};
+pub(crate) use parse_typemap_macro::{
+    CType, CTypes, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
+};
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
 pub(in crate::typemap) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
@@ -86,6 +88,7 @@ pub(crate) struct TypeMap {
     /// code that parsed, but not yet integrated to TypeMap,
     /// because of it is possible only in langauge backend
     not_merged_data: Vec<TypeMapConvRuleInfo>,
+    generic_rules: Vec<Rc<TypeMapConvRuleInfo>>,
 }
 
 impl Default for TypeMap {
@@ -144,6 +147,7 @@ impl Default for TypeMap {
             traits_usage_code: FxHashMap::default(),
             ftypes_storage: ForeignTypesStorage::default(),
             not_merged_data: vec![],
+            generic_rules: vec![],
         }
     }
 }
@@ -914,11 +918,11 @@ impl TypeMap {
     }
 
     pub(crate) fn take_not_merged_not_generic_rules(&mut self) -> Vec<TypeMapConvRuleInfo> {
-        let not_merged_data = mem::replace(&mut self.not_merged_data, vec![]);
-        let (not_generic, generic): (Vec<_>, Vec<_>) =
-            not_merged_data.into_iter().partition(|x| !x.is_generic());
-        mem::replace(&mut self.not_merged_data, generic);
-        not_generic
+        mem::replace(&mut self.not_merged_data, vec![])
+    }
+
+    pub(crate) fn generic_rules(&self) -> &[Rc<TypeMapConvRuleInfo>] {
+        &self.generic_rules
     }
 }
 

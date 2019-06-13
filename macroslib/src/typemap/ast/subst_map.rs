@@ -9,6 +9,8 @@ impl<'a> PartialEq<IdentRef<'_>> for Ident {
     }
 }
 
+const MAX_SIZE: usize = 10;
+
 #[derive(Debug, PartialEq)]
 pub(crate) struct TyParamsSubstItem<'a> {
     pub(crate) ident: &'a Ident,
@@ -17,7 +19,7 @@ pub(crate) struct TyParamsSubstItem<'a> {
 
 #[derive(Default, Debug, PartialEq)]
 pub(crate) struct TyParamsSubstMap<'a> {
-    inner: SmallVec<[TyParamsSubstItem<'a>; 10]>,
+    inner: SmallVec<[TyParamsSubstItem<'a>; MAX_SIZE]>,
 }
 
 impl<'a> TyParamsSubstMap<'a> {
@@ -58,5 +60,26 @@ impl<'a> TyParamsSubstMap<'a> {
             Some(idx) => Some(self.inner[idx].ty.as_ref()),
             None => None,
         }
+    }
+}
+
+pub(crate) type TyParamsSubstList = SmallVec<[(Ident, Option<syn::Type>); MAX_SIZE]>;
+
+impl<'a> From<TyParamsSubstMap<'a>> for TyParamsSubstList {
+    fn from(m: TyParamsSubstMap<'a>) -> Self {
+        m.inner
+            .into_iter()
+            .map(|x| (x.ident.clone(), x.ty))
+            .collect()
+    }
+}
+
+impl<'a> From<&'a [(Ident, Option<syn::Type>)]> for TyParamsSubstMap<'a> {
+    fn from(v: &'a [(Ident, Option<syn::Type>)]) -> Self {
+        let mut ret = TyParamsSubstMap::default();
+        for item in v {
+            ret.insert(&item.0, item.1.clone());
+        }
+        ret
     }
 }

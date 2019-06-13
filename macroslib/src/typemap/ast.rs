@@ -24,7 +24,7 @@ use syn::{
     Type,
 };
 
-pub(in crate::typemap) use self::subst_map::{TyParamsSubstItem, TyParamsSubstMap};
+pub(in crate) use self::subst_map::{TyParamsSubstItem, TyParamsSubstList, TyParamsSubstMap};
 use crate::{
     error::{panic_on_syn_error, SourceIdSpan},
     source_registry::SourceId,
