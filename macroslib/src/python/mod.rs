@@ -80,7 +80,15 @@ impl PythonConfig {
             .iter()
             .map(|m| generate_method_code(class, m, conv_map))
             .collect::<Result<Vec<_>>>()?;
-        let docstring = class.doc_comments.as_slice().join("\n");
+        let mut doc_comments = class.doc_comments.clone();
+        if let Some(constructor) = class.methods.iter().find(|m| m.variant == MethodVariant::Constructor) {
+            // Python API doesn't allow to add docstring to the special methods (slots),
+            // including __new__ and __init__.
+            // The convention is, to document the constructor in class's docstring.
+            doc_comments.push("".to_owned());
+            doc_comments.extend_from_slice(&constructor.doc_comments);
+        }
+        let docstring = doc_comments.as_slice().join("\n");
         let class_code = quote! {
             mod #wrapper_mod_name {
                 use super::*;
@@ -321,8 +329,14 @@ fn generate_method_code(
             #method_rust_path(#( #args_convertions ),*)
         },
     )?;
+    let docstring = if !method_name.to_string().starts_with("__") {
+        parse::<TokenStream>(&("/// ".to_owned() + &method.doc_comments.as_slice().join("\n/// ")), class.src_id)?
+    } else {
+        // Python API doesn't support defining docstrings on the special methods (slots)
+        quote!{}
+    };
     Ok(quote! {
-        #attribute def #method_name(
+        #docstring #attribute def #method_name(
             #( #args_list_tokens ),*
         ) -> cpython::PyResult<#return_type> {
             #[allow(unused)]
@@ -682,7 +696,7 @@ fn py_wrapper_mod_name(type_name: &str) -> String {
 }
 
 // `rust_cpython` provides access only to non-mutable reference of the wrapped Rust object.
-// What's more `rust_cpytho`n requires the object to be `Send + 'static`, because Python VM
+// What's more `rust_cpython` requires the object to be `Send + 'static`, because Python VM
 // can move it between threads without any control from Rust.
 // As a result, we need to wrap the object in `Mutex`, to provide mutability.
 // By default, `Mutex` is used.

@@ -149,7 +149,10 @@ impl TestClass {
 foreigner_class!(
     /// Test class containing static methods only.
     class TestStaticClass {
+        /// Documentation for `TestStaticClass::hello`()
         static_method TestStaticClass::hello() -> String;
+        /// Two line documentation for `TestStaticClass::format_number`()
+        /// :param i32 i: number to format
         static_method TestStaticClass::format_number(i: i32) -> String;
         static_method TestStaticClass::add(a: f32, b: f32) -> f32;
         static_method TestStaticClass::format_str(s: &str) -> String;
@@ -172,7 +175,9 @@ foreigner_class!(
     /// Test class containing standard methods.
     class TestClass {
         self_type TestClass;
+        /// Documentation for constructor
         constructor TestClass::new() -> TestClass;
+        /// increment method documentation
         method TestClass::increment(&mut self);
         method TestClass::format(&self) -> String;
         method TestClass::add(&mut self, i: i32);
