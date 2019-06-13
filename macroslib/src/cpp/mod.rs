@@ -370,7 +370,7 @@ static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * {sizeof_usize},
             opts
         };
 
-        let not_merged_data = conv_map.take_not_merged_data();
+        let not_merged_data = conv_map.take_not_merged_not_generic_rules();
         for mut rule in not_merged_data {
             validate_cfg_options(&rule, &all_options)?;
 

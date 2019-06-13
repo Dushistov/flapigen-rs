@@ -913,8 +913,12 @@ impl TypeMap {
             .map(|idx| self.conv_graph[*idx].clone())
     }
 
-    pub(crate) fn take_not_merged_data(&mut self) -> Vec<TypeMapConvRuleInfo> {
-        mem::replace(&mut self.not_merged_data, vec![])
+    pub(crate) fn take_not_merged_not_generic_rules(&mut self) -> Vec<TypeMapConvRuleInfo> {
+        let not_merged_data = mem::replace(&mut self.not_merged_data, vec![]);
+        let (not_generic, generic): (Vec<_>, Vec<_>) =
+            not_merged_data.into_iter().partition(|x| !x.is_generic());
+        mem::replace(&mut self.not_merged_data, generic);
+        not_generic
     }
 }
 

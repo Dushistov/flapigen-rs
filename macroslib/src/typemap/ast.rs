@@ -73,7 +73,7 @@ impl TypeName {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct SpannedSmolStr {
     pub sp: Span,
     pub value: SmolStr,
@@ -450,7 +450,10 @@ fn is_second_subst_of_first_ppath(
     }
 }
 
-fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
+pub(in crate::typemap) fn replace_all_types_with(
+    in_ty: &Type,
+    subst_map: &TyParamsSubstMap,
+) -> Type {
     struct ReplaceTypes<'a, 'b> {
         subst_map: &'a TyParamsSubstMap<'b>,
     }

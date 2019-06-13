@@ -1,15 +1,20 @@
 use petgraph::Direction;
 use proc_macro2::{Span, TokenStream};
 use smol_str::SmolStr;
+use std::fmt::Write;
 use syn::{
     braced, bracketed, parenthesized, parse_quote, spanned::Spanned, token, Ident, LitStr, Token,
     Type,
 };
 
 use crate::{
+    error::{invalid_src_id_span, DiagnosticError, Result},
     source_registry::SourceId,
     typemap::{
-        ast::{is_second_subst_of_first, DisplayToTokens, SpannedSmolStr, TyParamsSubstMap},
+        ast::{
+            is_second_subst_of_first, parse_ty_with_given_span, replace_all_types_with,
+            DisplayToTokens, SpannedSmolStr, TyParamsSubstMap,
+        },
         ty::FTypeConvCode,
         FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
@@ -17,6 +22,14 @@ use crate::{
 };
 
 static GENERIC_ALIAS: &str = "generic_alias";
+static SWIG_CONCAT_IDENTS: &str = "swig_concat_idents";
+static SWIG_I_TYPE: &str = "swig_i_type";
+static DEFINE_C_TYPE: &str = "define_c_type";
+static SWIG_FROM_RUST_TO_I_TYPE: &str = "swig_from_rust_to_i_type";
+static SWIG_FROM_I_TYPE_TO_RUST: &str = "swig_from_i_type_to_rust";
+static SWIG_FOREIGN_TO_I_TYPE: &str = "swig_foreign_to_i_type";
+static SWIG_FOREIGN_FROM_I_TYPE: &str = "swig_foreign_from_i_type";
+static SWIG_F_TYPE: &str = "swig_f_type";
 
 #[derive(Debug)]
 pub(crate) struct TypeMapConvRuleInfo {
@@ -110,6 +123,123 @@ impl TypeMapConvRuleInfo {
 
         Some(subst_map)
     }
+
+    pub(crate) fn subst_generic_params(
+        &self,
+        param_map: TyParamsSubstMap,
+        expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    ) -> Result<Self> {
+        assert!(self.is_generic());
+        let type_aliases =
+            build_generic_aliases(self.src_id, &self.generic_aliases, &param_map, expander)?;
+        let mut c_types = self.c_types.clone();
+        if let Some(generic_c_types) = self.generic_c_types.as_ref() {
+            let code_span = generic_c_types.types.span();
+            let code = expand_macroses(
+                &generic_c_types.types.to_string(),
+                |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
+                    if id == SWIG_I_TYPE {
+                        let param = if params.len() == 1 {
+                            &params[0]
+                        } else {
+                            return Err(DiagnosticError::new(
+                                self.src_id,
+                                code_span,
+                                format!(
+                                    "{} parameters in {} instead of 1",
+                                    params.len(),
+                                    SWIG_I_TYPE
+                                ),
+                            ));
+                        };
+                        let ty = param_map.get_by_str(param).unwrap_or(None).ok_or_else(|| {
+                            DiagnosticError::new(
+                                self.src_id,
+                                code_span,
+                                format!("unknown type parameter '{}'", param),
+                            )
+                        })?;
+
+                        let i_type = expander.swig_i_type(&ty)?;
+                        write!(out, "{}", DisplayToTokens(&i_type))
+                            .expect("write to String failed");
+                        Ok(())
+                    } else if let Some(pos) = type_aliases
+                        .iter()
+                        .position(|(ident, _)| ident.to_string() == id)
+                    {
+                        write!(out, "{}", DisplayToTokens(&type_aliases[pos].1))
+                            .expect("write to String failed");
+                        Ok(())
+                    } else {
+                        Err(DiagnosticError::new(
+                            self.src_id,
+                            code_span,
+                            format!("unknown macros '{}' in this context", id),
+                        ))
+                    }
+                },
+            )?;
+            let ctypes_list: CTypesList = syn::parse_str(&code).map_err(|err| {
+                DiagnosticError::new(
+                    self.src_id,
+                    code_span,
+                    format!("can not parse this code after expand: {}", err),
+                )
+                .add_span_note(
+                    invalid_src_id_span(),
+                    format!("Code after expand: ```\n{}\n```", code),
+                )
+            })?;
+            assert!(self.c_types.is_none());
+            c_types = Some(CTypes {
+                header_name: generic_c_types.header_name.clone(),
+                types: ctypes_list.0,
+            });
+        }
+        let rtype_left_to_right = expand_rtype_rule(
+            self.src_id,
+            self.rtype_left_to_right.as_ref(),
+            &param_map,
+            expander,
+            &type_aliases,
+        )?;
+        let rtype_right_to_left = expand_rtype_rule(
+            self.src_id,
+            self.rtype_right_to_left.as_ref(),
+            &param_map,
+            expander,
+            &type_aliases,
+        )?;
+        let ftype_left_to_right = expand_ftype_rule(
+            self.src_id,
+            self.ftype_left_to_right.as_ref(),
+            &param_map,
+            expander,
+            &type_aliases,
+        )?;
+        let ftype_right_to_left = expand_ftype_rule(
+            self.src_id,
+            self.ftype_right_to_left.as_ref(),
+            &param_map,
+            expander,
+            &type_aliases,
+        )?;
+
+        Ok(TypeMapConvRuleInfo {
+            src_id: self.src_id,
+            rtype_generics: None,
+            rtype_left_to_right,
+            rtype_right_to_left,
+            ftype_left_to_right,
+            ftype_right_to_left,
+            //TODO: need macros expand?
+            f_code: vec![],
+            c_types,
+            generic_c_types: None,
+            generic_aliases: vec![],
+        })
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -189,7 +319,6 @@ enum ConvertRuleType<T> {
 
 impl syn::parse::Parse for TypeMapConvRuleInfo {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        static DEFINE_C_TYPE: &str = "define_c_type";
         let mut rtype_left_to_right: Option<RTypeConvRule> = None;
         let mut rtype_right_to_left: Option<RTypeConvRule> = None;
         let mut ftype_left_to_right = Vec::<FTypeConvRule>::new();
@@ -388,23 +517,15 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                     return Err(syn::Error::new(mac.span(), "unknown macro in this context"));
                 }
                 if mac.path.is_ident(DEFINE_C_TYPE) {
+                    if c_types.is_some() || generic_c_types.is_some() {
+                        return Err(
+                            input.error(format!("{} should be used only once", DEFINE_C_TYPE))
+                        );
+                    }
                     match syn::parse2::<CTypes>(mac.tts.clone()) {
-                        Ok(x) => {
-                            if c_types.is_some() {
-                                return Err(input
-                                    .error(format!("{} should be used only once", DEFINE_C_TYPE)));
-                            }
-                            c_types = Some(x);
-                        }
-                        Err(_) => {
-                            if generic_c_types.is_some() {
-                                return Err(input.error(format!(
-                                    "generic {} should be used only once",
-                                    DEFINE_C_TYPE
-                                )));
-                            }
-                            generic_c_types = Some(syn::parse2::<GenericCTypes>(mac.tts)?);
-                        }
+                        Ok(x) => c_types = Some(x),
+
+                        Err(_) => generic_c_types = Some(syn::parse2::<GenericCTypes>(mac.tts)?),
                     }
                 } else if mac.path.is_ident(FOREIGN_CODE) || mac.path.is_ident(FOREIGNER_CODE) {
                     let fc_elem = syn::parse2::<ForeignCode>(mac.tts)?;
@@ -581,6 +702,18 @@ impl syn::parse::Parse for CTypes {
         let module_name: LitStr = input.parse()?;
         let header_name: SmolStr = module_name.value().into();
         input.parse::<Token![;]>()?;
+        let ctypes_list: CTypesList = input.parse()?;
+        Ok(CTypes {
+            header_name,
+            types: ctypes_list.0,
+        })
+    }
+}
+
+struct CTypesList(Vec<CType>);
+
+impl syn::parse::Parse for CTypesList {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut types = vec![];
         while !input.is_empty() {
             let item: syn::Item = input.parse()?;
@@ -600,7 +733,7 @@ impl syn::parse::Parse for CTypes {
                 _ => return Err(syn::Error::new(item.span(), "Expect struct or union here")),
             }
         }
-        Ok(CTypes { header_name, types })
+        Ok(CTypesList(types))
     }
 }
 
@@ -678,10 +811,423 @@ impl syn::parse::Parse for GenericCTypes {
     }
 }
 
+pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
+    fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type>;
+    fn swig_from_rust_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<TokenStream>;
+    fn swig_from_i_type_to_rust(&mut self, ty: &syn::Type, var_name: &str) -> Result<TokenStream>;
+    fn swig_f_type(&mut self, ty: &syn::Type) -> Result<SmolStr>;
+    fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
+    fn swig_foreign_from_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
+}
+
+fn build_generic_aliases<'a, 'b>(
+    src_id: SourceId,
+    generic_aliases: &'a [GenericAlias],
+    param_map: &'b TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+) -> Result<Vec<(&'a syn::Ident, Type)>> {
+    let mut ret = vec![];
+    for ga in generic_aliases {
+        let item: GenericAliasItem = syn::parse2(ga.value.clone())
+            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        let mut ident = String::new();
+        concat_idents(src_id, item, param_map, expander, &mut ident)?;
+        let new_type: syn::Type = parse_ty_with_given_span(&ident, ga.value.span())
+            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        ret.push((&ga.alias, new_type));
+    }
+
+    Ok(ret)
+}
+
+#[derive(Debug)]
+enum GenericAliasItem {
+    Concat(Vec<GenericAliasItem>),
+    Ident(syn::Ident),
+    SwigIType(syn::Ident),
+}
+
+fn concat_idents(
+    src_id: SourceId,
+    item: GenericAliasItem,
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    ident: &mut String,
+) -> Result<()> {
+    match item {
+        GenericAliasItem::Concat(items) => {
+            for it in items {
+                concat_idents(src_id, it, param_map, expander, ident)?;
+            }
+        }
+        GenericAliasItem::SwigIType(id) => {
+            let ty: &syn::Type = param_map.get(&id).unwrap_or(None).ok_or_else(|| {
+                DiagnosticError::new(
+                    src_id,
+                    id.span(),
+                    format!("unknown type parameter '{}'", id),
+                )
+            })?;
+            let i_type: syn::Type = expander.swig_i_type(ty)?;
+            ident.push_str(&DisplayToTokens(&i_type).to_string());
+        }
+        GenericAliasItem::Ident(id) => ident.push_str(&id.to_string()),
+    }
+    Ok(())
+}
+
+impl syn::parse::Parse for GenericAliasItem {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        if input.fork().parse::<syn::Macro>().is_ok() {
+            let mac: syn::Macro = input.parse()?;
+            if mac.path.is_ident(SWIG_CONCAT_IDENTS) {
+                let items: GenericAliasItemVecCommaSeparated = syn::parse2(mac.tts)?;
+                Ok(GenericAliasItem::Concat(items.0))
+            } else if mac.path.is_ident(SWIG_I_TYPE) {
+                let item: syn::Ident = syn::parse2(mac.tts)?;
+                Ok(GenericAliasItem::SwigIType(item))
+            } else {
+                return Err(syn::Error::new(
+                    mac.span(),
+                    format!(
+                        "uknown macro '{}' in this context",
+                        DisplayToTokens(&mac.path)
+                    ),
+                ));
+            }
+        } else {
+            Ok(GenericAliasItem::Ident(input.parse()?))
+        }
+    }
+}
+
+struct GenericAliasItemVecCommaSeparated(Vec<GenericAliasItem>);
+
+impl syn::parse::Parse for GenericAliasItemVecCommaSeparated {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let ret =
+            syn::punctuated::Punctuated::<GenericAliasItem, Token![,]>::parse_terminated(input)?;
+        Ok(GenericAliasItemVecCommaSeparated(ret.into_iter().collect()))
+    }
+}
+
+fn expand_macroses<'a, E>(code: &str, mut expander: E) -> Result<String>
+where
+    E: FnMut(&str, Vec<&str>, &mut String) -> Result<()>,
+{
+    let mut prev_pos = 0;
+    let mut ret = String::with_capacity(code.len());
+    loop {
+        match (&code[prev_pos..]).find(char::is_alphabetic) {
+            Some(pos) => {
+                let skip_chunk = &code[prev_pos..(prev_pos + pos)];
+                ret.push_str(skip_chunk);
+                prev_pos += pos;
+                if let Some((macro_id, params, macro_call_end)) = find_macro(&code[prev_pos..]) {
+                    expander(macro_id, params, &mut ret)?;
+                    prev_pos += macro_call_end;
+                } else {
+                    match (&code[prev_pos..]).find(|ch: char| !ch.is_alphabetic()) {
+                        Some(pos) => {
+                            let skip_chunk = &code[prev_pos..(prev_pos + pos)];
+                            ret.push_str(skip_chunk);
+                            prev_pos += pos;
+                        }
+                        None => {
+                            ret.push_str(&code[prev_pos..]);
+                            break;
+                        }
+                    }
+                }
+            }
+            None => {
+                ret.push_str(&code[prev_pos..]);
+                break;
+            }
+        }
+    }
+
+    Ok(ret)
+}
+
+fn find_macro(code: &str) -> Option<(&str, Vec<&str>, usize)> {
+    let id_end = code.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))?;
+    let mut next_pos = id_end + (&code[id_end..]).find(|ch: char| !ch.is_whitespace())?;
+    if &code[next_pos..(next_pos + 1)] != "!" {
+        return None;
+    }
+    next_pos += 1;
+    next_pos = next_pos + (&code[next_pos..]).find(|ch: char| !ch.is_whitespace())?;
+    if &code[next_pos..(next_pos + 1)] != "(" {
+        return None;
+    }
+    next_pos += 1;
+    let cnt_start = next_pos;
+    next_pos = next_pos + (&code[next_pos..]).find(')')?;
+    let cnt_end = next_pos;
+    let id = &code[0..id_end];
+    let params: Vec<&str> = (&code[cnt_start..cnt_end])
+        .trim()
+        .split(',')
+        .map(|x| x.trim())
+        .collect();
+    Some((id, params, next_pos + 1))
+}
+
+fn expand_rtype_rule(
+    src_id: SourceId,
+    grule: Option<&RTypeConvRule>,
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[(&syn::Ident, Type)],
+) -> Result<Option<RTypeConvRule>> {
+    let grule = match grule {
+        Some(x) => x,
+        None => return Ok(None),
+    };
+    let left_ty = replace_all_types_with(&grule.left_ty, param_map);
+    let right_ty: Option<Type> = match grule.right_ty.as_ref() {
+        Some(x) => match x {
+            Type::Macro(ref type_macro) => {
+                let alias_idx = generic_aliases
+                    .iter()
+                    .position(|a| type_macro.mac.path.is_ident(a.0.clone()))
+                    .ok_or_else(|| {
+                        DiagnosticError::new(
+                            src_id,
+                            x.span(),
+                            format!(
+                                "unknown {} name {}",
+                                GENERIC_ALIAS,
+                                DisplayToTokens(&type_macro.mac.path)
+                            ),
+                        )
+                    })?;
+                Some(generic_aliases[alias_idx].1.clone())
+            }
+            _ => Some(replace_all_types_with(&x, param_map)),
+        },
+        None => None,
+    };
+
+    let code = match grule.code {
+        Some(ref x) => {
+            let code = expand_macroses(
+                x.as_str(),
+                |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
+                    match id {
+                        _ if id == SWIG_FROM_RUST_TO_I_TYPE || id == SWIG_FROM_I_TYPE_TO_RUST => {
+                            let (type_name, var_name) = if params.len() == 2 {
+                                (&params[0], &params[1])
+                            } else {
+                                return Err(DiagnosticError::new(
+                                    src_id,
+                                    x.span(),
+                                    format!("{} parameters in {} instead of 2", params.len(), id),
+                                ));
+                            };
+
+                            let ty = param_map.get_by_str(type_name).unwrap_or(None).ok_or_else(
+                                || {
+                                    DiagnosticError::new(
+                                        src_id,
+                                        x.span(),
+                                        format!("unknown type parameter '{}'", type_name),
+                                    )
+                                },
+                            )?;
+                            let tt: TokenStream = if id == SWIG_FROM_RUST_TO_I_TYPE {
+                                expander.swig_from_rust_to_i_type(&ty, var_name)?
+                            } else if id == SWIG_FROM_I_TYPE_TO_RUST {
+                                expander.swig_from_i_type_to_rust(&ty, var_name)?
+                            } else {
+                                unreachable!()
+                            };
+                            write!(out, "{}", tt).expect("write to String failed");
+                        }
+                        _ => {
+                            let alias_idx = generic_aliases
+                                .iter()
+                                .position(|a| a.0 == id)
+                                .ok_or_else(|| {
+                                    DiagnosticError::new(
+                                        src_id,
+                                        x.span(),
+                                        format!("unknown {} {}", GENERIC_ALIAS, id),
+                                    )
+                                })?;
+                            write!(out, "{}", DisplayToTokens(&generic_aliases[alias_idx].1))
+                                .expect("write to String failed");
+                        }
+                    }
+                    Ok(())
+                },
+            )?;
+            Some(FTypeConvCode::new(code, x.span()))
+        }
+        None => None,
+    };
+
+    Ok(Some(RTypeConvRule {
+        left_ty,
+        right_ty,
+        code,
+    }))
+}
+
+fn expand_ftype_rule(
+    src_id: SourceId,
+    grules: &[FTypeConvRule],
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[(&syn::Ident, Type)],
+) -> Result<Vec<FTypeConvRule>> {
+    let mut ret = Vec::with_capacity(grules.len());
+
+    for grule in grules {
+        use FTypeLeftRightPair::*;
+        let left_right_ty = match grule.left_right_ty {
+            OnlyLeft(ref ftype) => OnlyLeft(expand_ftype_name(src_id, ftype, param_map, expander)?),
+            OnlyRight(ref ftype) => {
+                OnlyRight(expand_ftype_name(src_id, ftype, param_map, expander)?)
+            }
+            Both(ref fl, ref fr) => Both(
+                expand_ftype_name(src_id, fl, param_map, expander)?,
+                expand_ftype_name(src_id, fr, param_map, expander)?,
+            ),
+        };
+        let code = match grule.code {
+            Some(ref x) => {
+                let code = expand_macroses(
+                    x.as_str(),
+                    |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
+                        match id {
+                            _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {
+                                let (type_name, var_name) = if params.len() == 2 {
+                                    (&params[0], &params[1])
+                                } else {
+                                    return Err(DiagnosticError::new(
+                                        src_id,
+                                        x.span(),
+                                        format!(
+                                            "{} parameters in {} instead of 2",
+                                            params.len(),
+                                            id
+                                        ),
+                                    ));
+                                };
+
+                                let ty = param_map
+                                    .get_by_str(type_name)
+                                    .unwrap_or(None)
+                                    .ok_or_else(|| {
+                                        DiagnosticError::new(
+                                            src_id,
+                                            x.span(),
+                                            format!("unknown type parameter '{}'", type_name),
+                                        )
+                                    })?;
+                                let tt: String = if id == SWIG_FOREIGN_TO_I_TYPE {
+                                    expander.swig_foreign_to_i_type(&ty, var_name)?
+                                } else if id == SWIG_FOREIGN_FROM_I_TYPE {
+                                    expander.swig_foreign_from_i_type(&ty, var_name)?
+                                } else {
+                                    unreachable!()
+                                };
+                                write!(out, "{}", tt).expect("write to String failed");
+                            }
+                            _ => {
+                                let alias_idx = generic_aliases
+                                    .iter()
+                                    .position(|a| a.0 == id)
+                                    .ok_or_else(|| {
+                                        DiagnosticError::new(
+                                            src_id,
+                                            x.span(),
+                                            format!("unknown {} {}", GENERIC_ALIAS, id),
+                                        )
+                                    })?;
+
+                                write!(
+                                    out,
+                                    "{}",
+                                    expander.swig_f_type(&generic_aliases[alias_idx].1)?
+                                )
+                                .expect("write to String failed");
+                            }
+                        }
+                        Ok(())
+                    },
+                )?;
+                Some(FTypeConvCode::new(code, x.span()))
+            }
+            None => None,
+        };
+        ret.push(FTypeConvRule {
+            req_modules: grule.req_modules.clone(),
+            cfg_option: grule.cfg_option.clone(),
+            left_right_ty,
+            code,
+        });
+    }
+    Ok(ret)
+}
+
+fn expand_ftype_name(
+    src_id: SourceId,
+    ftype: &FTypeName,
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+) -> Result<FTypeName> {
+    let new_fytpe = expand_macroses(
+        ftype.name.as_str(),
+        |id: &str, params: Vec<&str>, out: &mut String| {
+            if id == SWIG_F_TYPE {
+                let type_name = if params.len() == 1 {
+                    &params[0]
+                } else {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        ftype.sp,
+                        format!(
+                            "{} parameters in {} instead of 1",
+                            params.len(),
+                            SWIG_F_TYPE
+                        ),
+                    ));
+                };
+
+                let ty = param_map
+                    .get_by_str(type_name)
+                    .unwrap_or(None)
+                    .ok_or_else(|| {
+                        DiagnosticError::new(
+                            src_id,
+                            ftype.sp,
+                            format!("unknown type parameter '{}'", type_name),
+                        )
+                    })?;
+                out.push_str(&expander.swig_f_type(ty)?);
+                Ok(())
+            } else {
+                Err(DiagnosticError::new(
+                    src_id,
+                    ftype.sp,
+                    format!("unknown macros '{}' in this context", id),
+                ))
+            }
+        },
+    )?;
+    Ok(FTypeName {
+        name: new_fytpe.into(),
+        sp: ftype.sp,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::panic_on_syn_error;
+    use crate::error::{invalid_src_id_span, panic_on_syn_error};
     use syn::parse_quote;
 
     #[test]
@@ -978,36 +1524,82 @@ $out = QString::fromUtf8($pin.data, $pin.len);
     }
 
     #[test]
-    fn test_foreign_typemap_cpp_pair() {
-        let rule = macro_to_conv_rule(parse_quote! {
-            foreign_typemap!(
-                generic_alias!(CRustPair = swig_concat_idents!(CRustPair, swig_i_type!(T1), swig_i_type!(T2)));
-                define_c_type!(
-                    module = "rust_tuple.h";
-                    #[repr(C)]
-                    pub struct CRustPair! {
-                        first: swig_i_type!(T1),
-                        second: swig_i_type!(T2),
-                    }
-                );
-            ($p:r_type) <T1, T2> (T1, T2) => CRustPair!() {
-                $out = CRustPair!() {
-                    first: swig_from_rust_to_i_type!(T1, $p.0),
-                    second: swig_from_rust_to_i_type!(T2, $p.1),
+    fn test_foreign_typemap_cpp_pair_expand() {
+        let rule = cpp_pair_rule();
+        println!("rule!!!: {:?}", rule);
+        struct Dummy;
+        impl TypeMapConvRuleInfoExpanderHelper for Dummy {
+            fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type> {
+                Ok(ty.clone())
+            }
+            fn swig_from_rust_to_i_type(
+                &mut self,
+                _ty: &syn::Type,
+                var_name: &str,
+            ) -> Result<TokenStream> {
+                syn::parse_str(var_name).map_err(|err| {
+                    DiagnosticError::from_syn_err(SourceId::none(), err).add_span_note(
+                        invalid_src_id_span(),
+                        format!("Invalid parameter name '{}'", var_name),
+                    )
+                })
+            }
+            fn swig_from_i_type_to_rust(
+                &mut self,
+                ty: &syn::Type,
+                var_name: &str,
+            ) -> Result<TokenStream> {
+                self.swig_from_rust_to_i_type(ty, var_name)
+            }
+            fn swig_f_type(&mut self, ty: &syn::Type) -> Result<SmolStr> {
+                if *ty == parse_type!(i32) {
+                    Ok("int32_t".into())
+                } else if *ty == parse_type!(f32) {
+                    Ok("float".into())
+                } else if *ty == parse_type!(CRustPairi32f32) {
+                    Ok("CRustPairi32f32".into())
+                } else {
+                    panic!("swig_f_type: Unknown type: {}", DisplayToTokens(ty));
                 }
-            };
-            ($p:r_type) <T1, T2> (T1, T2) <= CRustPair!() {
-                $out = (swig_from_rust_i_type_to!(T1, $p.first), swig_from_rust_i_type_to!(T2, $p.second))
-            };
-            ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
-                    "std::make_pair(swig_foreign_from_i_type!(T1, $p.first), swig_foreign_from_i_type!(T2, $p.second))";
-            ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
-                "CRustPair! { swig_foreign_to_i_type!(T1, $p.first), swig_foreign_to_i_type!(T2, $p.second) }";
-        )
-        });
+            }
+            fn swig_foreign_to_i_type(
+                &mut self,
+                _ty: &syn::Type,
+                var_name: &str,
+            ) -> Result<String> {
+                Ok(var_name.into())
+            }
+            fn swig_foreign_from_i_type(
+                &mut self,
+                ty: &syn::Type,
+                var_name: &str,
+            ) -> Result<String> {
+                self.swig_foreign_to_i_type(ty, var_name)
+            }
+        }
+
+        let new_rule = rule
+            .subst_generic_params(
+                rule.is_ty_subst_of_my_generic_rtype(
+                    &parse_type! {(i32, f32)},
+                    Direction::Outgoing,
+                )
+                .unwrap(),
+                &mut Dummy,
+            )
+            .unwrap();
+        assert!(rule.is_generic());
+        assert!(!new_rule.is_generic());
+        assert!(new_rule.contains_data_for_language_backend());
+    }
+
+    #[test]
+    fn test_foreign_typemap_cpp_pair_syntax() {
+        let rule = cpp_pair_rule();
         println!("rule!!!: {:?}", rule);
         assert!(!rule.if_simple_rtype_ftype_map().is_some());
         assert!(rule.contains_data_for_language_backend());
+        assert!(rule.is_generic());
 
         assert!(rule
             .is_ty_subst_of_my_generic_rtype(&parse_type! {i32}, Direction::Outgoing)
@@ -1015,6 +1607,33 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         assert!(rule
             .is_ty_subst_of_my_generic_rtype(&parse_type! {()}, Direction::Outgoing)
             .is_none());
+
+        let generics: syn::Generics = parse_quote! { <T1, T2> };
+        assert_eq!(generics, *rule.rtype_generics.as_ref().unwrap());
+        assert_eq!(
+            RTypeConvRule {
+                left_ty: parse_type! {(T1, T2)},
+                right_ty: Some(parse_type! { CRustPair!() }),
+                code: Some(FTypeConvCode::new(
+                    "let {to_var}: {to_var_type} = CRustPair ! ( ) { first : swig_from_rust_to_i_type ! ( T1 , {from_var} . 0 ) , second : swig_from_rust_to_i_type ! ( T2 , {from_var} . 1 ) , };",
+                    Span::call_site()
+                )),
+            },
+            *rule.rtype_left_to_right.as_ref().unwrap()
+        );
+
+        assert_eq!(
+            RTypeConvRule {
+                left_ty: parse_type! { (T1, T2) },
+                right_ty: Some(parse_type! { CRustPair!() }),
+                code: Some(FTypeConvCode::new(
+                    "let {to_var}: {to_var_type} = ( swig_from_i_type_to_rust ! ( T1 , {from_var} . first ) , swig_from_i_type_to_rust ! ( T2 , {from_var} . second ) );",
+                    Span::call_site()
+                )),
+            },
+            *rule.rtype_right_to_left.as_ref().unwrap()
+        );
+
         let t1 = syn::Ident::new("T1", Span::call_site());
         let t2 = syn::Ident::new("T2", Span::call_site());
         assert_eq!(
@@ -1026,32 +1645,35 @@ $out = QString::fromUtf8($pin.data, $pin.len);
             }),
             rule.is_ty_subst_of_my_generic_rtype(&parse_type! {(i32, f32)}, Direction::Outgoing)
         );
+    }
 
-        let generics: syn::Generics = parse_quote! { <T1, T2> };
-        assert_eq!(Some(generics), rule.rtype_generics);
-        assert_eq!(
-            RTypeConvRule {
-                left_ty: parse_type! {(T1, T2)},
-                right_ty: Some(parse_type! { CRustPair!() }),
-                code: Some(FTypeConvCode::new(
-                    "let {to_var}: {to_var_type} = CRustPair ! ( ) { first : swig_from_rust_to_i_type ! ( T1 , {from_var} . 0 ) , second : swig_from_rust_to_i_type ! ( T2 , {from_var} . 1 ) , };",
-                    Span::call_site()
-                )),
-            },
-            rule.rtype_left_to_right.unwrap()
-        );
-
-        assert_eq!(
-            RTypeConvRule {
-                left_ty: parse_type! { (T1, T2) },
-                right_ty: Some(parse_type! { CRustPair!() }),
-                code: Some(FTypeConvCode::new(
-                    "let {to_var}: {to_var_type} = ( swig_from_rust_i_type_to ! ( T1 , {from_var} . first ) , swig_from_rust_i_type_to ! ( T2 , {from_var} . second ) );",
-                    Span::call_site()
-                )),
-            },
-            rule.rtype_right_to_left.unwrap()
-        );
+    fn cpp_pair_rule() -> TypeMapConvRuleInfo {
+        macro_to_conv_rule(parse_quote! {
+            foreign_typemap!(
+                generic_alias!(CRustPair = swig_concat_idents!(CRustPair, swig_i_type!(T1), swig_i_type!(T2)));
+                define_c_type!(
+                    module = "rust_tuple.h";
+                    #[repr(C)]
+                    pub struct CRustPair!() {
+                        first: swig_i_type!(T1),
+                        second: swig_i_type!(T2),
+                    }
+                );
+            ($p:r_type) <T1, T2> (T1, T2) => CRustPair!() {
+                $out = CRustPair!() {
+                    first: swig_from_rust_to_i_type!(T1, $p.0),
+                    second: swig_from_rust_to_i_type!(T2, $p.1),
+                }
+            };
+            ($p:r_type) <T1, T2> (T1, T2) <= CRustPair!() {
+                $out = (swig_from_i_type_to_rust!(T1, $p.first), swig_from_i_type_to_rust!(T2, $p.second))
+            };
+            ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+                    "std::make_pair(swig_foreign_from_i_type!(T1, $p.first), swig_foreign_from_i_type!(T2, $p.second))";
+            ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+                "CRustPair!() { swig_foreign_to_i_type!(T1, $p.first), swig_foreign_to_i_type!(T2, $p.second) }";
+        )
+        })
     }
 
     fn macro_to_conv_rule(mac: syn::Macro) -> TypeMapConvRuleInfo {

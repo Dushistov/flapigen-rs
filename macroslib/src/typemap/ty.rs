@@ -213,6 +213,13 @@ impl FTypeConvCode {
         );
         FTypeConvCode { code, span }
     }
+
+    pub(crate) fn as_str(&self) -> &str {
+        self.code.as_str()
+    }
+    pub(crate) fn span(&self) -> Span {
+        self.span
+    }
 }
 
 impl ToString for FTypeConvCode {
