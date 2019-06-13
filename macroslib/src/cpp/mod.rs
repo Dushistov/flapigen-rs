@@ -29,7 +29,8 @@ use crate::{
             boxed_type, unpack_from_heap_pointer, validate_cfg_options, ForeignMethodSignature,
             ForeignTypeInfoT,
         },
-        CType, CTypes, ForeignTypeInfo, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        CType, CTypes, ForeignTypeInfo, RustTypeIdx, TypeMapConvRuleInfo, FROM_VAR_TEMPLATE,
+        TO_VAR_TEMPLATE,
     },
     types::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
@@ -347,108 +348,16 @@ May be you need to use `private constructor = empty;` syntax?",
 
         let not_merged_data = conv_map.take_not_merged_not_generic_rules();
         for mut rule in not_merged_data {
-            validate_cfg_options(&rule, &all_options)?;
-
-            if let Some(c_types) = rule.c_types.take() {
-                let mut c_header_f = file_for_module(
-                    &mut files,
-                    &self.output_dir,
-                    &c_types.header_name,
-                    target_pointer_width,
-                );
-                c_header_f
-                    .write_all(
-                        br##"
-#ifdef __cplusplus
-extern "C" {
-#endif
-"##,
-                    )
-                    .map_err(map_any_err_to_our_err)?;
-                register_c_type(conv_map, &c_types, rule.src_id)?;
-                ret.append(&mut cpp_code::generate_c_type(
-                    conv_map,
-                    &c_types,
-                    rule.src_id,
-                    &mut c_header_f,
-                )?);
-                c_header_f
-                    .write_all(
-                        br##"
-#ifdef __cplusplus
-} // extern "C" {
-#endif
-"##,
-                    )
-                    .map_err(map_any_err_to_our_err)?;
-            }
-
-            let f_codes = mem::replace(&mut rule.f_code, vec![]);
-            for fcode in f_codes {
-                let c_header_f = file_for_module(
-                    &mut files,
-                    &self.output_dir,
-                    &fcode.module_name,
-                    target_pointer_width,
-                );
-                let use_fcode = fcode
-                    .cfg_option
-                    .as_ref()
-                    .map(|opt| options.contains(opt.as_str()))
-                    .unwrap_or(true);
-
-                if use_fcode {
-                    c_header_f
-                        .write_all(
-                            fcode
-                                .code
-                                .replace("$RUST_SWIG_USER_NAMESPACE", &self.namespace_name)
-                                .as_bytes(),
-                        )
-                        .map_err(map_any_err_to_our_err)?;
-                }
-            }
-
-            macro_rules! configure_ftype_rule {
-                ($f_type_rules:ident, $rule_type:tt) => {{
-                    $f_type_rules.retain(|rule| {
-                        rule.cfg_option
-                            .as_ref()
-                            .map(|opt| options.contains(opt.as_str()))
-                            .unwrap_or(true)
-                    });
-                    if $f_type_rules.len() > 1 {
-                        let first_rule = $f_type_rules.remove(0);
-                        let mut err = DiagnosticError::new(
-                            rule.src_id,
-                            first_rule.left_right_ty.span(),
-                            concat!(
-                                "multiply f_type '",
-                                stringify!($rule_type),
-                                "' rules, that possible to use in this configuration, first"
-                            ),
-                        );
-                        for other in $f_type_rules.iter() {
-                            err.span_note(
-                                (rule.src_id, other.left_right_ty.span()),
-                                concat!("other f_type '", stringify!($rule_type), "' rule"),
-                            );
-                        }
-                        return Err(err);
-                    }
-                    if $f_type_rules.len() == 1 {
-                        $f_type_rules[0].cfg_option = None;
-                    }
-                }};
-            }
-
-            let ftype_left_to_right = &mut rule.ftype_left_to_right;
-            configure_ftype_rule!(ftype_left_to_right, =>);
-
-            let ftype_right_to_left = &mut rule.ftype_right_to_left;
-            configure_ftype_rule!(ftype_right_to_left, <=);
-
-            conv_map.merge_conv_rule(rule.src_id, rule)?;
+            merge_rule(
+                rule,
+                conv_map,
+                &options,
+                &all_options,
+                &mut files,
+                &mut ret,
+                self,
+                target_pointer_width,
+            )?;
         }
 
         for (module_name, c_header_f) in files {
@@ -1006,4 +915,119 @@ static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * {sizeof_usize},
         .expect("write to memory failed, no free mem?");
         c_header_f
     })
+}
+
+fn merge_rule(
+    mut rule: TypeMapConvRuleInfo,
+    conv_map: &mut TypeMap,
+    options: &FxHashSet<&'static str>,
+    all_options: &FxHashSet<&'static str>,
+    files: &mut FxHashMap<SmolStr, FileWriteCache>,
+    rust_code: &mut Vec<TokenStream>,
+    cfg: &CppConfig,
+    target_pointer_width: usize,
+) -> Result<()> {
+    validate_cfg_options(&rule, &all_options)?;
+
+    if let Some(c_types) = rule.c_types.take() {
+        let mut c_header_f = file_for_module(
+            files,
+            &cfg.output_dir,
+            &c_types.header_name,
+            target_pointer_width,
+        );
+        c_header_f
+            .write_all(
+                br##"
+#ifdef __cplusplus
+extern "C" {
+#endif
+"##,
+            )
+            .map_err(map_any_err_to_our_err)?;
+        register_c_type(conv_map, &c_types, rule.src_id)?;
+        rust_code.append(&mut cpp_code::generate_c_type(
+            conv_map,
+            &c_types,
+            rule.src_id,
+            &mut c_header_f,
+        )?);
+        c_header_f
+            .write_all(
+                br##"
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+"##,
+            )
+            .map_err(map_any_err_to_our_err)?;
+    }
+
+    let f_codes = mem::replace(&mut rule.f_code, vec![]);
+    for fcode in f_codes {
+        let c_header_f = file_for_module(
+            files,
+            &cfg.output_dir,
+            &fcode.module_name,
+            target_pointer_width,
+        );
+        let use_fcode = fcode
+            .cfg_option
+            .as_ref()
+            .map(|opt| options.contains(opt.as_str()))
+            .unwrap_or(true);
+
+        if use_fcode {
+            c_header_f
+                .write_all(
+                    fcode
+                        .code
+                        .replace("$RUST_SWIG_USER_NAMESPACE", &cfg.namespace_name)
+                        .as_bytes(),
+                )
+                .map_err(map_any_err_to_our_err)?;
+        }
+    }
+
+    macro_rules! configure_ftype_rule {
+        ($f_type_rules:ident, $rule_type:tt) => {{
+            $f_type_rules.retain(|rule| {
+                rule.cfg_option
+                    .as_ref()
+                    .map(|opt| options.contains(opt.as_str()))
+                    .unwrap_or(true)
+            });
+            if $f_type_rules.len() > 1 {
+                let first_rule = $f_type_rules.remove(0);
+                let mut err = DiagnosticError::new(
+                    rule.src_id,
+                    first_rule.left_right_ty.span(),
+                    concat!(
+                        "multiply f_type '",
+                        stringify!($rule_type),
+                        "' rules, that possible to use in this configuration, first"
+                    ),
+                );
+                for other in $f_type_rules.iter() {
+                    err.span_note(
+                        (rule.src_id, other.left_right_ty.span()),
+                        concat!("other f_type '", stringify!($rule_type), "' rule"),
+                    );
+                }
+                return Err(err);
+            }
+            if $f_type_rules.len() == 1 {
+                $f_type_rules[0].cfg_option = None;
+            }
+        }};
+    }
+
+    let ftype_left_to_right = &mut rule.ftype_left_to_right;
+    configure_ftype_rule!(ftype_left_to_right, =>);
+
+    let ftype_right_to_left = &mut rule.ftype_right_to_left;
+    configure_ftype_rule!(ftype_right_to_left, <=);
+
+    conv_map.merge_conv_rule(rule.src_id, rule)?;
+    Ok(())
 }
