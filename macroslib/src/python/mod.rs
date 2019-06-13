@@ -36,7 +36,15 @@ impl LanguageGenerator for PythonConfig {
             .iter()
             .map(|m| generate_method_code(class, m, conv_map))
             .collect::<Result<Vec<_>>>()?;
-        let docstring = class.doc_comments.as_slice().join("\n");
+        let mut doc_comments = class.doc_comments.clone();
+        if let Some(constructor) = class.methods.iter().find(|m| m.variant == MethodVariant::Constructor) {
+            // Python API doesn't allow to add docstring to the special methods (slots),
+            // including __new__ and __init__.
+            // The convention is, to document the constructor in class's docstring.
+            doc_comments.push("".to_owned());
+            doc_comments.extend_from_slice(&constructor.doc_comments);
+        }
+        let docstring = doc_comments.as_slice().join("\n");
         let class_code = quote! {
             mod #wrapper_mod_name {
                 use super::*;
@@ -239,8 +247,14 @@ fn generate_method_code(
             #method_rust_path(#( #args_convertions ),*)
         },
     )?;
+    let docstring = if !method_name.to_string().starts_with("__") {
+        syn::parse_str::<TokenStream>(&("/// ".to_owned() + &method.doc_comments.as_slice().join("\n/// ")))?
+    } else {
+        // Python API doesn't support defining docstrings on the special methods (slots)
+        quote!{}
+    };
     Ok(quote! {
-        #attribute def #method_name(
+        #docstring #attribute def #method_name(
             #( #args_list ),*
         ) -> cpython::PyResult<#return_type> {
             #[allow(unused)]

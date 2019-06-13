@@ -21,7 +21,7 @@ lazy_static = "1.0.2"
 smallvec = "0.6.9"
 rustc-hash = "1.0.1"
 smol_str = "0.1.10"
-cpython = { version = "0.2", features = ["extension-module"] }
+cpython = { git = "https://github.com/Simteract/rust-cpython.git", features = ["extension-module"] }
 heck = "0.3.1"
 
 [dev-dependencies]
