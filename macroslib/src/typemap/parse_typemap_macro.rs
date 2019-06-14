@@ -12,8 +12,8 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{
-            is_second_subst_of_first, parse_ty_with_given_span, replace_all_types_with,
-            DisplayToTokens, SpannedSmolStr, TyParamsSubstMap,
+            get_trait_bounds, is_second_subst_of_first, parse_ty_with_given_span,
+            replace_all_types_with, DisplayToTokens, SpannedSmolStr, TyParamsSubstMap,
         },
         ty::FTypeConvCode,
         FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
@@ -589,6 +589,9 @@ fn parse_r_type_rule(
                 ));
             }
         } else {
+            if !get_trait_bounds(&new_generics).is_empty() {
+                unimplemented!();
+            }
             *generics = Some(new_generics);
         }
     }
