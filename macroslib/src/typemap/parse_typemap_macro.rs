@@ -1197,10 +1197,7 @@ fn expand_ftype_rule(
                                 write!(
                                     out,
                                     "{}",
-                                    expander
-                                        .swig_f_type(&generic_aliases[alias_idx].1)?
-                                        .replace("struct", "")
-                                        .replace("union", "")
+                                    expander.swig_f_type(&generic_aliases[alias_idx].1)?
                                 )
                                 .expect("write to String failed");
                             }

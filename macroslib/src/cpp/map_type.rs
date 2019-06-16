@@ -295,11 +295,12 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let f_info = map_ordinal_type(self.ctx, &rust_ty, self.arg_ty_span, self.direction)?;
-        if let Some(cpp_conv) = f_info.cpp_converter {
-            Ok(cpp_conv.typename)
+        let fname = if let Some(ref cpp_conv) = f_info.cpp_converter {
+            cpp_conv.typename.as_str()
         } else {
-            Ok(f_info.base.name)
-        }
+            f_info.base.name.as_str()
+        };
+        Ok(fname.replace("struct ", "").replace("union ", "").into())
     }
     fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String> {
         let rust_ty = self
