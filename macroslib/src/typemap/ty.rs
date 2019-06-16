@@ -285,17 +285,15 @@ impl ForeignTypesStorage {
         if let Some(ft) = self.name_to_ftype.get(ftype_name.as_str()) {
             *ft
         } else {
-            let idx = ForeignType(self.ftypes.len());
-            self.ftypes.push(ForeignTypeS {
+            let ftype = ForeignTypeS {
                 name: ftype_name,
                 provides_by_module: Vec::new(),
                 into_from_rust: None,
                 from_into_rust: None,
                 name_prefix: None,
-            });
-            self.name_to_ftype
-                .insert(self.ftypes[idx.0].name.typename.clone(), idx);
-            idx
+            };
+            self.add_new_ftype(ftype)
+                .unwrap_or_else(|err| panic!("Internal error in find_or_alloc_ftype: {}", err))
         }
     }
 

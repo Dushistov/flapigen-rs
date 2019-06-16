@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, rc::Rc};
 
 use log::{debug, trace};
 use petgraph::Direction;
@@ -10,16 +10,19 @@ use syn::{parse_quote, spanned::Spanned, Type};
 use crate::{
     cpp::{
         cpp_code::{c_class_type, cpp_header_name, cpp_header_name_for_enum},
-        CppContext, CppConverter, CppForeignTypeInfo,
+        merge_c_types, merge_rule, CppContext, CppConverter, CppForeignTypeInfo, MergeCTypesFlags,
     },
     error::{panic_on_syn_error, DiagnosticError, Result, SourceIdSpan},
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::ast::{
         if_option_return_some_type, if_result_return_ok_err_types, if_type_slice_return_elem_type,
-        if_vec_return_elem_type,
+        if_vec_return_elem_type, TyParamsSubstList,
     },
-    typemap::{ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
+    typemap::{
+        ty::RustType, ForeignTypeInfo, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
+        TO_VAR_TEMPLATE,
+    },
     types::{ForeignEnumInfo, ForeignerClassInfo},
     CppOptional, CppVariant, TypeMap,
 };
@@ -57,46 +60,14 @@ fn special_type(
             return handle_option_type_in_return(ctx, arg_ty, (&ty, arg_ty.src_id), arg_ty_span);
         }
         if let Some(elem_ty) = if_type_slice_return_elem_type(&arg_ty.ty, false) {
-            return map_return_slice_type(ctx.conv_map, arg_ty, &elem_ty, arg_ty_span);
+            return map_return_slice_type(ctx, arg_ty, &elem_ty, arg_ty_span);
         }
     } else {
         if let Some(ty) = if_option_return_some_type(arg_ty) {
             return handle_option_type_in_input(ctx, arg_ty, (&ty, arg_ty.src_id), arg_ty_span);
         }
         if let Some(elem_ty) = if_type_slice_return_elem_type(&arg_ty.ty, true) {
-            return map_arg_with_slice_type(ctx.conv_map, arg_ty, &elem_ty, arg_ty_span);
-        }
-    }
-
-    if direction == Direction::Outgoing {
-        if let syn::Type::Tuple(ref tupple) = arg_ty.ty {
-            if tupple.elems.len() == 2 {
-                let mut ret = map_ordinal_result_type(ctx.conv_map, arg_ty, arg_ty_span)?;
-                if let (Some(fc1), Some(fc2)) = (
-                    ctx.conv_map.find_foreigner_class_with_such_this_type(
-                        &tupple.elems[0],
-                        calc_this_type_for_method,
-                    ),
-                    ctx.conv_map.find_foreigner_class_with_such_this_type(
-                        &tupple.elems[1],
-                        calc_this_type_for_method,
-                    ),
-                ) {
-                    ret.cpp_converter = Some(CppConverter {
-                        typename: format!("std::pair<{}, {}>", fc1.name, fc2.name).into(),
-                        converter: format!(
-                            "std::make_pair({FirstType}{{static_cast<{CFirstType} *>({from}.first)}},
- {SecondType}{{static_cast<{CSecondType} *>({from}.second)}})",
-                            FirstType = fc1.name,
-                            SecondType = fc2.name,
-                            from = FROM_VAR_TEMPLATE,
-                            CFirstType = c_class_type(fc1),
-                            CSecondType = c_class_type(fc2)
-                        ),
-                    });
-                    return Ok(Some(ret));
-                }
-            }
+            return map_arg_with_slice_type(ctx, arg_ty, &elem_ty, arg_ty_span);
         }
     }
 
@@ -164,79 +135,209 @@ pub(in crate::cpp) fn map_type(
             if let Some(converter) = special_type(ctx, arg_ty, Direction::Incoming, arg_ty_span)? {
                 return Ok(converter);
             }
-            map_ordinal_input_type(ctx.conv_map, arg_ty, arg_ty_span)?
+            map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Incoming)?
         }
         Direction::Outgoing => {
             if let Some(converter) = special_type(ctx, arg_ty, Direction::Outgoing, arg_ty_span)? {
                 converter
             } else {
-                map_ordinal_result_type(ctx.conv_map, arg_ty, arg_ty_span)?
+                map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?
             }
         }
     };
     Ok(ret)
 }
 
-fn map_ordinal_result_type(
-    conv_map: &mut TypeMap,
+fn map_ordinal_type(
+    ctx: &mut CppContext,
     arg_ty: &RustType,
     arg_ty_span: SourceIdSpan,
+    direction: Direction,
 ) -> Result<CppForeignTypeInfo> {
-    let ftype = conv_map
-        .map_through_conversation_to_foreign(
+    if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
+        arg_ty,
+        direction,
+        arg_ty_span,
+        calc_this_type_for_method,
+    ) {
+        return CppForeignTypeInfo::try_new(ctx.conv_map, direction, ftype);
+    }
+
+    let idx_subst_map: Option<(Rc<_>, TyParamsSubstList)> =
+        ctx.conv_map.generic_rules().iter().find_map(|grule| {
+            grule
+                .is_ty_subst_of_my_generic_rtype(&arg_ty.ty, direction)
+                .map(|sm| (grule.clone(), sm.into()))
+        });
+    if let Some((grule, subst_list)) = idx_subst_map {
+        let subst_map = subst_list.as_slice().into();
+        let c_types = grule.subst_generic_params_to_c_types(
+            &subst_map,
+            &mut CppContextForArg {
+                ctx,
+                arg_ty_span,
+                direction,
+            },
+        )?;
+        if let Some(c_types) = c_types {
+            merge_c_types(
+                ctx,
+                c_types,
+                MergeCTypesFlags::DefineAlsoRustType,
+                grule.src_id,
+            )?;
+        }
+
+        let new_rule = grule.subst_generic_params(
+            subst_map,
+            &mut CppContextForArg {
+                ctx,
+                arg_ty_span,
+                direction,
+            },
+        )?;
+        merge_rule(ctx, new_rule)?;
+        if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
             arg_ty,
-            Direction::Outgoing,
+            direction,
             arg_ty_span,
             calc_this_type_for_method,
-        )
-        .ok_or_else(|| {
-            DiagnosticError::new2(
-                arg_ty_span,
-                format!(
-                    "Do not know conversation from \
-                     such rust type '{}' to C++ type",
-                    arg_ty
-                ),
-            )
-        })?;
-    CppForeignTypeInfo::try_new(conv_map, Direction::Outgoing, ftype)
+        ) {
+            return CppForeignTypeInfo::try_new(ctx.conv_map, direction, ftype);
+        }
+    }
+    match direction {
+        Direction::Outgoing => Err(DiagnosticError::new2(
+            arg_ty_span,
+            format!(
+                "Do not know conversation from \
+                 such rust type '{}' to C++ type",
+                arg_ty
+            ),
+        )),
+
+        Direction::Incoming => Err(DiagnosticError::new2(
+            arg_ty_span,
+            format!(
+                "Do not know conversation from C++ type \
+                 to such rust type '{}'",
+                arg_ty
+            ),
+        )),
+    }
 }
 
-fn map_ordinal_input_type(
-    conv_map: &mut TypeMap,
-    arg_ty: &RustType,
+struct CppContextForArg<'a, 'b> {
+    ctx: &'a mut CppContext<'b>,
     arg_ty_span: SourceIdSpan,
-) -> Result<CppForeignTypeInfo> {
-    let ftype = conv_map
-        .map_through_conversation_to_foreign(
-            arg_ty,
-            Direction::Incoming,
-            arg_ty_span,
-            calc_this_type_for_method,
-        )
-        .ok_or_else(|| {
-            DiagnosticError::new2(
-                arg_ty_span,
-                format!(
-                    "Do not know conversation from C++ type \
-                     to such rust type '{}'",
-                    arg_ty
-                ),
-            )
-        })?;
-    CppForeignTypeInfo::try_new(conv_map, Direction::Incoming, ftype)
+    direction: Direction,
+}
+
+impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
+    fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type> {
+        let rust_ty = self
+            .ctx
+            .conv_map
+            .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
+        let f_info = map_ordinal_type(self.ctx, &rust_ty, self.arg_ty_span, self.direction)?;
+        trace!("swig_i_type return {}", f_info.base.correspoding_rust_type);
+        Ok(f_info.base.correspoding_rust_type.ty.clone())
+    }
+    fn swig_from_rust_to_i_type(
+        &mut self,
+        ty: &syn::Type,
+        in_var_name: &str,
+        out_var_name: &str,
+    ) -> Result<String> {
+        let rust_ty = self
+            .ctx
+            .conv_map
+            .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
+        let f_info = map_ordinal_type(self.ctx, &rust_ty, self.arg_ty_span, Direction::Outgoing)?;
+
+        let (mut conv_deps, conv_code) = self.ctx.conv_map.convert_rust_types(
+            rust_ty.to_idx(),
+            f_info.base.correspoding_rust_type.to_idx(),
+            in_var_name,
+            out_var_name,
+            "#error",
+            self.arg_ty_span,
+        )?;
+        self.ctx.rust_code.append(&mut conv_deps);
+        Ok(conv_code)
+    }
+    fn swig_from_i_type_to_rust(
+        &mut self,
+        ty: &syn::Type,
+        in_var_name: &str,
+        out_var_name: &str,
+    ) -> Result<String> {
+        let rust_ty = self
+            .ctx
+            .conv_map
+            .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
+        let f_info = map_ordinal_type(self.ctx, &rust_ty, self.arg_ty_span, Direction::Incoming)?;
+
+        let (mut conv_deps, conv_code) = self.ctx.conv_map.convert_rust_types(
+            f_info.base.correspoding_rust_type.to_idx(),
+            rust_ty.to_idx(),
+            in_var_name,
+            out_var_name,
+            "#error",
+            self.arg_ty_span,
+        )?;
+        self.ctx.rust_code.append(&mut conv_deps);
+        Ok(conv_code)
+    }
+    fn swig_f_type(&mut self, ty: &syn::Type) -> Result<SmolStr> {
+        let rust_ty = self
+            .ctx
+            .conv_map
+            .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
+        let f_info = map_ordinal_type(self.ctx, &rust_ty, self.arg_ty_span, self.direction)?;
+        if let Some(cpp_conv) = f_info.cpp_converter {
+            Ok(cpp_conv.typename)
+        } else {
+            Ok(f_info.base.name)
+        }
+    }
+    fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String> {
+        let rust_ty = self
+            .ctx
+            .conv_map
+            .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
+        let f_info = map_ordinal_type(self.ctx, &rust_ty, self.arg_ty_span, Direction::Incoming)?;
+        if let Some(cpp_conv) = f_info.cpp_converter {
+            Ok(cpp_conv.converter.replace(FROM_VAR_TEMPLATE, var_name))
+        } else {
+            Ok(var_name.into())
+        }
+    }
+    fn swig_foreign_from_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String> {
+        let rust_ty = self
+            .ctx
+            .conv_map
+            .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
+        let f_info = map_ordinal_type(self.ctx, &rust_ty, self.arg_ty_span, Direction::Outgoing)?;
+        if let Some(cpp_conv) = f_info.cpp_converter {
+            Ok(cpp_conv.converter.replace(FROM_VAR_TEMPLATE, var_name))
+        } else {
+            Ok(var_name.into())
+        }
+    }
 }
 
 fn map_arg_with_slice_type(
-    conv_map: &mut TypeMap,
+    ctx: &mut CppContext,
     arg_ty: &RustType,
     elem_ty: &Type,
     arg_ty_span: SourceIdSpan,
 ) -> Result<Option<CppForeignTypeInfo>> {
-    let mut ftype_info = map_ordinal_input_type(conv_map, arg_ty, arg_ty_span)?;
-    let elem_rust_ty = conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
-    if let Some(foreign_class) =
-        conv_map.find_foreigner_class_with_such_self_type(&elem_rust_ty, false)
+    let mut ftype_info = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Incoming)?;
+    let elem_rust_ty = ctx.conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
+    if let Some(foreign_class) = ctx
+        .conv_map
+        .find_foreigner_class_with_such_self_type(&elem_rust_ty, false)
     {
         let typename = format!("RustForeignSlice<{}Ref>", foreign_class.name);
         ftype_info.cpp_converter = Some(CppConverter {
@@ -250,15 +351,16 @@ fn map_arg_with_slice_type(
 }
 
 fn map_return_slice_type(
-    conv_map: &mut TypeMap,
+    ctx: &mut CppContext,
     arg_ty: &RustType,
     elem_ty: &Type,
     arg_ty_span: SourceIdSpan,
 ) -> Result<Option<CppForeignTypeInfo>> {
-    let mut ftype_info = map_ordinal_result_type(conv_map, arg_ty, arg_ty_span)?;
-    let elem_rust_ty = conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
-    if let Some(foreign_class) =
-        conv_map.find_foreigner_class_with_such_self_type(&elem_rust_ty, false)
+    let mut ftype_info = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?;
+    let elem_rust_ty = ctx.conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
+    if let Some(foreign_class) = ctx
+        .conv_map
+        .find_foreigner_class_with_such_self_type(&elem_rust_ty, false)
     {
         let typename = format!("RustForeignSlice<{}Ref>", foreign_class.name);
         let converter = format!(
@@ -283,7 +385,7 @@ fn map_type_vec(
     arg_ty_span: SourceIdSpan,
     direction: Direction,
 ) -> Result<Option<CppForeignTypeInfo>> {
-    let mut ftype_info = map_ordinal_result_type(ctx.conv_map, arg_ty, arg_ty_span)?;
+    let mut ftype_info = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?;
     let elem_rust_ty = ctx.conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
     if let Some(foreign_class) = ctx
         .conv_map
@@ -593,7 +695,7 @@ fn handle_result_type_as_return_type(
             Direction::Outgoing,
             (ok_rust_ty.src_id, ok_ty.span()),
         )?;
-        let mut f_type_info = map_ordinal_result_type(ctx.conv_map, arg_ty, arg_ty_span)?;
+        let mut f_type_info = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?;
         if err_rust_ty.normalized_name == "String" {
             let foreign_name = ctx
                 .conv_map
@@ -774,11 +876,13 @@ fn handle_option_type_in_input(
         if let Type::Path(syn::TypePath { ref path, .. }) = **ref_ty {
             if path.segments.len() == 1 && path.segments[0].ident == "str" {
                 trace!("Catch Option<&str>");
-                let mut cpp_info_opt = map_ordinal_input_type(ctx.conv_map, arg_ty, arg_ty_span)?;
-                let cpp_info_ty = map_ordinal_input_type(
-                    ctx.conv_map,
+                let mut cpp_info_opt =
+                    map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Incoming)?;
+                let cpp_info_ty = map_ordinal_type(
+                    ctx,
                     &opt_rust_ty,
                     (opt_rust_ty.src_id, opt_ty.span()),
+                    Direction::Incoming,
                 )?;
                 let f_opt_ty = cpp_info_ty.base.name;
                 let (typename, converter) = match ctx.cfg.cpp_optional {
@@ -800,11 +904,12 @@ fn handle_option_type_in_input(
         }
     }
     trace!("handle_option_type_in_input arg_ty {:?}", arg_ty);
-    let mut cpp_info_opt = map_ordinal_input_type(ctx.conv_map, arg_ty, arg_ty_span)?;
-    let cpp_info_ty = map_ordinal_input_type(
-        ctx.conv_map,
+    let mut cpp_info_opt = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Incoming)?;
+    let cpp_info_ty = map_ordinal_type(
+        ctx,
         &opt_rust_ty,
         (opt_rust_ty.src_id, opt_ty.span()),
+        Direction::Incoming,
     )?;
     let f_opt_ty = cpp_info_ty.base.name;
     let mut c_option_name: &str = &cpp_info_opt.base.name;
@@ -994,8 +1099,8 @@ fn handle_option_type_in_return(
             }));
         }
     }
-    let mut cpp_info_opt = map_ordinal_result_type(ctx.conv_map, arg_ty, arg_ty_span)?;
-    let cpp_info_ty = map_ordinal_result_type(ctx.conv_map, &opt_rust_ty, arg_ty_span)?;
+    let mut cpp_info_opt = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?;
+    let cpp_info_ty = map_ordinal_type(ctx, &opt_rust_ty, arg_ty_span, Direction::Outgoing)?;
 
     let f_opt_ty = if *opt_ty != parse_type! {bool} {
         cpp_info_ty.base.name
@@ -1050,7 +1155,8 @@ fn handle_option_type_in_return(
     if let Type::Path(syn::TypePath { ref path, .. }) = opt_ty {
         if path.segments.len() == 1 && path.segments[0].ident == "String" {
             trace!("Catch return of Option<String>");
-            let cpp_info_ty = map_ordinal_result_type(ctx.conv_map, &opt_rust_ty, arg_ty_span)?;
+            let cpp_info_ty =
+                map_ordinal_type(ctx, &opt_rust_ty, arg_ty_span, Direction::Outgoing)?;
             let cpp_typename = cpp_info_ty
                 .cpp_converter
                 .expect("C++ converter from C struct")
@@ -1087,7 +1193,7 @@ fn handle_option_type_in_return(
 
     if opt_rust_ty.normalized_name == "& str" {
         trace!("Catch return of Option<&str>");
-        let cpp_info_ty = map_ordinal_result_type(ctx.conv_map, &opt_rust_ty, arg_ty_span)?;
+        let cpp_info_ty = map_ordinal_type(ctx, &opt_rust_ty, arg_ty_span, Direction::Outgoing)?;
         let cpp_typename = cpp_info_ty
             .cpp_converter
             .expect("C++ converter from C struct")
@@ -1143,7 +1249,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
         "void *".into()
     } else {
         let ok_rust_ty = ctx.conv_map.find_or_alloc_rust_type(ok_ty, arg_ty_span.0);
-        map_ordinal_result_type(ctx.conv_map, &ok_rust_ty, arg_ty_span)?
+        map_ordinal_type(ctx, &ok_rust_ty, arg_ty_span, Direction::Outgoing)?
             .base
             .name
     };
@@ -1160,7 +1266,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
             VarType = typename,
             var = FROM_VAR_TEMPLATE
         );
-        let foreign_info = map_ordinal_result_type(ctx.conv_map, arg_ty, arg_ty_span)?;
+        let foreign_info = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?;
         if empty_ok_ty {
             assert_eq!(foreign_info.base.name, "struct CResultObjectString");
         }
@@ -1191,7 +1297,7 @@ fn handle_result_with_primitive_type_as_ok_ty(
             C_ErrType = c_err_class,
         );
         let err_cpp_header: SmolStr = format!("\"{}\"", cpp_header_name(err_class)).into();
-        let foreign_info = map_ordinal_result_type(ctx.conv_map, arg_ty, arg_ty_span)?;
+        let foreign_info = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?;
         if empty_ok_ty {
             assert_eq!(foreign_info.base.name, "struct CResultObjectObject");
         }

@@ -87,8 +87,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustOptionString"]
     #![swig_foreigner_type = "struct CRustObjectSlice"]
     #![swig_rust_type = "CRustObjectSlice"]
-    #![swig_foreigner_type = "struct CRustObjectPair"]
-    #![swig_rust_type = "CRustObjectPair"]
 }
 
 #[allow(unused_macros)]
@@ -1244,21 +1242,39 @@ impl<'a> SwigInto<String> for &'a str {
     }
 }
 
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustObjectPair {
-    pub first: *mut ::std::os::raw::c_void,
-    pub second: *mut ::std::os::raw::c_void,
-}
+foreign_typemap!(
+    (r_type) * mut ::std::os::raw::c_void;
+    (f_type) "void *";
+);
 
-impl<T1: SwigForeignClass, T2: SwigForeignClass> SwigFrom<(T1, T2)> for CRustObjectPair {
-    fn swig_from((x1, x2): (T1, T2)) -> Self {
-        Self {
-            first: <T1>::box_object(x1),
-            second: <T2>::box_object(x2),
+foreign_typemap!(
+     generic_alias!(CRustPair = swig_concat_idents!(CRustPair, swig_i_type!(T1), swig_i_type!(T2)));
+     define_c_type!(
+         module = "rust_tuple.h";
+         #[repr(C)]
+         pub struct CRustPair!() {
+             first: swig_i_type!(T1),
+             second: swig_i_type!(T2),
+         }
+     );
+    ($p:r_type) <T1, T2> (T1, T2) => CRustPair!() {
+        swig_from_rust_to_i_type!(T1, $p.0, p0)
+        swig_from_rust_to_i_type!(T2, $p.1, p1)
+        $out = CRustPair!() {
+            first: p0,
+            second: p1,
         }
-    }
-}
+    };
+    ($p:r_type) <T1, T2> (T1, T2) <= CRustPair!() {
+        swig_from_i_type_to_rust!(T1, $p.first, p0)
+        swig_from_i_type_to_rust!(T2, $p.second, p1)
+        $out = (p0, p1)
+    };
+    ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+            "std::make_pair(swig_foreign_from_i_type!(T1, $p.first), swig_foreign_from_i_type!(T2, $p.second))";
+    ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+        "CRustPair!() { swig_foreign_to_i_type!(T1, $p.first), swig_foreign_to_i_type!(T2, $p.second) }";
+ );
 
 foreign_typemap!(
     ($pin:r_type) bool => ::std::os::raw::c_char {

@@ -36,7 +36,7 @@
 #include "rust_interface/RecursiveStruct_fwd.hpp"
 #include "rust_interface/RecursiveStruct.hpp"
 #include "rust_interface/Boo.hpp"
-#include "rust_interface/TestReturnTuple.hpp"
+#include "rust_interface/TestPair.hpp"
 #include "rust_interface/TestCopy.hpp"
 
 using namespace rust;
@@ -791,12 +791,27 @@ TEST(RecursiveStruct, smokeTest)
     EXPECT_EQ(std::string{ "aaa/ccc" }, s.childs()[1].tag());
 }
 
-TEST(TestReturnTuple, smokeTest)
+TEST(TestPair, smokeTest)
 {
-    const auto pair = TestReturnTuple::return_pair();
+    auto pair = TestPair::return_pair_obj1();
     EXPECT_EQ(17, pair.second.f());
     EXPECT_EQ(5, pair.first.f(0, 0));
     EXPECT_EQ(std::string("FooName"), pair.first.getName());
+
+    const auto pair2 = TestPair::return_pair_obj2();
+    EXPECT_EQ(17, pair2.first.f());
+    EXPECT_EQ(5, pair2.second.f(0, 0));
+    EXPECT_EQ(std::string("FooName"), pair2.second.getName());
+
+    const auto pair3 = TestPair::return_pair_f32_i32();
+    EXPECT_NEAR(42.42f, pair3.first, std::numeric_limits<float>::epsilon());
+    EXPECT_EQ(17, pair3.second);
+
+    pair.first.set_field(11);
+    const auto pair4 = TestPair::swap_foo_boo(std::move(pair));
+    EXPECT_EQ(17, pair4.first.f());
+    EXPECT_EQ(11, pair4.second.f(0, 0));
+    EXPECT_EQ(std::string("FooName"), pair4.second.getName());
 }
 
 TEST(TestCopy, smokeTest)

@@ -347,21 +347,45 @@ fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> 
     })
 }
 
-fn register_c_type(tmap: &mut TypeMap, c_types: &CTypes, src_id: SourceId) -> Result<()> {
+fn register_c_type(
+    tmap: &mut TypeMap,
+    c_types: &CTypes,
+    fcode: &FileWriteCache,
+    src_id: SourceId,
+) -> Result<bool> {
+    let mut something_defined = false;
     for c_type in &c_types.types {
-        let f_ident = match c_type {
-            CType::Struct(ref s) => &s.ident,
-            CType::Union(ref u) => &u.ident,
+        let (f_ident, c_name) = match c_type {
+            CType::Struct(ref s) => (&s.ident, format!("struct {}", s.ident)),
+            CType::Union(ref u) => (&u.ident, format!("union {}", u.ident)),
         };
-        let struct_name = f_ident.to_string();
-        let rust_ty = parse_ty_with_given_span(&struct_name, f_ident.span())
+        if fcode.is_item_defined(&c_name) {
+            continue;
+        }
+        something_defined = true;
+        let rust_ty = parse_ty_with_given_span(&f_ident.to_string(), f_ident.span())
             .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
         let rust_ty = tmap.find_or_alloc_rust_type(&rust_ty, src_id);
-        let f_type = format!("struct {}", struct_name);
-        debug!("init::c_types add {} / {}", rust_ty, f_type);
-        tmap.add_foreign(rust_ty, TypeName::new(f_type, (src_id, f_ident.span())))?;
+        debug!("init::c_types add {} / {}", rust_ty, c_name);
+        if let Some(ftype_idx) = tmap.find_foreign_type_related_to_rust_ty(rust_ty.to_idx()) {
+            if tmap[ftype_idx].name.as_str() != c_name {
+                return Err(DiagnosticError::new(
+                    src_id,
+                    f_ident.span(),
+                    format!(
+                        "There is already exists foreign type related to rust type '{}', \
+                         but name is different: should be {}, have {}",
+                        rust_ty,
+                        c_name,
+                        tmap[ftype_idx].name.as_str()
+                    ),
+                ));
+            }
+        } else {
+            tmap.add_foreign(rust_ty, TypeName::new(c_name, (src_id, f_ident.span())))?;
+        }
     }
-    Ok(())
+    Ok(something_defined)
 }
 
 fn register_typemap_for_self_type(
@@ -593,7 +617,12 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 intermediate_ty: void_ptr_rust_ty,
                 conv_code: FTypeConvCode::new(
-                    format!("{}({})", class.name, FROM_VAR_TEMPLATE),
+                    format!(
+                        "{class_name}(static_cast<{c_type} *>({var}))",
+                        class_name = class.name,
+                        c_type = cpp_code::c_class_type(class),
+                        var = FROM_VAR_TEMPLATE
+                    ),
                     Span::call_site(),
                 ),
             }),
@@ -750,43 +779,26 @@ fn register_main_foreign_types(
     Ok(())
 }
 
-fn merge_rule(
-    ctx: &mut CppContext,
-    mut rule: TypeMapConvRuleInfo,
-    options: &FxHashSet<&'static str>,
-    all_options: &FxHashSet<&'static str>,
-) -> Result<()> {
+fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()> {
+    let all_options = {
+        let mut opts = FxHashSet::<&'static str>::default();
+        opts.extend(CppOptional::iter().map(|x| -> &'static str { x.into() }));
+        opts.extend(CppVariant::iter().map(|x| -> &'static str { x.into() }));
+        opts.extend(CppStrView::iter().map(|x| -> &'static str { x.into() }));
+        opts
+    };
+
     validate_cfg_options(&rule, &all_options)?;
+    let options = {
+        let mut opts = FxHashSet::<&'static str>::default();
+        opts.insert(ctx.cfg.cpp_variant.into());
+        opts.insert(ctx.cfg.cpp_optional.into());
+        opts.insert(ctx.cfg.cpp_str_view.into());
+        opts
+    };
 
     if let Some(c_types) = rule.c_types.take() {
-        register_c_type(ctx.conv_map, &c_types, rule.src_id)?;
-        let module_name = &c_types.header_name;
-        let common_files = &mut ctx.common_files;
-        let mut c_header_f = file_for_module!(ctx, common_files, module_name);
-        c_header_f
-            .write_all(
-                br##"
-#ifdef __cplusplus
-extern "C" {
-#endif
-"##,
-            )
-            .map_err(map_any_err_to_our_err)?;
-        ctx.rust_code.append(&mut cpp_code::generate_c_type(
-            ctx.conv_map,
-            &c_types,
-            rule.src_id,
-            &mut c_header_f,
-        )?);
-        c_header_f
-            .write_all(
-                br##"
-#ifdef __cplusplus
-} // extern "C" {
-#endif
-"##,
-            )
-            .map_err(map_any_err_to_our_err)?;
+        merge_c_types(ctx, c_types, MergeCTypesFlags::DefineOnlyCType, rule.src_id)?;
     }
 
     let f_codes = mem::replace(&mut rule.f_code, vec![]);
@@ -855,6 +867,54 @@ extern "C" {
     Ok(())
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum MergeCTypesFlags {
+    DefineAlsoRustType,
+    DefineOnlyCType,
+}
+
+fn merge_c_types(
+    ctx: &mut CppContext,
+    c_types: CTypes,
+    flags: MergeCTypesFlags,
+    rule_src_id: SourceId,
+) -> Result<()> {
+    let module_name = &c_types.header_name;
+    let common_files = &mut ctx.common_files;
+    let mut c_header_f = file_for_module!(ctx, common_files, module_name);
+    let something_defined = register_c_type(ctx.conv_map, &c_types, c_header_f, rule_src_id)?;
+    if something_defined {
+        c_header_f
+            .write_all(
+                br##"
+#ifdef __cplusplus
+extern "C" {
+#endif
+"##,
+            )
+            .map_err(map_any_err_to_our_err)?;
+    }
+    ctx.rust_code.append(&mut cpp_code::generate_c_type(
+        ctx.conv_map,
+        &c_types,
+        flags,
+        rule_src_id,
+        &mut c_header_f,
+    )?);
+    if something_defined {
+        c_header_f
+            .write_all(
+                br##"
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+"##,
+            )
+            .map_err(map_any_err_to_our_err)?;
+    }
+    Ok(())
+}
+
 fn init(ctx: &mut CppContext, code: &[SourceCode]) -> Result<()> {
     //for enum
     ctx.conv_map
@@ -877,25 +937,9 @@ fn init(ctx: &mut CppContext, code: &[SourceCode]) -> Result<()> {
         })?;
     }
 
-    let options = {
-        let mut opts = FxHashSet::<&'static str>::default();
-        opts.insert(ctx.cfg.cpp_variant.into());
-        opts.insert(ctx.cfg.cpp_optional.into());
-        opts.insert(ctx.cfg.cpp_str_view.into());
-        opts
-    };
-
-    let all_options = {
-        let mut opts = FxHashSet::<&'static str>::default();
-        opts.extend(CppOptional::iter().map(|x| -> &'static str { x.into() }));
-        opts.extend(CppVariant::iter().map(|x| -> &'static str { x.into() }));
-        opts.extend(CppStrView::iter().map(|x| -> &'static str { x.into() }));
-        opts
-    };
-
     let not_merged_data = ctx.conv_map.take_not_merged_not_generic_rules();
     for rule in not_merged_data {
-        merge_rule(ctx, rule, &options, &all_options)?;
+        merge_rule(ctx, rule)?;
     }
 
     Ok(())

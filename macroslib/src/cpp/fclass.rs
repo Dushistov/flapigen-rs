@@ -841,6 +841,7 @@ fn generate_method(
         from_ty.to_idx(),
         to_ty.to_idx(),
         "this",
+        "this",
         &c_ret_type,
         (mc.class.src_id, mc.method.span()),
     )?;
@@ -904,6 +905,7 @@ fn generate_constructor(
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
         construct_ret_type.to_idx(),
         this_type.to_idx(),
+        "this",
         "this",
         &ret_type_name,
         (mc.class.src_id, mc.method.span()),

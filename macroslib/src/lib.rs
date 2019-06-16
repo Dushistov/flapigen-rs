@@ -307,10 +307,6 @@ impl Generator {
                     id_of_code: "rust_option.h".into(),
                     code: include_str!("cpp/rust_option.h").into(),
                 });
-                foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_tuple.h".into(),
-                    code: include_str!("cpp/rust_tuple.h").into(),
-                });
             }
         }
         Generator {

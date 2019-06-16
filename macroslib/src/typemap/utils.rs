@@ -67,6 +67,7 @@ pub(crate) fn foreign_from_rust_convert_method_output(
         rust_ret_ty.to_idx(),
         f_output.correspoding_rust_type().to_idx(),
         var_name,
+        var_name,
         func_ret_type,
         (src_id, context_span),
     )
@@ -103,6 +104,7 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             f_from.correspoding_rust_type().to_idx(),
             to.to_idx(),
+            &arg_name,
             &arg_name,
             func_ret_type,
             (src_id, to_type.span()),
@@ -180,6 +182,7 @@ pub(crate) fn rust_to_foreign_convert_method_inputs<
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             from.to_idx(),
             to_f.correspoding_rust_type().to_idx(),
+            &arg_name,
             &arg_name,
             func_ret_type,
             (src_id, from_ty.span()),

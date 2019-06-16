@@ -671,6 +671,7 @@ fn generate_constructor(
         construct_ret_type.to_idx(),
         this_type.to_idx(),
         "this",
+        "this",
         "jlong",
         (mc.class.src_id, mc.method.span()),
     )?;
@@ -745,6 +746,7 @@ fn generate_method(
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
         from_ty.to_idx(),
         to_ty.to_idx(),
+        "this",
         "this",
         jni_ret_type,
         (mc.class.src_id, mc.method.span()),

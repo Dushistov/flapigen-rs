@@ -1,13 +1,15 @@
-use std::{fmt::Write, io, mem};
+use std::{fmt::Write, mem};
 
 use proc_macro2::TokenStream;
+use quote::ToTokens;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use syn::spanned::Spanned;
 
 use crate::{
-    cpp::{fmt_write_err_map, map_any_err_to_our_err, CppForeignMethodSignature},
+    cpp::{fmt_write_err_map, map_any_err_to_our_err, CppForeignMethodSignature, MergeCTypesFlags},
     error::{panic_on_syn_error, DiagnosticError},
+    file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{ast::DisplayToTokens, CType, CTypes, TypeMap, FROM_VAR_TEMPLATE},
     types::{ForeignEnumInfo, ForeignerClassInfo},
@@ -134,14 +136,21 @@ pub(in crate::cpp) fn cpp_list_required_includes(
 pub(in crate::cpp) fn generate_c_type(
     tmap: &TypeMap,
     c_types: &CTypes,
+    flags: MergeCTypesFlags,
     src_id: SourceId,
-    out: &mut io::Write,
+    out: &mut FileWriteCache,
 ) -> Result<Vec<TokenStream>, DiagnosticError> {
+    use std::io::Write;
+
     let mut rust_code = vec![];
 
     for c_type in &c_types.types {
         match c_type {
             CType::Struct(ref s) => {
+                let s_id = format!("struct {}", s.ident);
+                if out.is_item_defined(&s_id) {
+                    continue;
+                }
                 let mut rust_layout_test = format!(
                     r#"
 #[allow(non_snake_case)]
@@ -173,7 +182,11 @@ struct My{name} {{
                         )
                     })?;
                     let field_rty = tmap.ty_to_rust_type_checked(&f.ty).ok_or_else(|| {
-                        DiagnosticError::new(src_id, f.ty.span(), "unknown Rust type")
+                        DiagnosticError::new(
+                            src_id,
+                            f.ty.span(),
+                            format!("unknown Rust type: '{}'", DisplayToTokens(&f.ty)),
+                        )
                     })?;
                     let field_fty = tmap
                         .find_foreign_type_related_to_rust_ty(field_rty.to_idx())
@@ -223,10 +236,23 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
                     fields_asserts = fields_asserts_code,
                 )
                 .map_err(map_any_err_to_our_err)?;
-                let tt: TokenStream = syn::parse_str(&rust_layout_test).unwrap_or_else(|err| {
-                    panic_on_syn_error("Internal: layout unit test", rust_layout_test, err)
-                });
-                rust_code.push(tt);
+                match flags {
+                    MergeCTypesFlags::DefineOnlyCType => {
+                        let tt: TokenStream =
+                            syn::parse_str(&rust_layout_test).unwrap_or_else(|err| {
+                                panic_on_syn_error(
+                                    "Internal: layout unit test",
+                                    rust_layout_test,
+                                    err,
+                                )
+                            });
+                        rust_code.push(tt);
+                    }
+                    MergeCTypesFlags::DefineAlsoRustType => {
+                        rust_code.push(s.into_token_stream());
+                    }
+                }
+                out.define_item(s_id);
             }
             CType::Union(ref u) => {
                 unimplemented!();

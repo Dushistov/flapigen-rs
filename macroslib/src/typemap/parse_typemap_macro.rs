@@ -124,11 +124,11 @@ impl TypeMapConvRuleInfo {
         Some(subst_map)
     }
 
-    pub(crate) fn subst_generic_params(
+    pub(crate) fn subst_generic_params_to_c_types(
         &self,
-        param_map: TyParamsSubstMap,
+        param_map: &TyParamsSubstMap,
         expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-    ) -> Result<Self> {
+    ) -> Result<Option<CTypes>> {
         assert!(self.is_generic());
         let type_aliases =
             build_generic_aliases(self.src_id, &self.generic_aliases, &param_map, expander)?;
@@ -180,23 +180,36 @@ impl TypeMapConvRuleInfo {
                     }
                 },
             )?;
-            let ctypes_list: CTypesList = syn::parse_str(&code).map_err(|err| {
-                DiagnosticError::new(
-                    self.src_id,
-                    code_span,
-                    format!("can not parse this code after expand: {}", err),
-                )
-                .add_span_note(
-                    invalid_src_id_span(),
-                    format!("Code after expand: ```\n{}\n```", code),
-                )
-            })?;
+            let ctypes_list: CTypesList =
+                syn::LitStr::new(&code, code_span).parse().map_err(|err| {
+                    DiagnosticError::new(
+                        self.src_id,
+                        code_span,
+                        format!("can not parse this code after expand: {}", err),
+                    )
+                    .add_span_note(
+                        invalid_src_id_span(),
+                        format!("Code after expand: ```\n{}\n```", code),
+                    )
+                })?;
             assert!(self.c_types.is_none());
             c_types = Some(CTypes {
                 header_name: generic_c_types.header_name.clone(),
                 types: ctypes_list.0,
             });
         }
+        Ok(c_types)
+    }
+
+    pub(crate) fn subst_generic_params(
+        &self,
+        param_map: TyParamsSubstMap,
+        expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    ) -> Result<Self> {
+        assert!(self.is_generic());
+        let type_aliases =
+            build_generic_aliases(self.src_id, &self.generic_aliases, &param_map, expander)?;
+
         let rtype_left_to_right = expand_rtype_rule(
             self.src_id,
             self.rtype_left_to_right.as_ref(),
@@ -235,7 +248,7 @@ impl TypeMapConvRuleInfo {
             ftype_right_to_left,
             //TODO: need macros expand?
             f_code: vec![],
-            c_types,
+            c_types: None,
             generic_c_types: None,
             generic_aliases: vec![],
         })
@@ -816,8 +829,18 @@ impl syn::parse::Parse for GenericCTypes {
 
 pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
     fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type>;
-    fn swig_from_rust_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<TokenStream>;
-    fn swig_from_i_type_to_rust(&mut self, ty: &syn::Type, var_name: &str) -> Result<TokenStream>;
+    fn swig_from_rust_to_i_type(
+        &mut self,
+        ty: &syn::Type,
+        in_var_name: &str,
+        out_var_name: &str,
+    ) -> Result<String>;
+    fn swig_from_i_type_to_rust(
+        &mut self,
+        ty: &syn::Type,
+        in_var_name: &str,
+        out_var_name: &str,
+    ) -> Result<String>;
     fn swig_f_type(&mut self, ty: &syn::Type) -> Result<SmolStr>;
     fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
     fn swig_foreign_from_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
@@ -835,12 +858,32 @@ fn build_generic_aliases<'a, 'b>(
             .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
         let mut ident = String::new();
         concat_idents(src_id, item, param_map, expander, &mut ident)?;
-        let new_type: syn::Type = parse_ty_with_given_span(&ident, ga.value.span())
-            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        let ident = properly_escape_str_as_type(&ident);
+        let new_type: syn::Type =
+            parse_ty_with_given_span(&ident, ga.value.span()).map_err(|err| {
+                DiagnosticError::from_syn_err(src_id, err).add_span_note(
+                    invalid_src_id_span(),
+                    format!("trying to parse '{}' as type", ident),
+                )
+            })?;
         ret.push((&ga.alias, new_type));
     }
-
     Ok(ret)
+}
+
+fn properly_escape_str_as_type(s: &str) -> String {
+    let data = s
+        .replace(":: std :: os :: raw ::", "")
+        .replace("std :: os :: raw ::", "");
+    let mut ret = String::with_capacity(data.len());
+    for ch in data.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            ret.push(ch);
+        } else {
+            write!(&mut ret, "{}", u32::from(ch)).expect("write to String failed, no free mem?");
+        }
+    }
+    ret
 }
 
 #[derive(Debug)]
@@ -1020,8 +1063,8 @@ fn expand_rtype_rule(
                 |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
                     match id {
                         _ if id == SWIG_FROM_RUST_TO_I_TYPE || id == SWIG_FROM_I_TYPE_TO_RUST => {
-                            let (type_name, var_name) = if params.len() == 2 {
-                                (&params[0], &params[1])
+                            let (type_name, in_var_name, out_var_name) = if params.len() == 3 {
+                                (&params[0], &params[1], &params[2])
                             } else {
                                 return Err(DiagnosticError::new(
                                     src_id,
@@ -1039,10 +1082,10 @@ fn expand_rtype_rule(
                                     )
                                 },
                             )?;
-                            let tt: TokenStream = if id == SWIG_FROM_RUST_TO_I_TYPE {
-                                expander.swig_from_rust_to_i_type(&ty, var_name)?
+                            let tt: String = if id == SWIG_FROM_RUST_TO_I_TYPE {
+                                expander.swig_from_rust_to_i_type(&ty, in_var_name, out_var_name)?
                             } else if id == SWIG_FROM_I_TYPE_TO_RUST {
-                                expander.swig_from_i_type_to_rust(&ty, var_name)?
+                                expander.swig_from_i_type_to_rust(&ty, in_var_name, out_var_name)?
                             } else {
                                 unreachable!()
                             };
@@ -1154,7 +1197,10 @@ fn expand_ftype_rule(
                                 write!(
                                     out,
                                     "{}",
-                                    expander.swig_f_type(&generic_aliases[alias_idx].1)?
+                                    expander
+                                        .swig_f_type(&generic_aliases[alias_idx].1)?
+                                        .replace("struct", "")
+                                        .replace("union", "")
                                 )
                                 .expect("write to String failed");
                             }
@@ -1230,7 +1276,7 @@ fn expand_ftype_name(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::{invalid_src_id_span, panic_on_syn_error};
+    use crate::error::panic_on_syn_error;
     use syn::parse_quote;
 
     #[test]
@@ -1530,6 +1576,7 @@ $out = QString::fromUtf8($pin.data, $pin.len);
     fn test_foreign_typemap_cpp_pair_expand() {
         let rule = cpp_pair_rule();
         println!("rule!!!: {:?}", rule);
+        assert!(rule.is_generic());
         struct Dummy;
         impl TypeMapConvRuleInfoExpanderHelper for Dummy {
             fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type> {
@@ -1538,21 +1585,18 @@ $out = QString::fromUtf8($pin.data, $pin.len);
             fn swig_from_rust_to_i_type(
                 &mut self,
                 _ty: &syn::Type,
-                var_name: &str,
-            ) -> Result<TokenStream> {
-                syn::parse_str(var_name).map_err(|err| {
-                    DiagnosticError::from_syn_err(SourceId::none(), err).add_span_note(
-                        invalid_src_id_span(),
-                        format!("Invalid parameter name '{}'", var_name),
-                    )
-                })
+                in_var_name: &str,
+                out_var_name: &str,
+            ) -> Result<String> {
+                Ok(format!("{} = {}", out_var_name, in_var_name))
             }
             fn swig_from_i_type_to_rust(
                 &mut self,
                 ty: &syn::Type,
-                var_name: &str,
-            ) -> Result<TokenStream> {
-                self.swig_from_rust_to_i_type(ty, var_name)
+                in_var_name: &str,
+                out_var_name: &str,
+            ) -> Result<String> {
+                self.swig_from_rust_to_i_type(ty, in_var_name, out_var_name)
             }
             fn swig_f_type(&mut self, ty: &syn::Type) -> Result<SmolStr> {
                 if *ty == parse_type!(i32) {
@@ -1581,19 +1625,31 @@ $out = QString::fromUtf8($pin.data, $pin.len);
             }
         }
 
-        let new_rule = rule
-            .subst_generic_params(
-                rule.is_ty_subst_of_my_generic_rtype(
-                    &parse_type! {(i32, f32)},
-                    Direction::Outgoing,
-                )
-                .unwrap(),
-                &mut Dummy,
-            )
+        let subst_params = rule
+            .is_ty_subst_of_my_generic_rtype(&parse_type! {(i32, f32)}, Direction::Outgoing)
             .unwrap();
-        assert!(rule.is_generic());
+        let c_types = rule
+            .subst_generic_params_to_c_types(&subst_params, &mut Dummy)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            c_types,
+            CTypes {
+                header_name: "rust_tuple.h".into(),
+                types: vec![CType::Struct(parse_quote! {
+                    #[repr(C)]
+                    pub struct CRustPairi32f32 {
+                        first: i32,
+                        second: f32,
+                    }
+                }),],
+            },
+        );
+
+        let new_rule = rule.subst_generic_params(subst_params, &mut Dummy).unwrap();
         assert!(!new_rule.is_generic());
-        assert!(new_rule.contains_data_for_language_backend());
+        assert!(!new_rule.contains_data_for_language_backend());
     }
 
     #[test]
@@ -1618,7 +1674,10 @@ $out = QString::fromUtf8($pin.data, $pin.len);
                 left_ty: parse_type! {(T1, T2)},
                 right_ty: Some(parse_type! { CRustPair!() }),
                 code: Some(FTypeConvCode::new(
-                    "let {to_var}: {to_var_type} = CRustPair ! ( ) { first : swig_from_rust_to_i_type ! ( T1 , {from_var} . 0 ) , second : swig_from_rust_to_i_type ! ( T2 , {from_var} . 1 ) , };",
+                    concat!(
+                        "swig_from_rust_to_i_type ! ( T1 , {from_var} . 0 , p0 ) ; ",
+                        "swig_from_rust_to_i_type ! ( T2 , {from_var} . 1 , p1 ) ; ",
+                        "let {to_var}: {to_var_type} = CRustPair ! ( ) { first : p0 , second : p1 , };"),
                     Span::call_site()
                 )),
             },
@@ -1630,7 +1689,11 @@ $out = QString::fromUtf8($pin.data, $pin.len);
                 left_ty: parse_type! { (T1, T2) },
                 right_ty: Some(parse_type! { CRustPair!() }),
                 code: Some(FTypeConvCode::new(
-                    "let {to_var}: {to_var_type} = ( swig_from_i_type_to_rust ! ( T1 , {from_var} . first ) , swig_from_i_type_to_rust ! ( T2 , {from_var} . second ) );",
+                    concat!(
+                        "swig_from_i_type_to_rust ! ( T1 , {from_var} . first , p0 ) ; ",
+                        "swig_from_i_type_to_rust ! ( T2 , {from_var} . second , p1 ) ; ",
+                        "let {to_var}: {to_var_type} = ( p0 , p1 );"
+                    ),
                     Span::call_site()
                 )),
             },
@@ -1662,20 +1725,24 @@ $out = QString::fromUtf8($pin.data, $pin.len);
                         second: swig_i_type!(T2),
                     }
                 );
-            ($p:r_type) <T1, T2> (T1, T2) => CRustPair!() {
-                $out = CRustPair!() {
-                    first: swig_from_rust_to_i_type!(T1, $p.0),
-                    second: swig_from_rust_to_i_type!(T2, $p.1),
-                }
-            };
-            ($p:r_type) <T1, T2> (T1, T2) <= CRustPair!() {
-                $out = (swig_from_i_type_to_rust!(T1, $p.first), swig_from_i_type_to_rust!(T2, $p.second))
-            };
-            ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+                ($p:r_type) <T1, T2> (T1, T2) => CRustPair!() {
+                    swig_from_rust_to_i_type!(T1, $p.0, p0);
+                    swig_from_rust_to_i_type!(T2, $p.1, p1);
+                    $out = CRustPair!() {
+                        first: p0,
+                        second: p1,
+                    }
+                };
+                ($p:r_type) <T1, T2> (T1, T2) <= CRustPair!() {
+                    swig_from_i_type_to_rust!(T1, $p.first, p0);
+                    swig_from_i_type_to_rust!(T2, $p.second, p1);
+                    $out = (p0, p1)
+                };
+                ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
                     "std::make_pair(swig_foreign_from_i_type!(T1, $p.first), swig_foreign_from_i_type!(T2, $p.second))";
-            ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
-                "CRustPair!() { swig_foreign_to_i_type!(T1, $p.first), swig_foreign_to_i_type!(T2, $p.second) }";
-        )
+                ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+                    "CRustPair!() { swig_foreign_to_i_type!(T1, $p.first), swig_foreign_to_i_type!(T2, $p.second) }";
+            )
         })
     }
 

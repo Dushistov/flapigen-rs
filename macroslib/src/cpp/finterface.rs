@@ -157,6 +157,7 @@ impl {trait_name} for {struct_with_funcs} {{
                     f_method.output.base.correspoding_rust_type.to_idx(),
                     real_output_type.to_idx(),
                     "ret",
+                    "ret",
                     real_output_type.normalized_name.as_str(),
                     (interface.src_id, ret_ty.span()),
                 )?;
