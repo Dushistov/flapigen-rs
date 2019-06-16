@@ -2,19 +2,15 @@
 #include <atomic>
 #include <cassert>
 #include <cmath>
-#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <array>
 #include <functional>
 #include <limits>
-#include <string>
 #include <iostream>
 #include <sstream>
-#include <utility>
 #include <gtest/gtest.h>
 
-#include "rust_interface/rust_tuple.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
 #include "rust_interface/SomeObserver.hpp"
