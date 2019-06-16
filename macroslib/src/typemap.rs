@@ -33,7 +33,9 @@ use crate::{
     types::{ForeignEnumInfo, ForeignerClassInfo},
 };
 
-pub(crate) use parse_typemap_macro::{CType, CTypes, TypeMapConvRuleInfo};
+pub(crate) use parse_typemap_macro::{
+    CType, CTypes, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
+};
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
 pub(in crate::typemap) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
@@ -86,6 +88,7 @@ pub(crate) struct TypeMap {
     /// code that parsed, but not yet integrated to TypeMap,
     /// because of it is possible only in langauge backend
     not_merged_data: Vec<TypeMapConvRuleInfo>,
+    generic_rules: Vec<Rc<TypeMapConvRuleInfo>>,
 }
 
 impl Default for TypeMap {
@@ -144,6 +147,7 @@ impl Default for TypeMap {
             traits_usage_code: FxHashMap::default(),
             ftypes_storage: ForeignTypesStorage::default(),
             not_merged_data: vec![],
+            generic_rules: vec![],
         }
     }
 }
@@ -505,7 +509,8 @@ impl TypeMap {
         &mut self,
         from: RustTypeIdx,
         to: RustTypeIdx,
-        var_name: &str,
+        in_var_name: &str,
+        out_var_name: &str,
         function_ret_type: &str,
         build_for_sp: SourceIdSpan,
     ) -> Result<(Vec<TokenStream>, String)> {
@@ -513,7 +518,14 @@ impl TypeMap {
         let mut ret_code = String::new();
         let mut code_deps = Vec::<TokenStream>::new();
 
-        for edge in path {
+        if path.is_empty() && in_var_name != out_var_name {
+            return Ok((
+                code_deps,
+                format!("let {} = {};", out_var_name, in_var_name),
+            ));
+        }
+
+        for (idx, edge) in path.into_iter().enumerate() {
             let (_, target) = self.conv_graph.edge_endpoints(edge).unwrap();
             let target_typename: SmolStr = self.conv_graph[target].typename().into();
             let edge = &mut self.conv_graph[edge];
@@ -522,8 +534,8 @@ impl TypeMap {
             }
             let code = apply_code_template(
                 &edge.code_template,
-                var_name,
-                var_name,
+                out_var_name,
+                if idx != 0 { out_var_name } else { in_var_name },
                 &target_typename,
                 function_ret_type,
             );
@@ -913,8 +925,12 @@ impl TypeMap {
             .map(|idx| self.conv_graph[*idx].clone())
     }
 
-    pub(crate) fn take_not_merged_data(&mut self) -> Vec<TypeMapConvRuleInfo> {
+    pub(crate) fn take_not_merged_not_generic_rules(&mut self) -> Vec<TypeMapConvRuleInfo> {
         mem::replace(&mut self.not_merged_data, vec![])
+    }
+
+    pub(crate) fn generic_rules(&self) -> &[Rc<TypeMapConvRuleInfo>] {
+        &self.generic_rules
     }
 }
 
@@ -1170,16 +1186,17 @@ mod tests {
             types_map.find_or_alloc_rust_type(&parse_type! { &mut Foo }, SourceId::none());
 
         assert_eq!(
-            r#"    let mut a0: & Rc < RefCell < Foo > > = a0;
-    let mut a0: & RefCell < Foo > = a0.swig_deref();
-    let mut a0: RefMut < Foo > = <RefMut < Foo >>::swig_from(a0, env);
-    let mut a0: & mut Foo = a0.swig_deref_mut();
+            r#"    let mut a1: & Rc < RefCell < Foo > > = a0;
+    let mut a1: & RefCell < Foo > = a1.swig_deref();
+    let mut a1: RefMut < Foo > = <RefMut < Foo >>::swig_from(a1, env);
+    let mut a1: & mut Foo = a1.swig_deref_mut();
 "#,
             types_map
                 .convert_rust_types(
                     rc_refcell_foo_ty.to_idx(),
                     foo_ref_ty.to_idx(),
                     "a0",
+                    "a1",
                     "jlong",
                     invalid_src_id_span(),
                 )
@@ -1192,14 +1209,15 @@ mod tests {
         let foo_ref_ty = types_map.find_or_alloc_rust_type(&parse_type! { &Foo }, SourceId::none());
 
         assert_eq!(
-            r#"    let mut a0: Ref < Foo > = <Ref < Foo >>::swig_from(a0, env);
-    let mut a0: & Foo = a0.swig_deref();
+            r#"    let mut a1: Ref < Foo > = <Ref < Foo >>::swig_from(a0, env);
+    let mut a1: & Foo = a1.swig_deref();
 "#,
             types_map
                 .convert_rust_types(
                     rc_refcell_foo_ty.to_idx(),
                     foo_ref_ty.to_idx(),
                     "a0",
+                    "a1",
                     "jlong",
                     invalid_src_id_span(),
                 )

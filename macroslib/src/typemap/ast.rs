@@ -24,7 +24,7 @@ use syn::{
     Type,
 };
 
-use self::subst_map::{TyParamsSubstItem, TyParamsSubstMap};
+pub(in crate) use self::subst_map::{TyParamsSubstItem, TyParamsSubstList, TyParamsSubstMap};
 use crate::{
     error::{panic_on_syn_error, SourceIdSpan},
     source_registry::SourceId,
@@ -73,7 +73,7 @@ impl TypeName {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct SpannedSmolStr {
     pub sp: Span,
     pub value: SmolStr,
@@ -308,7 +308,11 @@ impl GenericTypeConv {
 }
 
 /// for example true for Result<T, E> Result<u8, u8>
-fn is_second_subst_of_first(ty1: &Type, ty2: &Type, subst_map: &mut TyParamsSubstMap) -> bool {
+pub(in crate::typemap) fn is_second_subst_of_first(
+    ty1: &Type,
+    ty2: &Type,
+    subst_map: &mut TyParamsSubstMap,
+) -> bool {
     trace!("is_second_substitude_of_first {:?} vs {:?}", ty1, ty2);
     match (ty1, ty2) {
         (
@@ -446,14 +450,17 @@ fn is_second_subst_of_first_ppath(
     }
 }
 
-fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
+pub(in crate::typemap) fn replace_all_types_with(
+    in_ty: &Type,
+    subst_map: &TyParamsSubstMap,
+) -> Type {
     struct ReplaceTypes<'a, 'b> {
         subst_map: &'a TyParamsSubstMap<'b>,
     }
     impl<'a, 'b> VisitMut for ReplaceTypes<'a, 'b> {
         fn visit_type_mut(&mut self, t: &mut Type) {
             let ty_name = normalize_ty_lifetimes(t);
-            if let Some(&Some(ref subst)) = self.subst_map.get(&ty_name) {
+            if let Some(Some(subst)) = self.subst_map.get_by_str(&ty_name) {
                 *t = subst.clone();
             } else {
                 visit_type_mut(self, t);
@@ -705,7 +712,9 @@ pub(crate) fn parse_ty_with_given_span_checked(type_str: &str, span: Span) -> Ty
 mod tests {
     use super::*;
     use crate::typemap::ty::RustTypeS;
+    use proc_macro2::LineColumn;
     use smallvec::smallvec;
+    use syn::spanned::Spanned;
 
     #[test]
     fn test_normalize_ty() {
@@ -1107,6 +1116,46 @@ mod tests {
             ret.iter().map(|v| v.as_str().to_string()).collect()
         };
         assert_eq!(vec!["'a"], my_list_lifetimes("Rc<RefCell<Foo<'a>>>"));
+    }
+
+    #[test]
+    fn test_is_second_subst_of_first_span() {
+        let ty1: Type = syn::parse_str(
+            r#"
+Result<T, E>
+"#,
+        )
+        .unwrap();
+        assert_eq!(LineColumn { line: 2, column: 0 }, ty1.span().start());
+        assert_eq!(LineColumn { line: 2, column: 6 }, ty1.span().end());
+        let ty2: Type = syn::parse_str(
+            r#"
+
+Result<u16, u8>
+"#,
+        )
+        .unwrap();
+        assert_eq!(LineColumn { line: 3, column: 0 }, ty2.span().start());
+        assert_eq!(LineColumn { line: 3, column: 6 }, ty2.span().end());
+        let t_id: Ident = parse_quote! { T };
+        let e_id: Ident = parse_quote! { E };
+        {
+            let mut subst_map = TyParamsSubstMap::default();
+            subst_map.insert(&t_id, None);
+            subst_map.insert(&e_id, None);
+            assert!(is_second_subst_of_first(&ty1, &ty2, &mut subst_map));
+            let t_ty = subst_map.get(&t_id).unwrap().unwrap();
+            assert_eq!(parse_type! {u16}, *t_ty);
+            assert_eq!(LineColumn { line: 3, column: 7 }, t_ty.span().start());
+            assert_eq!(
+                LineColumn {
+                    line: 3,
+                    column: 10
+                },
+                t_ty.span().end()
+            );
+            assert_eq!(parse_type! {u8}, *subst_map.get(&e_id).unwrap().unwrap());
+        }
     }
 
     fn str_to_ty(code: &str) -> syn::Type {

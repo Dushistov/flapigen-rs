@@ -69,6 +69,7 @@ pub(in crate::typemap) fn parse(
         traits_usage_code,
         ftypes_storage: ForeignTypesStorage::default(),
         not_merged_data: vec![],
+        generic_rules: vec![],
     };
 
     macro_rules! handle_attrs {
@@ -1125,24 +1126,26 @@ impl SwigFrom<bool> for jboolean {
                 jboolean_ty.to_idx(),
                 bool_ty.to_idx(),
                 "a0",
+                "a1",
                 "jlong",
                 invalid_src_id_span(),
             )
             .unwrap();
-        assert_eq!("    let a0: bool = a0.swig_into(env);\n".to_string(), code);
+        assert_eq!("    let a1: bool = a0.swig_into(env);\n".to_string(), code);
 
         let (_, code) = conv_map
             .convert_rust_types(
                 bool_ty.to_idx(),
                 jboolean_ty.to_idx(),
                 "a0",
+                "a1",
                 "jlong",
                 invalid_src_id_span(),
             )
             .unwrap();
 
         assert_eq!(
-            "    let a0: jboolean = <jboolean>::swig_from(a0, env);\n".to_string(),
+            "    let a1: jboolean = <jboolean>::swig_from(a0, env);\n".to_string(),
             code
         );
     }
@@ -1177,11 +1180,12 @@ impl SwigDeref for String {
                 string_ty.to_idx(),
                 str_ty.to_idx(),
                 "a0",
+                "a1",
                 "jlong",
                 invalid_src_id_span(),
             )
             .unwrap();
-        assert_eq!("    let a0: & str = a0.swig_deref();\n".to_string(), code);
+        assert_eq!("    let a1: & str = a0.swig_deref();\n".to_string(), code);
     }
 
     #[test]
@@ -1249,14 +1253,15 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
                 arc_mutex_foo.to_idx(),
                 foo_ref.to_idx(),
                 "a0",
+                "a1",
                 "jlong",
                 invalid_src_id_span(),
             )
             .unwrap();
         assert_eq!(
-            r#"    let a0: & Mutex < Foo > = a0.swig_deref();
-    let a0: MutexGuard < Foo > = <MutexGuard < Foo >>::swig_from(a0, env);
-    let a0: & Foo = a0.swig_deref();
+            r#"    let a1: & Mutex < Foo > = a0.swig_deref();
+    let a1: MutexGuard < Foo > = <MutexGuard < Foo >>::swig_from(a1, env);
+    let a1: & Foo = a1.swig_deref();
 "#
             .to_string(),
             code
@@ -1322,12 +1327,13 @@ macro_rules! jni_unpack_return {
                 result_foo_str_ty.to_idx(),
                 foo_ty.to_idx(),
                 "a0",
+                "a1",
                 "jlong",
                 invalid_src_id_span(),
             )
             .unwrap();
         assert_eq!(
-            r#"    let a0: Foo = jni_unpack_return!(a0, env);
+            r#"    let a1: Foo = jni_unpack_return!(a0, env);
 "#,
             code
         );
@@ -1341,13 +1347,14 @@ macro_rules! jni_unpack_return {
                 result_u8_str_ty.to_idx(),
                 jshort_ty.to_idx(),
                 "a0",
+                "a1",
                 "jlong",
                 invalid_src_id_span(),
             )
             .unwrap();
         assert_eq!(
-            r#"    let a0: u8 = jni_unpack_return!(a0, env);
-    let a0: jshort = <jshort>::swig_from(a0, env);
+            r#"    let a1: u8 = jni_unpack_return!(a0, env);
+    let a1: jshort = <jshort>::swig_from(a1, env);
 "#,
             code
         );

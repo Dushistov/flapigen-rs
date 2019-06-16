@@ -9,15 +9,17 @@ impl<'a> PartialEq<IdentRef<'_>> for Ident {
     }
 }
 
-#[derive(Debug)]
+const MAX_SIZE: usize = 10;
+
+#[derive(Debug, PartialEq)]
 pub(crate) struct TyParamsSubstItem<'a> {
     pub(crate) ident: &'a Ident,
     pub(crate) ty: Option<syn::Type>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub(crate) struct TyParamsSubstMap<'a> {
-    inner: SmallVec<[TyParamsSubstItem<'a>; 10]>,
+    inner: SmallVec<[TyParamsSubstItem<'a>; MAX_SIZE]>,
 }
 
 impl<'a> TyParamsSubstMap<'a> {
@@ -35,7 +37,12 @@ impl<'a> TyParamsSubstMap<'a> {
     pub(crate) fn len(&self) -> usize {
         self.inner.len()
     }
-
+    pub fn get(&self, k: &Ident) -> Option<Option<&syn::Type>> {
+        match self.inner.iter().position(|it| it.ident == k) {
+            Some(idx) => Some(self.inner[idx].ty.as_ref()),
+            None => None,
+        }
+    }
     pub fn get_mut(&mut self, k: &Ident) -> Option<&mut Option<syn::Type>> {
         match self.inner.iter().position(|it| it.ident == k) {
             Some(idx) => Some(&mut self.inner[idx].ty),
@@ -48,10 +55,31 @@ impl<'a> TyParamsSubstMap<'a> {
             None => None,
         }
     }
-    pub fn get(&self, k: &str) -> Option<&Option<syn::Type>> {
+    pub fn get_by_str(&self, k: &str) -> Option<Option<&syn::Type>> {
         match self.inner.iter().position(|it| it.ident == k) {
-            Some(idx) => Some(&self.inner[idx].ty),
+            Some(idx) => Some(self.inner[idx].ty.as_ref()),
             None => None,
         }
+    }
+}
+
+pub(crate) type TyParamsSubstList = SmallVec<[(Ident, Option<syn::Type>); MAX_SIZE]>;
+
+impl<'a> From<TyParamsSubstMap<'a>> for TyParamsSubstList {
+    fn from(m: TyParamsSubstMap<'a>) -> Self {
+        m.inner
+            .into_iter()
+            .map(|x| (x.ident.clone(), x.ty))
+            .collect()
+    }
+}
+
+impl<'a> From<&'a [(Ident, Option<syn::Type>)]> for TyParamsSubstMap<'a> {
+    fn from(v: &'a [(Ident, Option<syn::Type>)]) -> Self {
+        let mut ret = TyParamsSubstMap::default();
+        for item in v {
+            ret.insert(&item.0, item.1.clone());
+        }
+        ret
     }
 }

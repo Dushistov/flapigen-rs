@@ -44,6 +44,7 @@ impl TypeMap {
             generic_edges: mut new_generic_edges,
             utils_code: mut new_utils_code,
             not_merged_data: mut new_not_merged_data,
+            generic_rules: mut new_generic_rules,
             ..
         } = new_data;
         add_new_ftypes(new_ftypes_storage, self, &new_node_to_our_map)?;
@@ -53,6 +54,7 @@ impl TypeMap {
         self.generic_edges.append(&mut new_generic_edges);
         //TODO: add more checks
         self.not_merged_data.append(&mut new_not_merged_data);
+        self.generic_rules.append(&mut new_generic_rules);
         Ok(())
     }
 
@@ -62,6 +64,10 @@ impl TypeMap {
         mut ri: TypeMapConvRuleInfo,
     ) -> Result<()> {
         ri.src_id = src_id;
+        if ri.is_generic() {
+            self.generic_rules.push(Rc::new(ri));
+            return Ok(());
+        }
         if ri.contains_data_for_language_backend() {
             self.not_merged_data.push(ri);
             return Ok(());
@@ -75,6 +81,7 @@ impl TypeMap {
         mut ri: TypeMapConvRuleInfo,
     ) -> Result<()> {
         assert!(!ri.contains_data_for_language_backend());
+        assert!(!ri.is_generic());
         if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map() {
             let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
 

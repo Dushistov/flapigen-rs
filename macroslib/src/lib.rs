@@ -28,7 +28,6 @@ mod typemap;
 mod types;
 
 use std::{
-    cell::RefCell,
     env,
     io::Write,
     mem,
@@ -38,7 +37,6 @@ use std::{
 
 use log::debug;
 use proc_macro2::TokenStream;
-use rustc_hash::FxHashSet;
 use syn::spanned::Spanned;
 
 use crate::{
@@ -130,8 +128,6 @@ pub struct CppConfig {
     cpp_optional: CppOptional,
     cpp_variant: CppVariant,
     cpp_str_view: CppStrView,
-    generated_helper_files: RefCell<FxHashSet<PathBuf>>,
-    to_generate: RefCell<Vec<TokenStream>>,
     /// Create separate *_impl.hpp files with methods implementations.
     /// Can be necessary for the project with circular dependencies between classes.
     separate_impl_headers: bool,
@@ -203,8 +199,6 @@ impl CppConfig {
             cpp_optional: CppOptional::Std17,
             cpp_variant: CppVariant::Std17,
             cpp_str_view: CppStrView::Std17,
-            generated_helper_files: RefCell::new(FxHashSet::default()),
-            to_generate: RefCell::new(vec![]),
             separate_impl_headers: false,
         }
     }
@@ -312,10 +306,6 @@ impl Generator {
                 foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_option.h".into(),
                     code: include_str!("cpp/rust_option.h").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_tuple.h".into(),
-                    code: include_str!("cpp/rust_tuple.h").into(),
                 });
             }
         }

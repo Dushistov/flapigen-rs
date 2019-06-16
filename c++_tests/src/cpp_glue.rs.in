@@ -827,7 +827,7 @@ impl Boo {
     pub fn f(&self) -> i32 {
         self.f1
     }
-    pub fn return_pair() -> (Foo, Boo) {
+    pub fn return_pair_obj1() -> (Foo, Boo) {
         (
             Foo {
                 data: 5,
@@ -835,6 +835,21 @@ impl Boo {
             },
             Boo { f1: 17 },
         )
+    }
+    pub fn return_pair_obj2() -> (Boo, Foo) {
+        (
+            Boo { f1: 17 },
+            Foo {
+                data: 5,
+                name: "FooName".into(),
+            },
+        )
+    }
+    pub fn return_pair_f32_i32() -> (f32, i32) {
+        (42.42, 17)
+    }
+    pub fn swap_foo_boo((foo, boo): (Foo, Boo)) -> (Boo, Foo) {
+        (boo, foo)
     }
 }
 
@@ -844,8 +859,11 @@ foreigner_class!(class Boo {
     method Boo::f(&self) -> i32;
 });
 
-foreigner_class!(class TestReturnTuple {
-    static_method Boo::return_pair() -> (Foo, Boo);
+foreigner_class!(class TestPair {
+    static_method Boo::return_pair_obj1() -> (Foo, Boo);
+    static_method Boo::return_pair_obj2() -> (Boo, Foo);
+    static_method Boo::return_pair_f32_i32() -> (f32, i32);
+    static_method Boo::swap_foo_boo((foo, boo): (Foo, Boo)) -> (Boo, Foo);
 });
 
 #[derive(Clone)]

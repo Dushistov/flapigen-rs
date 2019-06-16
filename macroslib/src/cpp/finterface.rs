@@ -1,14 +1,13 @@
-use std::{io::Write, path::Path};
+use std::io::Write;
 
 use petgraph::Direction;
-use proc_macro2::TokenStream;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
     cpp::{
         cpp_code, fmt_write_err_map, map_type, map_write_err, n_arguments_list,
-        rust_generate_args_with_types, CppForeignMethodSignature, CppForeignTypeInfo,
+        rust_generate_args_with_types, CppContext, CppForeignMethodSignature, CppForeignTypeInfo,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
@@ -17,18 +16,16 @@ use crate::{
         ast::{fn_arg_type, DisplayToTokens},
         ty::RustType,
         utils::rust_to_foreign_convert_method_inputs,
-        ForeignTypeInfo, TypeMap, FROM_VAR_TEMPLATE,
+        ForeignTypeInfo, FROM_VAR_TEMPLATE,
     },
     types::ForeignInterface,
-    CppConfig,
 };
 
 pub(in crate::cpp) fn rust_code_generate_interface(
-    conv_map: &mut TypeMap,
-    pointer_target_width: usize,
+    ctx: &mut CppContext,
     interface: &ForeignInterface,
     methods_sign: &[CppForeignMethodSignature],
-) -> Result<Vec<TokenStream>> {
+) -> Result<()> {
     use std::fmt::Write;
 
     let struct_with_funcs = format!("C_{}", interface.name);
@@ -73,9 +70,7 @@ pub struct {struct_with_funcs} {{
     )
     .unwrap();
 
-    let mut gen_items = vec![];
-
-    gen_items.push(
+    ctx.rust_code.push(
         syn::parse_str(&code)
             .unwrap_or_else(|err| panic_on_syn_error("cpp internal code", code.clone(), err)),
     );
@@ -96,7 +91,8 @@ impl SwigFrom<*const {struct_with_funcs}> for Box<{trait_name}> {{
     )
     .unwrap();
 
-    conv_map.merge(SourceId::none(), &code, pointer_target_width)?;
+    ctx.conv_map
+        .merge(SourceId::none(), &code, ctx.target_pointer_width)?;
 
     code.clear();
 
@@ -143,27 +139,29 @@ impl {trait_name} for {struct_with_funcs} {{
         assert!(!method.fn_decl.inputs.is_empty());
         let n_args = method.fn_decl.inputs.len() - 1;
         let (mut conv_deps, convert_args) = rust_to_foreign_convert_method_inputs(
-            conv_map,
+            ctx.conv_map,
             interface.src_id,
             method,
             f_method,
             (0..n_args).map(|v| format!("a_{}", v)),
             "()",
         )?;
-        gen_items.append(&mut conv_deps);
+        ctx.rust_code.append(&mut conv_deps);
         let (real_output_typename, output_conv) = match method.fn_decl.output {
             syn::ReturnType::Default => ("()".to_string(), String::new()),
             syn::ReturnType::Type(_, ref ret_ty) => {
-                let real_output_type: RustType =
-                    conv_map.find_or_alloc_rust_type(ret_ty, interface.src_id);
-                let (mut conv_deps, conv_code) = conv_map.convert_rust_types(
+                let real_output_type: RustType = ctx
+                    .conv_map
+                    .find_or_alloc_rust_type(ret_ty, interface.src_id);
+                let (mut conv_deps, conv_code) = ctx.conv_map.convert_rust_types(
                     f_method.output.base.correspoding_rust_type.to_idx(),
                     real_output_type.to_idx(),
+                    "ret",
                     "ret",
                     real_output_type.normalized_name.as_str(),
                     (interface.src_id, ret_ty.span()),
                 )?;
-                gen_items.append(&mut conv_deps);
+                ctx.rust_code.append(&mut conv_deps);
                 (real_output_type.normalized_name.to_string(), conv_code)
             }
         };
@@ -218,31 +216,31 @@ impl Drop for {struct_with_funcs} {{
     )
     .unwrap();
 
-    gen_items.push(
+    ctx.rust_code.push(
         syn::parse_str(&code)
             .unwrap_or_else(|err| panic_on_syn_error("cpp internal code", code, err)),
     );
 
-    Ok(gen_items)
+    Ok(())
 }
 
 pub(in crate::cpp) fn find_suitable_ftypes_for_interace_methods(
-    conv_map: &mut TypeMap,
+    ctx: &mut CppContext,
     interace: &ForeignInterface,
-    cpp_cfg: &CppConfig,
 ) -> Result<Vec<CppForeignMethodSignature>> {
     let void_sym = "void";
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
+    let dummy_rust_ty = ctx.conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
     let mut f_methods = Vec::with_capacity(interace.items.len());
 
     for method in &interace.items {
         let mut input = Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg), interace.src_id);
+            let arg_rust_ty = ctx
+                .conv_map
+                .find_or_alloc_rust_type(fn_arg_type(arg), interace.src_id);
             input.push(map_type(
-                conv_map,
-                cpp_cfg,
+                ctx,
                 &arg_rust_ty,
                 Direction::Outgoing,
                 (interace.src_id, fn_arg_type(arg).span()),
@@ -255,10 +253,11 @@ pub(in crate::cpp) fn find_suitable_ftypes_for_interace_methods(
             }
             .into(),
             syn::ReturnType::Type(_, ref ret_ty) => {
-                let ret_rust_ty = conv_map.find_or_alloc_rust_type(ret_ty, interace.src_id);
+                let ret_rust_ty = ctx
+                    .conv_map
+                    .find_or_alloc_rust_type(ret_ty, interace.src_id);
                 map_type(
-                    conv_map,
-                    cpp_cfg,
+                    ctx,
                     &ret_rust_ty,
                     Direction::Incoming,
                     (interace.src_id, ret_ty.span()),
@@ -271,8 +270,7 @@ pub(in crate::cpp) fn find_suitable_ftypes_for_interace_methods(
 }
 
 pub(in crate::cpp) fn generate_for_interface(
-    output_dir: &Path,
-    namespace_name: &str,
+    ctx: &mut CppContext,
     interface: &ForeignInterface,
     req_includes: &[SmolStr],
     f_methods: &[CppForeignMethodSignature],
@@ -280,9 +278,9 @@ pub(in crate::cpp) fn generate_for_interface(
     use std::fmt::Write;
 
     let c_interface_struct_header = format!("c_{}.h", interface.name);
-    let c_path = output_dir.join(&c_interface_struct_header);
+    let c_path = ctx.cfg.output_dir.join(&c_interface_struct_header);
     let mut file_c = FileWriteCache::new(&c_path);
-    let cpp_path = output_dir.join(format!("{}.hpp", interface.name));
+    let cpp_path = ctx.cfg.output_dir.join(format!("{}.hpp", interface.name));
     let mut file_cpp = FileWriteCache::new(&cpp_path);
     let interface_comments = cpp_code::doc_comments_to_c_comments(&interface.doc_comments, true);
 
@@ -451,7 +449,7 @@ private:
         virtual_methods = cpp_virtual_methods,
         static_reroute_methods = cpp_static_reroute_methods,
         cpp_fill_c_interface_struct = cpp_fill_c_interface_struct,
-        namespace_name = namespace_name,
+        namespace_name = ctx.cfg.namespace_name,
     )
     .map_err(&map_write_err)?;
 
