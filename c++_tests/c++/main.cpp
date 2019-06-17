@@ -34,6 +34,7 @@
 #include "rust_interface/Boo.hpp"
 #include "rust_interface/TestPair.hpp"
 #include "rust_interface/TestCopy.hpp"
+#include "rust_interface/GetSetStrTest.hpp"
 
 using namespace rust;
 
@@ -845,6 +846,15 @@ TEST(RustString, Copy)
     ASSERT_EQ("AAAA", s.to_std_string());
     ASSERT_EQ("AAAA", s2.to_std_string());
     ASSERT_EQ("AAAA", s3.to_std_string());
+}
+
+TEST(GetSetStrTest, smokeTest)
+{
+    GetSetStrTest test;
+    EXPECT_EQ("", test.get_str());
+    test.set_str(test.get_str());
+    test.set_str({ "hello" });
+    EXPECT_EQ("hello", test.get_str());
 }
 
 int main(int argc, char *argv[])
