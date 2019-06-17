@@ -23,7 +23,7 @@ use crate::{
         ty::RustType, ForeignTypeInfo, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
         TO_VAR_TEMPLATE,
     },
-    types::{ForeignEnumInfo, ForeignerClassInfo},
+    types::ForeignerClassInfo,
     CppOptional, CppVariant, TypeMap,
 };
 
@@ -38,11 +38,6 @@ fn special_type(
         arg_ty,
         direction
     );
-
-    if let Some(foreign_enum) = ctx.conv_map.is_this_exported_enum(arg_ty) {
-        let converter = calc_converter_for_enum(ctx.conv_map, foreign_enum, direction);
-        return Ok(Some(converter));
-    }
 
     if let Some(elem_ty) = if_vec_return_elem_type(arg_ty) {
         return map_type_vec(ctx, arg_ty, &elem_ty, arg_ty_span, direction);
@@ -95,33 +90,6 @@ fn foreign_class_foreign_name(
                 format!("type {} unknown", foreign_class.name),
             )
         })
-}
-
-fn calc_converter_for_enum(
-    conv_map: &TypeMap,
-    foreign_enum: &ForeignEnumInfo,
-    direction: Direction,
-) -> CppForeignTypeInfo {
-    let u32_ti: RustType = conv_map.ty_to_rust_type(&parse_type! { u32 });
-    let converter = match direction {
-        Direction::Outgoing => format!(
-            "static_cast<{}>({})",
-            foreign_enum.name.to_string(),
-            FROM_VAR_TEMPLATE
-        ),
-        Direction::Incoming => format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
-    };
-    CppForeignTypeInfo {
-        provides_by_module: vec![format!("\"{}\"", cpp_header_name_for_enum(foreign_enum)).into()],
-        base: ForeignTypeInfo {
-            name: "uint32_t".into(),
-            correspoding_rust_type: u32_ti,
-        },
-        cpp_converter: Some(CppConverter {
-            typename: foreign_enum.name.to_string().into(),
-            converter,
-        }),
-    }
 }
 
 pub(in crate::cpp) fn map_type(
@@ -904,7 +872,7 @@ fn handle_option_type_in_input(
             }
         }
     }
-    trace!("handle_option_type_in_input arg_ty {:?}", arg_ty);
+    trace!("handle_option_type_in_input arg_ty {}", arg_ty);
     let mut cpp_info_opt = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Incoming)?;
     let cpp_info_ty = map_ordinal_type(
         ctx,
@@ -912,15 +880,23 @@ fn handle_option_type_in_input(
         (opt_rust_ty.src_id, opt_ty.span()),
         Direction::Incoming,
     )?;
-    let f_opt_ty = cpp_info_ty.base.name;
     let mut c_option_name: &str = &cpp_info_opt.base.name;
     if c_option_name.starts_with("struct ") {
         c_option_name = &c_option_name[7..];
     }
-    let conv: &'static str = if ctx.conv_map.is_this_exported_enum(&opt_rust_ty).is_some() {
-        "static_cast<uint32_t>"
+    trace!("c_option_name {}", c_option_name);
+    let (conv, f_opt_ty) = if ctx.conv_map.is_this_exported_enum(&opt_rust_ty).is_some() {
+        (
+            "static_cast<uint32_t>",
+            cpp_info_ty
+                .cpp_converter
+                .as_ref()
+                .expect("Internal error: enum converter is empty")
+                .typename
+                .as_str(),
+        )
     } else {
-        ""
+        ("", cpp_info_ty.base.name.as_str())
     };
     let (typename, converter) = match ctx.cfg.cpp_optional {
         CppOptional::Std17 => (
@@ -1100,6 +1076,7 @@ fn handle_option_type_in_return(
             }));
         }
     }
+
     let mut cpp_info_opt = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?;
     let cpp_info_ty = map_ordinal_type(ctx, &opt_rust_ty, arg_ty_span, Direction::Outgoing)?;
 
@@ -1111,6 +1088,12 @@ fn handle_option_type_in_return(
     debug!("is_this_exported_enum {:?}", opt_ty);
     let (typename, converter) =
         if let Some(foreign_enum) = ctx.conv_map.is_this_exported_enum(&opt_rust_ty) {
+            trace!("catch foreign_enum {}", foreign_enum.name);
+            let cpp_conv = cpp_info_ty
+                .cpp_converter
+                .as_ref()
+                .expect("Internal error: enum converter is empty");
+            let f_opt_ty = cpp_conv.typename.as_str();
             match ctx.cfg.cpp_optional {
                 CppOptional::Std17 => (
                     format!("std::optional<{}>", f_opt_ty),

@@ -106,6 +106,7 @@ pub trait SwigForeignClass {
 #[allow(dead_code)]
 pub trait SwigForeignEnum {
     fn as_u32(&self) -> u32;
+    fn from_u32(_: u32) -> Self;
 }
 
 #[allow(dead_code)]
@@ -1239,6 +1240,30 @@ where
 impl<'a> SwigInto<String> for &'a str {
     fn swig_into(self) -> String {
         self.into()
+    }
+}
+
+impl<T: SwigForeignEnum> SwigFrom<T> for u32 {
+    fn swig_from(x: T) -> u32 {
+        x.as_u32()
+    }
+}
+
+impl<T: SwigForeignEnum> SwigFrom<u32> for T {
+    fn swig_from(x: u32) -> T {
+        T::from_u32(x)
+    }
+}
+
+impl<T: SwigForeignEnum> SwigFrom<Option<T>> for Option<u32> {
+    fn swig_from(x: Option<T>) -> Option<u32> {
+        x.map(|v| v.as_u32())
+    }
+}
+
+impl<T: SwigForeignEnum> SwigFrom<Option<u32>> for Option<T> {
+    fn swig_from(x: Option<u32>) -> Option<T> {
+        x.map(|v| T::from_u32(v))
     }
 }
 
