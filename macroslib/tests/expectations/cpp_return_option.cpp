@@ -8,7 +8,7 @@
 
 "std::optional<BooRef> f5()";
 
-"std::optional<ControlItem> f6()";
+"std::optional<ControlItem> f6() const  noexcept;";
 
 "std::optional<uint64_t> f7()";
 
@@ -24,3 +24,13 @@ r#"template<bool OWN_DATA>
 "std::optional<RustString> f9()";
 
 "std::optional<bool> f10()";
+
+r#"template<bool OWN_DATA>
+    inline std::optional<ControlItem> FooWrapper<OWN_DATA>::f6() const  noexcept
+    {
+        struct CRustOptionU32 ret = Foo_f6(this->self_);
+        return ret.is_some ? static_cast<ControlItem>(ret.val)
+ : std::optional<ControlItem>();
+    }"#;
+
+"struct CRustOptionU32 Foo_f6(const FooOpaque * const self);";
