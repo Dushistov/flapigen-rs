@@ -687,7 +687,12 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 intermediate_ty: const_void_ptr_rust_ty,
                 conv_code: FTypeConvCode::new(
-                    format!("{}Ref{{{}}}", class.name, FROM_VAR_TEMPLATE),
+                    format!(
+                        "{class}Ref{{ static_cast<const {c_type} *>({var}) }}",
+                        class = class.name,
+                        c_type = cpp_code::c_class_type(class),
+                        var = FROM_VAR_TEMPLATE
+                    ),
                     Span::call_site(),
                 ),
             }),

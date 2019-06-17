@@ -6,7 +6,7 @@ r#"template<bool OWN_DATA>
     inline FooRef TestReferencesWrapper<OWN_DATA>::get_foo_ref() const  noexcept
     {
         const FooOpaque * ret = TestReferences_get_foo_ref(this->self_);
-        return FooRef{ret};
+        return FooRef{ static_cast<const FooOpaque *>(ret) };
     }"#;
 
 r#"template<bool OWN_DATA>

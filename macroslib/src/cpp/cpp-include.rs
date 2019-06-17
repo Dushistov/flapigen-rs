@@ -65,26 +65,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "CRustSliceU32"]
     #![swig_foreigner_type = "struct CRustSliceUsize"]
     #![swig_rust_type = "CRustSliceUsize"]
-    #![swig_foreigner_type = "struct CRustOptionBool"]
-    #![swig_rust_type = "CRustOptionBool"]
-    #![swig_foreigner_type = "struct CRustOptionF32"]
-    #![swig_rust_type = "CRustOptionF32"]
-    #![swig_foreigner_type = "struct CRustOptionF64"]
-    #![swig_rust_type = "CRustOptionF64"]
-    #![swig_foreigner_type = "struct CRustOptionI32"]
-    #![swig_rust_type = "CRustOptionI32"]
-    #![swig_foreigner_type = "struct CRustOptionU32"]
-    #![swig_rust_type = "CRustOptionU32"]
-    #![swig_foreigner_type = "struct CRustOptionI64"]
-    #![swig_rust_type = "CRustOptionI64"]
-    #![swig_foreigner_type = "struct CRustOptionU64"]
-    #![swig_rust_type = "CRustOptionU64"]
-    #![swig_foreigner_type = "struct CRustOptionUSize"]
-    #![swig_rust_type = "CRustOptionUSize"]
-    #![swig_foreigner_type = "struct CRustOptionStr"]
-    #![swig_rust_type = "CRustOptionStr"]
-    #![swig_foreigner_type = "struct CRustOptionString"]
-    #![swig_rust_type = "CRustOptionString"]
     #![swig_foreigner_type = "struct CRustObjectSlice"]
     #![swig_rust_type = "CRustObjectSlice"]
 }
@@ -135,38 +115,9 @@ trait SwigDerefMut {
     fn swig_deref_mut(&mut self) -> &mut Self::Target;
 }
 
-impl<'a> SwigInto<&'a ::std::ffi::CStr> for *const ::std::os::raw::c_char {
-    fn swig_into(self) -> &'a ::std::ffi::CStr {
-        assert!(!self.is_null());
-        unsafe { ::std::ffi::CStr::from_ptr(self) }
-    }
-}
-
-impl<'a> SwigDeref for &'a ::std::ffi::CStr {
-    type Target = str;
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_str().expect("wrong utf-8")
-    }
-}
-
-impl<'a> SwigInto<Option<&'a str>> for *const ::std::os::raw::c_char {
-    fn swig_into(self) -> Option<&'a str> {
-        if !self.is_null() {
-            let n = {
-                //strlen not avaiable, so
-                let cstr = unsafe { ::std::ffi::CStr::from_ptr(self) };
-                cstr.to_bytes().len()
-            };
-            let bytes = unsafe { ::std::slice::from_raw_parts(self as *const u8, n) };
-            Some(::std::str::from_utf8(bytes).expect("wrong utf-8"))
-        } else {
-            None
-        }
-    }
-}
-
 #[allow(dead_code)]
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct CRustStrView {
     data: *const ::std::os::raw::c_char,
     len: usize,
@@ -572,26 +523,6 @@ impl CRustString {
     }
 }
 
-#[swig_to_foreigner_hint = "T"]
-impl<T: SwigForeignClass> SwigFrom<Option<T>> for *mut ::std::os::raw::c_void {
-    fn swig_from(x: Option<T>) -> Self {
-        match x {
-            Some(x) => <T>::box_object(x),
-            None => ::std::ptr::null_mut(),
-        }
-    }
-}
-
-impl<T: SwigForeignClass> SwigInto<Option<T>> for *mut ::std::os::raw::c_void {
-    fn swig_into(self) -> Option<T> {
-        if !self.is_null() {
-            Some(T::unbox_object(self))
-        } else {
-            None
-        }
-    }
-}
-
 #[allow(dead_code)]
 #[repr(C)]
 pub struct CResultObjectString {
@@ -775,267 +706,6 @@ impl<T: SwigForeignClass> SwigFrom<Result<Vec<T>, String>> for CResultCRustForei
                 data: CResultCRustForeignVecStringUnion {
                     err: CRustString::from_string(err),
                 },
-            },
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustOptionBool {
-    val: u8,
-    is_some: u8,
-}
-
-impl SwigFrom<Option<bool>> for CRustOptionBool {
-    fn swig_from(x: Option<bool>) -> Self {
-        match x {
-            Some(x) => CRustOptionBool {
-                val: if x { 1 } else { 0 },
-                is_some: 1,
-            },
-            None => CRustOptionBool { val: 0, is_some: 0 },
-        }
-    }
-}
-
-impl SwigInto<Option<bool>> for CRustOptionBool {
-    fn swig_into(self) -> Option<bool> {
-        if self.is_some != 0 {
-            Some(if self.val != 0 { true } else { false })
-        } else {
-            None
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustOptionF32 {
-    val: f32,
-    is_some: u8,
-}
-
-impl SwigFrom<Option<f32>> for CRustOptionF32 {
-    fn swig_from(x: Option<f32>) -> Self {
-        match x {
-            Some(x) => CRustOptionF32 { val: x, is_some: 1 },
-            None => CRustOptionF32 {
-                val: 0.,
-                is_some: 0,
-            },
-        }
-    }
-}
-
-impl SwigInto<Option<f32>> for CRustOptionF32 {
-    fn swig_into(self) -> Option<f32> {
-        if self.is_some != 0 {
-            Some(self.val)
-        } else {
-            None
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustOptionF64 {
-    val: f64,
-    is_some: u8,
-}
-
-impl SwigFrom<Option<f64>> for CRustOptionF64 {
-    fn swig_from(x: Option<f64>) -> Self {
-        match x {
-            Some(x) => CRustOptionF64 { val: x, is_some: 1 },
-            None => CRustOptionF64 {
-                val: 0.,
-                is_some: 0,
-            },
-        }
-    }
-}
-
-impl SwigInto<Option<f64>> for CRustOptionF64 {
-    fn swig_into(self) -> Option<f64> {
-        if self.is_some != 0 {
-            Some(self.val)
-        } else {
-            None
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustOptionI32 {
-    val: i32,
-    is_some: u8,
-}
-
-impl SwigFrom<Option<i32>> for CRustOptionI32 {
-    fn swig_from(x: Option<i32>) -> Self {
-        match x {
-            Some(x) => CRustOptionI32 { val: x, is_some: 1 },
-            None => CRustOptionI32 { val: 0, is_some: 0 },
-        }
-    }
-}
-
-impl SwigInto<Option<i32>> for CRustOptionI32 {
-    fn swig_into(self) -> Option<i32> {
-        if self.is_some != 0 {
-            Some(self.val)
-        } else {
-            None
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustOptionU32 {
-    val: u32,
-    is_some: u8,
-}
-
-impl SwigFrom<Option<u32>> for CRustOptionU32 {
-    fn swig_from(x: Option<u32>) -> Self {
-        match x {
-            Some(x) => CRustOptionU32 { val: x, is_some: 1 },
-            None => CRustOptionU32 { val: 0, is_some: 0 },
-        }
-    }
-}
-
-impl SwigInto<Option<u32>> for CRustOptionU32 {
-    fn swig_into(self) -> Option<u32> {
-        if self.is_some != 0 {
-            Some(self.val)
-        } else {
-            None
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustOptionU64 {
-    val: u64,
-    is_some: u8,
-}
-
-impl SwigFrom<Option<u64>> for CRustOptionU64 {
-    fn swig_from(x: Option<u64>) -> Self {
-        match x {
-            Some(x) => CRustOptionU64 { val: x, is_some: 1 },
-            None => CRustOptionU64 { val: 0, is_some: 0 },
-        }
-    }
-}
-
-impl SwigInto<Option<u64>> for CRustOptionU64 {
-    fn swig_into(self) -> Option<u64> {
-        if self.is_some != 0 {
-            Some(self.val)
-        } else {
-            None
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustOptionI64 {
-    val: i64,
-    is_some: u8,
-}
-
-impl SwigFrom<Option<i64>> for CRustOptionI64 {
-    fn swig_from(x: Option<i64>) -> Self {
-        match x {
-            Some(x) => CRustOptionI64 { val: x, is_some: 1 },
-            None => CRustOptionI64 { val: 0, is_some: 0 },
-        }
-    }
-}
-
-impl SwigInto<Option<i64>> for CRustOptionI64 {
-    fn swig_into(self) -> Option<i64> {
-        if self.is_some != 0 {
-            Some(self.val)
-        } else {
-            None
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustOptionUSize {
-    val: usize,
-    is_some: u8,
-}
-
-impl SwigFrom<Option<usize>> for CRustOptionUSize {
-    fn swig_from(x: Option<usize>) -> Self {
-        match x {
-            Some(x) => CRustOptionUSize { val: x, is_some: 1 },
-            None => CRustOptionUSize { val: 0, is_some: 0 },
-        }
-    }
-}
-
-impl SwigInto<Option<usize>> for CRustOptionUSize {
-    fn swig_into(self) -> Option<usize> {
-        if self.is_some != 0 {
-            Some(self.val)
-        } else {
-            None
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustOptionStr {
-    val: CRustStrView,
-    is_some: u8,
-}
-
-impl<'a> SwigFrom<Option<&'a str>> for CRustOptionStr {
-    fn swig_from(x: Option<&'a str>) -> Self {
-        match x {
-            Some(x) => CRustOptionStr {
-                val: CRustStrView::from_str(x),
-                is_some: 1,
-            },
-            None => CRustOptionStr {
-                val: unsafe { ::std::mem::uninitialized() },
-                is_some: 0,
-            },
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustOptionString {
-    val: CRustString,
-    is_some: u8,
-}
-
-impl SwigFrom<Option<String>> for CRustOptionString {
-    fn swig_from(x: Option<String>) -> Self {
-        match x {
-            Some(x) => CRustOptionString {
-                val: CRustString::from_string(x),
-                is_some: 1,
-            },
-            None => CRustOptionString {
-                val: unsafe { ::std::mem::uninitialized() },
-                is_some: 0,
             },
         }
     }
@@ -1255,21 +925,14 @@ impl<T: SwigForeignEnum> SwigFrom<u32> for T {
     }
 }
 
-impl<T: SwigForeignEnum> SwigFrom<Option<T>> for Option<u32> {
-    fn swig_from(x: Option<T>) -> Option<u32> {
-        x.map(|v| v.as_u32())
-    }
-}
-
-impl<T: SwigForeignEnum> SwigFrom<Option<u32>> for Option<T> {
-    fn swig_from(x: Option<u32>) -> Option<T> {
-        x.map(|v| T::from_u32(v))
-    }
-}
-
 foreign_typemap!(
     (r_type) * mut ::std::os::raw::c_void;
     (f_type) "void *";
+);
+
+foreign_typemap!(
+    (r_type) * const ::std::os::raw::c_void;
+    (f_type) "/*const*/void *";
 );
 
 foreign_typemap!(
@@ -1323,10 +986,22 @@ foreign_typemap!(
     ($p:r_type) &str => CRustStrView {
         $out = CRustStrView::from_str($p)
     };
+    ($p:r_type) &str <= CRustStrView {
+        $out = unsafe {
+            let slice: &[u8] = ::std::slice::from_raw_parts($p.data as *const u8, $p.len);
+            ::std::str::from_utf8_unchecked(slice)
+        }
+    };
+
     ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_str.h\"", "<boost/utility/string_view.hpp>"]) => "boost::string_view"
         "boost::string_view{ $p.data, $p.len }";
+    ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_str.h\"", "<boost/utility/string_view.hpp>"]) <= "boost::string_view"
+        "CRustStrView{ $p.data(), $p.size() }";
+    
     ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_str.h\"", "<string_view>"]) => "std::string_view"
         "std::string_view{ $p.data, $p.len }";
+    ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_str.h\"", "<string_view>"]) <= "std::string_view"
+        "CRustStrView{ $p.data(), $p.size() }";
 );
 
 foreign_typemap!(
@@ -1452,3 +1127,55 @@ private:
     };
     ($pin:f_type, req_modules = ["\"rust_str.h\""]) => "RustString" "RustString{$pin}";
 );
+
+foreign_typemap!(
+    generic_alias!(CRustOpt = swig_concat_idents!(CRustOption, swig_i_type!(T)));
+    generic_alias!(CRustOptUnion = swig_concat_idents!(CRustOptionUnion, swig_i_type!(T)));
+     define_c_type!(
+         module = "rust_option.h";
+         #[repr(C)]
+         pub union CRustOptUnion!() {
+             data: swig_i_type!(T),
+             uninit: u8,
+         }
+         
+         #[repr(C)]
+         pub struct CRustOpt!() {
+             val: CRustOptUnion!(),
+             is_some: u8,
+         }
+     );
+    ($p:r_type) <T> Option<T> => CRustOpt!() {
+        $out = match $p {
+            Some(x) => {
+                swig_from_rust_to_i_type!(T, x, data)
+                CRustOpt!() {
+                    val: CRustOptUnion!() { data },
+                    is_some: 1,
+                }
+            }
+            None => CRustOpt!() {
+                    val: CRustOptUnion!() { uninit: 0 },
+                    is_some: 0,
+            },
+        }
+    };
+    ($p:r_type) <T> Option<T> <= CRustOpt!() {
+        $out = if $p.is_some != 0 {            
+            swig_from_i_type_to_rust!(T, unsafe { $p.val.data }, ret)
+            Some(ret)
+        } else {
+            None
+        }
+    };
+    
+    ($p:f_type, option = "CppOptional::Boost", req_modules = ["\"rust_option.h\"", "<boost/optional.hpp>"]) => "boost::optional<swig_f_type!(T)>"
+        "($p.is_some != 0) ? boost::optional<swig_f_type!(T)>(swig_foreign_from_i_type!(T, $p.val.data)) : boost::optional<swig_f_type!(T)>()";
+    ($p:f_type, option = "CppOptional::Boost", req_modules = ["\"rust_option.h\"", "<boost/optional.hpp>"]) <= "boost::optional<swig_f_type!(T)>"
+        "!!$p ? CRustOpt!() { CRustOptUnion!() { swig_foreign_to_i_type!(T, (*$p)) }, 1} : CRustOpt!() { {}, 0 }";
+    
+    ($p:f_type, option = "CppOptional::Std17", req_modules = ["\"rust_option.h\"", "<optional>"]) => "std::optional<swig_f_type!(T)>"
+        "($p.is_some != 0) ? std::optional<swig_f_type!(T)>(swig_foreign_from_i_type!(T, $p.val.data)) : std::optional<swig_f_type!(T)>()";
+    ($p:f_type, option = "CppOptional::Std17", req_modules = ["\"rust_option.h\"", "<optional>"]) <= "std::optional<swig_f_type!(T)>"
+        "!!$p ? CRustOpt!() { CRustOptUnion!() { swig_foreign_to_i_type!(T, (*$p)) }, 1} : CRustOpt!() { {}, 0 }";
+ );

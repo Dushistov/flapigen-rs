@@ -1009,7 +1009,20 @@ fn find_macro(code: &str) -> Option<(&str, Vec<&str>, usize)> {
     }
     next_pos += 1;
     let cnt_start = next_pos;
-    next_pos = next_pos + (&code[next_pos..]).find(')')?;
+    let mut bracket_counter: usize = 1;
+    let mut close_bracket_pos = None;
+    for (idx, ch) in (&code[next_pos..]).chars().enumerate() {
+        if ch == ')' {
+            bracket_counter -= 1;
+            if bracket_counter == 0 {
+                close_bracket_pos = Some(idx);
+                break;
+            }
+        } else if ch == '(' {
+            bracket_counter += 1;
+        }
+    }
+    next_pos = next_pos + close_bracket_pos?;
     let cnt_end = next_pos;
     let id = &code[0..id_end];
     let params: Vec<&str> = (&code[cnt_start..cnt_end])
@@ -1148,6 +1161,16 @@ fn expand_ftype_rule(
                     x.as_str(),
                     |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
                         match id {
+                            _ if id == SWIG_F_TYPE => {
+                                call_swig_f_type(
+                                    src_id,
+                                    x.span(),
+                                    params,
+                                    out,
+                                    param_map,
+                                    expander,
+                                )?;
+                            }
                             _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {
                                 let (type_name, var_name) = if params.len() == 2 {
                                     (&params[0], &params[1])
@@ -1190,7 +1213,10 @@ fn expand_ftype_rule(
                                         DiagnosticError::new(
                                             src_id,
                                             x.span(),
-                                            format!("unknown {} {}", GENERIC_ALIAS, id),
+                                            format!(
+                                                "unknown {} {} in f_type conversation code",
+                                                GENERIC_ALIAS, id
+                                            ),
                                         )
                                     })?;
 
@@ -1219,6 +1245,42 @@ fn expand_ftype_rule(
     Ok(ret)
 }
 
+fn call_swig_f_type(
+    src_id: SourceId,
+    sp: Span,
+    params: Vec<&str>,
+    out: &mut String,
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+) -> Result<()> {
+    let type_name = if params.len() == 1 {
+        &params[0]
+    } else {
+        return Err(DiagnosticError::new(
+            src_id,
+            sp,
+            format!(
+                "{} parameters in {} instead of 1",
+                params.len(),
+                SWIG_F_TYPE
+            ),
+        ));
+    };
+
+    let ty = param_map
+        .get_by_str(type_name)
+        .unwrap_or(None)
+        .ok_or_else(|| {
+            DiagnosticError::new(
+                src_id,
+                sp,
+                format!("unknown type parameter '{}'", type_name),
+            )
+        })?;
+    out.push_str(&expander.swig_f_type(ty)?);
+    Ok(())
+}
+
 fn expand_ftype_name(
     src_id: SourceId,
     ftype: &FTypeName,
@@ -1229,32 +1291,7 @@ fn expand_ftype_name(
         ftype.name.as_str(),
         |id: &str, params: Vec<&str>, out: &mut String| {
             if id == SWIG_F_TYPE {
-                let type_name = if params.len() == 1 {
-                    &params[0]
-                } else {
-                    return Err(DiagnosticError::new(
-                        src_id,
-                        ftype.sp,
-                        format!(
-                            "{} parameters in {} instead of 1",
-                            params.len(),
-                            SWIG_F_TYPE
-                        ),
-                    ));
-                };
-
-                let ty = param_map
-                    .get_by_str(type_name)
-                    .unwrap_or(None)
-                    .ok_or_else(|| {
-                        DiagnosticError::new(
-                            src_id,
-                            ftype.sp,
-                            format!("unknown type parameter '{}'", type_name),
-                        )
-                    })?;
-                out.push_str(&expander.swig_f_type(ty)?);
-                Ok(())
+                call_swig_f_type(src_id, ftype.sp, params, out, param_map, expander)
             } else {
                 Err(DiagnosticError::new(
                     src_id,

@@ -589,7 +589,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let c_destructor_name = format!("{}_delete", class.name);
         let code = format!(
             r#"
-#[allow(unused_variables, unused_mut, non_snake_case)]
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
 #[no_mangle]
 pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
 {unpack_code}
@@ -766,7 +766,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
     )?;
     let code = format!(
         r#"
-#[allow(non_snake_case, unused_variables, unused_mut)]
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
 #[no_mangle]
 pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
 {convert_input_code}
@@ -843,7 +843,7 @@ fn generate_method(
     )?;
     let code = format!(
         r#"
-#[allow(non_snake_case, unused_variables, unused_mut)]
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
 #[no_mangle]
 pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_ret_type} {{
 {convert_input_code}
@@ -909,7 +909,7 @@ fn generate_constructor(
 
     let code = format!(
         r#"
-#[allow(unused_variables, unused_mut, non_snake_case)]
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
 #[no_mangle]
 pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void {{
 {convert_input_code}

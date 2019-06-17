@@ -75,7 +75,7 @@ static char c_simple_cb_is_odd(int32_t x, void *opaque)
 
 TEST(c_Foo, Simple)
 {
-    auto foo = Foo_new(1, "a");
+    auto foo = Foo_new(1, CRustStrView{ "a", 1 });
     ASSERT_TRUE(foo != nullptr);
 
     EXPECT_EQ(3, Foo_f(foo, 1, 1));
@@ -508,7 +508,7 @@ TEST(TestOptional, smokeTest)
         EXPECT_EQ(ITEM1, *val);
     }
     {
-        auto val = x.f9({ "aaa" });
+        auto val = x.f9({ { "aaa" } });
         EXPECT_EQ(std::string("your name is aaa"), val.to_std_string());
         auto val2 = x.f9({});
         EXPECT_EQ(std::string("None"), val2.to_std_string());

@@ -350,14 +350,14 @@ foreign_interface!(interface RepoChangedCallback {
    {
         auto p = static_cast<RepoChangedCallback *>(opaque);
         assert(p != nullptr);
-        p->on_save(UuidRef{a_0});
+        p->on_save(UuidRef{ static_cast<const UuidOpaque *>(a_0) });
    }
 
    static void c_on_remove(const UuidOpaque * a_0, void *opaque)
    {
         auto p = static_cast<RepoChangedCallback *>(opaque);
         assert(p != nullptr);
-        p->on_remove(UuidRef{a_0});
+        p->on_remove(UuidRef{ static_cast<const UuidOpaque *>(a_0) });
    }
 "#
         ));

@@ -1,6 +1,8 @@
-r##"# [ no_mangle ] pub extern "C" fn Foo_f6 ( this : * mut Foo , ) -> CRustOptionU32 {
+r##"# [ no_mangle ] pub extern "C" fn Foo_f6 ( this : * mut Foo , ) -> CRustOptionu32 {
  let this : & Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : Option < ControlItem > = Foo :: f6 ( this , ) ;
- let mut ret : Option < u32 > = < Option < u32 >>:: swig_from ( ret ) ;
- let mut ret : CRustOptionU32 = < CRustOptionU32 >:: swig_from ( ret ) ;
+ let ret : CRustOptionu32 = match ret { Some ( x ) => {
+ let mut data : u32 = < u32 >:: swig_from ( x ) ;
+ CRustOptionu32 { val : CRustOptionUnionu32 { data } , is_some : 1 , } }
+ None => CRustOptionu32 { val : CRustOptionUnionu32 { uninit : 0 } , is_some : 0 , } , } ;
  ret }"##;
