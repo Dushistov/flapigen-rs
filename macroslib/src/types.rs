@@ -16,6 +16,8 @@ pub(crate) struct ForeignerClassInfo {
     pub foreigner_code: String,
     pub doc_comments: Vec<String>,
     pub copy_derived: bool,
+    /// constructor type implements Clone trait
+    pub clone_derived: bool,
 }
 
 /// Two types instead of one, to simplify live to developer

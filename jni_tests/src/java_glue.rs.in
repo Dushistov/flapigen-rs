@@ -54,6 +54,7 @@ fn chrono_now() -> DateTime<Utc> {
 
 foreigner_class!(
 /// Class comment description for Foo.
+#[derive(Clone)]
 class Foo {
     self_type Foo;
     /// some text about the new function

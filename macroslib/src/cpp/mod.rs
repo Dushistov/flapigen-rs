@@ -198,9 +198,19 @@ impl CppConfig {
         if let Some(self_desc) = class.self_desc.as_ref() {
             let constructor_ret_type = &self_desc.constructor_ret_type;
             let this_type_for_method = constructor_ret_type;
+            let mut traits = vec!["SwigForeignClass"];
+            if class.clone_derived {
+                traits.push("Copy");
+            }
+            if class.copy_derived {
+                if !class.clone_derived {
+                    traits.push("Clone");
+                }
+                traits.push("Copy");
+            }
             let this_type = conv_map.find_or_alloc_rust_type_that_implements(
                 this_type_for_method,
-                &["SwigForeignClass"],
+                &traits,
                 class.src_id,
             );
 

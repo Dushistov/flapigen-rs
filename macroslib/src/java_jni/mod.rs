@@ -125,9 +125,13 @@ impl JavaConfig {
             let this_type_for_method = if_ty_result_return_ok_type(constructor_ret_type)
                 .unwrap_or_else(|| constructor_ret_type.clone());
 
+            let mut traits = vec!["SwigForeignClass"];
+            if class.clone_derived {
+                traits.push("Clone");
+            }
             let this_type: RustType = conv_map.find_or_alloc_rust_type_that_implements(
                 &this_type_for_method,
-                &["SwigForeignClass"],
+                &traits,
                 class.src_id,
             );
             debug!(

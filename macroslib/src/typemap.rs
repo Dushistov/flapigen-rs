@@ -1182,6 +1182,7 @@ mod tests {
             foreigner_code: String::new(),
             doc_comments: vec![],
             copy_derived: false,
+            clone_derived: false,
         });
 
         let rc_refcell_foo_ty = types_map

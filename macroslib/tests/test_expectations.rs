@@ -189,9 +189,12 @@ fn test_expectations_foreign_vec_as_arg() {
 
     let name = "foreign_vec_as_arg";
     let src = r#"
-foreigner_class!(class Boo {
+foreigner_class!(
+#[derive(Clone)]
+class Boo {
     self_type Boo;
     constructor Boo::default() -> Boo;
+    method Boo::clone(&self) -> Boo;
 });
 foreigner_class!(class FooImpl {
     self_type Foo<'a>;
@@ -201,6 +204,7 @@ foreigner_class!(class FooImpl {
 });
 "#;
     ;
+
     for _ in 0..100 {
         let cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).expect("parse failed");
         println!("c/c++: {}", cpp_code.foreign_code);

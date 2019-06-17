@@ -204,10 +204,10 @@ impl GenericTypeConv {
     {
         let mut subst_map = TyParamsSubstMap::default();
         trace!(
-            "is_conv_possible: begin generic: {:?} => from_ty: {:?} => ty: {}",
-            self.generic_params,
-            self.from_ty,
-            ty.normalized_name
+            "is_conv_possible: begin generic: {} => from_ty: {} => ty: {}",
+            DisplayToTokens(&self.generic_params),
+            DisplayToTokens(&self.from_ty),
+            ty
         );
         for ty_p in self.generic_params.type_params() {
             subst_map.insert(&ty_p.ident, None);
@@ -216,9 +216,9 @@ impl GenericTypeConv {
             return None;
         }
         trace!(
-            "is_conv_possible: {} is subst of {:?}, check trait bounds",
+            "is_conv_possible: {} is subst of {}, check trait bounds",
             ty,
-            self.from_ty
+            DisplayToTokens(&self.from_ty),
         );
         let trait_bounds = get_trait_bounds(&self.generic_params);
         let mut has_unbinded = false;
@@ -229,17 +229,8 @@ impl GenericTypeConv {
                     *subst_it,
                     trait_bounds
                 );
-                let traits_bound_not_match = |idx: usize| {
-                    let requires = &trait_bounds[idx].trait_names;
-                    let val_name = normalize_ty_lifetimes(val);
 
-                    others(val_name).map_or(true, |rt| !rt.implements.contains_subset(requires))
-                };
-                if trait_bounds
-                    .iter()
-                    .position(|it| it.ty_param.as_ref() == subst_it.ident)
-                    .map_or(false, traits_bound_not_match)
-                {
+                if !is_ty_satisfy_trait_bounds(subst_it.ident, val, &trait_bounds, &others) {
                     trace!("is_conv_possible: trait bounds check failed");
                     return None;
                 }
@@ -250,7 +241,30 @@ impl GenericTypeConv {
         if has_unbinded {
             trace!("is_conv_possible: has_unbinded: goal_ty {:?}", goal_ty);
             if let Some(goal_ty) = goal_ty {
-                is_second_subst_of_first(&self.to_ty, &goal_ty.ty, &mut subst_map);
+                /*
+                should be:
+                jlong -> Box<T> gool Box<Foo>, T = Foo,
+                jlong -> Box<T>, gool Foo, T = Foo
+                 */
+                if !is_second_subst_of_first(&self.to_ty, &goal_ty.ty, &mut subst_map)
+                    && subst_map.len() == 1
+                    && subst_map.as_slice()[0].ty.is_none()
+                {
+                    debug_assert_eq!(1, self.generic_params.type_params().count());
+                    if let Some(first_generic_ty) = self.generic_params.type_params().nth(0) {
+                        *subst_map
+                            .get_mut(&first_generic_ty.ident)
+                            .expect("Type should be there") = Some(goal_ty.ty.clone());
+                    }
+                }
+            }
+            for subst_it in subst_map.as_slice() {
+                if let Some(ref val) = subst_it.ty {
+                    if !is_ty_satisfy_trait_bounds(subst_it.ident, val, &trait_bounds, &others) {
+                        trace!("is_conv_possible: trait bounds check failed");
+                        return None;
+                    }
+                }
             }
         }
 
@@ -307,13 +321,38 @@ impl GenericTypeConv {
     }
 }
 
+fn is_ty_satisfy_trait_bounds<'a, OtherRustTypes>(
+    subst_ident: &syn::Ident,
+    val: &syn::Type,
+    trait_bounds: &[GenericTraitBound],
+    others: &OtherRustTypes,
+) -> bool
+where
+    OtherRustTypes: Fn(&str) -> Option<&'a RustType>,
+{
+    let traits_bound_not_match = |idx: usize| {
+        let requires = &trait_bounds[idx].trait_names;
+        let val_name = normalize_ty_lifetimes(val);
+
+        others(val_name).map_or(true, |rt| !rt.implements.contains_subset(requires))
+    };
+    !trait_bounds
+        .iter()
+        .position(|it| it.ty_param.as_ref() == subst_ident)
+        .map_or(false, traits_bound_not_match)
+}
+
 /// for example true for Result<T, E> Result<u8, u8>
 pub(in crate::typemap) fn is_second_subst_of_first(
     ty1: &Type,
     ty2: &Type,
     subst_map: &mut TyParamsSubstMap,
 ) -> bool {
-    trace!("is_second_substitude_of_first {:?} vs {:?}", ty1, ty2);
+    trace!(
+        "is_second_substitude_of_first {} vs {}",
+        DisplayToTokens(ty1),
+        DisplayToTokens(ty2)
+    );
     match (ty1, ty2) {
         (
             Type::Path(syn::TypePath { path: ref p1, .. }),
@@ -372,9 +411,9 @@ pub(in crate::typemap) fn is_second_subst_of_first(
         _ => {
             let ret = ty1 == ty2;
             trace!(
-                "is_second_substitude_of_first just check equal {:?} vs {:?} => {}",
-                ty1,
-                ty2,
+                "is_second_substitude_of_first just check equal {} vs {} => {}",
+                DisplayToTokens(ty1),
+                DisplayToTokens(ty2),
                 ret
             );
             ret
@@ -1156,6 +1195,70 @@ Result<u16, u8>
             );
             assert_eq!(parse_type! {u8}, *subst_map.get(&e_id).unwrap().unwrap());
         }
+    }
+
+    #[test]
+    fn test_jlong_to_option_wrong_conv() {
+        let _ = env_logger::try_init();
+
+        let generics = get_generic_params_from_code! {
+            impl<T: SwigForeignClass> SwigFrom<jlong> for Option<T> {
+                fn swig_from(x: jlong, _: *mut JNIEnv) -> Self {
+                    if x != 0 {
+                        let o: T = T::unbox_object(x);
+                        Some(o)
+                    } else {
+                        None
+                    }
+                }
+            }
+        };
+
+        let foo_spec = Rc::new(
+            RustTypeS::new_without_graph_idx(str_to_ty("Foo"), "Foo", SourceId::none())
+                .implements("SwigForeignClass"),
+        );
+        assert_eq!(
+            None,
+            GenericTypeConv::simple_new(str_to_ty("jlong"), str_to_ty("Option<T>"), generics)
+                .is_conv_possible(
+                    &str_to_rust_ty("jlong"),
+                    Some(&str_to_rust_ty("&Foo")),
+                    |name| {
+                        println!("test rt map, check name {:?}", name);
+                        if name == "Foo" {
+                            Some(&foo_spec)
+                        } else {
+                            None
+                        }
+                    },
+                )
+        );
+
+        let generics = get_generic_params_from_code! {
+            impl<T: SwigForeignClass + Clone> SwigInto<Vec<T>> for jobjectArray {
+                fn swig_into(self, env: *mut JNIEnv) -> Vec<T> {
+                    unimplemented!();
+                }
+            }
+        };
+
+        assert_eq!(
+            None,
+            GenericTypeConv::simple_new(str_to_ty("jobjectArray"), str_to_ty("Vec<T>"), generics)
+                .is_conv_possible(
+                    &str_to_rust_ty("jobjectArray"),
+                    Some(&str_to_rust_ty("Vec<Foo>")),
+                    |name| {
+                        println!("test rt map, check name {:?}", name);
+                        if name == "Foo" {
+                            Some(&foo_spec)
+                        } else {
+                            None
+                        }
+                    },
+                )
+        );
     }
 
     fn str_to_ty(code: &str) -> syn::Type {
