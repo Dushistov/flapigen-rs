@@ -42,6 +42,7 @@ impl RustTypeS {
             src_id,
         }
     }
+    #[cfg(test)]
     pub(in crate::typemap) fn implements(mut self, trait_name: &str) -> RustTypeS {
         self.implements.insert(trait_name.into());
         self

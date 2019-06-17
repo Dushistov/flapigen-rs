@@ -1241,7 +1241,7 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
 
         conv_map.find_or_alloc_rust_type_that_implements(
             &parse_type! { Foo },
-            "SwigForeignClass",
+            &["SwigForeignClass"],
             SourceId::none(),
         );
         let arc_mutex_foo =

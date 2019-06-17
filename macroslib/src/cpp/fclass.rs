@@ -224,7 +224,7 @@ public:
         if let Some(this_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
             let this_type = ctx.conv_map.find_or_alloc_rust_type_that_implements(
                 this_type,
-                "SwigForeignClass",
+                &["SwigForeignClass"],
                 class.src_id,
             );
 

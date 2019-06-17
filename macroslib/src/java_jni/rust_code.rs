@@ -59,7 +59,7 @@ pub(in crate::java_jni) fn generate_rust_code(
         if let Some(this_type) = calc_this_type_for_method(conv_map, class) {
             let this_type = conv_map.find_or_alloc_rust_type_that_implements(
                 &this_type,
-                "SwigForeignClass",
+                &["SwigForeignClass"],
                 class.src_id,
             );
             debug!(

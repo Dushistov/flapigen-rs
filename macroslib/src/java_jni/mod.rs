@@ -127,7 +127,7 @@ impl JavaConfig {
 
             let this_type: RustType = conv_map.find_or_alloc_rust_type_that_implements(
                 &this_type_for_method,
-                "SwigForeignClass",
+                &["SwigForeignClass"],
                 class.src_id,
             );
             debug!(

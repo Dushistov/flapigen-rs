@@ -200,7 +200,7 @@ impl CppConfig {
             let this_type_for_method = constructor_ret_type;
             let this_type = conv_map.find_or_alloc_rust_type_that_implements(
                 this_type_for_method,
-                "SwigForeignClass",
+                &["SwigForeignClass"],
                 class.src_id,
             );
 
@@ -992,7 +992,7 @@ fn generate_enum(ctx: &mut CppContext, enum_info: &ForeignEnumInfo) -> Result<()
         .map_err(|err| DiagnosticError::from_syn_err(enum_info.src_id, err))?;
     ctx.conv_map.find_or_alloc_rust_type_that_implements(
         &enum_ti,
-        "SwigForeignEnum",
+        &["SwigForeignEnum"],
         enum_info.src_id,
     );
 
