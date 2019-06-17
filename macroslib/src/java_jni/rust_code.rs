@@ -57,11 +57,7 @@ pub(in crate::java_jni) fn generate_rust_code(
     let mut gen_code = Vec::<TokenStream>::new();
     let (this_type_for_method, code_box_this) =
         if let Some(this_type) = calc_this_type_for_method(conv_map, class) {
-            let this_type = conv_map.find_or_alloc_rust_type_that_implements(
-                &this_type,
-                &["SwigForeignClass"],
-                class.src_id,
-            );
+            let this_type = conv_map.ty_to_rust_type(&this_type);
             debug!(
                 "generate_rust_code: add implements SwigForeignClass for {}",
                 this_type.normalized_name

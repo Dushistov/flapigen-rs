@@ -222,11 +222,7 @@ public:
 
     let (this_type_for_method, code_box_this) =
         if let Some(this_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
-            let this_type = ctx.conv_map.find_or_alloc_rust_type_that_implements(
-                this_type,
-                &["SwigForeignClass"],
-                class.src_id,
-            );
+            let this_type = ctx.conv_map.ty_to_rust_type(this_type);
 
             let (this_type_for_method, code_box_this) =
                 convert_to_heap_pointer(ctx.conv_map, &this_type, "this");
