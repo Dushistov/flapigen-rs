@@ -871,12 +871,16 @@ impl TypeMap {
     pub(crate) fn find_or_alloc_rust_type_that_implements(
         &mut self,
         ty: &Type,
-        trait_name: &str,
+        traits_name: &[&str],
         src_id: SourceId,
     ) -> RustType {
         let name = normalize_ty_lifetimes(ty);
         let idx = self.add_node(name.into(), || {
-            RustTypeS::new_without_graph_idx(ty.clone(), name, src_id).implements(trait_name)
+            let mut ty = RustTypeS::new_without_graph_idx(ty.clone(), name, src_id);
+            for tn in traits_name {
+                ty.implements.insert((*tn).into());
+            }
+            ty
         });
         self.conv_graph[idx].clone()
     }
@@ -1164,7 +1168,7 @@ mod tests {
 
         let foo_rt: RustType = types_map.find_or_alloc_rust_type_that_implements(
             &parse_type! { Foo },
-            "SwigForeignClass",
+            &["SwigForeignClass"],
             SourceId::none(),
         );
         types_map.register_foreigner_class(&ForeignerClassInfo {
@@ -1178,6 +1182,7 @@ mod tests {
             foreigner_code: String::new(),
             doc_comments: vec![],
             copy_derived: false,
+            clone_derived: false,
         });
 
         let rc_refcell_foo_ty = types_map

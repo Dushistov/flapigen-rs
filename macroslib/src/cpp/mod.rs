@@ -198,9 +198,19 @@ impl CppConfig {
         if let Some(self_desc) = class.self_desc.as_ref() {
             let constructor_ret_type = &self_desc.constructor_ret_type;
             let this_type_for_method = constructor_ret_type;
+            let mut traits = vec!["SwigForeignClass"];
+            if class.clone_derived {
+                traits.push("Copy");
+            }
+            if class.copy_derived {
+                if !class.clone_derived {
+                    traits.push("Clone");
+                }
+                traits.push("Copy");
+            }
             let this_type = conv_map.find_or_alloc_rust_type_that_implements(
                 this_type_for_method,
-                "SwigForeignClass",
+                &traits,
                 class.src_id,
             );
 
@@ -677,7 +687,12 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 intermediate_ty: const_void_ptr_rust_ty,
                 conv_code: FTypeConvCode::new(
-                    format!("{}Ref{{{}}}", class.name, FROM_VAR_TEMPLATE),
+                    format!(
+                        "{class}Ref{{ static_cast<const {c_type} *>({var}) }}",
+                        class = class.name,
+                        c_type = cpp_code::c_class_type(class),
+                        var = FROM_VAR_TEMPLATE
+                    ),
                     Span::call_site(),
                 ),
             }),
@@ -977,28 +992,66 @@ May be you need to use `private constructor = empty;` syntax?",
     Ok(())
 }
 
-fn generate_enum(ctx: &mut CppContext, enum_info: &ForeignEnumInfo) -> Result<()> {
-    if (enum_info.items.len() as u64) >= u64::from(u32::max_value()) {
+fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInfo) -> Result<()> {
+    if (fenum.items.len() as u64) >= u64::from(u32::max_value()) {
         return Err(DiagnosticError::new(
-            enum_info.src_id,
-            enum_info.span(),
+            fenum.src_id,
+            fenum.span(),
             "Too many items in enum",
         ));
     }
 
-    trace!("enum_ti: {}", enum_info.name);
-    let enum_name = &enum_info.name;
-    let enum_ti: Type = parse_ty_with_given_span(&enum_name.to_string(), enum_info.name.span())
-        .map_err(|err| DiagnosticError::from_syn_err(enum_info.src_id, err))?;
-    ctx.conv_map.find_or_alloc_rust_type_that_implements(
+    trace!("enum_ti: {}", fenum.name);
+    let enum_name = &fenum.name;
+    let enum_ti: Type = parse_ty_with_given_span(&enum_name.to_string(), fenum.name.span())
+        .map_err(|err| DiagnosticError::from_syn_err(fenum.src_id, err))?;
+    let enum_rty = ctx.conv_map.find_or_alloc_rust_type_that_implements(
         &enum_ti,
-        "SwigForeignEnum",
-        enum_info.src_id,
+        &["SwigForeignEnum"],
+        fenum.src_id,
     );
 
-    fenum::generate_code_for_enum(&ctx.cfg.output_dir, enum_info)
-        .map_err(|err| DiagnosticError::new(enum_info.src_id, enum_info.span(), err))?;
-    fenum::generate_rust_code_for_enum(ctx, enum_info)?;
+    fenum::generate_c_code_for_enum(&ctx.cfg.output_dir, fenum)
+        .map_err(|err| DiagnosticError::new(fenum.src_id, fenum.span(), err))?;
+    fenum::generate_rust_trait_for_enum(ctx, fenum)?;
+
+    let u32_rty = ctx
+        .conv_map
+        .find_or_alloc_rust_type_no_src_id(&parse_type! { u32 });
+
+    let enum_ftype = ForeignTypeS {
+        name: TypeName::new(fenum.name.to_string(), (fenum.src_id, fenum.name.span())),
+        provides_by_module: vec![
+            format!("\"{}\"", cpp_code::cpp_header_name_for_enum(fenum)).into()
+        ],
+        into_from_rust: Some(ForeignConversationRule {
+            rust_ty: enum_rty.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                intermediate_ty: u32_rty.to_idx(),
+                conv_code: FTypeConvCode::new(
+                    format!(
+                        "static_cast<{enum_name}>({var})",
+                        enum_name = fenum.name,
+                        var = FROM_VAR_TEMPLATE
+                    ),
+                    Span::call_site(),
+                ),
+            }),
+        }),
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: enum_rty.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                intermediate_ty: u32_rty.to_idx(),
+                conv_code: FTypeConvCode::new(
+                    format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
+                    Span::call_site(),
+                ),
+            }),
+        }),
+        name_prefix: None,
+    };
+    ctx.conv_map.alloc_foreign_type(enum_ftype)?;
+    ctx.conv_map.register_exported_enum(fenum);
     Ok(())
 }
 

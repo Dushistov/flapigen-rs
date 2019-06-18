@@ -140,69 +140,113 @@ pub(in crate::cpp) fn generate_c_type(
     src_id: SourceId,
     out: &mut FileWriteCache,
 ) -> Result<Vec<TokenStream>, DiagnosticError> {
-    use std::io::Write;
-
     let mut rust_code = vec![];
 
     for c_type in &c_types.types {
-        match c_type {
-            CType::Struct(ref s) => {
-                let s_id = format!("struct {}", s.ident);
-                if out.is_item_defined(&s_id) {
-                    continue;
-                }
-                let mut rust_layout_test = format!(
-                    r#"
+        let ctype: &CTypeDescriptor = match c_type {
+            CType::Struct(ref s) => s,
+            CType::Union(ref u) => u,
+        };
+        do_generate_c_type(tmap, flags, src_id, ctype, out, &mut rust_code)?;
+    }
+
+    Ok(rust_code)
+}
+
+trait CTypeDescriptor: ToTokens {
+    fn c_type_prefix(&self) -> &'static str;
+    fn name(&self) -> &syn::Ident;
+    fn fields(&self) -> Result<&syn::FieldsNamed, syn::Error>;
+}
+
+impl CTypeDescriptor for syn::ItemStruct {
+    fn c_type_prefix(&self) -> &'static str {
+        "struct"
+    }
+    fn name(&self) -> &syn::Ident {
+        &self.ident
+    }
+    fn fields(&self) -> Result<&syn::FieldsNamed, syn::Error> {
+        match self.fields {
+            syn::Fields::Named(ref x) => Ok(&x),
+            _ => Err(syn::Error::new(
+                self.fields.span(),
+                "only fields with names accepted in this context",
+            )),
+        }
+    }
+}
+
+impl CTypeDescriptor for syn::ItemUnion {
+    fn c_type_prefix(&self) -> &'static str {
+        "union"
+    }
+    fn name(&self) -> &syn::Ident {
+        &self.ident
+    }
+    fn fields(&self) -> Result<&syn::FieldsNamed, syn::Error> {
+        Ok(&self.fields)
+    }
+}
+
+fn do_generate_c_type(
+    tmap: &TypeMap,
+    flags: MergeCTypesFlags,
+    src_id: SourceId,
+    ctype: &CTypeDescriptor,
+    out: &mut FileWriteCache,
+    rust_code: &mut Vec<TokenStream>,
+) -> Result<(), DiagnosticError> {
+    use std::io::Write;
+
+    let s_id = format!("{} {}", ctype.c_type_prefix(), ctype.name());
+    if out.is_item_defined(&s_id) {
+        return Ok(());
+    }
+    let mut rust_layout_test = format!(
+        r#"
 #[allow(non_snake_case)]
 #[test]
 fn test_{name}_layout() {{
 #[repr(C)]
-struct My{name} {{
+{c_type_prefix} My{name} {{
 "#,
-                    name = s.ident,
-                );
-                writeln!(out, "struct {} {{", s.ident).map_err(map_any_err_to_our_err)?;
-                let fields = match s.fields {
-                    syn::Fields::Named(ref x) => x,
-                    _ => {
-                        return Err(DiagnosticError::new(
-                            src_id,
-                            s.fields.span(),
-                            "only fields with names accepted in this context",
-                        ))
-                    }
-                };
-                let mut fields_asserts_code = String::new();
-                for f in &fields.named {
-                    let id = f.ident.as_ref().ok_or_else(|| {
-                        DiagnosticError::new(
-                            src_id,
-                            f.span(),
-                            "only fields with names accepted in this context",
-                        )
-                    })?;
-                    let field_rty = tmap.ty_to_rust_type_checked(&f.ty).ok_or_else(|| {
-                        DiagnosticError::new(
-                            src_id,
-                            f.ty.span(),
-                            format!("unknown Rust type: '{}'", DisplayToTokens(&f.ty)),
-                        )
-                    })?;
-                    let field_fty = tmap
-                        .find_foreign_type_related_to_rust_ty(field_rty.to_idx())
-                        .ok_or_else(|| {
-                            DiagnosticError::new(
-                                src_id,
-                                f.ty.span(),
-                                "no foreign type related to this type",
-                            )
-                        })?;
-                    writeln!(out, "    {} {};", tmap[field_fty].name.as_str(), id)
-                        .map_err(map_any_err_to_our_err)?;
-                    writeln!(&mut rust_layout_test, "{}: {},", id, DisplayToTokens(&f.ty))
-                        .map_err(map_any_err_to_our_err)?;
+        c_type_prefix = ctype.c_type_prefix(),
+        name = ctype.name(),
+    );
+    writeln!(out, "{} {{", s_id).map_err(map_any_err_to_our_err)?;
 
-                    writeln!(
+    let mut fields_asserts_code = String::new();
+    let fields = &ctype
+        .fields()
+        .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?
+        .named;
+    for f in fields {
+        let id = f.ident.as_ref().ok_or_else(|| {
+            DiagnosticError::new(
+                src_id,
+                f.span(),
+                "only fields with names accepted in this context",
+            )
+        })?;
+        let field_rty = tmap.ty_to_rust_type_checked(&f.ty).ok_or_else(|| {
+            DiagnosticError::new(
+                src_id,
+                f.ty.span(),
+                format!("unknown Rust type: '{}'", DisplayToTokens(&f.ty)),
+            )
+        })?;
+        let field_fty = tmap
+            .find_foreign_type_related_to_rust_ty(field_rty.to_idx())
+            .ok_or_else(|| {
+                DiagnosticError::new(src_id, f.ty.span(), "no foreign type related to this type")
+            })?;
+        writeln!(out, "    {} {};", tmap[field_fty].name.as_str(), id)
+            .map_err(map_any_err_to_our_err)?;
+        writeln!(&mut rust_layout_test, "{}: {},", id, DisplayToTokens(&f.ty))
+            .map_err(map_any_err_to_our_err)?;
+
+        writeln!(
                         &mut fields_asserts_code,
                         r#"
 #[allow(dead_code)]
@@ -213,17 +257,17 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
     let offset_user = ((&user_s.{field_name} as *const {field_type}) as usize) - ((&user_s as *const {struct_name}) as usize);
     assert_eq!(offset_our, offset_user);
 "#,
-                        struct_name = s.ident,
+                        struct_name = ctype.name(),
                         field_name = id,
                         field_type = DisplayToTokens(&f.ty),
                     )
                     .map_err(map_any_err_to_our_err)?;
-                }
-                out.write_all(b"};\n").map_err(map_any_err_to_our_err)?;
+    }
+    out.write_all(b"};\n").map_err(map_any_err_to_our_err)?;
 
-                writeln!(
-                    &mut rust_layout_test,
-                    r#"}}
+    writeln!(
+        &mut rust_layout_test,
+        r#"}}
     assert_eq!(::std::mem::size_of::<My{name}>(), ::std::mem::size_of::<{name}>());
     assert_eq!(::std::mem::align_of::<My{name}>(), ::std::mem::align_of::<{name}>());
     let our_s: My{name} = unsafe {{ ::std::mem::zeroed() }};
@@ -232,33 +276,21 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
 {fields_asserts}
 }}
 "#,
-                    name = s.ident,
-                    fields_asserts = fields_asserts_code,
-                )
-                .map_err(map_any_err_to_our_err)?;
-                match flags {
-                    MergeCTypesFlags::DefineOnlyCType => {
-                        let tt: TokenStream =
-                            syn::parse_str(&rust_layout_test).unwrap_or_else(|err| {
-                                panic_on_syn_error(
-                                    "Internal: layout unit test",
-                                    rust_layout_test,
-                                    err,
-                                )
-                            });
-                        rust_code.push(tt);
-                    }
-                    MergeCTypesFlags::DefineAlsoRustType => {
-                        rust_code.push(s.into_token_stream());
-                    }
-                }
-                out.define_item(s_id);
-            }
-            CType::Union(ref u) => {
-                unimplemented!();
-            }
+        name = ctype.name(),
+        fields_asserts = fields_asserts_code,
+    )
+    .map_err(map_any_err_to_our_err)?;
+    match flags {
+        MergeCTypesFlags::DefineOnlyCType => {
+            let tt: TokenStream = syn::parse_str(&rust_layout_test).unwrap_or_else(|err| {
+                panic_on_syn_error("Internal: layout unit test", rust_layout_test, err)
+            });
+            rust_code.push(tt);
+        }
+        MergeCTypesFlags::DefineAlsoRustType => {
+            rust_code.push(ctype.into_token_stream());
         }
     }
-
-    Ok(rust_code)
+    out.define_item(s_id);
+    Ok(())
 }

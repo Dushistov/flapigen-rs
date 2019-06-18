@@ -1,17 +1,14 @@
 use std::{io::Write, path::Path};
 
-use quote::ToTokens;
-
 use crate::{
     cpp::{cpp_code, map_write_err, CppContext},
-    error::{panic_on_syn_error, Result},
+    error::Result,
     file_cache::FileWriteCache,
-    source_registry::SourceId,
-    typemap::ast::DisplayToTokens,
     types::ForeignEnumInfo,
 };
+use quote::quote;
 
-pub(in crate::cpp) fn generate_code_for_enum(
+pub(in crate::cpp) fn generate_c_code_for_enum(
     output_dir: &Path,
     enum_info: &ForeignEnumInfo,
 ) -> std::result::Result<(), String> {
@@ -53,162 +50,38 @@ enum {enum_name} {{
     Ok(())
 }
 
-pub(in crate::cpp) fn generate_rust_code_for_enum(
+pub(in crate::cpp) fn generate_rust_trait_for_enum(
     ctx: &mut CppContext,
     enum_info: &ForeignEnumInfo,
 ) -> Result<()> {
-    use std::fmt::Write;
-
-    let rust_enum_name = enum_info.rust_enum_name();
-
-    let mut code = format!(
-        r#"
-impl SwigFrom<u32> for {rust_enum_name} {{
-    fn swig_from(x: u32) -> {rust_enum_name} {{
-        match x {{
-
-"#,
-        rust_enum_name = rust_enum_name,
-    );
+    let mut arms_to_u32 = Vec::with_capacity(enum_info.items.len());
+    let mut arms_from_u32 = Vec::with_capacity(enum_info.items.len());
+    assert!((enum_info.items.len() as u64) <= u64::from(u32::max_value()));
     for (i, item) in enum_info.items.iter().enumerate() {
-        writeln!(
-            &mut code,
-            "{index} => {item_name},",
-            index = i,
-            item_name = DisplayToTokens(&item.rust_name)
-        )
-        .unwrap();
+        let item_name = &item.rust_name;
+        let idx = i as u32;
+        arms_to_u32.push(quote! { #item_name => #idx });
+        arms_from_u32.push(quote! { #idx => #item_name });
     }
-    write!(
-        &mut code,
-        r#"
-        _ => panic!("{{}} not expected for {rust_enum_name}", x),
-        }}
-    }}
-}}
-"#,
-        rust_enum_name = rust_enum_name,
-    )
-    .unwrap();
 
-    write!(
-        &mut code,
-        r#"
-impl SwigFrom<Option<u32>> for Option<{rust_enum_name}> {{
-    fn swig_from(x: Option<u32>) -> Option<{rust_enum_name}> {{
-        x.map(|v| match v {{
+    let rust_enum_name = &enum_info.name;
 
-"#,
-        rust_enum_name = rust_enum_name,
-    )
-    .unwrap();
-    for (i, item) in enum_info.items.iter().enumerate() {
-        writeln!(
-            &mut code,
-            "{index} => {item_name},",
-            index = i,
-            item_name = DisplayToTokens(&item.rust_name)
-        )
-        .unwrap();
-    }
-    write!(
-        &mut code,
-        r#"
-        _ => panic!("{{}} not expected for {rust_enum_name}", v),
-        }})
-    }}
-}}
-"#,
-        rust_enum_name = rust_enum_name,
-    )
-    .unwrap();
+    ctx.rust_code.push(quote! {
+        impl SwigForeignEnum for #rust_enum_name {
+            fn as_u32(&self) -> u32 {
+                match *self {
+                    #(#arms_to_u32),*
+                }
+            }
+            fn from_u32(x: u32) -> Self {
+                match x {
+                    #(#arms_from_u32),*
+                    ,
+                    _ => panic!(concat!("{} not expected for ", stringify!(#rust_enum_name)), x),
+                }
+            }
+        }
+    });
 
-    let mut trait_impl = format!(
-        r#"
-impl SwigForeignEnum for {rust_enum_name} {{
-    fn as_u32(&self) -> u32 {{
-        match *self {{
-"#,
-        rust_enum_name = rust_enum_name
-    );
-    for (i, item) in enum_info.items.iter().enumerate() {
-        write!(
-            &mut trait_impl,
-            r#"
-            {item_name} => {index},
-"#,
-            index = i,
-            item_name = DisplayToTokens(&item.rust_name)
-        )
-        .unwrap();
-    }
-    write!(
-        &mut trait_impl,
-        r#"
-        }}
-    }}
-}}
-"#
-    )
-    .unwrap();
-
-    let trait_impl: syn::Item = syn::parse_str(&trait_impl)
-        .unwrap_or_else(|err| panic_on_syn_error("trait_impl", trait_impl, err));
-
-    write!(
-        &mut code,
-        r#"
-mod swig_foreign_types_map {{
-    #![swig_foreigner_type = "{enum_name}"]
-    #![swig_rust_type = "{rust_enum_name}"]
-}}
-
-impl SwigFrom<{rust_enum_name}> for u32 {{
-   fn swig_from(x: {rust_enum_name}) -> u32 {{
-       x.as_u32()
-   }}
-}}
-"#,
-        enum_name = enum_info.name,
-        rust_enum_name = rust_enum_name,
-    )
-    .unwrap();
-
-    write!(
-        &mut code,
-        r#"
-impl SwigFrom<Option<{rust_enum_name}>> for Option<u32> {{
-   fn swig_from(x: Option<{rust_enum_name}>) -> Option<u32> {{
-        x.map(|v| match v {{
-"#,
-        rust_enum_name = rust_enum_name,
-    )
-    .unwrap();
-
-    for (i, item) in enum_info.items.iter().enumerate() {
-        write!(
-            &mut code,
-            r#"
-           {item_name} => {index},
-"#,
-            index = i,
-            item_name = DisplayToTokens(&item.rust_name)
-        )
-        .unwrap();
-    }
-    write!(
-        &mut code,
-        r#"
-       }})
-    }}
-}}
-"#
-    )
-    .unwrap();
-
-    ctx.conv_map.register_exported_enum(enum_info);
-    ctx.conv_map
-        .merge(SourceId::none(), &code, ctx.target_pointer_width)?;
-    ctx.rust_code.push(trait_impl.into_token_stream());
     Ok(())
 }

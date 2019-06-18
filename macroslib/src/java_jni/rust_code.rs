@@ -57,11 +57,7 @@ pub(in crate::java_jni) fn generate_rust_code(
     let mut gen_code = Vec::<TokenStream>::new();
     let (this_type_for_method, code_box_this) =
         if let Some(this_type) = calc_this_type_for_method(conv_map, class) {
-            let this_type = conv_map.find_or_alloc_rust_type_that_implements(
-                &this_type,
-                "SwigForeignClass",
-                class.src_id,
-            );
+            let this_type = conv_map.ty_to_rust_type(&this_type);
             debug!(
                 "generate_rust_code: add implements SwigForeignClass for {}",
                 this_type.normalized_name
@@ -227,7 +223,7 @@ May be you need to use `private constructor = empty;` syntax?",
         )?;
         let code = format!(
             r#"
-#[allow(unused_variables, unused_mut, non_snake_case)]
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
 #[no_mangle]
 pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong) {{
     let this: *mut {this_type} = unsafe {{
@@ -620,7 +616,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
 
     let code = format!(
         r#"
-#[allow(non_snake_case, unused_variables, unused_mut)]
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
 #[no_mangle]
 pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_type} {{
 {convert_input_code}
@@ -679,7 +675,7 @@ fn generate_constructor(
     let code = format!(
         r#"
 #[no_mangle]
-#[allow(unused_variables, unused_mut, non_snake_case)]
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
 pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
 {convert_input_code}
     let this: {real_output_typename} = {rust_func_name}({args_names});
@@ -754,7 +750,7 @@ fn generate_method(
 
     let code = format!(
         r#"
-#[allow(non_snake_case, unused_variables, unused_mut)]
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
 #[no_mangle]
 pub extern "C"
  fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -> {jni_ret_type} {{

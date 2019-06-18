@@ -1,4 +1,11 @@
-r#"pub extern "C" fn Foo_f3 ( this : * mut Foo , a_0 : CRustOptionU32 , ) -> ( )"#;
-r#"pub extern "C" fn Foo_f4 ( this : * mut Foo , a_0 : CRustOptionUSize , ) -> ( )"#;
-r#"pub extern "C" fn Foo_f5 ( a_0 : CRustOptionF64 , a_1 : CRustOptionUSize , ) -> ( )"#;
-r#"pub extern "C" fn Foo_f6 ( a_0 : * const :: std :: os :: raw :: c_char , ) -> ( )"#;
+r#"pub extern "C" fn Foo_f4 ( this : * mut Foo , a_0 : CRustOptionusize , ) -> ( )"#;
+r#"pub extern "C" fn Foo_f5 ( a_0 : CRustOptionf64 , a_1 : CRustOptionusize , ) -> ( )"#;
+r#"pub extern "C" fn Foo_f6 ( a_0 : CRustOptionCRustStrView , ) -> ( )"#;
+
+r##"# [ no_mangle ] pub extern "C" fn Foo_f3 ( this : * mut Foo , a_0 : CRustOptionu32 , ) -> ( ) {
+ let a_0 : Option < ControlItem > = if a_0 . is_some != 0 {
+ let mut ret : ControlItem = < ControlItem >:: swig_from ( unsafe { a_0 . val . data } ) ;
+ Some ( ret ) } else { None } ;
+ let this : & mut Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : ( ) = Foo :: f3 ( this , a_0 ) ;
+ ret }"##;

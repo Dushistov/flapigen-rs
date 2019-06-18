@@ -888,3 +888,24 @@ foreigner_class!(
         method TestCopy::get(&self) -> &str;
         method TestCopy::clone(&self) -> TestCopy;
     });
+
+#[derive(Default)]
+pub struct GetSetStrTest {
+    s: String,
+}
+
+impl GetSetStrTest {
+    fn get_str(&self) -> &str {
+        &self.s
+    }
+    fn set_str(&mut self, x: &str) {
+        self.s = x.into();
+    }
+}
+
+foreigner_class!(class GetSetStrTest {
+    self_type GetSetStrTest;
+    constructor GetSetStrTest::default() -> GetSetStrTest;
+    method GetSetStrTest::get_str(&self) -> &str;
+    method GetSetStrTest::set_str(&mut self, _: &str);
+});

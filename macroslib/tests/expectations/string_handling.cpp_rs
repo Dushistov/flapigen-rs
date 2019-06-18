@@ -1,8 +1,8 @@
-r#"# [ no_mangle ] pub extern "C" fn Foo_f ( this : * mut Foo , a_0 : i32 , a_1 : i32 , a_2 : * const :: std :: os :: raw :: c_char , ) -> CRustString {
- let mut a_2 : & :: std :: ffi :: CStr = a_2 . swig_into ( ) ;
- let mut a_2 : & str = a_2 . swig_deref ( ) ;
+r##"# [ no_mangle ] pub extern "C" fn Foo_f ( this : * mut Foo , a_0 : i32 , a_1 : i32 , a_2 : CRustStrView , ) -> CRustString {
+ let a_2 : & str = unsafe { let slice : & [ u8 ] = :: std :: slice :: from_raw_parts ( a_2 . data as * const u8 , a_2 . len ) ;
+ :: std :: str :: from_utf8_unchecked ( slice ) } ;
  let mut a_2 : String = a_2 . swig_into ( ) ;
  let this : & Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : String = Foo :: f ( this , a_0 , a_1 , a_2 ) ;
  let ret : CRustString = CRustString :: from_string ( ret ) ;
- ret }"#;
+ ret }"##;

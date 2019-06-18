@@ -34,6 +34,7 @@
 #include "rust_interface/Boo.hpp"
 #include "rust_interface/TestPair.hpp"
 #include "rust_interface/TestCopy.hpp"
+#include "rust_interface/GetSetStrTest.hpp"
 
 using namespace rust;
 
@@ -75,7 +76,7 @@ static char c_simple_cb_is_odd(int32_t x, void *opaque)
 
 TEST(c_Foo, Simple)
 {
-    auto foo = Foo_new(1, "a");
+    auto foo = Foo_new(1, CRustStrView{ "a", 1 });
     ASSERT_TRUE(foo != nullptr);
 
     EXPECT_EQ(3, Foo_f(foo, 1, 1));
@@ -508,7 +509,7 @@ TEST(TestOptional, smokeTest)
         EXPECT_EQ(ITEM1, *val);
     }
     {
-        auto val = x.f9({ "aaa" });
+        auto val = x.f9({ { "aaa" } });
         EXPECT_EQ(std::string("your name is aaa"), val.to_std_string());
         auto val2 = x.f9({});
         EXPECT_EQ(std::string("None"), val2.to_std_string());
@@ -845,6 +846,15 @@ TEST(RustString, Copy)
     ASSERT_EQ("AAAA", s.to_std_string());
     ASSERT_EQ("AAAA", s2.to_std_string());
     ASSERT_EQ("AAAA", s3.to_std_string());
+}
+
+TEST(GetSetStrTest, smokeTest)
+{
+    GetSetStrTest test;
+    EXPECT_EQ("", test.get_str());
+    test.set_str(test.get_str());
+    test.set_str({ "hello" });
+    EXPECT_EQ("hello", test.get_str());
 }
 
 int main(int argc, char *argv[])
