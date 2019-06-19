@@ -9,7 +9,7 @@ use std::{
 };
 
 /// Implement write cache in memory, and update file only if necessary
-pub(crate) struct FileWriteCache {
+pub struct FileWriteCache {
     cnt: Vec<u8>,
     path: PathBuf,
     /// To prevent redifining some items,
@@ -19,7 +19,7 @@ pub(crate) struct FileWriteCache {
 }
 
 impl FileWriteCache {
-    pub(crate) fn new<P: Into<PathBuf>>(p: P) -> FileWriteCache {
+    pub fn new<P: Into<PathBuf>>(p: P) -> FileWriteCache {
         FileWriteCache {
             cnt: vec![],
             path: p.into(),
@@ -27,7 +27,7 @@ impl FileWriteCache {
         }
     }
 
-    pub(crate) fn update_file_if_necessary(self) -> Result<(), io::Error> {
+    pub fn update_file_if_necessary(self) -> Result<(), io::Error> {
         if let Ok(mut f) = File::open(&self.path) {
             let mut cur_cnt = vec![];
             f.read_to_end(&mut cur_cnt)?;
@@ -40,10 +40,10 @@ impl FileWriteCache {
         Ok(())
     }
 
-    pub(crate) fn define_item<S: Into<String>>(&mut self, item: S) {
+    pub fn define_item<S: Into<String>>(&mut self, item: S) {
         self.already_defined_items.insert(item.into());
     }
-    pub(crate) fn is_item_defined(&self, item: &str) -> bool {
+    pub fn is_item_defined(&self, item: &str) -> bool {
         self.already_defined_items.contains(item)
     }
 }

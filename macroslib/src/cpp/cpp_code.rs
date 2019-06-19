@@ -147,7 +147,15 @@ pub(in crate::cpp) fn generate_c_type(
             CType::Struct(ref s) => s,
             CType::Union(ref u) => u,
         };
-        do_generate_c_type(tmap, flags, src_id, ctype, out, &mut rust_code)?;
+        do_generate_c_type(
+            tmap,
+            flags,
+            src_id,
+            c_types.header_name.as_str(),
+            ctype,
+            out,
+            &mut rust_code,
+        )?;
     }
 
     Ok(rust_code)
@@ -193,14 +201,15 @@ fn do_generate_c_type(
     tmap: &TypeMap,
     flags: MergeCTypesFlags,
     src_id: SourceId,
+    c_type_header_name: &str,
     ctype: &CTypeDescriptor,
-    out: &mut FileWriteCache,
+    file_out: &mut FileWriteCache,
     rust_code: &mut Vec<TokenStream>,
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
 
     let s_id = format!("{} {}", ctype.c_type_prefix(), ctype.name());
-    if out.is_item_defined(&s_id) {
+    if file_out.is_item_defined(&s_id) {
         return Ok(());
     }
     let mut rust_layout_test = format!(
@@ -214,7 +223,10 @@ fn test_{name}_layout() {{
         c_type_prefix = ctype.c_type_prefix(),
         name = ctype.name(),
     );
-    writeln!(out, "{} {{", s_id).map_err(map_any_err_to_our_err)?;
+    let mut mem_out = Vec::<u8>::new();
+    writeln!(&mut mem_out, "{} {{", s_id).map_err(map_any_err_to_our_err)?;
+
+    let mut includes = FxHashSet::<&str>::default();
 
     let mut fields_asserts_code = String::new();
     let fields = &ctype
@@ -241,8 +253,17 @@ fn test_{name}_layout() {{
             .ok_or_else(|| {
                 DiagnosticError::new(src_id, f.ty.span(), "no foreign type related to this type")
             })?;
-        writeln!(out, "    {} {};", tmap[field_fty].name.as_str(), id)
-            .map_err(map_any_err_to_our_err)?;
+        for inc in &tmap[field_fty].provides_by_module {
+            includes.insert(inc.as_str());
+        }
+
+        writeln!(
+            &mut mem_out,
+            "    {} {};",
+            tmap[field_fty].name.as_str(),
+            id
+        )
+        .map_err(map_any_err_to_our_err)?;
         writeln!(&mut rust_layout_test, "{}: {},", id, DisplayToTokens(&f.ty))
             .map_err(map_any_err_to_our_err)?;
 
@@ -263,7 +284,7 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
                     )
                     .map_err(map_any_err_to_our_err)?;
     }
-    out.write_all(b"};\n").map_err(map_any_err_to_our_err)?;
+    mem_out.write_all(b"};\n").map_err(map_any_err_to_our_err)?;
 
     writeln!(
         &mut rust_layout_test,
@@ -291,6 +312,33 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
             rust_code.push(ctype.into_token_stream());
         }
     }
-    out.define_item(s_id);
+    let self_inc = format!("\"{}\"", c_type_header_name);
+    for inc in &includes {
+        if self_inc != *inc {
+            writeln!(file_out, "#include {}", inc).map_err(map_any_err_to_our_err)?;
+        }
+    }
+    file_out
+        .write_all(
+            br##"
+#ifdef __cplusplus
+extern "C" {
+#endif
+"##,
+        )
+        .map_err(map_any_err_to_our_err)?;
+    file_out
+        .write_all(&mem_out)
+        .map_err(map_any_err_to_our_err)?;
+    file_out
+        .write_all(
+            br##"
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+"##,
+        )
+        .map_err(map_any_err_to_our_err)?;
+    file_out.define_item(s_id);
     Ok(())
 }
