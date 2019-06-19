@@ -392,7 +392,17 @@ fn register_c_type(
                 ));
             }
         } else {
-            tmap.add_foreign(rust_ty, TypeName::new(c_name, (src_id, f_ident.span())))?;
+            let rule = ForeignConversationRule {
+                rust_ty: rust_ty.to_idx(),
+                intermediate: None,
+            };
+            tmap.alloc_foreign_type(ForeignTypeS {
+                name: TypeName::new(c_name, (src_id, f_ident.span())),
+                provides_by_module: vec![format!("\"{}\"", c_types.header_name).into()],
+                into_from_rust: Some(rule.clone()),
+                from_into_rust: Some(rule),
+                name_prefix: None,
+            })?;
         }
     }
     Ok(something_defined)
@@ -897,18 +907,8 @@ fn merge_c_types(
     let module_name = &c_types.header_name;
     let common_files = &mut ctx.common_files;
     let mut c_header_f = file_for_module!(ctx, common_files, module_name);
-    let something_defined = register_c_type(ctx.conv_map, &c_types, c_header_f, rule_src_id)?;
-    if something_defined {
-        c_header_f
-            .write_all(
-                br##"
-#ifdef __cplusplus
-extern "C" {
-#endif
-"##,
-            )
-            .map_err(map_any_err_to_our_err)?;
-    }
+    register_c_type(ctx.conv_map, &c_types, c_header_f, rule_src_id)?;
+
     ctx.rust_code.append(&mut cpp_code::generate_c_type(
         ctx.conv_map,
         &c_types,
@@ -916,17 +916,7 @@ extern "C" {
         rule_src_id,
         &mut c_header_f,
     )?);
-    if something_defined {
-        c_header_f
-            .write_all(
-                br##"
-#ifdef __cplusplus
-} // extern "C" {
-#endif
-"##,
-            )
-            .map_err(map_any_err_to_our_err)?;
-    }
+
     Ok(())
 }
 
