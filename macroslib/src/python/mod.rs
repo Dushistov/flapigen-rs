@@ -280,7 +280,7 @@ fn method_name(method: &ForeignerMethod) -> Result<syn::Ident> {
         let name = standard_method_name(method)?;
         let name_str = name.to_string();
         match name_str.as_ref() {
-            "to_string" => Ok(syn::parse_str("__str__")?),
+            "to_string" => Ok(syn::parse_str("__repr__")?),
             _ => Ok(name)
         }
     }
