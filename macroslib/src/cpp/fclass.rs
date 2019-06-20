@@ -146,12 +146,9 @@ May be you need to use `private constructor = empty;` syntax?",
     let mut inline_impl = String::new();
 
     for (method, f_method) in class.methods.iter().zip(methods_sign) {
-        write!(
-            c_include_f,
-            "{}",
-            cpp_code::doc_comments_to_c_comments(&method.doc_comments, false)
-        )
-        .map_err(map_write_err!(c_path))?;
+        c_include_f
+            .write_all(cpp_code::doc_comments_to_c_comments(&method.doc_comments, false).as_bytes())
+            .expect(WRITE_TO_MEM_FAILED_MSG);
 
         let method_access = match method.access {
             MethodAccess::Private => "private",
@@ -162,11 +159,12 @@ May be you need to use `private constructor = empty;` syntax?",
             .map(|last| last != method_access)
             .unwrap_or(true)
         {
-            write!(cpp_include_f, "{}:\n", method_access).map_err(map_write_err!(cpp_path))?;
+            writeln!(cpp_include_f, "{}:", method_access).expect(WRITE_TO_MEM_FAILED_MSG);
         }
         last_cpp_access = Some(method_access);
-        let cpp_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false);
-        write!(cpp_include_f, "{}", cpp_comments,).map_err(map_write_err!(cpp_path))?;
+        cpp_include_f
+            .write_all(cpp_code::doc_comments_to_c_comments(&method.doc_comments, false).as_bytes())
+            .expect(WRITE_TO_MEM_FAILED_MSG);
         let c_func_name = c_func_name(class, method);
         let c_args_with_types = cpp_code::c_generate_args_with_types(f_method, false)
             .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
@@ -224,17 +222,18 @@ May be you need to use `private constructor = empty;` syntax?",
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                if f_method.output.as_ref().name != "void" {
-                    write!(
-                        cpp_include_f,
-                        r#"
+                write!(
+                    cpp_include_f,
+                    r#"
     static {cpp_ret_type} {method_name}({cpp_args_with_types}) noexcept;
 "#,
-                        method_name = method_name,
-                        cpp_ret_type = cpp_ret_type,
-                        cpp_args_with_types = cpp_args_with_types,
-                    )
-                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                    method_name = method_name,
+                    cpp_ret_type = cpp_ret_type,
+                    cpp_args_with_types = cpp_args_with_types,
+                )
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+
+                if f_method.output.as_ref().name != "void" {
                     write!(
                         &mut inline_impl,
                         r#"
@@ -256,15 +255,6 @@ May be you need to use `private constructor = empty;` syntax?",
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
-                    write!(
-                        cpp_include_f,
-                        r#"
-    static void {method_name}({cpp_args_with_types}) noexcept;
-"#,
-                        method_name = method_name,
-                        cpp_args_with_types = cpp_args_with_types,
-                    )
-                    .expect(WRITE_TO_MEM_FAILED_MSG);
                     write!(
                         &mut inline_impl,
                         r#"
@@ -304,18 +294,19 @@ May be you need to use `private constructor = empty;` syntax?",
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                if f_method.output.as_ref().name != "void" {
-                    write!(
-                        cpp_include_f,
-                        r#"
+                write!(
+                    cpp_include_f,
+                    r#"
     {cpp_ret_type} {method_name}({cpp_args_with_types}) {const_if_readonly}noexcept;
 "#,
-                        method_name = method_name,
-                        cpp_ret_type = cpp_ret_type,
-                        cpp_args_with_types = cpp_args_with_types,
-                        const_if_readonly = const_if_readonly,
-                    )
-                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                    method_name = method_name,
+                    cpp_ret_type = cpp_ret_type,
+                    cpp_args_with_types = cpp_args_with_types,
+                    const_if_readonly = const_if_readonly,
+                )
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+
+                if f_method.output.as_ref().name != "void" {
                     write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
     inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly}noexcept
@@ -339,16 +330,6 @@ May be you need to use `private constructor = empty;` syntax?",
                            const_if_readonly = const_if_readonly,
                     ).expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
-                    write!(
-                        cpp_include_f,
-                        r#"
-    void {method_name}({cpp_args_with_types}) {const_if_readonly}noexcept;
-"#,
-                        method_name = method_name,
-                        cpp_args_with_types = cpp_args_with_types,
-                        const_if_readonly = const_if_readonly,
-                    )
-                    .expect(WRITE_TO_MEM_FAILED_MSG);
                     write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
     inline void {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly}noexcept
