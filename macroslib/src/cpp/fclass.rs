@@ -222,7 +222,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     c_func_name = c_func_name,
                     args_with_types = c_args_with_types,
                 )
-                .map_err(map_write_err!(c_path))?;
+                .expect(WRITE_TO_MEM_FAILED_MSG);
 
                 if f_method.output.as_ref().name != "void" {
                     write!(
@@ -234,7 +234,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         cpp_ret_type = cpp_ret_type,
                         cpp_args_with_types = cpp_args_with_types,
                     )
-                    .map_err(map_write_err!(cpp_path))?;
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                     write!(
                         &mut inline_impl,
                         r#"
@@ -254,7 +254,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         method_name = method_name,
                         cpp_args_with_types = cpp_args_with_types,
                     )
-                    .unwrap();
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
                     write!(
                         cpp_include_f,
@@ -264,7 +264,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         method_name = method_name,
                         cpp_args_with_types = cpp_args_with_types,
                     )
-                    .map_err(map_write_err!(cpp_path))?;
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                     write!(
                         &mut inline_impl,
                         r#"
@@ -280,7 +280,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         c_func_name = c_func_name,
                         cpp_args_for_c = cpp_args_for_c,
                     )
-                    .unwrap();
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
                 ctx.rust_code
                     .append(&mut generate_static_method(ctx.conv_map, &method_ctx)?);
@@ -302,7 +302,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     args_with_types = comma_c_args_with_types,
                     const_if_readonly = const_if_readonly,
                 )
-                .map_err(map_write_err!(c_path))?;
+                .expect(WRITE_TO_MEM_FAILED_MSG);
 
                 if f_method.output.as_ref().name != "void" {
                     write!(
@@ -315,7 +315,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         cpp_args_with_types = cpp_args_with_types,
                         const_if_readonly = const_if_readonly,
                     )
-                    .map_err(map_write_err!(cpp_path))?;
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                     write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
     inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly}noexcept
@@ -337,7 +337,7 @@ May be you need to use `private constructor = empty;` syntax?",
                             format!(", {}", cpp_args_for_c)
                                                    },
                            const_if_readonly = const_if_readonly,
-                    ).unwrap();
+                    ).expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
                     write!(
                         cpp_include_f,
@@ -348,7 +348,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         cpp_args_with_types = cpp_args_with_types,
                         const_if_readonly = const_if_readonly,
                     )
-                    .map_err(map_write_err!(cpp_path))?;
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                     write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
     inline void {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly}noexcept
@@ -366,7 +366,7 @@ May be you need to use `private constructor = empty;` syntax?",
                             format!(", {}", cpp_args_for_c)
                            },
                            const_if_readonly = const_if_readonly,
-                    ).unwrap();
+                    ).expect(WRITE_TO_MEM_FAILED_MSG);
                 }
 
                 ctx.rust_code.append(&mut generate_method(
@@ -387,7 +387,7 @@ May be you need to use `private constructor = empty;` syntax?",
 "#,
                         class_name = class_name,
                     )
-                    .map_err(map_write_err!(cpp_path))?;
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
                     write!(
                         c_include_f,
@@ -398,7 +398,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         func_name = c_func_name,
                         args_with_types = c_args_with_types,
                     )
-                    .map_err(map_write_err!(c_path))?;
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
 
                     write!(
                         cpp_include_f,
@@ -416,7 +416,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         class_name = class_name,
                         cpp_args_for_c = cpp_args_for_c,
                     )
-                    .map_err(map_write_err!(cpp_path))?;
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
 
                     let constructor_ret_type = class
                         .self_desc
@@ -438,13 +438,12 @@ May be you need to use `private constructor = empty;` syntax?",
     }
 
     if need_destructor {
-        let this_type: RustType = ctx.conv_map.find_or_alloc_rust_type(
+        let this_type = ctx.conv_map.ty_to_rust_type(
             class
                 .self_desc
                 .as_ref()
                 .map(|x| &x.constructor_ret_type)
                 .ok_or_else(&no_this_info)?,
-            class.src_id,
         );
 
         let unpack_code = unpack_from_heap_pointer(&this_type, "this", false);
@@ -476,7 +475,7 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
             c_class_type = c_class_type,
             c_destructor_name = c_destructor_name,
         )
-        .map_err(map_write_err!(c_path))?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
 
         write!(
             cpp_include_f,
@@ -498,7 +497,7 @@ public:
             c_destructor_name = c_destructor_name,
             class_name = class_name,
         )
-        .map_err(map_write_err!(cpp_path))?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     } else if !static_only {
         // not need_destructor
         write!(
@@ -510,7 +509,7 @@ private:
    }}
 "#,
         )
-        .map_err(map_write_err!(cpp_path))?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     write!(
@@ -522,10 +521,10 @@ private:
 
 "#
     )
-    .map_err(map_write_err!(c_path))?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
     if !class.foreigner_code.is_empty() {
-        writeln!(cpp_include_f, "\n{}", class.foreigner_code).map_err(map_write_err!(cpp_path))?;
+        writeln!(cpp_include_f, "\n{}", class.foreigner_code).expect(WRITE_TO_MEM_FAILED_MSG);
     }
     if !static_only {
         cpp_include_f.write_all(
@@ -542,7 +541,7 @@ private:
 "#,
         )
     }
-    .map_err(map_write_err!(cpp_path))?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
     // Write method implementations.
     if ctx.cfg.separate_impl_headers {
         write!(
@@ -553,7 +552,7 @@ private:
 "#,
             namespace = ctx.cfg.namespace_name
         )
-        .map_err(map_write_err!(cpp_path))?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
         let cpp_impl_path = ctx.cfg.output_dir.join(format!("{}_impl.hpp", class.name));
         let mut cpp_impl_f = FileWriteCache::new(&cpp_impl_path);
         write!(
@@ -568,7 +567,8 @@ namespace {namespace} {{
             class_name = class.name,
             namespace = ctx.cfg.namespace_name,
         )
-        .map_err(map_write_err!(cpp_impl_path))?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+
         write_methods_impls(&mut cpp_impl_f, &ctx.cfg.namespace_name, &inline_impl)
             .map_err(map_write_err!(cpp_impl_path))?;
         cpp_impl_f
@@ -595,7 +595,7 @@ using {class_name}Ref = {base_class_name}<false>;
         class_name = class.name,
         base_class_name = class_name
     )
-    .map_err(map_write_err!(cpp_fwd_path))?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
     cpp_fwd_f
         .update_file_if_necessary()
