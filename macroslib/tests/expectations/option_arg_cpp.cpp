@@ -9,9 +9,9 @@ r#"template<bool OWN_DATA>
         Foo_f6(!!a_0 ? CRustOptionCRustStrView { CRustOptionUnionCRustStrView { CRustStrView{ (*a_0).data(), (*a_0).size() } }, 1} : CRustOptionCRustStrView { {}, 0 });
     }"#;
 
-"void f3(std::optional<ControlItem> a_0)  noexcept;";
+"void f3(std::optional<ControlItem> a_0) noexcept;";
 r#"template<bool OWN_DATA>
-    inline void FooWrapper<OWN_DATA>::f3(std::optional<ControlItem> a_0)  noexcept
+    inline void FooWrapper<OWN_DATA>::f3(std::optional<ControlItem> a_0) noexcept
     {
         Foo_f3(this->self_, !!a_0 ? CRustOptionu32 { CRustOptionUnionu32 { static_cast<uint32_t>((*a_0)) }, 1} : CRustOptionu32 { {}, 0 });
     }"#;

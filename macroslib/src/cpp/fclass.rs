@@ -308,7 +308,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     write!(
                         cpp_include_f,
                         r#"
-    {cpp_ret_type} {method_name}({cpp_args_with_types}) {const_if_readonly} noexcept;
+    {cpp_ret_type} {method_name}({cpp_args_with_types}) {const_if_readonly}noexcept;
 "#,
                         method_name = method_name,
                         cpp_ret_type = cpp_ret_type,
@@ -318,7 +318,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     .map_err(map_write_err!(cpp_path))?;
                     write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
-    inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly} noexcept
+    inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly}noexcept
     {{
         {c_ret_type} ret = {c_func_name}(this->self_{cpp_args_for_c});
         return {convert_ret_for_cpp};
@@ -342,7 +342,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     write!(
                         cpp_include_f,
                         r#"
-    void {method_name}({cpp_args_with_types}) {const_if_readonly} noexcept;
+    void {method_name}({cpp_args_with_types}) {const_if_readonly}noexcept;
 "#,
                         method_name = method_name,
                         cpp_args_with_types = cpp_args_with_types,
@@ -351,7 +351,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     .map_err(map_write_err!(cpp_path))?;
                     write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
-    inline void {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly} noexcept
+    inline void {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly}noexcept
     {{
         {c_func_name}(this->self_{cpp_args_for_c});
     }}

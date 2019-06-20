@@ -7,4 +7,4 @@ r#"//Some documentation comment
 
 r#"//1 Some documentation comment
     //2 Some documentation comment
-    int32_t f(int32_t a_0, int32_t a_1) const  noexcept;"#;
+    int32_t f(int32_t a_0, int32_t a_1) const noexcept;"#;

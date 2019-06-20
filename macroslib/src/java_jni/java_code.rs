@@ -180,7 +180,7 @@ public final class {class_name} {{
         };
 
         let exception_spec = if may_return_error {
-            "throws Exception"
+            " throws Exception"
         } else {
             ""
         };
@@ -201,7 +201,7 @@ public final class {class_name} {{
                     write!(
                         file,
                         r#"
-    {method_access} static native {ret_type} {func_name}({args_with_types}) {exception_spec};
+    {method_access} static native {ret_type} {func_name}({args_with_types}){exception_spec};
 "#,
                         method_access = method_access,
                         ret_type = ret_type,
@@ -218,11 +218,11 @@ public final class {class_name} {{
                     write!(
                         file,
                         r#"
-    {method_access} static {ret_type} {method_name}({single_args_with_types}) {exception_spec} {{
+    {method_access} static {ret_type} {method_name}({single_args_with_types}){exception_spec} {{
 {convert_code}
          {return_code}{func_name}({args});
     }}
-    private static native {ret_type} {func_name}({args_with_types}) {exception_spec};
+    private static native {ret_type} {func_name}({args_with_types}){exception_spec};
 "#,
                         method_name = method.short_name(),
                         method_access = method_access,
@@ -252,11 +252,11 @@ public final class {class_name} {{
                 write!(
                     file,
                     r#"
-    {method_access} final {ret_type} {method_name}({single_args_with_types}) {exception_spec} {{
+    {method_access} final {ret_type} {method_name}({single_args_with_types}){exception_spec} {{
 {convert_code}
         {return_code}{func_name}(mNativeObj{args});
     }}
-    private static native {ret_type} {func_name}(long me{args_with_types}) {exception_spec};
+    private static native {ret_type} {func_name}(long me{args_with_types}){exception_spec};
 "#,
                     method_access = method_access,
                     ret_type = ret_type,
@@ -299,11 +299,11 @@ public final class {class_name} {{
                     write!(
                         file,
                         "
-    {method_access} {class_name}({ext_args_with_types}) {exception_spec} {{
+    {method_access} {class_name}({ext_args_with_types}){exception_spec} {{
 {convert_code}
         mNativeObj = init({args});
     }}
-    private static native long {func_name}({args_with_types}) {exception_spec};
+    private static native long {func_name}({args_with_types}){exception_spec};
 ",
                         method_access = method_access,
                         class_name = class.name,

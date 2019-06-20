@@ -13,10 +13,10 @@ r#"struct C_SomeObserver {
 
 };"#;
 
-"void f1(const struct C_SomeObserver * const a_0)  noexcept";
+"void f1(const struct C_SomeObserver * const a_0) noexcept";
 
 r#"template<bool OWN_DATA>
-    inline void ClassWithCallbacksWrapper<OWN_DATA>::f1(const struct C_SomeObserver * const a_0)  noexcept
+    inline void ClassWithCallbacksWrapper<OWN_DATA>::f1(const struct C_SomeObserver * const a_0) noexcept
     {
         ClassWithCallbacks_f1(this->self_, a_0);
     }"#;

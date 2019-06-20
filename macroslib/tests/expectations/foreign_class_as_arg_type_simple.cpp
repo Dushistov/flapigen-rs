@@ -11,7 +11,7 @@ r#"BooWrapper(Foo a_0) noexcept
 "static int32_t f2(double a_0, Foo a_1) noexcept";
 
 r#"template<bool OWN_DATA>
-    inline uintptr_t BooWrapper<OWN_DATA>::f(Foo a_0) const  noexcept
+    inline uintptr_t BooWrapper<OWN_DATA>::f(Foo a_0) const noexcept
     {
         uintptr_t ret = Boo_f(this->self_, a_0.release());
         return ret;
