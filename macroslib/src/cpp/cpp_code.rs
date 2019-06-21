@@ -19,7 +19,6 @@ pub(in crate::cpp) fn doc_comments_to_c_comments(
     doc_comments: &[String],
     class_comments: bool,
 ) -> String {
-    use std::fmt::Write;
     let mut comments = String::new();
     for (i, comment) in doc_comments.iter().enumerate() {
         if i != 0 {
@@ -37,8 +36,6 @@ pub(in crate::cpp) fn c_generate_args_with_types(
     f_method: &CppForeignMethodSignature,
     append_comma_if_not_empty: bool,
 ) -> Result<String, String> {
-    use std::fmt::Write;
-
     let mut buf = String::new();
     for (i, f_type_info) in f_method.input.iter().enumerate() {
         if i > 0 {
@@ -59,7 +56,6 @@ pub(in crate::cpp) fn c_class_type(class: &ForeignerClassInfo) -> String {
 pub(in crate::cpp) fn cpp_generate_args_with_types(
     f_method: &CppForeignMethodSignature,
 ) -> Result<String, String> {
-    use std::fmt::Write;
     let mut ret = String::new();
     for (i, f_type_info) in f_method.input.iter().enumerate() {
         if i > 0 {
@@ -84,7 +80,6 @@ pub(in crate::cpp) fn cpp_generate_args_with_types(
 pub(in crate::cpp) fn cpp_generate_args_to_call_c(
     f_method: &CppForeignMethodSignature,
 ) -> Result<String, String> {
-    use std::fmt::Write;
     let mut ret = String::new();
     for (i, f_type_info) in f_method.input.iter().enumerate() {
         if i > 0 {
