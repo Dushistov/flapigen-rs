@@ -2,3 +2,5 @@
 * text=auto
 
 macroslib/tests/expectations/* text eol=lf
+macroslib/src/cpp/* text eol=lf
+macroslib/src/java/* text eol=lf

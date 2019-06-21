@@ -113,11 +113,37 @@ using {class_dot_name}Ref = {class_name}<false>;
 template<bool OWN_DATA>
 class {class_name} {{
 public:
-    using SelfType = typename std::conditional<OWN_DATA, {c_class_type} *, const {c_class_type} *>::type;
-    using CForeignType = {c_class_type};
     using value_type = {class_name}<true>;
     friend class {class_name}<true>;
     friend class {class_name}<false>;
+"#,
+        includes = includes,
+        class_name = class_name,
+        class_dot_name = class.name,
+        namespace = ctx.cfg.namespace_name,
+        doc_comments = class_doc_comments,
+    )
+    .map_err(map_write_err!(cpp_path))?;
+
+    let has_contructor = class
+        .methods
+        .iter()
+        .any(|x| x.variant == MethodVariant::Constructor);
+    let has_method = class.methods.iter().any(|x| {
+        if let MethodVariant::Method(_) = x.variant {
+            true
+        } else {
+            false
+        }
+    });
+
+    let static_only = !has_method && !has_contructor;
+    if !static_only {
+        write!(
+        cpp_include_f,
+r#"
+    using SelfType = typename std::conditional<OWN_DATA, {c_class_type} *, const {c_class_type} *>::type;
+    using CForeignType = {c_class_type};
 
     {class_name}({class_name} &&o) noexcept: self_(o.self_)
     {{
@@ -144,49 +170,47 @@ public:
 "#,
         c_class_type = c_class_type,
         class_name = class_name,
-        class_dot_name = class.name,
-        includes = includes,
-        doc_comments = class_doc_comments,
-        namespace = ctx.cfg.namespace_name,
     ).map_err(map_write_err!(cpp_path))?;
+    }
 
-    if !class.copy_derived {
-        write!(
-            cpp_include_f,
-            r#"
+    if !static_only {
+        if !class.copy_derived {
+            write!(
+                cpp_include_f,
+                r#"
     {class_name}(const {class_name}&) = delete;
     {class_name} &operator=(const {class_name}&) = delete;
 "#,
-            class_name = class_name
-        )
-        .map_err(map_write_err!(cpp_path))?;
-    } else {
-        let pos = class
-            .methods
-            .iter()
-            .position(|m| {
-                if let Some(seg) = m.rust_id.segments.last() {
-                    let seg = seg.into_value();
-                    seg.ident == "clone"
-                } else {
-                    false
-                }
-            })
-            .ok_or_else(|| {
-                DiagnosticError::new(
-                    class.src_id,
-                    class.span(),
-                    format!(
+                class_name = class_name
+            )
+            .map_err(map_write_err!(cpp_path))?;
+        } else {
+            let pos = class
+                .methods
+                .iter()
+                .position(|m| {
+                    if let Some(seg) = m.rust_id.segments.last() {
+                        let seg = seg.into_value();
+                        seg.ident == "clone"
+                    } else {
+                        false
+                    }
+                })
+                .ok_or_else(|| {
+                    DiagnosticError::new(
+                        class.src_id,
+                        class.span(),
+                        format!(
                         "Class {} (namespace {}) has derived Copy attribute, but no clone method",
                         class.name, ctx.cfg.namespace_name,
                     ),
-                )
-            })?;
-        let c_clone_func = c_func_name(class, &class.methods[pos]);
+                    )
+                })?;
+            let c_clone_func = c_func_name(class, &class.methods[pos]);
 
-        write!(
-            cpp_include_f,
-            r#"
+            write!(
+                cpp_include_f,
+                r#"
             {class_name}(const {class_name}& o) noexcept {{
                 static_assert(OWN_DATA, "copy possible only if class own data");
 
@@ -209,10 +233,11 @@ public:
                 return *this;
             }}
         "#,
-            c_clone_func = c_clone_func,
-            class_name = class_name
-        )
-        .map_err(map_write_err!(cpp_path))?;
+                c_clone_func = c_clone_func,
+                class_name = class_name
+            )
+            .map_err(map_write_err!(cpp_path))?;
+        }
     }
 
     let mut last_cpp_access = Some("public");
@@ -637,7 +662,7 @@ public:
             class_name = class_name,
         )
         .map_err(map_write_err!(cpp_path))?;
-    } else {
+    } else if !static_only {
         // not need_destructor
         write!(
             cpp_include_f,
@@ -662,18 +687,25 @@ private:
     )
     .map_err(map_write_err!(c_path))?;
 
-    write!(
-        cpp_include_f,
-        r#"
-{foreigner_code}
+    if !class.foreigner_code.is_empty() {
+        writeln!(cpp_include_f, "\n{}", class.foreigner_code).map_err(map_write_err!(cpp_path))?;
+    }
+    if !static_only {
+        cpp_include_f.write_all(
+            br#"
 private:
     SelfType self_;
-}};
+};
 "#,
-        foreigner_code = class.foreigner_code,
-    )
+        )
+    } else {
+        cpp_include_f.write_all(
+            br#"
+};
+"#,
+        )
+    }
     .map_err(map_write_err!(cpp_path))?;
-
     // Write method implementations.
     if ctx.cfg.separate_impl_headers {
         write!(
