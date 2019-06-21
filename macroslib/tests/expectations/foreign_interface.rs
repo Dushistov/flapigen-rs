@@ -3,7 +3,7 @@ trait SomeTrait {
     fn on_state_changed_without_args(&self);
 }
 
-foreign_interface!(interface SomeObserver {
+foreign_callback!(callback SomeObserver {
     self_type SomeTrait;
     onStateChanged = SomeTrait::on_state_changed(&self, _: i32, _: bool);
     onStateChangedWithoutArgs = SomeObserver::on_state_changed_without_args(&self);

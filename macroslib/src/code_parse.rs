@@ -90,6 +90,7 @@ mod kw {
     custom_keyword!(protected);
     custom_keyword!(empty);
     custom_keyword!(interface);
+    custom_keyword!(callback);
 }
 
 struct Attrs {
@@ -491,7 +492,14 @@ struct ForeignInterfaceParser(ForeignInterface);
 impl Parse for ForeignInterfaceParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let interface_doc_comments = parse_doc_comments(input)?;
-        input.parse::<kw::interface>()?;
+        let kw_la = input.lookahead1();
+        if kw_la.peek(kw::interface) {
+            input.parse::<kw::interface>()?;
+        } else if kw_la.peek(kw::callback) {
+            input.parse::<kw::callback>()?;
+        } else {
+            return Err(kw_la.error());
+        }
         let interface_name = input.parse::<Ident>()?;
         debug!("INTERFACE NAME {:?}", interface_name);
 

@@ -646,7 +646,7 @@ impl Observable {
     }
 }
 
-foreign_interface!(interface MyObserver {
+foreign_callback!(callback MyObserver {
     self_type OnEvent;
     onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
 });
@@ -663,7 +663,7 @@ trait CheckAllTypesInCallbackArgs {
     fn check_all_types2(&self, _: u64, _: i64, _: f32, _: f64, _: usize, _: isize);
 }
 
-foreign_interface!(interface CheckAllTypesInCallbackArgs {
+foreign_callback!(callback CheckAllTypesInCallbackArgs {
     self_type CheckAllTypesInCallbackArgs;
     checkAllTypes1 = CheckAllTypesInCallbackArgs::check_all_types1(&self, _: u8, _: i8, _: u16,
                                                                    _: i16, _: u32, _: i32,
