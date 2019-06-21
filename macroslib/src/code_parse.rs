@@ -90,6 +90,7 @@ mod kw {
     custom_keyword!(protected);
     custom_keyword!(empty);
     custom_keyword!(interface);
+    custom_keyword!(callback);
 }
 
 struct Attrs {
@@ -491,7 +492,14 @@ struct ForeignInterfaceParser(ForeignInterface);
 impl Parse for ForeignInterfaceParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let interface_doc_comments = parse_doc_comments(input)?;
-        input.parse::<kw::interface>()?;
+        let kw_la = input.lookahead1();
+        if kw_la.peek(kw::interface) {
+            input.parse::<kw::interface>()?;
+        } else if kw_la.peek(kw::callback) {
+            input.parse::<kw::callback>()?;
+        } else {
+            return Err(kw_la.error());
+        }
         let interface_name = input.parse::<Ident>()?;
         debug!("INTERFACE NAME {:?}", interface_name);
 
@@ -518,6 +526,16 @@ impl Parse for ForeignInterfaceParser {
             let args_in: Punctuated<syn::FnArg, Token![,]> =
                 args_parser.parse_terminated(syn::FnArg::parse)?;
             debug!("cb func in args {:?}", args_in);
+            let have_self_args = match args_in.iter().nth(0) {
+                Some(syn::FnArg::SelfRef(_)) => true,
+                _ => false,
+            };
+            if !have_self_args {
+                return Err(syn::Error::new(
+                    rust_func_name.span(),
+                    "expect &self or &mut self as first argument",
+                ));
+            }
             let out_type: syn::ReturnType = item_parser.parse()?;
             item_parser.parse::<Token![;]>()?;
             let span = rust_func_name.span();

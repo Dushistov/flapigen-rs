@@ -59,7 +59,7 @@ trait SomeObserver {
     fn is_odd(&self, x: i32) -> bool;
 }
 
-foreign_interface!(interface SomeObserver {
+foreign_callback!(callback SomeObserver {
     self_type SomeObserver;
     onStateChanged = SomeObserver::on_state_changed(&self, _: i32, _: bool);
     onStateChangedWithoutArgs = SomeObserver::on_state_changed_without_args(&self);
@@ -770,7 +770,7 @@ foreigner_class!(class TestPassInterface {
     static_method TestPassInterface::use_interface(a: Box<Box<Interface>>, b: i32) -> i32;
 });
 
-foreign_interface!(interface ToString {
+foreign_callback!(callback ToString {
     self_type ::std::string::ToString;
     toString = ::std::string::ToString::to_string(&self) -> String;
 });

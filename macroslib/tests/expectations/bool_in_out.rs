@@ -5,7 +5,7 @@ foreigner_class!(class Foo {
     static_method f2(_: bool) -> bool;
 });
 
-foreign_interface!(interface SomeObserver {
+foreign_callback!(callback SomeObserver {
     self_type SomeTrait;
     onStateChanged1 = SomeTrait::on_state_changed1(&self, _: i32, _: bool);
 });

@@ -1,4 +1,4 @@
-foreign_interface!(interface SomeObserver {
+foreign_callback!(callback SomeObserver {
     self_type SomeTrait;
     onStateChanged = SomeTrait::on_state_changed(&self, _: &str);
 });

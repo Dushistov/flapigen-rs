@@ -261,6 +261,7 @@ struct SourceCode {
 static FOREIGNER_CLASS: &str = "foreigner_class";
 static FOREIGN_ENUM: &str = "foreign_enum";
 static FOREIGN_INTERFACE: &str = "foreign_interface";
+static FOREIGN_CALLBACK: &str = "foreign_callback";
 static FOREIGNER_CODE: &str = "foreigner_code";
 static FOREIGN_CODE: &str = "foreign_code";
 
@@ -391,9 +392,14 @@ impl Generator {
 
         for item in syn_file.items {
             if let syn::Item::Macro(mut item_macro) = item {
-                let is_our_macro = [FOREIGNER_CLASS, FOREIGN_ENUM, FOREIGN_INTERFACE]
-                    .iter()
-                    .any(|x| item_macro.mac.path.is_ident(x));
+                let is_our_macro = [
+                    FOREIGNER_CLASS,
+                    FOREIGN_ENUM,
+                    FOREIGN_INTERFACE,
+                    FOREIGN_CALLBACK,
+                ]
+                .iter()
+                .any(|x| item_macro.mac.path.is_ident(x));
                 if !is_our_macro {
                     writeln!(&mut file, "{}", DisplayToTokens(&item_macro))
                         .expect("mem I/O failed");
@@ -420,7 +426,9 @@ impl Generator {
                 } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
                     let fenum = code_parse::parse_foreign_enum(src_id, tts)?;
                     items_to_expand.push(ItemToExpand::Enum(fenum));
-                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE) {
+                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE)
+                    || item_macro.mac.path.is_ident(FOREIGN_CALLBACK)
+                {
                     let finterface = code_parse::parse_foreign_interface(src_id, tts)?;
                     items_to_expand.push(ItemToExpand::Interface(finterface));
                 } else {

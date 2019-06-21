@@ -152,6 +152,31 @@ foreigner_class!(class Foo {
 }
 
 #[test]
+fn test_callback_without_self_err() {
+    let _ = env_logger::try_init();
+    for lang in &[ForeignLang::Java, ForeignLang::Cpp] {
+        let result = panic::catch_unwind(|| {
+            let name = format!("test_callback_without_self_err {:?}", lang);
+            parse_code(
+                &name,
+                Source::Str(
+                    r#"
+foreign_interface! (interface FooBar {
+    self_type Foo;
+    bar = Foo::bar();
+});
+    "#,
+                ),
+                *lang,
+            )
+            .expect(&name);
+        });
+        println!("result: {:?}", result);
+        assert!(result.is_err());
+    }
+}
+
+#[test]
 fn test_expectations_parse_without_self_type_err() {
     let _ = env_logger::try_init();
 
