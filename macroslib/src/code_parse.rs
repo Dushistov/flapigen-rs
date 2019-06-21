@@ -526,6 +526,16 @@ impl Parse for ForeignInterfaceParser {
             let args_in: Punctuated<syn::FnArg, Token![,]> =
                 args_parser.parse_terminated(syn::FnArg::parse)?;
             debug!("cb func in args {:?}", args_in);
+            let have_self_args = match args_in.iter().nth(0) {
+                Some(syn::FnArg::SelfRef(_)) => true,
+                _ => false,
+            };
+            if !have_self_args {
+                return Err(syn::Error::new(
+                    rust_func_name.span(),
+                    "expect &self or &mut self as first argument",
+                ));
+            }
             let out_type: syn::ReturnType = item_parser.parse()?;
             item_parser.parse::<Token![;]>()?;
             let span = rust_func_name.span();
