@@ -15,7 +15,7 @@ use crate::{
     error::{DiagnosticError, Result},
     source_registry::SourceId,
     typemap::ast::{
-        fn_arg_type, if_result_return_ok_err_types, if_ty_result_return_ok_type,
+        if_result_return_ok_err_types, if_ty_result_return_ok_type,
         parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
     },
     typemap::{
@@ -371,12 +371,13 @@ fn find_suitable_ftypes_for_interace_methods(
     for method in &interace.items {
         let mut input = Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg), interace.src_id);
+            let named_arg = arg.as_named_arg(interace.src_id)?;
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, interace.src_id);
             let f_arg_type = map_type(
                 conv_map,
                 &arg_rust_ty,
                 Direction::Outgoing,
-                (interace.src_id, fn_arg_type(arg).span()),
+                (interace.src_id, named_arg.ty.span()),
             )?;
 
             input.push(f_arg_type);
@@ -412,13 +413,14 @@ fn find_suitable_foreign_types_for_methods(
         let mut input =
             Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg), class.src_id);
+            let named_arg = arg.as_named_arg(class.src_id)?;
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, class.src_id);
 
             let fti = map_type(
                 conv_map,
                 &arg_rust_ty,
                 Direction::Incoming,
-                (class.src_id, fn_arg_type(arg).span()),
+                (class.src_id, named_arg.ty.span()),
             )?;
             input.push(fti);
         }

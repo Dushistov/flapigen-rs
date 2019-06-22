@@ -1,6 +1,7 @@
 use proc_macro2::{Ident, Span};
-
-use syn::{parse_quote, spanned::Spanned, Token, Type};
+use smol_str::SmolStr;
+use std::fmt;
+use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
     error::{DiagnosticError, Result, SourceIdSpan},
@@ -85,20 +86,46 @@ pub(crate) struct ForeignerMethod {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct FnDecl {
-    pub(crate) span: Span,
-    pub(crate) inputs: syn::punctuated::Punctuated<syn::FnArg, Token![,]>,
-    pub(crate) output: syn::ReturnType,
+pub(crate) enum FnArg {
+    SelfArg(Span, SelfTypeVariant),
+    Default(NamedArg),
 }
 
-impl From<syn::FnDecl> for crate::types::FnDecl {
-    fn from(x: syn::FnDecl) -> Self {
-        crate::types::FnDecl {
-            span: x.fn_token.span(),
-            inputs: x.inputs,
-            output: x.output,
+impl FnArg {
+    pub(crate) fn as_named_arg(&self, src_id: SourceId) -> Result<&NamedArg> {
+        match self {
+            FnArg::SelfArg(sp, _) => Err(DiagnosticError::new(
+                src_id,
+                *sp,
+                format!("expect not self argument here"),
+            )),
+            FnArg::Default(ref arg) => Ok(arg),
         }
     }
+    pub(crate) fn as_self_arg(&self, src_id: SourceId) -> Result<SelfTypeVariant> {
+        match self {
+            FnArg::SelfArg(_, var) => Ok(*var),
+            FnArg::Default(ref arg) => Err(DiagnosticError::new(
+                src_id,
+                arg.span,
+                format!("expect self argument here"),
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct NamedArg {
+    pub name: SmolStr,
+    pub span: Span,
+    pub ty: syn::Type,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct FnDecl {
+    pub(crate) span: Span,
+    pub(crate) inputs: Vec<FnArg>,
+    pub(crate) output: syn::ReturnType,
 }
 
 impl ForeignerMethod {
@@ -142,6 +169,18 @@ pub(crate) enum SelfTypeVariant {
     Rptr,
     Mut,
     Default,
+}
+
+impl fmt::Display for SelfTypeVariant {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
+        use SelfTypeVariant::*;
+        f.write_str(match self {
+            RptrMut => "&mut self",
+            Rptr => "&self",
+            Mut => "mut self",
+            Default => "self",
+        })
+    }
 }
 
 impl SelfTypeVariant {

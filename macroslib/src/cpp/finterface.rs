@@ -13,9 +13,7 @@ use crate::{
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
-        ast::{fn_arg_type, DisplayToTokens},
-        ty::RustType,
-        utils::rust_to_foreign_convert_method_inputs,
+        ast::DisplayToTokens, ty::RustType, utils::rust_to_foreign_convert_method_inputs,
         ForeignTypeInfo, FROM_VAR_TEMPLATE,
     },
     types::ForeignInterface,
@@ -127,13 +125,22 @@ impl {trait_name} for {struct_with_funcs} {{
             .iter()
             .skip(1)
             .enumerate()
-            .map(|(i, v)| format!("a_{}: {}", i, DisplayToTokens(fn_arg_type(v))))
+            .map(|(i, v)| {
+                format!(
+                    "a_{}: {}",
+                    i,
+                    DisplayToTokens(&v.as_named_arg(interface.src_id).unwrap().ty)
+                )
+            })
             .fold(String::new(), |mut acc, x| {
                 acc.push_str(", ");
                 acc.push_str(&x);
                 acc
             });
-        let self_arg = format!("{}", DisplayToTokens(&method.fn_decl.inputs[0]));
+        let self_arg = format!(
+            "{}",
+            method.fn_decl.inputs[0].as_self_arg(interface.src_id)?
+        );
 
         let args_with_types: String = [self_arg.to_string(), rest_args_with_types].concat();
         assert!(!method.fn_decl.inputs.is_empty());
@@ -236,14 +243,15 @@ pub(in crate::cpp) fn find_suitable_ftypes_for_interace_methods(
     for method in &interace.items {
         let mut input = Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
+            let named_arg = arg.as_named_arg(interace.src_id)?;
             let arg_rust_ty = ctx
                 .conv_map
-                .find_or_alloc_rust_type(fn_arg_type(arg), interace.src_id);
+                .find_or_alloc_rust_type(&named_arg.ty, interace.src_id);
             input.push(map_type(
                 ctx,
                 &arg_rust_ty,
                 Direction::Outgoing,
-                (interace.src_id, fn_arg_type(arg).span()),
+                (interace.src_id, named_arg.ty.span()),
             )?);
         }
         let output = match method.fn_decl.output {

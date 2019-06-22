@@ -701,15 +701,6 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
         .map(|x| x.0)
 }
 
-pub(crate) fn fn_arg_type(a: &syn::FnArg) -> &syn::Type {
-    use syn::FnArg::*;
-    match a {
-        SelfRef(_) | SelfValue(_) => panic!("internal error: fn_arg_type for self type"),
-        Inferred(_) => panic!("internal erorr: fn_arg_type for inferred"),
-        Captured(syn::ArgCaptured { ref ty, .. }) | Ignored(ref ty) => ty,
-    }
-}
-
 pub(crate) fn list_lifetimes(ty: &Type) -> Vec<String> {
     struct CatchLifetimes(Vec<String>);
     impl<'ast> Visit<'ast> for CatchLifetimes {

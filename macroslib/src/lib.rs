@@ -23,6 +23,7 @@ mod cpp;
 mod error;
 pub mod file_cache;
 mod java_jni;
+mod namegen;
 mod source_registry;
 mod typemap;
 mod types;

@@ -1,5 +1,8 @@
 use log::debug;
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
+use rustc_hash::FxHashSet;
+use smol_str::SmolStr;
+use std::convert::{TryFrom, TryInto};
 use syn::{
     braced, parenthesized,
     parse::{Parse, ParseStream},
@@ -11,11 +14,12 @@ use syn::{
 
 use crate::{
     error::{DiagnosticError, Result},
+    namegen::new_unique_name,
     source_registry::SourceId,
     typemap::ast::{normalize_ty_lifetimes, DisplayToTokens},
     types::{
-        ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
-        ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, SelfTypeDesc,
+        FnArg, ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
+        ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
         SelfTypeVariant,
     },
     LanguageConfig, FOREIGNER_CODE, FOREIGN_CODE,
@@ -276,7 +280,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             methods.push(ForeignerMethod {
                 variant: func_type,
                 rust_id: dummy_path,
-                fn_decl: dummy_func.into(),
+                fn_decl: dummy_func.try_into()?,
                 name_alias: None,
                 access,
                 doc_comments,
@@ -295,6 +299,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         parenthesized!(args_parser in content);
         let args_in: Punctuated<syn::FnArg, Token![,]> =
             args_parser.parse_terminated(syn::FnArg::parse)?;
+
         debug!("func in args {:?}", args_in);
         match func_type {
             MethodVariant::Constructor | MethodVariant::StaticMethod => {
@@ -339,6 +344,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 }
             },
         }
+        let fn_args = parse_fn_args(args_in)?;
         let out_type: syn::ReturnType = content.parse()?;
         debug!("out_type {:?}", out_type);
         content.parse::<Token![;]>()?;
@@ -395,7 +401,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             rust_id: func_name,
             fn_decl: crate::types::FnDecl {
                 span,
-                inputs: args_in,
+                inputs: fn_args,
                 output: out_type,
             },
             name_alias: func_name_alias,
@@ -451,6 +457,95 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         copy_derived,
         clone_derived,
     })
+}
+
+impl TryFrom<syn::FnDecl> for crate::types::FnDecl {
+    type Error = syn::Error;
+    fn try_from(x: syn::FnDecl) -> std::result::Result<Self, Self::Error> {
+        Ok(crate::types::FnDecl {
+            span: x.fn_token.span(),
+            inputs: parse_fn_args(x.inputs)?,
+            output: x.output,
+        })
+    }
+}
+
+fn parse_fn_args(args: Punctuated<syn::FnArg, Token![,]>) -> syn::Result<Vec<FnArg>> {
+    let mut ret = Vec::with_capacity(args.len());
+    let invalid_arg = |sp| {
+        Err(syn::Error::new(
+            sp,
+            "Invalid function argument, should be 'name: type' or '_: type' or 'type'",
+        ))
+    };
+    let mut args_names = FxHashSet::<SmolStr>::default();
+    for arg in args {
+        use syn::FnArg::*;
+        let fn_arg = match arg {
+            SelfRef(syn::ArgSelfRef {
+                self_token,
+                ref mutability,
+                ..
+            }) => FnArg::SelfArg(
+                self_token.span(),
+                if mutability.is_some() {
+                    SelfTypeVariant::RptrMut
+                } else {
+                    SelfTypeVariant::Rptr
+                },
+            ),
+            SelfValue(syn::ArgSelf {
+                self_token,
+                ref mutability,
+                ..
+            }) => FnArg::SelfArg(
+                self_token.span(),
+                if mutability.is_some() {
+                    SelfTypeVariant::Mut
+                } else {
+                    SelfTypeVariant::Default
+                },
+            ),
+            Captured(syn::ArgCaptured { pat, ty, .. }) => {
+                let (name, span): (SmolStr, Span) = match pat {
+                    syn::Pat::Wild(w) => ("_".into(), w.span()),
+                    syn::Pat::Ident(syn::PatIdent { ident, .. }) => {
+                        (ident.to_string().into(), ident.span())
+                    }
+                    _ => return invalid_arg(pat.span()),
+                };
+                if name != "_" {
+                    if args_names.contains(name.as_str()) {
+                        return Err(syn::Error::new(
+                            span,
+                            format!("duplicate argument name '{}'", name),
+                        ));
+                    }
+                    args_names.insert(name.clone());
+                }
+                FnArg::Default(NamedArg { name, ty, span })
+            }
+            Ignored(ty) => FnArg::Default(NamedArg {
+                name: "_".into(),
+                span: ty.span(),
+                ty,
+            }),
+            _ => return invalid_arg(arg.span()),
+        };
+        ret.push(fn_arg);
+    }
+
+    for (i, x) in ret.iter_mut().enumerate() {
+        if let FnArg::Default(ref mut named_arg) = x {
+            if named_arg.name == "_" {
+                let templ = format!("a{}", i);
+                named_arg.name = new_unique_name(&args_names, &templ);
+                debug_assert!(!args_names.contains(named_arg.name.as_str()));
+                args_names.insert(named_arg.name.clone());
+            }
+        }
+    }
+    Ok(ret)
 }
 
 struct ForeignEnumInfoParser(ForeignEnumInfo);
@@ -536,6 +631,7 @@ impl Parse for ForeignInterfaceParser {
                     "expect &self or &mut self as first argument",
                 ));
             }
+            let fn_args = parse_fn_args(args_in)?;
             let out_type: syn::ReturnType = item_parser.parse()?;
             item_parser.parse::<Token![;]>()?;
             let span = rust_func_name.span();
@@ -544,7 +640,7 @@ impl Parse for ForeignInterfaceParser {
                 rust_name: rust_func_name,
                 fn_decl: crate::types::FnDecl {
                     span,
-                    inputs: args_in,
+                    inputs: fn_args,
                     output: out_type,
                 },
                 doc_comments,
@@ -585,7 +681,7 @@ mod tests {
         "#;
                     constructor Foo::new(_: i32) -> Foo;
                     method Foo::set_field(&mut self, _: i32);
-                    method Foo::f(&self, _: i32, _: i32) -> i32;
+                    method Foo::f(&self, _: i32, a: i32) -> i32;
                     static_method f2(_: i32, String) -> i32;
                 })
         };

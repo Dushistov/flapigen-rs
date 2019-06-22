@@ -14,7 +14,7 @@ use crate::{
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
     typemap::{
-        ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
+        ast::{list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
         ty::RustType,
         utils::{
             convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
@@ -821,14 +821,15 @@ pub(in crate::cpp) fn find_suitable_foreign_types_for_methods(
         let mut input =
             Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
+            let named_arg = arg.as_named_arg(class.src_id)?;
             let arg_rust_ty = ctx
                 .conv_map
-                .find_or_alloc_rust_type(fn_arg_type(arg), class.src_id);
+                .find_or_alloc_rust_type(&named_arg.ty, class.src_id);
             input.push(map_type(
                 ctx,
                 &arg_rust_ty,
                 Direction::Incoming,
-                (class.src_id, fn_arg_type(arg).span()),
+                (class.src_id, named_arg.ty.span()),
             )?);
         }
         let output: CppForeignTypeInfo = match method.variant {
