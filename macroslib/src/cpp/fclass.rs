@@ -10,6 +10,7 @@ use crate::{
     cpp::{
         c_func_name, cpp_code, map_type::map_type, n_arguments_list, rust_generate_args_with_types,
         CppContext, CppForeignMethodSignature, CppForeignTypeInfo, MethodContext,
+        WRITE_TO_MEM_FAILED_MSG,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
@@ -25,8 +26,6 @@ use crate::{
     },
     types::{ForeignerClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
 };
-
-static WRITE_TO_MEM_FAILED_MSG: &str = "Write to memory buffer failed, no free mem?";
 
 pub(in crate::cpp) fn generate(
     ctx: &mut CppContext,
@@ -166,8 +165,7 @@ May be you need to use `private constructor = empty;` syntax?",
             .write_all(cpp_code::doc_comments_to_c_comments(&method.doc_comments, false).as_bytes())
             .expect(WRITE_TO_MEM_FAILED_MSG);
         let c_func_name = c_func_name(class, method);
-        let c_args_with_types = cpp_code::c_generate_args_with_types(f_method, false)
-            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
+        let c_args_with_types = cpp_code::c_generate_args_with_types(f_method, false);
         let comma_c_args_with_types = if c_args_with_types.is_empty() {
             String::new()
         } else {

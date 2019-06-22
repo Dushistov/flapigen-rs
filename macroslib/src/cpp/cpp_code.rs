@@ -7,7 +7,10 @@ use smol_str::SmolStr;
 use syn::spanned::Spanned;
 
 use crate::{
-    cpp::{fmt_write_err_map, map_any_err_to_our_err, CppForeignMethodSignature, MergeCTypesFlags},
+    cpp::{
+        fmt_write_err_map, map_any_err_to_our_err, CppForeignMethodSignature, MergeCTypesFlags,
+        WRITE_TO_MEM_FAILED_MSG,
+    },
     error::{panic_on_syn_error, DiagnosticError},
     file_cache::FileWriteCache,
     source_registry::SourceId,
@@ -35,18 +38,18 @@ pub(in crate::cpp) fn doc_comments_to_c_comments(
 pub(in crate::cpp) fn c_generate_args_with_types(
     f_method: &CppForeignMethodSignature,
     append_comma_if_not_empty: bool,
-) -> Result<String, String> {
+) -> String {
     let mut buf = String::new();
     for (i, f_type_info) in f_method.input.iter().enumerate() {
         if i > 0 {
-            write!(&mut buf, ", ").map_err(fmt_write_err_map)?;
+            buf.push_str(", ");
         }
-        write!(&mut buf, "{} a_{}", f_type_info.as_ref().name, i).map_err(fmt_write_err_map)?;
+        write!(&mut buf, "{} a_{}", f_type_info.as_ref().name, i).expect(WRITE_TO_MEM_FAILED_MSG);
     }
     if !buf.is_empty() && append_comma_if_not_empty {
-        write!(&mut buf, ", ").map_err(fmt_write_err_map)?;
+        buf.push_str(", ");
     }
-    Ok(buf)
+    buf
 }
 
 pub(in crate::cpp) fn c_class_type(class: &ForeignerClassInfo) -> String {

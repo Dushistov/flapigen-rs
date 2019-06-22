@@ -345,7 +345,7 @@ struct C_{interface_name} {{
 "#,
             method_name = method.name,
             doc_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false),
-            single_args_with_types = cpp_code::c_generate_args_with_types(f_method, true)?,
+            single_args_with_types = cpp_code::c_generate_args_with_types(f_method, true),
             c_ret_type = c_ret_type,
         )
         .map_err(&map_write_err)?;
@@ -374,7 +374,7 @@ struct C_{interface_name} {{
    }}
 "#,
                 method_name = method.name,
-                single_args_with_types = cpp_code::c_generate_args_with_types(f_method, true)?,
+                single_args_with_types = cpp_code::c_generate_args_with_types(f_method, true),
                 input_args = cpp_code::cpp_generate_args_to_call_c(f_method)?,
                 interface_name = interface.name,
             )
@@ -392,7 +392,7 @@ struct C_{interface_name} {{
    }}
 "#,
                 method_name = method.name,
-                single_args_with_types = cpp_code::c_generate_args_with_types(f_method, true)?,
+                single_args_with_types = cpp_code::c_generate_args_with_types(f_method, true),
                 input_args = cpp_code::cpp_generate_args_to_call_c(f_method)?,
                 interface_name = interface.name,
                 c_ret_type = c_ret_type,
