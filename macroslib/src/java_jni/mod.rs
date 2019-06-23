@@ -65,23 +65,6 @@ impl AsRef<ForeignTypeInfo> for JavaForeignTypeInfo {
     }
 }
 
-impl JavaForeignTypeInfo {
-    fn java_convert<NameArg>(&self, name_arg: NameArg) -> Option<String>
-    where
-        NameArg: Fn() -> (String, String),
-    {
-        if let Some(code) = self.java_converter.as_ref().map(|x| &x.converter) {
-            let (from_name, to_name) = name_arg();
-            Some(
-                code.replace(TO_VAR_TEMPLATE, &to_name)
-                    .replace(FROM_VAR_TEMPLATE, &from_name),
-            )
-        } else {
-            None
-        }
-    }
-}
-
 impl From<ForeignTypeInfo> for JavaForeignTypeInfo {
     fn from(x: ForeignTypeInfo) -> Self {
         JavaForeignTypeInfo {

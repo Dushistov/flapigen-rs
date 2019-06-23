@@ -12,6 +12,7 @@ where
         if !names.contains(new_name.as_str()) {
             return new_name.into();
         }
+        new_name.clear();
         write!(&mut new_name, "{}{}", templ, idx).expect("write to String failed, no free mem?");
         idx += 1;
         if idx == u64::max_value() {

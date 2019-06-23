@@ -63,9 +63,9 @@ class Foo {
     /// some markdown example in the text
     /// ```
     ///
-    /// @param a0 id - somenumber
-    /// @param a1 desc - more information
-    constructor Foo::new(_: i32, _: &str) -> Foo;
+    /// @param val - some number
+    /// @param name - more information
+    constructor Foo::new(val: i32, name: &str) -> Foo;
     method Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
     method Foo::f_double(&self, _: f64, _: f64) -> f64;
     method Foo::name(&self) -> &str; alias getName;

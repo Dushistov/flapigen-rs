@@ -69,8 +69,6 @@ use crate::{
     CppConfig, CppOptional, CppStrView, CppVariant, LanguageGenerator, SourceCode, TypeMap,
 };
 
-static WRITE_TO_MEM_FAILED_MSG: &str = "Write to memory buffer failed, no free mem?";
-
 #[derive(Debug)]
 struct CppConverter {
     typename: SmolStr,

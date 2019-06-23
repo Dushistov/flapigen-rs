@@ -9,7 +9,6 @@ use crate::{
     cpp::{
         cpp_code, fmt_write_err_map, map_type, map_write_err, n_arguments_list,
         rust_generate_args_with_types, CppContext, CppForeignMethodSignature, CppForeignTypeInfo,
-        WRITE_TO_MEM_FAILED_MSG,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
@@ -20,6 +19,7 @@ use crate::{
         ForeignTypeInfo, FROM_VAR_TEMPLATE,
     },
     types::ForeignInterface,
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::cpp) fn rust_code_generate_interface(

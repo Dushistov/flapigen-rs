@@ -8,7 +8,7 @@ class Foo {
     /// some markdown example in the text
     /// ```
     ///
-    /// @param a0 id - somenumber
-    /// @param a1 desc - more information
-    constructor Foo::new(_: i32, _: &str) -> Foo;
+    /// @param id - some number
+    /// @param desc - more information
+    constructor Foo::new(id: i32, desc: &str) -> Foo;
 });

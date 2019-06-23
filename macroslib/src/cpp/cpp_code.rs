@@ -7,15 +7,13 @@ use smol_str::SmolStr;
 use syn::spanned::Spanned;
 
 use crate::{
-    cpp::{
-        map_any_err_to_our_err, CppForeignMethodSignature, MergeCTypesFlags,
-        WRITE_TO_MEM_FAILED_MSG,
-    },
+    cpp::{map_any_err_to_our_err, CppForeignMethodSignature, MergeCTypesFlags},
     error::{panic_on_syn_error, DiagnosticError},
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{ast::DisplayToTokens, CType, CTypes, TypeMap, FROM_VAR_TEMPLATE},
     types::{ForeignEnumInfo, ForeignerClassInfo},
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::cpp) fn doc_comments_to_c_comments(

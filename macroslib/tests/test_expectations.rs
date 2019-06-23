@@ -241,7 +241,7 @@ foreigner_class!(class FooImpl {
         println!("Java: {}", java_code.foreign_code);
         assert!(java_code
             .foreign_code
-            .contains("void setAlternateBoarding(@NonNull Boo [] a0)"));
+            .contains("void setAlternateBoarding(@NonNull Boo [] p)"));
     }
 }
 

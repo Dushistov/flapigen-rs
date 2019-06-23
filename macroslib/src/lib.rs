@@ -47,6 +47,8 @@ use crate::{
     types::ItemToExpand,
 };
 
+pub(crate) static WRITE_TO_MEM_FAILED_MSG: &str = "Write to memory buffer failed, no free mem?";
+
 /// Calculate target pointer width from environment variable
 /// that `cargo` inserts
 pub fn target_pointer_width_from_env() -> Option<usize> {

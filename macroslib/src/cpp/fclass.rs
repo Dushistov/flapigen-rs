@@ -11,7 +11,6 @@ use crate::{
     cpp::{
         c_func_name, cpp_code, map_type::map_type, n_arguments_list, rust_generate_args_with_types,
         CppContext, CppForeignMethodSignature, CppForeignTypeInfo, MethodContext,
-        WRITE_TO_MEM_FAILED_MSG,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
@@ -27,6 +26,7 @@ use crate::{
         ForeignTypeInfo, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{ForeignerClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::cpp) fn generate(
