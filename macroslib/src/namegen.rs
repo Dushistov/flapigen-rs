@@ -1,8 +1,11 @@
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
-use std::fmt::Write;
+use std::{borrow::Borrow, fmt::Write, hash::Hash};
 
-pub(crate) fn new_unique_name(names: &FxHashSet<SmolStr>, templ: &str) -> SmolStr {
+pub(crate) fn new_unique_name<T>(names: &FxHashSet<T>, templ: &str) -> SmolStr
+where
+    T: Borrow<str> + Eq + Hash,
+{
     let mut new_name: String = templ.into();
     let mut idx = 0_u64;
     loop {

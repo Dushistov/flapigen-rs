@@ -535,14 +535,19 @@ fn parse_fn_args(args: Punctuated<syn::FnArg, Token![,]>) -> syn::Result<Vec<FnA
         ret.push(fn_arg);
     }
 
-    for (i, x) in ret.iter_mut().enumerate() {
-        if let FnArg::Default(ref mut named_arg) = x {
-            if named_arg.name == "_" {
-                let templ = format!("a{}", i);
-                named_arg.name = new_unique_name(&args_names, &templ);
-                debug_assert!(!args_names.contains(named_arg.name.as_str()));
-                args_names.insert(named_arg.name.clone());
-            }
+    for (i, named_arg) in ret
+        .iter_mut()
+        .filter_map(|x| match x {
+            FnArg::SelfArg(_, _) => None,
+            FnArg::Default(ref mut y) => Some(y),
+        })
+        .enumerate()
+    {
+        if named_arg.name == "_" {
+            let templ = format!("a{}", i);
+            named_arg.name = new_unique_name(&args_names, &templ);
+            debug_assert!(!args_names.contains(named_arg.name.as_str()));
+            args_names.insert(named_arg.name.clone());
         }
     }
     Ok(ret)

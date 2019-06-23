@@ -1,1 +1,1 @@
-"void f(int32_t a_0) const noexcept;";
+"void f(int32_t a0) const noexcept;";

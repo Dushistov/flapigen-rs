@@ -1,1 +1,1 @@
-"bool eq(const Foo & a_0) const";
+"bool eq(const Foo & a0) const";

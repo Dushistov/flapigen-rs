@@ -92,10 +92,9 @@ pub(crate) enum FnArg {
 }
 
 impl FnArg {
-    pub(crate) fn as_named_arg(&self, src_id: SourceId) -> Result<&NamedArg> {
+    pub(crate) fn as_named_arg(&self) -> syn::Result<&NamedArg> {
         match self {
-            FnArg::SelfArg(sp, _) => Err(DiagnosticError::new(
-                src_id,
+            FnArg::SelfArg(sp, _) => Err(syn::Error::new(
                 *sp,
                 format!("expect not self argument here"),
             )),
@@ -146,6 +145,18 @@ impl ForeignerMethod {
 
     pub(crate) fn is_dummy_constructor(&self) -> bool {
         self.rust_id.segments.is_empty()
+    }
+
+    pub(crate) fn arg_names_without_self(&self) -> impl Iterator<Item = &str> {
+        let skip = match self.variant {
+            MethodVariant::Method(_) => 1,
+            _ => 0,
+        };
+        self.fn_decl
+            .inputs
+            .iter()
+            .skip(skip)
+            .map(|x| x.as_named_arg().unwrap().name.as_str())
     }
 }
 
@@ -238,6 +249,16 @@ pub(crate) struct ForeignInterfaceMethod {
     pub(crate) rust_name: syn::Path,
     pub(crate) fn_decl: FnDecl,
     pub(crate) doc_comments: Vec<String>,
+}
+
+impl ForeignInterfaceMethod {
+    pub(crate) fn arg_names_without_self(&self) -> impl Iterator<Item = &str> {
+        self.fn_decl
+            .inputs
+            .iter()
+            .skip(1)
+            .map(|x| x.as_named_arg().unwrap().name.as_str())
+    }
 }
 
 pub(crate) enum ItemToExpand {

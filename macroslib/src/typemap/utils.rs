@@ -100,7 +100,9 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
         .zip(f_method.input().iter())
         .zip(arg_names)
     {
-        let to_named_arg = to_type.as_named_arg(src_id)?;
+        let to_named_arg = to_type
+            .as_named_arg()
+            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
         let to: RustType = conv_map.find_or_alloc_rust_type(&to_named_arg.ty, src_id);
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             f_from.correspoding_rust_type().to_idx(),
@@ -179,7 +181,9 @@ pub(crate) fn rust_to_foreign_convert_method_inputs<
         .zip(f_method.input().iter())
         .zip(arg_names)
     {
-        let from_named_arg = from_ty.as_named_arg(src_id)?;
+        let from_named_arg = from_ty
+            .as_named_arg()
+            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
         let from: RustType = conv_map.find_or_alloc_rust_type(&from_named_arg.ty, src_id);
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             from.to_idx(),

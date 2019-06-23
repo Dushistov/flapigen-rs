@@ -3,6 +3,7 @@ use std::io::Write;
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
+use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
@@ -14,6 +15,7 @@ use crate::{
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
+    namegen::new_unique_name,
     typemap::{
         ast::{list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
         ty::RustType,
@@ -165,7 +167,8 @@ May be you need to use `private constructor = empty;` syntax?",
             .write_all(cpp_code::doc_comments_to_c_comments(&method.doc_comments, false).as_bytes())
             .expect(WRITE_TO_MEM_FAILED_MSG);
         let c_func_name = c_func_name(class, method);
-        let c_args_with_types = cpp_code::c_generate_args_with_types(f_method, false);
+        let c_args_with_types =
+            cpp_code::c_generate_args_with_types(f_method, method.arg_names_without_self(), false);
         let comma_c_args_with_types = if c_args_with_types.is_empty() {
             String::new()
         } else {
@@ -173,10 +176,16 @@ May be you need to use `private constructor = empty;` syntax?",
         };
         let args_names = n_arguments_list(f_method.input.len());
 
-        let cpp_args_with_types = cpp_code::cpp_generate_args_with_types(f_method)
-            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
-        let cpp_args_for_c = cpp_code::cpp_generate_args_to_call_c(f_method)
-            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
+        let mut known_names: FxHashSet<&str> = method.arg_names_without_self().collect();
+        let ret_name = new_unique_name(&known_names, "ret");
+        known_names.insert(&ret_name);
+
+        let cpp_args_with_types =
+            cpp_code::cpp_generate_args_with_types(f_method, method.arg_names_without_self());
+
+        let (conv_args_code, cpp_args_for_c) =
+            cpp_code::convert_args(f_method, known_names, method.arg_names_without_self());
+
         let real_output_typename = match method.fn_decl.output {
             syn::ReturnType::Default => "()",
             syn::ReturnType::Type(_, ref t) => normalize_ty_lifetimes(&*t),
@@ -199,7 +208,9 @@ May be you need to use `private constructor = empty;` syntax?",
             if let Some(cpp_converter) = f_method.output.cpp_converter.as_ref() {
                 (
                     cpp_converter.typename.clone(),
-                    cpp_converter.converter.replace(FROM_VAR_TEMPLATE, "ret"),
+                    cpp_converter
+                        .converter
+                        .replace(FROM_VAR_TEMPLATE, &ret_name),
                 )
             } else {
                 (f_method.output.as_ref().name.clone(), "ret".to_string())
@@ -231,14 +242,26 @@ May be you need to use `private constructor = empty;` syntax?",
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
+                write!(
+                    &mut inline_impl,
+                    r#"
+    template<bool OWN_DATA>
+    inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) noexcept
+    {{
+{conv_args_code}"#,
+                    cpp_ret_type = cpp_ret_type,
+                    class_name = class_name,
+                    method_name = method_name,
+                    cpp_args_with_types = cpp_args_with_types,
+                    conv_args_code = conv_args_code,
+                )
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+
                 if f_method.output.as_ref().name != "void" {
                     write!(
                         &mut inline_impl,
                         r#"
-    template<bool OWN_DATA>
-    inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) noexcept
-    {{
-        {c_ret_type} ret = {c_func_name}({cpp_args_for_c});
+        {c_ret_type} {ret} = {c_func_name}({cpp_args_for_c});
         return {convert_ret_for_cpp};
     }}
 "#,
@@ -246,25 +269,16 @@ May be you need to use `private constructor = empty;` syntax?",
                         convert_ret_for_cpp = convert_ret_for_cpp,
                         cpp_args_for_c = cpp_args_for_c,
                         c_func_name = c_func_name,
-                        cpp_ret_type = cpp_ret_type,
-                        class_name = class_name,
-                        method_name = method_name,
-                        cpp_args_with_types = cpp_args_with_types,
+                        ret = ret_name,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
                     write!(
                         &mut inline_impl,
                         r#"
-    template<bool OWN_DATA>
-    inline void {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) noexcept
-    {{
         {c_func_name}({cpp_args_for_c});
     }}
 "#,
-                        cpp_args_with_types = cpp_args_with_types,
-                        class_name = class_name,
-                        method_name = method_name,
                         c_func_name = c_func_name,
                         cpp_args_for_c = cpp_args_for_c,
                     )
@@ -304,48 +318,53 @@ May be you need to use `private constructor = empty;` syntax?",
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                if f_method.output.as_ref().name != "void" {
-                    write!(&mut inline_impl, r#"
+                write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
     inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly}noexcept
     {{
-        {c_ret_type} ret = {c_func_name}(this->self_{cpp_args_for_c});
+{conv_args_code}"#,
+                       cpp_args_with_types = cpp_args_with_types,
+                       method_name = method_name,
+                       class_name = class_name,
+                       cpp_ret_type = cpp_ret_type,
+                       const_if_readonly = const_if_readonly,
+                       conv_args_code = conv_args_code,
+          ).expect(WRITE_TO_MEM_FAILED_MSG);
+
+                if f_method.output.as_ref().name != "void" {
+                    write!(
+                        &mut inline_impl,
+                        r#"
+        {c_ret_type} {ret} = {c_func_name}(this->self_{cpp_args_for_c});
         return {convert_ret_for_cpp};
     }}
 "#,
-                           method_name = method_name,
-                           convert_ret_for_cpp = convert_ret_for_cpp,
-                           c_ret_type = f_method.output.as_ref().name,
-                           class_name = class_name,
-                           cpp_ret_type = cpp_ret_type,
-                           c_func_name = c_func_name,
-                           cpp_args_with_types = cpp_args_with_types,
-                                                   cpp_args_for_c = if args_names.is_empty() {
+                        convert_ret_for_cpp = convert_ret_for_cpp,
+                        c_ret_type = f_method.output.as_ref().name,
+                        c_func_name = c_func_name,
+                        cpp_args_for_c = if args_names.is_empty() {
                             String::new()
                         } else {
                             format!(", {}", cpp_args_for_c)
-                                                   },
-                           const_if_readonly = const_if_readonly,
-                    ).expect(WRITE_TO_MEM_FAILED_MSG);
+                        },
+                        ret = ret_name,
+                    )
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
-                    write!(&mut inline_impl, r#"
-    template<bool OWN_DATA>
-    inline void {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly}noexcept
-    {{
+                    write!(
+                        &mut inline_impl,
+                        r#"
         {c_func_name}(this->self_{cpp_args_for_c});
     }}
 "#,
-                           method_name = method_name,
-                           c_func_name = c_func_name,
-                           class_name = class_name,
-                           cpp_args_with_types = cpp_args_with_types,
-                           cpp_args_for_c = if args_names.is_empty() {
-                               String::new()
+                        c_func_name = c_func_name,
+                        cpp_args_for_c = if args_names.is_empty() {
+                            String::new()
                         } else {
                             format!(", {}", cpp_args_for_c)
-                           },
-                           const_if_readonly = const_if_readonly,
-                    ).expect(WRITE_TO_MEM_FAILED_MSG);
+                        },
+                    )
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
 
                 ctx.rust_code.append(&mut generate_method(
@@ -384,6 +403,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         r#"
     {class_name}({cpp_args_with_types}) noexcept
     {{
+{conv_args_code}
         this->self_ = {c_func_name}({cpp_args_for_c});
         if (this->self_ == nullptr) {{
             std::abort();
@@ -394,6 +414,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         cpp_args_with_types = cpp_args_with_types,
                         class_name = class_name,
                         cpp_args_for_c = cpp_args_for_c,
+                        conv_args_code = conv_args_code,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
 
@@ -819,7 +840,9 @@ pub(in crate::cpp) fn find_suitable_foreign_types_for_methods(
         let mut input =
             Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            let named_arg = arg.as_named_arg(class.src_id)?;
+            let named_arg = arg
+                .as_named_arg()
+                .map_err(|err| DiagnosticError::from_syn_err(class.src_id, err))?;
             let arg_rust_ty = ctx
                 .conv_map
                 .find_or_alloc_rust_type(&named_arg.ty, class.src_id);

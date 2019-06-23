@@ -371,7 +371,9 @@ fn find_suitable_ftypes_for_interace_methods(
     for method in &interace.items {
         let mut input = Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
-            let named_arg = arg.as_named_arg(interace.src_id)?;
+            let named_arg = arg
+                .as_named_arg()
+                .map_err(|err| DiagnosticError::from_syn_err(interace.src_id, err))?;
             let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, interace.src_id);
             let f_arg_type = map_type(
                 conv_map,
@@ -413,7 +415,9 @@ fn find_suitable_foreign_types_for_methods(
         let mut input =
             Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            let named_arg = arg.as_named_arg(class.src_id)?;
+            let named_arg = arg
+                .as_named_arg()
+                .map_err(|err| DiagnosticError::from_syn_err(class.src_id, err))?;
             let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, class.src_id);
 
             let fti = map_type(

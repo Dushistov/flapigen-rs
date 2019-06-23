@@ -429,7 +429,7 @@ impl {trait_name} for JavaCallback {{
                 format!(
                     "a_{}: {}",
                     i,
-                    DisplayToTokens(&v.as_named_arg(interface.src_id).unwrap().ty)
+                    DisplayToTokens(&v.as_named_arg().unwrap().ty)
                 )
             })
             .fold(String::new(), |mut acc, x| {
