@@ -176,9 +176,10 @@ May be you need to use `private constructor = empty;` syntax?",
         };
         let args_names = n_arguments_list(f_method.input.len());
 
-        let mut known_names: FxHashSet<&str> = method.arg_names_without_self().collect();
+        let mut known_names: FxHashSet<SmolStr> =
+            method.arg_names_without_self().map(|x| x.into()).collect();
         let ret_name = new_unique_name(&known_names, "ret");
-        known_names.insert(&ret_name);
+        known_names.insert(ret_name.clone());
 
         let cpp_args_with_types =
             cpp_code::cpp_generate_args_with_types(f_method, method.arg_names_without_self());

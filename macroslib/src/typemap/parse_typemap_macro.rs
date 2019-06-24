@@ -10,6 +10,7 @@ use syn::{
 use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result},
     source_registry::SourceId,
+    str_replace::replace_first_and_other,
     typemap::{
         ast::{
             get_trait_bounds, is_second_subst_of_first, parse_ty_with_given_span,
@@ -446,7 +447,15 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                             })?;
                             let var_name = format!("${}", var_name);
                             Some(FTypeConvCode::new(
-                                code_str.value().replace(&var_name, FROM_VAR_TEMPLATE),
+                                replace_first_and_other(
+                                    code_str
+                                        .value()
+                                        .replace(&var_name, FROM_VAR_TEMPLATE)
+                                        .as_str(),
+                                    "$out",
+                                    TO_VAR_TYPE_TEMPLATE,
+                                    TO_VAR_TEMPLATE,
+                                ),
                                 code_str.span(),
                             ))
                         } else {
@@ -1373,6 +1382,7 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
         );
 
         assert_eq!(
+            rule.ftype_left_to_right,
             vec![FTypeConvRule {
                 req_modules: vec![],
                 left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
@@ -1380,15 +1390,15 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
                     sp: Span::call_site(),
                 }),
                 code: Some(FTypeConvCode::new(
-                    "$out = ({from_var} != 0);",
+                    "{to_var_type} = ({from_var} != 0);",
                     Span::call_site()
                 )),
                 cfg_option: None,
             }],
-            rule.ftype_left_to_right
         );
 
         assert_eq!(
+            rule.ftype_right_to_left,
             vec![FTypeConvRule {
                 req_modules: vec![],
                 left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
@@ -1396,12 +1406,11 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
                     sp: Span::call_site(),
                 }),
                 code: Some(FTypeConvCode::new(
-                    "$out = {from_var} ? 1 : 0;",
+                    "{to_var_type} = {from_var} ? 1 : 0;",
                     Span::call_site()
                 )),
                 cfg_option: None,
             }],
-            rule.ftype_right_to_left
         );
     }
 

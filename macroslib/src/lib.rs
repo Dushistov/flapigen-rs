@@ -25,6 +25,7 @@ pub mod file_cache;
 mod java_jni;
 mod namegen;
 mod source_registry;
+mod str_replace;
 mod typemap;
 mod types;
 

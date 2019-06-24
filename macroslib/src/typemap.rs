@@ -38,7 +38,7 @@ pub(crate) use parse_typemap_macro::{
 };
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
-pub(in crate::typemap) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
+pub(crate) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
 pub(in crate::typemap) static FUNCTION_RETURN_TYPE_TEMPLATE: &str = "{function_ret_type}";
 const MAX_TRY_BUILD_PATH_STEPS: usize = 7;
 

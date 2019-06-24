@@ -332,13 +332,14 @@ struct C_{interface_name} {{
 
     for (method, f_method) in interface.items.iter().zip(f_methods) {
         let c_ret_type = f_method.output.base.name.clone();
-        let mut known_names: FxHashSet<&str> = method.arg_names_without_self().collect();
+        let mut known_names: FxHashSet<SmolStr> =
+            method.arg_names_without_self().map(|x| x.into()).collect();
         let opaque_name = new_unique_name(&known_names, "opaque");
-        known_names.insert(&opaque_name);
+        known_names.insert(opaque_name.clone());
         let interface_ptr = new_unique_name(&known_names, "pi");
-        known_names.insert(&interface_ptr);
+        known_names.insert(interface_ptr.clone());
         let ret_name = new_unique_name(&known_names, "ret");
-        known_names.insert(&ret_name);
+        known_names.insert(ret_name.clone());
 
         let (cpp_ret_type, cpp_out_conv) =
             if let Some(out_conv) = f_method.output.cpp_converter.as_ref() {

@@ -10,8 +10,12 @@ use crate::{
     cpp::{map_any_err_to_our_err, CppForeignMethodSignature, MergeCTypesFlags},
     error::{panic_on_syn_error, DiagnosticError},
     file_cache::FileWriteCache,
+    namegen::new_unique_name,
     source_registry::SourceId,
-    typemap::{ast::DisplayToTokens, CType, CTypes, TypeMap, FROM_VAR_TEMPLATE},
+    typemap::{
+        ast::DisplayToTokens, CType, CTypes, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        TO_VAR_TYPE_TEMPLATE,
+    },
     types::{ForeignEnumInfo, ForeignerClassInfo},
     WRITE_TO_MEM_FAILED_MSG,
 };
@@ -86,22 +90,37 @@ pub(in crate::cpp) fn cpp_generate_args_with_types<'a, NI: Iterator<Item = &'a s
 
 pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
     f_method: &CppForeignMethodSignature,
-    known_names: FxHashSet<&str>,
+    mut known_names: FxHashSet<SmolStr>,
     arg_name_iter: NI,
 ) -> (String, String) {
-    let mut ret = String::new();
+    let mut conv_deps = String::new();
+    let mut converted_args = String::new();
     for (i, (f_type_info, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
         if i > 0 {
-            ret.push_str(", ");
+            converted_args.push_str(", ");
         }
         if let Some(conv) = f_type_info.cpp_converter.as_ref() {
-            let conv_arg = conv.converter.as_str().replace(FROM_VAR_TEMPLATE, arg_name);
-            ret.push_str(&conv_arg);
+            let conv_code = conv.converter.as_str().replace(FROM_VAR_TEMPLATE, arg_name);
+            if !conv_code.contains(TO_VAR_TYPE_TEMPLATE) {
+                converted_args.push_str(&conv_code);
+            } else {
+                let templ = format!("a{}", i);
+                let var_name = new_unique_name(&known_names, &templ);
+                converted_args.push_str(&format!("std::move({})", var_name));
+                let conv_code = conv_code
+                    .replace(
+                        TO_VAR_TYPE_TEMPLATE,
+                        &format!("{} {}", f_type_info.as_ref().name, var_name),
+                    )
+                    .replace(TO_VAR_TEMPLATE, &var_name);
+                conv_deps.push_str(&conv_code);
+                known_names.insert(var_name);
+            }
         } else {
-            ret.push_str(arg_name);
+            converted_args.push_str(arg_name);
         }
     }
-    (String::new(), ret)
+    (conv_deps, converted_args)
 }
 
 pub(in crate::cpp) fn cpp_header_name(class: &ForeignerClassInfo) -> String {
