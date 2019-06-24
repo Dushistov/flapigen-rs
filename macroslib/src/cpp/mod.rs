@@ -38,7 +38,7 @@ use std::{fmt, io::Write, mem};
 
 use log::{debug, trace};
 use petgraph::Direction;
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use strum::IntoEnumIterator;
@@ -46,7 +46,7 @@ use syn::{parse_quote, spanned::Spanned, Type};
 
 use crate::{
     cpp::map_type::map_type,
-    error::{DiagnosticError, Result},
+    error::{invalid_src_id_span, DiagnosticError, Result},
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
@@ -643,7 +643,7 @@ fn register_main_foreign_types(
                         c_type = cpp_code::c_class_type(class),
                         var = FROM_VAR_TEMPLATE
                     ),
-                    Span::call_site(),
+                    invalid_src_id_span(),
                 ),
             }),
         }),
@@ -653,7 +653,7 @@ fn register_main_foreign_types(
                 intermediate_ty: void_ptr_rust_ty,
                 conv_code: FTypeConvCode::new(
                     format!("{}.release()", FROM_VAR_TEMPLATE),
-                    Span::call_site(),
+                    invalid_src_id_span(),
                 ),
             }),
         }),
@@ -677,7 +677,7 @@ fn register_main_foreign_types(
                         cpp_code::c_class_type(class),
                         FROM_VAR_TEMPLATE
                     ),
-                    Span::call_site(),
+                    invalid_src_id_span(),
                 ),
             }),
         }),
@@ -703,7 +703,7 @@ fn register_main_foreign_types(
                         c_type = cpp_code::c_class_type(class),
                         var = FROM_VAR_TEMPLATE
                     ),
-                    Span::call_site(),
+                    invalid_src_id_span(),
                 ),
             }),
         }),
@@ -728,7 +728,7 @@ fn register_main_foreign_types(
                         cpp_code::c_class_type(class),
                         FROM_VAR_TEMPLATE
                     ),
-                    Span::call_site(),
+                    invalid_src_id_span(),
                 ),
             }),
         }),
@@ -760,7 +760,7 @@ fn register_main_foreign_types(
                                 cpp_code::c_class_type(class),
                                 FROM_VAR_TEMPLATE
                             ),
-                            Span::call_site(),
+                            invalid_src_id_span(),
                         ),
                     }),
                 }),
@@ -790,7 +790,7 @@ fn register_main_foreign_types(
                                 cpp_code::c_class_type(class),
                                 FROM_VAR_TEMPLATE
                             ),
-                            Span::call_site(),
+                            invalid_src_id_span(),
                         ),
                     }),
                 }),
@@ -1024,7 +1024,7 @@ fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInfo) -> Result<()> {
                         enum_name = fenum.name,
                         var = FROM_VAR_TEMPLATE
                     ),
-                    Span::call_site(),
+                    invalid_src_id_span(),
                 ),
             }),
         }),
@@ -1034,7 +1034,7 @@ fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInfo) -> Result<()> {
                 intermediate_ty: u32_rty.to_idx(),
                 conv_code: FTypeConvCode::new(
                     format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
-                    Span::call_site(),
+                    invalid_src_id_span(),
                 ),
             }),
         }),
