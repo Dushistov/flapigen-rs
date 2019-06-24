@@ -7,7 +7,7 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{
-            check_if_smart_pointer_return_inner_type, fn_arg_type, normalize_ty_lifetimes,
+            check_if_smart_pointer_return_inner_type, normalize_ty_lifetimes,
             parse_ty_with_given_span_checked, DisplayToTokens,
         },
         parse_typemap_macro::{FTypeConvRule, TypeMapConvRuleInfo},
@@ -100,14 +100,17 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
         .zip(f_method.input().iter())
         .zip(arg_names)
     {
-        let to: RustType = conv_map.find_or_alloc_rust_type(fn_arg_type(to_type), src_id);
+        let to_named_arg = to_type
+            .as_named_arg()
+            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        let to: RustType = conv_map.find_or_alloc_rust_type(&to_named_arg.ty, src_id);
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             f_from.correspoding_rust_type().to_idx(),
             to.to_idx(),
             &arg_name,
             &arg_name,
             func_ret_type,
-            (src_id, to_type.span()),
+            (src_id, to_named_arg.ty.span()),
         )?;
         code_deps.append(&mut cur_deps);
         ret_code.push_str(&cur_code);
@@ -178,14 +181,17 @@ pub(crate) fn rust_to_foreign_convert_method_inputs<
         .zip(f_method.input().iter())
         .zip(arg_names)
     {
-        let from: RustType = conv_map.find_or_alloc_rust_type(fn_arg_type(from_ty), src_id);
+        let from_named_arg = from_ty
+            .as_named_arg()
+            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        let from: RustType = conv_map.find_or_alloc_rust_type(&from_named_arg.ty, src_id);
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             from.to_idx(),
             to_f.correspoding_rust_type().to_idx(),
             &arg_name,
             &arg_name,
             func_ret_type,
-            (src_id, from_ty.span()),
+            (src_id, from_named_arg.ty.span()),
         )?;
         code_deps.append(&mut cur_deps);
         ret_code.push_str(&cur_code);

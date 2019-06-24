@@ -1,6 +1,7 @@
 use std::io::Write;
 
 use petgraph::Direction;
+use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use syn::{parse_quote, spanned::Spanned, Type};
 
@@ -11,14 +12,14 @@ use crate::{
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
+    namegen::new_unique_name,
     source_registry::SourceId,
     typemap::{
-        ast::{fn_arg_type, DisplayToTokens},
-        ty::RustType,
-        utils::rust_to_foreign_convert_method_inputs,
+        ast::DisplayToTokens, ty::RustType, utils::rust_to_foreign_convert_method_inputs,
         ForeignTypeInfo, FROM_VAR_TEMPLATE,
     },
     types::ForeignInterface,
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::cpp) fn rust_code_generate_interface(
@@ -127,13 +128,22 @@ impl {trait_name} for {struct_with_funcs} {{
             .iter()
             .skip(1)
             .enumerate()
-            .map(|(i, v)| format!("a_{}: {}", i, DisplayToTokens(fn_arg_type(v))))
+            .map(|(i, v)| {
+                format!(
+                    "a_{}: {}",
+                    i,
+                    DisplayToTokens(&v.as_named_arg().unwrap().ty)
+                )
+            })
             .fold(String::new(), |mut acc, x| {
                 acc.push_str(", ");
                 acc.push_str(&x);
                 acc
             });
-        let self_arg = format!("{}", DisplayToTokens(&method.fn_decl.inputs[0]));
+        let self_arg = format!(
+            "{}",
+            method.fn_decl.inputs[0].as_self_arg(interface.src_id)?
+        );
 
         let args_with_types: String = [self_arg.to_string(), rest_args_with_types].concat();
         assert!(!method.fn_decl.inputs.is_empty());
@@ -236,14 +246,17 @@ pub(in crate::cpp) fn find_suitable_ftypes_for_interace_methods(
     for method in &interace.items {
         let mut input = Vec::<CppForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
+            let named_arg = arg
+                .as_named_arg()
+                .map_err(|err| DiagnosticError::from_syn_err(interace.src_id, err))?;
             let arg_rust_ty = ctx
                 .conv_map
-                .find_or_alloc_rust_type(fn_arg_type(arg), interace.src_id);
+                .find_or_alloc_rust_type(&named_arg.ty, interace.src_id);
             input.push(map_type(
                 ctx,
                 &arg_rust_ty,
                 Direction::Outgoing,
-                (interace.src_id, fn_arg_type(arg).span()),
+                (interace.src_id, named_arg.ty.span()),
             )?);
         }
         let output = match method.fn_decl.output {
@@ -319,12 +332,21 @@ struct C_{interface_name} {{
 
     for (method, f_method) in interface.items.iter().zip(f_methods) {
         let c_ret_type = f_method.output.base.name.clone();
+        let mut known_names: FxHashSet<SmolStr> =
+            method.arg_names_without_self().map(|x| x.into()).collect();
+        let opaque_name = new_unique_name(&known_names, "opaque");
+        known_names.insert(opaque_name.clone());
+        let interface_ptr = new_unique_name(&known_names, "pi");
+        known_names.insert(interface_ptr.clone());
+        let ret_name = new_unique_name(&known_names, "ret");
+        known_names.insert(ret_name.clone());
+
         let (cpp_ret_type, cpp_out_conv) =
             if let Some(out_conv) = f_method.output.cpp_converter.as_ref() {
                 let conv_code = out_conv
                     .converter
                     .as_str()
-                    .replace(FROM_VAR_TEMPLATE, "ret");
+                    .replace(FROM_VAR_TEMPLATE, &ret_name);
                 (out_conv.typename.clone(), conv_code)
             } else {
                 (c_ret_type.clone(), String::new())
@@ -337,7 +359,11 @@ struct C_{interface_name} {{
 "#,
             method_name = method.name,
             doc_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false),
-            single_args_with_types = cpp_code::c_generate_args_with_types(f_method, true)?,
+            single_args_with_types = cpp_code::c_generate_args_with_types(
+                f_method,
+                method.arg_names_without_self(),
+                true
+            ),
             c_ret_type = c_ret_type,
         )
         .map_err(&map_write_err)?;
@@ -350,45 +376,62 @@ struct C_{interface_name} {{
 "#,
             method_name = method.name,
             doc_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false),
-            single_args_with_types = cpp_code::cpp_generate_args_with_types(f_method)?,
+            single_args_with_types =
+                cpp_code::cpp_generate_args_with_types(f_method, method.arg_names_without_self()),
             cpp_ret_type = cpp_ret_type,
         )
-        .map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+
+        let (conv_args_code, call_input_args) =
+            cpp_code::convert_args(f_method, known_names, method.arg_names_without_self());
+
+        write!(
+            &mut cpp_static_reroute_methods,
+            r#"
+    static {c_ret_type} c_{method_name}({single_args_with_types}void *{opaque})
+    {{
+        assert({opaque} != nullptr);
+        auto {p} = static_cast<{interface_name} *>({opaque});
+{conv_args_code}"#,
+            c_ret_type = c_ret_type,
+            method_name = method.name,
+            single_args_with_types = cpp_code::c_generate_args_with_types(
+                f_method,
+                method.arg_names_without_self(),
+                true
+            ),
+            opaque = opaque_name,
+            p = interface_ptr,
+            interface_name = interface.name,
+            conv_args_code = conv_args_code,
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+
         if c_ret_type == "void" {
             write!(
                 &mut cpp_static_reroute_methods,
                 r#"
-   static void c_{method_name}({single_args_with_types}void *opaque)
-   {{
-        auto p = static_cast<{interface_name} *>(opaque);
-        assert(p != nullptr);
-        p->{method_name}({input_args});
-   }}
+        {p}->{method_name}({input_args});
+    }}
 "#,
+                p = interface_ptr,
                 method_name = method.name,
-                single_args_with_types = cpp_code::c_generate_args_with_types(f_method, true)?,
-                input_args = cpp_code::cpp_generate_args_to_call_c(f_method)?,
-                interface_name = interface.name,
+                input_args = call_input_args,
             )
             .map_err(&map_write_err)?;
         } else {
             write!(
                 &mut cpp_static_reroute_methods,
                 r#"
-   static {c_ret_type} c_{method_name}({single_args_with_types}void *opaque)
-   {{
-        auto p = static_cast<{interface_name} *>(opaque);
-        assert(p != nullptr);
-        auto ret = p->{method_name}({input_args});
+        auto {ret} = {p}->{method_name}({input_args});
         return {cpp_out_conv};
-   }}
+    }}
 "#,
+                ret = ret_name,
                 method_name = method.name,
-                single_args_with_types = cpp_code::c_generate_args_with_types(f_method, true)?,
-                input_args = cpp_code::cpp_generate_args_to_call_c(f_method)?,
-                interface_name = interface.name,
-                c_ret_type = c_ret_type,
+                input_args = call_input_args,
                 cpp_out_conv = cpp_out_conv,
+                p = interface_ptr,
             )
             .map_err(&map_write_err)?;
         }

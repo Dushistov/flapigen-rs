@@ -7,19 +7,23 @@ use smol_str::SmolStr;
 use syn::spanned::Spanned;
 
 use crate::{
-    cpp::{fmt_write_err_map, map_any_err_to_our_err, CppForeignMethodSignature, MergeCTypesFlags},
+    cpp::{map_any_err_to_our_err, CppForeignMethodSignature, MergeCTypesFlags},
     error::{panic_on_syn_error, DiagnosticError},
     file_cache::FileWriteCache,
+    namegen::new_unique_name,
     source_registry::SourceId,
-    typemap::{ast::DisplayToTokens, CType, CTypes, TypeMap, FROM_VAR_TEMPLATE},
+    typemap::{
+        ast::DisplayToTokens, CType, CTypes, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        TO_VAR_TYPE_TEMPLATE,
+    },
     types::{ForeignEnumInfo, ForeignerClassInfo},
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::cpp) fn doc_comments_to_c_comments(
     doc_comments: &[String],
     class_comments: bool,
 ) -> String {
-    use std::fmt::Write;
     let mut comments = String::new();
     for (i, comment) in doc_comments.iter().enumerate() {
         if i != 0 {
@@ -33,76 +37,90 @@ pub(in crate::cpp) fn doc_comments_to_c_comments(
     comments
 }
 
-pub(in crate::cpp) fn c_generate_args_with_types(
+pub(in crate::cpp) fn c_generate_args_with_types<'a, NI>(
     f_method: &CppForeignMethodSignature,
+    name_iter: NI,
     append_comma_if_not_empty: bool,
-) -> Result<String, String> {
-    use std::fmt::Write;
-
+) -> String
+where
+    NI: Iterator<Item = &'a str>,
+{
     let mut buf = String::new();
-    for (i, f_type_info) in f_method.input.iter().enumerate() {
+    for (i, (f_type_info, arg_name)) in f_method.input.iter().zip(name_iter).enumerate() {
         if i > 0 {
-            write!(&mut buf, ", ").map_err(fmt_write_err_map)?;
+            buf.push_str(", ");
         }
-        write!(&mut buf, "{} a_{}", f_type_info.as_ref().name, i).map_err(fmt_write_err_map)?;
+        write!(&mut buf, "{} {}", f_type_info.as_ref().name, arg_name)
+            .expect(WRITE_TO_MEM_FAILED_MSG);
     }
     if !buf.is_empty() && append_comma_if_not_empty {
-        write!(&mut buf, ", ").map_err(fmt_write_err_map)?;
+        buf.push_str(", ");
     }
-    Ok(buf)
+    buf
 }
 
 pub(in crate::cpp) fn c_class_type(class: &ForeignerClassInfo) -> String {
     format!("{}Opaque", class.name)
 }
 
-pub(in crate::cpp) fn cpp_generate_args_with_types(
+pub(in crate::cpp) fn cpp_generate_args_with_types<'a, NI: Iterator<Item = &'a str>>(
     f_method: &CppForeignMethodSignature,
-) -> Result<String, String> {
-    use std::fmt::Write;
+    arg_name_iter: NI,
+) -> String {
     let mut ret = String::new();
-    for (i, f_type_info) in f_method.input.iter().enumerate() {
+    for (i, (f_type_info, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
         if i > 0 {
-            write!(&mut ret, ", ").map_err(fmt_write_err_map)?;
+            ret.push_str(", ");
         }
 
         write!(
             &mut ret,
-            "{} a_{}",
+            "{} {}",
             if let Some(conv) = f_type_info.cpp_converter.as_ref() {
                 conv.typename.clone()
             } else {
                 f_type_info.as_ref().name.clone()
             },
-            i
+            arg_name,
         )
-        .map_err(fmt_write_err_map)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
-    Ok(ret)
+    ret
 }
 
-pub(in crate::cpp) fn cpp_generate_args_to_call_c(
+pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
     f_method: &CppForeignMethodSignature,
-) -> Result<String, String> {
-    use std::fmt::Write;
-    let mut ret = String::new();
-    for (i, f_type_info) in f_method.input.iter().enumerate() {
+    mut known_names: FxHashSet<SmolStr>,
+    arg_name_iter: NI,
+) -> (String, String) {
+    let mut conv_deps = String::new();
+    let mut converted_args = String::new();
+    for (i, (f_type_info, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
         if i > 0 {
-            write!(&mut ret, ", ").map_err(fmt_write_err_map)?;
+            converted_args.push_str(", ");
         }
         if let Some(conv) = f_type_info.cpp_converter.as_ref() {
-            let arg_name = format!("a_{}", i);
-            let conv_arg = conv
-                .converter
-                .as_str()
-                .replace(FROM_VAR_TEMPLATE, &arg_name);
-            write!(&mut ret, "{}", conv_arg)
+            let conv_code = conv.converter.as_str().replace(FROM_VAR_TEMPLATE, arg_name);
+            if !conv_code.contains(TO_VAR_TYPE_TEMPLATE) {
+                converted_args.push_str(&conv_code);
+            } else {
+                let templ = format!("a{}", i);
+                let var_name = new_unique_name(&known_names, &templ);
+                converted_args.push_str(&format!("std::move({})", var_name));
+                let conv_code = conv_code
+                    .replace(
+                        TO_VAR_TYPE_TEMPLATE,
+                        &format!("{} {}", f_type_info.as_ref().name, var_name),
+                    )
+                    .replace(TO_VAR_TEMPLATE, &var_name);
+                conv_deps.push_str(&conv_code);
+                known_names.insert(var_name);
+            }
         } else {
-            write!(&mut ret, "a_{}", i)
+            converted_args.push_str(arg_name);
         }
-        .map_err(fmt_write_err_map)?;
     }
-    Ok(ret)
+    (conv_deps, converted_args)
 }
 
 pub(in crate::cpp) fn cpp_header_name(class: &ForeignerClassInfo) -> String {

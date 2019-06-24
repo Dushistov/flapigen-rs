@@ -1,13 +1,16 @@
 use std::{fmt, io::Write, path::Path};
 
 use bitflags::bitflags;
+use rustc_hash::FxHashSet;
+use smol_str::SmolStr;
 
 use crate::{
     file_cache::FileWriteCache,
-    java_jni::{fmt_write_err_map, method_name, JniForeignMethodSignature, NullAnnotation},
-    typemap::ast::if_result_return_ok_err_types,
-    typemap::TypeMap,
+    java_jni::{method_name, JniForeignMethodSignature, NullAnnotation},
+    namegen::new_unique_name,
+    typemap::{ast::if_result_return_ok_err_types, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
     types::{ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant},
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 bitflags! {
@@ -113,11 +116,12 @@ public interface {interface_name} {{
             doc_comments = doc_comments_to_java_comments(&method.doc_comments, false),
             single_args_with_types = args_with_java_types(
                 f_method,
+                method.arg_names_without_self(),
                 ArgsFormatFlags::EXTERNAL,
                 use_null_annotation.is_some()
-            )?,
+            ),
         )
-        .map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     write!(
@@ -126,7 +130,7 @@ public interface {interface_name} {{
 }}
 "#,
     )
-    .map_err(&map_write_err)?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
     file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
@@ -169,7 +173,7 @@ public final class {class_name} {{
             "{doc_comments}",
             doc_comments = doc_comments_to_java_comments(&method.doc_comments, false)
         )
-        .map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
 
         let may_return_error = match method.fn_decl.output {
             syn::ReturnType::Default => false,
@@ -180,7 +184,7 @@ public final class {class_name} {{
         };
 
         let exception_spec = if may_return_error {
-            "throws Exception"
+            " throws Exception"
         } else {
             ""
         };
@@ -190,60 +194,72 @@ public final class {class_name} {{
             MethodAccess::Public => "public",
             MethodAccess::Protected => unreachable!(),
         };
-
-        let convert_code = convert_code_for_method(f_method);
+        let conv_code_flags = match method.variant {
+            MethodVariant::StaticMethod => ArgsFormatFlags::INTERNAL,
+            MethodVariant::Method(_) => ArgsFormatFlags::COMMA_BEFORE | ArgsFormatFlags::INTERNAL,
+            MethodVariant::Constructor => ArgsFormatFlags::INTERNAL,
+        };
+        let known_names: FxHashSet<SmolStr> =
+            method.arg_names_without_self().map(|x| x.into()).collect();
+        let (convert_code, args_for_call_internal) = convert_code_for_method(
+            f_method,
+            method.arg_names_without_self(),
+            known_names,
+            conv_code_flags,
+        );
         let func_name = method_name(method, f_method);
+
+        let external_args_except_self = args_with_java_types(
+            f_method,
+            method.arg_names_without_self(),
+            ArgsFormatFlags::EXTERNAL,
+            null_annotation_package.is_some(),
+        );
+
         match method.variant {
             MethodVariant::StaticMethod => {
                 let ret_type = &f_method.output.name;
-
-                if convert_code.is_empty() {
-                    write!(
-                        file,
-                        r#"
-    {method_access} static native {ret_type} {func_name}({args_with_types}) {exception_spec};
-"#,
-                        method_access = method_access,
-                        ret_type = ret_type,
-                        func_name = func_name,
-                        args_with_types = args_with_java_types(
-                            f_method,
-                            ArgsFormatFlags::EXTERNAL,
-                            null_annotation_package.is_some()
-                        )?,
-                        exception_spec = exception_spec,
-                    )
-                    .map_err(&map_write_err)?;
+                let (native, end) = if convert_code.is_empty() {
+                    ("native ", ";\n")
                 } else {
+                    ("", " {\n")
+                };
+                write!(
+                    file,
+                    r#"
+    {method_access} static {native}{ret_type} {func_name}({args_with_types}){exception_spec}{end}"#,
+                    method_access = method_access,
+                    ret_type = ret_type,
+                    func_name = method.short_name(),
+                    args_with_types = external_args_except_self,
+                    exception_spec = exception_spec,
+                    native = native,
+                    end = end,
+                )
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+
+                if !convert_code.is_empty() {
                     write!(
                         file,
-                        r#"
-    {method_access} static {ret_type} {method_name}({single_args_with_types}) {exception_spec} {{
-{convert_code}
-         {return_code}{func_name}({args});
+                        r#"{convert_code}
+        {return_code}{func_name}({args});
     }}
-    private static native {ret_type} {func_name}({args_with_types}) {exception_spec};
+    private static native {ret_type} {func_name}({args_with_types}){exception_spec};
 "#,
-                        method_name = method.short_name(),
-                        method_access = method_access,
                         ret_type = ret_type,
                         func_name = func_name,
                         return_code = if ret_type != "void" { "return " } else { "" },
                         args_with_types = args_with_java_types(
                             f_method,
+                            method.arg_names_without_self(),
                             ArgsFormatFlags::INTERNAL,
                             null_annotation_package.is_some()
-                        )?,
+                        ),
                         exception_spec = exception_spec,
-                        single_args_with_types = args_with_java_types(
-                            f_method,
-                            ArgsFormatFlags::EXTERNAL,
-                            null_annotation_package.is_some()
-                        )?,
                         convert_code = convert_code,
-                        args = list_of_args_for_call_method(f_method, ArgsFormatFlags::INTERNAL)?,
+                        args = args_for_call_internal,
                     )
-                    .map_err(&map_write_err)?;
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
             }
             MethodVariant::Method(_) => {
@@ -252,11 +268,11 @@ public final class {class_name} {{
                 write!(
                     file,
                     r#"
-    {method_access} final {ret_type} {method_name}({single_args_with_types}) {exception_spec} {{
+    {method_access} final {ret_type} {method_name}({single_args_with_types}){exception_spec} {{
 {convert_code}
         {return_code}{func_name}(mNativeObj{args});
     }}
-    private static native {ret_type} {func_name}(long me{args_with_types}) {exception_spec};
+    private static native {ret_type} {func_name}(long self{args_with_types}){exception_spec};
 "#,
                     method_access = method_access,
                     ret_type = ret_type,
@@ -265,22 +281,16 @@ public final class {class_name} {{
                     return_code = if ret_type != "void" { "return " } else { "" },
                     func_name = func_name,
                     convert_code = convert_code,
-                    single_args_with_types = args_with_java_types(
-                        f_method,
-                        ArgsFormatFlags::EXTERNAL,
-                        null_annotation_package.is_some()
-                    )?,
+                    single_args_with_types = external_args_except_self,
                     args_with_types = args_with_java_types(
                         f_method,
+                        method.arg_names_without_self(),
                         ArgsFormatFlags::USE_COMMA_IF_NEED | ArgsFormatFlags::INTERNAL,
                         null_annotation_package.is_some()
-                    )?,
-                    args = list_of_args_for_call_method(
-                        f_method,
-                        ArgsFormatFlags::COMMA_BEFORE | ArgsFormatFlags::INTERNAL
-                    )?,
+                    ),
+                    args = args_for_call_internal,
                 )
-                .map_err(&map_write_err)?;
+                .expect(WRITE_TO_MEM_FAILED_MSG);
             }
             MethodVariant::Constructor => {
                 have_constructor = true;
@@ -294,35 +304,32 @@ public final class {class_name} {{
                         method_access = method_access,
                         class_name = class.name,
                     )
-                    .map_err(&map_write_err)?;
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
                     write!(
                         file,
                         "
-    {method_access} {class_name}({ext_args_with_types}) {exception_spec} {{
+    {method_access} {class_name}({ext_args_with_types}){exception_spec} {{
 {convert_code}
         mNativeObj = init({args});
     }}
-    private static native long {func_name}({args_with_types}) {exception_spec};
+    private static native long {func_name}({args_with_types}){exception_spec};
 ",
                         method_access = method_access,
                         class_name = class.name,
                         exception_spec = exception_spec,
                         func_name = func_name,
-                        ext_args_with_types = args_with_java_types(
-                            f_method,
-                            ArgsFormatFlags::EXTERNAL,
-                            null_annotation_package.is_some()
-                        )?,
+                        ext_args_with_types = external_args_except_self,
                         args_with_types = args_with_java_types(
                             f_method,
+                            method.arg_names_without_self(),
                             ArgsFormatFlags::INTERNAL,
                             null_annotation_package.is_some()
-                        )?,
+                        ),
                         convert_code = convert_code,
-                        args = list_of_args_for_call_method(f_method, ArgsFormatFlags::INTERNAL)?
+                        args = args_for_call_internal,
                     )
-                    .map_err(&map_write_err)?;
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
             }
         }
@@ -375,29 +382,30 @@ May be you need to use `private constructor = empty;` syntax?",
     }
 
     file.write_all(class.foreigner_code.as_bytes())
-        .map_err(&map_write_err)?;
-    write!(file, "}}").map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+    write!(file, "}}").expect(WRITE_TO_MEM_FAILED_MSG);
 
     file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
 
-fn args_with_java_types(
+fn args_with_java_types<'a, NI: Iterator<Item = &'a str>>(
     method: &JniForeignMethodSignature,
+    arg_name_iter: NI,
     flags: ArgsFormatFlags,
     use_null_annotation: bool,
-) -> Result<String, String> {
+) -> String {
     use std::fmt::Write;
 
     assert!(flags.contains(ArgsFormatFlags::INTERNAL) || flags.contains(ArgsFormatFlags::EXTERNAL));
 
     let mut res = String::new();
     if flags.contains(ArgsFormatFlags::USE_COMMA_IF_NEED) && !method.input.is_empty() {
-        write!(&mut res, ", ").map_err(fmt_write_err_map)?;
+        res.push_str(", ");
     }
     let external = flags.contains(ArgsFormatFlags::EXTERNAL);
 
-    for (i, arg) in method.input.iter().enumerate() {
+    for (i, (arg, arg_name)) in method.input.iter().zip(arg_name_iter).enumerate() {
         let type_name = match arg.java_converter.as_ref() {
             Some(converter) if flags.contains(ArgsFormatFlags::INTERNAL) => {
                 &converter.java_transition_type
@@ -410,59 +418,52 @@ fn args_with_java_types(
             _ => "",
         };
         if i == (method.input.len() - 1) {
-            write!(&mut res, "{}{} a{}", annotation, type_name, i)
+            write!(&mut res, "{}{} {}", annotation, type_name, arg_name)
         } else {
-            write!(&mut res, "{}{} a{}, ", annotation, type_name, i)
+            write!(&mut res, "{}{} {}, ", annotation, type_name, arg_name)
         }
-        .map_err(&fmt_write_err_map)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
-    Ok(res)
+    res
 }
 
-fn list_of_args_for_call_method(
+fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
     f_method: &JniForeignMethodSignature,
+    arg_name_iter: NI,
+    mut known_names: FxHashSet<SmolStr>,
     flags: ArgsFormatFlags,
-) -> Result<String, String> {
-    use std::fmt::Write;
+) -> (String, String) {
+    let mut conv_code = String::new();
+    let mut args_for_call_internal = String::new();
 
-    assert!(flags.contains(ArgsFormatFlags::INTERNAL) || flags.contains(ArgsFormatFlags::EXTERNAL));
-
-    let mut res = String::new();
-    if f_method.input.is_empty() {
-        return Ok(res);
+    if flags.contains(ArgsFormatFlags::COMMA_BEFORE) && !f_method.input.is_empty() {
+        args_for_call_internal.push_str(", ");
     }
 
-    if flags.contains(ArgsFormatFlags::COMMA_BEFORE) {
-        res.push_str(", ");
-    }
-
-    for (i, arg) in f_method.input.iter().enumerate() {
-        let need_conv = flags.contains(ArgsFormatFlags::INTERNAL) && arg.java_converter.is_some();
-        if i == (f_method.input.len() - 1) {
-            if need_conv {
-                write!(&mut res, "a{}C0", i)
+    for (i, (arg, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
+        let after_conv_arg_name =
+            if let Some(code) = arg.java_converter.as_ref().map(|x| &x.converter) {
+                let templ = format!("a{}", i);
+                let after_conv_arg_name = new_unique_name(&known_names, &templ);
+                known_names.insert(after_conv_arg_name.clone());
+                let java_code = code
+                    .replace(TO_VAR_TEMPLATE, &after_conv_arg_name)
+                    .replace(FROM_VAR_TEMPLATE, arg_name);
+                conv_code.push_str(&java_code);
+                Some(after_conv_arg_name)
             } else {
-                write!(&mut res, "a{}", i)
-            }
-        } else if need_conv {
-            write!(&mut res, "a{}C0, ", i)
+                None
+            };
+        if let Some(after_conv_arg_name) = after_conv_arg_name {
+            args_for_call_internal.push_str(&after_conv_arg_name);
         } else {
-            write!(&mut res, "a{}, ", i)
+            args_for_call_internal.push_str(arg_name);
         }
-        .map_err(|err| format!("write fmt failed: {}", err))?;
-    }
-
-    Ok(res)
-}
-
-fn convert_code_for_method(f_method: &JniForeignMethodSignature) -> String {
-    let mut ret = String::new();
-    for (i, arg) in f_method.input.iter().enumerate() {
-        if let Some(java_code) = arg.java_convert(|| (format!("a{}", i), format!("a{}C0", i))) {
-            ret.push_str(&java_code);
+        if i != (f_method.input.len() - 1) {
+            args_for_call_internal.push_str(", ");
         }
     }
-    ret
+    (conv_code, args_for_call_internal)
 }
 
 fn doc_comments_to_java_comments(doc_comments: &[String], class_comments: bool) -> String {

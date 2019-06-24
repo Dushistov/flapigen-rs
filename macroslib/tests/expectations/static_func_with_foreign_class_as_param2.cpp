@@ -1,1 +1,1 @@
-r#"static void static_foo(const Boo & a_0)"#;
+r#"static void static_foo(const Boo & a0)"#;

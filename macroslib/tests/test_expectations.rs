@@ -235,13 +235,13 @@ foreigner_class!(class FooImpl {
         println!("c/c++: {}", cpp_code.foreign_code);
         assert!(cpp_code
             .foreign_code
-            .contains("void setAlternateBoarding(RustForeignVecBoo a_0)"));
+            .contains("void setAlternateBoarding(RustForeignVecBoo p)"));
         let java_code =
             parse_code(name, Source::Str(src), ForeignLang::Java).expect("parse failed");
         println!("Java: {}", java_code.foreign_code);
         assert!(java_code
             .foreign_code
-            .contains("void setAlternateBoarding(@NonNull Boo [] a0)"));
+            .contains("void setAlternateBoarding(@NonNull Boo [] p)"));
     }
 }
 
@@ -324,7 +324,7 @@ foreigner_class!(class Moo {
     self_type Moo;
     constructor TestPathAndResult::default() -> Moo;
     method TestPathAndResult::get_boo(&self) -> &Boo;
-    method TestReferences::update_boo(&mut self, foo: &Boo);
+    method TestReferences::update_boo(&mut self, boo: &Boo);
 });
 "#,
             ),
@@ -335,10 +335,10 @@ foreigner_class!(class Moo {
         assert!(cpp_code.foreign_code.contains("BooRef get_boo() const"));
         assert!(cpp_code
             .foreign_code
-            .contains("void Moo_update_boo(MooOpaque * const self, const BooOpaque * a_0);"));
+            .contains("void Moo_update_boo(MooOpaque * const self, const BooOpaque * boo);"));
         assert!(cpp_code
             .foreign_code
-            .contains("void update_boo(const Boo & a_0)"));
+            .contains("void update_boo(const Boo & boo)"));
     }
 }
 
@@ -365,25 +365,27 @@ foreign_interface!(interface RepoChangedCallback {
         println!("c/c++: {}", cpp_code.foreign_code);
         assert!(cpp_code
             .foreign_code
-            .contains("virtual void on_save(UuidRef a_0) = 0;"));
+            .contains("virtual void on_save(UuidRef uuid) = 0;"));
         assert!(cpp_code
             .foreign_code
-            .contains("virtual void on_remove(UuidRef a_0) = 0;"));
+            .contains("virtual void on_remove(UuidRef uuid) = 0;"));
         assert!(cpp_code.foreign_code.contains(
             r#"
-   static void c_on_save(const UuidOpaque * a_0, void *opaque)
-   {
-        auto p = static_cast<RepoChangedCallback *>(opaque);
-        assert(p != nullptr);
-        p->on_save(UuidRef{ static_cast<const UuidOpaque *>(a_0) });
-   }
+    static void c_on_save(const UuidOpaque * uuid, void *opaque)
+    {
+        assert(opaque != nullptr);
+        auto pi = static_cast<RepoChangedCallback *>(opaque);
 
-   static void c_on_remove(const UuidOpaque * a_0, void *opaque)
-   {
-        auto p = static_cast<RepoChangedCallback *>(opaque);
-        assert(p != nullptr);
-        p->on_remove(UuidRef{ static_cast<const UuidOpaque *>(a_0) });
-   }
+        pi->on_save(UuidRef{ static_cast<const UuidOpaque *>(uuid) });
+    }
+
+    static void c_on_remove(const UuidOpaque * uuid, void *opaque)
+    {
+        assert(opaque != nullptr);
+        auto pi = static_cast<RepoChangedCallback *>(opaque);
+
+        pi->on_remove(UuidRef{ static_cast<const UuidOpaque *>(uuid) });
+    }
 "#
         ));
     }

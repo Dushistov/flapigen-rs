@@ -8,7 +8,7 @@ public final class Utils {
     /**
      * Very important function
      */
-    public static native int f(int a0) ;
+    public static native int f(int a0);
 
     private Utils() {}
 }"#;

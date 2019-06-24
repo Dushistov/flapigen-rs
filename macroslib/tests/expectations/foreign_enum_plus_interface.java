@@ -5,6 +5,6 @@ GPS_PROVIDER(1);"#;
 r#"public interface ControlStateObserver {
 
 
-    void onSessionUpdate(@NonNull ControlItem a0, boolean a1);
+    void onSessionUpdate(@NonNull ControlItem item, boolean is_ok);
 
 }"#;

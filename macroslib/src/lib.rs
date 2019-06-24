@@ -23,7 +23,9 @@ mod cpp;
 mod error;
 pub mod file_cache;
 mod java_jni;
+mod namegen;
 mod source_registry;
+mod str_replace;
 mod typemap;
 mod types;
 
@@ -45,6 +47,8 @@ use crate::{
     typemap::{ast::DisplayToTokens, TypeMap},
     types::ItemToExpand,
 };
+
+pub(crate) static WRITE_TO_MEM_FAILED_MSG: &str = "Write to memory buffer failed, no free mem?";
 
 /// Calculate target pointer width from environment variable
 /// that `cargo` inserts

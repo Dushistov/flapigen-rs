@@ -11,7 +11,7 @@ use crate::{
         method_name, ForeignTypeInfo, JniForeignMethodSignature,
     },
     source_registry::SourceId,
-    typemap::ast::{fn_arg_type, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
+    typemap::ast::{list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     typemap::{
         ty::RustType,
         utils::{
@@ -425,13 +425,22 @@ impl {trait_name} for JavaCallback {{
             .iter()
             .skip(1)
             .enumerate()
-            .map(|(i, v)| format!("a_{}: {}", i, DisplayToTokens(fn_arg_type(v))))
+            .map(|(i, v)| {
+                format!(
+                    "a_{}: {}",
+                    i,
+                    DisplayToTokens(&v.as_named_arg().unwrap().ty)
+                )
+            })
             .fold(String::new(), |mut acc, x| {
                 acc.push_str(", ");
                 acc.push_str(&x);
                 acc
             });
-        let self_arg = format!("{}", DisplayToTokens(&method.fn_decl.inputs[0]));
+        let self_arg = format!(
+            "{}",
+            method.fn_decl.inputs[0].as_self_arg(interface.src_id)?
+        );
         let args_with_types: String = [self_arg.to_string(), rest_args_with_types].concat();
         assert!(!method.fn_decl.inputs.is_empty());
         let n_args = method.fn_decl.inputs.len() - 1;
