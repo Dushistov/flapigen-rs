@@ -412,7 +412,10 @@ fn ftype_merge(our: &mut ForeignTypeS, extrn_ft: ForeignTypeS) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{error::invalid_src_id_span, typemap::find_conversation_path};
+    use crate::{
+        error::invalid_src_id_span,
+        typemap::{find_conversation_path, MapToForeignFlag},
+    };
     use rustc_hash::FxHashSet;
     use syn::{parse_quote, Type};
 
@@ -503,6 +506,7 @@ fn helper3() {
             .map_through_conversation_to_foreign(
                 &ty_i32,
                 petgraph::Direction::Outgoing,
+                MapToForeignFlag::FullSearch,
                 invalid_src_id_span(),
                 |_, fc| {
                     fc.self_desc

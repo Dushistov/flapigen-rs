@@ -14,11 +14,14 @@ use crate::{
     },
     error::{panic_on_syn_error, DiagnosticError, Result, SourceIdSpan},
     file_cache::FileWriteCache,
-    typemap::ast::{
-        if_result_return_ok_err_types, if_type_slice_return_elem_type, if_vec_return_elem_type,
-        TyParamsSubstList,
+    typemap::{
+        ast::{
+            if_result_return_ok_err_types, if_type_slice_return_elem_type, if_vec_return_elem_type,
+            TyParamsSubstList,
+        },
+        ty::RustType,
+        MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
     },
-    typemap::{ty::RustType, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE},
     types::ForeignerClassInfo,
     CppVariant, TypeMap,
 };
@@ -93,6 +96,7 @@ fn map_ordinal_type(
     if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
         arg_ty,
         direction,
+        MapToForeignFlag::FastSearch,
         arg_ty_span,
         calc_this_type_for_method,
     ) {
@@ -136,6 +140,17 @@ fn map_ordinal_type(
         if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
             arg_ty,
             direction,
+            MapToForeignFlag::FullSearch,
+            arg_ty_span,
+            calc_this_type_for_method,
+        ) {
+            return CppForeignTypeInfo::try_new(ctx.conv_map, direction, ftype);
+        }
+    } else {
+        if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
+            arg_ty,
+            direction,
+            MapToForeignFlag::FullSearch,
             arg_ty_span,
             calc_this_type_for_method,
         ) {

@@ -59,8 +59,8 @@ use crate::{
             boxed_type, unpack_from_heap_pointer, validate_cfg_options, ForeignMethodSignature,
             ForeignTypeInfoT,
         },
-        CType, CTypes, ForeignTypeInfo, RustTypeIdx, TypeMapConvRuleInfo, FROM_VAR_TEMPLATE,
-        TO_VAR_TEMPLATE,
+        CType, CTypes, ForeignTypeInfo, MapToForeignFlag, RustTypeIdx, TypeMapConvRuleInfo,
+        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
@@ -341,6 +341,7 @@ fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> 
     tmap.map_through_conversation_to_foreign(
         &rtype,
         Direction::Outgoing,
+        MapToForeignFlag::FullSearch,
         rtype.src_id_span(),
         self::map_type::calc_this_type_for_method,
     )

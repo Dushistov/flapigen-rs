@@ -305,6 +305,12 @@ impl<'a> Drop for TypeGraphSnapshot<'a> {
     }
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub(crate) enum MapToForeignFlag {
+    FastSearch,
+    FullSearch,
+}
+
 impl TypeMap {
     pub(crate) fn is_empty(&self) -> bool {
         self.conv_graph.node_count() == 0
@@ -589,6 +595,7 @@ impl TypeMap {
         &mut self,
         rust_ty: &RustType,
         direction: petgraph::Direction,
+        flag: MapToForeignFlag,
         build_for_sp: SourceIdSpan,
         calc_this_type_for_method: F,
     ) -> Option<ForeignType> {
@@ -656,6 +663,11 @@ impl TypeMap {
 
                 return Some(ftype);
             }
+        }
+
+        if flag == MapToForeignFlag::FastSearch {
+            debug!("No direct path, because of FastSearch just exiting");
+            return None;
         }
 
         debug!(
@@ -1237,6 +1249,7 @@ mod tests {
             .map_through_conversation_to_foreign(
                 &vec_foo_ty,
                 petgraph::Direction::Outgoing,
+                MapToForeignFlag::FullSearch,
                 invalid_src_id_span(),
                 |_, fc| {
                     fc.self_desc
