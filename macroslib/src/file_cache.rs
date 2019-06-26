@@ -15,6 +15,7 @@ pub struct FileWriteCache {
     /// To prevent redifining some items,
     /// also it is possible to scan `cnt`, but it is possible to add
     /// user defined comments into generated file, so this is more robust
+    #[allow(dead_code)]
     already_defined_items: HashSet<String>,
 }
 
@@ -40,9 +41,12 @@ impl FileWriteCache {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn define_item<S: Into<String>>(&mut self, item: S) {
         self.already_defined_items.insert(item.into());
     }
+
+    #[allow(dead_code)]
     pub fn is_item_defined(&self, item: &str) -> bool {
         self.already_defined_items.contains(item)
     }
