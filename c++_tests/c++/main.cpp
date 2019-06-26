@@ -35,6 +35,7 @@
 #include "rust_interface/TestPair.hpp"
 #include "rust_interface/TestCopy.hpp"
 #include "rust_interface/GetSetStrTest.hpp"
+#include "rust_interface/TestWorkWithReprC.hpp"
 
 using namespace rust;
 
@@ -855,6 +856,14 @@ TEST(GetSetStrTest, smokeTest)
     test.set_str(test.get_str());
     test.set_str({ "hello" });
     EXPECT_EQ("hello", test.get_str());
+}
+
+TEST(TestWorkWithReprC, smokeTest)
+{
+    auto v = TestWorkWithReprC::inc_vec2({ 1.75f, 1e5f });
+
+    EXPECT_NEAR(1.75f + 1.1f, v.x, std::numeric_limits<float>::epsilon());
+    EXPECT_NEAR(1e5f + 1.f, v.y, std::numeric_limits<float>::epsilon());
 }
 
 int main(int argc, char *argv[])
