@@ -50,7 +50,6 @@ fn main() {
         let write_err_msg = format!("Error during write to file {}", out_path.display());
         write!(&mut cache, "{}", file.into_token_stream().to_string()).expect(&write_err_msg);
         cache.update_file_if_necessary().expect(&write_err_msg);
-        println!("cargo:rerun-if-changed={}", out_path.display());
         println!("cargo:rerun-if-changed={}", include_path.display());
     }
     println!("cargo:rerun-if-changed=tests/test_includes_syntax.rs");
