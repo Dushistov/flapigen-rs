@@ -1,7 +1,6 @@
-use std::collections::HashSet;
-
 /// To prevent modification time changing
 use std::{
+    collections::HashSet,
     fs::File,
     io,
     io::{Read, Write},

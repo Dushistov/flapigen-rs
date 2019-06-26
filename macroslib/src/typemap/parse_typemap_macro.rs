@@ -205,40 +205,53 @@ impl TypeMapConvRuleInfo {
     pub(crate) fn subst_generic_params(
         &self,
         param_map: TyParamsSubstMap,
+        direction: Direction,
         expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
     ) -> Result<Self> {
         assert!(self.is_generic());
         let type_aliases =
             build_generic_aliases(self.src_id, &self.generic_aliases, &param_map, expander)?;
 
-        let rtype_left_to_right = expand_rtype_rule(
-            self.src_id,
-            self.rtype_left_to_right.as_ref(),
-            &param_map,
-            expander,
-            &type_aliases,
-        )?;
-        let rtype_right_to_left = expand_rtype_rule(
-            self.src_id,
-            self.rtype_right_to_left.as_ref(),
-            &param_map,
-            expander,
-            &type_aliases,
-        )?;
-        let ftype_left_to_right = expand_ftype_rule(
-            self.src_id,
-            self.ftype_left_to_right.as_ref(),
-            &param_map,
-            expander,
-            &type_aliases,
-        )?;
-        let ftype_right_to_left = expand_ftype_rule(
-            self.src_id,
-            self.ftype_right_to_left.as_ref(),
-            &param_map,
-            expander,
-            &type_aliases,
-        )?;
+        let (rtype_left_to_right, ftype_left_to_right) = if direction == Direction::Outgoing {
+            (
+                expand_rtype_rule(
+                    self.src_id,
+                    self.rtype_left_to_right.as_ref(),
+                    &param_map,
+                    expander,
+                    &type_aliases,
+                )?,
+                expand_ftype_rule(
+                    self.src_id,
+                    self.ftype_left_to_right.as_ref(),
+                    &param_map,
+                    expander,
+                    &type_aliases,
+                )?,
+            )
+        } else {
+            (None, vec![])
+        };
+        let (rtype_right_to_left, ftype_right_to_left) = if direction == Direction::Incoming {
+            (
+                expand_rtype_rule(
+                    self.src_id,
+                    self.rtype_right_to_left.as_ref(),
+                    &param_map,
+                    expander,
+                    &type_aliases,
+                )?,
+                expand_ftype_rule(
+                    self.src_id,
+                    self.ftype_right_to_left.as_ref(),
+                    &param_map,
+                    expander,
+                    &type_aliases,
+                )?,
+            )
+        } else {
+            (None, vec![])
+        };
 
         Ok(TypeMapConvRuleInfo {
             src_id: self.src_id,
@@ -1714,7 +1727,9 @@ $out = QString::fromUtf8($pin.data, $pin.len);
             },
         );
 
-        let new_rule = rule.subst_generic_params(subst_params, &mut Dummy).unwrap();
+        let new_rule = rule
+            .subst_generic_params(subst_params, petgraph::Direction::Outgoing, &mut Dummy)
+            .unwrap();
         assert!(!new_rule.is_generic());
         assert!(!new_rule.contains_data_for_language_backend());
     }
