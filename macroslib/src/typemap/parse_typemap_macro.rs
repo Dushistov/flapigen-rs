@@ -254,6 +254,30 @@ impl TypeMapConvRuleInfo {
             generic_aliases: vec![],
         })
     }
+    pub(in crate::typemap) fn set_src_id(&mut self, src_id: SourceId) {
+        self.src_id = src_id;
+        fn rtype_change_src_id(r: Option<&mut RTypeConvRule>, src_id: SourceId) {
+            if let Some(RTypeConvRule {
+                code: Some(ref mut conv_code),
+                ..
+            }) = r
+            {
+                conv_code.span.0 = src_id;
+            }
+        }
+        fn ftype_change_src_id(rules: &mut [FTypeConvRule], src_id: SourceId) {
+            for r in rules {
+                if let Some(conv_code) = r.code.as_mut() {
+                    conv_code.span.0 = src_id;
+                }
+            }
+        }
+
+        rtype_change_src_id(self.rtype_left_to_right.as_mut(), src_id);
+        rtype_change_src_id(self.rtype_right_to_left.as_mut(), src_id);
+        ftype_change_src_id(&mut self.ftype_left_to_right, src_id);
+        ftype_change_src_id(&mut self.ftype_right_to_left, src_id);
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -456,7 +480,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                                     TO_VAR_TYPE_TEMPLATE,
                                     TO_VAR_TEMPLATE,
                                 ),
-                                code_str.span(),
+                                (SourceId::none(), code_str.span()),
                             ))
                         } else {
                             None
@@ -658,7 +682,7 @@ fn parse_r_type_rule(
                 &out_var,
                 &format!("let {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),
             ),
-            conv_body.span(),
+            (SourceId::none(), conv_body.span()),
         ))
     } else {
         None
@@ -1131,7 +1155,7 @@ fn expand_rtype_rule(
                     Ok(())
                 },
             )?;
-            Some(FTypeConvCode::new(code, x.span()))
+            Some(FTypeConvCode::new(code, (SourceId::none(), x.span())))
         }
         None => None,
     };
@@ -1240,7 +1264,7 @@ fn expand_ftype_rule(
                         Ok(())
                     },
                 )?;
-                Some(FTypeConvCode::new(code, x.span()))
+                Some(FTypeConvCode::new(code, (SourceId::none(), x.span())))
             }
             None => None,
         };
@@ -1363,7 +1387,7 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
                 right_ty: Some(parse_type!(::std::os::raw::c_char)),
                 code: Some(FTypeConvCode::new(
                     "let {to_var}: {to_var_type} = if {from_var} { 1 } else { 0 };",
-                    Span::call_site()
+                    invalid_src_id_span(),
                 )),
             },
             rule.rtype_left_to_right.unwrap()
@@ -1375,7 +1399,7 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
                 right_ty: Some(parse_type!(::std::os::raw::c_char)),
                 code: Some(FTypeConvCode::new(
                     "let {to_var}: {to_var_type} = ( {from_var} != 0 );",
-                    Span::call_site()
+                    invalid_src_id_span(),
                 )),
             },
             rule.rtype_right_to_left.unwrap()
@@ -1391,7 +1415,7 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
                 }),
                 code: Some(FTypeConvCode::new(
                     "{to_var_type} = ({from_var} != 0);",
-                    Span::call_site()
+                    invalid_src_id_span(),
                 )),
                 cfg_option: None,
             }],
@@ -1407,7 +1431,7 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
                 }),
                 code: Some(FTypeConvCode::new(
                     "{to_var_type} = {from_var} ? 1 : 0;",
-                    Span::call_site()
+                    invalid_src_id_span(),
                 )),
                 cfg_option: None,
             }],
@@ -1721,7 +1745,7 @@ $out = QString::fromUtf8($pin.data, $pin.len);
                         "swig_from_rust_to_i_type ! ( T1 , {from_var} . 0 , p0 ) ; ",
                         "swig_from_rust_to_i_type ! ( T2 , {from_var} . 1 , p1 ) ; ",
                         "let {to_var}: {to_var_type} = CRustPair ! ( ) { first : p0 , second : p1 , };"),
-                    Span::call_site()
+                    invalid_src_id_span(),
                 )),
             },
             *rule.rtype_left_to_right.as_ref().unwrap()
@@ -1737,7 +1761,7 @@ $out = QString::fromUtf8($pin.data, $pin.len);
                         "swig_from_i_type_to_rust ! ( T2 , {from_var} . second , p1 ) ; ",
                         "let {to_var}: {to_var_type} = ( p0 , p1 );"
                     ),
-                    Span::call_site()
+                    invalid_src_id_span(),
                 )),
             },
             *rule.rtype_right_to_left.as_ref().unwrap()

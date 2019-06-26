@@ -63,7 +63,7 @@ impl TypeMap {
         src_id: SourceId,
         mut ri: TypeMapConvRuleInfo,
     ) -> Result<()> {
-        ri.src_id = src_id;
+        ri.set_src_id(src_id);
         if ri.is_generic() {
             self.generic_rules.push(Rc::new(ri));
             return Ok(());
@@ -111,6 +111,7 @@ impl TypeMap {
                 .find_or_alloc_rust_type(&rule.left_ty, src_id)
                 .graph_idx;
             let to_ty = self.find_or_alloc_rust_type(&right_ty, src_id).graph_idx;
+
             self.conv_graph
                 .update_edge(from_ty, to_ty, TypeConvEdge::new(code.into(), None));
             rtype_left_to_right = Some((from_ty, to_ty));
@@ -229,6 +230,33 @@ impl TypeMap {
             ));
         }
 
+        fn validate_rule_rewrite(
+            prev: Option<&ForeignConversationRule>,
+            new: &ForeignConversationRule,
+        ) -> Result<()> {
+            if let Some(prev) = prev {
+                if let (Some(prev_rule), Some(new_rule)) =
+                    (prev.intermediate.as_ref(), new.intermediate.as_ref())
+                {
+                    if !prev_rule.conv_code.src_id().is_none()
+                        && prev_rule.conv_code.src_id() == new_rule.conv_code.src_id()
+                    {
+                        return Err(DiagnosticError::new(
+                            new_rule.conv_code.src_id(),
+                            new_rule.conv_code.span(),
+                            "new rule f_type here",
+                        )
+                        .add_span_note(
+                            (prev_rule.conv_code.src_id(), prev_rule.conv_code.span()),
+                            "overwrite f_type defined in the same file",
+                        ));
+                    }
+                }
+            }
+
+            Ok(())
+        }
+
         match (ft_into_from_rust, ft_from_into_rust) {
             (Some((ft1, into_from_rust)), Some((ft2, from_into_rust))) => {
                 if ft1 != ft2 {
@@ -242,21 +270,27 @@ impl TypeMap {
                 let name = TypeName::new(ft1.name, (src_id, ft1.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 let res_ftype = &mut self.ftypes_storage[ftype_idx];
+                validate_rule_rewrite(res_ftype.into_from_rust.as_ref(), &into_from_rust)?;
                 res_ftype.into_from_rust = Some(into_from_rust);
+                validate_rule_rewrite(res_ftype.from_into_rust.as_ref(), &from_into_rust)?;
                 res_ftype.from_into_rust = Some(from_into_rust);
                 res_ftype.provides_by_module = req_modules;
             }
             (Some((ft, into_from_rust)), None) => {
                 let name = TypeName::new(ft.name, (src_id, ft.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
-                self.ftypes_storage[ftype_idx].into_from_rust = Some(into_from_rust);
-                self.ftypes_storage[ftype_idx].provides_by_module = req_modules;
+                let res_ftype = &mut self.ftypes_storage[ftype_idx];
+                validate_rule_rewrite(res_ftype.into_from_rust.as_ref(), &into_from_rust)?;
+                res_ftype.into_from_rust = Some(into_from_rust);
+                res_ftype.provides_by_module = req_modules;
             }
             (None, Some((ft, from_into_rust))) => {
                 let name = TypeName::new(ft.name, (src_id, ft.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
-                self.ftypes_storage[ftype_idx].from_into_rust = Some(from_into_rust);
-                self.ftypes_storage[ftype_idx].provides_by_module = req_modules;
+                let res_ftype = &mut self.ftypes_storage[ftype_idx];
+                validate_rule_rewrite(res_ftype.from_into_rust.as_ref(), &from_into_rust)?;
+                res_ftype.from_into_rust = Some(from_into_rust);
+                res_ftype.provides_by_module = req_modules;
             }
             (None, None) => {}
         }
@@ -378,7 +412,10 @@ fn ftype_merge(our: &mut ForeignTypeS, extrn_ft: ForeignTypeS) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{error::invalid_src_id_span, typemap::find_conversation_path};
+    use crate::{
+        error::invalid_src_id_span,
+        typemap::{find_conversation_path, MapToForeignFlag},
+    };
     use rustc_hash::FxHashSet;
     use syn::{parse_quote, Type};
 
@@ -469,6 +506,7 @@ fn helper3() {
             .map_through_conversation_to_foreign(
                 &ty_i32,
                 petgraph::Direction::Outgoing,
+                MapToForeignFlag::FullSearch,
                 invalid_src_id_span(),
                 |_, fc| {
                     fc.self_desc

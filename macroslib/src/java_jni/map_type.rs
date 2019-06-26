@@ -9,7 +9,7 @@ use crate::{
     typemap::{
         ast::{if_option_return_some_type, normalize_ty_lifetimes},
         ty::RustType,
-        ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        ForeignTypeInfo, MapToForeignFlag, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{ForeignEnumInfo, ForeignerClassInfo},
     TypeMap,
@@ -32,6 +32,7 @@ pub(in crate::java_jni) fn map_type(
             .map_through_conversation_to_foreign(
                 &arg_ty,
                 direction,
+                MapToForeignFlag::FullSearch,
                 arg_ty_span,
                 calc_this_type_for_method,
             )

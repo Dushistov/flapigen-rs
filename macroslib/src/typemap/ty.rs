@@ -1,5 +1,5 @@
 use crate::{
-    error::DiagnosticError,
+    error::{DiagnosticError, SourceIdSpan},
     source_registry::SourceId,
     typemap::{ast::TypeName, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
 };
@@ -183,7 +183,7 @@ pub(crate) struct ForeignConversationIntermediate {
 
 #[derive(Debug, Clone)]
 pub(crate) struct FTypeConvCode {
-    span: Span,
+    pub(in crate::typemap) span: SourceIdSpan,
     code: String,
 }
 
@@ -195,7 +195,7 @@ impl PartialEq for FTypeConvCode {
 
 impl FTypeConvCode {
     /// # Panics
-    pub(crate) fn new<S: Into<String>>(code: S, span: Span) -> FTypeConvCode {
+    pub(crate) fn new<S: Into<String>>(code: S, span: SourceIdSpan) -> FTypeConvCode {
         let code: String = code.into();
         assert!(
             code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE),
@@ -205,7 +205,7 @@ impl FTypeConvCode {
         FTypeConvCode { code, span }
     }
     /// # Panics
-    pub(crate) fn new2<S: Into<String>>(code: S, span: Span) -> FTypeConvCode {
+    pub(crate) fn new2<S: Into<String>>(code: S, span: SourceIdSpan) -> FTypeConvCode {
         let code: String = code.into();
         assert!(
             code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE),
@@ -218,8 +218,11 @@ impl FTypeConvCode {
     pub(crate) fn as_str(&self) -> &str {
         self.code.as_str()
     }
+    pub(crate) fn src_id(&self) -> SourceId {
+        self.span.0
+    }
     pub(crate) fn span(&self) -> Span {
-        self.span
+        self.span.1
     }
 }
 
