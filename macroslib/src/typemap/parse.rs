@@ -24,6 +24,7 @@ use crate::{
         ty::{ForeignTypesStorage, RustTypeS},
         validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
     },
+    FOREIGN_TYPEMAP,
 };
 
 static MOD_NAME_WITH_FOREIGN_TYPES: &str = "swig_foreign_types_map";
@@ -146,7 +147,7 @@ pub(in crate::typemap) fn parse(
                 handle_deref_impl(name, &swig_attrs, item_impl, &mut ret)?;
             }
             Item::Macro(mut item_macro) => {
-                if item_macro.mac.path.is_ident("foreign_typemap") {
+                if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
                     let tmap_conv_rule: TypeMapConvRuleInfo = syn::parse2(item_macro.mac.tts)
                         .map_err(|err| DiagnosticError::from_syn_err(name, err))?;
 

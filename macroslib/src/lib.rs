@@ -268,6 +268,7 @@ static FOREIGN_INTERFACE: &str = "foreign_interface";
 static FOREIGN_CALLBACK: &str = "foreign_callback";
 static FOREIGNER_CODE: &str = "foreigner_code";
 static FOREIGN_CODE: &str = "foreign_code";
+static FOREIGN_TYPEMAP: &str = "foreign_typemap";
 
 impl Generator {
     pub fn new(config: LanguageConfig) -> Generator {
@@ -401,6 +402,7 @@ impl Generator {
                     FOREIGN_ENUM,
                     FOREIGN_INTERFACE,
                     FOREIGN_CALLBACK,
+                    FOREIGN_TYPEMAP,
                 ]
                 .iter()
                 .any(|x| item_macro.mac.path.is_ident(x));
@@ -435,6 +437,8 @@ impl Generator {
                 {
                     let finterface = code_parse::parse_foreign_interface(src_id, tts)?;
                     items_to_expand.push(ItemToExpand::Interface(finterface));
+                } else if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
+                    self.conv_map.parse_foreign_typemap_macro(src_id, tts)?;
                 } else {
                     unreachable!();
                 }

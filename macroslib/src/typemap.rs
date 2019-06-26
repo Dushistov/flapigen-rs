@@ -599,7 +599,10 @@ impl TypeMap {
         build_for_sp: SourceIdSpan,
         calc_this_type_for_method: F,
     ) -> Option<ForeignType> {
-        debug!("map foreign: {} {:?}", rust_ty, direction);
+        debug!(
+            "map_through_conversation_to_foreign: {} {:?}",
+            rust_ty, direction
+        );
 
         if direction == petgraph::Direction::Outgoing {
             if let Some(ftype) = self.rust_to_foreign_cache.get(&rust_ty.normalized_name) {
@@ -947,6 +950,17 @@ impl TypeMap {
 
     pub(crate) fn generic_rules(&self) -> &[Rc<TypeMapConvRuleInfo>] {
         &self.generic_rules
+    }
+
+    pub(crate) fn parse_foreign_typemap_macro(
+        &mut self,
+        src_id: SourceId,
+        tts: TokenStream,
+    ) -> Result<()> {
+        let tmap_conv_rule: TypeMapConvRuleInfo =
+            syn::parse2(tts).map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+
+        self.may_be_merge_conv_rule(src_id, tmap_conv_rule)
     }
 }
 
