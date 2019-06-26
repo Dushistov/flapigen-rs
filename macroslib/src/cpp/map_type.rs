@@ -110,6 +110,10 @@ fn map_ordinal_type(
                 .map(|sm| (grule.clone(), sm.into()))
         });
     if let Some((grule, subst_list)) = idx_subst_map {
+        debug!(
+            "map_ordinal_type: we found generic rule for {}: {:?}",
+            arg_ty, subst_list
+        );
         let subst_map = subst_list.as_slice().into();
         let c_types = grule.subst_generic_params_to_c_types(
             &subst_map,
@@ -130,6 +134,7 @@ fn map_ordinal_type(
 
         let new_rule = grule.subst_generic_params(
             subst_map,
+            direction,
             &mut CppContextForArg {
                 ctx,
                 arg_ty_span,
