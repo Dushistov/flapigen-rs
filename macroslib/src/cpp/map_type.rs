@@ -20,7 +20,7 @@ use crate::{
             TyParamsSubstList,
         },
         ty::RustType,
-        MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
+        ExpandedFType, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
     },
     types::ForeignerClassInfo,
     CppVariant, TypeMap,
@@ -245,7 +245,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
         self.ctx.rust_code.append(&mut conv_deps);
         Ok(conv_code)
     }
-    fn swig_f_type(&mut self, ty: &syn::Type) -> Result<SmolStr> {
+    fn swig_f_type(&mut self, ty: &syn::Type) -> Result<ExpandedFType> {
         let rust_ty = self
             .ctx
             .conv_map
@@ -256,7 +256,10 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
         } else {
             f_info.base.name.as_str()
         };
-        Ok(fname.replace("struct ", "").replace("union ", "").into())
+        Ok(ExpandedFType {
+            name: fname.replace("struct ", "").replace("union ", "").into(),
+            provides_by_module: f_info.provides_by_module.clone(),
+        })
     }
     fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String> {
         let rust_ty = self
@@ -343,6 +346,9 @@ fn map_type_vec(
     direction: Direction,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let mut ftype_info = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?;
+    let rust_vec_mod = "\"rust_vec.h\"";
+    ftype_info.add_provides_by_module(rust_vec_mod);
+
     let elem_rust_ty = ctx.conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
     if let Some(foreign_class) = ctx
         .conv_map
@@ -350,6 +356,7 @@ fn map_type_vec(
     {
         let typename = format!("RustForeignVec{}", foreign_class.name);
         let vec_module_name: SmolStr = format!("{}.h", typename).into();
+        let class_cpp_header = format!("\"{}\"", cpp_header_name(foreign_class));
 
         if ctx.common_files.get(&vec_module_name).is_none() {
             debug!(
@@ -376,12 +383,15 @@ extern void *{remove_func}(struct CRustForeignVec *, uintptr_t);
 #ifdef __cplusplus
 }} // extern "C"
 
+#include {class_cpp_header}
+
 namespace {namespace_name} {{
 using {vec_type} = RustForeignVec<{class}Ref, CRustForeignVec,
                                   {free_mem_func}, {push_func}, {remove_func}>;
 }}
 #endif
 "##,
+                class_cpp_header = class_cpp_header,
                 free_mem_func = free_mem_func,
                 namespace_name = ctx.cfg.namespace_name,
                 vec_type = typename,
@@ -453,6 +463,8 @@ using {vec_type} = RustForeignVec<{class}Ref, CRustForeignVec,
             typename: typename.into(),
             converter,
         });
+        ftype_info.add_provides_by_module(class_cpp_header);
+        ftype_info.add_provides_by_module(format!("\"{}\"", vec_module_name));
         return Ok(Some(ftype_info));
     }
     let typename = match ftype_info
@@ -682,7 +694,12 @@ fn handle_result_type_as_return_type(
                     typename: typename.into(),
                     converter,
                 });
-                f_type_info.provides_by_module = vec!["\"rust_str.h\"".into(), var_inc];
+                f_type_info.provides_by_module = vec![
+                    "\"rust_str.h\"".into(),
+                    var_inc,
+                    "\"rust_result.h\"".into(),
+                    "\"rust_vec.h\"".into(),
+                ];
                 return Ok(Some(f_type_info));
             } else {
                 return Ok(None);
@@ -724,7 +741,8 @@ fn handle_result_type_as_return_type(
                     typename: typename.into(),
                     converter,
                 });
-                f_type_info.provides_by_module = vec![var_inc];
+                f_type_info.provides_by_module =
+                    vec![var_inc, "\"rust_result.h\"".into(), "\"rust_vec.h\"".into()];
                 return Ok(Some(f_type_info));
             } else {
                 if let Some(cpp_conv) = vec_foreign_info.cpp_converter.as_ref() {
@@ -733,13 +751,15 @@ fn handle_result_type_as_return_type(
                     );
                     let ok_typename = &cpp_conv.typename;
                     let c_err_class = c_class_type(err_class);
-                    let typename = match ctx.cfg.cpp_variant {
-                        CppVariant::Std17 => {
-                            format!("std::variant<{}, {}>", ok_typename, err_class.name)
-                        }
-                        CppVariant::Boost => {
-                            format!("boost::variant<{}, {}>", ok_typename, err_class.name)
-                        }
+                    let (typename, var_inc): (String, SmolStr) = match ctx.cfg.cpp_variant {
+                        CppVariant::Std17 => (
+                            format!("std::variant<{}, {}>", ok_typename, err_class.name),
+                            "<variant>".into(),
+                        ),
+                        CppVariant::Boost => (
+                            format!("boost::variant<{}, {}>", ok_typename, err_class.name),
+                            "<boost/variant.hpp>".into(),
+                        ),
                     };
                     let converter = format!(
                         "{var}.is_ok != 0 ?
@@ -755,6 +775,9 @@ fn handle_result_type_as_return_type(
                         typename: typename.into(),
                         converter,
                     });
+                    f_type_info.add_provides_by_module(var_inc);
+                    f_type_info.add_provides_by_module("\"rust_result.h\"");
+                    f_type_info.add_provides_by_module("\"rust_vec.h\"");
                     return Ok(Some(f_type_info));
                 }
                 return Ok(None);

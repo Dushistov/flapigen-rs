@@ -1,3 +1,32 @@
+r##"#pragma once
+
+//for std::abort
+#include <cstdlib>
+//for std::move
+#include <utility>
+//for std::conditional
+#include <type_traits>
+
+#include "Boo.hpp"
+#include "c_ControlItem.h"
+#include "rust_option.h"
+#include "rust_str.h"
+#include <optional>
+#include <string_view>
+
+#include "c_Foo.h"
+
+namespace org_examples {
+
+template<bool>
+class FooWrapper;
+using Foo = FooWrapper<true>;
+using FooRef = FooWrapper<false>;
+
+
+template<bool OWN_DATA>
+class FooWrapper {"##;
+
 "std::optional<Boo> f1()";
 
 "std::optional<double> f2()";

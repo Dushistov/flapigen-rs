@@ -178,6 +178,8 @@ add_executable(c++-rust-swig-test
   #because of strange compiler settings in google's cmake files
   gtest/googletest/src/gtest-all.cc
   ${RUST_SWIG_CPP_HEADERS}
+  TestOptional.cpp
+  TestWorkWithVec.cpp
   main.cpp
   )
 

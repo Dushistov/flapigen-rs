@@ -144,6 +144,19 @@ impl CppForeignTypeInfo {
             cpp_converter,
         })
     }
+
+    fn add_provides_by_module<'a, S>(&'a mut self, mod_name: S)
+    where
+        for<'b> S: Into<SmolStr> + PartialEq<&'b str>,
+    {
+        if !self
+            .provides_by_module
+            .iter()
+            .any(|x| mod_name == x.as_str())
+        {
+            self.provides_by_module.push(mod_name.into());
+        }
+    }
 }
 
 impl AsRef<ForeignTypeInfo> for CppForeignTypeInfo {
@@ -978,7 +991,9 @@ May be you need to use `private constructor = empty;` syntax?",
     }
 
     let mut m_sigs = fclass::find_suitable_foreign_types_for_methods(ctx, class)?;
-    let req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
+    let mut req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
+    let my_self = format!("\"{}\"", cpp_code::cpp_header_name(class));
+    req_includes.retain(|el| *el != my_self);
     fclass::generate(ctx, class, &req_includes, &m_sigs)?;
     Ok(())
 }
