@@ -978,7 +978,9 @@ May be you need to use `private constructor = empty;` syntax?",
     }
 
     let mut m_sigs = fclass::find_suitable_foreign_types_for_methods(ctx, class)?;
-    let req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
+    let mut req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
+    let my_self = format!("\"{}\"", cpp_code::cpp_header_name(class));
+    req_includes.retain(|el| *el != my_self);
     fclass::generate(ctx, class, &req_includes, &m_sigs)?;
     Ok(())
 }
