@@ -694,7 +694,8 @@ fn handle_result_type_as_return_type(
                     typename: typename.into(),
                     converter,
                 });
-                f_type_info.provides_by_module = vec!["\"rust_str.h\"".into(), var_inc];
+                f_type_info.provides_by_module =
+                    vec!["\"rust_str.h\"".into(), var_inc, "\"rust_result.h\"".into()];
                 return Ok(Some(f_type_info));
             } else {
                 return Ok(None);
@@ -736,7 +737,7 @@ fn handle_result_type_as_return_type(
                     typename: typename.into(),
                     converter,
                 });
-                f_type_info.provides_by_module = vec![var_inc];
+                f_type_info.provides_by_module = vec![var_inc, "\"rust_result.h\"".into()];
                 return Ok(Some(f_type_info));
             } else {
                 if let Some(cpp_conv) = vec_foreign_info.cpp_converter.as_ref() {
