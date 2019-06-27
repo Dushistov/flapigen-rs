@@ -694,8 +694,12 @@ fn handle_result_type_as_return_type(
                     typename: typename.into(),
                     converter,
                 });
-                f_type_info.provides_by_module =
-                    vec!["\"rust_str.h\"".into(), var_inc, "\"rust_result.h\"".into()];
+                f_type_info.provides_by_module = vec![
+                    "\"rust_str.h\"".into(),
+                    var_inc,
+                    "\"rust_result.h\"".into(),
+                    "\"rust_vec.h\"".into(),
+                ];
                 return Ok(Some(f_type_info));
             } else {
                 return Ok(None);
@@ -737,7 +741,8 @@ fn handle_result_type_as_return_type(
                     typename: typename.into(),
                     converter,
                 });
-                f_type_info.provides_by_module = vec![var_inc, "\"rust_result.h\"".into()];
+                f_type_info.provides_by_module =
+                    vec![var_inc, "\"rust_result.h\"".into(), "\"rust_vec.h\"".into()];
                 return Ok(Some(f_type_info));
             } else {
                 if let Some(cpp_conv) = vec_foreign_info.cpp_converter.as_ref() {
@@ -746,13 +751,15 @@ fn handle_result_type_as_return_type(
                     );
                     let ok_typename = &cpp_conv.typename;
                     let c_err_class = c_class_type(err_class);
-                    let typename = match ctx.cfg.cpp_variant {
-                        CppVariant::Std17 => {
-                            format!("std::variant<{}, {}>", ok_typename, err_class.name)
-                        }
-                        CppVariant::Boost => {
-                            format!("boost::variant<{}, {}>", ok_typename, err_class.name)
-                        }
+                    let (typename, var_inc): (String, SmolStr) = match ctx.cfg.cpp_variant {
+                        CppVariant::Std17 => (
+                            format!("std::variant<{}, {}>", ok_typename, err_class.name),
+                            "<variant>".into(),
+                        ),
+                        CppVariant::Boost => (
+                            format!("boost::variant<{}, {}>", ok_typename, err_class.name),
+                            "<boost/variant.hpp>".into(),
+                        ),
                     };
                     let converter = format!(
                         "{var}.is_ok != 0 ?
@@ -768,6 +775,9 @@ fn handle_result_type_as_return_type(
                         typename: typename.into(),
                         converter,
                     });
+                    f_type_info.add_provides_by_module(var_inc);
+                    f_type_info.add_provides_by_module("\"rust_result.h\"");
+                    f_type_info.add_provides_by_module("\"rust_vec.h\"");
                     return Ok(Some(f_type_info));
                 }
                 return Ok(None);

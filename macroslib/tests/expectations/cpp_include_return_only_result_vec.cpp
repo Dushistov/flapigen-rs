@@ -9,6 +9,7 @@ r##"#pragma once
 
 #include "LatLon.h"
 #include "rust_result.h"
+#include "rust_vec.h"
 #include <variant>
 
 #include "c_Weather.h"
