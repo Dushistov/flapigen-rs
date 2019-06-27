@@ -20,7 +20,7 @@ use crate::{
             TyParamsSubstList,
         },
         ty::RustType,
-        MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
+        ExpandedFType, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
     },
     types::ForeignerClassInfo,
     CppVariant, TypeMap,
@@ -245,7 +245,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
         self.ctx.rust_code.append(&mut conv_deps);
         Ok(conv_code)
     }
-    fn swig_f_type(&mut self, ty: &syn::Type) -> Result<SmolStr> {
+    fn swig_f_type(&mut self, ty: &syn::Type) -> Result<ExpandedFType> {
         let rust_ty = self
             .ctx
             .conv_map
@@ -256,7 +256,10 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
         } else {
             f_info.base.name.as_str()
         };
-        Ok(fname.replace("struct ", "").replace("union ", "").into())
+        Ok(ExpandedFType {
+            name: fname.replace("struct ", "").replace("union ", "").into(),
+            provides_by_module: f_info.provides_by_module.clone(),
+        })
     }
     fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String> {
         let rust_ty = self

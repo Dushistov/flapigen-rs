@@ -873,6 +873,11 @@ impl syn::parse::Parse for GenericCTypes {
     }
 }
 
+pub(crate) struct ExpandedFType {
+    pub name: SmolStr,
+    pub provides_by_module: Vec<SmolStr>,
+}
+
 pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
     fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type>;
     fn swig_from_rust_to_i_type(
@@ -887,7 +892,7 @@ pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
         in_var_name: &str,
         out_var_name: &str,
     ) -> Result<String>;
-    fn swig_f_type(&mut self, ty: &syn::Type) -> Result<SmolStr>;
+    fn swig_f_type(&mut self, ty: &syn::Type) -> Result<ExpandedFType>;
     fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
     fn swig_foreign_from_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
 }
@@ -1191,14 +1196,25 @@ fn expand_ftype_rule(
 
     for grule in grules {
         use FTypeLeftRightPair::*;
+        let mut provides_by_module = Vec::<SmolStr>::new();
         let left_right_ty = match grule.left_right_ty {
-            OnlyLeft(ref ftype) => OnlyLeft(expand_ftype_name(src_id, ftype, param_map, expander)?),
-            OnlyRight(ref ftype) => {
-                OnlyRight(expand_ftype_name(src_id, ftype, param_map, expander)?)
-            }
+            OnlyLeft(ref ftype) => OnlyLeft(expand_ftype_name(
+                src_id,
+                ftype,
+                param_map,
+                expander,
+                &mut provides_by_module,
+            )?),
+            OnlyRight(ref ftype) => OnlyRight(expand_ftype_name(
+                src_id,
+                ftype,
+                param_map,
+                expander,
+                &mut provides_by_module,
+            )?),
             Both(ref fl, ref fr) => Both(
-                expand_ftype_name(src_id, fl, param_map, expander)?,
-                expand_ftype_name(src_id, fr, param_map, expander)?,
+                expand_ftype_name(src_id, fl, param_map, expander, &mut provides_by_module)?,
+                expand_ftype_name(src_id, fr, param_map, expander, &mut provides_by_module)?,
             ),
         };
         let code = match grule.code {
@@ -1269,7 +1285,7 @@ fn expand_ftype_rule(
                                 write!(
                                     out,
                                     "{}",
-                                    expander.swig_f_type(&generic_aliases[alias_idx].1)?
+                                    expander.swig_f_type(&generic_aliases[alias_idx].1)?.name
                                 )
                                 .expect("write to String failed");
                             }
@@ -1281,8 +1297,11 @@ fn expand_ftype_rule(
             }
             None => None,
         };
+        provides_by_module.extend_from_slice(&grule.req_modules);
+        provides_by_module.sort();
+        provides_by_module.dedup();
         ret.push(FTypeConvRule {
-            req_modules: grule.req_modules.clone(),
+            req_modules: provides_by_module,
             cfg_option: grule.cfg_option.clone(),
             left_right_ty,
             code,
@@ -1298,7 +1317,7 @@ fn call_swig_f_type(
     out: &mut String,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-) -> Result<()> {
+) -> Result<Vec<SmolStr>> {
     let type_name = if params.len() == 1 {
         &params[0]
     } else {
@@ -1323,8 +1342,9 @@ fn call_swig_f_type(
                 format!("unknown type parameter '{}'", type_name),
             )
         })?;
-    out.push_str(&expander.swig_f_type(ty)?);
-    Ok(())
+    let f_type = expander.swig_f_type(ty)?;
+    out.push_str(&f_type.name);
+    Ok(f_type.provides_by_module)
 }
 
 fn expand_ftype_name(
@@ -1332,12 +1352,16 @@ fn expand_ftype_name(
     ftype: &FTypeName,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    provides_by_module: &mut Vec<SmolStr>,
 ) -> Result<FTypeName> {
     let new_fytpe = expand_macroses(
         ftype.name.as_str(),
         |id: &str, params: Vec<&str>, out: &mut String| {
             if id == SWIG_F_TYPE {
-                call_swig_f_type(src_id, ftype.sp, params, out, param_map, expander)
+                let mut modules: Vec<SmolStr> =
+                    call_swig_f_type(src_id, ftype.sp, params, out, param_map, expander)?;
+                provides_by_module.append(&mut modules);
+                Ok(())
             } else {
                 Err(DiagnosticError::new(
                     src_id,
@@ -1678,16 +1702,20 @@ $out = QString::fromUtf8($pin.data, $pin.len);
             ) -> Result<String> {
                 self.swig_from_rust_to_i_type(ty, in_var_name, out_var_name)
             }
-            fn swig_f_type(&mut self, ty: &syn::Type) -> Result<SmolStr> {
-                if *ty == parse_type!(i32) {
-                    Ok("int32_t".into())
-                } else if *ty == parse_type!(f32) {
-                    Ok("float".into())
-                } else if *ty == parse_type!(CRustPairi32f32) {
-                    Ok("CRustPairi32f32".into())
-                } else {
-                    panic!("swig_f_type: Unknown type: {}", DisplayToTokens(ty));
-                }
+            fn swig_f_type(&mut self, ty: &syn::Type) -> Result<ExpandedFType> {
+                Ok(ExpandedFType {
+                    name: if *ty == parse_type!(i32) {
+                        "int32_t"
+                    } else if *ty == parse_type!(f32) {
+                        "float"
+                    } else if *ty == parse_type!(CRustPairi32f32) {
+                        "CRustPairi32f32"
+                    } else {
+                        panic!("swig_f_type: Unknown type: {}", DisplayToTokens(ty));
+                    }
+                    .into(),
+                    provides_by_module: vec![],
+                })
             }
             fn swig_foreign_to_i_type(
                 &mut self,
