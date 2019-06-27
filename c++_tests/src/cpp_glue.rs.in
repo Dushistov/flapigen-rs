@@ -909,3 +909,34 @@ foreigner_class!(class GetSetStrTest {
     method GetSetStrTest::get_str(&self) -> &str;
     method GetSetStrTest::set_str(&mut self, _: &str);
 });
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
+pub struct Vec2 {
+    x: f32,
+    y: f32,
+}
+
+foreign_typemap!(
+    define_c_type!(
+        module = "vec2.h";
+        #[repr(C)]
+        struct Vec2 {
+            x: f32,
+            y: f32,
+        }
+    );
+    (r_type) Vec2;
+    (f_type) "Vec2";
+);
+
+fn inc_vec2(v: Vec2) -> Vec2 {
+    Vec2 {
+        x: v.x + 1.1,
+        y: v.y + 1.,
+    }
+}
+
+foreigner_class!(class TestWorkWithReprC {
+    static_method inc_vec2(v: Vec2) -> Vec2;
+});
