@@ -346,6 +346,9 @@ fn map_type_vec(
     direction: Direction,
 ) -> Result<Option<CppForeignTypeInfo>> {
     let mut ftype_info = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?;
+    let rust_vec_mod = "\"rust_vec.h\"";
+    ftype_info.add_provides_by_module(rust_vec_mod);
+
     let elem_rust_ty = ctx.conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
     if let Some(foreign_class) = ctx
         .conv_map
@@ -353,6 +356,7 @@ fn map_type_vec(
     {
         let typename = format!("RustForeignVec{}", foreign_class.name);
         let vec_module_name: SmolStr = format!("{}.h", typename).into();
+        let class_cpp_header = format!("\"{}\"", cpp_header_name(foreign_class));
 
         if ctx.common_files.get(&vec_module_name).is_none() {
             debug!(
@@ -379,12 +383,15 @@ extern void *{remove_func}(struct CRustForeignVec *, uintptr_t);
 #ifdef __cplusplus
 }} // extern "C"
 
+#include {class_cpp_header}
+
 namespace {namespace_name} {{
 using {vec_type} = RustForeignVec<{class}Ref, CRustForeignVec,
                                   {free_mem_func}, {push_func}, {remove_func}>;
 }}
 #endif
 "##,
+                class_cpp_header = class_cpp_header,
                 free_mem_func = free_mem_func,
                 namespace_name = ctx.cfg.namespace_name,
                 vec_type = typename,
@@ -456,6 +463,8 @@ using {vec_type} = RustForeignVec<{class}Ref, CRustForeignVec,
             typename: typename.into(),
             converter,
         });
+        ftype_info.add_provides_by_module(class_cpp_header);
+        ftype_info.add_provides_by_module(format!("\"{}\"", vec_module_name));
         return Ok(Some(ftype_info));
     }
     let typename = match ftype_info

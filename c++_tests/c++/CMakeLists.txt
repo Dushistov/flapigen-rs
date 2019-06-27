@@ -179,6 +179,7 @@ add_executable(c++-rust-swig-test
   gtest/googletest/src/gtest-all.cc
   ${RUST_SWIG_CPP_HEADERS}
   TestOptional.cpp
+  TestWorkWithVec.cpp
   main.cpp
   )
 
