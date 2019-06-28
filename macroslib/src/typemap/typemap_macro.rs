@@ -203,7 +203,7 @@ impl TypeMapConvRuleInfo {
                                 ),
                             ));
                         };
-                        let ty = param_map.get_by_str(param).unwrap_or(None).ok_or_else(|| {
+                        let ty = param_map.get(param).unwrap_or(None).ok_or_else(|| {
                             DiagnosticError::new(
                                 self.src_id,
                                 code_span,
@@ -626,15 +626,13 @@ fn expand_rtype_rule(
                                 ));
                             };
 
-                            let ty = param_map.get_by_str(type_name).unwrap_or(None).ok_or_else(
-                                || {
-                                    DiagnosticError::new(
-                                        src_id,
-                                        x.span(),
-                                        format!("unknown type parameter '{}'", type_name),
-                                    )
-                                },
-                            )?;
+                            let ty = param_map.get(type_name).unwrap_or(None).ok_or_else(|| {
+                                DiagnosticError::new(
+                                    src_id,
+                                    x.span(),
+                                    format!("unknown type parameter '{}'", type_name),
+                                )
+                            })?;
                             let tt: String = if id == SWIG_FROM_RUST_TO_I_TYPE {
                                 expander.swig_from_rust_to_i_type(&ty, in_var_name, out_var_name)?
                             } else if id == SWIG_FROM_I_TYPE_TO_RUST {
@@ -737,10 +735,8 @@ fn expand_ftype_rule(
                                     ));
                                 };
 
-                                let ty = param_map
-                                    .get_by_str(type_name)
-                                    .unwrap_or(None)
-                                    .ok_or_else(|| {
+                                let ty =
+                                    param_map.get(type_name).unwrap_or(None).ok_or_else(|| {
                                         DiagnosticError::new(
                                             src_id,
                                             x.span(),
@@ -821,16 +817,13 @@ fn call_swig_f_type(
         ));
     };
 
-    let ty = param_map
-        .get_by_str(type_name)
-        .unwrap_or(None)
-        .ok_or_else(|| {
-            DiagnosticError::new(
-                src_id,
-                sp,
-                format!("unknown type parameter '{}'", type_name),
-            )
-        })?;
+    let ty = param_map.get(type_name).unwrap_or(None).ok_or_else(|| {
+        DiagnosticError::new(
+            src_id,
+            sp,
+            format!("unknown type parameter '{}'", type_name),
+        )
+    })?;
     let f_type = expander.swig_f_type(ty)?;
     out.push_str(&f_type.name);
     Ok(f_type.provides_by_module)

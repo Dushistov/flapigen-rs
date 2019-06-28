@@ -458,19 +458,18 @@ fn is_second_subst_of_first_ppath(
                     }
                 };
                 let type_p1_name = normalize_ty_lifetimes(type_p1);
-                let real_type_p1: Type =
-                    if let Some(subst) = subst_map.get_mut_by_str(&type_p1_name) {
-                        match *subst {
-                            Some(ref x) => (*x).clone(),
-                            None => {
-                                *subst = Some(type_p2.clone());
-                                (*type_p2).clone()
-                                //return true;
-                            }
+                let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
+                    match *subst {
+                        Some(ref x) => (*x).clone(),
+                        None => {
+                            *subst = Some(type_p2.clone());
+                            (*type_p2).clone()
+                            //return true;
                         }
-                    } else {
-                        (*type_p1).clone()
-                    };
+                    }
+                } else {
+                    (*type_p1).clone()
+                };
                 trace!("is_second_subst_of_first_ppath: go deeper");
                 if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
                     return false;
@@ -499,7 +498,7 @@ pub(in crate::typemap) fn replace_all_types_with(
     impl<'a, 'b> VisitMut for ReplaceTypes<'a, 'b> {
         fn visit_type_mut(&mut self, t: &mut Type) {
             let ty_name = normalize_ty_lifetimes(t);
-            if let Some(Some(subst)) = self.subst_map.get_by_str(&ty_name) {
+            if let Some(Some(subst)) = self.subst_map.get(&ty_name) {
                 *t = subst.clone();
             } else {
                 visit_type_mut(self, t);
