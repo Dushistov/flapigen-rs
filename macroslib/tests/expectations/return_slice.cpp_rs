@@ -1,0 +1,21 @@
+r##"# [ no_mangle ] pub extern "C" fn Boo_f1 ( this : * mut Boo , ) -> CRustSliceU32 {
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : & [ u32 ] = Boo :: f1 ( this , ) ;
+ let mut ret : CRustSliceU32 = ret . swig_into ( ) ;
+ ret
+ }"##;
+
+r##"# [ no_mangle ] pub extern "C" fn Boo_f2 ( this : * mut Boo , ) -> CRustObjectSlice {
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : & [ Foo ] = Boo :: f2 ( this , ) ;
+ let mut ret : CRustObjectSlice = ret . swig_into ( ) ;
+ ret
+ }"##;
+
+
+r##"# [ no_mangle ] pub extern "C" fn Boo_f3 ( this : * mut Boo , ) -> CRustSliceUsize {
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : & [ usize ] = Boo :: f3 ( this , ) ;
+ let mut ret : CRustSliceUsize = ret . swig_into ( ) ;
+ ret
+ }"##;

@@ -1,0 +1,15 @@
+r##"# [ no_mangle ]
+ pub extern "C" fn Boo_f1 ( this : * mut Boo , a_0 : CRustObjectSlice , ) -> CRustSliceU32 {
+ let mut a_0 : & mut [ Foo ] = <& mut [ Foo ] >:: swig_from ( a_0 ) ;
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : & [ u32 ] = Boo :: f1 ( this , a_0 ) ;
+ let mut ret : CRustSliceU32 = ret . swig_into ( ) ;
+ ret }"##;
+
+r##"# [ no_mangle ]
+ pub extern "C" fn Boo_f2 ( this : * mut Boo , a_0 : CRustObjectSlice , ) -> CRustSliceU32 {
+ let mut a_0 : & [ Foo ] = <& [ Foo ] >:: swig_from ( a_0 ) ;
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : & [ u32 ] = Boo :: f2 ( this , a_0 ) ;
+ let mut ret : CRustSliceU32 = ret . swig_into ( ) ;
+ ret }"##;
