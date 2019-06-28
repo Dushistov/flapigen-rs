@@ -11,8 +11,8 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::TypeName,
-        parse_typemap_macro::{FTypeLeftRightPair, TypeMapConvRuleInfo},
         ty::{ForeignConversationIntermediate, ForeignTypeS, ForeignTypesStorage},
+        typemap_macro::{FTypeLeftRightPair, TypeMapConvRuleInfo},
         TypeConvEdge, TypeMap,
     },
 };

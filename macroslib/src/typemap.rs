@@ -1,8 +1,8 @@
 pub mod ast;
 mod merge;
 mod parse;
-mod parse_typemap_macro;
 pub mod ty;
+mod typemap_macro;
 pub mod utils;
 
 use std::{cell::RefCell, fmt, mem, ops, rc::Rc};
@@ -33,7 +33,7 @@ use crate::{
     types::{ForeignEnumInfo, ForeignerClassInfo},
 };
 
-pub(crate) use parse_typemap_macro::{
+pub(crate) use typemap_macro::{
     CType, CTypes, ExpandedFType, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
 };
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
