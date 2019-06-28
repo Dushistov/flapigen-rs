@@ -16,7 +16,7 @@ use crate::{
             get_trait_bounds, is_second_subst_of_first, parse_ty_with_given_span,
             replace_all_types_with, DisplayToTokens, SpannedSmolStr, TyParamsSubstMap,
         },
-        ty::FTypeConvCode,
+        ty::{FTypeConvCode, TraitNamesSet},
         FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
     FOREIGNER_CODE, FOREIGN_CODE,
@@ -98,11 +98,15 @@ impl TypeMapConvRuleInfo {
         self.rtype_generics.is_some()
     }
 
-    pub(crate) fn is_ty_subst_of_my_generic_rtype(
+    pub(crate) fn is_ty_subst_of_my_generic_rtype<TraitChecker>(
         &self,
         ty: &Type,
         direction: Direction,
-    ) -> Option<TyParamsSubstMap> {
+        impl_trait: TraitChecker,
+    ) -> Option<TyParamsSubstMap>
+    where
+        TraitChecker: Fn(&Type, &TraitNamesSet) -> bool,
+    {
         assert!(self.is_generic());
         let rule = match direction {
             Direction::Incoming => self.rtype_right_to_left.as_ref(),
@@ -120,6 +124,22 @@ impl TypeMapConvRuleInfo {
         }
         if !is_second_subst_of_first(&rule.left_ty, ty, &mut subst_map) {
             return None;
+        }
+        let bounds = get_trait_bounds(generics);
+        for b in &bounds {
+            println!("trait bound param {:?}", b.ty_param);
+            if let Some(Some(ty)) = subst_map.get(b.ty_param.as_ref()) {
+                if !impl_trait(ty, &b.trait_names) {
+                    return None;
+                }
+            } else {
+                println!(
+                    "warning=invalid generic bounds({}) refer unknown parameter, subst. map {:?}",
+                    b.ty_param.as_ref(),
+                    subst_map
+                );
+                return None;
+            }
         }
 
         Some(subst_map)
@@ -648,9 +668,6 @@ fn parse_r_type_rule(
                 ));
             }
         } else {
-            if !get_trait_bounds(&new_generics).is_empty() {
-                unimplemented!();
-            }
             *generics = Some(new_generics);
         }
     }
@@ -1734,7 +1751,11 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         }
 
         let subst_params = rule
-            .is_ty_subst_of_my_generic_rtype(&parse_type! {(i32, f32)}, Direction::Outgoing)
+            .is_ty_subst_of_my_generic_rtype(
+                &parse_type! {(i32, f32)},
+                Direction::Outgoing,
+                |_, _| false,
+            )
             .unwrap();
         let c_types = rule
             .subst_generic_params_to_c_types(&subst_params, &mut Dummy)
@@ -1771,10 +1792,10 @@ $out = QString::fromUtf8($pin.data, $pin.len);
         assert!(rule.is_generic());
 
         assert!(rule
-            .is_ty_subst_of_my_generic_rtype(&parse_type! {i32}, Direction::Outgoing)
+            .is_ty_subst_of_my_generic_rtype(&parse_type! {i32}, Direction::Outgoing, |_, _| false,)
             .is_none());
         assert!(rule
-            .is_ty_subst_of_my_generic_rtype(&parse_type! {()}, Direction::Outgoing)
+            .is_ty_subst_of_my_generic_rtype(&parse_type! {()}, Direction::Outgoing, |_, _| false,)
             .is_none());
 
         let generics: syn::Generics = parse_quote! { <T1, T2> };
@@ -1819,7 +1840,11 @@ $out = QString::fromUtf8($pin.data, $pin.len);
                 subst_map.insert(&t2, Some(parse_type! {f32}));
                 subst_map
             }),
-            rule.is_ty_subst_of_my_generic_rtype(&parse_type! {(i32, f32)}, Direction::Outgoing)
+            rule.is_ty_subst_of_my_generic_rtype(
+                &parse_type! {(i32, f32)},
+                Direction::Outgoing,
+                |_, _| false,
+            )
         );
     }
 

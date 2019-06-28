@@ -17,7 +17,7 @@ use crate::{
     typemap::{
         ast::{
             if_result_return_ok_err_types, if_type_slice_return_elem_type, if_vec_return_elem_type,
-            TyParamsSubstList,
+            DisplayToTokens, TyParamsSubstList,
         },
         ty::RustType,
         ExpandedFType, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
@@ -106,7 +106,17 @@ fn map_ordinal_type(
     let idx_subst_map: Option<(Rc<_>, TyParamsSubstList)> =
         ctx.conv_map.generic_rules().iter().find_map(|grule| {
             grule
-                .is_ty_subst_of_my_generic_rtype(&arg_ty.ty, direction)
+                .is_ty_subst_of_my_generic_rtype(&arg_ty.ty, direction, |ty, traits| -> bool {
+                    if let Some(rty) = ctx.conv_map.ty_to_rust_type_checked(ty) {
+                        rty.implements.contains_subset(traits)
+                    } else {
+                        println!(
+                            "warning=mapping types: type {} unknown",
+                            DisplayToTokens(ty)
+                        );
+                        false
+                    }
+                })
                 .map(|sm| (grule.clone(), sm.into()))
         });
     if let Some((grule, subst_list)) = idx_subst_map {
