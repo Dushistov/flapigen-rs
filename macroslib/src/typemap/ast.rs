@@ -393,6 +393,14 @@ pub(in crate::typemap) fn is_second_subst_of_first(
                 is_second_subst_of_first(&*mut_ty1.elem, &*mut_ty2.elem, subst_map)
             }
         }
+        (Type::Ptr(ref ptr_ty1), Type::Ptr(ref ptr_ty2)) => {
+            if ptr_ty1.mutability != ptr_ty2.mutability {
+                trace!("is_second_substitude_of_first mutable not match");
+                false
+            } else {
+                is_second_subst_of_first(&*ptr_ty1.elem, &*ptr_ty2.elem, subst_map)
+            }
+        }
         (Type::Slice(ref ty1), Type::Slice(ref ty2)) => {
             is_second_subst_of_first(&*ty1.elem, &*ty2.elem, subst_map)
         }
@@ -1249,6 +1257,21 @@ Result<u16, u8>
                     },
                 )
         );
+    }
+
+    #[test]
+    fn test_is_second_subst_of_first_pointer() {
+        let _ = env_logger::try_init();
+        let generics: syn::Generics = parse_quote! { <T> };
+        let mut subst_map = TyParamsSubstMap::default();
+        for ty_p in generics.type_params() {
+            subst_map.insert(&ty_p.ident, None);
+        }
+        let ty = parse_type! { *const u32 };
+        let generic_ty = parse_type! { *const T };
+        assert!(is_second_subst_of_first(&generic_ty, &ty, &mut subst_map));
+        assert_eq!(1, subst_map.len());
+        assert_eq!(parse_type! { u32 }, *subst_map.get("T").unwrap().unwrap());
     }
 
     fn str_to_ty(code: &str) -> syn::Type {

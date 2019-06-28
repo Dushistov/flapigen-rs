@@ -40,6 +40,7 @@ impl<'a> TyParamsSubstMap<'a> {
     pub fn get<K>(&self, k: &K) -> Option<Option<&syn::Type>>
     where
         Ident: PartialEq<K>,
+        K: ?Sized,
     {
         match self.inner.iter().position(|it| it.ident == k) {
             Some(idx) => Some(self.inner[idx].ty.as_ref()),
