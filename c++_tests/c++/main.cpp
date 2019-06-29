@@ -268,11 +268,11 @@ TEST(TestWorkWithVec, smokeTest)
     }
 
     auto sp = t.get_u32_slice();
-    ASSERT_EQ(tag_len + 1, sp.len);
+    ASSERT_EQ(tag_len + 1, sp.size());
     for (size_t i = 0; i < tag_len; ++i) {
-        EXPECT_EQ(i, sp.data[i]);
+        EXPECT_EQ(i, sp[i]);
     }
-    EXPECT_EQ(uint32_t(1) << 30, sp.data[tag_len]);
+    EXPECT_EQ(uint32_t(1) << 30, sp[tag_len]);
 
     static_assert(std::is_same<RustVecU32::value_type, uint32_t>::value,
                   "RustVecU32::value_type should be uint32_t");
@@ -326,7 +326,7 @@ TEST(TestWorkWithVec, smokeTest)
             EXPECT_EQ(i, static_cast<size_t>(elem.f(0, 0)));
             --i;
         }
-        TestWorkWithVec::sort_foo_slice(v1.as_slice());
+        TestWorkWithVec::sort_foo_slice(v1.as_slice_mut());
         i = 0;
         for (const auto &elem : v1) {
             EXPECT_EQ(i, static_cast<size_t>(elem.f(0, 0)));
@@ -335,7 +335,7 @@ TEST(TestWorkWithVec, smokeTest)
     }
 
     {
-        auto sl = RustSlice<CRustSliceUsize>{ t.return_usize_slice() };
+        auto sl = t.return_usize_slice();
         ASSERT_EQ(2u, sl.size());
         EXPECT_EQ(17u, sl[0]);
         EXPECT_EQ(18u, sl[1]);
@@ -353,7 +353,7 @@ TEST(TestWorkWithVec, smokeTest)
     }
     {
         const std::array<int32_t, 5> a{ { -(int32_t(1) << 29), -10, 0, 17, int32_t(1) << 30 } };
-        auto v = TestWorkWithVec::test_i32_slice({ &a[0], a.size() });
+        auto v = TestWorkWithVec::test_i32_slice(RustSlice<int32_t>{ &a[0], a.size() });
         ASSERT_EQ(a.size(), v.size());
         for (size_t i = 0; i < a.size(); ++i) {
             EXPECT_EQ(a[i] + 1, v[i]);

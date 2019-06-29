@@ -37,27 +37,22 @@ impl<'a> TyParamsSubstMap<'a> {
     pub(crate) fn len(&self) -> usize {
         self.inner.len()
     }
-    pub fn get(&self, k: &Ident) -> Option<Option<&syn::Type>> {
+    pub fn get<K>(&self, k: &K) -> Option<Option<&syn::Type>>
+    where
+        Ident: PartialEq<K>,
+        K: ?Sized,
+    {
         match self.inner.iter().position(|it| it.ident == k) {
             Some(idx) => Some(self.inner[idx].ty.as_ref()),
             None => None,
         }
     }
-    pub fn get_mut(&mut self, k: &Ident) -> Option<&mut Option<syn::Type>> {
+    pub fn get_mut<K>(&mut self, k: &K) -> Option<&mut Option<syn::Type>>
+    where
+        Ident: PartialEq<K>,
+    {
         match self.inner.iter().position(|it| it.ident == k) {
             Some(idx) => Some(&mut self.inner[idx].ty),
-            None => None,
-        }
-    }
-    pub fn get_mut_by_str(&mut self, k: &str) -> Option<&mut Option<syn::Type>> {
-        match self.inner.iter().position(|it| it.ident == k) {
-            Some(idx) => Some(&mut self.inner[idx].ty),
-            None => None,
-        }
-    }
-    pub fn get_by_str(&self, k: &str) -> Option<Option<&syn::Type>> {
-        match self.inner.iter().position(|it| it.ident == k) {
-            Some(idx) => Some(self.inner[idx].ty.as_ref()),
             None => None,
         }
     }

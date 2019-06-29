@@ -393,6 +393,14 @@ pub(in crate::typemap) fn is_second_subst_of_first(
                 is_second_subst_of_first(&*mut_ty1.elem, &*mut_ty2.elem, subst_map)
             }
         }
+        (Type::Ptr(ref ptr_ty1), Type::Ptr(ref ptr_ty2)) => {
+            if ptr_ty1.mutability != ptr_ty2.mutability {
+                trace!("is_second_substitude_of_first mutable not match");
+                false
+            } else {
+                is_second_subst_of_first(&*ptr_ty1.elem, &*ptr_ty2.elem, subst_map)
+            }
+        }
         (Type::Slice(ref ty1), Type::Slice(ref ty2)) => {
             is_second_subst_of_first(&*ty1.elem, &*ty2.elem, subst_map)
         }
@@ -458,19 +466,18 @@ fn is_second_subst_of_first_ppath(
                     }
                 };
                 let type_p1_name = normalize_ty_lifetimes(type_p1);
-                let real_type_p1: Type =
-                    if let Some(subst) = subst_map.get_mut_by_str(&type_p1_name) {
-                        match *subst {
-                            Some(ref x) => (*x).clone(),
-                            None => {
-                                *subst = Some(type_p2.clone());
-                                (*type_p2).clone()
-                                //return true;
-                            }
+                let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
+                    match *subst {
+                        Some(ref x) => (*x).clone(),
+                        None => {
+                            *subst = Some(type_p2.clone());
+                            (*type_p2).clone()
+                            //return true;
                         }
-                    } else {
-                        (*type_p1).clone()
-                    };
+                    }
+                } else {
+                    (*type_p1).clone()
+                };
                 trace!("is_second_subst_of_first_ppath: go deeper");
                 if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
                     return false;
@@ -499,7 +506,7 @@ pub(in crate::typemap) fn replace_all_types_with(
     impl<'a, 'b> VisitMut for ReplaceTypes<'a, 'b> {
         fn visit_type_mut(&mut self, t: &mut Type) {
             let ty_name = normalize_ty_lifetimes(t);
-            if let Some(Some(subst)) = self.subst_map.get_by_str(&ty_name) {
+            if let Some(Some(subst)) = self.subst_map.get(&ty_name) {
                 *t = subst.clone();
             } else {
                 visit_type_mut(self, t);
@@ -606,26 +613,6 @@ pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> GenericTraitBoundVec 
     }
 
     ret
-}
-
-pub(crate) fn if_type_slice_return_elem_type(ty: &Type, accept_mutbl_slice: bool) -> Option<&Type> {
-    if let syn::Type::Reference(syn::TypeReference {
-        ref elem,
-        mutability,
-        ..
-    }) = ty
-    {
-        if mutability.is_some() && !accept_mutbl_slice {
-            return None;
-        }
-        if let syn::Type::Slice(syn::TypeSlice { ref elem, .. }) = **elem {
-            Some(&*elem)
-        } else {
-            None
-        }
-    } else {
-        None
-    }
 }
 
 pub(crate) fn if_option_return_some_type(ty: &RustType) -> Option<Type> {
@@ -1035,20 +1022,6 @@ mod tests {
     }
 
     #[test]
-    fn test_if_type_slice_return_elem_type() {
-        let ty: Type = parse_quote! {
-            &[i32]
-        };
-        let elem_ty: Type = parse_quote! { i32 };
-        assert_eq!(
-            elem_ty,
-            *if_type_slice_return_elem_type(&ty, false).unwrap()
-        );
-
-        assert!(if_type_slice_return_elem_type(&elem_ty, false).is_none());
-    }
-
-    #[test]
     fn test_work_with_option() {
         assert_eq!(
             "String",
@@ -1250,6 +1223,21 @@ Result<u16, u8>
                     },
                 )
         );
+    }
+
+    #[test]
+    fn test_is_second_subst_of_first_pointer() {
+        let _ = env_logger::try_init();
+        let generics: syn::Generics = parse_quote! { <T> };
+        let mut subst_map = TyParamsSubstMap::default();
+        for ty_p in generics.type_params() {
+            subst_map.insert(&ty_p.ident, None);
+        }
+        let ty = parse_type! { *const u32 };
+        let generic_ty = parse_type! { *const T };
+        assert!(is_second_subst_of_first(&generic_ty, &ty, &mut subst_map));
+        assert_eq!(1, subst_map.len());
+        assert_eq!(parse_type! { u32 }, *subst_map.get("T").unwrap().unwrap());
     }
 
     fn str_to_ty(code: &str) -> syn::Type {

@@ -10,8 +10,8 @@ use crate::{
             check_if_smart_pointer_return_inner_type, normalize_ty_lifetimes,
             parse_ty_with_given_span_checked, DisplayToTokens,
         },
-        parse_typemap_macro::{FTypeConvRule, TypeMapConvRuleInfo},
         ty::RustType,
+        typemap_macro::{FTypeConvRule, TypeMapConvRuleInfo},
         ForeignTypeInfo, TypeMap,
     },
     types::{

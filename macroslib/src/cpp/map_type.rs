@@ -16,10 +16,10 @@ use crate::{
     file_cache::FileWriteCache,
     typemap::{
         ast::{
-            if_result_return_ok_err_types, if_type_slice_return_elem_type, if_vec_return_elem_type,
+            if_result_return_ok_err_types, if_vec_return_elem_type, DisplayToTokens,
             TyParamsSubstList,
         },
-        ty::RustType,
+        ty::{RustType, TraitNamesSet},
         ExpandedFType, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
     },
     types::ForeignerClassInfo,
@@ -49,13 +49,6 @@ fn special_type(
                 err_ty
             );
             return handle_result_type_as_return_type(ctx, arg_ty, &ok_ty, &err_ty, arg_ty_span);
-        }
-        if let Some(elem_ty) = if_type_slice_return_elem_type(&arg_ty.ty, false) {
-            return map_return_slice_type(ctx, arg_ty, &elem_ty, arg_ty_span);
-        }
-    } else {
-        if let Some(elem_ty) = if_type_slice_return_elem_type(&arg_ty.ty, true) {
-            return map_arg_with_slice_type(ctx, arg_ty, &elem_ty, arg_ty_span);
         }
     }
 
@@ -106,7 +99,9 @@ fn map_ordinal_type(
     let idx_subst_map: Option<(Rc<_>, TyParamsSubstList)> =
         ctx.conv_map.generic_rules().iter().find_map(|grule| {
             grule
-                .is_ty_subst_of_my_generic_rtype(&arg_ty.ty, direction)
+                .is_ty_subst_of_my_generic_rtype(&arg_ty.ty, direction, |ty, traits| -> bool {
+                    is_ty_implement_traits(ctx.conv_map, ty, traits)
+                })
                 .map(|sm| (grule.clone(), sm.into()))
         });
     if let Some((grule, subst_list)) = idx_subst_map {
@@ -245,12 +240,17 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
         self.ctx.rust_code.append(&mut conv_deps);
         Ok(conv_code)
     }
-    fn swig_f_type(&mut self, ty: &syn::Type) -> Result<ExpandedFType> {
+    fn swig_f_type(
+        &mut self,
+        ty: &syn::Type,
+        direction: Option<Direction>,
+    ) -> Result<ExpandedFType> {
         let rust_ty = self
             .ctx
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
-        let f_info = map_ordinal_type(self.ctx, &rust_ty, self.arg_ty_span, self.direction)?;
+        let direction = direction.unwrap_or(self.direction);
+        let f_info = map_ordinal_type(self.ctx, &rust_ty, self.arg_ty_span, direction)?;
         let fname = if let Some(ref cpp_conv) = f_info.cpp_converter {
             cpp_conv.typename.as_str()
         } else {
@@ -284,57 +284,6 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
         } else {
             Ok(var_name.into())
         }
-    }
-}
-
-fn map_arg_with_slice_type(
-    ctx: &mut CppContext,
-    arg_ty: &RustType,
-    elem_ty: &Type,
-    arg_ty_span: SourceIdSpan,
-) -> Result<Option<CppForeignTypeInfo>> {
-    let mut ftype_info = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Incoming)?;
-    let elem_rust_ty = ctx.conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
-    if let Some(foreign_class) = ctx
-        .conv_map
-        .find_foreigner_class_with_such_self_type(&elem_rust_ty, false)
-    {
-        let typename = format!("RustForeignSlice<{}Ref>", foreign_class.name);
-        ftype_info.cpp_converter = Some(CppConverter {
-            typename: typename.into(),
-            converter: FROM_VAR_TEMPLATE.to_string(),
-        });
-        return Ok(Some(ftype_info));
-    } else {
-        Ok(None)
-    }
-}
-
-fn map_return_slice_type(
-    ctx: &mut CppContext,
-    arg_ty: &RustType,
-    elem_ty: &Type,
-    arg_ty_span: SourceIdSpan,
-) -> Result<Option<CppForeignTypeInfo>> {
-    let mut ftype_info = map_ordinal_type(ctx, arg_ty, arg_ty_span, Direction::Outgoing)?;
-    let elem_rust_ty = ctx.conv_map.find_or_alloc_rust_type(elem_ty, arg_ty_span.0);
-    if let Some(foreign_class) = ctx
-        .conv_map
-        .find_foreigner_class_with_such_self_type(&elem_rust_ty, false)
-    {
-        let typename = format!("RustForeignSlice<{}Ref>", foreign_class.name);
-        let converter = format!(
-            "{cpp_type}{{{var}}}",
-            cpp_type = typename,
-            var = FROM_VAR_TEMPLATE
-        );
-        ftype_info.cpp_converter = Some(CppConverter {
-            typename: typename.into(),
-            converter,
-        });
-        return Ok(Some(ftype_info));
-    } else {
-        Ok(None)
     }
 }
 
@@ -883,4 +832,28 @@ pub(in crate::cpp) fn calc_this_type_for_method(
         .self_desc
         .as_ref()
         .map(|x| x.constructor_ret_type.clone())
+}
+
+fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet) -> bool {
+    if let Some(rty) = tmap.ty_to_rust_type_checked(ty) {
+        for tname in traits.iter() {
+            if tname.is_ident("SwigTypeIsReprC") {
+                if tmap
+                    .find_foreign_type_related_to_rust_ty(rty.to_idx())
+                    .is_none()
+                {
+                    return false;
+                }
+            } else if !rty.implements.contains_path(tname) {
+                return false;
+            }
+        }
+        true
+    } else {
+        println!(
+            "warning=mapping types: type {} unknown",
+            DisplayToTokens(ty)
+        );
+        false
+    }
 }

@@ -1,0 +1,16 @@
+r##"# [ no_mangle ] pub extern "C" fn Boo_get_foo_arr ( this : * mut Boo , ) -> CRustForeignVec {
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : Vec < Foo > = Boo :: get_foo_arr ( this , ) ;
+ let mut ret : CRustForeignVec = < CRustForeignVec >:: swig_from ( ret ) ; ret }"##;
+
+r##"# [ no_mangle ] pub extern "C" fn Boo_get_foo_with_err ( this : * mut Boo , ) -> CResultObjectString {
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : Result < Foo , String > = Boo :: get_foo_with_err ( this , ) ;
+ let mut ret : CResultObjectString = < CResultObjectString >:: swig_from ( ret ) ;
+ ret }"##;
+
+r##"# [ no_mangle ] pub extern "C" fn Boo_get_foo_arr_with_err ( this : * mut Boo , ) -> CResultCRustForeignVecString {
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : Result < Vec < Foo > , String > = Boo :: get_foo_arr_with_err ( this , ) ;
+ let mut ret : CResultCRustForeignVecString = < CResultCRustForeignVecString >:: swig_from ( ret ) ;
+ ret }"##;
