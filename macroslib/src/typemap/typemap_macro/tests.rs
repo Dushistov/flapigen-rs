@@ -35,6 +35,12 @@ fn test_foreign_typemap_simple_generic() {
             true
         });
     assert!(subst_map.is_some());
+    let ty = parse_type! { * const ::std::os::raw::c_char };
+    let subst_map =
+        rule.is_ty_subst_of_my_generic_rtype(&ty, petgraph::Direction::Outgoing, |_ty, _traits| {
+            true
+        });
+    assert!(subst_map.is_some());
 }
 
 #[test]

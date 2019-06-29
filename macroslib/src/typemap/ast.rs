@@ -360,10 +360,6 @@ pub(in crate::typemap) fn is_second_subst_of_first(
             Type::Path(syn::TypePath { path: ref p1, .. }),
             Type::Path(syn::TypePath { path: ref p2, .. }),
         ) => {
-            if p1.segments.len() != p2.segments.len() {
-                trace!("is_second_substitude_of_first: path length not match");
-                return false;
-            }
             if p1.segments.len() == 1 {
                 if let Some(subst) = subst_map.get_mut(&p1.segments[0].ident) {
                     if subst.is_none() {
@@ -371,6 +367,10 @@ pub(in crate::typemap) fn is_second_subst_of_first(
                         return true;
                     }
                 }
+            }
+            if p1.segments.len() != p2.segments.len() {
+                trace!("is_second_substitude_of_first: path length not match");
+                return false;
             }
             for (s1, s2) in p1.segments.iter().zip(p2.segments.iter()) {
                 if s1.ident != s2.ident {

@@ -25,8 +25,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "f64"]
     #![swig_foreigner_type = "char"]
     #![swig_rust_type = "::std::os::raw::c_char"]
-    #![swig_foreigner_type = "const char *"]
-    #![swig_rust_type = "*const ::std::os::raw::c_char"]
     #![swig_foreigner_type = "int"]
     #![swig_rust_type = "::std::os::raw::c_int"]
     #![swig_foreigner_type = "struct CRustVecU8"]
@@ -855,11 +853,11 @@ foreign_typemap!(
 
 foreign_typemap!(
     define_c_type!(module = "rust_str.h";
-                   #[repr(C)]
-                   pub struct CRustStrView {
-                       data: *const ::std::os::raw::c_char,
-                       len: usize,
-                   }
+        #[repr(C)]
+        pub struct CRustStrView {
+            data: *const ::std::os::raw::c_char,
+            len: usize,
+        }
     );
     ($p:r_type) &str => CRustStrView {
         $out = CRustStrView::from_str($p)
