@@ -110,7 +110,7 @@ fn map_ordinal_type(
             arg_ty, subst_list
         );
         let subst_map = subst_list.as_slice().into();
-        let c_types = grule.subst_generic_params_to_c_types(
+        let c_types = grule.subst_generic_params_to_c_items(
             &subst_map,
             &mut CppContextForArg {
                 ctx,

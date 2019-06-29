@@ -379,7 +379,7 @@ fn test_foreign_typemap_cpp_pair_expand() {
         })
         .unwrap();
     let c_types = rule
-        .subst_generic_params_to_c_types(&subst_params, &mut Dummy)
+        .subst_generic_params_to_c_items(&subst_params, &mut Dummy)
         .unwrap()
         .unwrap();
 

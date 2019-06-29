@@ -812,15 +812,16 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
-     generic_alias!(CRustPair = swig_concat_idents!(CRustPair, swig_i_type!(T1), swig_i_type!(T2)));
-     define_c_type!(
-         module = "rust_tuple.h";
+    generic_alias!(CRustPair = swig_concat_idents!(CRustPair, swig_i_type!(T1), swig_i_type!(T2)));
+    generic_alias!(CRustPairModule = swig_concat_idents!(rust_tuple, swig_i_type!(T1), swig_i_type!(T2)));
+    define_c_type!(
+         module = "CRustPairModule!().h";
          #[repr(C)]
          pub struct CRustPair!() {
              first: swig_i_type!(T1),
              second: swig_i_type!(T2),
          }
-     );
+    );
     ($p:r_type) <T1, T2> (T1, T2) => CRustPair!() {
         swig_from_rust_to_i_type!(T1, $p.0, p0)
         swig_from_rust_to_i_type!(T2, $p.1, p1)
@@ -834,9 +835,9 @@ foreign_typemap!(
         swig_from_i_type_to_rust!(T2, $p.second, p1)
         $out = (p0, p1)
     };
-    ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+    ($p:f_type, req_modules = ["\"CRustPairModule!().h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
             "std::make_pair(swig_foreign_from_i_type!(T1, $p.first), swig_foreign_from_i_type!(T2, $p.second))";
-    ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+    ($p:f_type, req_modules = ["\"CRustPairModule!().h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
         "swig_f_type!(CRustPair!()) { swig_foreign_to_i_type!(T1, $p.first), swig_foreign_to_i_type!(T2, $p.second) }";
  );
 

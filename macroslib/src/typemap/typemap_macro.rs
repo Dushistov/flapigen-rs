@@ -74,14 +74,40 @@ pub(crate) struct GenericAlias {
     pub value: TokenStream,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ModuleName {
+    pub name: SmolStr,
+    pub sp: Span,
+}
+
+impl PartialEq for ModuleName {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for ModuleName {}
+
+impl Ord for ModuleName {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(&other.name)
+    }
+}
+
+impl PartialOrd for ModuleName {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.name.cmp(&other.name))
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct GenericCItems {
-    pub header_name: SmolStr,
+    pub header_name: ModuleName,
     pub types: TokenStream,
 }
 
 impl TypeMapConvRuleInfo {
-    pub(crate) fn if_simple_rtype_ftype_map(&self) -> Option<(&Type, &FTypeName, &[SmolStr])> {
+    pub(crate) fn if_simple_rtype_ftype_map(&self) -> Option<(&Type, &FTypeName, &[ModuleName])> {
         if self.rtype_right_to_left.is_some()
             || !self.ftype_right_to_left.is_empty()
             || self.ftype_left_to_right.len() > 1
@@ -177,7 +203,7 @@ impl TypeMapConvRuleInfo {
         Some(subst_map)
     }
 
-    pub(crate) fn subst_generic_params_to_c_types(
+    pub(crate) fn subst_generic_params_to_c_items(
         &self,
         param_map: &TyParamsSubstMap,
         expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
@@ -239,8 +265,15 @@ impl TypeMapConvRuleInfo {
                     )
                 })?;
             assert!(self.c_types.is_none());
+
+            let header_name = expand_module_name(
+                &generic_c_types.header_name.name,
+                (self.src_id, generic_c_types.header_name.sp),
+                &type_aliases,
+            )?;
+
             c_types = Some(CItems {
-                header_name: generic_c_types.header_name.clone(),
+                header_name,
                 items: citems_list.0,
             });
         }
@@ -346,7 +379,7 @@ pub(crate) struct RTypeConvRule {
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct FTypeConvRule {
-    pub req_modules: Vec<SmolStr>,
+    pub req_modules: Vec<ModuleName>,
     pub cfg_option: Option<SpannedSmolStr>,
     pub left_right_ty: FTypeLeftRightPair,
     pub code: Option<FTypeConvCode>,
@@ -560,7 +593,14 @@ fn find_macro(code: &str) -> Option<(&str, Vec<&str>, usize)> {
     let params: Vec<&str> = (&code[cnt_start..cnt_end])
         .trim()
         .split(',')
-        .map(|x| x.trim())
+        .filter_map(|x| {
+            let s = x.trim();
+            if !s.is_empty() {
+                Some(s)
+            } else {
+                None
+            }
+        })
         .collect();
     Some((id, params, next_pos + 1))
 }
@@ -693,7 +733,7 @@ fn expand_ftype_rule(
 
     for grule in grules {
         use FTypeLeftRightPair::*;
-        let mut provides_by_module = Vec::<SmolStr>::new();
+        let mut provides_by_module = Vec::<ModuleName>::new();
         let left_right_ty = match grule.left_right_ty {
             OnlyLeft(ref ftype) => OnlyLeft(expand_ftype_name(
                 src_id,
@@ -787,7 +827,13 @@ fn expand_ftype_rule(
             }
             None => None,
         };
-        provides_by_module.extend_from_slice(&grule.req_modules);
+        for m in &grule.req_modules {
+            let mod_name = expand_module_name(&m.name, (src_id, m.sp), generic_aliases)?;
+            provides_by_module.push(ModuleName {
+                name: mod_name,
+                sp: m.sp,
+            });
+        }
         provides_by_module.sort();
         provides_by_module.dedup();
         ret.push(FTypeConvRule {
@@ -866,13 +912,13 @@ fn expand_ftype_name(
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
     generic_aliases: &[(&syn::Ident, Type)],
-    provides_by_module: &mut Vec<SmolStr>,
+    provides_by_module: &mut Vec<ModuleName>,
 ) -> Result<FTypeName> {
     let new_fytpe = expand_macroses(
         ftype.name.as_str(),
         |id: &str, params: Vec<&str>, out: &mut String| {
             if id == SWIG_F_TYPE {
-                let mut modules: Vec<SmolStr> = call_swig_f_type(
+                let modules: Vec<SmolStr> = call_swig_f_type(
                     src_id,
                     ftype.sp,
                     params,
@@ -881,7 +927,10 @@ fn expand_ftype_name(
                     expander,
                     generic_aliases,
                 )?;
-                provides_by_module.append(&mut modules);
+                provides_by_module.extend(modules.into_iter().map(|name| ModuleName {
+                    name,
+                    sp: Span::call_site(),
+                }));
                 Ok(())
             } else {
                 Err(DiagnosticError::new(
@@ -940,4 +989,37 @@ fn find_type_param<'a, 'b>(
         param_span,
         format!("unknown type parameter '{}'", param),
     ))
+}
+
+fn expand_module_name(
+    generic_mod_name: &str,
+    ctx_sp: SourceIdSpan,
+    aliases: &[(&syn::Ident, Type)],
+) -> Result<SmolStr> {
+    expand_macroses(
+        generic_mod_name,
+        |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
+            if params.len() != 0 {
+                Err(DiagnosticError::new2(
+                    ctx_sp,
+                    format!(
+                        "{} ({}) does not accept parameters: {:?}",
+                        GENERIC_ALIAS, id, params
+                    ),
+                ))
+            } else if let Some(pos) = aliases
+                .iter()
+                .position(|(ident, _)| ident.to_string() == id)
+            {
+                write!(out, "{}", DisplayToTokens(&aliases[pos].1)).expect(WRITE_TO_MEM_FAILED_MSG);
+                Ok(())
+            } else {
+                Err(DiagnosticError::new2(
+                    ctx_sp,
+                    format!("unknown macros '{}' in this context", id),
+                ))
+            }
+        },
+    )
+    .map(|x| x.into())
 }

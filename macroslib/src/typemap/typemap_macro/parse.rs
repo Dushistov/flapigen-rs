@@ -7,7 +7,7 @@ use syn::{
 
 use super::{
     CItem, CItems, FTypeConvRule, FTypeLeftRightPair, ForeignCode, GenericAlias, GenericAliasItem,
-    GenericCItems, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE, GENERIC_ALIAS,
+    GenericCItems, ModuleName, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE, GENERIC_ALIAS,
     SWIG_CONCAT_IDENTS, SWIG_I_TYPE,
 };
 use crate::{
@@ -75,7 +75,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                     return Err(kw_la.error());
                 };
                 let mut ftype_cfg: Option<SpannedSmolStr> = None;
-                let mut ftype_req_modules = Vec::<SmolStr>::new();
+                let mut ftype_req_modules = Vec::<ModuleName>::new();
                 while !params.is_empty() && params.peek(Token![,]) {
                     params.parse::<Token![,]>()?;
                     let la = params.lookahead1();
@@ -94,7 +94,11 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                         let modules;
                         bracketed!(modules in params);
                         while !modules.is_empty() {
-                            ftype_req_modules.push(modules.parse::<LitStr>()?.value().into());
+                            let mod_name = modules.parse::<LitStr>()?;
+                            ftype_req_modules.push(ModuleName {
+                                name: mod_name.value().into(),
+                                sp: mod_name.span(),
+                            });
                             if modules.peek(Token![,]) {
                                 modules.parse::<Token![,]>()?;
                             } else if !modules.is_empty() {
@@ -535,7 +539,13 @@ impl syn::parse::Parse for GenericCItems {
         let header_name: SmolStr = module_name.value().into();
         input.parse::<Token![;]>()?;
         let types = input.parse()?;
-        Ok(GenericCItems { header_name, types })
+        Ok(GenericCItems {
+            header_name: ModuleName {
+                name: header_name,
+                sp: module_name.span(),
+            },
+            types,
+        })
     }
 }
 
