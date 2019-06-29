@@ -5,7 +5,7 @@ use petgraph::Direction;
 use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
-use syn::{parse_quote, spanned::Spanned, Type};
+use syn::{spanned::Spanned, Type};
 
 use crate::{
     cpp::{

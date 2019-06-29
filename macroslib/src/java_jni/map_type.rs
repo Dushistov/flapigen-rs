@@ -1,6 +1,6 @@
 use log::trace;
 use petgraph::Direction;
-use syn::{parse_quote, Type};
+use syn::Type;
 
 use crate::{
     error::{DiagnosticError, Result, SourceIdSpan},

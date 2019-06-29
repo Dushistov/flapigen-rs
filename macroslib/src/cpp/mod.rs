@@ -42,7 +42,7 @@ use proc_macro2::TokenStream;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use strum::IntoEnumIterator;
-use syn::{parse_quote, spanned::Spanned, Type};
+use syn::{spanned::Spanned, Type};
 
 use crate::{
     cpp::map_type::map_type,

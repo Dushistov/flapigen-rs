@@ -417,7 +417,6 @@ mod tests {
         typemap::{find_conversation_path, MapToForeignFlag},
     };
     use rustc_hash::FxHashSet;
-    use syn::{parse_quote, Type};
 
     #[test]
     fn test_merge() {

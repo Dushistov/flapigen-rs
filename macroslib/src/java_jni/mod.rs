@@ -8,7 +8,7 @@ use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
 use smol_str::SmolStr;
-use syn::{parse_quote, spanned::Spanned, Type};
+use syn::{spanned::Spanned, Type};
 
 use self::map_type::map_type;
 use crate::{

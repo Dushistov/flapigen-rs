@@ -13,7 +13,7 @@ extern crate strum_macros;
 
 macro_rules! parse_type {
     ($($tt:tt)*) => {{
-        let ty: Type = parse_quote! { $($tt)* };
+        let ty: syn::Type = syn::parse_quote! { $($tt)* };
         ty
     }}
 }
