@@ -1,21 +1,19 @@
-r##"# [ no_mangle ] pub extern "C" fn Boo_f1 ( this : * mut Boo , ) -> CRustSliceU32 {
+r##"# [ no_mangle ] pub extern "C" fn Boo_f1 ( this : * mut Boo , ) -> CRustSliceu32 {
  let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : & [ u32 ] = Boo :: f1 ( this , ) ;
- let mut ret : CRustSliceU32 = ret . swig_into ( ) ;
- ret
- }"##;
+ let ret : CRustSliceu32 = CRustSliceu32 { data : ret . as_ptr ( ) , len : ret . len ( ) , } ;
+ ret }"##;
 
 r##"# [ no_mangle ] pub extern "C" fn Boo_f2 ( this : * mut Boo , ) -> CRustObjectSlice {
  let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : & [ Foo ] = Boo :: f2 ( this , ) ;
- let mut ret : CRustObjectSlice = ret . swig_into ( ) ;
- ret
- }"##;
+ let ret : CRustObjectSlice = CRustObjectSlice { data : ret . as_ptr ( ) as * const :: std :: os :: raw :: c_void , len : ret . len ( ) , step : :: std :: mem :: size_of ::< Foo > ( ) , } ;
+ ret }"##;
 
-
-r##"# [ no_mangle ] pub extern "C" fn Boo_f3 ( this : * mut Boo , ) -> CRustSliceUsize {
+r##"# [ no_mangle ] pub extern "C" fn Boo_f3 ( this : * mut Boo , ) -> CRustSliceusize {
  let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : & [ usize ] = Boo :: f3 ( this , ) ;
- let mut ret : CRustSliceUsize = ret . swig_into ( ) ;
- ret
- }"##;
+ let ret : CRustSliceusize = CRustSliceusize { data : ret . as_ptr ( ) , len : ret . len ( ) , } ;
+ ret }"##;
+
+

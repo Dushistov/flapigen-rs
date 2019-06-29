@@ -306,16 +306,20 @@ impl Generator {
                     code: include_str!("cpp/rust_vec.h").into(),
                 });
                 foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_slice.h".into(),
-                    code: include_str!("cpp/rust_slice.h").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_result.h".into(),
                     code: include_str!("cpp/rust_result.h").into(),
                 });
                 foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_foreign_slice_iter.hpp".into(),
                     code: include_str!("cpp/rust_foreign_slice_iter.hpp").into(),
+                });
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_foreign_slice_impl.hpp".into(),
+                    code: include_str!("cpp/rust_foreign_slice_impl.hpp").into(),
+                });
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_slice_tmpl.hpp".into(),
+                    code: include_str!("cpp/rust_slice_tmpl.hpp").into(),
                 });
             }
         }

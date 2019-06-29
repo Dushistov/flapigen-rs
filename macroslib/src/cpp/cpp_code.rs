@@ -1,4 +1,4 @@
-use std::{fmt::Write, mem};
+use std::{fmt::Write, mem, rc::Rc};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
@@ -8,13 +8,15 @@ use syn::spanned::Spanned;
 
 use crate::{
     cpp::{map_any_err_to_our_err, CppForeignMethodSignature, MergeCTypesFlags},
-    error::{panic_on_syn_error, DiagnosticError},
+    error::{panic_on_syn_error, DiagnosticError, SourceIdSpan},
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     source_registry::SourceId,
     typemap::{
-        ast::DisplayToTokens, CType, CTypes, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
-        TO_VAR_TYPE_TEMPLATE,
+        ast::{DisplayToTokens, TyParamsSubstList},
+        ty::TraitNamesSet,
+        CType, CTypes, ExpandedFType, TypeMap, TypeMapConvRuleInfoExpanderHelper,
+        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
     types::{ForeignEnumInfo, ForeignerClassInfo},
     WRITE_TO_MEM_FAILED_MSG,
@@ -152,7 +154,7 @@ pub(in crate::cpp) fn cpp_list_required_includes(
 }
 
 pub(in crate::cpp) fn generate_c_type(
-    tmap: &TypeMap,
+    tmap: &mut TypeMap,
     c_types: &CTypes,
     flags: MergeCTypesFlags,
     src_id: SourceId,
@@ -216,7 +218,7 @@ impl CTypeDescriptor for syn::ItemUnion {
 }
 
 fn do_generate_c_type(
-    tmap: &TypeMap,
+    tmap: &mut TypeMap,
     flags: MergeCTypesFlags,
     src_id: SourceId,
     c_type_header_name: &str,
@@ -244,7 +246,7 @@ fn test_{name}_layout() {{
     let mut mem_out = Vec::<u8>::new();
     writeln!(&mut mem_out, "{} {{", s_id).map_err(map_any_err_to_our_err)?;
 
-    let mut includes = FxHashSet::<&str>::default();
+    let mut includes = FxHashSet::<SmolStr>::default();
 
     let mut fields_asserts_code = String::new();
     let fields = &ctype
@@ -259,20 +261,68 @@ fn test_{name}_layout() {{
                 "only fields with names accepted in this context",
             )
         })?;
-        let field_rty = tmap.ty_to_rust_type_checked(&f.ty).ok_or_else(|| {
-            DiagnosticError::new(
-                src_id,
-                f.ty.span(),
-                format!("unknown Rust type: '{}'", DisplayToTokens(&f.ty)),
-            )
-        })?;
-        let field_fty = tmap
-            .find_foreign_type_related_to_rust_ty(field_rty.to_idx())
-            .ok_or_else(|| {
-                DiagnosticError::new(src_id, f.ty.span(), "no foreign type related to this type")
-            })?;
+        let field_rty = tmap.find_or_alloc_rust_type(&f.ty, src_id);
+        let field_fty = match tmap.find_foreign_type_related_to_rust_ty(field_rty.to_idx()) {
+            Some(x) => x,
+            None => {
+                // direction not important
+                let direction = petgraph::Direction::Outgoing;
+                let idx_subst_map: Option<(Rc<_>, TyParamsSubstList)> =
+                    tmap.generic_rules().iter().find_map(|grule| {
+                        if grule.if_simple_rtype_ftype_map().is_some() {
+                            grule
+                                .is_ty_subst_of_my_generic_rtype(
+                                    &field_rty.ty,
+                                    direction,
+                                    |ty, traits| -> bool { is_ty_repr_c(tmap, ty, traits) },
+                                )
+                                .map(|sm| (grule.clone(), sm.into()))
+                        } else {
+                            None
+                        }
+                    });
+                if let Some((grule, subst_list)) = idx_subst_map {
+                    let subst_map = subst_list.as_slice().into();
+                    let new_rule = grule.subst_generic_params(
+                        subst_map,
+                        direction,
+                        &mut FTypeExpander {
+                            tmap,
+                            ty_span: (src_id, f.ty.span()),
+                        },
+                    )?;
+                    if new_rule.ftype_left_to_right.len() != 1
+                        || new_rule
+                            .ftype_left_to_right
+                            .iter()
+                            .any(|x| x.cfg_option.is_some())
+                    {
+                        return Err(DiagnosticError::new(
+                            src_id,
+                            f.ty.span(),
+                            "found generic rule for this type, but it contains options",
+                        ));
+                    }
+                    tmap.merge_conv_rule(grule.src_id, new_rule)?;
+                    tmap.find_foreign_type_related_to_rust_ty(field_rty.to_idx())
+                        .ok_or_else(|| {
+                            DiagnosticError::new(
+                                src_id,
+                                f.ty.span(),
+                                "no foreign type related to this type",
+                            )
+                        })?
+                } else {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        f.ty.span(),
+                        "no foreign type related to this type",
+                    ));
+                }
+            }
+        };
         for inc in &tmap[field_fty].provides_by_module {
-            includes.insert(inc.as_str());
+            includes.insert(inc.clone());
         }
 
         writeln!(
@@ -281,7 +331,7 @@ fn test_{name}_layout() {{
             tmap[field_fty].name.as_str(),
             id
         )
-        .map_err(map_any_err_to_our_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
         writeln!(&mut rust_layout_test, "{}: {},", id, DisplayToTokens(&f.ty))
             .map_err(map_any_err_to_our_err)?;
 
@@ -359,4 +409,98 @@ extern "C" {
         .map_err(map_any_err_to_our_err)?;
     file_out.define_item(s_id);
     Ok(())
+}
+
+fn is_ty_repr_c(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet) -> bool {
+    match traits.len() {
+        0 => true,
+        1 => {
+            for tname in traits.iter() {
+                if tname.is_ident("SwigTypeIsReprC") {
+                    if let Some(r_ty) = tmap.ty_to_rust_type_checked(ty) {
+                        if tmap
+                            .find_foreign_type_related_to_rust_ty(r_ty.to_idx())
+                            .is_none()
+                        {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+            true
+        }
+        _ => false,
+    }
+}
+
+struct FTypeExpander<'a> {
+    tmap: &'a TypeMap,
+    ty_span: SourceIdSpan,
+}
+
+impl<'a> TypeMapConvRuleInfoExpanderHelper for FTypeExpander<'_> {
+    fn swig_i_type(&mut self, _ty: &syn::Type) -> Result<syn::Type, DiagnosticError> {
+        unimplemented!()
+    }
+    fn swig_from_rust_to_i_type(
+        &mut self,
+        _ty: &syn::Type,
+        _in_var_name: &str,
+        _out_var_name: &str,
+    ) -> Result<String, DiagnosticError> {
+        unimplemented!()
+    }
+    fn swig_from_i_type_to_rust(
+        &mut self,
+        _ty: &syn::Type,
+        _in_var_name: &str,
+        _out_var_name: &str,
+    ) -> Result<String, DiagnosticError> {
+        unimplemented!()
+    }
+    fn swig_f_type(
+        &mut self,
+        ty: &syn::Type,
+        _: Option<petgraph::Direction>,
+    ) -> Result<ExpandedFType, DiagnosticError> {
+        let rty = self.tmap.ty_to_rust_type_checked(ty).ok_or_else(|| {
+            DiagnosticError::new2(
+                self.ty_span,
+                format!("Unknown rust type {}", DisplayToTokens(ty)),
+            )
+        })?;
+
+        let fty = self
+            .tmap
+            .find_foreign_type_related_to_rust_ty(rty.to_idx())
+            .ok_or_else(|| {
+                DiagnosticError::new2(
+                    self.ty_span,
+                    format!("No related foreign type to rust type {}", rty),
+                )
+            })?;
+        let ft = &self.tmap[fty];
+        Ok(ExpandedFType {
+            name: ft.name.typename.clone(),
+            provides_by_module: ft.provides_by_module.clone(),
+        })
+    }
+    fn swig_foreign_to_i_type(
+        &mut self,
+        _ty: &syn::Type,
+        _var_name: &str,
+    ) -> Result<String, DiagnosticError> {
+        unimplemented!()
+    }
+    fn swig_foreign_from_i_type(
+        &mut self,
+        _ty: &syn::Type,
+        _var_name: &str,
+    ) -> Result<String, DiagnosticError> {
+        unimplemented!()
+    }
 }

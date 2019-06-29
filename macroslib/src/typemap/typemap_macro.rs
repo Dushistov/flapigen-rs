@@ -9,7 +9,7 @@ use std::fmt::Write;
 use syn::{spanned::Spanned, LitStr, Type};
 
 use crate::{
-    error::{invalid_src_id_span, DiagnosticError, Result},
+    error::{invalid_src_id_span, DiagnosticError, Result, SourceIdSpan},
     source_registry::SourceId,
     typemap::{
         ast::{
@@ -18,6 +18,7 @@ use crate::{
         },
         ty::{FTypeConvCode, TraitNamesSet},
     },
+    WRITE_TO_MEM_FAILED_MSG,
 };
 use parse::CTypesList;
 
@@ -30,6 +31,7 @@ static SWIG_FROM_I_TYPE_TO_RUST: &str = "swig_from_i_type_to_rust";
 static SWIG_FOREIGN_TO_I_TYPE: &str = "swig_foreign_to_i_type";
 static SWIG_FOREIGN_FROM_I_TYPE: &str = "swig_foreign_from_i_type";
 static SWIG_F_TYPE: &str = "swig_f_type";
+static SWIG_SUBST_TYPE: &str = "swig_subst_type";
 
 #[derive(Debug)]
 pub(crate) struct TypeMapConvRuleInfo {
@@ -58,7 +60,7 @@ pub(crate) struct CTypes {
     pub types: Vec<CType>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ForeignCode {
     pub module_name: SmolStr,
     pub cfg_option: Option<SpannedSmolStr>,
@@ -78,13 +80,13 @@ pub(crate) struct GenericCTypes {
 }
 
 impl TypeMapConvRuleInfo {
-    pub(in crate::typemap) fn if_simple_rtype_ftype_map(
-        &self,
-    ) -> Option<(&Type, &FTypeName, &[SmolStr])> {
-        if self.rtype_right_to_left.is_some() || !self.ftype_right_to_left.is_empty() {
-            return None;
-        }
-        if self.ftype_left_to_right.len() > 1 {
+    pub(crate) fn if_simple_rtype_ftype_map(&self) -> Option<(&Type, &FTypeName, &[SmolStr])> {
+        if self.rtype_right_to_left.is_some()
+            || !self.ftype_right_to_left.is_empty()
+            || self.ftype_left_to_right.len() > 1
+            || !self.f_code.is_empty()
+            || self.c_types.is_some()
+        {
             return None;
         }
         match (
@@ -157,7 +159,6 @@ impl TypeMapConvRuleInfo {
         }
         let bounds = get_trait_bounds(generics);
         for b in &bounds {
-            println!("trait bound param {:?}", b.ty_param);
             if let Some(Some(ty)) = subst_map.get(b.ty_param.as_ref()) {
                 if !impl_trait(ty, &b.trait_names) {
                     return None;
@@ -203,15 +204,8 @@ impl TypeMapConvRuleInfo {
                                 ),
                             ));
                         };
-                        let ty = param_map.get(param).unwrap_or(None).ok_or_else(|| {
-                            DiagnosticError::new(
-                                self.src_id,
-                                code_span,
-                                format!("unknown type parameter '{}'", param),
-                            )
-                        })?;
-
-                        let i_type = expander.swig_i_type(&ty)?;
+                        let ty = find_type_param(param_map, param, (self.src_id, code_span))?;
+                        let i_type = expander.swig_i_type(ty.as_ref())?;
                         write!(out, "{}", DisplayToTokens(&i_type))
                             .expect("write to String failed");
                         Ok(())
@@ -310,8 +304,7 @@ impl TypeMapConvRuleInfo {
             rtype_right_to_left,
             ftype_left_to_right,
             ftype_right_to_left,
-            //TODO: need macros expand?
-            f_code: vec![],
+            f_code: self.f_code.clone(),
             c_types: None,
             generic_c_types: None,
             generic_aliases: vec![],
@@ -416,7 +409,11 @@ pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
         in_var_name: &str,
         out_var_name: &str,
     ) -> Result<String>;
-    fn swig_f_type(&mut self, ty: &syn::Type) -> Result<ExpandedFType>;
+    fn swig_f_type(
+        &mut self,
+        ty: &syn::Type,
+        direction: Option<Direction>,
+    ) -> Result<ExpandedFType>;
     fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
     fn swig_foreign_from_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
 }
@@ -482,14 +479,8 @@ fn concat_idents(
             }
         }
         GenericAliasItem::SwigIType(id) => {
-            let ty: &syn::Type = param_map.get(&id).unwrap_or(None).ok_or_else(|| {
-                DiagnosticError::new(
-                    src_id,
-                    id.span(),
-                    format!("unknown type parameter '{}'", id),
-                )
-            })?;
-            let i_type: syn::Type = expander.swig_i_type(ty)?;
+            let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
+            let i_type: syn::Type = expander.swig_i_type(ty.as_ref())?;
             ident.push_str(&DisplayToTokens(&i_type).to_string());
         }
         GenericAliasItem::Ident(id) => ident.push_str(&id.to_string()),
@@ -625,36 +616,54 @@ fn expand_rtype_rule(
                                     format!("{} parameters in {} instead of 2", params.len(), id),
                                 ));
                             };
-
-                            let ty = param_map.get(type_name).unwrap_or(None).ok_or_else(|| {
-                                DiagnosticError::new(
-                                    src_id,
-                                    x.span(),
-                                    format!("unknown type parameter '{}'", type_name),
-                                )
-                            })?;
+                            let ty = find_type_param(param_map, type_name, (src_id, x.span()))?;
                             let tt: String = if id == SWIG_FROM_RUST_TO_I_TYPE {
-                                expander.swig_from_rust_to_i_type(&ty, in_var_name, out_var_name)?
+                                expander.swig_from_rust_to_i_type(
+                                    ty.as_ref(),
+                                    in_var_name,
+                                    out_var_name,
+                                )?
                             } else if id == SWIG_FROM_I_TYPE_TO_RUST {
-                                expander.swig_from_i_type_to_rust(&ty, in_var_name, out_var_name)?
+                                expander.swig_from_i_type_to_rust(
+                                    ty.as_ref(),
+                                    in_var_name,
+                                    out_var_name,
+                                )?
                             } else {
                                 unreachable!()
                             };
-                            write!(out, "{}", tt).expect("write to String failed");
+                            write!(out, "{}", tt).expect(WRITE_TO_MEM_FAILED_MSG);
+                        }
+                        _ if id == SWIG_SUBST_TYPE => {
+                            let type_name = if params.len() == 1 {
+                                &params[0]
+                            } else {
+                                return Err(DiagnosticError::new(
+                                    src_id,
+                                    x.span(),
+                                    format!("{} parameters in {} instead of 1", params.len(), id),
+                                ));
+                            };
+                            let ty = find_type_param(param_map, type_name, (src_id, x.span()))?;
+                            write!(out, "{}", DisplayToTokens(ty.as_ref()))
+                                .expect(WRITE_TO_MEM_FAILED_MSG);
                         }
                         _ => {
-                            let alias_idx = generic_aliases
-                                .iter()
-                                .position(|a| a.0 == id)
-                                .ok_or_else(|| {
-                                    DiagnosticError::new(
-                                        src_id,
-                                        x.span(),
-                                        format!("unknown {} {}", GENERIC_ALIAS, id),
-                                    )
-                                })?;
-                            write!(out, "{}", DisplayToTokens(&generic_aliases[alias_idx].1))
-                                .expect("write to String failed");
+                            if let Some(alias_idx) = generic_aliases.iter().position(|a| a.0 == id)
+                            {
+                                write!(out, "{}", DisplayToTokens(&generic_aliases[alias_idx].1))
+                                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                            } else {
+                                write!(out, "{}!(", id).expect(WRITE_TO_MEM_FAILED_MSG);
+                                for (i, p) in params.iter().enumerate() {
+                                    if i == 0 {
+                                        out.push_str(p);
+                                    } else {
+                                        write!(out, ", {}", p).expect(WRITE_TO_MEM_FAILED_MSG);
+                                    }
+                                }
+                                out.push_str(")");
+                            }
                         }
                     }
                     Ok(())
@@ -690,6 +699,7 @@ fn expand_ftype_rule(
                 ftype,
                 param_map,
                 expander,
+                generic_aliases,
                 &mut provides_by_module,
             )?),
             OnlyRight(ref ftype) => OnlyRight(expand_ftype_name(
@@ -697,11 +707,26 @@ fn expand_ftype_rule(
                 ftype,
                 param_map,
                 expander,
+                generic_aliases,
                 &mut provides_by_module,
             )?),
             Both(ref fl, ref fr) => Both(
-                expand_ftype_name(src_id, fl, param_map, expander, &mut provides_by_module)?,
-                expand_ftype_name(src_id, fr, param_map, expander, &mut provides_by_module)?,
+                expand_ftype_name(
+                    src_id,
+                    fl,
+                    param_map,
+                    expander,
+                    generic_aliases,
+                    &mut provides_by_module,
+                )?,
+                expand_ftype_name(
+                    src_id,
+                    fr,
+                    param_map,
+                    expander,
+                    generic_aliases,
+                    &mut provides_by_module,
+                )?,
             ),
         };
         let code = match grule.code {
@@ -718,6 +743,7 @@ fn expand_ftype_rule(
                                     out,
                                     param_map,
                                     expander,
+                                    generic_aliases,
                                 )?;
                             }
                             _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {
@@ -735,44 +761,22 @@ fn expand_ftype_rule(
                                     ));
                                 };
 
-                                let ty =
-                                    param_map.get(type_name).unwrap_or(None).ok_or_else(|| {
-                                        DiagnosticError::new(
-                                            src_id,
-                                            x.span(),
-                                            format!("unknown type parameter '{}'", type_name),
-                                        )
-                                    })?;
+                                let ty = find_type_param(param_map, type_name, (src_id, x.span()))?;
                                 let tt: String = if id == SWIG_FOREIGN_TO_I_TYPE {
-                                    expander.swig_foreign_to_i_type(&ty, var_name)?
+                                    expander.swig_foreign_to_i_type(ty.as_ref(), var_name)?
                                 } else if id == SWIG_FOREIGN_FROM_I_TYPE {
-                                    expander.swig_foreign_from_i_type(&ty, var_name)?
+                                    expander.swig_foreign_from_i_type(ty.as_ref(), var_name)?
                                 } else {
                                     unreachable!()
                                 };
-                                write!(out, "{}", tt).expect("write to String failed");
+                                write!(out, "{}", tt).expect(WRITE_TO_MEM_FAILED_MSG);
                             }
                             _ => {
-                                let alias_idx = generic_aliases
-                                    .iter()
-                                    .position(|a| a.0 == id)
-                                    .ok_or_else(|| {
-                                        DiagnosticError::new(
-                                            src_id,
-                                            x.span(),
-                                            format!(
-                                                "unknown {} {} in f_type conversation code",
-                                                GENERIC_ALIAS, id
-                                            ),
-                                        )
-                                    })?;
-
-                                write!(
-                                    out,
-                                    "{}",
-                                    expander.swig_f_type(&generic_aliases[alias_idx].1)?.name
-                                )
-                                .expect("write to String failed");
+                                return Err(DiagnosticError::new(
+                                    src_id,
+                                    x.span(),
+                                    format!("unknown macro {} in f_type conversation code", id),
+                                ))
                             }
                         }
                         Ok(())
@@ -802,29 +806,55 @@ fn call_swig_f_type(
     out: &mut String,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[(&syn::Ident, Type)],
 ) -> Result<Vec<SmolStr>> {
-    let type_name = if params.len() == 1 {
-        &params[0]
+    let (type_name, direction) = match params.len() {
+        1 => (&params[0], None),
+        2 => {
+            let direction = match params[1] {
+                "output" => Direction::Outgoing,
+                "input" => Direction::Incoming,
+                _ => {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        sp,
+                        format!(
+                            "{} parameters in {} instead of 1",
+                            params.len(),
+                            SWIG_F_TYPE
+                        ),
+                    ))
+                }
+            };
+
+            (&params[0], Some(direction))
+        }
+        _ => {
+            return Err(DiagnosticError::new(
+                src_id,
+                sp,
+                format!(
+                    "{} parameters in {} instead of 1",
+                    params.len(),
+                    SWIG_F_TYPE
+                ),
+            ))
+        }
+    };
+    let ty = if type_name.ends_with("!()") {
+        let alias_name = (&type_name[0..type_name.len() - 3]).trim();
+        let pos = generic_aliases
+            .iter()
+            .position(|a| a.0 == alias_name)
+            .ok_or_else(|| {
+                DiagnosticError::new(src_id, sp, format!("unknown type alias '{}'", alias_name))
+            })?;
+        TyValueOrRef::Ref(&generic_aliases[pos].1)
     } else {
-        return Err(DiagnosticError::new(
-            src_id,
-            sp,
-            format!(
-                "{} parameters in {} instead of 1",
-                params.len(),
-                SWIG_F_TYPE
-            ),
-        ));
+        find_type_param(param_map, type_name, (src_id, sp))?
     };
 
-    let ty = param_map.get(type_name).unwrap_or(None).ok_or_else(|| {
-        DiagnosticError::new(
-            src_id,
-            sp,
-            format!("unknown type parameter '{}'", type_name),
-        )
-    })?;
-    let f_type = expander.swig_f_type(ty)?;
+    let f_type = expander.swig_f_type(ty.as_ref(), direction)?;
     out.push_str(&f_type.name);
     Ok(f_type.provides_by_module)
 }
@@ -834,14 +864,22 @@ fn expand_ftype_name(
     ftype: &FTypeName,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[(&syn::Ident, Type)],
     provides_by_module: &mut Vec<SmolStr>,
 ) -> Result<FTypeName> {
     let new_fytpe = expand_macroses(
         ftype.name.as_str(),
         |id: &str, params: Vec<&str>, out: &mut String| {
             if id == SWIG_F_TYPE {
-                let mut modules: Vec<SmolStr> =
-                    call_swig_f_type(src_id, ftype.sp, params, out, param_map, expander)?;
+                let mut modules: Vec<SmolStr> = call_swig_f_type(
+                    src_id,
+                    ftype.sp,
+                    params,
+                    out,
+                    param_map,
+                    expander,
+                    generic_aliases,
+                )?;
                 provides_by_module.append(&mut modules);
                 Ok(())
             } else {
@@ -857,4 +895,48 @@ fn expand_ftype_name(
         name: new_fytpe.into(),
         sp: ftype.sp,
     })
+}
+
+enum TyValueOrRef<'a> {
+    Value(Type),
+    Ref(&'a Type),
+}
+
+impl<'a> AsRef<Type> for TyValueOrRef<'_> {
+    fn as_ref(&self) -> &Type {
+        match self {
+            TyValueOrRef::Value(ref ty) => ty,
+            TyValueOrRef::Ref(ty) => ty,
+        }
+    }
+}
+
+fn find_type_param<'a, 'b>(
+    param_map: &'b TyParamsSubstMap,
+    param: &'a str,
+    param_span: SourceIdSpan,
+) -> Result<TyValueOrRef<'b>> {
+    if let Some(Some(ty)) = param_map.get(param) {
+        return Ok(TyValueOrRef::Ref(ty));
+    }
+    let compound_ty: Type = parse_ty_with_given_span(param, param_span.1).map_err(|err| {
+        DiagnosticError::new2(param_span, format!("unknown type parameter '{}'", param))
+            .add_span_note(invalid_src_id_span(), err)
+    })?;
+    if let Type::Reference(ty_ref) = compound_ty {
+        let param = format!("{}", DisplayToTokens(&ty_ref.elem));
+        if let Some(Some(ty)) = param_map.get(&param) {
+            let new_ty = Type::Reference(syn::TypeReference {
+                and_token: ty_ref.and_token,
+                lifetime: ty_ref.lifetime,
+                mutability: ty_ref.mutability,
+                elem: Box::new(ty.clone()),
+            });
+            return Ok(TyValueOrRef::Value(new_ty));
+        }
+    }
+    Err(DiagnosticError::new2(
+        param_span,
+        format!("unknown type parameter '{}'", param),
+    ))
 }

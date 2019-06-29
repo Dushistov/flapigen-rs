@@ -19,6 +19,25 @@ $out = QDateTime::fromMSecsSinceEpoch($pin * 1000, Qt::UTC, 0);
 }
 
 #[test]
+fn test_foreign_typemap_simple_generic() {
+    let rule = macro_to_conv_rule(parse_quote! {
+        foreign_typemap!(
+            (r_type) <T: SwigTypeIsReprC> *const T;
+            (f_type) "const swig_i_type!(T) *";
+        )
+    });
+    assert!(rule.is_generic());
+    assert!(rule.if_simple_rtype_ftype_map().is_some());
+    assert!(rule.contains_data_for_language_backend());
+    let ty = parse_type! { * const u32 };
+    let subst_map =
+        rule.is_ty_subst_of_my_generic_rtype(&ty, petgraph::Direction::Outgoing, |_ty, _traits| {
+            true
+        });
+    assert!(subst_map.is_some());
+}
+
+#[test]
 fn test_foreign_typemap_cpp_bool() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
@@ -321,7 +340,11 @@ fn test_foreign_typemap_cpp_pair_expand() {
         ) -> Result<String> {
             self.swig_from_rust_to_i_type(ty, in_var_name, out_var_name)
         }
-        fn swig_f_type(&mut self, ty: &syn::Type) -> Result<ExpandedFType> {
+        fn swig_f_type(
+            &mut self,
+            ty: &syn::Type,
+            _: Option<petgraph::Direction>,
+        ) -> Result<ExpandedFType> {
             Ok(ExpandedFType {
                 name: if *ty == parse_type!(i32) {
                     "int32_t"

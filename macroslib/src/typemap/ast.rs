@@ -615,26 +615,6 @@ pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> GenericTraitBoundVec 
     ret
 }
 
-pub(crate) fn if_type_slice_return_elem_type(ty: &Type, accept_mutbl_slice: bool) -> Option<&Type> {
-    if let syn::Type::Reference(syn::TypeReference {
-        ref elem,
-        mutability,
-        ..
-    }) = ty
-    {
-        if mutability.is_some() && !accept_mutbl_slice {
-            return None;
-        }
-        if let syn::Type::Slice(syn::TypeSlice { ref elem, .. }) = **elem {
-            Some(&*elem)
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
 pub(crate) fn if_option_return_some_type(ty: &RustType) -> Option<Type> {
     let generic_params: syn::Generics = parse_quote! { <T> };
     let from_ty: Type = parse_quote! { Option<T> };
@@ -1039,20 +1019,6 @@ mod tests {
                 v
             }
         );
-    }
-
-    #[test]
-    fn test_if_type_slice_return_elem_type() {
-        let ty: Type = parse_quote! {
-            &[i32]
-        };
-        let elem_ty: Type = parse_quote! { i32 };
-        assert_eq!(
-            elem_ty,
-            *if_type_slice_return_elem_type(&ty, false).unwrap()
-        );
-
-        assert!(if_type_slice_return_elem_type(&elem_ty, false).is_none());
     }
 
     #[test]

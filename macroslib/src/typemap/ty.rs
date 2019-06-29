@@ -105,11 +105,7 @@ impl ImplementsSet {
     }
     pub(crate) fn contains_subset(&self, subset: &TraitNamesSet) -> bool {
         for path in &subset.inner {
-            if !self
-                .inner
-                .iter()
-                .any(|id: &SmolStr| path.is_ident(id.as_str()))
-            {
+            if !self.contains_path(path) {
                 return false;
             }
         }
@@ -117,6 +113,11 @@ impl ImplementsSet {
     }
     pub(crate) fn contains(&self, trait_name: &str) -> bool {
         self.inner.iter().any(|it| *it == trait_name)
+    }
+    pub(crate) fn contains_path(&self, path: &syn::Path) -> bool {
+        self.inner
+            .iter()
+            .any(|id: &SmolStr| path.is_ident(id.as_str()))
     }
 }
 
@@ -137,6 +138,12 @@ impl<'a> TraitNamesSet<'a> {
     #[inline]
     pub(crate) fn is_empty(&self) -> bool {
         self.inner.is_empty()
+    }
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &syn::Path> {
+        self.inner.iter().map(|x| *x)
+    }
+    pub(crate) fn len(&self) -> usize {
+        self.inner.len()
     }
 }
 

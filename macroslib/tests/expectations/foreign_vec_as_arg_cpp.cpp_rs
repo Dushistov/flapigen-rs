@@ -1,7 +1,7 @@
 r##"# [ no_mangle ] pub extern "C" fn FooImpl_alternateBoarding ( this : * mut Foo < >, ) -> CRustObjectSlice {
  let this : & Foo < > = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : & [ Boo ] = Foo :: alternate_boarding ( this , ) ;
- let mut ret : CRustObjectSlice = ret . swig_into ( ) ;
+ let ret : CRustObjectSlice = CRustObjectSlice { data : ret . as_ptr ( ) as * const :: std :: os :: raw :: c_void , len : ret . len ( ) , step : :: std :: mem :: size_of ::< Boo > ( ) , } ;
  ret }"##;
 
 r##"# [ no_mangle ] pub extern "C" fn FooImpl_setAlternateBoarding ( this : * mut Foo < >, a_0 : CRustForeignVec , ) -> ( ) {

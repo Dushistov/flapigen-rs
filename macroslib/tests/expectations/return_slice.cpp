@@ -1,30 +1,30 @@
-"CRustSliceU32 f1() const noexcept;";
-"struct CRustSliceU32 Boo_f1(const BooOpaque * const self);";
+"RustSlice<uint32_t> f1() const noexcept;";
+"struct CRustSliceu32 Boo_f1(const BooOpaque * const self);";
 r#"template<bool OWN_DATA>
-    inline  CRustSliceU32 BooWrapper<OWN_DATA>::f1() const noexcept
+    inline RustSlice<uint32_t> BooWrapper<OWN_DATA>::f1() const noexcept
     {
 
-        struct CRustSliceU32 ret = Boo_f1(this->self_);
-        return ret;
+        struct CRustSliceu32 ret = Boo_f1(this->self_);
+        return RustSlice<uint32_t>{ret.data, ret.len};
     }"#;
 
 "struct CRustObjectSlice Boo_f2(const BooOpaque * const self);";
-"RustForeignSlice<FooRef> f2() const noexcept;";
+"RustForeignSlice<FooRef, CRustObjectSlice> f2() const noexcept;";
 r#"template<bool OWN_DATA>
-    inline RustForeignSlice<FooRef> BooWrapper<OWN_DATA>::f2() const noexcept
+    inline RustForeignSlice<FooRef, CRustObjectSlice> BooWrapper<OWN_DATA>::f2() const noexcept
     {
 
         struct CRustObjectSlice ret = Boo_f2(this->self_);
-        return RustForeignSlice<FooRef>{ret};
+        return RustForeignSlice<FooRef, CRustObjectSlice>{ret};
     }"#;
 
-"CRustSliceUsize f3() const noexcept;";
-"struct CRustSliceUsize Boo_f3(const BooOpaque * const self);";
+"RustSlice<uintptr_t> f3() const noexcept;";
+"struct CRustSliceusize Boo_f3(const BooOpaque * const self);";
 r#"template<bool OWN_DATA>
-    inline  CRustSliceUsize BooWrapper<OWN_DATA>::f3() const noexcept
+    inline RustSlice<uintptr_t> BooWrapper<OWN_DATA>::f3() const noexcept
     {
 
-        struct CRustSliceUsize ret = Boo_f3(this->self_);
-        return ret;
+        struct CRustSliceusize ret = Boo_f3(this->self_);
+        return RustSlice<uintptr_t>{ret.data, ret.len};
     }"#;
 

@@ -7,6 +7,8 @@
 
 #include "rust_foreign_slice_iter.hpp"
 #include "rust_slice.h"
+#include "rust_slice_mut.h"
+#include "rust_foreign_slice_impl.hpp"
 
 extern "C" {
 #endif
@@ -60,7 +62,7 @@ struct CRustVecF64 {
 void CRustVecF64_free(struct CRustVecF64 vec);
 
 struct CRustForeignVec {
-    const void *data;
+    void *data;
     uintptr_t len;
     uintptr_t capacity;
     uintptr_t step;
@@ -237,10 +239,16 @@ public:
         return const_iterator{ p, this->step };
     }
 
-    RustForeignSlice<ForeignClassRef> as_slice()
+    RustForeignSlice<ForeignClassRef, CRustObjectSlice> as_slice() const noexcept
     {
-        return RustForeignSlice<ForeignClassRef>{ CRustObjectSlice{ this->data, this->len,
-                                                                    this->step } };
+        return RustForeignSlice<ForeignClassRef, CRustObjectSlice>{ CRustObjectSlice{
+            this->data, this->len, this->step } };
+    }
+
+    RustForeignSlice<ForeignClassRef, CRustObjectMutSlice> as_slice_mut() noexcept
+    {
+        return RustForeignSlice<ForeignClassRef, CRustObjectMutSlice>{ CRustObjectMutSlice{
+            this->data, this->len, this->step } };
     }
 
     void clear() noexcept { free_mem(); }
