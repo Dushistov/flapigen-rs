@@ -482,22 +482,6 @@ pub struct CRustString {
     capacity: usize,
 }
 
-#[allow(private_no_mangle_fns)]
-#[no_mangle]
-pub extern "C" fn crust_string_free(x: CRustString) {
-    let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
-    drop(s);
-}
-
-#[allow(private_no_mangle_fns)]
-#[no_mangle]
-pub extern "C" fn crust_string_clone(x: CRustString) -> CRustString {
-    let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
-    let ret = CRustString::from_string(s.clone());
-    ::std::mem::forget(s);
-    ret
-}
-
 #[allow(dead_code)]
 impl CRustString {
     pub fn from_string(s: String) -> CRustString {
@@ -906,20 +890,23 @@ foreign_typemap!(
             len: usize,
             capacity: usize,
         }
+
+        #[no_mangle]
+        pub extern "C" fn crust_string_free(x: CRustString) {
+            let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
+            drop(s);
+        }
+
+        #[no_mangle]
+        pub extern "C" fn crust_string_clone(x: CRustString) -> CRustString {
+            let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
+            let ret = CRustString::from_string(s.clone());
+            ::std::mem::forget(s);
+            ret
+        }
     );
     foreigner_code!(module = "rust_str.h";
                     r##"
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void crust_string_free(struct CRustString str);
-struct CRustString crust_string_clone(struct CRustString str);
-
-#ifdef __cplusplus
-} // extern "C" {
-#endif
-
 #ifdef __cplusplus
 
 #include <string>

@@ -7,18 +7,19 @@ use smol_str::SmolStr;
 use syn::spanned::Spanned;
 
 use crate::{
-    cpp::{map_any_err_to_our_err, CppForeignMethodSignature, MergeCTypesFlags},
+    code_parse::parse_fn_args,
+    cpp::{map_any_err_to_our_err, CppForeignMethodSignature, MergeCItemsFlags},
     error::{panic_on_syn_error, DiagnosticError, SourceIdSpan},
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     source_registry::SourceId,
     typemap::{
         ast::{DisplayToTokens, TyParamsSubstList},
-        ty::TraitNamesSet,
-        CType, CTypes, ExpandedFType, TypeMap, TypeMapConvRuleInfoExpanderHelper,
+        ty::{ForeignType, TraitNamesSet},
+        CItem, CItems, ExpandedFType, TypeMap, TypeMapConvRuleInfoExpanderHelper,
         FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
-    types::{ForeignEnumInfo, ForeignerClassInfo},
+    types::{FnArg, ForeignEnumInfo, ForeignerClassInfo},
     WRITE_TO_MEM_FAILED_MSG,
 };
 
@@ -155,17 +156,27 @@ pub(in crate::cpp) fn cpp_list_required_includes(
 
 pub(in crate::cpp) fn generate_c_type(
     tmap: &mut TypeMap,
-    c_types: &CTypes,
-    flags: MergeCTypesFlags,
+    c_types: &CItems,
+    flags: MergeCItemsFlags,
     src_id: SourceId,
     out: &mut FileWriteCache,
 ) -> Result<Vec<TokenStream>, DiagnosticError> {
     let mut rust_code = vec![];
 
-    for c_type in &c_types.types {
-        let ctype: &CTypeDescriptor = match c_type {
-            CType::Struct(ref s) => s,
-            CType::Union(ref u) => u,
+    for c_type in &c_types.items {
+        let ctype: &CItemDescriptor = match c_type {
+            CItem::Struct(ref s) => s,
+            CItem::Union(ref u) => u,
+            CItem::Fn(ref f) => {
+                let fn_id = format!("fn {}", f.ident);
+                if out.is_item_defined(&fn_id) {
+                    continue;
+                }
+                add_func_forward_decl(f, out, tmap, src_id, c_types.header_name.as_str())?;
+                rust_code.push(f.into_token_stream());
+                out.define_item(fn_id);
+                continue;
+            }
         };
         do_generate_c_type(
             tmap,
@@ -181,13 +192,13 @@ pub(in crate::cpp) fn generate_c_type(
     Ok(rust_code)
 }
 
-trait CTypeDescriptor: ToTokens {
+trait CItemDescriptor: ToTokens {
     fn c_type_prefix(&self) -> &'static str;
     fn name(&self) -> &syn::Ident;
     fn fields(&self) -> Result<&syn::FieldsNamed, syn::Error>;
 }
 
-impl CTypeDescriptor for syn::ItemStruct {
+impl CItemDescriptor for syn::ItemStruct {
     fn c_type_prefix(&self) -> &'static str {
         "struct"
     }
@@ -205,7 +216,7 @@ impl CTypeDescriptor for syn::ItemStruct {
     }
 }
 
-impl CTypeDescriptor for syn::ItemUnion {
+impl CItemDescriptor for syn::ItemUnion {
     fn c_type_prefix(&self) -> &'static str {
         "union"
     }
@@ -219,10 +230,10 @@ impl CTypeDescriptor for syn::ItemUnion {
 
 fn do_generate_c_type(
     tmap: &mut TypeMap,
-    flags: MergeCTypesFlags,
+    flags: MergeCItemsFlags,
     src_id: SourceId,
     c_type_header_name: &str,
-    ctype: &CTypeDescriptor,
+    ctype: &CItemDescriptor,
     file_out: &mut FileWriteCache,
     rust_code: &mut Vec<TokenStream>,
 ) -> Result<(), DiagnosticError> {
@@ -261,66 +272,9 @@ fn test_{name}_layout() {{
                 "only fields with names accepted in this context",
             )
         })?;
-        let field_rty = tmap.find_or_alloc_rust_type(&f.ty, src_id);
-        let field_fty = match tmap.find_foreign_type_related_to_rust_ty(field_rty.to_idx()) {
-            Some(x) => x,
-            None => {
-                // direction not important
-                let direction = petgraph::Direction::Outgoing;
-                let idx_subst_map: Option<(Rc<_>, TyParamsSubstList)> =
-                    tmap.generic_rules().iter().find_map(|grule| {
-                        if grule.if_simple_rtype_ftype_map().is_some() {
-                            grule
-                                .is_ty_subst_of_my_generic_rtype(
-                                    &field_rty.ty,
-                                    direction,
-                                    |ty, traits| -> bool { is_ty_repr_c(tmap, ty, traits) },
-                                )
-                                .map(|sm| (grule.clone(), sm.into()))
-                        } else {
-                            None
-                        }
-                    });
-                if let Some((grule, subst_list)) = idx_subst_map {
-                    let subst_map = subst_list.as_slice().into();
-                    let new_rule = grule.subst_generic_params(
-                        subst_map,
-                        direction,
-                        &mut FTypeExpander {
-                            tmap,
-                            ty_span: (src_id, f.ty.span()),
-                        },
-                    )?;
-                    if new_rule.ftype_left_to_right.len() != 1
-                        || new_rule
-                            .ftype_left_to_right
-                            .iter()
-                            .any(|x| x.cfg_option.is_some())
-                    {
-                        return Err(DiagnosticError::new(
-                            src_id,
-                            f.ty.span(),
-                            "found generic rule for this type, but it contains options",
-                        ));
-                    }
-                    tmap.merge_conv_rule(grule.src_id, new_rule)?;
-                    tmap.find_foreign_type_related_to_rust_ty(field_rty.to_idx())
-                        .ok_or_else(|| {
-                            DiagnosticError::new(
-                                src_id,
-                                f.ty.span(),
-                                "no foreign type related to this type",
-                            )
-                        })?
-                } else {
-                    return Err(DiagnosticError::new(
-                        src_id,
-                        f.ty.span(),
-                        "no foreign type related to this type",
-                    ));
-                }
-            }
-        };
+
+        let field_fty = simple_map_rust_to_c(tmap, &f.ty, src_id)?;
+
         for inc in &tmap[field_fty].provides_by_module {
             includes.insert(inc.clone());
         }
@@ -370,13 +324,13 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
     )
     .map_err(map_any_err_to_our_err)?;
     match flags {
-        MergeCTypesFlags::DefineOnlyCType => {
+        MergeCItemsFlags::DefineOnlyCItem => {
             let tt: TokenStream = syn::parse_str(&rust_layout_test).unwrap_or_else(|err| {
                 panic_on_syn_error("Internal: layout unit test", rust_layout_test, err)
             });
             rust_code.push(tt);
         }
-        MergeCTypesFlags::DefineAlsoRustType => {
+        MergeCItemsFlags::DefineAlsoRustType => {
             rust_code.push(ctype.into_token_stream());
         }
     }
@@ -394,10 +348,8 @@ extern "C" {
 #endif
 "##,
         )
-        .map_err(map_any_err_to_our_err)?;
-    file_out
-        .write_all(&mem_out)
-        .map_err(map_any_err_to_our_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+    file_out.write_all(&mem_out).expect(WRITE_TO_MEM_FAILED_MSG);
     file_out
         .write_all(
             br##"
@@ -406,7 +358,7 @@ extern "C" {
 #endif
 "##,
         )
-        .map_err(map_any_err_to_our_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     file_out.define_item(s_id);
     Ok(())
 }
@@ -503,4 +455,161 @@ impl<'a> TypeMapConvRuleInfoExpanderHelper for FTypeExpander<'_> {
     ) -> Result<String, DiagnosticError> {
         unimplemented!()
     }
+}
+
+fn simple_map_rust_to_c(
+    tmap: &mut TypeMap,
+    ty: &syn::Type,
+    src_id: SourceId,
+) -> Result<ForeignType, DiagnosticError> {
+    let rty = tmap.find_or_alloc_rust_type(ty, src_id);
+    match tmap.find_foreign_type_related_to_rust_ty(rty.to_idx()) {
+        Some(x) => Ok(x),
+        None => {
+            // direction not important
+            let direction = petgraph::Direction::Outgoing;
+            let idx_subst_map: Option<(Rc<_>, TyParamsSubstList)> =
+                tmap.generic_rules().iter().find_map(|grule| {
+                    if grule.if_simple_rtype_ftype_map().is_some() {
+                        grule
+                            .is_ty_subst_of_my_generic_rtype(
+                                &rty.ty,
+                                direction,
+                                |ty, traits| -> bool { is_ty_repr_c(tmap, ty, traits) },
+                            )
+                            .map(|sm| (grule.clone(), sm.into()))
+                    } else {
+                        None
+                    }
+                });
+            if let Some((grule, subst_list)) = idx_subst_map {
+                let subst_map = subst_list.as_slice().into();
+                let new_rule = grule.subst_generic_params(
+                    subst_map,
+                    direction,
+                    &mut FTypeExpander {
+                        tmap,
+                        ty_span: (src_id, ty.span()),
+                    },
+                )?;
+                if new_rule.ftype_left_to_right.len() != 1
+                    || new_rule
+                        .ftype_left_to_right
+                        .iter()
+                        .any(|x| x.cfg_option.is_some())
+                {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        ty.span(),
+                        "found generic rule for this type, but it contains options",
+                    ));
+                }
+                tmap.merge_conv_rule(grule.src_id, new_rule)?;
+                tmap.find_foreign_type_related_to_rust_ty(rty.to_idx())
+                    .ok_or_else(|| {
+                        DiagnosticError::new(
+                            src_id,
+                            ty.span(),
+                            "no foreign type related to this type",
+                        )
+                    })
+            } else {
+                Err(DiagnosticError::new(
+                    src_id,
+                    ty.span(),
+                    "no foreign type related to this type",
+                ))
+            }
+        }
+    }
+}
+
+fn add_func_forward_decl(
+    f: &syn::ItemFn,
+    out: &mut FileWriteCache,
+    tmap: &mut TypeMap,
+    src_id: SourceId,
+    c_type_header_name: &str,
+) -> Result<(), DiagnosticError> {
+    use std::io::Write;
+
+    out.write_all(
+        br##"
+#ifdef __cplusplus
+extern "C" {
+#endif
+"##,
+    )
+    .expect(WRITE_TO_MEM_FAILED_MSG);
+
+    let mut fn_decl_out = Vec::with_capacity(100);
+    let mut includes = FxHashSet::<SmolStr>::default();
+
+    match f.decl.output {
+        syn::ReturnType::Default => {
+            fn_decl_out
+                .write_all(b"void")
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+        }
+        syn::ReturnType::Type(_, ref ty) => {
+            let fti = simple_map_rust_to_c(tmap, &*ty, src_id)?;
+            for inc in &tmap[fti].provides_by_module {
+                includes.insert(inc.clone());
+            }
+            fn_decl_out
+                .write_all(tmap[fti].name.as_str().as_bytes())
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+        }
+    }
+    write!(&mut fn_decl_out, " {}(", f.ident).expect(WRITE_TO_MEM_FAILED_MSG);
+
+    let fn_args = parse_fn_args(f.decl.inputs.clone())
+        .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+    for (i, arg) in fn_args.iter().enumerate() {
+        match arg {
+            FnArg::SelfArg(sp, _) => {
+                return Err(DiagnosticError::new(
+                    src_id,
+                    *sp,
+                    "it is impossible to self argument in this context",
+                ))
+            }
+            FnArg::Default(named_arg) => {
+                let fti = simple_map_rust_to_c(tmap, &named_arg.ty, src_id)?;
+                for inc in &tmap[fti].provides_by_module {
+                    includes.insert(inc.clone());
+                }
+                if i != 0 {
+                    fn_decl_out.write_all(b", ").expect(WRITE_TO_MEM_FAILED_MSG);
+                }
+                write!(
+                    &mut fn_decl_out,
+                    "{} {}",
+                    tmap[fti].name.as_str(),
+                    named_arg.name
+                )
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+            }
+        }
+    }
+
+    fn_decl_out.write_all(b");").expect(WRITE_TO_MEM_FAILED_MSG);
+
+    let self_inc = format!("\"{}\"", c_type_header_name);
+    for inc in &includes {
+        if self_inc != *inc {
+            writeln!(out, "#include {}", inc).expect(WRITE_TO_MEM_FAILED_MSG);
+        }
+    }
+    out.write_all(&fn_decl_out).expect(WRITE_TO_MEM_FAILED_MSG);
+
+    out.write_all(
+        br##"
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+"##,
+    )
+    .expect(WRITE_TO_MEM_FAILED_MSG);
+    Ok(())
 }

@@ -20,7 +20,7 @@ use crate::{
     },
     WRITE_TO_MEM_FAILED_MSG,
 };
-use parse::CTypesList;
+use parse::CItemsList;
 
 static GENERIC_ALIAS: &str = "generic_alias";
 static SWIG_CONCAT_IDENTS: &str = "swig_concat_idents";
@@ -42,22 +42,23 @@ pub(crate) struct TypeMapConvRuleInfo {
     pub ftype_left_to_right: Vec<FTypeConvRule>,
     pub ftype_right_to_left: Vec<FTypeConvRule>,
     /// For C++ case it is possible to introduce some C types
-    pub c_types: Option<CTypes>,
-    pub generic_c_types: Option<GenericCTypes>,
+    pub c_types: Option<CItems>,
+    pub generic_c_types: Option<GenericCItems>,
     pub f_code: Vec<ForeignCode>,
     pub generic_aliases: Vec<GenericAlias>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum CType {
+pub(crate) enum CItem {
     Struct(syn::ItemStruct),
     Union(syn::ItemUnion),
+    Fn(syn::ItemFn),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct CTypes {
+pub(crate) struct CItems {
     pub header_name: SmolStr,
-    pub types: Vec<CType>,
+    pub items: Vec<CItem>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,7 +75,7 @@ pub(crate) struct GenericAlias {
 }
 
 #[derive(Debug)]
-pub(crate) struct GenericCTypes {
+pub(crate) struct GenericCItems {
     pub header_name: SmolStr,
     pub types: TokenStream,
 }
@@ -180,7 +181,7 @@ impl TypeMapConvRuleInfo {
         &self,
         param_map: &TyParamsSubstMap,
         expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-    ) -> Result<Option<CTypes>> {
+    ) -> Result<Option<CItems>> {
         assert!(self.is_generic());
         let type_aliases =
             build_generic_aliases(self.src_id, &self.generic_aliases, &param_map, expander)?;
@@ -225,7 +226,7 @@ impl TypeMapConvRuleInfo {
                     }
                 },
             )?;
-            let ctypes_list: CTypesList =
+            let citems_list: CItemsList =
                 syn::LitStr::new(&code, code_span).parse().map_err(|err| {
                     DiagnosticError::new(
                         self.src_id,
@@ -238,9 +239,9 @@ impl TypeMapConvRuleInfo {
                     )
                 })?;
             assert!(self.c_types.is_none());
-            c_types = Some(CTypes {
+            c_types = Some(CItems {
                 header_name: generic_c_types.header_name.clone(),
-                types: ctypes_list.0,
+                items: citems_list.0,
             });
         }
         Ok(c_types)

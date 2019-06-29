@@ -6,8 +6,8 @@ use syn::{
 };
 
 use super::{
-    CType, CTypes, FTypeConvRule, FTypeLeftRightPair, ForeignCode, GenericAlias, GenericAliasItem,
-    GenericCTypes, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE, GENERIC_ALIAS,
+    CItem, CItems, FTypeConvRule, FTypeLeftRightPair, ForeignCode, GenericAlias, GenericAliasItem,
+    GenericCItems, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE, GENERIC_ALIAS,
     SWIG_CONCAT_IDENTS, SWIG_I_TYPE,
 };
 use crate::{
@@ -255,10 +255,10 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                             input.error(format!("{} should be used only once", DEFINE_C_TYPE))
                         );
                     }
-                    match syn::parse2::<CTypes>(mac.tts.clone()) {
+                    match syn::parse2::<CItems>(mac.tts.clone()) {
                         Ok(x) => c_types = Some(x),
 
-                        Err(_) => generic_c_types = Some(syn::parse2::<GenericCTypes>(mac.tts)?),
+                        Err(_) => generic_c_types = Some(syn::parse2::<GenericCItems>(mac.tts)?),
                     }
                 } else if mac.path.is_ident(FOREIGN_CODE) || mac.path.is_ident(FOREIGNER_CODE) {
                     let fc_elem = syn::parse2::<ForeignCode>(mac.tts)?;
@@ -292,7 +292,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
             ))
         } else if rule.generic_c_types.is_some() && !rule.is_generic() {
             Err(syn::Error::new(
-                rule.generic_aliases[0].alias.span(),
+                rule.generic_c_types.unwrap().types.span(),
                 format!(
                     "there is generic {}, but r_type is not generic",
                     DEFINE_C_TYPE
@@ -416,24 +416,24 @@ fn parse_r_type_rule(
     Ok(())
 }
 
-impl syn::parse::Parse for CTypes {
+impl syn::parse::Parse for CItems {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
         let header_name: SmolStr = module_name.value().into();
         input.parse::<Token![;]>()?;
-        let ctypes_list: CTypesList = input.parse()?;
-        Ok(CTypes {
+        let citems_list: CItemsList = input.parse()?;
+        Ok(CItems {
             header_name,
-            types: ctypes_list.0,
+            items: citems_list.0,
         })
     }
 }
 
-pub(super) struct CTypesList(pub(super) Vec<CType>);
+pub(super) struct CItemsList(pub(super) Vec<CItem>);
 
-impl syn::parse::Parse for CTypesList {
+impl syn::parse::Parse for CItemsList {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut types = vec![];
         while !input.is_empty() {
@@ -443,18 +443,44 @@ impl syn::parse::Parse for CTypesList {
                     if !has_repr_c_attr(&s.attrs) {
                         return Err(syn::Error::new(s.span(), "struct has no repr(C) attribute"));
                     }
-                    types.push(CType::Struct(s));
+                    types.push(CItem::Struct(s));
                 }
                 syn::Item::Union(u) => {
                     if !has_repr_c_attr(&u.attrs) {
                         return Err(syn::Error::new(u.span(), "union has no repr(C) attribute"));
                     }
-                    types.push(CType::Union(u));
+                    types.push(CItem::Union(u));
+                }
+                syn::Item::Fn(f) => {
+                    let mangle_attr: syn::Attribute = parse_quote! { #[no_mangle] };
+                    if !f.attrs.iter().any(|a| *a == mangle_attr) {
+                        return Err(syn::Error::new(
+                            f.span(),
+                            "fn has no #[no_mangle] attribute",
+                        ));
+                    }
+
+                    match f.abi {
+                        Some(ref abi) => match abi.name {
+                            Some(ref name) if name.value() == "C" => {}
+                            _ => {
+                                return Err(syn::Error::new(
+                                    abi.extern_token.span(),
+                                    "fn marked as extern, but not extern \"C\"",
+                                ))
+                            }
+                        },
+                        None => {
+                            return Err(syn::Error::new(f.span(), "fn not marked as extern \"C\""))
+                        }
+                    }
+
+                    types.push(CItem::Fn(f));
                 }
                 _ => return Err(syn::Error::new(item.span(), "Expect struct or union here")),
             }
         }
-        Ok(CTypesList(types))
+        Ok(CItemsList(types))
     }
 }
 
@@ -501,7 +527,7 @@ impl syn::parse::Parse for GenericAlias {
     }
 }
 
-impl syn::parse::Parse for GenericCTypes {
+impl syn::parse::Parse for GenericCItems {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
@@ -509,7 +535,7 @@ impl syn::parse::Parse for GenericCTypes {
         let header_name: SmolStr = module_name.value().into();
         input.parse::<Token![;]>()?;
         let types = input.parse()?;
-        Ok(GenericCTypes { header_name, types })
+        Ok(GenericCItems { header_name, types })
     }
 }
 

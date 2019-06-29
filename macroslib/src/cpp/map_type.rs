@@ -10,7 +10,7 @@ use syn::{parse_quote, spanned::Spanned, Type};
 use crate::{
     cpp::{
         cpp_code::{c_class_type, cpp_header_name, cpp_header_name_for_enum},
-        merge_c_types, merge_rule, CppContext, CppConverter, CppForeignTypeInfo, MergeCTypesFlags,
+        merge_c_types, merge_rule, CppContext, CppConverter, CppForeignTypeInfo, MergeCItemsFlags,
     },
     error::{panic_on_syn_error, DiagnosticError, Result, SourceIdSpan},
     file_cache::FileWriteCache,
@@ -122,7 +122,7 @@ fn map_ordinal_type(
             merge_c_types(
                 ctx,
                 c_types,
-                MergeCTypesFlags::DefineAlsoRustType,
+                MergeCItemsFlags::DefineAlsoRustType,
                 grule.src_id,
             )?;
         }

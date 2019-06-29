@@ -470,7 +470,7 @@ impl TryFrom<syn::FnDecl> for crate::types::FnDecl {
     }
 }
 
-fn parse_fn_args(args: Punctuated<syn::FnArg, Token![,]>) -> syn::Result<Vec<FnArg>> {
+pub(crate) fn parse_fn_args(args: Punctuated<syn::FnArg, Token![,]>) -> syn::Result<Vec<FnArg>> {
     let mut ret = Vec::with_capacity(args.len());
     let invalid_arg = |sp| {
         Err(syn::Error::new(

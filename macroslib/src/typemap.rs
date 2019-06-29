@@ -34,7 +34,7 @@ use crate::{
 };
 
 pub(crate) use typemap_macro::{
-    CType, CTypes, ExpandedFType, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
+    CItem, CItems, ExpandedFType, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
 };
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";

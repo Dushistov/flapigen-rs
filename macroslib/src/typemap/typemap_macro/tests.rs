@@ -275,9 +275,9 @@ fn test_foreign_typemap_cpp_ruststring() {
     assert!(!rule.if_simple_rtype_ftype_map().is_some());
     assert!(rule.contains_data_for_language_backend());
     assert_eq!(
-        CTypes {
+        CItems {
             header_name: "rust_str.h".into(),
-            types: vec![CType::Struct(parse_quote! {
+            items: vec![CItem::Struct(parse_quote! {
                 #[repr(C)]
                     struct CRustString {
                         data: *const ::std::os::raw::c_char,
@@ -379,9 +379,9 @@ fn test_foreign_typemap_cpp_pair_expand() {
 
     assert_eq!(
         c_types,
-        CTypes {
+        CItems {
             header_name: "rust_tuple.h".into(),
-            types: vec![CType::Struct(parse_quote! {
+            items: vec![CItem::Struct(parse_quote! {
                 #[repr(C)]
                 pub struct CRustPairi32f32 {
                     first: i32,
