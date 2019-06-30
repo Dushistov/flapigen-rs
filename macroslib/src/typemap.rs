@@ -77,7 +77,8 @@ type RustTypeNameToGraphIdx = FxHashMap<SmolStr, RustTypeIdx>;
 pub(crate) struct TypeMap {
     conv_graph: TypesConvGraph,
     ftypes_storage: ForeignTypesStorage,
-    rust_to_foreign_cache: FxHashMap<SmolStr, ForeignType>,
+    //TODO: deprecate and remove this cache
+    rust_class_to_foreign_cache: FxHashMap<SmolStr, ForeignType>,
     rust_names_map: RustTypeNameToGraphIdx,
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
@@ -141,7 +142,7 @@ impl Default for TypeMap {
             rust_names_map: FxHashMap::default(),
             utils_code: Vec::new(),
             generic_edges: default_rules,
-            rust_to_foreign_cache: FxHashMap::default(),
+            rust_class_to_foreign_cache: FxHashMap::default(),
             foreign_classes: Vec::new(),
             exported_enums: FxHashMap::default(),
             traits_usage_code: FxHashMap::default(),
@@ -375,7 +376,7 @@ impl TypeMap {
     }
 
     //TODO: deprecate and remove this method
-    pub(crate) fn cache_rust_to_foreign_conv(
+    pub(crate) fn cache_class_for_rust_to_foreign_conv(
         &mut self,
         from: &RustType,
         to: ForeignTypeInfo,
@@ -386,7 +387,7 @@ impl TypeMap {
         let ftype = self
             .ftypes_storage
             .alloc_new(TypeName::new(to.name, span), to_id)?;
-        self.rust_to_foreign_cache
+        self.rust_class_to_foreign_cache
             .insert(from.normalized_name.clone(), ftype);
         Ok(())
     }
@@ -580,7 +581,10 @@ impl TypeMap {
         );
 
         if direction == petgraph::Direction::Outgoing {
-            if let Some(ftype) = self.rust_to_foreign_cache.get(&rust_ty.normalized_name) {
+            if let Some(ftype) = self
+                .rust_class_to_foreign_cache
+                .get(&rust_ty.normalized_name)
+            {
                 let fts = &self.ftypes_storage[*ftype];
                 if fts.into_from_rust.is_some() {
                     return Some(*ftype);

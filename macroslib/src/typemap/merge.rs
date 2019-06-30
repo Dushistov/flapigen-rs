@@ -26,7 +26,7 @@ impl TypeMap {
         target_pointer_width: usize,
     ) -> Result<()> {
         debug!("TypeMap::merge {:?} with our rules", id_of_code);
-        self.rust_to_foreign_cache.clear();
+        self.rust_class_to_foreign_cache.clear();
         let mut was_traits_usage_code = FxHashMap::default();
         mem::swap(&mut was_traits_usage_code, &mut self.traits_usage_code);
         let mut new_data = crate::typemap::parse::parse(
