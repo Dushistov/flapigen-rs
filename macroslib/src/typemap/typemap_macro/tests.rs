@@ -384,7 +384,6 @@ fn test_foreign_typemap_cpp_pair_expand() {
         .unwrap();
 
     assert_eq!(
-        c_types,
         CItems {
             header_name: "rust_tuple.h".into(),
             items: vec![CItem::Struct(parse_quote! {
@@ -395,6 +394,7 @@ fn test_foreign_typemap_cpp_pair_expand() {
                 }
             }),],
         },
+        c_types,
     );
 
     let new_rule = rule

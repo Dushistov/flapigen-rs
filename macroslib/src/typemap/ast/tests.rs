@@ -327,16 +327,6 @@ fn test_work_with_result() {
 }
 
 #[test]
-fn test_work_with_vec() {
-    assert_eq!(
-        "bool",
-        if_vec_return_elem_type(&str_to_rust_ty("Vec<bool>"))
-            .map(|x| normalize_ty_lifetimes(&x))
-            .unwrap(),
-    );
-}
-
-#[test]
 fn test_work_with_rc() {
     let ty = check_if_smart_pointer_return_inner_type(&str_to_rust_ty("Rc<RefCell<bool>>"), "Rc")
         .unwrap();

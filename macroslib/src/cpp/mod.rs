@@ -144,19 +144,6 @@ impl CppForeignTypeInfo {
             cpp_converter,
         })
     }
-
-    fn add_provides_by_module<'a, S>(&'a mut self, mod_name: S)
-    where
-        for<'b> S: Into<SmolStr> + PartialEq<&'b str>,
-    {
-        if !self
-            .provides_by_module
-            .iter()
-            .any(|x| mod_name == x.as_str())
-        {
-            self.provides_by_module.push(mod_name.into());
-        }
-    }
 }
 
 impl AsRef<ForeignTypeInfo> for CppForeignTypeInfo {

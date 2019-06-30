@@ -36,6 +36,7 @@ static SWIG_SUBST_TYPE: &str = "swig_subst_type";
 #[derive(Debug)]
 pub(crate) struct TypeMapConvRuleInfo {
     pub src_id: SourceId,
+    pub span: Span,
     pub rtype_generics: Option<syn::Generics>,
     pub rtype_left_to_right: Option<RTypeConvRule>,
     pub rtype_right_to_left: Option<RTypeConvRule>,
@@ -63,6 +64,7 @@ pub(crate) struct CItems {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignCode {
+    pub sp: Span,
     pub module_name: SmolStr,
     pub cfg_option: Option<SpannedSmolStr>,
     pub code: String,
@@ -214,44 +216,14 @@ impl TypeMapConvRuleInfo {
         let mut c_types = self.c_types.clone();
         if let Some(generic_c_types) = self.generic_c_types.as_ref() {
             let code_span = generic_c_types.types.span();
-            let code = expand_macroses(
+            let code = expand_rust_code(
                 &generic_c_types.types.to_string(),
-                |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
-                    if id == SWIG_I_TYPE {
-                        let param = if params.len() == 1 {
-                            &params[0]
-                        } else {
-                            return Err(DiagnosticError::new(
-                                self.src_id,
-                                code_span,
-                                format!(
-                                    "{} parameters in {} instead of 1",
-                                    params.len(),
-                                    SWIG_I_TYPE
-                                ),
-                            ));
-                        };
-                        let ty = find_type_param(param_map, param, (self.src_id, code_span))?;
-                        let i_type = expander.swig_i_type(ty.as_ref())?;
-                        write!(out, "{}", DisplayToTokens(&i_type))
-                            .expect("write to String failed");
-                        Ok(())
-                    } else if let Some(pos) = type_aliases
-                        .iter()
-                        .position(|(ident, _)| ident.to_string() == id)
-                    {
-                        write!(out, "{}", DisplayToTokens(&type_aliases[pos].1))
-                            .expect("write to String failed");
-                        Ok(())
-                    } else {
-                        Err(DiagnosticError::new(
-                            self.src_id,
-                            code_span,
-                            format!("unknown macros '{}' in this context", id),
-                        ))
-                    }
-                },
+                param_map,
+                expander,
+                &type_aliases,
+                (self.src_id, code_span),
             )?;
+
             let citems_list: CItemsList =
                 syn::LitStr::new(&code, code_span).parse().map_err(|err| {
                     DiagnosticError::new(
@@ -289,7 +261,6 @@ impl TypeMapConvRuleInfo {
         assert!(self.is_generic());
         let type_aliases =
             build_generic_aliases(self.src_id, &self.generic_aliases, &param_map, expander)?;
-
         let (rtype_left_to_right, ftype_left_to_right) = if direction == Direction::Outgoing {
             (
                 expand_rtype_rule(
@@ -330,15 +301,22 @@ impl TypeMapConvRuleInfo {
         } else {
             (None, vec![])
         };
-
+        let f_code = expand_fcode(
+            &self.f_code,
+            &param_map,
+            expander,
+            &type_aliases,
+            self.src_id,
+        )?;
         Ok(TypeMapConvRuleInfo {
             src_id: self.src_id,
+            span: self.span,
             rtype_generics: None,
             rtype_left_to_right,
             rtype_right_to_left,
             ftype_left_to_right,
             ftype_right_to_left,
-            f_code: self.f_code.clone(),
+            f_code,
             c_types: None,
             generic_c_types: None,
             generic_aliases: vec![],
@@ -497,6 +475,7 @@ enum GenericAliasItem {
     Concat(Vec<GenericAliasItem>),
     Ident(syn::Ident),
     SwigIType(syn::Ident),
+    SwigFType(syn::Ident),
 }
 
 fn concat_idents(
@@ -516,6 +495,11 @@ fn concat_idents(
             let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
             let i_type: syn::Type = expander.swig_i_type(ty.as_ref())?;
             ident.push_str(&DisplayToTokens(&i_type).to_string());
+        }
+        GenericAliasItem::SwigFType(id) => {
+            let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
+            let f_type = expander.swig_f_type(ty.as_ref(), None)?;
+            ident.push_str(&f_type.name);
         }
         GenericAliasItem::Ident(id) => ident.push_str(&id.to_string()),
     }
@@ -643,78 +627,17 @@ fn expand_rtype_rule(
 
     let code = match grule.code {
         Some(ref x) => {
-            let code = expand_macroses(
+            let code = expand_rust_code(
                 x.as_str(),
-                |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
-                    match id {
-                        _ if id == SWIG_FROM_RUST_TO_I_TYPE || id == SWIG_FROM_I_TYPE_TO_RUST => {
-                            let (type_name, in_var_name, out_var_name) = if params.len() == 3 {
-                                (&params[0], &params[1], &params[2])
-                            } else {
-                                return Err(DiagnosticError::new(
-                                    src_id,
-                                    x.span(),
-                                    format!("{} parameters in {} instead of 2", params.len(), id),
-                                ));
-                            };
-                            let ty = find_type_param(param_map, type_name, (src_id, x.span()))?;
-                            let tt: String = if id == SWIG_FROM_RUST_TO_I_TYPE {
-                                expander.swig_from_rust_to_i_type(
-                                    ty.as_ref(),
-                                    in_var_name,
-                                    out_var_name,
-                                )?
-                            } else if id == SWIG_FROM_I_TYPE_TO_RUST {
-                                expander.swig_from_i_type_to_rust(
-                                    ty.as_ref(),
-                                    in_var_name,
-                                    out_var_name,
-                                )?
-                            } else {
-                                unreachable!()
-                            };
-                            write!(out, "{}", tt).expect(WRITE_TO_MEM_FAILED_MSG);
-                        }
-                        _ if id == SWIG_SUBST_TYPE => {
-                            let type_name = if params.len() == 1 {
-                                &params[0]
-                            } else {
-                                return Err(DiagnosticError::new(
-                                    src_id,
-                                    x.span(),
-                                    format!("{} parameters in {} instead of 1", params.len(), id),
-                                ));
-                            };
-                            let ty = find_type_param(param_map, type_name, (src_id, x.span()))?;
-                            write!(out, "{}", DisplayToTokens(ty.as_ref()))
-                                .expect(WRITE_TO_MEM_FAILED_MSG);
-                        }
-                        _ => {
-                            if let Some(alias_idx) = generic_aliases.iter().position(|a| a.0 == id)
-                            {
-                                write!(out, "{}", DisplayToTokens(&generic_aliases[alias_idx].1))
-                                    .expect(WRITE_TO_MEM_FAILED_MSG);
-                            } else {
-                                write!(out, "{}!(", id).expect(WRITE_TO_MEM_FAILED_MSG);
-                                for (i, p) in params.iter().enumerate() {
-                                    if i == 0 {
-                                        out.push_str(p);
-                                    } else {
-                                        write!(out, ", {}", p).expect(WRITE_TO_MEM_FAILED_MSG);
-                                    }
-                                }
-                                out.push_str(")");
-                            }
-                        }
-                    }
-                    Ok(())
-                },
+                param_map,
+                expander,
+                generic_aliases,
+                (src_id, x.span()),
             )?;
             Some(FTypeConvCode::new(code, (SourceId::none(), x.span())))
         }
         None => None,
     };
-
     Ok(Some(RTypeConvRule {
         left_ty,
         right_ty,
@@ -772,56 +695,12 @@ fn expand_ftype_rule(
         };
         let code = match grule.code {
             Some(ref x) => {
-                let code = expand_macroses(
+                let code = expand_foreign_code(
                     x.as_str(),
-                    |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
-                        match id {
-                            _ if id == SWIG_F_TYPE => {
-                                call_swig_f_type(
-                                    src_id,
-                                    x.span(),
-                                    params,
-                                    out,
-                                    param_map,
-                                    expander,
-                                    generic_aliases,
-                                )?;
-                            }
-                            _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {
-                                let (type_name, var_name) = if params.len() == 2 {
-                                    (&params[0], &params[1])
-                                } else {
-                                    return Err(DiagnosticError::new(
-                                        src_id,
-                                        x.span(),
-                                        format!(
-                                            "{} parameters in {} instead of 2",
-                                            params.len(),
-                                            id
-                                        ),
-                                    ));
-                                };
-
-                                let ty = find_type_param(param_map, type_name, (src_id, x.span()))?;
-                                let tt: String = if id == SWIG_FOREIGN_TO_I_TYPE {
-                                    expander.swig_foreign_to_i_type(ty.as_ref(), var_name)?
-                                } else if id == SWIG_FOREIGN_FROM_I_TYPE {
-                                    expander.swig_foreign_from_i_type(ty.as_ref(), var_name)?
-                                } else {
-                                    unreachable!()
-                                };
-                                write!(out, "{}", tt).expect(WRITE_TO_MEM_FAILED_MSG);
-                            }
-                            _ => {
-                                return Err(DiagnosticError::new(
-                                    src_id,
-                                    x.span(),
-                                    format!("unknown macro {} in f_type conversation code", id),
-                                ))
-                            }
-                        }
-                        Ok(())
-                    },
+                    param_map,
+                    expander,
+                    generic_aliases,
+                    (src_id, x.span()),
                 )?;
                 Some(FTypeConvCode::new(code, (SourceId::none(), x.span())))
             }
@@ -847,8 +726,7 @@ fn expand_ftype_rule(
 }
 
 fn call_swig_f_type(
-    src_id: SourceId,
-    sp: Span,
+    ctx_sp: SourceIdSpan,
     params: Vec<&str>,
     out: &mut String,
     param_map: &TyParamsSubstMap,
@@ -862,9 +740,8 @@ fn call_swig_f_type(
                 "output" => Direction::Outgoing,
                 "input" => Direction::Incoming,
                 _ => {
-                    return Err(DiagnosticError::new(
-                        src_id,
-                        sp,
+                    return Err(DiagnosticError::new2(
+                        ctx_sp,
                         format!(
                             "{} parameters in {} instead of 1",
                             params.len(),
@@ -877,9 +754,8 @@ fn call_swig_f_type(
             (&params[0], Some(direction))
         }
         _ => {
-            return Err(DiagnosticError::new(
-                src_id,
-                sp,
+            return Err(DiagnosticError::new2(
+                ctx_sp,
                 format!(
                     "{} parameters in {} instead of 1",
                     params.len(),
@@ -894,11 +770,11 @@ fn call_swig_f_type(
             .iter()
             .position(|a| a.0 == alias_name)
             .ok_or_else(|| {
-                DiagnosticError::new(src_id, sp, format!("unknown type alias '{}'", alias_name))
+                DiagnosticError::new2(ctx_sp, format!("unknown type alias '{}'", alias_name))
             })?;
         TyValueOrRef::Ref(&generic_aliases[pos].1)
     } else {
-        find_type_param(param_map, type_name, (src_id, sp))?
+        find_type_param(param_map, type_name, ctx_sp)?
     };
 
     let f_type = expander.swig_f_type(ty.as_ref(), direction)?;
@@ -919,8 +795,7 @@ fn expand_ftype_name(
         |id: &str, params: Vec<&str>, out: &mut String| {
             if id == SWIG_F_TYPE {
                 let modules: Vec<SmolStr> = call_swig_f_type(
-                    src_id,
-                    ftype.sp,
+                    (src_id, ftype.sp),
                     params,
                     out,
                     param_map,
@@ -931,6 +806,10 @@ fn expand_ftype_name(
                     name,
                     sp: Span::call_site(),
                 }));
+                Ok(())
+            } else if let Some(pos) = generic_aliases.iter().position(|a| a.0 == id) {
+                write!(out, "{}", DisplayToTokens(&generic_aliases[pos].1))
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                 Ok(())
             } else {
                 Err(DiagnosticError::new(
@@ -1022,4 +901,164 @@ fn expand_module_name(
         },
     )
     .map(|x| x.into())
+}
+
+fn expand_rust_code(
+    code: &str,
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[(&syn::Ident, Type)],
+    ctx_span: SourceIdSpan,
+) -> Result<String> {
+    expand_macroses(
+        code,
+        |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
+            match id {
+                _ if id == SWIG_FROM_RUST_TO_I_TYPE || id == SWIG_FROM_I_TYPE_TO_RUST => {
+                    let (type_name, in_var_name, out_var_name) = if params.len() == 3 {
+                        (&params[0], &params[1], &params[2])
+                    } else {
+                        return Err(DiagnosticError::new2(
+                            ctx_span,
+                            format!("{} parameters in {} instead of 2", params.len(), id),
+                        ));
+                    };
+                    let ty = find_type_param(param_map, type_name, ctx_span)?;
+                    let tt: String = if id == SWIG_FROM_RUST_TO_I_TYPE {
+                        expander.swig_from_rust_to_i_type(ty.as_ref(), in_var_name, out_var_name)?
+                    } else if id == SWIG_FROM_I_TYPE_TO_RUST {
+                        expander.swig_from_i_type_to_rust(ty.as_ref(), in_var_name, out_var_name)?
+                    } else {
+                        unreachable!()
+                    };
+                    write!(out, "{}", tt).expect(WRITE_TO_MEM_FAILED_MSG);
+                }
+                _ if id == SWIG_I_TYPE => {
+                    let param = if params.len() == 1 {
+                        &params[0]
+                    } else {
+                        return Err(DiagnosticError::new2(
+                            ctx_span,
+                            format!(
+                                "{} parameters in {} instead of 1",
+                                params.len(),
+                                SWIG_I_TYPE
+                            ),
+                        ));
+                    };
+                    let ty = find_type_param(param_map, param, ctx_span)?;
+                    let i_type = expander.swig_i_type(ty.as_ref())?;
+                    write!(out, "{}", DisplayToTokens(&i_type)).expect(WRITE_TO_MEM_FAILED_MSG);
+                }
+                _ if id == SWIG_SUBST_TYPE => {
+                    let type_name = if params.len() == 1 {
+                        &params[0]
+                    } else {
+                        return Err(DiagnosticError::new2(
+                            ctx_span,
+                            format!("{} parameters in {} instead of 1", params.len(), id),
+                        ));
+                    };
+                    let ty = find_type_param(param_map, type_name, ctx_span)?;
+                    write!(out, "{}", DisplayToTokens(ty.as_ref())).expect(WRITE_TO_MEM_FAILED_MSG);
+                }
+                _ => {
+                    if let Some(alias_idx) = generic_aliases.iter().position(|a| a.0 == id) {
+                        write!(out, "{}", DisplayToTokens(&generic_aliases[alias_idx].1))
+                            .expect(WRITE_TO_MEM_FAILED_MSG);
+                    } else {
+                        write!(out, "{}!(", id).expect(WRITE_TO_MEM_FAILED_MSG);
+                        for (i, p) in params.iter().enumerate() {
+                            if i == 0 {
+                                out.push_str(p);
+                            } else {
+                                write!(out, ", {}", p).expect(WRITE_TO_MEM_FAILED_MSG);
+                            }
+                        }
+                        out.push_str(")");
+                    }
+                }
+            }
+            Ok(())
+        },
+    )
+}
+
+fn expand_foreign_code(
+    code: &str,
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[(&syn::Ident, Type)],
+    ctx_span: SourceIdSpan,
+) -> Result<String> {
+    expand_macroses(
+        code,
+        |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
+            match id {
+                _ if id == SWIG_F_TYPE => {
+                    call_swig_f_type(ctx_span, params, out, param_map, expander, generic_aliases)?;
+                }
+                _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {
+                    let (type_name, var_name) = if params.len() == 2 {
+                        (&params[0], &params[1])
+                    } else {
+                        return Err(DiagnosticError::new2(
+                            ctx_span,
+                            format!("{} parameters in {} instead of 2", params.len(), id),
+                        ));
+                    };
+
+                    let ty = find_type_param(param_map, type_name, ctx_span)?;
+                    let tt: String = if id == SWIG_FOREIGN_TO_I_TYPE {
+                        expander.swig_foreign_to_i_type(ty.as_ref(), var_name)?
+                    } else if id == SWIG_FOREIGN_FROM_I_TYPE {
+                        expander.swig_foreign_from_i_type(ty.as_ref(), var_name)?
+                    } else {
+                        unreachable!()
+                    };
+                    write!(out, "{}", tt).expect(WRITE_TO_MEM_FAILED_MSG);
+                }
+                _ => {
+                    if let Some(pos) = generic_aliases.iter().position(|a| a.0 == id) {
+                        write!(out, "{}", DisplayToTokens(&generic_aliases[pos].1))
+                            .expect(WRITE_TO_MEM_FAILED_MSG);
+                    } else {
+                        return Err(DiagnosticError::new2(
+                            ctx_span,
+                            format!("unknown macro {} in f_type conversation code", id),
+                        ));
+                    }
+                }
+            }
+            Ok(())
+        },
+    )
+}
+
+fn expand_fcode(
+    f_code: &[ForeignCode],
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[(&syn::Ident, Type)],
+    src_id: SourceId,
+) -> Result<Vec<ForeignCode>> {
+    let mut ret = Vec::<ForeignCode>::with_capacity(f_code.len());
+    for fc in f_code {
+        let module_name: SmolStr =
+            expand_module_name(&fc.module_name, (src_id, fc.sp), generic_aliases)?;
+        let code = expand_foreign_code(
+            &fc.code,
+            param_map,
+            expander,
+            generic_aliases,
+            (src_id, fc.sp),
+        )?;
+        ret.push(ForeignCode {
+            sp: fc.sp,
+            module_name,
+            cfg_option: fc.cfg_option.clone(),
+            code,
+        });
+    }
+    Ok(ret)
 }

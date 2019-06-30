@@ -510,14 +510,14 @@ fn simple_map_rust_to_c(
                         DiagnosticError::new(
                             src_id,
                             ty.span(),
-                            "no foreign type related to this type",
+                            format!("no foreign type related to type '{}'", rty),
                         )
                     })
             } else {
                 Err(DiagnosticError::new(
                     src_id,
                     ty.span(),
-                    "no foreign type related to this type",
+                    format!("no foreign type related to type '{}'", rty),
                 ))
             }
         }

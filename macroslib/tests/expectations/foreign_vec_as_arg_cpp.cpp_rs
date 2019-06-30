@@ -4,8 +4,9 @@ r##"# [ no_mangle ] pub extern "C" fn FooImpl_alternateBoarding ( this : * mut F
  let ret : CRustObjectSlice = CRustObjectSlice { data : ret . as_ptr ( ) as * const :: std :: os :: raw :: c_void , len : ret . len ( ) , step : :: std :: mem :: size_of ::< Boo > ( ) , } ;
  ret }"##;
 
+
 r##"# [ no_mangle ] pub extern "C" fn FooImpl_setAlternateBoarding ( this : * mut Foo < >, a_0 : CRustForeignVec , ) -> ( ) {
- let mut a_0 : Vec < Boo > = a_0 . swig_into ( ) ;
+ let a_0 : Vec < Boo > = unsafe { Vec :: from_raw_parts ( a_0 . data as * mut Boo , a_0 . len , a_0 . capacity ) } ;
  let this : & mut Foo < > = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : ( ) = Foo :: set_alternate_boarding ( this , a_0 ) ;
  ret }"##;

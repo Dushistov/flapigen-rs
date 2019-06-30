@@ -8,8 +8,9 @@ r##"#pragma once
 #include <type_traits>
 
 #include "LatLon.h"
-#include "rust_result.h"
-#include "rust_vec.h"
+#include "RemoteApiError.hpp"
+#include "RustForeignVecWindVelocity.h"
+#include "rust_resultCRustForeignVec4232mut3232c_void.h"
 #include <variant>
 
 #include "c_Weather.h"
@@ -37,8 +38,8 @@ r#"template<bool OWN_DATA>
     inline std::variant<RustForeignVecWindVelocity, RemoteApiError> WeatherWrapper<OWN_DATA>::get_wind_for(struct CLatLon pos) noexcept
     {
 
-        struct CResultVecObjectObject ret = Weather_get_wind_for(pos);
+        struct CRustResultCRustForeignVec4232mut3232c_void ret = Weather_get_wind_for(pos);
         return ret.is_ok != 0 ?
- std::variant<RustForeignVecWindVelocity, RemoteApiError> { RustForeignVecWindVelocity{ret.data.ok} } :
- std::variant<RustForeignVecWindVelocity, RemoteApiError> { RemoteApiError(static_cast<RemoteApiErrorOpaque *>(ret.data.err)) };
+            std::variant<RustForeignVecWindVelocity, RemoteApiError> { RustForeignVecWindVelocity{ret.data.ok} } :
+            std::variant<RustForeignVecWindVelocity, RemoteApiError> { RemoteApiError(static_cast<RemoteApiErrorOpaque *>(ret.data.err)) };
     }"#;

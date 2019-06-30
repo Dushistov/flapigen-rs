@@ -8,7 +8,7 @@ use syn::{
 use super::{
     CItem, CItems, FTypeConvRule, FTypeLeftRightPair, ForeignCode, GenericAlias, GenericAliasItem,
     GenericCItems, ModuleName, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE, GENERIC_ALIAS,
-    SWIG_CONCAT_IDENTS, SWIG_I_TYPE,
+    SWIG_CONCAT_IDENTS, SWIG_F_TYPE, SWIG_I_TYPE,
 };
 use crate::{
     source_registry::SourceId,
@@ -18,7 +18,7 @@ use crate::{
         ty::FTypeConvCode,
         FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
-    FOREIGNER_CODE, FOREIGN_CODE,
+    FOREIGNER_CODE, FOREIGN_CODE, FOREIGN_TYPEMAP,
 };
 
 mod kw {
@@ -53,6 +53,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
         let mut generic_aliases = vec![];
         let mut generic_c_types = None;
         let mut rtype_generics = None;
+        let mut main_span = None;
 
         while !input.is_empty() {
             if input.peek(token::Paren) {
@@ -67,13 +68,20 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 }
 
                 let kw_la = params.lookahead1();
-                let rule = if kw_la.peek(kw::r_type) {
-                    RuleType::RType(params.parse::<kw::r_type>()?)
+                let (rule, span) = if kw_la.peek(kw::r_type) {
+                    let k = params.parse::<kw::r_type>()?;
+                    let sp = k.span();
+                    (RuleType::RType(k), sp)
                 } else if kw_la.peek(kw::f_type) {
-                    RuleType::FType(params.parse::<kw::f_type>()?)
+                    let k = params.parse::<kw::f_type>()?;
+                    let sp = k.span();
+                    (RuleType::FType(k), sp)
                 } else {
                     return Err(kw_la.error());
                 };
+                if main_span.is_none() {
+                    main_span = Some(span);
+                }
                 let mut ftype_cfg: Option<SpannedSmolStr> = None;
                 let mut ftype_req_modules = Vec::<ModuleName>::new();
                 while !params.is_empty() && params.peek(Token![,]) {
@@ -247,6 +255,9 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 }
             } else {
                 let mac: syn::Macro = input.parse()?;
+                if main_span.is_none() {
+                    main_span = Some(mac.span());
+                }
                 let is_our_macro = [DEFINE_C_TYPE, FOREIGNER_CODE, FOREIGN_CODE, GENERIC_ALIAS]
                     .iter()
                     .any(|x| mac.path.is_ident(x));
@@ -276,8 +287,12 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
             input.parse::<Token![;]>()?;
         }
 
+        let main_span =
+            main_span.ok_or_else(|| input.error(format!("{} is empty", FOREIGN_TYPEMAP)))?;
+
         let rule = TypeMapConvRuleInfo {
             src_id: SourceId::none(),
+            span: main_span,
             rtype_generics,
             c_types,
             f_code,
@@ -498,6 +513,7 @@ impl syn::parse::Parse for ForeignCode {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
+        let sp = module_name.span();
         let module_name: SmolStr = module_name.value().into();
         input.parse::<Token![;]>()?;
         let cfg_option: Option<SpannedSmolStr> = if input.peek(kw::option) {
@@ -515,6 +531,7 @@ impl syn::parse::Parse for ForeignCode {
         let code: LitStr = input.parse()?;
 
         Ok(ForeignCode {
+            sp,
             module_name,
             cfg_option,
             code: code.value(),
@@ -559,6 +576,9 @@ impl syn::parse::Parse for GenericAliasItem {
             } else if mac.path.is_ident(SWIG_I_TYPE) {
                 let item: syn::Ident = syn::parse2(mac.tts)?;
                 Ok(GenericAliasItem::SwigIType(item))
+            } else if mac.path.is_ident(SWIG_F_TYPE) {
+                let item: syn::Ident = syn::parse2(mac.tts)?;
+                Ok(GenericAliasItem::SwigFType(item))
             } else {
                 return Err(syn::Error::new(
                     mac.span(),

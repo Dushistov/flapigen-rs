@@ -346,27 +346,6 @@ impl TypeMap {
             .alloc_new(foreign_name, correspoding_rty)
     }
 
-    //TODO: should be removed in the future
-    pub(crate) fn find_foreign_type_info_by_name(
-        &self,
-        foreign_name: &str,
-    ) -> Option<ForeignTypeInfo> {
-        if let Some(ft) = self.ftypes_storage.find_ftype_by_name(foreign_name) {
-            let ftype = &self.ftypes_storage[ft];
-            let ty_idx = match (ftype.into_from_rust.as_ref(), ftype.from_into_rust.as_ref()) {
-                (Some(rule), _) => rule.rust_ty,
-                (None, Some(rule)) => rule.rust_ty,
-                (None, None) => return None,
-            };
-            Some(ForeignTypeInfo {
-                name: ftype.name.typename.clone(),
-                correspoding_rust_type: self.conv_graph[ty_idx].clone(),
-            })
-        } else {
-            None
-        }
-    }
-
     pub(crate) fn alloc_foreign_type(&mut self, ft: ForeignTypeS) -> Result<ForeignType> {
         self.ftypes_storage.add_new_ftype(ft)
     }

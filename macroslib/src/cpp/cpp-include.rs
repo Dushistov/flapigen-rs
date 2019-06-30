@@ -27,34 +27,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "::std::os::raw::c_char"]
     #![swig_foreigner_type = "int"]
     #![swig_rust_type = "::std::os::raw::c_int"]
-    #![swig_foreigner_type = "struct CRustVecU8"]
-    #![swig_rust_type = "CRustVecU8"]
-    #![swig_foreigner_type = "struct CRustVecI32"]
-    #![swig_rust_type = "CRustVecI32"]
-    #![swig_foreigner_type = "struct CRustVecU32"]
-    #![swig_rust_type = "CRustVecU32"]
-    #![swig_foreigner_type = "struct CRustVecUsize"]
-    #![swig_rust_type = "CRustVecUsize"]
-    #![swig_foreigner_type = "struct CRustVecF32"]
-    #![swig_rust_type = "CRustVecF32"]
-    #![swig_foreigner_type = "struct CRustVecF64"]
-    #![swig_rust_type = "CRustVecF64"]
-    #![swig_foreigner_type = "struct CRustForeignVec"]
-    #![swig_rust_type = "CRustForeignVec"]
-    #![swig_foreigner_type = "struct CResultObjectString"]
-    #![swig_rust_type = "CResultObjectString"]
-    #![swig_foreigner_type = "struct CResultCRustForeignVecString"]
-    #![swig_rust_type = "CResultCRustForeignVecString"]
-    #![swig_foreigner_type = "struct CResultObjectEnum"]
-    #![swig_rust_type = "CResultObjectEnum"]
-    #![swig_foreigner_type = "struct CResultObjectObject"]
-    #![swig_rust_type = "CResultObjectObject"]
-    #![swig_foreigner_type = "struct CResultVecObjectObject"]
-    #![swig_rust_type = "CResultVecObjectObject"]
-    #![swig_foreigner_type = "struct CResultCRustVecU8Object"]
-    #![swig_rust_type = "CResultCRustVecU8Object"]
-    #![swig_foreigner_type = "struct CResultI64Object"]
-    #![swig_rust_type = "CResultI64Object"]
 }
 
 #[allow(unused_macros)]
@@ -202,268 +174,6 @@ impl<T: SwigForeignClass> SwigDerefMut for T {
     }
 }
 
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CRustVecU8 {
-    data: *const u8,
-    len: usize,
-    capacity: usize,
-}
-
-#[allow(dead_code)]
-impl CRustVecU8 {
-    pub fn from_vec(mut v: Vec<u8>) -> CRustVecU8 {
-        let p = v.as_mut_ptr();
-        let len = v.len();
-        let cap = v.capacity();
-        ::std::mem::forget(v);
-        CRustVecU8 {
-            data: p,
-            len: len,
-            capacity: cap,
-        }
-    }
-}
-
-impl SwigFrom<Vec<u8>> for CRustVecU8 {
-    fn swig_from(v: Vec<u8>) -> CRustVecU8 {
-        CRustVecU8::from_vec(v)
-    }
-}
-
-#[allow(private_no_mangle_fns)]
-#[no_mangle]
-pub extern "C" fn CRustVecU8_free(v: CRustVecU8) {
-    let v = unsafe { Vec::from_raw_parts(v.data as *mut u8, v.len, v.capacity) };
-    drop(v);
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustVecI32 {
-    data: *const i32,
-    len: usize,
-    capacity: usize,
-}
-
-impl SwigFrom<Vec<i32>> for CRustVecI32 {
-    fn swig_from(mut v: Vec<i32>) -> CRustVecI32 {
-        let p = v.as_mut_ptr();
-        let len = v.len();
-        let cap = v.capacity();
-        ::std::mem::forget(v);
-        CRustVecI32 {
-            data: p,
-            len: len,
-            capacity: cap,
-        }
-    }
-}
-
-#[allow(private_no_mangle_fns)]
-#[no_mangle]
-pub extern "C" fn CRustVecI32_free(v: CRustVecI32) {
-    let v = unsafe { Vec::from_raw_parts(v.data as *mut i32, v.len, v.capacity) };
-    drop(v);
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustVecU32 {
-    data: *const u32,
-    len: usize,
-    capacity: usize,
-}
-
-impl SwigFrom<Vec<u32>> for CRustVecU32 {
-    fn swig_from(mut v: Vec<u32>) -> CRustVecU32 {
-        let p = v.as_mut_ptr();
-        let len = v.len();
-        let cap = v.capacity();
-        ::std::mem::forget(v);
-        CRustVecU32 {
-            data: p,
-            len: len,
-            capacity: cap,
-        }
-    }
-}
-
-#[allow(private_no_mangle_fns)]
-#[no_mangle]
-pub extern "C" fn CRustVecU32_free(v: CRustVecU32) {
-    let v = unsafe { Vec::from_raw_parts(v.data as *mut u32, v.len, v.capacity) };
-    drop(v);
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustVecUsize {
-    data: *const usize,
-    len: usize,
-    capacity: usize,
-}
-
-impl SwigFrom<Vec<usize>> for CRustVecUsize {
-    fn swig_from(mut v: Vec<usize>) -> CRustVecUsize {
-        let p = v.as_mut_ptr();
-        let len = v.len();
-        let cap = v.capacity();
-        ::std::mem::forget(v);
-        CRustVecUsize {
-            data: p,
-            len: len,
-            capacity: cap,
-        }
-    }
-}
-
-#[allow(private_no_mangle_fns)]
-#[no_mangle]
-pub extern "C" fn CRustVecUsize_free(v: CRustVecUsize) {
-    let v = unsafe { Vec::from_raw_parts(v.data as *mut usize, v.len, v.capacity) };
-    drop(v);
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustVecF32 {
-    data: *const f32,
-    len: usize,
-    capacity: usize,
-}
-
-impl SwigFrom<Vec<f32>> for CRustVecF32 {
-    fn swig_from(mut v: Vec<f32>) -> CRustVecF32 {
-        let p = v.as_mut_ptr();
-        let len = v.len();
-        let cap = v.capacity();
-        ::std::mem::forget(v);
-        CRustVecF32 {
-            data: p,
-            len: len,
-            capacity: cap,
-        }
-    }
-}
-
-#[allow(private_no_mangle_fns)]
-#[no_mangle]
-pub extern "C" fn CRustVecF32_free(v: CRustVecF32) {
-    let v = unsafe { Vec::from_raw_parts(v.data as *mut f32, v.len, v.capacity) };
-    drop(v);
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CRustVecF64 {
-    data: *const f64,
-    len: usize,
-    capacity: usize,
-}
-
-impl SwigFrom<Vec<f64>> for CRustVecF64 {
-    fn swig_from(mut v: Vec<f64>) -> CRustVecF64 {
-        let p = v.as_mut_ptr();
-        let len = v.len();
-        let cap = v.capacity();
-        ::std::mem::forget(v);
-        CRustVecF64 {
-            data: p,
-            len: len,
-            capacity: cap,
-        }
-    }
-}
-
-#[allow(private_no_mangle_fns)]
-#[no_mangle]
-pub extern "C" fn CRustVecF64_free(v: CRustVecF64) {
-    let v = unsafe { Vec::from_raw_parts(v.data as *mut f64, v.len, v.capacity) };
-    drop(v);
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CRustForeignVec {
-    data: *const ::std::os::raw::c_void,
-    len: usize,
-    capacity: usize,
-    step: usize,
-}
-
-#[allow(dead_code)]
-impl CRustForeignVec {
-    pub fn from_vec<T: SwigForeignClass>(mut v: Vec<T>) -> CRustForeignVec {
-        let data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
-        let len = v.len();
-        let capacity = v.capacity();
-        ::std::mem::forget(v);
-        CRustForeignVec {
-            data,
-            len,
-            capacity,
-            step: ::std::mem::size_of::<T>(),
-        }
-    }
-}
-
-impl<T: SwigForeignClass> SwigFrom<Vec<T>> for CRustForeignVec {
-    fn swig_from(v: Vec<T>) -> Self {
-        CRustForeignVec::from_vec(v)
-    }
-}
-
-impl<T: SwigForeignClass> SwigInto<Vec<T>> for CRustForeignVec {
-    fn swig_into(self) -> Vec<T> {
-        unsafe { Vec::from_raw_parts(self.data as *mut T, self.len, self.capacity) }
-    }
-}
-
-#[allow(dead_code)]
-fn drop_foreign_class_vec<T: SwigForeignClass>(data: *mut T, len: usize, cap: usize) {
-    let v = unsafe { Vec::from_raw_parts(data, len, cap) };
-    drop(v);
-}
-
-#[allow(dead_code)]
-#[inline]
-fn push_foreign_class_to_vec<T: SwigForeignClass>(
-    vec: *mut CRustForeignVec,
-    elem: *mut ::std::os::raw::c_void,
-) {
-    assert!(!vec.is_null());
-    let vec: &mut CRustForeignVec = unsafe { &mut *vec };
-    assert!(vec.len == 0 || ::std::mem::size_of::<T>() == vec.step);
-    vec.step = ::std::mem::size_of::<T>();
-    let mut v = unsafe { Vec::from_raw_parts(vec.data as *mut T, vec.len, vec.capacity) };
-    v.push(T::unbox_object(elem));
-    vec.data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
-    vec.len = v.len();
-    vec.capacity = v.capacity();
-    ::std::mem::forget(v);
-}
-
-#[allow(dead_code)]
-#[inline]
-fn remove_foreign_class_from_vec<T: SwigForeignClass>(
-    vec: *mut CRustForeignVec,
-    index: usize,
-) -> *mut ::std::os::raw::c_void {
-    assert!(!vec.is_null());
-    let vec: &mut CRustForeignVec = unsafe { &mut *vec };
-    assert_eq!(::std::mem::size_of::<T>(), vec.step);
-    let mut v = unsafe { Vec::from_raw_parts(vec.data as *mut T, vec.len, vec.capacity) };
-    let elem: T = v.remove(index);
-    vec.data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
-    vec.len = v.len();
-    vec.capacity = v.capacity();
-    ::std::mem::forget(v);
-    T::box_object(elem)
-}
-
 // &str -> &Path
 impl<'a> SwigInto<&'a Path> for &'a str {
     fn swig_into(self) -> &'a Path {
@@ -491,289 +201,6 @@ impl CRustString {
             data,
             len,
             capacity,
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CResultObjectString {
-    is_ok: u8,
-    data: CResultObjectStringUnion,
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union CResultObjectStringUnion {
-    pub ok: *mut ::std::os::raw::c_void,
-    pub err: CRustString,
-}
-
-impl SwigFrom<Result<(), String>> for CResultObjectString {
-    fn swig_from(x: Result<(), String>) -> Self {
-        match x {
-            Ok(_) => CResultObjectString {
-                is_ok: 1,
-                data: CResultObjectStringUnion {
-                    ok: ::std::ptr::null_mut(),
-                },
-            },
-            Err(err) => CResultObjectString {
-                is_ok: 0,
-                data: CResultObjectStringUnion {
-                    err: CRustString::from_string(err),
-                },
-            },
-        }
-    }
-}
-
-impl<T: SwigForeignClass> SwigFrom<Result<T, String>> for CResultObjectString {
-    fn swig_from(x: Result<T, String>) -> Self {
-        match x {
-            Ok(v) => CResultObjectString {
-                is_ok: 1,
-                data: CResultObjectStringUnion {
-                    ok: <T>::box_object(v),
-                },
-            },
-            Err(err) => CResultObjectString {
-                is_ok: 0,
-                data: CResultObjectStringUnion {
-                    err: CRustString::from_string(err),
-                },
-            },
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CResultCRustForeignVecString {
-    is_ok: u8,
-    data: CResultCRustForeignVecStringUnion,
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union CResultCRustForeignVecStringUnion {
-    pub ok: CRustForeignVec,
-    pub err: CRustString,
-}
-
-impl<T: SwigForeignClass> SwigFrom<Result<Vec<T>, String>> for CResultCRustForeignVecString {
-    fn swig_from(x: Result<Vec<T>, String>) -> Self {
-        match x {
-            Ok(v) => CResultCRustForeignVecString {
-                is_ok: 1,
-                data: CResultCRustForeignVecStringUnion {
-                    ok: CRustForeignVec::from_vec(v),
-                },
-            },
-            Err(err) => CResultCRustForeignVecString {
-                is_ok: 0,
-                data: CResultCRustForeignVecStringUnion {
-                    err: CRustString::from_string(err),
-                },
-            },
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CResultObjectObject {
-    is_ok: u8,
-    data: CResultObjectObjectUnion,
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union CResultObjectObjectUnion {
-    pub ok: *mut ::std::os::raw::c_void,
-    pub err: *mut ::std::os::raw::c_void,
-}
-
-impl<ErrT: SwigForeignClass> SwigFrom<Result<(), ErrT>> for CResultObjectObject {
-    fn swig_from(x: Result<(), ErrT>) -> Self {
-        match x {
-            Ok(_) => CResultObjectObject {
-                is_ok: 1,
-                data: CResultObjectObjectUnion {
-                    ok: ::std::ptr::null_mut(),
-                },
-            },
-            Err(err) => CResultObjectObject {
-                is_ok: 0,
-                data: CResultObjectObjectUnion {
-                    err: <ErrT>::box_object(err),
-                },
-            },
-        }
-    }
-}
-
-impl<T: SwigForeignClass, ErrT: SwigForeignClass> SwigFrom<Result<T, ErrT>>
-    for CResultObjectObject
-{
-    fn swig_from(x: Result<T, ErrT>) -> Self {
-        match x {
-            Ok(v) => CResultObjectObject {
-                is_ok: 1,
-                data: CResultObjectObjectUnion {
-                    ok: <T>::box_object(v),
-                },
-            },
-            Err(err) => CResultObjectObject {
-                is_ok: 0,
-                data: CResultObjectObjectUnion {
-                    err: <ErrT>::box_object(err),
-                },
-            },
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CResultVecObjectObject {
-    is_ok: u8,
-    data: CResultVecObjectObjectUnion,
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union CResultVecObjectObjectUnion {
-    pub ok: CRustForeignVec,
-    pub err: *mut ::std::os::raw::c_void,
-}
-
-impl<T: SwigForeignClass, ErrT: SwigForeignClass> SwigFrom<Result<Vec<T>, ErrT>>
-    for CResultVecObjectObject
-{
-    fn swig_from(x: Result<Vec<T>, ErrT>) -> Self {
-        match x {
-            Ok(v) => CResultVecObjectObject {
-                is_ok: 1,
-                data: CResultVecObjectObjectUnion {
-                    ok: CRustForeignVec::from_vec(v),
-                },
-            },
-            Err(err) => CResultVecObjectObject {
-                is_ok: 0,
-                data: CResultVecObjectObjectUnion {
-                    err: <ErrT>::box_object(err),
-                },
-            },
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CResultCRustVecU8Object {
-    data: CRustVecU8ObjectUnion,
-    is_ok: u8,
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union CRustVecU8ObjectUnion {
-    pub ok: CRustVecU8,
-    pub err: *mut ::std::os::raw::c_void,
-}
-
-impl<ErrT: SwigForeignClass> SwigFrom<Result<Vec<u8>, ErrT>> for CResultCRustVecU8Object {
-    fn swig_from(x: Result<Vec<u8>, ErrT>) -> Self {
-        match x {
-            Ok(v) => CResultCRustVecU8Object {
-                is_ok: 1,
-                data: CRustVecU8ObjectUnion {
-                    ok: CRustVecU8::from_vec(v),
-                },
-            },
-            Err(err) => CResultCRustVecU8Object {
-                is_ok: 0,
-                data: CRustVecU8ObjectUnion {
-                    err: <ErrT>::box_object(err),
-                },
-            },
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CResultObjectEnum {
-    data: CResultObjectEnumUnion,
-    is_ok: u8,
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union CResultObjectEnumUnion {
-    pub ok: *mut ::std::os::raw::c_void,
-    pub err: u32,
-}
-
-impl<T, ErrT> SwigFrom<Result<T, ErrT>> for CResultObjectEnum
-where
-    T: SwigForeignClass,
-    ErrT: SwigForeignEnum,
-{
-    fn swig_from(x: Result<T, ErrT>) -> Self {
-        match x {
-            Ok(x) => CResultObjectEnum {
-                data: CResultObjectEnumUnion {
-                    ok: <T>::box_object(x),
-                },
-                is_ok: 1,
-            },
-            Err(e) => CResultObjectEnum {
-                data: CResultObjectEnumUnion { err: e.as_u32() },
-                is_ok: 0,
-            },
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub struct CResultI64Object {
-    data: CResultI64ObjectUnion,
-    is_ok: u8,
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union CResultI64ObjectUnion {
-    pub ok: i64,
-    pub err: *mut ::std::os::raw::c_void,
-}
-
-impl<ErrT> SwigFrom<Result<i64, ErrT>> for CResultI64Object
-where
-    ErrT: SwigForeignClass,
-{
-    fn swig_from(x: Result<i64, ErrT>) -> Self {
-        match x {
-            Ok(x) => CResultI64Object {
-                data: CResultI64ObjectUnion { ok: x },
-                is_ok: 1,
-            },
-            Err(e) => CResultI64Object {
-                data: CResultI64ObjectUnion {
-                    err: <ErrT>::box_object(e),
-                },
-                is_ok: 0,
-            },
         }
     }
 }
@@ -809,6 +236,11 @@ foreign_typemap!(
 foreign_typemap!(
     (r_type) <T: SwigTypeIsReprC> *const T;
     (f_type) "const swig_f_type!(T) *";
+);
+
+foreign_typemap!(
+    (r_type) <T: SwigTypeIsReprC> *mut T;
+    (f_type) "swig_f_type!(T) *";
 );
 
 foreign_typemap!(
@@ -1189,3 +621,278 @@ foreign_typemap!(
     ($p:f_type, req_modules = ["\"rust_slice.h\""]) <= "RustSlice<swig_f_type!(T)>"
         "$p.as_c<swig_f_type!(CRustSlice!())>()";
 );
+
+foreign_typemap!(
+    generic_alias!(CRustVec = swig_concat_idents!(CRustVec, swig_i_type!(T)));
+    generic_alias!(CRustVecModule = swig_concat_idents!(rust_vec, swig_i_type!(T)));
+    generic_alias!(CRustVecFree = swig_concat_idents!(CRustVec, swig_i_type!(T), _free));
+    generic_alias!(CppRustVec = swig_concat_idents!(RustVec, swig_i_type!(T)));
+    define_c_type!(
+        module = "CRustVecModule!().h";
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        pub struct CRustVec!() {
+            data: *const swig_subst_type!(T),
+            len: usize,
+            capacity: usize,
+        }
+
+        #[no_mangle]
+        pub extern "C" fn CRustVecFree!()(v: CRustVec!()) {
+            let v = unsafe { Vec::from_raw_parts(v.data as *mut swig_subst_type!(T), v.len, v.capacity) };
+            drop(v);
+        }
+    );
+    foreigner_code!(module = "CRustVecModule!().h";
+                    r##"
+#ifdef __cplusplus
+
+#include "rust_vec_impl.hpp"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+using CppRustVec!() = RustVec<CRustVec!(), CRustVecFree!()>;
+}
+
+#endif
+"##);
+    ($p:r_type) <T: SwigTypeIsReprC> Vec<T> => CRustVec!() {
+        let p = $p.as_mut_ptr();
+        let len = $p.len();
+        let cap = $p.capacity();
+        ::std::mem::forget($p);
+        $out = CRustVec!() {
+            data: p,
+            len: len,
+            capacity: cap,
+        }
+    };
+    ($p:f_type, req_modules = ["\"CRustVecModule!().h\""]) => "CppRustVec!()"
+        "CppRustVec!(){$p}";
+);
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CRustForeignVec {
+    data: *const ::std::os::raw::c_void,
+    len: usize,
+    capacity: usize,
+    step: usize,
+}
+
+#[allow(dead_code)]
+impl CRustForeignVec {
+    pub fn from_vec<T: SwigForeignClass>(mut v: Vec<T>) -> CRustForeignVec {
+        let data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
+        let len = v.len();
+        let capacity = v.capacity();
+        ::std::mem::forget(v);
+        CRustForeignVec {
+            data,
+            len,
+            capacity,
+            step: ::std::mem::size_of::<T>(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[inline]
+fn push_foreign_class_to_vec<T: SwigForeignClass>(
+    vec: *mut CRustForeignVec,
+    elem: *mut ::std::os::raw::c_void,
+) {
+    assert!(!vec.is_null());
+    let vec: &mut CRustForeignVec = unsafe { &mut *vec };
+    assert!(vec.len == 0 || ::std::mem::size_of::<T>() == vec.step);
+    vec.step = ::std::mem::size_of::<T>();
+    let mut v = unsafe { Vec::from_raw_parts(vec.data as *mut T, vec.len, vec.capacity) };
+    v.push(T::unbox_object(elem));
+    vec.data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
+    vec.len = v.len();
+    vec.capacity = v.capacity();
+    ::std::mem::forget(v);
+}
+
+#[allow(dead_code)]
+#[inline]
+fn remove_foreign_class_from_vec<T: SwigForeignClass>(
+    vec: *mut CRustForeignVec,
+    index: usize,
+) -> *mut ::std::os::raw::c_void {
+    assert!(!vec.is_null());
+    let vec: &mut CRustForeignVec = unsafe { &mut *vec };
+    assert_eq!(::std::mem::size_of::<T>(), vec.step);
+    let mut v = unsafe { Vec::from_raw_parts(vec.data as *mut T, vec.len, vec.capacity) };
+    let elem: T = v.remove(index);
+    vec.data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
+    vec.len = v.len();
+    vec.capacity = v.capacity();
+    ::std::mem::forget(v);
+    T::box_object(elem)
+}
+
+foreign_typemap!(
+    define_c_type!(
+        module = "rust_vec.h";
+        #[repr(C)]
+        pub struct CRustForeignVec {
+            data: *const ::std::os::raw::c_void,
+            len: usize,
+            capacity: usize,
+            step: usize,
+        });
+    (r_type) CRustForeignVec;
+    (f_type) "CRustForeignVec";
+);
+
+foreign_typemap!(
+    generic_alias!(CForeignVecModule = swig_concat_idents!(RustForeignVec, swig_f_type!(T)));
+    generic_alias!(CForeignVecFree = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _free));
+    generic_alias!(CForeignVecPush = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _push));
+    generic_alias!(CForeignVecRemove = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _remove));
+
+    define_c_type!(
+        module = "CForeignVecModule!().h";
+        #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+        #[no_mangle]
+        pub extern "C" fn CForeignVecFree!()(v: CRustForeignVec) {
+            type SelfType = swig_subst_type!(T);
+            assert_eq!(::std::mem::size_of::<SelfType>(), v.step);
+            let v = unsafe { Vec::from_raw_parts(v.data as *mut swig_subst_type!(T), v.len, v.capacity) };
+            drop(v);
+        }
+
+        #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+        #[no_mangle]
+        pub extern "C" fn CForeignVecPush!()(v: *mut CRustForeignVec, e: *mut ::std::os::raw::c_void) {
+            push_foreign_class_to_vec::<swig_subst_type!(T)>(v, e);
+        }
+
+        #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+        #[no_mangle]
+        pub extern "C" fn CForeignVecRemove!()(v: *mut CRustForeignVec, idx: usize) -> *mut ::std::os::raw::c_void {
+            remove_foreign_class_from_vec::<swig_subst_type!(T)>(v, idx)
+        }
+    );
+
+    foreigner_code!(module = "CForeignVecModule!().h";
+                    r##"
+#ifdef __cplusplus
+
+#include "rust_foreign_vec_impl.hpp"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+using CForeignVecModule!() = RustForeignVec<swig_f_type!(&T, output), CRustForeignVec, CForeignVecFree!(), CForeignVecPush!(), CForeignVecRemove!()>;
+}
+#endif
+"##);
+
+    ($p:r_type) <T: SwigForeignClass> Vec<T> => CRustForeignVec {
+        $out = CRustForeignVec::from_vec($p)
+    };
+    ($p:r_type) <T: SwigForeignClass> Vec<T> <= CRustForeignVec {
+        $out = unsafe { Vec::from_raw_parts($p.data as *mut swig_subst_type!(T), $p.len, $p.capacity) }
+    };
+    ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) => "CForeignVecModule!()"
+        "CForeignVecModule!(){$p}";
+    ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) <= "CForeignVecModule!()"
+        "$p.release()";
+);
+
+// order is important!!!
+// we map () to void, but C++ can not handle std::variant<void,..>
+foreign_typemap!(
+    generic_alias!(CRustRes = swig_concat_idents!(CRustVoidOkResult, swig_i_type!(T)));
+    generic_alias!(CRustResUnion = swig_concat_idents!(CRustVoidOkResultUnion, swig_i_type!(T)));
+    generic_alias!(CRustResModule = swig_concat_idents!(rust_void_ok_result, swig_i_type!(T)));
+    define_c_type!(
+        module = "CRustResModule!().h";
+        #[repr(C)]
+         pub union CRustResUnion!() {
+             ok: u8,
+             err: swig_i_type!(T),
+         }
+
+         #[repr(C)]
+         pub struct CRustRes!() {
+             data: CRustResUnion!(),
+             is_ok: u8,
+         }
+    );
+    ($p:r_type) <T> Result<(), T> => CRustRes!() {
+        $out = match $p {
+            Ok(()) => {
+                CRustRes!() {
+                    data: CRustResUnion!() { ok: 0 },
+                    is_ok: 1,
+                }
+            }
+            Err(err) => {
+                swig_from_rust_to_i_type!(T, err, err)
+                CRustRes!() {
+                    data: CRustResUnion!() { err },
+                    is_ok: 0,
+                }
+            }
+        }
+    };
+
+    ($p:f_type, option = "CppVariant::Boost", req_modules = ["\"CRustResModule!().h\"", "<boost/variant.hpp>"]) => "boost::variant<void *, swig_f_type!(T)>"
+        r#"$p.is_ok != 0 ?
+            boost::variant<void *, swig_f_type!(T)> { nullptr } :
+            boost::variant<void *, swig_f_type!(T)> { swig_foreign_from_i_type!(T, $p.data.err) }"#;
+
+    ($p:f_type, option = "CppVariant::Std17", req_modules = ["\"CRustResModule!().h\"", "<variant>"]) => "std::variant<void *, swig_f_type!(T)>"
+        r#"$p.is_ok != 0 ?
+            std::variant<void *, swig_f_type!(T)> { nullptr } :
+            std::variant<void *, swig_f_type!(T)> { swig_foreign_from_i_type!(T, $p.data.err) }"#;
+ );
+
+foreign_typemap!(
+    generic_alias!(CRustRes = swig_concat_idents!(CRustResult, swig_i_type!(T1), swig_i_type!(T2)));
+    generic_alias!(CRustResUnion = swig_concat_idents!(CRustResultUnion, swig_i_type!(T1), swig_i_type!(T2)));
+    generic_alias!(CRustResModule = swig_concat_idents!(rust_result, swig_i_type!(T1), swig_i_type!(T2)));
+    define_c_type!(
+         module = "CRustResModule!().h";
+         #[repr(C)]
+         pub union CRustResUnion!() {
+             ok: swig_i_type!(T1),
+             err: swig_i_type!(T2),
+         }
+
+         #[repr(C)]
+         pub struct CRustRes!() {
+             data: CRustResUnion!(),
+             is_ok: u8,
+         }
+    );
+    ($p:r_type) <T1, T2> Result<T1, T2> => CRustRes!() {
+        $out = match $p {
+            Ok(mut x) => {
+                swig_from_rust_to_i_type!(T1, x, ok)
+                CRustRes!() {
+                    data: CRustResUnion!() { ok },
+                    is_ok: 1,
+                }
+            }
+            Err(err) => {
+                swig_from_rust_to_i_type!(T2, err, err)
+                CRustRes!() {
+                    data: CRustResUnion!() { err },
+                    is_ok: 0,
+                }
+            }
+        }
+    };
+
+    ($p:f_type, option = "CppVariant::Boost", req_modules = ["\"CRustResModule!().h\"", "<boost/variant.hpp>"]) => "boost::variant<swig_f_type!(T1), swig_f_type!(T2)>"
+        r#"$p.is_ok != 0 ?
+            boost::variant<swig_f_type!(T1), swig_f_type!(T2)> { swig_foreign_from_i_type!(T1, $p.data.ok) } :
+            boost::variant<swig_f_type!(T1), swig_f_type!(T2)> { swig_foreign_from_i_type!(T2, $p.data.err) }"#;
+
+    ($p:f_type, option = "CppVariant::Std17", req_modules = ["\"CRustResModule!().h\"", "<variant>"]) => "std::variant<swig_f_type!(T1), swig_f_type!(T2)>"
+        r#"$p.is_ok != 0 ?
+            std::variant<swig_f_type!(T1), swig_f_type!(T2)> { swig_foreign_from_i_type!(T1, $p.data.ok) } :
+            std::variant<swig_f_type!(T1), swig_f_type!(T2)> { swig_foreign_from_i_type!(T2, $p.data.err) }"#;
+ );

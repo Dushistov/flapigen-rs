@@ -627,16 +627,6 @@ pub(crate) fn if_option_return_some_type(ty: &RustType) -> Option<Type> {
         .map(|x| x.0)
 }
 
-pub(crate) fn if_vec_return_elem_type(ty: &RustType) -> Option<Type> {
-    let from_ty: Type = parse_quote! { Vec<T> };
-    let to_ty: Type = parse_quote! { T };
-    let generic_params: syn::Generics = parse_quote! { <T> };
-
-    GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
-        .is_conv_possible(ty, None, |_| None)
-        .map(|x| x.0)
-}
-
 pub(crate) fn if_result_return_ok_err_types(ty: &RustType) -> Option<(Type, Type)> {
     let from_ty: Type = parse_quote! { Result<T, E> };
     let ok_ty: Type = parse_quote! { T };
