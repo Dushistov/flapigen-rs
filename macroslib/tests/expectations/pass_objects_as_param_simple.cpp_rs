@@ -25,7 +25,7 @@ r##"# [ no_mangle ]
 
 r##"# [ no_mangle ] pub extern "C" fn TestPassObjectsAsParams_f3_a ( this : * mut TestPassObjectsAsParams , a_0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
  assert ! ( ! a_0 . is_null ( ) ) ;
- let a_0 : & mut Moo < > = unsafe { & mut * ( a_0 as * mut Moo < > ) } ;
+ let a_0 : & mut Moo = unsafe { & mut * ( a_0 as * mut Moo ) } ;
  let this : & TestPassObjectsAsParams = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : ( ) = TestPassObjectsAsParams :: f3_a ( this , a_0 ) ;
  ret }"##;

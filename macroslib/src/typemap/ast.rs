@@ -20,8 +20,8 @@ use syn::{
     parse_quote,
     visit::{visit_lifetime, Visit},
     visit_mut::{
-        visit_angle_bracketed_generic_arguments_mut, visit_type_mut, visit_type_reference_mut,
-        VisitMut,
+        visit_angle_bracketed_generic_arguments_mut, visit_parenthesized_generic_arguments_mut,
+        visit_type_mut, visit_type_reference_mut, VisitMut,
     },
     Type,
 };
@@ -154,6 +154,20 @@ pub(crate) fn normalize_ty_lifetimes(ty: &syn::Type) -> &'static str {
                 })
                 .collect();
             visit_angle_bracketed_generic_arguments_mut(self, i);
+        }
+        fn visit_path_arguments_mut(&mut self, i: &mut syn::PathArguments) {
+            match *i {
+                syn::PathArguments::None => {}
+                syn::PathArguments::AngleBracketed(ref mut b) => {
+                    self.visit_angle_bracketed_generic_arguments_mut(b);
+                    if b.args.is_empty() {
+                        *i = syn::PathArguments::None;
+                    }
+                }
+                syn::PathArguments::Parenthesized(ref mut b) => {
+                    visit_parenthesized_generic_arguments_mut(self, b);
+                }
+            }
         }
     }
 
