@@ -4,6 +4,7 @@ use std::{mem, rc::Rc};
 use log::{debug, info};
 use petgraph::graph::NodeIndex;
 use rustc_hash::FxHashMap;
+use smol_str::SmolStr;
 use syn::spanned::Spanned;
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
     typemap::{
         ast::TypeName,
         ty::{ForeignConversationIntermediate, ForeignTypeS, ForeignTypesStorage},
-        typemap_macro::{FTypeLeftRightPair, TypeMapConvRuleInfo},
+        typemap_macro::{FTypeLeftRightPair, ModuleName, TypeMapConvRuleInfo},
         TypeConvEdge, TypeMap,
     },
 };
@@ -90,7 +91,7 @@ impl TypeMap {
                 r_ty,
             )?;
             self.ftypes_storage[ftype_idx].provides_by_module =
-                req_modules.iter().cloned().collect();
+                convert_req_module_to_provides_by_module(req_modules.to_vec());
 
             return Ok(());
         }
@@ -274,7 +275,8 @@ impl TypeMap {
                 res_ftype.into_from_rust = Some(into_from_rust);
                 validate_rule_rewrite(res_ftype.from_into_rust.as_ref(), &from_into_rust)?;
                 res_ftype.from_into_rust = Some(from_into_rust);
-                res_ftype.provides_by_module = req_modules;
+                res_ftype.provides_by_module =
+                    convert_req_module_to_provides_by_module(req_modules);
             }
             (Some((ft, into_from_rust)), None) => {
                 let name = TypeName::new(ft.name, (src_id, ft.sp));
@@ -282,7 +284,8 @@ impl TypeMap {
                 let res_ftype = &mut self.ftypes_storage[ftype_idx];
                 validate_rule_rewrite(res_ftype.into_from_rust.as_ref(), &into_from_rust)?;
                 res_ftype.into_from_rust = Some(into_from_rust);
-                res_ftype.provides_by_module = req_modules;
+                res_ftype.provides_by_module =
+                    convert_req_module_to_provides_by_module(req_modules);
             }
             (None, Some((ft, from_into_rust))) => {
                 let name = TypeName::new(ft.name, (src_id, ft.sp));
@@ -290,7 +293,8 @@ impl TypeMap {
                 let res_ftype = &mut self.ftypes_storage[ftype_idx];
                 validate_rule_rewrite(res_ftype.from_into_rust.as_ref(), &from_into_rust)?;
                 res_ftype.from_into_rust = Some(from_into_rust);
-                res_ftype.provides_by_module = req_modules;
+                res_ftype.provides_by_module =
+                    convert_req_module_to_provides_by_module(req_modules);
             }
             (None, None) => {}
         }
@@ -409,6 +413,14 @@ fn ftype_merge(our: &mut ForeignTypeS, extrn_ft: ForeignTypeS) {
     }
 }
 
+fn convert_req_module_to_provides_by_module(v: Vec<ModuleName>) -> Vec<SmolStr> {
+    let mut ret = Vec::with_capacity(v.len());
+    for x in v {
+        ret.push(x.name);
+    }
+    ret
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -417,7 +429,6 @@ mod tests {
         typemap::{find_conversation_path, MapToForeignFlag},
     };
     use rustc_hash::FxHashSet;
-    use syn::{parse_quote, Type};
 
     #[test]
     fn test_merge() {

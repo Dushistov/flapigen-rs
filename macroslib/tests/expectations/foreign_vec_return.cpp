@@ -8,26 +8,28 @@ r#"template<bool OWN_DATA>
         return RustForeignVecFoo{ret};
     }"#;
 
-"struct CResultObjectString Boo_get_foo_with_err(const BooOpaque * const self);";
+
+"struct CRustResult4232mut3232c_voidCRustString Boo_get_foo_with_err(const BooOpaque * const self);";
 "std::variant<Foo, RustString> get_foo_with_err() const noexcept;";
 r#"template<bool OWN_DATA>
     inline std::variant<Foo, RustString> BooWrapper<OWN_DATA>::get_foo_with_err() const noexcept
     {
 
-        struct CResultObjectString ret = Boo_get_foo_with_err(this->self_);
+        struct CRustResult4232mut3232c_voidCRustString ret = Boo_get_foo_with_err(this->self_);
         return ret.is_ok != 0 ?
- std::variant<Foo, RustString>{Foo(static_cast<FooOpaque *>(ret.data.ok))} :
- std::variant<Foo, RustString>{RustString{ret.data.err}};
+            std::variant<Foo, RustString> { Foo(static_cast<FooOpaque *>(ret.data.ok)) } :
+            std::variant<Foo, RustString> { RustString{ret.data.err} };
     }"#;
 
-"struct CResultCRustForeignVecString Boo_get_foo_arr_with_err(const BooOpaque * const self);";
+
+"struct CRustResultCRustForeignVecCRustString Boo_get_foo_arr_with_err(const BooOpaque * const self);";
 "std::variant<RustForeignVecFoo, RustString> get_foo_arr_with_err() const noexcept;";
 r#"template<bool OWN_DATA>
     inline std::variant<RustForeignVecFoo, RustString> BooWrapper<OWN_DATA>::get_foo_arr_with_err() const noexcept
     {
 
-        struct CResultCRustForeignVecString ret = Boo_get_foo_arr_with_err(this->self_);
+        struct CRustResultCRustForeignVecCRustString ret = Boo_get_foo_arr_with_err(this->self_);
         return ret.is_ok != 0 ?
- std::variant<RustForeignVecFoo, RustString>{RustForeignVecFoo{ret.data.ok}} :
- std::variant<RustForeignVecFoo, RustString>{RustString{ret.data.err}};
+            std::variant<RustForeignVecFoo, RustString> { RustForeignVecFoo{ret.data.ok} } :
+            std::variant<RustForeignVecFoo, RustString> { RustString{ret.data.err} };
     }"#;

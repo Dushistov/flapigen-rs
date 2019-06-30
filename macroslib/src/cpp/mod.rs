@@ -42,7 +42,7 @@ use proc_macro2::TokenStream;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use strum::IntoEnumIterator;
-use syn::{parse_quote, spanned::Spanned, Type};
+use syn::{spanned::Spanned, Type};
 
 use crate::{
     cpp::map_type::map_type,
@@ -59,7 +59,7 @@ use crate::{
             boxed_type, unpack_from_heap_pointer, validate_cfg_options, ForeignMethodSignature,
             ForeignTypeInfoT,
         },
-        CType, CTypes, ForeignTypeInfo, MapToForeignFlag, RustTypeIdx, TypeMapConvRuleInfo,
+        CItem, CItems, ForeignTypeInfo, MapToForeignFlag, RustTypeIdx, TypeMapConvRuleInfo,
         FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
@@ -143,19 +143,6 @@ impl CppForeignTypeInfo {
             provides_by_module,
             cpp_converter,
         })
-    }
-
-    fn add_provides_by_module<'a, S>(&'a mut self, mod_name: S)
-    where
-        for<'b> S: Into<SmolStr> + PartialEq<&'b str>,
-    {
-        if !self
-            .provides_by_module
-            .iter()
-            .any(|x| mod_name == x.as_str())
-        {
-            self.provides_by_module.push(mod_name.into());
-        }
     }
 }
 
@@ -373,15 +360,16 @@ fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> 
 
 fn register_c_type(
     tmap: &mut TypeMap,
-    c_types: &CTypes,
+    c_types: &CItems,
     fcode: &FileWriteCache,
     src_id: SourceId,
 ) -> Result<bool> {
     let mut something_defined = false;
-    for c_type in &c_types.types {
+    for c_type in &c_types.items {
         let (f_ident, c_name) = match c_type {
-            CType::Struct(ref s) => (&s.ident, format!("struct {}", s.ident)),
-            CType::Union(ref u) => (&u.ident, format!("union {}", u.ident)),
+            CItem::Struct(ref s) => (&s.ident, format!("struct {}", s.ident)),
+            CItem::Union(ref u) => (&u.ident, format!("union {}", u.ident)),
+            CItem::Fn(_) => continue,
         };
         if fcode.is_item_defined(&c_name) {
             continue;
@@ -837,7 +825,7 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
     };
 
     if let Some(c_types) = rule.c_types.take() {
-        merge_c_types(ctx, c_types, MergeCTypesFlags::DefineOnlyCType, rule.src_id)?;
+        merge_c_types(ctx, c_types, MergeCItemsFlags::DefineOnlyCItem, rule.src_id)?;
     }
 
     let f_codes = mem::replace(&mut rule.f_code, vec![]);
@@ -907,15 +895,15 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum MergeCTypesFlags {
+enum MergeCItemsFlags {
     DefineAlsoRustType,
-    DefineOnlyCType,
+    DefineOnlyCItem,
 }
 
 fn merge_c_types(
     ctx: &mut CppContext,
-    c_types: CTypes,
-    flags: MergeCTypesFlags,
+    c_types: CItems,
+    flags: MergeCItemsFlags,
     rule_src_id: SourceId,
 ) -> Result<()> {
     let module_name = &c_types.header_name;

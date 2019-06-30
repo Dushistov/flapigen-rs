@@ -13,7 +13,7 @@ extern crate strum_macros;
 
 macro_rules! parse_type {
     ($($tt:tt)*) => {{
-        let ty: Type = parse_quote! { $($tt)* };
+        let ty: syn::Type = syn::parse_quote! { $($tt)* };
         ty
     }}
 }
@@ -302,12 +302,12 @@ impl Generator {
                     code: include_str!("cpp/cpp-include.rs").into(),
                 }));
                 foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_vec.h".into(),
-                    code: include_str!("cpp/rust_vec.h").into(),
+                    id_of_code: "rust_vec_impl.hpp".into(),
+                    code: include_str!("cpp/rust_vec_impl.hpp").into(),
                 });
                 foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_result.h".into(),
-                    code: include_str!("cpp/rust_result.h").into(),
+                    id_of_code: "rust_foreign_vec_impl.hpp".into(),
+                    code: include_str!("cpp/rust_foreign_vec_impl.hpp").into(),
                 });
                 foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_foreign_slice_iter.hpp".into(),

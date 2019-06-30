@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use log::{debug, trace};
 use proc_macro2::TokenStream;
 use rustc_hash::FxHashMap;
-use syn::{parse_quote, spanned::Spanned, Type};
+use syn::{spanned::Spanned, Type};
 
 use crate::{
     error::{panic_on_syn_error, DiagnosticError, Result},

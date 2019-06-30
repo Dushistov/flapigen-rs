@@ -6,9 +6,9 @@ use syn::{
 };
 
 use super::{
-    CType, CTypes, FTypeConvRule, FTypeLeftRightPair, ForeignCode, GenericAlias, GenericAliasItem,
-    GenericCTypes, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE, GENERIC_ALIAS,
-    SWIG_CONCAT_IDENTS, SWIG_I_TYPE,
+    CItem, CItems, FTypeConvRule, FTypeLeftRightPair, ForeignCode, GenericAlias, GenericAliasItem,
+    GenericCItems, ModuleName, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE, GENERIC_ALIAS,
+    SWIG_CONCAT_IDENTS, SWIG_F_TYPE, SWIG_I_TYPE,
 };
 use crate::{
     source_registry::SourceId,
@@ -18,7 +18,7 @@ use crate::{
         ty::FTypeConvCode,
         FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
-    FOREIGNER_CODE, FOREIGN_CODE,
+    FOREIGNER_CODE, FOREIGN_CODE, FOREIGN_TYPEMAP,
 };
 
 mod kw {
@@ -53,6 +53,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
         let mut generic_aliases = vec![];
         let mut generic_c_types = None;
         let mut rtype_generics = None;
+        let mut main_span = None;
 
         while !input.is_empty() {
             if input.peek(token::Paren) {
@@ -67,15 +68,22 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 }
 
                 let kw_la = params.lookahead1();
-                let rule = if kw_la.peek(kw::r_type) {
-                    RuleType::RType(params.parse::<kw::r_type>()?)
+                let (rule, span) = if kw_la.peek(kw::r_type) {
+                    let k = params.parse::<kw::r_type>()?;
+                    let sp = k.span();
+                    (RuleType::RType(k), sp)
                 } else if kw_la.peek(kw::f_type) {
-                    RuleType::FType(params.parse::<kw::f_type>()?)
+                    let k = params.parse::<kw::f_type>()?;
+                    let sp = k.span();
+                    (RuleType::FType(k), sp)
                 } else {
                     return Err(kw_la.error());
                 };
+                if main_span.is_none() {
+                    main_span = Some(span);
+                }
                 let mut ftype_cfg: Option<SpannedSmolStr> = None;
-                let mut ftype_req_modules = Vec::<SmolStr>::new();
+                let mut ftype_req_modules = Vec::<ModuleName>::new();
                 while !params.is_empty() && params.peek(Token![,]) {
                     params.parse::<Token![,]>()?;
                     let la = params.lookahead1();
@@ -94,7 +102,11 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                         let modules;
                         bracketed!(modules in params);
                         while !modules.is_empty() {
-                            ftype_req_modules.push(modules.parse::<LitStr>()?.value().into());
+                            let mod_name = modules.parse::<LitStr>()?;
+                            ftype_req_modules.push(ModuleName {
+                                name: mod_name.value().into(),
+                                sp: mod_name.span(),
+                            });
                             if modules.peek(Token![,]) {
                                 modules.parse::<Token![,]>()?;
                             } else if !modules.is_empty() {
@@ -243,6 +255,9 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 }
             } else {
                 let mac: syn::Macro = input.parse()?;
+                if main_span.is_none() {
+                    main_span = Some(mac.span());
+                }
                 let is_our_macro = [DEFINE_C_TYPE, FOREIGNER_CODE, FOREIGN_CODE, GENERIC_ALIAS]
                     .iter()
                     .any(|x| mac.path.is_ident(x));
@@ -255,10 +270,10 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                             input.error(format!("{} should be used only once", DEFINE_C_TYPE))
                         );
                     }
-                    match syn::parse2::<CTypes>(mac.tts.clone()) {
+                    match syn::parse2::<CItems>(mac.tts.clone()) {
                         Ok(x) => c_types = Some(x),
 
-                        Err(_) => generic_c_types = Some(syn::parse2::<GenericCTypes>(mac.tts)?),
+                        Err(_) => generic_c_types = Some(syn::parse2::<GenericCItems>(mac.tts)?),
                     }
                 } else if mac.path.is_ident(FOREIGN_CODE) || mac.path.is_ident(FOREIGNER_CODE) {
                     let fc_elem = syn::parse2::<ForeignCode>(mac.tts)?;
@@ -272,8 +287,12 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
             input.parse::<Token![;]>()?;
         }
 
+        let main_span =
+            main_span.ok_or_else(|| input.error(format!("{} is empty", FOREIGN_TYPEMAP)))?;
+
         let rule = TypeMapConvRuleInfo {
             src_id: SourceId::none(),
+            span: main_span,
             rtype_generics,
             c_types,
             f_code,
@@ -292,7 +311,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
             ))
         } else if rule.generic_c_types.is_some() && !rule.is_generic() {
             Err(syn::Error::new(
-                rule.generic_aliases[0].alias.span(),
+                rule.generic_c_types.unwrap().types.span(),
                 format!(
                     "there is generic {}, but r_type is not generic",
                     DEFINE_C_TYPE
@@ -416,24 +435,24 @@ fn parse_r_type_rule(
     Ok(())
 }
 
-impl syn::parse::Parse for CTypes {
+impl syn::parse::Parse for CItems {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
         let header_name: SmolStr = module_name.value().into();
         input.parse::<Token![;]>()?;
-        let ctypes_list: CTypesList = input.parse()?;
-        Ok(CTypes {
+        let citems_list: CItemsList = input.parse()?;
+        Ok(CItems {
             header_name,
-            types: ctypes_list.0,
+            items: citems_list.0,
         })
     }
 }
 
-pub(super) struct CTypesList(pub(super) Vec<CType>);
+pub(super) struct CItemsList(pub(super) Vec<CItem>);
 
-impl syn::parse::Parse for CTypesList {
+impl syn::parse::Parse for CItemsList {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut types = vec![];
         while !input.is_empty() {
@@ -443,18 +462,44 @@ impl syn::parse::Parse for CTypesList {
                     if !has_repr_c_attr(&s.attrs) {
                         return Err(syn::Error::new(s.span(), "struct has no repr(C) attribute"));
                     }
-                    types.push(CType::Struct(s));
+                    types.push(CItem::Struct(s));
                 }
                 syn::Item::Union(u) => {
                     if !has_repr_c_attr(&u.attrs) {
                         return Err(syn::Error::new(u.span(), "union has no repr(C) attribute"));
                     }
-                    types.push(CType::Union(u));
+                    types.push(CItem::Union(u));
+                }
+                syn::Item::Fn(f) => {
+                    let mangle_attr: syn::Attribute = parse_quote! { #[no_mangle] };
+                    if !f.attrs.iter().any(|a| *a == mangle_attr) {
+                        return Err(syn::Error::new(
+                            f.span(),
+                            "fn has no #[no_mangle] attribute",
+                        ));
+                    }
+
+                    match f.abi {
+                        Some(ref abi) => match abi.name {
+                            Some(ref name) if name.value() == "C" => {}
+                            _ => {
+                                return Err(syn::Error::new(
+                                    abi.extern_token.span(),
+                                    "fn marked as extern, but not extern \"C\"",
+                                ))
+                            }
+                        },
+                        None => {
+                            return Err(syn::Error::new(f.span(), "fn not marked as extern \"C\""))
+                        }
+                    }
+
+                    types.push(CItem::Fn(f));
                 }
                 _ => return Err(syn::Error::new(item.span(), "Expect struct or union here")),
             }
         }
-        Ok(CTypesList(types))
+        Ok(CItemsList(types))
     }
 }
 
@@ -468,6 +513,7 @@ impl syn::parse::Parse for ForeignCode {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
+        let sp = module_name.span();
         let module_name: SmolStr = module_name.value().into();
         input.parse::<Token![;]>()?;
         let cfg_option: Option<SpannedSmolStr> = if input.peek(kw::option) {
@@ -485,6 +531,7 @@ impl syn::parse::Parse for ForeignCode {
         let code: LitStr = input.parse()?;
 
         Ok(ForeignCode {
+            sp,
             module_name,
             cfg_option,
             code: code.value(),
@@ -501,7 +548,7 @@ impl syn::parse::Parse for GenericAlias {
     }
 }
 
-impl syn::parse::Parse for GenericCTypes {
+impl syn::parse::Parse for GenericCItems {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
@@ -509,7 +556,13 @@ impl syn::parse::Parse for GenericCTypes {
         let header_name: SmolStr = module_name.value().into();
         input.parse::<Token![;]>()?;
         let types = input.parse()?;
-        Ok(GenericCTypes { header_name, types })
+        Ok(GenericCItems {
+            header_name: ModuleName {
+                name: header_name,
+                sp: module_name.span(),
+            },
+            types,
+        })
     }
 }
 
@@ -523,6 +576,9 @@ impl syn::parse::Parse for GenericAliasItem {
             } else if mac.path.is_ident(SWIG_I_TYPE) {
                 let item: syn::Ident = syn::parse2(mac.tts)?;
                 Ok(GenericAliasItem::SwigIType(item))
+            } else if mac.path.is_ident(SWIG_F_TYPE) {
+                let item: syn::Ident = syn::parse2(mac.tts)?;
+                Ok(GenericAliasItem::SwigFType(item))
             } else {
                 return Err(syn::Error::new(
                     mac.span(),

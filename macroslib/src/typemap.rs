@@ -34,7 +34,7 @@ use crate::{
 };
 
 pub(crate) use typemap_macro::{
-    CType, CTypes, ExpandedFType, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
+    CItem, CItems, ExpandedFType, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
 };
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
@@ -346,27 +346,6 @@ impl TypeMap {
             .alloc_new(foreign_name, correspoding_rty)
     }
 
-    //TODO: should be removed in the future
-    pub(crate) fn find_foreign_type_info_by_name(
-        &self,
-        foreign_name: &str,
-    ) -> Option<ForeignTypeInfo> {
-        if let Some(ft) = self.ftypes_storage.find_ftype_by_name(foreign_name) {
-            let ftype = &self.ftypes_storage[ft];
-            let ty_idx = match (ftype.into_from_rust.as_ref(), ftype.from_into_rust.as_ref()) {
-                (Some(rule), _) => rule.rust_ty,
-                (None, Some(rule)) => rule.rust_ty,
-                (None, None) => return None,
-            };
-            Some(ForeignTypeInfo {
-                name: ftype.name.typename.clone(),
-                correspoding_rust_type: self.conv_graph[ty_idx].clone(),
-            })
-        } else {
-            None
-        }
-    }
-
     pub(crate) fn alloc_foreign_type(&mut self, ft: ForeignTypeS) -> Result<ForeignType> {
         self.ftypes_storage.add_new_ftype(ft)
     }
@@ -400,17 +379,13 @@ impl TypeMap {
         &mut self,
         from: &RustType,
         to: ForeignTypeInfo,
+        span: SourceIdSpan,
     ) -> Result<()> {
         trace!("cache_rust_to_foreign_conv: {} / {}", to.name, from);
         let to_id = to.correspoding_rust_type.graph_idx;
-        let ftype = self.ftypes_storage.alloc_new(
-            TypeName::new(
-                to.name,
-                //TODO: need more right span
-                invalid_src_id_span(),
-            ),
-            to_id,
-        )?;
+        let ftype = self
+            .ftypes_storage
+            .alloc_new(TypeName::new(to.name, span), to_id)?;
         self.rust_to_foreign_cache
             .insert(from.normalized_name.clone(), ftype);
         Ok(())

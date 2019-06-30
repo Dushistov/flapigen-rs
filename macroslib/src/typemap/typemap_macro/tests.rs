@@ -35,6 +35,12 @@ fn test_foreign_typemap_simple_generic() {
             true
         });
     assert!(subst_map.is_some());
+    let ty = parse_type! { * const ::std::os::raw::c_char };
+    let subst_map =
+        rule.is_ty_subst_of_my_generic_rtype(&ty, petgraph::Direction::Outgoing, |_ty, _traits| {
+            true
+        });
+    assert!(subst_map.is_some());
 }
 
 #[test]
@@ -275,9 +281,9 @@ fn test_foreign_typemap_cpp_ruststring() {
     assert!(!rule.if_simple_rtype_ftype_map().is_some());
     assert!(rule.contains_data_for_language_backend());
     assert_eq!(
-        CTypes {
+        CItems {
             header_name: "rust_str.h".into(),
-            types: vec![CType::Struct(parse_quote! {
+            items: vec![CItem::Struct(parse_quote! {
                 #[repr(C)]
                     struct CRustString {
                         data: *const ::std::os::raw::c_char,
@@ -373,15 +379,14 @@ fn test_foreign_typemap_cpp_pair_expand() {
         })
         .unwrap();
     let c_types = rule
-        .subst_generic_params_to_c_types(&subst_params, &mut Dummy)
+        .subst_generic_params_to_c_items(&subst_params, &mut Dummy)
         .unwrap()
         .unwrap();
 
     assert_eq!(
-        c_types,
-        CTypes {
+        CItems {
             header_name: "rust_tuple.h".into(),
-            types: vec![CType::Struct(parse_quote! {
+            items: vec![CItem::Struct(parse_quote! {
                 #[repr(C)]
                 pub struct CRustPairi32f32 {
                     first: i32,
@@ -389,6 +394,7 @@ fn test_foreign_typemap_cpp_pair_expand() {
                 }
             }),],
         },
+        c_types,
     );
 
     let new_rule = rule
