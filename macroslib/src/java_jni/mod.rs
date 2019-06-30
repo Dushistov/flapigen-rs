@@ -134,6 +134,7 @@ impl JavaConfig {
                     correspoding_rust_type: my_jobj_ti,
                     name: class.name.to_string().into(),
                 },
+                (class.src_id, class.name.span()),
             )?;
 
             conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);

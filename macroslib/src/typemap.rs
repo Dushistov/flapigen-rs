@@ -400,17 +400,13 @@ impl TypeMap {
         &mut self,
         from: &RustType,
         to: ForeignTypeInfo,
+        span: SourceIdSpan,
     ) -> Result<()> {
         trace!("cache_rust_to_foreign_conv: {} / {}", to.name, from);
         let to_id = to.correspoding_rust_type.graph_idx;
-        let ftype = self.ftypes_storage.alloc_new(
-            TypeName::new(
-                to.name,
-                //TODO: need more right span
-                invalid_src_id_span(),
-            ),
-            to_id,
-        )?;
+        let ftype = self
+            .ftypes_storage
+            .alloc_new(TypeName::new(to.name, span), to_id)?;
         self.rust_to_foreign_cache
             .insert(from.normalized_name.clone(), ftype);
         Ok(())
