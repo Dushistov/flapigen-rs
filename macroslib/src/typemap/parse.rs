@@ -65,6 +65,8 @@ pub(in crate::typemap) fn parse(
         utils_code: Vec::with_capacity(file.items.len()),
         generic_edges: Vec::<GenericTypeConv>::new(),
         rust_class_to_foreign_cache: FxHashMap::default(),
+        rust_from_foreign_cache: FxHashMap::default(),
+        rust_to_foreign_cache: FxHashMap::default(),
         foreign_classes: Vec::new(),
         exported_enums: FxHashMap::default(),
         traits_usage_code,

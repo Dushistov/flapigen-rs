@@ -77,6 +77,8 @@ type RustTypeNameToGraphIdx = FxHashMap<SmolStr, RustTypeIdx>;
 pub(crate) struct TypeMap {
     conv_graph: TypesConvGraph,
     ftypes_storage: ForeignTypesStorage,
+    rust_to_foreign_cache: FxHashMap<RustTypeIdx, ForeignType>,
+    rust_from_foreign_cache: FxHashMap<RustTypeIdx, ForeignType>,
     //TODO: deprecate and remove this cache
     rust_class_to_foreign_cache: FxHashMap<SmolStr, ForeignType>,
     rust_names_map: RustTypeNameToGraphIdx,
@@ -142,6 +144,8 @@ impl Default for TypeMap {
             rust_names_map: FxHashMap::default(),
             utils_code: Vec::new(),
             generic_edges: default_rules,
+            rust_from_foreign_cache: FxHashMap::default(),
+            rust_to_foreign_cache: FxHashMap::default(),
             rust_class_to_foreign_cache: FxHashMap::default(),
             foreign_classes: Vec::new(),
             exported_enums: FxHashMap::default(),
@@ -592,6 +596,14 @@ impl TypeMap {
             }
         }
 
+        let cached = match direction {
+            petgraph::Direction::Outgoing => self.rust_to_foreign_cache.get(&rust_ty.to_idx()),
+            petgraph::Direction::Incoming => self.rust_from_foreign_cache.get(&rust_ty.to_idx()),
+        };
+        if let Some(cached) = cached {
+            return Some(*cached);
+        }
+
         {
             debug!(
                 "map foreign: graph node {:?}",
@@ -642,6 +654,15 @@ impl TypeMap {
                     "map foreign: we found min path ({}) {} <-> {} ({})",
                     path_len, rust_ty, self.conv_graph[rust_type_idx], self[ftype].name
                 );
+
+                match direction {
+                    petgraph::Direction::Outgoing => {
+                        self.rust_to_foreign_cache.insert(rust_ty.to_idx(), ftype);
+                    }
+                    petgraph::Direction::Incoming => {
+                        self.rust_from_foreign_cache.insert(rust_ty.to_idx(), ftype);
+                    }
+                }
 
                 return Some(ftype);
             }
@@ -940,6 +961,16 @@ impl TypeMap {
             syn::parse2(tts).map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
 
         self.may_be_merge_conv_rule(src_id, tmap_conv_rule)
+    }
+
+    pub(in crate::typemap) fn invalidate_conv_cache(&mut self) {
+        self.rust_to_foreign_cache.clear();
+        self.rust_from_foreign_cache.clear();
+        self.rust_class_to_foreign_cache.clear();
+    }
+    pub(in crate::typemap) fn invalidate_conv_for_rust_type(&mut self, rti: RustTypeIdx) {
+        self.rust_from_foreign_cache.remove(&rti);
+        self.rust_to_foreign_cache.remove(&rti);
     }
 }
 

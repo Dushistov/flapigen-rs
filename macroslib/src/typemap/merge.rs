@@ -26,7 +26,7 @@ impl TypeMap {
         target_pointer_width: usize,
     ) -> Result<()> {
         debug!("TypeMap::merge {:?} with our rules", id_of_code);
-        self.rust_class_to_foreign_cache.clear();
+        self.invalidate_conv_cache();
         let mut was_traits_usage_code = FxHashMap::default();
         mem::swap(&mut was_traits_usage_code, &mut self.traits_usage_code);
         let mut new_data = crate::typemap::parse::parse(
@@ -85,7 +85,7 @@ impl TypeMap {
         assert!(!ri.is_generic());
         if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map() {
             let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
-
+            self.invalidate_conv_for_rust_type(r_ty);
             let ftype_idx = self.add_foreign_rust_ty_idx(
                 TypeName::new(f_ty.name.clone(), (src_id, f_ty.sp)),
                 r_ty,
@@ -116,6 +116,8 @@ impl TypeMap {
             self.conv_graph
                 .update_edge(from_ty, to_ty, TypeConvEdge::new(code.into(), None));
             rtype_left_to_right = Some((from_ty, to_ty));
+            self.invalidate_conv_for_rust_type(from_ty);
+            self.invalidate_conv_for_rust_type(to_ty);
         }
 
         let mut rtype_right_to_left = None;
@@ -137,6 +139,8 @@ impl TypeMap {
             self.conv_graph
                 .update_edge(from_ty, to_ty, TypeConvEdge::new(code.into(), None));
             rtype_right_to_left = Some((from_ty, to_ty));
+            self.invalidate_conv_for_rust_type(from_ty);
+            self.invalidate_conv_for_rust_type(to_ty);
         }
 
         let mut req_modules = vec![];
@@ -174,6 +178,8 @@ impl TypeMap {
                 DiagnosticError::new(src_id, right_fty.sp, "expect conversation code here")
             })?;
 
+            self.invalidate_conv_for_rust_type(rty_right);
+            self.invalidate_conv_for_rust_type(rty_left);
             ft_into_from_rust = Some((
                 right_fty,
                 ForeignConversationRule {
@@ -218,7 +224,8 @@ impl TypeMap {
             let conv_code = rule.code.ok_or_else(|| {
                 DiagnosticError::new(src_id, right_fty.sp, "expect conversation code here")
             })?;
-
+            self.invalidate_conv_for_rust_type(rty_right);
+            self.invalidate_conv_for_rust_type(rty_left);
             ft_from_into_rust = Some((
                 right_fty,
                 ForeignConversationRule {
