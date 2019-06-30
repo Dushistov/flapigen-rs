@@ -128,7 +128,7 @@ impl JavaConfig {
                 SourceId::none(),
             );
 
-            conv_map.cache_rust_to_foreign_conv(
+            conv_map.cache_class_for_rust_to_foreign_conv(
                 &this_type,
                 ForeignTypeInfo {
                     correspoding_rust_type: my_jobj_ti,
