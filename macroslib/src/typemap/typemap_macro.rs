@@ -4,6 +4,7 @@ mod tests;
 
 use petgraph::Direction;
 use proc_macro2::{Span, TokenStream};
+use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use std::fmt::Write;
 use syn::{spanned::Spanned, LitStr, Type};
@@ -13,8 +14,9 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{
-            get_trait_bounds, is_second_subst_of_first, parse_ty_with_given_span,
-            replace_all_types_with, DisplayToTokens, SpannedSmolStr, TyParamsSubstMap,
+            get_trait_bounds, is_second_subst_of_first, normalize_ty_lifetimes,
+            parse_ty_with_given_span, replace_all_types_with, DisplayToTokens, SpannedSmolStr,
+            TyParamsSubstMap,
         },
         ty::{FTypeConvCode, TraitNamesSet},
     },
@@ -430,18 +432,32 @@ pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
     fn swig_foreign_from_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
 }
 
+struct CalcGenericAlias<'a> {
+    name: &'a syn::Ident,
+    value: syn::Type,
+    req_modules: Vec<SmolStr>,
+}
+
 fn build_generic_aliases<'a, 'b>(
     src_id: SourceId,
     generic_aliases: &'a [GenericAlias],
     param_map: &'b TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-) -> Result<Vec<(&'a syn::Ident, Type)>> {
+) -> Result<Vec<CalcGenericAlias<'a>>> {
     let mut ret = vec![];
     for ga in generic_aliases {
         let item: GenericAliasItem = syn::parse2(ga.value.clone())
             .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        let mut req_modules = Vec::<SmolStr>::new();
         let mut ident = String::new();
-        concat_idents(src_id, item, param_map, expander, &mut ident)?;
+        concat_idents(
+            src_id,
+            item,
+            param_map,
+            expander,
+            &mut req_modules,
+            &mut ident,
+        )?;
         let ident = properly_escape_str_as_type(&ident);
         let new_type: syn::Type =
             parse_ty_with_given_span(&ident, ga.value.span()).map_err(|err| {
@@ -450,7 +466,11 @@ fn build_generic_aliases<'a, 'b>(
                     format!("trying to parse '{}' as type", ident),
                 )
             })?;
-        ret.push((&ga.alias, new_type));
+        ret.push(CalcGenericAlias {
+            name: &ga.alias,
+            value: new_type,
+            req_modules,
+        });
     }
     Ok(ret)
 }
@@ -483,12 +503,13 @@ fn concat_idents(
     item: GenericAliasItem,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    req_modules: &mut Vec<SmolStr>,
     ident: &mut String,
 ) -> Result<()> {
     match item {
         GenericAliasItem::Concat(items) => {
             for it in items {
-                concat_idents(src_id, it, param_map, expander, ident)?;
+                concat_idents(src_id, it, param_map, expander, req_modules, ident)?;
             }
         }
         GenericAliasItem::SwigIType(id) => {
@@ -498,7 +519,8 @@ fn concat_idents(
         }
         GenericAliasItem::SwigFType(id) => {
             let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
-            let f_type = expander.swig_f_type(ty.as_ref(), None)?;
+            let mut f_type = expander.swig_f_type(ty.as_ref(), None)?;
+            req_modules.append(&mut f_type.provides_by_module);
             ident.push_str(&f_type.name);
         }
         GenericAliasItem::Ident(id) => ident.push_str(&id.to_string()),
@@ -594,7 +616,7 @@ fn expand_rtype_rule(
     grule: Option<&RTypeConvRule>,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-    generic_aliases: &[(&syn::Ident, Type)],
+    generic_aliases: &[CalcGenericAlias],
 ) -> Result<Option<RTypeConvRule>> {
     let grule = match grule {
         Some(x) => x,
@@ -606,7 +628,7 @@ fn expand_rtype_rule(
             Type::Macro(ref type_macro) => {
                 let alias_idx = generic_aliases
                     .iter()
-                    .position(|a| type_macro.mac.path.is_ident(a.0.clone()))
+                    .position(|a| type_macro.mac.path.is_ident(a.name.clone()))
                     .ok_or_else(|| {
                         DiagnosticError::new(
                             src_id,
@@ -618,7 +640,7 @@ fn expand_rtype_rule(
                             ),
                         )
                     })?;
-                Some(generic_aliases[alias_idx].1.clone())
+                Some(generic_aliases[alias_idx].value.clone())
             }
             _ => Some(replace_all_types_with(&x, param_map)),
         },
@@ -650,7 +672,7 @@ fn expand_ftype_rule(
     grules: &[FTypeConvRule],
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-    generic_aliases: &[(&syn::Ident, Type)],
+    generic_aliases: &[CalcGenericAlias],
 ) -> Result<Vec<FTypeConvRule>> {
     let mut ret = Vec::with_capacity(grules.len());
 
@@ -713,8 +735,10 @@ fn expand_ftype_rule(
                 sp: m.sp,
             });
         }
-        provides_by_module.sort();
-        provides_by_module.dedup();
+        // prerserve order of modules
+        let mut mod_uniques = FxHashSet::default();
+        provides_by_module.retain(|e| mod_uniques.insert(e.name.clone()));
+
         ret.push(FTypeConvRule {
             req_modules: provides_by_module,
             cfg_option: grule.cfg_option.clone(),
@@ -731,7 +755,7 @@ fn call_swig_f_type(
     out: &mut String,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-    generic_aliases: &[(&syn::Ident, Type)],
+    generic_aliases: &[CalcGenericAlias],
 ) -> Result<Vec<SmolStr>> {
     let (type_name, direction) = match params.len() {
         1 => (&params[0], None),
@@ -768,11 +792,11 @@ fn call_swig_f_type(
         let alias_name = (&type_name[0..type_name.len() - 3]).trim();
         let pos = generic_aliases
             .iter()
-            .position(|a| a.0 == alias_name)
+            .position(|a| a.name == alias_name)
             .ok_or_else(|| {
                 DiagnosticError::new2(ctx_sp, format!("unknown type alias '{}'", alias_name))
             })?;
-        TyValueOrRef::Ref(&generic_aliases[pos].1)
+        TyValueOrRef::Ref(&generic_aliases[pos].value)
     } else {
         find_type_param(param_map, type_name, ctx_sp)?
     };
@@ -787,34 +811,34 @@ fn expand_ftype_name(
     ftype: &FTypeName,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-    generic_aliases: &[(&syn::Ident, Type)],
+    generic_aliases: &[CalcGenericAlias],
     provides_by_module: &mut Vec<ModuleName>,
 ) -> Result<FTypeName> {
+    let ctx_sp = (src_id, ftype.sp);
     let new_fytpe = expand_macroses(
         ftype.name.as_str(),
         |id: &str, params: Vec<&str>, out: &mut String| {
             if id == SWIG_F_TYPE {
-                let modules: Vec<SmolStr> = call_swig_f_type(
-                    (src_id, ftype.sp),
-                    params,
-                    out,
-                    param_map,
-                    expander,
-                    generic_aliases,
-                )?;
+                let modules: Vec<SmolStr> =
+                    call_swig_f_type(ctx_sp, params, out, param_map, expander, generic_aliases)?;
                 provides_by_module.extend(modules.into_iter().map(|name| ModuleName {
                     name,
                     sp: Span::call_site(),
                 }));
                 Ok(())
-            } else if let Some(pos) = generic_aliases.iter().position(|a| a.0 == id) {
-                write!(out, "{}", DisplayToTokens(&generic_aliases[pos].1))
+            } else if let Some(pos) = generic_aliases.iter().position(|a| a.name == id) {
+                write!(out, "{}", DisplayToTokens(&generic_aliases[pos].value))
                     .expect(WRITE_TO_MEM_FAILED_MSG);
+                provides_by_module.extend(generic_aliases[pos].req_modules.iter().map(|name| {
+                    ModuleName {
+                        name: name.clone(),
+                        sp: Span::call_site(),
+                    }
+                }));
                 Ok(())
             } else {
-                Err(DiagnosticError::new(
-                    src_id,
-                    ftype.sp,
+                Err(DiagnosticError::new2(
+                    ctx_sp,
                     format!("unknown macros '{}' in this context", id),
                 ))
             }
@@ -873,7 +897,7 @@ fn find_type_param<'a, 'b>(
 fn expand_module_name(
     generic_mod_name: &str,
     ctx_sp: SourceIdSpan,
-    aliases: &[(&syn::Ident, Type)],
+    aliases: &[CalcGenericAlias],
 ) -> Result<SmolStr> {
     expand_macroses(
         generic_mod_name,
@@ -886,11 +910,9 @@ fn expand_module_name(
                         GENERIC_ALIAS, id, params
                     ),
                 ))
-            } else if let Some(pos) = aliases
-                .iter()
-                .position(|(ident, _)| ident.to_string() == id)
-            {
-                write!(out, "{}", DisplayToTokens(&aliases[pos].1)).expect(WRITE_TO_MEM_FAILED_MSG);
+            } else if let Some(pos) = aliases.iter().position(|e| e.name == id) {
+                write!(out, "{}", DisplayToTokens(&aliases[pos].value))
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
                 Ok(())
             } else {
                 Err(DiagnosticError::new2(
@@ -907,7 +929,7 @@ fn expand_rust_code(
     code: &str,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-    generic_aliases: &[(&syn::Ident, Type)],
+    generic_aliases: &[CalcGenericAlias],
     ctx_span: SourceIdSpan,
 ) -> Result<String> {
     expand_macroses(
@@ -948,7 +970,8 @@ fn expand_rust_code(
                     };
                     let ty = find_type_param(param_map, param, ctx_span)?;
                     let i_type = expander.swig_i_type(ty.as_ref())?;
-                    write!(out, "{}", DisplayToTokens(&i_type)).expect(WRITE_TO_MEM_FAILED_MSG);
+                    write!(out, "{}", normalize_ty_lifetimes(&i_type))
+                        .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
                 _ if id == SWIG_SUBST_TYPE => {
                     let type_name = if params.len() == 1 {
@@ -960,12 +983,17 @@ fn expand_rust_code(
                         ));
                     };
                     let ty = find_type_param(param_map, type_name, ctx_span)?;
-                    write!(out, "{}", DisplayToTokens(ty.as_ref())).expect(WRITE_TO_MEM_FAILED_MSG);
+                    write!(out, "{}", normalize_ty_lifetimes(ty.as_ref()))
+                        .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
                 _ => {
-                    if let Some(alias_idx) = generic_aliases.iter().position(|a| a.0 == id) {
-                        write!(out, "{}", DisplayToTokens(&generic_aliases[alias_idx].1))
-                            .expect(WRITE_TO_MEM_FAILED_MSG);
+                    if let Some(alias_idx) = generic_aliases.iter().position(|a| a.name == id) {
+                        write!(
+                            out,
+                            "{}",
+                            normalize_ty_lifetimes(&generic_aliases[alias_idx].value)
+                        )
+                        .expect(WRITE_TO_MEM_FAILED_MSG);
                     } else {
                         write!(out, "{}!(", id).expect(WRITE_TO_MEM_FAILED_MSG);
                         for (i, p) in params.iter().enumerate() {
@@ -988,7 +1016,7 @@ fn expand_foreign_code(
     code: &str,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-    generic_aliases: &[(&syn::Ident, Type)],
+    generic_aliases: &[CalcGenericAlias],
     ctx_span: SourceIdSpan,
 ) -> Result<String> {
     expand_macroses(
@@ -1019,8 +1047,8 @@ fn expand_foreign_code(
                     write!(out, "{}", tt).expect(WRITE_TO_MEM_FAILED_MSG);
                 }
                 _ => {
-                    if let Some(pos) = generic_aliases.iter().position(|a| a.0 == id) {
-                        write!(out, "{}", DisplayToTokens(&generic_aliases[pos].1))
+                    if let Some(pos) = generic_aliases.iter().position(|a| a.name == id) {
+                        write!(out, "{}", DisplayToTokens(&generic_aliases[pos].value))
                             .expect(WRITE_TO_MEM_FAILED_MSG);
                     } else {
                         return Err(DiagnosticError::new2(
@@ -1039,7 +1067,7 @@ fn expand_fcode(
     f_code: &[ForeignCode],
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-    generic_aliases: &[(&syn::Ident, Type)],
+    generic_aliases: &[CalcGenericAlias],
     src_id: SourceId,
 ) -> Result<Vec<ForeignCode>> {
     let mut ret = Vec::<ForeignCode>::with_capacity(f_code.len());

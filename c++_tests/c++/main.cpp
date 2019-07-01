@@ -250,7 +250,7 @@ TEST(TestWorkWithVec, smokeTest)
     const size_t tag_len = std::strlen(tag);
     TestWorkWithVec t{ tag };
     for (uint32_t n : { 0, 1, 2, 3, 5, 10, 100, 1000 }) {
-        auto vec =  t.get_bytes(n);
+        auto vec = t.get_bytes(n);
         EXPECT_TRUE(n == 0 || !vec.empty());
         EXPECT_EQ(tag_len * n, vec.size());
         for (size_t i = 0; i < vec.size(); i += std::strlen(tag)) {
@@ -366,6 +366,15 @@ TEST(TestWorkWithVec, smokeTest)
         tester.set_vec_foo(std::move(v));
         auto v2 = tester.get_vec_foo();
         validate_create_foo_vec(30, v2);
+    }
+
+    {
+        auto v = TestWorkWithVec::test_lifetime_objs(1000);
+        uint32_t i = 0;
+        for (const auto &&e : v) {
+            ASSERT_EQ(static_cast<int32_t>(i), e.get_data());
+            ++i;
+        }
     }
 }
 

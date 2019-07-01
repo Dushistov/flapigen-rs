@@ -8,8 +8,9 @@ r##"#pragma once
 #include <type_traits>
 
 #include "LatLon.h"
-#include "RemoteApiError.hpp"
+#include "WindVelocity.hpp"
 #include "RustForeignVecWindVelocity.h"
+#include "RemoteApiError.hpp"
 #include "rust_resultCRustForeignVec4232mut3232c_void.h"
 #include <variant>
 

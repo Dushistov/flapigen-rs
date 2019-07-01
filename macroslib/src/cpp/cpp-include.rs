@@ -732,6 +732,14 @@ fn remove_foreign_class_from_vec<T: SwigForeignClass>(
     T::box_object(elem)
 }
 
+#[allow(dead_code)]
+#[inline]
+fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec) {
+    assert_eq!(::std::mem::size_of::<T>(), v.step);
+    let v = unsafe { Vec::from_raw_parts(v.data as *mut T, v.len, v.capacity) };
+    drop(v);
+}
+
 foreign_typemap!(
     define_c_type!(
         module = "rust_vec.h";
@@ -757,10 +765,7 @@ foreign_typemap!(
         #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
         #[no_mangle]
         pub extern "C" fn CForeignVecFree!()(v: CRustForeignVec) {
-            type SelfType = swig_subst_type!(T);
-            assert_eq!(::std::mem::size_of::<SelfType>(), v.step);
-            let v = unsafe { Vec::from_raw_parts(v.data as *mut swig_subst_type!(T), v.len, v.capacity) };
-            drop(v);
+            drop_foreign_class_vec::<swig_subst_type!(T)>(v);
         }
 
         #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
