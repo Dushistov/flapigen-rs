@@ -573,7 +573,7 @@ impl TypeMap {
         F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
     >(
         &mut self,
-        rust_ty: &RustType,
+        rust_ty: RustTypeIdx,
         direction: petgraph::Direction,
         flag: MapToForeignFlag,
         build_for_sp: SourceIdSpan,
@@ -581,13 +581,14 @@ impl TypeMap {
     ) -> Option<ForeignType> {
         debug!(
             "map_through_conversation_to_foreign: {} {:?}",
-            rust_ty, direction
+            self[rust_ty], direction
         );
 
         if direction == petgraph::Direction::Outgoing {
+            let rust_ty_info = self[rust_ty].clone();
             if let Some(ftype) = self
                 .rust_class_to_foreign_cache
-                .get(&rust_ty.normalized_name)
+                .get(&rust_ty_info.normalized_name)
             {
                 let fts = &self.ftypes_storage[*ftype];
                 if fts.into_from_rust.is_some() {
@@ -597,18 +598,15 @@ impl TypeMap {
         }
 
         let cached = match direction {
-            petgraph::Direction::Outgoing => self.rust_to_foreign_cache.get(&rust_ty.to_idx()),
-            petgraph::Direction::Incoming => self.rust_from_foreign_cache.get(&rust_ty.to_idx()),
+            petgraph::Direction::Outgoing => self.rust_to_foreign_cache.get(&rust_ty),
+            petgraph::Direction::Incoming => self.rust_from_foreign_cache.get(&rust_ty),
         };
         if let Some(cached) = cached {
             return Some(*cached);
         }
 
         {
-            debug!(
-                "map foreign: graph node {:?}",
-                self.conv_graph[rust_ty.graph_idx]
-            );
+            debug!("map foreign: graph node {:?}", self.conv_graph[rust_ty]);
             let find_path = |from, to| {
                 find_conversation_path(&self.conv_graph, from, to, invalid_src_id_span()).ok()
             };
@@ -617,14 +615,14 @@ impl TypeMap {
                 let (related_rty_idx, path) = match direction {
                     petgraph::Direction::Outgoing => {
                         if let Some(rule) = ftype.into_from_rust.as_ref() {
-                            (rule.rust_ty, find_path(rust_ty.graph_idx, rule.rust_ty))
+                            (rule.rust_ty, find_path(rust_ty, rule.rust_ty))
                         } else {
                             continue;
                         }
                     }
                     petgraph::Direction::Incoming => {
                         if let Some(rule) = ftype.from_into_rust.as_ref() {
-                            (rule.rust_ty, find_path(rule.rust_ty, rust_ty.graph_idx))
+                            (rule.rust_ty, find_path(rule.rust_ty, rust_ty))
                         } else {
                             continue;
                         }
@@ -652,15 +650,15 @@ impl TypeMap {
             if let Some((path_len, rust_type_idx, ftype)) = min_path {
                 debug!(
                     "map foreign: we found min path ({}) {} <-> {} ({})",
-                    path_len, rust_ty, self.conv_graph[rust_type_idx], self[ftype].name
+                    path_len, self[rust_ty], self.conv_graph[rust_type_idx], self[ftype].name
                 );
 
                 match direction {
                     petgraph::Direction::Outgoing => {
-                        self.rust_to_foreign_cache.insert(rust_ty.to_idx(), ftype);
+                        self.rust_to_foreign_cache.insert(rust_ty, ftype);
                     }
                     petgraph::Direction::Incoming => {
-                        self.rust_from_foreign_cache.insert(rust_ty.to_idx(), ftype);
+                        self.rust_from_foreign_cache.insert(rust_ty, ftype);
                     }
                 }
 
@@ -675,7 +673,7 @@ impl TypeMap {
 
         debug!(
             "map foreign: No paths exists, may be we can create one for '{}' {:?}?",
-            rust_ty, direction
+            self[rust_ty], direction
         );
 
         let mut new_foreign_types = FxHashSet::default();
@@ -740,7 +738,7 @@ impl TypeMap {
             });
         }
 
-        let from: RustType = rust_ty.clone();
+        let from: RustType = self[rust_ty].clone();
         let mut possible_paths =
             Vec::<(PossiblePath, ForeignType, RustTypeIdx, Option<RustTypeIdx>)>::new();
         for max_steps in 1..=MAX_TRY_BUILD_PATH_STEPS {
@@ -814,7 +812,7 @@ impl TypeMap {
                 merge_path_to_conv_map(pp, self);
                 debug!(
                     "map foreign: we found min path ({}) '{}' <-> '{}' ({})",
-                    path_len, rust_ty, self.conv_graph[rtype_idx], self[ftype].name
+                    path_len, self[rust_ty], self.conv_graph[rtype_idx], self[ftype].name
                 );
                 ftype
             });
@@ -1271,7 +1269,7 @@ mod tests {
 
         let fti = types_map
             .map_through_conversation_to_foreign(
-                &vec_foo_ty,
+                vec_foo_ty.to_idx(),
                 petgraph::Direction::Outgoing,
                 MapToForeignFlag::FullSearch,
                 invalid_src_id_span(),

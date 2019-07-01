@@ -113,7 +113,7 @@ impl CppForeignTypeInfo {
                 ),
             )
         })?;
-        let provides_by_module = ftype.provides_by_module.clone();
+        let mut provides_by_module = ftype.provides_by_module.clone();
         let base_rt;
         let base_ft_name;
         if let Some(intermediate) = rule.intermediate.as_ref() {
@@ -121,6 +121,7 @@ impl CppForeignTypeInfo {
             let typename = ftype.typename();
             let converter = intermediate.conv_code.to_string();
             let inter_ft = convert_rt_to_ft(tmap, intermediate.intermediate_ty)?;
+            provides_by_module.extend_from_slice(&tmap[inter_ft].provides_by_module);
             base_ft_name = tmap[inter_ft].typename();
             cpp_converter = Some(CppConverter {
                 typename,
@@ -339,7 +340,7 @@ fn n_arguments_list(n: usize) -> String {
 fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> {
     let rtype = tmap[rt].clone();
     tmap.map_through_conversation_to_foreign(
-        &rtype,
+        rtype.to_idx(),
         Direction::Outgoing,
         MapToForeignFlag::FullSearch,
         rtype.src_id_span(),
@@ -980,8 +981,9 @@ May be you need to use `private constructor = empty;` syntax?",
 
     let mut m_sigs = fclass::find_suitable_foreign_types_for_methods(ctx, class)?;
     let mut req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
-    let my_self = format!("\"{}\"", cpp_code::cpp_header_name(class));
-    req_includes.retain(|el| *el != my_self);
+    let my_self_cpp = format!("\"{}\"", cpp_code::cpp_header_name(class));
+    let my_self_c = format!("\"{}\"", cpp_code::c_header_name(class));
+    req_includes.retain(|el| *el != my_self_cpp && *el != my_self_c);
     fclass::generate(ctx, class, &req_includes, &m_sigs)?;
     Ok(())
 }

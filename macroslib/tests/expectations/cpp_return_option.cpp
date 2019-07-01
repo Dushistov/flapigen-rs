@@ -8,10 +8,11 @@ r##"#pragma once
 #include <type_traits>
 
 #include "Boo.hpp"
-#include "c_ControlItem.h"
+#include "c_Boo.h"
 #include "rust_option.h"
-#include "rust_str.h"
 #include <optional>
+#include "c_ControlItem.h"
+#include "rust_str.h"
 #include <string_view>
 
 #include "c_Foo.h"

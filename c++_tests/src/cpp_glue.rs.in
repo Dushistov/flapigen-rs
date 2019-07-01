@@ -331,6 +331,15 @@ impl TestWorkWithVec {
         }
         v
     }
+    fn test_lifetime_objs<'a>(n: usize) -> Vec<TestObjectLifetime<'a>> {
+        let mut ret = Vec::with_capacity(n);
+        for i in 0..n {
+            let mut obj = create_test_obj_with_lifetime();
+            obj.data.set(i as i32);
+            ret.push(obj);
+        }
+        ret
+    }
 }
 
 foreigner_class!(class TestWorkWithVec {
@@ -350,6 +359,7 @@ foreigner_class!(class TestWorkWithVec {
     static_method TestWorkWithVec::clone_foo_slice(v: &[Foo]) -> Vec<Foo>;
     static_method TestWorkWithVec::test_i32_slice(a: &[i32]) -> Vec<i32>;
     method TestWorkWithVec::set_vec_foo(&mut self, v: Vec<Foo>);
+    static_method TestWorkWithVec::test_lifetime_objs<'a>(n: usize) -> Vec<TestObjectLifetime<'a>>;
 });
 
 enum MyEnum {

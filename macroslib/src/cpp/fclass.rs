@@ -1056,28 +1056,28 @@ r#"
             write!(
                 cpp_include_f,
                 r#"
-            {class_name}(const {class_name}& o) noexcept {{
-                static_assert(OWN_DATA, "copy possible only if class own data");
+    {class_name}(const {class_name}& o) noexcept {{
+        static_assert(OWN_DATA, "copy possible only if class own data");
 
-                 if (o.self_ != nullptr) {{
-                     self_ = {c_clone_func}(o.self_);
-                 }} else {{
-                     self_ = nullptr;
-                 }}
+         if (o.self_ != nullptr) {{
+             self_ = {c_clone_func}(o.self_);
+         }} else {{
+             self_ = nullptr;
+         }}
+    }}
+    {class_name} &operator=(const {class_name}& o) noexcept {{
+        static_assert(OWN_DATA, "copy possible only if class own data");
+        if (this != &o) {{
+            free_mem(this->self_);
+            if (o.self_ != nullptr) {{
+                self_ = {c_clone_func}(o.self_);
+            }} else {{
+                self_ = nullptr;
             }}
-            {class_name} &operator=(const {class_name}& o) noexcept {{
-                static_assert(OWN_DATA, "copy possible only if class own data");
-                if (this != &o) {{
-                    free_mem(this->self_);
-                    if (o.self_ != nullptr) {{
-                        self_ = {c_clone_func}(o.self_);
-                    }} else {{
-                        self_ = nullptr;
-                    }}
-                }}
-                return *this;
-            }}
-        "#,
+        }}
+        return *this;
+    }}
+"#,
                 c_clone_func = c_clone_func,
                 class_name = tmp_class_name
             )

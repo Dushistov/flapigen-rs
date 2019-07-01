@@ -9,13 +9,13 @@ r#"template<bool OWN_DATA>
     }"#;
 
 "struct CRustObjectSlice Boo_f2(const BooOpaque * const self);";
-"RustForeignSlice<FooRef, CRustObjectSlice> f2() const noexcept;";
+"RustForeignSliceConst<FooRef> f2() const noexcept;";
 r#"template<bool OWN_DATA>
-    inline RustForeignSlice<FooRef, CRustObjectSlice> BooWrapper<OWN_DATA>::f2() const noexcept
+    inline RustForeignSliceConst<FooRef> BooWrapper<OWN_DATA>::f2() const noexcept
     {
 
         struct CRustObjectSlice ret = Boo_f2(this->self_);
-        return RustForeignSlice<FooRef, CRustObjectSlice>{ret};
+        return RustForeignSliceConst<FooRef>{ret};
     }"#;
 
 "RustSlice<uintptr_t> f3() const noexcept;";

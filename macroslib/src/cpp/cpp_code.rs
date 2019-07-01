@@ -141,7 +141,7 @@ pub(in crate::cpp) fn cpp_header_name_for_enum(enum_info: &ForeignEnumInfo) -> S
 pub(in crate::cpp) fn cpp_list_required_includes(
     methods: &mut [CppForeignMethodSignature],
 ) -> Vec<SmolStr> {
-    let mut includes = FxHashSet::<SmolStr>::default();
+    let mut includes = Vec::<SmolStr>::with_capacity(methods.len());
     for m in methods {
         for p in &mut m.input {
             includes.extend(mem::replace(&mut p.provides_by_module, Vec::new()).into_iter());
@@ -149,9 +149,11 @@ pub(in crate::cpp) fn cpp_list_required_includes(
         includes.extend(mem::replace(&mut m.output.provides_by_module, Vec::new()).into_iter());
     }
 
-    let mut ret: Vec<_> = includes.into_iter().collect();
-    ret.sort();
-    ret
+    // prerserve order of includes
+    let mut uniques = FxHashSet::default();
+    includes.retain(|e| uniques.insert(e.clone()));
+
+    includes
 }
 
 pub(in crate::cpp) fn generate_c_type(

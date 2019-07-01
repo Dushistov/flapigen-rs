@@ -11,9 +11,10 @@ fn test_normalize_ty() {
     assert_eq!(normalize_ty_lifetimes(&str_to_ty("string")), "string");
     assert_eq!(normalize_ty_lifetimes(&str_to_ty("()")), "( )");
     assert_eq!(
-        normalize_ty_lifetimes(&str_to_ty("Foo<'a, T>")),
-        "Foo < T >"
+        "Foo < T >",
+        normalize_ty_lifetimes(&parse_type! { Foo<'a, T> }),
     );
+    assert_eq!("Foo", normalize_ty_lifetimes(&parse_type! { Foo<'a> }));
 }
 
 macro_rules! get_generic_params_from_code {

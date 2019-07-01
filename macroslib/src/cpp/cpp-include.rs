@@ -521,6 +521,17 @@ foreign_typemap!(
             len: usize,
             step: usize,
         });
+    foreigner_code!(module = "rust_slice.h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_foreign_slice_impl.hpp"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+template<typename T>
+using RustForeignSliceConst = RustForeignSlice<T, CRustObjectSlice>;
+}
+#endif
+"##);
     (r_type) CRustObjectSlice;
     (f_type) "CRustObjectSlice";
 );
@@ -542,15 +553,22 @@ foreign_typemap!(
             len: usize,
             step: usize,
         });
+    foreigner_code!(module = "rust_slice_mut.h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_foreign_slice_impl.hpp"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+template<typename T>
+using RustForeignSliceMut = RustForeignSlice<T, CRustObjectMutSlice>;
+}
+#endif
+"##);
     (r_type) CRustObjectMutSlice;
     (f_type) "CRustObjectMutSlice";
 );
 
 foreign_typemap!(
-     foreigner_code!(module = "rust_slice.h";
-                    r##"
-#include "rust_foreign_slice_impl.hpp"
-"##);
     ($p:r_type) <T: SwigForeignClass> &[T] => CRustObjectSlice {
         $out = CRustObjectSlice {
             data: $p.as_ptr() as *const ::std::os::raw::c_void,
@@ -561,19 +579,13 @@ foreign_typemap!(
     ($p:r_type) <T: SwigForeignClass> &[T] <= CRustObjectSlice {
         $out = unsafe { ::std::slice::from_raw_parts($p.data as *const swig_subst_type!(T), $p.len) }
     };
-    ($p:f_type, req_modules = ["\"rust_slice.h\""]) => "RustForeignSlice<swig_f_type!(&T), CRustObjectSlice>"
-        "RustForeignSlice<swig_f_type!(&T), CRustObjectSlice>{$p}";
-    ($p:f_type, req_modules = ["\"rust_slice.h\""]) <= "RustForeignSlice<swig_f_type!(&T, output), CRustObjectSlice>"
+    ($p:f_type, req_modules = ["\"rust_slice.h\""]) => "RustForeignSliceConst<swig_f_type!(&T)>"
+        "RustForeignSliceConst<swig_f_type!(&T)>{$p}";
+    ($p:f_type, req_modules = ["\"rust_slice.h\""]) <= "RustForeignSliceConst<swig_f_type!(&T, output)>"
         "$p";
 );
 
 foreign_typemap!(
-     foreigner_code!(module = "rust_slice_mut.h";
-                    r##"
-#ifdef __cplusplus
-#include "rust_foreign_slice_impl.hpp"
-#endif
-"##);
     ($p:r_type) <T: SwigForeignClass> &mut [T] => CRustObjectMutSlice {
         $out = CRustObjectMutSlice {
             data: $p.as_ptr() as *const ::std::os::raw::c_void,
@@ -584,9 +596,9 @@ foreign_typemap!(
     ($p:r_type) <T: SwigForeignClass> &mut [T] <= CRustObjectMutSlice {
         $out = unsafe { ::std::slice::from_raw_parts_mut($p.data as *mut swig_subst_type!(T), $p.len) }
     };
-    ($p:f_type, req_modules = ["\"rust_slice_mut.h\""]) => "RustForeignSlice<swig_f_type!(&T), CRustObjectMutSlice>"
-        "RustForeignSlice<swig_f_type!(&T), CRustObjectMutSlice>{$p}";
-    ($p:f_type, req_modules = ["\"rust_slice_mut.h\""]) <= "RustForeignSlice<swig_f_type!(&T, output), CRustObjectMutSlice>"
+    ($p:f_type, req_modules = ["\"rust_slice_mut.h\""]) => "RustForeignSliceMut<swig_f_type!(&T)>"
+        "RustForeignSliceMut<swig_f_type!(&T)>{$p}";
+    ($p:f_type, req_modules = ["\"rust_slice_mut.h\""]) <= "RustForeignSliceMut<swig_f_type!(&T, output)>"
         "$p";
 );
 
@@ -624,7 +636,7 @@ foreign_typemap!(
 
 foreign_typemap!(
     generic_alias!(CRustVec = swig_concat_idents!(CRustVec, swig_i_type!(T)));
-    generic_alias!(CRustVecModule = swig_concat_idents!(rust_vec, swig_i_type!(T)));
+    generic_alias!(CRustVecModule = swig_concat_idents!(rust_vec_, swig_i_type!(T)));
     generic_alias!(CRustVecFree = swig_concat_idents!(CRustVec, swig_i_type!(T), _free));
     generic_alias!(CppRustVec = swig_concat_idents!(RustVec, swig_i_type!(T)));
     define_c_type!(
@@ -732,6 +744,14 @@ fn remove_foreign_class_from_vec<T: SwigForeignClass>(
     T::box_object(elem)
 }
 
+#[allow(dead_code)]
+#[inline]
+fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec) {
+    assert_eq!(::std::mem::size_of::<T>(), v.step);
+    let v = unsafe { Vec::from_raw_parts(v.data as *mut T, v.len, v.capacity) };
+    drop(v);
+}
+
 foreign_typemap!(
     define_c_type!(
         module = "rust_vec.h";
@@ -757,10 +777,7 @@ foreign_typemap!(
         #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
         #[no_mangle]
         pub extern "C" fn CForeignVecFree!()(v: CRustForeignVec) {
-            type SelfType = swig_subst_type!(T);
-            assert_eq!(::std::mem::size_of::<SelfType>(), v.step);
-            let v = unsafe { Vec::from_raw_parts(v.data as *mut swig_subst_type!(T), v.len, v.capacity) };
-            drop(v);
+            drop_foreign_class_vec::<swig_subst_type!(T)>(v);
         }
 
         #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
