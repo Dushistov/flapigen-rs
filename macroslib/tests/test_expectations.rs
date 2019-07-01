@@ -1,5 +1,4 @@
 use std::{
-    env,
     ffi::OsString,
     fs, panic,
     path::{Path, PathBuf},
@@ -9,88 +8,7 @@ use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
 use syn::Token;
 use tempfile::tempdir;
 
-#[test]
-fn test_expectations_main() {
-    let _ = env_logger::builder()
-        .default_format_timestamp(false)
-        .try_init();
-
-    let test_cases: Vec<PathBuf> = fs::read_dir(Path::new("tests").join("expectations"))
-        .expect("read_dir failed")
-        .into_iter()
-        .filter_map(|p| {
-            if let Ok(path) = p {
-                if let Ok(ft) = path.file_type() {
-                    if ft.is_file() && path.path().to_str().map_or(false, |x| x.ends_with(".rs")) {
-                        return Some(path.path());
-                    }
-                }
-            }
-            None
-        })
-        .collect();
-
-    let mut ntests = 0_usize;
-
-    fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bool {
-        let (main_ext, rust_ext) = match lang {
-            ForeignLang::Cpp => (".cpp", ".cpp_rs"),
-            ForeignLang::Java => (".java", ".java_rs"),
-        };
-        let main_expectation = new_path(test_case, main_ext);
-        if main_expectation.exists() {
-            let code_pair =
-                parse_code(&test_name, Source::Path(&test_case), lang).expect("parse_code failed");
-            let pats =
-                parse_code_expectation(&main_expectation).expect("parsing of patterns failed");
-
-            let mut print_test_info = PrintTestInfo::new(code_pair.clone(), test_name.into(), lang);
-            for pat in pats {
-                print_test_info.foreign_code_search_pattern = pat.clone();
-                assert!(code_pair.foreign_code.contains(&pat));
-            }
-            print_test_info.foreign_code_search_pattern.clear();
-
-            let rust_cpp_expectation = new_path(&test_case, rust_ext);
-            if rust_cpp_expectation.exists() {
-                let pats = parse_code_expectation(&rust_cpp_expectation)
-                    .expect("parsing of patterns failed");
-                let pats: Vec<String> = pats.into_iter().map(|v| v.replace("\n", "")).collect();
-                for pat in pats {
-                    print_test_info.rust_pat = pat.clone();
-                    assert!(code_pair.rust_code.contains(&pat));
-                }
-                print_test_info.rust_pat.clear();
-            }
-            print_test_info.success();
-            true
-        } else {
-            false
-        }
-    }
-
-    let filter = env::var("RUST_SWIG_EXPECT_RUN_ONLY").ok();
-
-    for test_case in test_cases {
-        let base_name = test_case.file_stem().expect("name without extenstion");
-        let test_name = base_name.to_string_lossy();
-        if filter.as_ref().map(|v| *v != test_name).unwrap_or(false) {
-            continue;
-        }
-
-        let mut test_something = false;
-        for lang in &[ForeignLang::Cpp, ForeignLang::Java] {
-            if check_expectation(&test_name, &test_case, *lang) {
-                test_something = true;
-            }
-        }
-        if test_something {
-            ntests += 1;
-        }
-    }
-
-    assert_eq!(49, ntests);
-}
+include!(concat!(env!("OUT_DIR"), "/test_expectations.rs"));
 
 #[test]
 fn test_expectations_class_with_methods_without_constructor() {
@@ -573,4 +491,40 @@ fn new_path(main_path: &Path, ext: &str) -> PathBuf {
     let mut new_name: OsString = base_name.into();
     new_name.push(ext);
     main_path.with_file_name(new_name)
+}
+
+fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bool {
+    let (main_ext, rust_ext) = match lang {
+        ForeignLang::Cpp => (".cpp", ".cpp_rs"),
+        ForeignLang::Java => (".java", ".java_rs"),
+    };
+    let main_expectation = new_path(test_case, main_ext);
+    if main_expectation.exists() {
+        let code_pair =
+            parse_code(&test_name, Source::Path(&test_case), lang).expect("parse_code failed");
+        let pats = parse_code_expectation(&main_expectation).expect("parsing of patterns failed");
+
+        let mut print_test_info = PrintTestInfo::new(code_pair.clone(), test_name.into(), lang);
+        for pat in pats {
+            print_test_info.foreign_code_search_pattern = pat.clone();
+            assert!(code_pair.foreign_code.contains(&pat));
+        }
+        print_test_info.foreign_code_search_pattern.clear();
+
+        let rust_cpp_expectation = new_path(&test_case, rust_ext);
+        if rust_cpp_expectation.exists() {
+            let pats =
+                parse_code_expectation(&rust_cpp_expectation).expect("parsing of patterns failed");
+            let pats: Vec<String> = pats.into_iter().map(|v| v.replace("\n", "")).collect();
+            for pat in pats {
+                print_test_info.rust_pat = pat.clone();
+                assert!(code_pair.rust_code.contains(&pat));
+            }
+            print_test_info.rust_pat.clear();
+        }
+        print_test_info.success();
+        true
+    } else {
+        false
+    }
 }
