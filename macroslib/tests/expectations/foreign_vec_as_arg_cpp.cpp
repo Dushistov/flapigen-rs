@@ -1,11 +1,11 @@
-"RustForeignSlice<BooRef, CRustObjectSlice> alternateBoarding() const noexcept;";
+"RustForeignSliceConst<BooRef> alternateBoarding() const noexcept;";
 "struct CRustObjectSlice FooImpl_alternateBoarding(const FooImplOpaque * const self);";
 r#"template<bool OWN_DATA>
-    inline RustForeignSlice<BooRef, CRustObjectSlice> FooImplWrapper<OWN_DATA>::alternateBoarding() const noexcept
+    inline RustForeignSliceConst<BooRef> FooImplWrapper<OWN_DATA>::alternateBoarding() const noexcept
     {
 
         struct CRustObjectSlice ret = FooImpl_alternateBoarding(this->self_);
-        return RustForeignSlice<BooRef, CRustObjectSlice>{ret};
+        return RustForeignSliceConst<BooRef>{ret};
     }"#;
 
 "void setAlternateBoarding(RustForeignVecBoo p) noexcept";
