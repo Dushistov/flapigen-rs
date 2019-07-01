@@ -8,6 +8,7 @@ r##"#pragma once
 #include <type_traits>
 
 #include <QString>
+#include "rust_str.h"
 
 #include "c_BtAddr.h"
 
