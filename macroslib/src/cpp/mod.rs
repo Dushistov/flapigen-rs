@@ -339,7 +339,7 @@ fn n_arguments_list(n: usize) -> String {
 fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> {
     let rtype = tmap[rt].clone();
     tmap.map_through_conversation_to_foreign(
-        &rtype,
+        rtype.to_idx(),
         Direction::Outgoing,
         MapToForeignFlag::FullSearch,
         rtype.src_id_span(),

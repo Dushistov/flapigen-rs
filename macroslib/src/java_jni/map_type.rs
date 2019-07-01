@@ -30,7 +30,7 @@ pub(in crate::java_jni) fn map_type(
     let fti = {
         let fti = conv_map
             .map_through_conversation_to_foreign(
-                &arg_ty,
+                arg_ty.to_idx(),
                 direction,
                 MapToForeignFlag::FullSearch,
                 arg_ty_span,

@@ -23,7 +23,7 @@ pub(in crate::cpp) fn map_type(
     arg_ty_span: SourceIdSpan,
 ) -> Result<CppForeignTypeInfo> {
     if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
-        arg_ty,
+        arg_ty.to_idx(),
         direction,
         MapToForeignFlag::FastSearch,
         arg_ty_span,
@@ -87,7 +87,7 @@ pub(in crate::cpp) fn map_type(
             })?;
         merge_rule(ctx, new_rule)?;
         if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
-            arg_ty,
+            arg_ty.to_idx(),
             direction,
             MapToForeignFlag::FullSearch,
             arg_ty_span,
@@ -97,7 +97,7 @@ pub(in crate::cpp) fn map_type(
         }
     } else {
         if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
-            arg_ty,
+            arg_ty.to_idx(),
             direction,
             MapToForeignFlag::FullSearch,
             arg_ty_span,
