@@ -248,11 +248,12 @@ foreign_typemap!(
     generic_alias!(CRustPairModule = swig_concat_idents!(rust_tuple, swig_i_type!(T1), swig_i_type!(T2)));
     define_c_type!(
          module = "CRustPairModule!().h";
-         #[repr(C)]
-         pub struct CRustPair!() {
-             first: swig_i_type!(T1),
-             second: swig_i_type!(T2),
-         }
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustPair!() {
+            first: swig_i_type!(T1),
+            second: swig_i_type!(T2),
+        }
     );
     ($p:r_type) <T1, T2> (T1, T2) => CRustPair!() {
         swig_from_rust_to_i_type!(T1, $p.0, p0)
@@ -287,6 +288,7 @@ foreign_typemap!(
 foreign_typemap!(
     define_c_type!(module = "rust_str.h";
         #[repr(C)]
+        #[derive(Clone, Copy)]
         pub struct CRustStrView {
             data: *const ::std::os::raw::c_char,
             len: usize,
@@ -316,6 +318,7 @@ foreign_typemap!(
 foreign_typemap!(
     define_c_type!(module = "rust_str.h";
         #[repr(C)]
+        #[derive(Clone, Copy)]
         struct CRustString {
             data: *const ::std::os::raw::c_char,
             len: usize,
@@ -446,12 +449,14 @@ foreign_typemap!(
      define_c_type!(
          module = "rust_option.h";
          #[repr(C)]
+         #[derive(Clone, Copy)]
          pub union CRustOptUnion!() {
              data: swig_i_type!(T),
              uninit: u8,
          }
 
          #[repr(C)]
+         #[derive(Clone, Copy)]
          pub struct CRustOpt!() {
              val: CRustOptUnion!(),
              is_some: u8,
@@ -516,6 +521,7 @@ foreign_typemap!(
     define_c_type!(
         module = "rust_slice.h";
         #[repr(C)]
+        #[derive(Clone, Copy)]
         pub struct CRustObjectSlice {
             data: *const ::std::os::raw::c_void,
             len: usize,
@@ -548,6 +554,7 @@ foreign_typemap!(
     define_c_type!(
         module = "rust_slice_mut.h";
         #[repr(C)]
+        #[derive(Clone, Copy)]
         pub struct CRustObjectMutSlice {
             data: *mut ::std::os::raw::c_void,
             len: usize,
@@ -607,6 +614,7 @@ foreign_typemap!(
     define_c_type!(
         module = "rust_slice.h";
         #[repr(C)]
+        #[derive(Clone, Copy)]
         pub struct CRustSlice!() {
             data: *const swig_i_type!(T),
             len: usize,
@@ -756,6 +764,7 @@ foreign_typemap!(
     define_c_type!(
         module = "rust_vec.h";
         #[repr(C)]
+        #[derive(Clone, Copy)]
         pub struct CRustForeignVec {
             data: *const ::std::os::raw::c_void,
             len: usize,
@@ -826,16 +835,18 @@ foreign_typemap!(
     define_c_type!(
         module = "CRustResModule!().h";
         #[repr(C)]
-         pub union CRustResUnion!() {
-             ok: u8,
-             err: swig_i_type!(T),
-         }
+        #[derive(Clone, Copy)]
+        pub union CRustResUnion!() {
+            ok: u8,
+            err: swig_i_type!(T),
+        }
 
-         #[repr(C)]
-         pub struct CRustRes!() {
-             data: CRustResUnion!(),
-             is_ok: u8,
-         }
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustRes!() {
+            data: CRustResUnion!(),
+            is_ok: u8,
+        }
     );
     ($p:r_type) <T> Result<(), T> => CRustRes!() {
         $out = match $p {
@@ -872,17 +883,19 @@ foreign_typemap!(
     generic_alias!(CRustResModule = swig_concat_idents!(rust_result, swig_i_type!(T1), swig_i_type!(T2)));
     define_c_type!(
          module = "CRustResModule!().h";
-         #[repr(C)]
-         pub union CRustResUnion!() {
-             ok: swig_i_type!(T1),
-             err: swig_i_type!(T2),
-         }
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub union CRustResUnion!() {
+            ok: swig_i_type!(T1),
+            err: swig_i_type!(T2),
+        }
 
-         #[repr(C)]
-         pub struct CRustRes!() {
-             data: CRustResUnion!(),
-             is_ok: u8,
-         }
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustRes!() {
+            data: CRustResUnion!(),
+            is_ok: u8,
+        }
     );
     ($p:r_type) <T1, T2> Result<T1, T2> => CRustRes!() {
         $out = match $p {
