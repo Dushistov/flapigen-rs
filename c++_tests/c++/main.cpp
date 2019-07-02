@@ -673,29 +673,50 @@ TEST(TestResult, smokeTest)
         TestError err_ret = std::get<TestError>(std::move(err));
         ASSERT_EQ(std::string_view("Not ok"), RustString{ err_ret.to_string() }.to_string_view());
     }
+    {
+        auto res1 = TestResult::f_res_opt(0);
+        ASSERT_TRUE(nullptr != std::get_if<std::optional<Foo>>(&res1));
+        auto res1_ok = std::get<std::optional<Foo>>(std::move(res1));
+        ASSERT_TRUE(!!res1_ok);
+        EXPECT_EQ("17", res1_ok->getName());
+        EXPECT_EQ((17 + 1), res1_ok->f(0, 1));
+
+        auto res2 = TestResult::f_res_opt(1);
+        ASSERT_TRUE(nullptr != std::get_if<std::optional<Foo>>(&res2));
+        auto res2_ok = std::get<std::optional<Foo>>(std::move(res2));
+        EXPECT_TRUE(!res2_ok);
+
+        auto res3 = TestResult::f_res_opt(2);
+        ASSERT_TRUE(nullptr != std::get_if<RustString>(&res3));
+        auto res3_ok = std::get<RustString>(std::move(res3));
+        EXPECT_EQ("this is bad", res3_ok.to_string_view());
+    }
 #endif // HAS_STDCXX_17
 #ifdef USE_BOOST
-    boost::variant<TestResult, RustString> res = TestResult::new_with_err();
-    EXPECT_EQ(nullptr, boost::get<TestResult>(&res));
-    EXPECT_NE(nullptr, boost::get<RustString>(&res));
+    {
+        boost::variant<TestResult, RustString> res = TestResult::new_with_err();
+        EXPECT_EQ(nullptr, boost::get<TestResult>(&res));
+        EXPECT_NE(nullptr, boost::get<RustString>(&res));
 #ifdef HAS_BOOST_STRING_VIEW_HPP
-    EXPECT_EQ(boost::string_view("this is error"),
-              boost::get<RustString>(std::move(res)).to_boost_string_view());
+        EXPECT_EQ(boost::string_view("this is error"),
+                  boost::get<RustString>(std::move(res)).to_boost_string_view());
 #else
-    EXPECT_EQ(std::string("this is error"), boost::get<RustString>(std::move(res)).to_std_string());
+        EXPECT_EQ(std::string("this is error"),
+                  boost::get<RustString>(std::move(res)).to_std_string());
 #endif
-    auto res2 = TestResult::f(true);
-    EXPECT_EQ(nullptr, boost::get<RustString>(&res2));
-    EXPECT_NE(nullptr, boost::get<void *>(&res2));
-    auto res3 = TestResult::f(false);
-    EXPECT_NE(nullptr, boost::get<RustString>(&res3));
-    EXPECT_EQ(nullptr, boost::get<void *>(&res3));
+        auto res2 = TestResult::f(true);
+        EXPECT_EQ(nullptr, boost::get<RustString>(&res2));
+        EXPECT_NE(nullptr, boost::get<void *>(&res2));
+        auto res3 = TestResult::f(false);
+        EXPECT_NE(nullptr, boost::get<RustString>(&res3));
+        EXPECT_EQ(nullptr, boost::get<void *>(&res3));
 #ifdef HAS_BOOST_STRING_VIEW_HPP
-    EXPECT_EQ(boost::string_view("Not ok"),
-              boost::get<RustString>(std::move(res3)).to_boost_string_view());
+        EXPECT_EQ(boost::string_view("Not ok"),
+                  boost::get<RustString>(std::move(res3)).to_boost_string_view());
 #else
-    EXPECT_EQ(std::string("Not ok"), boost::get<RustString>(std::move(res3)).to_std_string());
+        EXPECT_EQ(std::string("Not ok"), boost::get<RustString>(std::move(res3)).to_std_string());
 #endif
+    }
     {
         auto res_vec = TestResult::f_vec(true);
         EXPECT_EQ(nullptr, boost::get<RustString>(&res_vec));
@@ -730,6 +751,25 @@ TEST(TestResult, smokeTest)
         EXPECT_NE(nullptr, boost::get<TestError>(&err));
         TestError err_ret = boost::get<TestError>(std::move(err));
         ASSERT_EQ(std::string("Not ok"), err_ret.to_string().to_std_string());
+    }
+
+    {
+        auto res1 = TestResult::f_res_opt(0);
+        ASSERT_TRUE(nullptr != boost::get<boost::optional<Foo>>(&res1));
+        auto res1_ok = boost::get<boost::optional<Foo>>(boost::move(res1));
+        ASSERT_TRUE(!!res1_ok);
+        EXPECT_EQ("17", res1_ok->getName());
+        EXPECT_EQ((17 + 1), res1_ok->f(0, 1));
+
+        auto res2 = TestResult::f_res_opt(1);
+        ASSERT_TRUE(nullptr != boost::get<boost::optional<Foo>>(&res2));
+        auto res2_ok = boost::get<boost::optional<Foo>>(boost::move(res2));
+        EXPECT_TRUE(!res2_ok);
+
+        auto res3 = TestResult::f_res_opt(2);
+        ASSERT_TRUE(nullptr != boost::get<RustString>(&res3));
+        auto res3_ok = boost::get<RustString>(boost::move(res3));
+        EXPECT_EQ("this is bad", res3_ok.to_boost_string_view());
     }
 #endif // USE_BOOST
 }
