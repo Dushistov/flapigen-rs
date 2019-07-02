@@ -616,6 +616,15 @@ impl TestResult {
             })
         }
     }
+
+    fn f_res_opt(var: u32) -> Result<Option<Foo>, String> {
+        match var {
+            0 => Ok(Some(Foo::new(17, "17"))),
+            1 => Ok(None),
+            2 => Err("this is bad".into()),
+            _ => panic!("unknown var {}", var),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -657,6 +666,7 @@ foreigner_class!(class TestResult {
     static_method TestResult::f4(is_ok: bool) -> Result<Vec<u8>, TestError>;
     static_method TestResult::f5(is_ok: bool) -> Result<Foo, ErrorEnum>;
     static_method TestResult::f6(is_ok: bool, val: i64) -> Result<i64, TestError>;
+    static_method TestResult::f_res_opt(var: u32) -> Result<Option<Foo>, String>;
 });
 
 pub struct TestReferences {
