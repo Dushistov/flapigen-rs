@@ -25,6 +25,9 @@ import com.example.rust.CircularDepsA;
 import com.example.rust.CircularDepsB;
 import com.example.rust.EffectBuilder;
 import com.example.rust.Gamepad;
+import com.example.rust.Gamepad2;
+import com.example.rust.Code;
+import com.example.rust.GamepadId;
 
 class Main {
     public static void main(String[] args) {
@@ -114,6 +117,7 @@ class Main {
             testOptional();
             testCircularDeps();
 	    testBuilderPattern();
+	    testGetIDOverloading();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -406,5 +410,14 @@ class Main {
 	Foo foo = new Foo(17, null);
 	assert foo.calcF(0, 0) == 17;
 	assert foo.getName().equals("");
+    }
+
+    private static void testGetIDOverloading() {
+	Gamepad2 g = new Gamepad2();
+	Code code = new Code(5);
+	OptionalDouble x1 = g.getID(code);
+	assert !x1.isPresent();
+	GamepadId x2 = g.getID();
+	assert x2.value() == 17;
     }
 }
