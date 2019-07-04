@@ -673,24 +673,6 @@ TEST(TestResult, smokeTest)
         TestError err_ret = std::get<TestError>(std::move(err));
         ASSERT_EQ(std::string_view("Not ok"), RustString{ err_ret.to_string() }.to_string_view());
     }
-    {
-        auto res1 = TestResult::f_res_opt(0);
-        ASSERT_TRUE(nullptr != std::get_if<std::optional<Foo>>(&res1));
-        auto res1_ok = std::get<std::optional<Foo>>(std::move(res1));
-        ASSERT_TRUE(!!res1_ok);
-        EXPECT_EQ("17", res1_ok->getName());
-        EXPECT_EQ((17 + 1), res1_ok->f(0, 1));
-
-        auto res2 = TestResult::f_res_opt(1);
-        ASSERT_TRUE(nullptr != std::get_if<std::optional<Foo>>(&res2));
-        auto res2_ok = std::get<std::optional<Foo>>(std::move(res2));
-        EXPECT_TRUE(!res2_ok);
-
-        auto res3 = TestResult::f_res_opt(2);
-        ASSERT_TRUE(nullptr != std::get_if<RustString>(&res3));
-        auto res3_ok = std::get<RustString>(std::move(res3));
-        EXPECT_EQ("this is bad", res3_ok.to_string_view());
-    }
 #endif // HAS_STDCXX_17
 #ifdef USE_BOOST
     {
@@ -752,7 +734,45 @@ TEST(TestResult, smokeTest)
         TestError err_ret = boost::get<TestError>(std::move(err));
         ASSERT_EQ(std::string("Not ok"), err_ret.to_string().to_std_string());
     }
+#endif // USE_BOOST
+}
 
+#if defined(__GNUC__) && defined(__GNUG__) && !defined(__clang__)
+#if __GNUC_PREREQ(9, 0)
+#define SKIP_TEST_RESULT_COMPOUND
+#else
+#undef SKIP_TEST_RESULT_COMPOUND
+#endif
+#else
+#undef SKIP_TEST_RESULT_COMPOUND
+#endif
+
+#ifndef SKIP_TEST_RESULT_COMPOUND
+// there is some issue with optional/may-be-unused and valgrind
+// see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
+TEST(TestResult, Compound)
+{
+#if defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)
+    {
+        auto res1 = TestResult::f_res_opt(0);
+        ASSERT_TRUE(nullptr != std::get_if<std::optional<Foo>>(&res1));
+        auto res1_ok = std::get<std::optional<Foo>>(std::move(res1));
+        ASSERT_TRUE(!!res1_ok);
+        EXPECT_EQ("17", res1_ok->getName());
+        EXPECT_EQ((17 + 1), res1_ok->f(0, 1));
+
+        auto res2 = TestResult::f_res_opt(1);
+        ASSERT_TRUE(nullptr != std::get_if<std::optional<Foo>>(&res2));
+        auto res2_ok = std::get<std::optional<Foo>>(std::move(res2));
+        EXPECT_TRUE(!res2_ok);
+
+        auto res3 = TestResult::f_res_opt(2);
+        ASSERT_TRUE(nullptr != std::get_if<RustString>(&res3));
+        auto res3_ok = std::get<RustString>(std::move(res3));
+        EXPECT_EQ("this is bad", res3_ok.to_string_view());
+    }
+#endif
+#ifdef USE_BOOST
     {
         auto res1 = TestResult::f_res_opt(0);
         ASSERT_TRUE(nullptr != boost::get<boost::optional<Foo>>(&res1));
@@ -771,8 +791,9 @@ TEST(TestResult, smokeTest)
         auto res3_ok = boost::get<RustString>(boost::move(res3));
         EXPECT_EQ("this is bad", res3_ok.to_boost_string_view());
     }
-#endif // USE_BOOST
+#endif
 }
+#endif // SKIP_TEST_RESULT_COMPOUND
 #endif
 
 TEST(TestReferences, smokeTest)
