@@ -25,13 +25,11 @@ import com.example.rust.CircularDepsA;
 import com.example.rust.CircularDepsB;
 import com.example.rust.EffectBuilder;
 import com.example.rust.Gamepad;
+import com.example.rust.Gamepad2;
+import com.example.rust.Code;
+import com.example.rust.GamepadId;
 
 class Main {
-    private static void testDoubleOverload() {
-        new Xyz();
-        new Xyz(1., 2., 3.);
-    }
-
     public static void main(String[] args) {
         try {
             System.loadLibrary("rust_swig_test_jni");
@@ -107,41 +105,8 @@ class Main {
             assert Math.abs(Boo.test_f64((double) -1.0)) < 1e-12;
 
             testDoubleOverload();
-
-            {
-                TestContainers testContainers = new TestContainers();
-                Foo[] sv = testContainers.get_struct_vec();
-                assert sv.length == 2;
-                assert sv[0].getName().equals("1");
-                assert sv[0].calcF(0, 0) == 1;
-                assert sv[1].getName().equals("2");
-                assert sv[1].calcF(0, 0) == 2;
-                assert testContainers.get_empty_struct_vec().length == 0;
-                String[] strv = testContainers.get_string_vec();
-                assert strv.length == 7;
-                assert strv[0].equals("The");
-                assert strv[1].equals("was");
-                assert strv[2].equals("a");
-                assert strv[3].equals("young");
-                assert strv[4].equals("lady");
-                assert strv[5].equals("whose");
-                assert strv[6].equals("nose");
-
-                Foo[] owned = {new Foo(17, "")};
-                testContainers.set_struct_vec(owned);
-                Foo[] owned2 = testContainers.get_struct_vec();
-                assert owned2.length == 1;
-                assert owned2[0].calcF(0, 0) == 17;
-                assert owned2[0].getName().equals("");
-            }
-
-            {
-                System.out.println("check null handling for String");
-                Foo foo = new Foo(17, null);
-                assert foo.calcF(0, 0) == 17;
-                assert foo.getName().equals("");
-            }
-
+	    testContainers();
+	    testNullString();
             testArraysWithPrimitiveTypes();
             testPassObjectsAsParams();
             testTestEnumClass();
@@ -152,6 +117,7 @@ class Main {
             testOptional();
             testCircularDeps();
 	    testBuilderPattern();
+	    testGetIDOverloading();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -405,5 +371,53 @@ class Main {
 	assert l.length == 2;
 	assert l[0].equals("Builder");
 	assert l[1].equals("Pattern");
+    }
+
+    private static void testDoubleOverload() {
+        new Xyz();
+        new Xyz(1., 2., 3.);
+    }
+
+    private static void testContainers() {
+	TestContainers testContainers = new TestContainers();
+	Foo[] sv = testContainers.get_struct_vec();
+	assert sv.length == 2;
+	assert sv[0].getName().equals("1");
+	assert sv[0].calcF(0, 0) == 1;
+	assert sv[1].getName().equals("2");
+	assert sv[1].calcF(0, 0) == 2;
+	assert testContainers.get_empty_struct_vec().length == 0;
+	String[] strv = testContainers.get_string_vec();
+	assert strv.length == 7;
+	assert strv[0].equals("The");
+	assert strv[1].equals("was");
+	assert strv[2].equals("a");
+	assert strv[3].equals("young");
+	assert strv[4].equals("lady");
+	assert strv[5].equals("whose");
+	assert strv[6].equals("nose");
+
+	Foo[] owned = {new Foo(17, "")};
+	testContainers.set_struct_vec(owned);
+	Foo[] owned2 = testContainers.get_struct_vec();
+	assert owned2.length == 1;
+	assert owned2[0].calcF(0, 0) == 17;
+	assert owned2[0].getName().equals("");
+    }
+
+    private static void testNullString() {
+	System.out.println("check null handling for String");
+	Foo foo = new Foo(17, null);
+	assert foo.calcF(0, 0) == 17;
+	assert foo.getName().equals("");
+    }
+
+    private static void testGetIDOverloading() {
+	Gamepad2 g = new Gamepad2();
+	Code code = new Code(5);
+	OptionalDouble x1 = g.getID(code);
+	assert !x1.isPresent();
+	GamepadId x2 = g.getID();
+	assert x2.value() == 17;
     }
 }

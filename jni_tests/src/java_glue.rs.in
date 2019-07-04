@@ -842,3 +842,63 @@ foreigner_class!(
         method EffectBuilderWrapper::tag(&self) -> Vec<String>;
     }
 );
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+pub struct GamepadId(pub(crate) usize);
+impl GamepadId {
+    fn value(&self) -> usize {
+        self.0
+    }
+}
+
+foreigner_class!(
+    class GamepadId {
+        self_type GamepadId;
+        private constructor = empty;
+        method GamepadId::value(&self) -> usize;
+    }
+);
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct Code(pub(crate) i32);
+impl Code {
+    fn new(v: i32) -> Self {
+        Code(v)
+    }
+}
+
+foreigner_class!(
+    class Code {
+        self_type Code;
+        constructor Code::new(v: i32) -> Code;
+    });
+
+struct Gamepad2 {
+    id: GamepadId,
+}
+
+impl Gamepad2 {
+    fn new() -> Self {
+        Gamepad2 { id: GamepadId(17) }
+    }
+    fn deadzone(&self, axis: Code) -> Option<f64> {
+        if axis.0 == 5 {
+            None
+        } else {
+            Some(42.42)
+        }
+    }
+    fn id(&self) -> GamepadId {
+        self.id
+    }
+}
+
+foreigner_class!(
+    class Gamepad2 {
+        self_type Gamepad2;
+
+        constructor Gamepad2::new() -> Gamepad2;
+        method Gamepad2::deadzone(&self, axis: Code) -> Option<f64>; alias getID;
+        method Gamepad2::id(&self) -> GamepadId; alias getID;
+    }
+);

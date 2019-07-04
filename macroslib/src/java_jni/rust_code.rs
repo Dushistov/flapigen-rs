@@ -8,7 +8,7 @@ use crate::{
     error::{panic_on_syn_error, DiagnosticError, Result},
     java_jni::{
         calc_this_type_for_method, fmt_write_err_map, java_class_full_name, java_class_name_to_jni,
-        method_name, ForeignTypeInfo, JniForeignMethodSignature,
+        method_name, ForeignTypeInfo, JavaForeignTypeInfo, JniForeignMethodSignature,
     },
     source_registry::SourceId,
     typemap::ast::{list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
@@ -136,6 +136,7 @@ May be you need to use `private constructor = empty;` syntax?",
             package_name,
             class,
             &java_method_name,
+            method.variant,
             f_method,
             method_overloading,
         )?;
@@ -205,6 +206,7 @@ May be you need to use `private constructor = empty;` syntax?",
             &calc_this_type_for_method(conv_map, class).ok_or_else(&no_this_info)?,
             class.src_id,
         );
+        let jlong_type = conv_map.ty_to_rust_type(&parse_type! { jlong });
 
         let unpack_code = unpack_from_heap_pointer(&this_type, "this", false);
 
@@ -212,12 +214,20 @@ May be you need to use `private constructor = empty;` syntax?",
             package_name,
             class,
             "do_delete",
+            MethodVariant::StaticMethod,
             &JniForeignMethodSignature {
                 output: ForeignTypeInfo {
                     name: "".into(),
                     correspoding_rust_type: dummy_rust_ty.clone(),
                 },
-                input: vec![],
+                input: vec![JavaForeignTypeInfo {
+                    base: ForeignTypeInfo {
+                        name: "long".into(),
+                        correspoding_rust_type: jlong_type,
+                    },
+                    java_converter: None,
+                    annotation: None,
+                }],
             },
             false,
         )?;
@@ -532,6 +542,7 @@ fn generate_jni_func_name(
     package_name: &str,
     class: &ForeignerClassInfo,
     java_method_name: &str,
+    method_type: MethodVariant,
     f_method: &JniForeignMethodSignature,
     overloaded: bool,
 ) -> Result<String> {
@@ -556,6 +567,9 @@ fn generate_jni_func_name(
 
     if overloaded {
         output.push_str("__");
+        if let MethodVariant::Method(_) = method_type {
+            output.push('J');
+        }
         for arg in &f_method.input {
             let type_name = arg
                 .java_converter
