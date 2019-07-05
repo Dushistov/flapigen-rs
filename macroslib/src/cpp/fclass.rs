@@ -9,8 +9,8 @@ use syn::{spanned::Spanned, Type};
 
 use crate::{
     cpp::{
-        c_func_name, cpp_code, map_type::map_type, n_arguments_list, rust_generate_args_with_types,
-        CppContext, CppForeignMethodSignature, CppForeignTypeInfo, MethodContext,
+        c_func_name, cpp_code, map_type::map_type, CppContext, CppForeignMethodSignature,
+        CppForeignTypeInfo, MethodContext,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
@@ -174,7 +174,11 @@ May be you need to use `private constructor = empty;` syntax?",
         } else {
             format!(", {}", c_args_with_types)
         };
-        let args_names = n_arguments_list(f_method.input.len());
+        let have_args_except_self = if let MethodVariant::Method(_) = method.variant {
+            method.fn_decl.inputs.len() > 1
+        } else {
+            !method.fn_decl.inputs.is_empty()
+        };
 
         let mut known_names: FxHashSet<SmolStr> =
             method.arg_names_without_self().map(|x| x.into()).collect();
@@ -194,15 +198,23 @@ May be you need to use `private constructor = empty;` syntax?",
             syn::ReturnType::Type(_, ref t) => normalize_ty_lifetimes(&*t),
         };
 
-        let rust_args_with_types = rust_generate_args_with_types(f_method)
-            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
+        let mut rust_args_with_types = String::new();
+        for (f_type_info, arg_name) in f_method.input.iter().zip(method.arg_names_without_self()) {
+            write!(
+                &mut rust_args_with_types,
+                "{}: {}, ",
+                arg_name,
+                f_type_info.as_ref().correspoding_rust_type.typename(),
+            )
+            .expect(WRITE_TO_MEM_FAILED_MSG);
+        }
+
         let method_ctx = MethodContext {
             class,
             method,
             f_method,
             c_func_name: &c_func_name,
             decl_func_args: &rust_args_with_types,
-            args_names: &args_names,
             real_output_typename: &real_output_typename,
         };
 
@@ -360,7 +372,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         convert_ret_for_cpp = convert_ret_for_cpp,
                         c_ret_type = f_method.output.as_ref().name,
                         c_func_name = c_func_name,
-                        cpp_args_for_c = if args_names.is_empty() {
+                        cpp_args_for_c = if !have_args_except_self {
                             String::new()
                         } else {
                             format!(", {}", cpp_args_for_c)
@@ -376,7 +388,7 @@ May be you need to use `private constructor = empty;` syntax?",
     }}
 "#,
                         c_func_name = c_func_name,
-                        cpp_args_for_c = if args_names.is_empty() {
+                        cpp_args_for_c = if !have_args_except_self {
                             String::new()
                         } else {
                             format!(", {}", cpp_args_for_c)
@@ -642,13 +654,12 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
         "ret",
         &c_ret_type,
     )?;
-    let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
         mc.class.src_id,
         mc.method,
         mc.f_method,
-        (0..n_args).map(|v| format!("a_{}", v)),
+        mc.method.arg_names_without_self(),
         &c_ret_type,
     )?;
     let code = format!(
@@ -657,7 +668,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
 #[no_mangle]
 pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
 {convert_input_code}
-    let mut ret: {real_output_typename} = {rust_func_name}({args_names});
+    let mut ret: {real_output_typename} = {call};
 {convert_output_code}
     ret
 }}
@@ -666,10 +677,9 @@ pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
         decl_func_args = mc.decl_func_args,
         c_ret_type = c_ret_type,
         convert_input_code = convert_input_code,
-        rust_func_name = DisplayToTokens(&mc.method.rust_id),
-        args_names = mc.args_names,
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
+        call = mc.method.generate_code_to_call_rust_func(),
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
@@ -693,13 +703,12 @@ fn generate_method(
         .as_ref()
         .correspoding_rust_type
         .typename();
-    let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
         mc.class.src_id,
         mc.method,
         mc.f_method,
-        (0..n_args).map(|v| format!("a_{}", v)),
+        mc.method.arg_names_without_self(),
         &c_ret_type,
     )?;
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
@@ -738,7 +747,7 @@ pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_re
         this.as_mut().unwrap()
     }};
 {convert_this}
-    let mut ret: {real_output_typename} = {rust_func_name}(this, {args_names});
+    let mut ret: {real_output_typename} = {call};
 {convert_output_code}
     ret
 }}
@@ -750,10 +759,9 @@ pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_re
         this_type_ref = from_ty.normalized_name,
         this_type = this_type_for_method.normalized_name,
         convert_this = convert_this,
-        rust_func_name = DisplayToTokens(&mc.method.rust_id),
-        args_names = mc.args_names,
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
+        call = mc.method.generate_code_to_call_rust_func(),
     );
 
     let mut gen_code = deps_code_in;
@@ -773,7 +781,6 @@ fn generate_constructor(
     this_type: Type,
     code_box_this: &str,
 ) -> Result<Vec<TokenStream>> {
-    let n_args = mc.f_method.input.len();
     let this_type: RustType = conv_map.ty_to_rust_type(&this_type);
     let ret_type_name = this_type.normalized_name.as_str();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
@@ -781,7 +788,7 @@ fn generate_constructor(
         mc.class.src_id,
         mc.method,
         mc.f_method,
-        (0..n_args).map(|v| format!("a_{}", v)),
+        mc.method.arg_names_without_self(),
         &ret_type_name,
     )?;
     let construct_ret_type: RustType = conv_map.ty_to_rust_type(&construct_ret_type);
@@ -800,7 +807,7 @@ fn generate_constructor(
 #[no_mangle]
 pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void {{
 {convert_input_code}
-    let this: {real_output_typename} = {rust_func_name}({args_names});
+    let this: {real_output_typename} = {call};
 {convert_this}
 {box_this}
     this as *const ::std::os::raw::c_void
@@ -810,10 +817,9 @@ pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void
         convert_this = convert_this,
         decl_func_args = mc.decl_func_args,
         convert_input_code = convert_input_code,
-        rust_func_name = DisplayToTokens(&mc.method.rust_id),
-        args_names = mc.args_names,
         box_this = code_box_this,
         real_output_typename = &construct_ret_type.normalized_name.as_str(),
+        call = mc.method.generate_code_to_call_rust_func(),
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_this);

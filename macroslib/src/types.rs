@@ -6,6 +6,7 @@ use syn::{parse_quote, spanned::Spanned, Type};
 use crate::{
     error::{DiagnosticError, Result, SourceIdSpan},
     source_registry::SourceId,
+    typemap::ast::DisplayToTokens,
 };
 
 #[derive(Debug, Clone)]
@@ -83,6 +84,7 @@ pub(crate) struct ForeignerMethod {
     pub(crate) name_alias: Option<Ident>,
     pub(crate) access: MethodAccess,
     pub(crate) doc_comments: Vec<String>,
+    pub(crate) inline_block: Option<syn::Block>,
 }
 
 #[derive(Debug, Clone)]
@@ -157,6 +159,27 @@ impl ForeignerMethod {
             .iter()
             .skip(skip)
             .map(|x| x.as_named_arg().unwrap().name.as_str())
+    }
+
+    pub(crate) fn generate_code_to_call_rust_func(&self) -> String {
+        if let Some(ref code_block) = self.inline_block {
+            format!("{}", DisplayToTokens(code_block))
+        } else {
+            let args_names = self
+                .arg_names_without_self()
+                .fold(String::new(), |mut acc, x| {
+                    if !acc.is_empty() {
+                        acc.push_str(", ");
+                    }
+                    acc.push_str(&x);
+                    acc
+                });
+            if let MethodVariant::Method(_) = self.variant {
+                format!("{}(this, {})", DisplayToTokens(&self.rust_id), args_names)
+            } else {
+                format!("{}({})", DisplayToTokens(&self.rust_id), args_names)
+            }
+        }
     }
 }
 

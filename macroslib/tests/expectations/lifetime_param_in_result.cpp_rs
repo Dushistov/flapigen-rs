@@ -1,5 +1,5 @@
-r#"# [ no_mangle ] pub extern "C" fn Foo_f ( this : * mut RefCell < Foo >, a_0 : i32 , ) -> ( ) {
+r#"# [ no_mangle ] pub extern "C" fn Foo_f ( this : * mut RefCell < Foo >, a0 : i32 , ) -> ( ) {
  let this : & RefCell < Foo > = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut this : Ref < Foo > = < Ref < Foo >>:: swig_from ( this ) ;
  let mut this : & Foo = this . swig_deref ( ) ;
- let mut ret : ( ) = Foo :: f ( this , a_0 ) ; ret }"#;
+ let mut ret : ( ) = Foo :: f ( this , a0 ) ; ret }"#;

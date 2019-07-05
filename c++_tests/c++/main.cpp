@@ -36,6 +36,7 @@
 #include "rust_interface/TestCopy.hpp"
 #include "rust_interface/GetSetStrTest.hpp"
 #include "rust_interface/TestWorkWithReprC.hpp"
+#include "rust_interface/TestFnInline.hpp"
 
 using namespace rust;
 
@@ -934,6 +935,14 @@ TEST(TestWorkWithReprC, smokeTest)
 
     EXPECT_NEAR(1.75f + 1.1f, v.x, std::numeric_limits<float>::epsilon());
     EXPECT_NEAR(1e5f + 1.f, v.y, std::numeric_limits<float>::epsilon());
+}
+
+TEST(TestFnInline, smokeTest)
+{
+    for (auto x : { 1, 100, -1, 1000 }) {
+        auto s = TestFnInline::int_to_str(x);
+        EXPECT_EQ(std::to_string(x), s.to_std_string());
+    }
 }
 
 int main(int argc, char *argv[])

@@ -270,6 +270,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 rust_id: dummy_path,
                 fn_decl: dummy_func.try_into()?,
                 name_alias: None,
+                inline_block: None,
                 access,
                 doc_comments,
             });
@@ -362,14 +363,30 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 }
             },
         }
-        let fn_args = parse_fn_args(args_in)?;
+        let (fn_args, has_unnamed_args) = parse_fn_args(args_in)?;
         let out_type: syn::ReturnType = content.parse()?;
         debug!("out_type {:?}", out_type);
-        content.parse::<Token![;]>()?;
+
+        let inline_block = if content.peek(syn::token::Brace) {
+            let inline_body: syn::Block = content.parse()?;
+            if has_unnamed_args {
+                return Err(syn::Error::new(
+                    func_type_name_span,
+                    "there is unnamed argument, this is impossible for \"inline\" function",
+                ));
+            }
+            Some(inline_body)
+        } else {
+            content.parse::<Token![;]>()?;
+            None
+        };
 
         let mut func_name_alias = None;
         if content.peek(kw::alias) {
             content.parse::<kw::alias>()?;
+            if inline_block.is_some() {
+                return Err(content.error("alias useless with \"inline\" function"));
+            }
             if func_type == MethodVariant::Constructor {
                 return Err(content.error("alias not supported for 'constructor'"));
             }
@@ -425,6 +442,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             name_alias: func_name_alias,
             access,
             doc_comments,
+            inline_block,
         });
     }
 
@@ -482,13 +500,16 @@ impl TryFrom<syn::FnDecl> for crate::types::FnDecl {
     fn try_from(x: syn::FnDecl) -> std::result::Result<Self, Self::Error> {
         Ok(crate::types::FnDecl {
             span: x.fn_token.span(),
-            inputs: parse_fn_args(x.inputs)?,
+            inputs: parse_fn_args(x.inputs)?.0,
             output: x.output,
         })
     }
 }
 
-pub(crate) fn parse_fn_args(args: Punctuated<syn::FnArg, Token![,]>) -> syn::Result<Vec<FnArg>> {
+pub(crate) fn parse_fn_args(
+    args: Punctuated<syn::FnArg, Token![,]>,
+) -> syn::Result<(Vec<FnArg>, bool)> {
+    let mut has_unnamed_args = false;
     let mut ret = Vec::with_capacity(args.len());
     let invalid_arg = |sp| {
         Err(syn::Error::new(
@@ -562,13 +583,14 @@ pub(crate) fn parse_fn_args(args: Punctuated<syn::FnArg, Token![,]>) -> syn::Res
         .enumerate()
     {
         if named_arg.name == "_" {
+            has_unnamed_args = true;
             let templ = format!("a{}", i);
             named_arg.name = new_unique_name(&args_names, &templ);
             debug_assert!(!args_names.contains(named_arg.name.as_str()));
             args_names.insert(named_arg.name.clone());
         }
     }
-    Ok(ret)
+    Ok((ret, has_unnamed_args))
 }
 
 struct ForeignEnumInfoParser(ForeignEnumInfo);
@@ -654,7 +676,7 @@ impl Parse for ForeignInterfaceParser {
                     "expect &self or &mut self as first argument",
                 ));
             }
-            let fn_args = parse_fn_args(args_in)?;
+            let fn_args = parse_fn_args(args_in)?.0;
             let out_type: syn::ReturnType = item_parser.parse()?;
             item_parser.parse::<Token![;]>()?;
             let span = rust_func_name.span();
@@ -707,6 +729,10 @@ mod tests {
                     method Foo::f(&self, _: i32, a: i32) -> i32;
                     static_method f2(_: i32, String) -> i32;
                     fn Foo::f3(&self) -> String;
+                    fn Boo::f4(&self, a: i32) -> Vec<i32> {
+                        let a = a + 1;
+                        vec![a; self.n]
+                    }
                 })
         };
         let java_class = test_parse::<JavaClass>(mac.tts);

@@ -7,8 +7,8 @@ use syn::spanned::Spanned;
 
 use crate::{
     cpp::{
-        cpp_code, fmt_write_err_map, map_type, map_write_err, n_arguments_list,
-        rust_generate_args_with_types, CppContext, CppForeignMethodSignature, CppForeignTypeInfo,
+        cpp_code, fmt_write_err_map, map_type, map_write_err, rust_generate_args_with_types,
+        CppContext, CppForeignMethodSignature, CppForeignTypeInfo,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
@@ -44,13 +44,7 @@ pub struct {struct_with_funcs} {{
         struct_with_funcs = struct_with_funcs,
     );
     for (method, f_method) in interface.items.iter().zip(methods_sign) {
-        let args = rust_generate_args_with_types(f_method).map_err(|err| {
-            DiagnosticError::new(
-                interface.src_id,
-                interface.span(),
-                format!("gen args with types error: {}", err),
-            )
-        })?;
+        let args = rust_generate_args_with_types(f_method);
         write!(
             &mut code,
             r#"
@@ -105,7 +99,19 @@ impl {trait_name} for {struct_with_funcs} {{
         trait_name = DisplayToTokens(&interface.self_type),
         struct_with_funcs = struct_with_funcs,
     )
-    .unwrap();
+    .expect(WRITE_TO_MEM_FAILED_MSG);
+
+    fn n_arguments_list(n: usize) -> String {
+        (0..n)
+            .map(|v| format!("a{}", v))
+            .fold(String::new(), |mut acc, x| {
+                if !acc.is_empty() {
+                    acc.push_str(", ");
+                }
+                acc.push_str(&x);
+                acc
+            })
+    }
 
     for (method, f_method) in interface.items.iter().zip(methods_sign) {
         let func_name = method
@@ -128,13 +134,7 @@ impl {trait_name} for {struct_with_funcs} {{
             .iter()
             .skip(1)
             .enumerate()
-            .map(|(i, v)| {
-                format!(
-                    "a_{}: {}",
-                    i,
-                    DisplayToTokens(&v.as_named_arg().unwrap().ty)
-                )
-            })
+            .map(|(i, v)| format!("a{}: {}", i, DisplayToTokens(&v.as_named_arg().unwrap().ty)))
             .fold(String::new(), |mut acc, x| {
                 acc.push_str(", ");
                 acc.push_str(&x);
@@ -153,7 +153,7 @@ impl {trait_name} for {struct_with_funcs} {{
             interface.src_id,
             method,
             f_method,
-            (0..n_args).map(|v| format!("a_{}", v)),
+            (0..n_args).map(|v| format!("a{}", v)),
             "()",
         )?;
         ctx.rust_code.append(&mut conv_deps);
@@ -203,7 +203,7 @@ impl {trait_name} for {struct_with_funcs} {{
             ret_type = ret_type,
             output_conv = output_conv,
         )
-        .unwrap();
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
     write!(
         &mut code,

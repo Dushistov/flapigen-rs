@@ -47,3 +47,4 @@ static_func_with_foreign_class_full
 string_containers
 string_handling
 work_with_rc
+inline_function

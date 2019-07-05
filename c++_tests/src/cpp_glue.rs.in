@@ -960,3 +960,9 @@ fn inc_vec2(v: Vec2) -> Vec2 {
 foreigner_class!(class TestWorkWithReprC {
     static_method inc_vec2(v: Vec2) -> Vec2;
 });
+
+foreigner_class!(class TestFnInline {
+    fn int_to_str(a: i32) -> String {
+        format!("{}", a)
+    }
+});

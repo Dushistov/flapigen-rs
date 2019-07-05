@@ -28,6 +28,7 @@ import com.example.rust.Gamepad;
 import com.example.rust.Gamepad2;
 import com.example.rust.Code;
 import com.example.rust.GamepadId;
+import com.example.rust.TestFnInline;
 
 class Main {
     public static void main(String[] args) {
@@ -118,6 +119,7 @@ class Main {
             testCircularDeps();
 	    testBuilderPattern();
 	    testGetIDOverloading();
+	    testFnInline();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -419,5 +421,13 @@ class Main {
 	assert !x1.isPresent();
 	GamepadId x2 = g.getID();
 	assert x2.value() == 17;
+    }
+
+    private static void testFnInline() {
+	for (int i = -2000; i < 2000; ++i) {
+	    String expected = String.valueOf(i);
+	    String s = TestFnInline.int_to_str(i);
+	    assert expected.equals(s);
+	}
     }
 }

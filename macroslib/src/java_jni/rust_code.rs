@@ -7,8 +7,8 @@ use syn::{spanned::Spanned, Type};
 use crate::{
     error::{panic_on_syn_error, DiagnosticError, Result},
     java_jni::{
-        calc_this_type_for_method, fmt_write_err_map, java_class_full_name, java_class_name_to_jni,
-        method_name, ForeignTypeInfo, JavaForeignTypeInfo, JniForeignMethodSignature,
+        calc_this_type_for_method, java_class_full_name, java_class_name_to_jni, method_name,
+        ForeignTypeInfo, JavaForeignTypeInfo, JniForeignMethodSignature,
     },
     source_registry::SourceId,
     typemap::ast::{list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
@@ -25,7 +25,7 @@ use crate::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
         SelfTypeVariant,
     },
-    TypeMap,
+    TypeMap, WRITE_TO_MEM_FAILED_MSG,
 };
 
 struct MethodContext<'a> {
@@ -34,7 +34,6 @@ struct MethodContext<'a> {
     f_method: &'a JniForeignMethodSignature,
     jni_func_name: &'a str,
     decl_func_args: &'a str,
-    args_names: &'a str,
     real_output_typename: &'a str,
 }
 
@@ -142,15 +141,23 @@ May be you need to use `private constructor = empty;` syntax?",
         )?;
         trace!("generate_rust_code jni name: {}", jni_func_name);
 
-        let args_names = f_method
-            .input
-            .iter()
-            .enumerate()
-            .map(|a| format!("a_{}, ", a.0))
-            .fold(String::new(), |acc, x| acc + &x);
+        let decl_func_args = {
+            use std::fmt::Write;
+            let mut buf = String::new();
+            for (f_type_info, arg_name) in
+                f_method.input.iter().zip(method.arg_names_without_self())
+            {
+                write!(
+                    &mut buf,
+                    "{}: {}, ",
+                    arg_name,
+                    f_type_info.as_ref().correspoding_rust_type.typename()
+                )
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+            }
+            buf
+        };
 
-        let decl_func_args = generate_jni_args_with_types(f_method)
-            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
         let real_output_typename = match method.fn_decl.output {
             syn::ReturnType::Default => "()",
             syn::ReturnType::Type(_, ref ty) => normalize_ty_lifetimes(&*ty),
@@ -162,7 +169,6 @@ May be you need to use `private constructor = empty;` syntax?",
             f_method,
             jni_func_name: &jni_func_name,
             decl_func_args: &decl_func_args,
-            args_names: &args_names,
             real_output_typename: &real_output_typename,
         };
 
@@ -435,13 +441,7 @@ impl {trait_name} for JavaCallback {{
             .iter()
             .skip(1)
             .enumerate()
-            .map(|(i, v)| {
-                format!(
-                    "a_{}: {}",
-                    i,
-                    DisplayToTokens(&v.as_named_arg().unwrap().ty)
-                )
-            })
+            .map(|(i, v)| format!("a{}: {}", i, DisplayToTokens(&v.as_named_arg().unwrap().ty)))
             .fold(String::new(), |mut acc, x| {
                 acc.push_str(", ");
                 acc.push_str(&x);
@@ -460,7 +460,7 @@ impl {trait_name} for JavaCallback {{
             interface.src_id,
             method,
             f_method,
-            (0..n_args).map(|v| format!("a_{}", v)),
+            (0..n_args).map(|v| format!("a{}", v)),
             "()",
         )?;
 
@@ -599,24 +599,6 @@ fn generate_jni_func_name(
     Ok(output)
 }
 
-fn generate_jni_args_with_types(
-    f_method: &JniForeignMethodSignature,
-) -> std::result::Result<String, String> {
-    use std::fmt::Write;
-
-    let mut buf = String::new();
-    for (i, f_type_info) in f_method.input.iter().enumerate() {
-        write!(
-            &mut buf,
-            "a_{}: {}, ",
-            i,
-            f_type_info.as_ref().correspoding_rust_type.typename()
-        )
-        .map_err(fmt_write_err_map)?;
-    }
-    Ok(buf)
-}
-
 fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<Vec<TokenStream>> {
     let jni_ret_type = mc.f_method.output.correspoding_rust_type.typename();
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
@@ -627,13 +609,12 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
         "ret",
         &jni_ret_type,
     )?;
-    let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
         mc.class.src_id,
         mc.method,
         mc.f_method,
-        (0..n_args).map(|v| format!("a_{}", v)),
+        mc.method.arg_names_without_self(),
         &jni_ret_type,
     )?;
 
@@ -643,7 +624,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
 #[no_mangle]
 pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_type} {{
 {convert_input_code}
-    let mut ret: {real_output_typename} = {rust_func_name}({args_names});
+    let mut ret: {real_output_typename} = {call};
 {convert_output_code}
     ret
 }}
@@ -652,10 +633,9 @@ pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> 
         decl_func_args = mc.decl_func_args,
         jni_ret_type = jni_ret_type,
         convert_input_code = convert_input_code,
-        rust_func_name = DisplayToTokens(&mc.method.rust_id),
-        args_names = mc.args_names,
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
+        call = mc.method.generate_code_to_call_rust_func(),
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
@@ -673,13 +653,12 @@ fn generate_constructor(
     this_type: Type,
     code_box_this: &str,
 ) -> Result<Vec<TokenStream>> {
-    let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
         mc.class.src_id,
         mc.method,
         mc.f_method,
-        (0..n_args).map(|v| format!("a_{}", v)),
+        mc.method.arg_names_without_self(),
         "jlong",
     )?;
 
@@ -701,7 +680,7 @@ fn generate_constructor(
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
 pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
 {convert_input_code}
-    let this: {real_output_typename} = {rust_func_name}({args_names});
+    let this: {real_output_typename} = {call};
 {convert_this}
 {box_this}
     this as jlong
@@ -711,10 +690,9 @@ pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> 
         convert_this = convert_this,
         decl_func_args = mc.decl_func_args,
         convert_input_code = convert_input_code,
-        rust_func_name = DisplayToTokens(&mc.method.rust_id),
-        args_names = mc.args_names,
         box_this = code_box_this,
         real_output_typename = mc.real_output_typename,
+        call = mc.method.generate_code_to_call_rust_func(),
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_this);
@@ -732,13 +710,12 @@ fn generate_method(
     this_type_for_method: &RustType,
 ) -> Result<Vec<TokenStream>> {
     let jni_ret_type = mc.f_method.output.correspoding_rust_type.typename();
-    let n_args = mc.f_method.input.len();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
         mc.class.src_id,
         mc.method,
         mc.f_method,
-        (0..n_args).map(|v| format!("a_{}", v)),
+        mc.method.arg_names_without_self(),
         &jni_ret_type,
     )?;
 
@@ -782,7 +759,7 @@ pub extern "C"
         jlong_to_pointer::<{this_type}>(this).as_mut().unwrap()
     }};
 {convert_this}
-    let mut ret: {real_output_typename} = {rust_func_name}(this, {args_names});
+    let mut ret: {real_output_typename} = {call};
 {convert_output_code}
     ret
 }}
@@ -794,10 +771,9 @@ pub extern "C"
         this_type_ref = this_type_ref,
         this_type = this_type_for_method.normalized_name,
         convert_this = convert_this,
-        rust_func_name = DisplayToTokens(&mc.method.rust_id),
-        args_names = mc.args_names,
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
+        call = mc.method.generate_code_to_call_rust_func(),
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
@@ -868,10 +844,11 @@ fn convert_args_for_variadic_function_call(
         if let Some(conv_type) = JNI_FOR_VARIADIC_C_FUNC_CALL
             .get(&*arg.as_ref().correspoding_rust_type.normalized_name.as_str())
         {
-            write!(&mut ret, ", a_{} as {}", i, conv_type).unwrap();
+            write!(&mut ret, ", a{} as {}", i, conv_type)
         } else {
-            write!(&mut ret, ", a_{}", i).unwrap();
+            write!(&mut ret, ", a{}", i)
         }
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
     let check_sizes = r#"
     swig_assert_eq_size!(::std::os::raw::c_uint, u32);

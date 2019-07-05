@@ -5,14 +5,14 @@ r##"# [ no_mangle ] pub extern "C" fn Java_org_example_Boo_do_1f1 ( env : * mut 
  let mut ret : ( ) = Boo :: f1 ( this , ) ;
  ret }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn Java_org_example_Foo_do_1f1 ( env : * mut JNIEnv , _ : jclass , a_0 : jlong , ) -> ( ) {
- let a_0 : & RefCell < Boo > = unsafe { jlong_to_pointer ::< RefCell < Boo >> ( a_0 ) . as_mut ( ) . unwrap ( ) } ;
- let mut a_0 : Ref < Boo > = < Ref < Boo >>:: swig_from ( a_0 , env ) ;
- let mut a_0 : & Boo = a_0 . swig_deref ( ) ;
- let mut ret : ( ) = f1 ( a_0 , ) ; ret }"##;
+r##"# [ no_mangle ] pub extern "C" fn Java_org_example_Foo_do_1f1 ( env : * mut JNIEnv , _ : jclass , a0 : jlong , ) -> ( ) {
+ let a0 : & RefCell < Boo > = unsafe { jlong_to_pointer ::< RefCell < Boo >> ( a0 ) . as_mut ( ) . unwrap ( ) } ;
+ let mut a0 : Ref < Boo > = < Ref < Boo >>:: swig_from ( a0 , env ) ;
+ let mut a0 : & Boo = a0 . swig_deref ( ) ;
+ let mut ret : ( ) = f1 ( a0 ) ; ret }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn Java_org_example_Foo_do_1f2 ( env : * mut JNIEnv , _ : jclass , a_0 : jlong , ) -> ( ) {
- let a_0 : & RefCell < Boo > = unsafe { jlong_to_pointer ::< RefCell < Boo >> ( a_0 ) . as_mut ( ) . unwrap ( ) } ;
- let mut a_0 : RefMut < Boo > = < RefMut < Boo >>:: swig_from ( a_0 , env ) ;
- let mut a_0 : & mut Boo = a_0 . swig_deref_mut ( ) ;
- let mut ret : ( ) = f2 ( a_0 , ) ; ret }"##;
+r##"# [ no_mangle ] pub extern "C" fn Java_org_example_Foo_do_1f2 ( env : * mut JNIEnv , _ : jclass , a0 : jlong , ) -> ( ) {
+ let a0 : & RefCell < Boo > = unsafe { jlong_to_pointer ::< RefCell < Boo >> ( a0 ) . as_mut ( ) . unwrap ( ) } ;
+ let mut a0 : RefMut < Boo > = < RefMut < Boo >>:: swig_from ( a0 , env ) ;
+ let mut a0 : & mut Boo = a0 . swig_deref_mut ( ) ;
+ let mut ret : ( ) = f2 ( a0 ) ; ret }"##;

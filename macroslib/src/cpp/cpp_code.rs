@@ -566,7 +566,8 @@ extern "C" {
     write!(&mut fn_decl_out, " {}(", f.ident).expect(WRITE_TO_MEM_FAILED_MSG);
 
     let fn_args = parse_fn_args(f.decl.inputs.clone())
-        .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?
+        .0;
     for (i, arg) in fn_args.iter().enumerate() {
         match arg {
             FnArg::SelfArg(sp, _) => {

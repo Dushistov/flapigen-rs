@@ -16,20 +16,20 @@ r##"# [ no_mangle ] pub extern "C" fn Boo_delete ( this : * mut RefCell < Boo > 
  drop ( this ) ;
  }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn Foo_f1 ( a_0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
- assert ! ( ! a_0 . is_null ( ) ) ;
- let a_0 : & RefCell < Boo > = unsafe { &* ( a_0 as * const RefCell < Boo > ) } ;
- let mut a_0 : Ref < Boo > = < Ref < Boo >>:: swig_from ( a_0 ) ;
- let mut a_0 : & Boo = a_0 . swig_deref ( ) ;
- let mut ret : ( ) = f1 ( a_0 ) ;
+r##"# [ no_mangle ] pub extern "C" fn Foo_f1 ( a0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
+ assert ! ( ! a0 . is_null ( ) ) ;
+ let a0 : & RefCell < Boo > = unsafe { &* ( a0 as * const RefCell < Boo > ) } ;
+ let mut a0 : Ref < Boo > = < Ref < Boo >>:: swig_from ( a0 ) ;
+ let mut a0 : & Boo = a0 . swig_deref ( ) ;
+ let mut ret : ( ) = f1 ( a0 ) ;
  ret }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn Foo_f2 ( a_0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
- assert ! ( ! a_0 . is_null ( ) ) ;
- let a_0 : & mut RefCell < Boo > = unsafe { & mut * ( a_0 as * mut RefCell < Boo > ) } ;
- let mut a_0 : & RefCell < Boo > = a_0 ;
- let mut a_0 : RefMut < Boo > = < RefMut < Boo >>:: swig_from ( a_0 ) ;
- let mut a_0 : & mut Boo = a_0 . swig_deref_mut ( ) ;
- let mut ret : ( ) = f2 ( a_0 ) ;
+r##"# [ no_mangle ] pub extern "C" fn Foo_f2 ( a0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
+ assert ! ( ! a0 . is_null ( ) ) ;
+ let a0 : & mut RefCell < Boo > = unsafe { & mut * ( a0 as * mut RefCell < Boo > ) } ;
+ let mut a0 : & RefCell < Boo > = a0 ;
+ let mut a0 : RefMut < Boo > = < RefMut < Boo >>:: swig_from ( a0 ) ;
+ let mut a0 : & mut Boo = a0 . swig_deref_mut ( ) ;
+ let mut ret : ( ) = f2 ( a0 ) ;
  ret }"##;
 

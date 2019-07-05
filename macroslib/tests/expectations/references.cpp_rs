@@ -4,16 +4,16 @@ r##"# [ no_mangle ] pub extern "C" fn TestReferences_get_foo_ref ( this : * mut 
  let ret : * const :: std :: os :: raw :: c_void = ( ret as * const Foo ) as * const :: std :: os :: raw :: c_void ;
  ret }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn TestReferences_update_foo ( this : * mut TestReferences , a_0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
- assert ! ( ! a_0 . is_null ( ) ) ;
- let a_0 : & Foo = unsafe { &* ( a_0 as * const Foo ) } ;
+r##"# [ no_mangle ] pub extern "C" fn TestReferences_update_foo ( this : * mut TestReferences , foo : * const :: std :: os :: raw :: c_void , ) -> ( ) {
+ assert ! ( ! foo . is_null ( ) ) ;
+ let foo : & Foo = unsafe { &* ( foo as * const Foo ) } ;
  let this : & mut TestReferences = unsafe { this . as_mut ( ) . unwrap ( ) } ;
- let mut ret : ( ) = TestReferences :: update_foo ( this , a_0 ) ;
+ let mut ret : ( ) = TestReferences :: update_foo ( this , foo ) ;
  ret }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn TestReferences_update_mut_foo ( this : * mut TestReferences , a_0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
- assert ! ( ! a_0 . is_null ( ) ) ;
- let a_0 : & mut Foo = unsafe { & mut * ( a_0 as * mut Foo ) } ;
+r##"# [ no_mangle ] pub extern "C" fn TestReferences_update_mut_foo ( this : * mut TestReferences , foo : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
+ assert ! ( ! foo . is_null ( ) ) ;
+ let foo : & mut Foo = unsafe { & mut * ( foo as * mut Foo ) } ;
  let this : & mut TestReferences = unsafe { this . as_mut ( ) . unwrap ( ) } ;
- let mut ret : ( ) = TestReferences :: update_mut_foo ( this , a_0 ) ;
+ let mut ret : ( ) = TestReferences :: update_mut_foo ( this , foo ) ;
  ret }"##;
