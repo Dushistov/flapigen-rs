@@ -179,6 +179,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     static CONSTRUCTOR: &str = "constructor";
     static METHOD: &str = "method";
     static STATIC_METHOD: &str = "static_method";
+    static FN: &str = "fn";
 
     while !content.is_empty() {
         let doc_comments = parse_doc_comments(&&content)?;
@@ -194,7 +195,13 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 access = MethodAccess::Protected;
             }
         }
-        let func_type_name: Ident = content.parse()?;
+        let (func_type_name, func_type_name_span): (String, Span) = if content.peek(Token![fn]) {
+            let token = content.parse::<Token![fn]>()?;
+            (FN.into(), token.span())
+        } else {
+            let id: Ident = content.parse()?;
+            (id.to_string(), id.span())
+        };
         debug!("may be func_type_name {:?}", func_type_name);
         if func_type_name == "self_type" {
             rust_self_type = Some(content.parse::<Type>()?);
@@ -211,33 +218,14 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             continue;
         }
 
-        let mut func_type = match func_type_name {
-            _ if func_type_name == CONSTRUCTOR => {
-                if has_dummy_constructor {
-                    return Err(syn::Error::new(
-                        func_type_name.span(),
-                        "You defined dummy constructor for this, but have not dummy constructor",
-                    ));
-                }
-                MethodVariant::Constructor
-            }
-            _ if func_type_name == STATIC_METHOD => MethodVariant::StaticMethod,
-            _ if func_type_name == METHOD => MethodVariant::Method(SelfTypeVariant::Default),
-            _ => {
-                return Err(syn::Error::new(
-                    func_type_name.span(),
-                    format!(
-                        "expect 'constructor' or 'method' or \
-                         'static_method' here, got: {}",
-                        func_type_name
-                    ),
-                ));
-            }
-        };
-        if func_type == MethodVariant::Constructor
-            && content.peek(Token![=])
-            && content.peek2(kw::empty)
-        {
+        if func_type_name == CONSTRUCTOR && has_dummy_constructor {
+            return Err(syn::Error::new(
+                func_type_name_span,
+                "You defined dummy constructor for this, but have not dummy constructor",
+            ));
+        }
+
+        if func_type_name == CONSTRUCTOR && content.peek(Token![=]) && content.peek2(kw::empty) {
             debug!("class {} has dummy constructor", class_name);
             content.parse::<Token![=]>()?;
             content.parse::<kw::empty>()?;
@@ -264,8 +252,8 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             }
 
             let mut dummy_colon2: Token![::] = parse_quote! { :: };
-            dummy_colon2.spans[0] = func_type_name.span();
-            dummy_colon2.spans[1] = func_type_name.span();
+            dummy_colon2.spans[0] = func_type_name_span;
+            dummy_colon2.spans[1] = func_type_name_span;
 
             let dummy_path = syn::Path {
                 leading_colon: Some(dummy_colon2),
@@ -278,7 +266,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             };
             let dummy_func = *dummy_func.decl;
             methods.push(ForeignerMethod {
-                variant: func_type,
+                variant: MethodVariant::Constructor,
                 rust_id: dummy_path,
                 fn_decl: dummy_func.try_into()?,
                 name_alias: None,
@@ -301,6 +289,36 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             args_parser.parse_terminated(syn::FnArg::parse)?;
 
         debug!("func in args {:?}", args_in);
+
+        let mut func_type = match func_type_name {
+            _ if func_type_name == CONSTRUCTOR => MethodVariant::Constructor,
+            _ if func_type_name == STATIC_METHOD => MethodVariant::StaticMethod,
+            _ if func_type_name == METHOD => MethodVariant::Method(SelfTypeVariant::Default),
+            _ if func_type_name == FN => {
+                if args_in.len() >= 1 {
+                    use syn::FnArg::*;
+                    match args_in[0] {
+                        SelfRef(_) | SelfValue(_) => {
+                            MethodVariant::Method(SelfTypeVariant::Default)
+                        }
+                        _ => MethodVariant::StaticMethod,
+                    }
+                } else {
+                    MethodVariant::StaticMethod
+                }
+            }
+            _ => {
+                return Err(syn::Error::new(
+                    func_type_name_span,
+                    format!(
+                        "expect 'constructor' or 'method' or \
+                         'static_method' here, got: {}",
+                        func_type_name
+                    ),
+                ));
+            }
+        };
+
         match func_type {
             MethodVariant::Constructor | MethodVariant::StaticMethod => {
                 let have_self_args = args_in.iter().any(|x| {
@@ -688,6 +706,7 @@ mod tests {
                     method Foo::set_field(&mut self, _: i32);
                     method Foo::f(&self, _: i32, a: i32) -> i32;
                     static_method f2(_: i32, String) -> i32;
+                    fn Foo::f3(&self) -> String;
                 })
         };
         let java_class = test_parse::<JavaClass>(mac.tts);
