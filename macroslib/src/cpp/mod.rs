@@ -67,6 +67,7 @@ use crate::{
         MethodAccess, MethodVariant, SelfTypeDesc,
     },
     CppConfig, CppOptional, CppStrView, CppVariant, LanguageGenerator, SourceCode, TypeMap,
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 #[derive(Debug)]
@@ -187,7 +188,6 @@ struct MethodContext<'a> {
     f_method: &'a CppForeignMethodSignature,
     c_func_name: &'a str,
     decl_func_args: &'a str,
-    args_names: &'a str,
     real_output_typename: &'a str,
 }
 
@@ -295,22 +295,20 @@ fn c_func_name(class: &ForeignerClassInfo, method: &ForeignerMethod) -> String {
     )
 }
 
-fn rust_generate_args_with_types(
-    f_method: &CppForeignMethodSignature,
-) -> std::result::Result<String, String> {
+fn rust_generate_args_with_types(f_method: &CppForeignMethodSignature) -> String {
     use std::fmt::Write;
 
     let mut buf = String::new();
     for (i, f_type_info) in f_method.input.iter().enumerate() {
         write!(
             &mut buf,
-            "a_{}: {}, ",
+            "a{}: {}, ",
             i,
             f_type_info.as_ref().correspoding_rust_type.typename(),
         )
-        .map_err(fmt_write_err_map)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
-    Ok(buf)
+    buf
 }
 
 fn fmt_write_err_map(err: fmt::Error) -> String {
@@ -323,18 +321,6 @@ fn map_write_err<Err: fmt::Display>(err: Err) -> String {
 
 fn map_any_err_to_our_err<E: fmt::Display>(err: E) -> DiagnosticError {
     DiagnosticError::new_without_src_info(err)
-}
-
-fn n_arguments_list(n: usize) -> String {
-    (0..n)
-        .map(|v| format!("a_{}", v))
-        .fold(String::new(), |mut acc, x| {
-            if !acc.is_empty() {
-                acc.push_str(", ");
-            }
-            acc.push_str(&x);
-            acc
-        })
 }
 
 fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> {

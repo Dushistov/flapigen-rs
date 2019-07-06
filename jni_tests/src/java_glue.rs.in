@@ -902,3 +902,9 @@ foreigner_class!(
         method Gamepad2::id(&self) -> GamepadId; alias getID;
     }
 );
+
+foreigner_class!(class TestFnInline {
+    fn int_to_str(a: i32) -> String {
+        format!("{}", a)
+    }    
+});

@@ -2,8 +2,6 @@ mod java_code;
 mod map_type;
 mod rust_code;
 
-use std::fmt;
-
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
@@ -437,10 +435,6 @@ fn find_suitable_foreign_types_for_methods(
         ret.push(JniForeignMethodSignature { output, input });
     }
     Ok(ret)
-}
-
-fn fmt_write_err_map(err: fmt::Error) -> String {
-    format!("fmt write error: {}", err)
 }
 
 fn java_class_full_name(package_name: &str, class_name: &str) -> String {

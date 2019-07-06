@@ -179,6 +179,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     static CONSTRUCTOR: &str = "constructor";
     static METHOD: &str = "method";
     static STATIC_METHOD: &str = "static_method";
+    static FN: &str = "fn";
 
     while !content.is_empty() {
         let doc_comments = parse_doc_comments(&&content)?;
@@ -194,7 +195,13 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 access = MethodAccess::Protected;
             }
         }
-        let func_type_name: Ident = content.parse()?;
+        let (func_type_name, func_type_name_span): (String, Span) = if content.peek(Token![fn]) {
+            let token = content.parse::<Token![fn]>()?;
+            (FN.into(), token.span())
+        } else {
+            let id: Ident = content.parse()?;
+            (id.to_string(), id.span())
+        };
         debug!("may be func_type_name {:?}", func_type_name);
         if func_type_name == "self_type" {
             rust_self_type = Some(content.parse::<Type>()?);
@@ -211,33 +218,14 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             continue;
         }
 
-        let mut func_type = match func_type_name {
-            _ if func_type_name == CONSTRUCTOR => {
-                if has_dummy_constructor {
-                    return Err(syn::Error::new(
-                        func_type_name.span(),
-                        "You defined dummy constructor for this, but have not dummy constructor",
-                    ));
-                }
-                MethodVariant::Constructor
-            }
-            _ if func_type_name == STATIC_METHOD => MethodVariant::StaticMethod,
-            _ if func_type_name == METHOD => MethodVariant::Method(SelfTypeVariant::Default),
-            _ => {
-                return Err(syn::Error::new(
-                    func_type_name.span(),
-                    format!(
-                        "expect 'constructor' or 'method' or \
-                         'static_method' here, got: {}",
-                        func_type_name
-                    ),
-                ));
-            }
-        };
-        if func_type == MethodVariant::Constructor
-            && content.peek(Token![=])
-            && content.peek2(kw::empty)
-        {
+        if func_type_name == CONSTRUCTOR && has_dummy_constructor {
+            return Err(syn::Error::new(
+                func_type_name_span,
+                "You defined dummy constructor for this, but have not dummy constructor",
+            ));
+        }
+
+        if func_type_name == CONSTRUCTOR && content.peek(Token![=]) && content.peek2(kw::empty) {
             debug!("class {} has dummy constructor", class_name);
             content.parse::<Token![=]>()?;
             content.parse::<kw::empty>()?;
@@ -264,8 +252,8 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             }
 
             let mut dummy_colon2: Token![::] = parse_quote! { :: };
-            dummy_colon2.spans[0] = func_type_name.span();
-            dummy_colon2.spans[1] = func_type_name.span();
+            dummy_colon2.spans[0] = func_type_name_span;
+            dummy_colon2.spans[1] = func_type_name_span;
 
             let dummy_path = syn::Path {
                 leading_colon: Some(dummy_colon2),
@@ -278,10 +266,11 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             };
             let dummy_func = *dummy_func.decl;
             methods.push(ForeignerMethod {
-                variant: func_type,
+                variant: MethodVariant::Constructor,
                 rust_id: dummy_path,
                 fn_decl: dummy_func.try_into()?,
                 name_alias: None,
+                inline_block: None,
                 access,
                 doc_comments,
             });
@@ -301,6 +290,36 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             args_parser.parse_terminated(syn::FnArg::parse)?;
 
         debug!("func in args {:?}", args_in);
+
+        let mut func_type = match func_type_name {
+            _ if func_type_name == CONSTRUCTOR => MethodVariant::Constructor,
+            _ if func_type_name == STATIC_METHOD => MethodVariant::StaticMethod,
+            _ if func_type_name == METHOD => MethodVariant::Method(SelfTypeVariant::Default),
+            _ if func_type_name == FN => {
+                if args_in.len() >= 1 {
+                    use syn::FnArg::*;
+                    match args_in[0] {
+                        SelfRef(_) | SelfValue(_) => {
+                            MethodVariant::Method(SelfTypeVariant::Default)
+                        }
+                        _ => MethodVariant::StaticMethod,
+                    }
+                } else {
+                    MethodVariant::StaticMethod
+                }
+            }
+            _ => {
+                return Err(syn::Error::new(
+                    func_type_name_span,
+                    format!(
+                        "expect 'constructor' or 'method' or \
+                         'static_method' here, got: {}",
+                        func_type_name
+                    ),
+                ));
+            }
+        };
+
         match func_type {
             MethodVariant::Constructor | MethodVariant::StaticMethod => {
                 let have_self_args = args_in.iter().any(|x| {
@@ -344,14 +363,30 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 }
             },
         }
-        let fn_args = parse_fn_args(args_in)?;
+        let (fn_args, has_unnamed_args) = parse_fn_args(args_in)?;
         let out_type: syn::ReturnType = content.parse()?;
         debug!("out_type {:?}", out_type);
-        content.parse::<Token![;]>()?;
+
+        let inline_block = if content.peek(syn::token::Brace) {
+            let inline_body: syn::Block = content.parse()?;
+            if has_unnamed_args {
+                return Err(syn::Error::new(
+                    func_type_name_span,
+                    "there is unnamed argument, this is impossible for \"inline\" function",
+                ));
+            }
+            Some(inline_body)
+        } else {
+            content.parse::<Token![;]>()?;
+            None
+        };
 
         let mut func_name_alias = None;
         if content.peek(kw::alias) {
             content.parse::<kw::alias>()?;
+            if inline_block.is_some() {
+                return Err(content.error("alias useless with \"inline\" function"));
+            }
             if func_type == MethodVariant::Constructor {
                 return Err(content.error("alias not supported for 'constructor'"));
             }
@@ -407,6 +442,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             name_alias: func_name_alias,
             access,
             doc_comments,
+            inline_block,
         });
     }
 
@@ -464,13 +500,16 @@ impl TryFrom<syn::FnDecl> for crate::types::FnDecl {
     fn try_from(x: syn::FnDecl) -> std::result::Result<Self, Self::Error> {
         Ok(crate::types::FnDecl {
             span: x.fn_token.span(),
-            inputs: parse_fn_args(x.inputs)?,
+            inputs: parse_fn_args(x.inputs)?.0,
             output: x.output,
         })
     }
 }
 
-pub(crate) fn parse_fn_args(args: Punctuated<syn::FnArg, Token![,]>) -> syn::Result<Vec<FnArg>> {
+pub(crate) fn parse_fn_args(
+    args: Punctuated<syn::FnArg, Token![,]>,
+) -> syn::Result<(Vec<FnArg>, bool)> {
+    let mut has_unnamed_args = false;
     let mut ret = Vec::with_capacity(args.len());
     let invalid_arg = |sp| {
         Err(syn::Error::new(
@@ -544,13 +583,14 @@ pub(crate) fn parse_fn_args(args: Punctuated<syn::FnArg, Token![,]>) -> syn::Res
         .enumerate()
     {
         if named_arg.name == "_" {
+            has_unnamed_args = true;
             let templ = format!("a{}", i);
             named_arg.name = new_unique_name(&args_names, &templ);
             debug_assert!(!args_names.contains(named_arg.name.as_str()));
             args_names.insert(named_arg.name.clone());
         }
     }
-    Ok(ret)
+    Ok((ret, has_unnamed_args))
 }
 
 struct ForeignEnumInfoParser(ForeignEnumInfo);
@@ -636,7 +676,7 @@ impl Parse for ForeignInterfaceParser {
                     "expect &self or &mut self as first argument",
                 ));
             }
-            let fn_args = parse_fn_args(args_in)?;
+            let fn_args = parse_fn_args(args_in)?.0;
             let out_type: syn::ReturnType = item_parser.parse()?;
             item_parser.parse::<Token![;]>()?;
             let span = rust_func_name.span();
@@ -688,6 +728,11 @@ mod tests {
                     method Foo::set_field(&mut self, _: i32);
                     method Foo::f(&self, _: i32, a: i32) -> i32;
                     static_method f2(_: i32, String) -> i32;
+                    fn Foo::f3(&self) -> String;
+                    fn Boo::f4(&self, a: i32) -> Vec<i32> {
+                        let a = a + 1;
+                        vec![a; self.n]
+                    }
                 })
         };
         let java_class = test_parse::<JavaClass>(mac.tts);

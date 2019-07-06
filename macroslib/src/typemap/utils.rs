@@ -75,7 +75,8 @@ pub(crate) fn foreign_from_rust_convert_method_output(
 
 pub(crate) fn foreign_to_rust_convert_method_inputs<
     FTI: ForeignTypeInfoT,
-    GI: Iterator<Item = String>,
+    S: AsRef<str>,
+    GI: Iterator<Item = S>,
 >(
     conv_map: &mut TypeMap,
     src_id: SourceId,
@@ -107,8 +108,8 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             f_from.correspoding_rust_type().to_idx(),
             to.to_idx(),
-            &arg_name,
-            &arg_name,
+            arg_name.as_ref(),
+            arg_name.as_ref(),
             func_ret_type,
             (src_id, to_named_arg.ty.span()),
         )?;

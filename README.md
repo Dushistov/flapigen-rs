@@ -55,9 +55,9 @@ in Rust project you write (in Rust language):
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
-    method Foo::set_field(&mut self, _: i32);
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-    static_method f2(_: i32) -> i32;
+    fn Foo::set_field(&mut self, _: i32);
+    fn Foo::f(&self, _: i32, _: i32) -> i32;
+    fn f2(_: i32) -> i32;
 });
 ```
 
@@ -75,8 +75,8 @@ Also rust_swig support bypassing of code generation:
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-    static_method f2(_: i32) -> i32;
+    fn Foo::f(&self, _: i32, _: i32) -> i32;
+    fn f2(_: i32) -> i32;
     foreigner_code "    public int javaFunc() { return 17; }\n";
     foreigner_code r#"
     public Foo[] testHandArrayReturn() { return do_testHandArrayReturn(this.mNativeObj); }
@@ -95,7 +95,7 @@ Also you can create alias for function name:
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
+    fn Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
 });
 ```
 
@@ -111,7 +111,7 @@ class Foo {
     self_type Foo;
     /// Cool constructor
     constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
+    fn Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
 });
 ```
 
@@ -133,7 +133,7 @@ foreign_enum!(enum MyEnum {
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::default() -> Foo;
-    method f1(&mut self, v: MyEnum);
+    fn f1(&mut self, v: MyEnum);
 });
 ```
 
@@ -165,7 +165,7 @@ foreign_callback!(callback SomeObserver {
 foreigner_class!(class ClassWithCallbacks {
     self_type Foo;
     constructor Foo::default() -> Foo;
-    method f1(&mut self, cb: Box<SomeTrait>);
+    fn f1(&mut self, cb: Box<SomeTrait>);
 });
 ```
 
@@ -188,6 +188,18 @@ class Boo : public SomeObserver {
 public:
     void onStateChanged(int, bool) override {}
 };
+```
+
+Also you can insert rust code into generated code:
+
+```rust
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -> Foo;
+	fn to_string(&self) -> String {
+        format!("{}", self)
+	}
+});
 ```
 
 ## Integration of rust_swig with your project
