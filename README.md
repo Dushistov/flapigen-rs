@@ -198,7 +198,7 @@ foreigner_class!(class Foo {
     constructor Foo::new(_: i32) -> Foo;
 	fn to_string(&self) -> String {
         format!("{}", self)
-	}
+    }
 });
 ```
 
