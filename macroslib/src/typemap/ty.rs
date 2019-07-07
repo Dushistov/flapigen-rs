@@ -1,7 +1,7 @@
 use crate::{
-    error::{DiagnosticError, SourceIdSpan},
+    error::DiagnosticError,
     source_registry::SourceId,
-    typemap::{ast::TypeName, RustTypeIdx, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
+    typemap::{ast::TypeName, RustTypeIdx, TypeConvCode},
 };
 use proc_macro2::Span;
 use rustc_hash::FxHashMap;
@@ -182,64 +182,7 @@ pub(crate) struct ForeignConversationRule {
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationIntermediate {
     pub(crate) intermediate_ty: RustTypeIdx,
-    pub(crate) conv_code: FTypeConvCode,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct FTypeConvCode {
-    pub(in crate::typemap) span: SourceIdSpan,
-    code: String,
-}
-
-impl PartialEq for FTypeConvCode {
-    fn eq(&self, o: &Self) -> bool {
-        self.code == o.code
-    }
-}
-
-impl FTypeConvCode {
-    /// # Panics
-    pub(crate) fn new<S: Into<String>>(code: S, span: SourceIdSpan) -> FTypeConvCode {
-        let code: String = code.into();
-        assert!(
-            code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE),
-            "code: '{}'",
-            code
-        );
-        FTypeConvCode { code, span }
-    }
-    /// # Panics
-    pub(crate) fn new2<S: Into<String>>(code: S, span: SourceIdSpan) -> FTypeConvCode {
-        let code: String = code.into();
-        assert!(
-            code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE),
-            "code: '{}'",
-            code
-        );
-        FTypeConvCode { code, span }
-    }
-
-    pub(crate) fn as_str(&self) -> &str {
-        self.code.as_str()
-    }
-    pub(crate) fn src_id(&self) -> SourceId {
-        self.span.0
-    }
-    pub(crate) fn span(&self) -> Span {
-        self.span.1
-    }
-}
-
-impl ToString for FTypeConvCode {
-    fn to_string(&self) -> String {
-        self.code.clone()
-    }
-}
-
-impl From<FTypeConvCode> for String {
-    fn from(x: FTypeConvCode) -> Self {
-        x.code
-    }
+    pub(crate) conv_code: TypeConvCode,
 }
 
 #[derive(Debug, Clone, Copy)]

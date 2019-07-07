@@ -15,8 +15,7 @@ use crate::{
     str_replace::replace_first_and_other,
     typemap::{
         ast::{DisplayToTokens, SpannedSmolStr},
-        ty::FTypeConvCode,
-        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
+        TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
     FOREIGNER_CODE, FOREIGN_CODE, FOREIGN_TYPEMAP,
 };
@@ -169,7 +168,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                                 syn::Error::new(keyword.span(), "there is conversation code, but name of input variable not defined here")
                             })?;
                             let var_name = format!("${}", var_name);
-                            Some(FTypeConvCode::new(
+                            Some(TypeConvCode::new(
                                 replace_first_and_other(
                                     code_str
                                         .value()
@@ -380,7 +379,7 @@ fn parse_r_type_rule(
         }
         code_str.push(';');
 
-        Some(FTypeConvCode::new2(
+        Some(TypeConvCode::new2(
             code_str.replace(&d_var_name, FROM_VAR_TEMPLATE).replace(
                 &out_var,
                 &format!("let {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),

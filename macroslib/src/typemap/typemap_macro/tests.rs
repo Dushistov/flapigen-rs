@@ -66,7 +66,7 @@ fn test_foreign_typemap_cpp_bool() {
         RTypeConvRule {
             left_ty: parse_type!(bool),
             right_ty: Some(parse_type!(::std::os::raw::c_char)),
-            code: Some(FTypeConvCode::new(
+            code: Some(TypeConvCode::new(
                 "let {to_var}: {to_var_type} = if {from_var} { 1 } else { 0 };",
                 invalid_src_id_span(),
             )),
@@ -78,7 +78,7 @@ fn test_foreign_typemap_cpp_bool() {
         RTypeConvRule {
             left_ty: parse_type!(bool),
             right_ty: Some(parse_type!(::std::os::raw::c_char)),
-            code: Some(FTypeConvCode::new(
+            code: Some(TypeConvCode::new(
                 "let {to_var}: {to_var_type} = ( {from_var} != 0 );",
                 invalid_src_id_span(),
             )),
@@ -94,7 +94,7 @@ fn test_foreign_typemap_cpp_bool() {
                 name: "bool".into(),
                 sp: Span::call_site(),
             }),
-            code: Some(FTypeConvCode::new(
+            code: Some(TypeConvCode::new(
                 "{to_var_type} = ({from_var} != 0);",
                 invalid_src_id_span(),
             )),
@@ -110,7 +110,7 @@ fn test_foreign_typemap_cpp_bool() {
                 name: "bool".into(),
                 sp: Span::call_site(),
             }),
-            code: Some(FTypeConvCode::new(
+            code: Some(TypeConvCode::new(
                 "{to_var_type} = {from_var} ? 1 : 0;",
                 invalid_src_id_span(),
             )),
@@ -405,7 +405,7 @@ fn test_foreign_typemap_cpp_pair_syntax() {
         RTypeConvRule {
             left_ty: parse_type! {(T1, T2)},
             right_ty: Some(parse_type! { CRustPair!() }),
-            code: Some(FTypeConvCode::new(
+            code: Some(TypeConvCode::new(
                 concat!(
                     "swig_from_rust_to_i_type ! ( T1 , {from_var} . 0 , p0 ) ; ",
                     "swig_from_rust_to_i_type ! ( T2 , {from_var} . 1 , p1 ) ; ",
@@ -421,7 +421,7 @@ fn test_foreign_typemap_cpp_pair_syntax() {
         RTypeConvRule {
             left_ty: parse_type! { (T1, T2) },
             right_ty: Some(parse_type! { CRustPair!() }),
-            code: Some(FTypeConvCode::new(
+            code: Some(TypeConvCode::new(
                 concat!(
                     "swig_from_i_type_to_rust ! ( T1 , {from_var} . first , p0 ) ; ",
                     "swig_from_i_type_to_rust ! ( T2 , {from_var} . second , p1 ) ; ",

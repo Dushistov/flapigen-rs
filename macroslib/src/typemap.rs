@@ -12,7 +12,7 @@ use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     Graph,
 };
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -41,6 +41,63 @@ pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
 pub(crate) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
 pub(in crate::typemap) static FUNCTION_RETURN_TYPE_TEMPLATE: &str = "{function_ret_type}";
 const MAX_TRY_BUILD_PATH_STEPS: usize = 7;
+
+#[derive(Debug, Clone)]
+pub(crate) struct TypeConvCode {
+    pub(in crate::typemap) span: SourceIdSpan,
+    code: String,
+}
+
+impl PartialEq for TypeConvCode {
+    fn eq(&self, o: &Self) -> bool {
+        self.code == o.code
+    }
+}
+
+impl TypeConvCode {
+    /// # Panics
+    pub(crate) fn new<S: Into<String>>(code: S, span: SourceIdSpan) -> TypeConvCode {
+        let code: String = code.into();
+        assert!(
+            code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE),
+            "code: '{}'",
+            code
+        );
+        TypeConvCode { code, span }
+    }
+    /// # Panics
+    pub(crate) fn new2<S: Into<String>>(code: S, span: SourceIdSpan) -> TypeConvCode {
+        let code: String = code.into();
+        assert!(
+            code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE),
+            "code: '{}'",
+            code
+        );
+        TypeConvCode { code, span }
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        self.code.as_str()
+    }
+    pub(crate) fn src_id(&self) -> SourceId {
+        self.span.0
+    }
+    pub(crate) fn span(&self) -> Span {
+        self.span.1
+    }
+}
+
+impl ToString for TypeConvCode {
+    fn to_string(&self) -> String {
+        self.code.clone()
+    }
+}
+
+impl From<TypeConvCode> for String {
+    fn from(x: TypeConvCode) -> Self {
+        x.code
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct TypeConvEdge {

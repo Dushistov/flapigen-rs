@@ -19,7 +19,8 @@ use crate::{
             parse_ty_with_given_span, replace_all_types_with, DisplayToTokens, SpannedSmolStr,
             TyParamsSubstMap,
         },
-        ty::{FTypeConvCode, TraitNamesSet},
+        ty::TraitNamesSet,
+        TypeConvCode,
     },
     WRITE_TO_MEM_FAILED_MSG,
 };
@@ -386,7 +387,7 @@ impl TypeMapConvRuleInfo {
 pub(crate) struct RTypeConvRule {
     pub left_ty: Type,
     pub right_ty: Option<Type>,
-    pub code: Option<FTypeConvCode>,
+    pub code: Option<TypeConvCode>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -394,7 +395,7 @@ pub(crate) struct FTypeConvRule {
     pub req_modules: Vec<ModuleName>,
     pub cfg_option: Option<SpannedSmolStr>,
     pub left_right_ty: FTypeLeftRightPair,
-    pub code: Option<FTypeConvCode>,
+    pub code: Option<TypeConvCode>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -688,7 +689,7 @@ fn expand_rtype_rule(
                 generic_aliases,
                 (src_id, x.span()),
             )?;
-            Some(FTypeConvCode::new(code, (SourceId::none(), x.span())))
+            Some(TypeConvCode::new(code, (SourceId::none(), x.span())))
         }
         None => None,
     };
@@ -756,7 +757,7 @@ fn expand_ftype_rule(
                     generic_aliases,
                     (src_id, x.span()),
                 )?;
-                Some(FTypeConvCode::new(code, (SourceId::none(), x.span())))
+                Some(TypeConvCode::new(code, (SourceId::none(), x.span())))
             }
             None => None,
         };

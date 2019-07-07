@@ -52,15 +52,15 @@ use crate::{
     typemap::{
         ast::{parse_ty_with_given_span, parse_ty_with_given_span_checked, TypeName},
         ty::{
-            FTypeConvCode, ForeignConversationIntermediate, ForeignConversationRule, ForeignType,
-            ForeignTypeS, RustType,
+            ForeignConversationIntermediate, ForeignConversationRule, ForeignType, ForeignTypeS,
+            RustType,
         },
         utils::{
             boxed_type, unpack_from_heap_pointer, validate_cfg_options, ForeignMethodSignature,
             ForeignTypeInfoT,
         },
-        CItem, CItems, ForeignTypeInfo, MapToForeignFlag, RustTypeIdx, TypeMapConvRuleInfo,
-        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        CItem, CItems, ForeignTypeInfo, MapToForeignFlag, RustTypeIdx, TypeConvCode,
+        TypeMapConvRuleInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
@@ -625,7 +625,7 @@ fn register_main_foreign_types(
             rust_ty: this_type,
             intermediate: Some(ForeignConversationIntermediate {
                 intermediate_ty: void_ptr_rust_ty,
-                conv_code: FTypeConvCode::new(
+                conv_code: TypeConvCode::new(
                     format!(
                         "{class_name}(static_cast<{c_type} *>({var}))",
                         class_name = class.name,
@@ -640,7 +640,7 @@ fn register_main_foreign_types(
             rust_ty: this_type,
             intermediate: Some(ForeignConversationIntermediate {
                 intermediate_ty: void_ptr_rust_ty,
-                conv_code: FTypeConvCode::new(
+                conv_code: TypeConvCode::new(
                     format!("{}.release()", FROM_VAR_TEMPLATE),
                     invalid_src_id_span(),
                 ),
@@ -660,7 +660,7 @@ fn register_main_foreign_types(
             rust_ty: this_type_ref,
             intermediate: Some(ForeignConversationIntermediate {
                 intermediate_ty: const_void_ptr_rust_ty,
-                conv_code: FTypeConvCode::new(
+                conv_code: TypeConvCode::new(
                     format!(
                         "static_cast<const {} *>({})",
                         cpp_code::c_class_type(class),
@@ -685,7 +685,7 @@ fn register_main_foreign_types(
             rust_ty: this_type_ref,
             intermediate: Some(ForeignConversationIntermediate {
                 intermediate_ty: const_void_ptr_rust_ty,
-                conv_code: FTypeConvCode::new(
+                conv_code: TypeConvCode::new(
                     format!(
                         "{class}Ref{{ static_cast<const {c_type} *>({var}) }}",
                         class = class.name,
@@ -711,7 +711,7 @@ fn register_main_foreign_types(
             rust_ty: this_type_mut_ref,
             intermediate: Some(ForeignConversationIntermediate {
                 intermediate_ty: void_ptr_rust_ty,
-                conv_code: FTypeConvCode::new(
+                conv_code: TypeConvCode::new(
                     format!(
                         "static_cast<{} *>({})",
                         cpp_code::c_class_type(class),
@@ -743,7 +743,7 @@ fn register_main_foreign_types(
                     rust_ty: self_type_mut_ref.to_idx(),
                     intermediate: Some(ForeignConversationIntermediate {
                         intermediate_ty: void_ptr_rust_ty,
-                        conv_code: FTypeConvCode::new(
+                        conv_code: TypeConvCode::new(
                             format!(
                                 "static_cast<{} *>({})",
                                 cpp_code::c_class_type(class),
@@ -773,7 +773,7 @@ fn register_main_foreign_types(
                     rust_ty: self_type_ref.to_idx(),
                     intermediate: Some(ForeignConversationIntermediate {
                         intermediate_ty: const_void_ptr_rust_ty,
-                        conv_code: FTypeConvCode::new(
+                        conv_code: TypeConvCode::new(
                             format!(
                                 "static_cast<const {} *>({})",
                                 cpp_code::c_class_type(class),
@@ -1013,7 +1013,7 @@ fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInfo) -> Result<()> {
             rust_ty: enum_rty.to_idx(),
             intermediate: Some(ForeignConversationIntermediate {
                 intermediate_ty: u32_rty.to_idx(),
-                conv_code: FTypeConvCode::new(
+                conv_code: TypeConvCode::new(
                     format!(
                         "static_cast<{enum_name}>({var})",
                         enum_name = fenum.name,
@@ -1027,7 +1027,7 @@ fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInfo) -> Result<()> {
             rust_ty: enum_rty.to_idx(),
             intermediate: Some(ForeignConversationIntermediate {
                 intermediate_ty: u32_rty.to_idx(),
-                conv_code: FTypeConvCode::new(
+                conv_code: TypeConvCode::new(
                     format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
                     invalid_src_id_span(),
                 ),
