@@ -75,6 +75,8 @@ fn main() {
             r##"
 #[test]
 fn test_expectation_{test_name}() {{
+   let _ = env_logger::try_init();
+
    let test_case = Path::new("tests").join("expectations").join("{test_name}.rs");
    let base_name = test_case.file_stem().expect("name without extenstion");
    let test_name = base_name.to_string_lossy();
