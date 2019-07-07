@@ -439,6 +439,34 @@ pub(in crate::typemap) fn is_second_subst_of_first(
             }
             true
         }
+        (Type::BareFn(ref fn1), Type::BareFn(ref fn2)) => {
+            if fn1.abi != fn2.abi {
+                trace!("is_second_subst_of_first: bare fn abi mismatch");
+                return false;
+            }
+            if fn1.unsafety != fn2.unsafety {
+                trace!("is_second_subst_of_first: bare fn unsafety mismatch");
+                return false;
+            }
+            if fn1.variadic != fn2.variadic {
+                trace!("is_second_subst_of_first: bare fn variadic mismatch");
+                return false;
+            }
+            if fn1.inputs.len() != fn2.inputs.len() {
+                trace!("is_second_subst_of_first: bare fn inputs len mismatch");
+                return false;
+            }
+            for (arg1, arg2) in fn1.inputs.iter().zip(fn2.inputs.iter()) {
+                if !types_equal_inside_path(&arg1.ty, &arg2.ty, subst_map) {
+                    return false;
+                }
+            }
+            if !return_type_match(&fn1.output, &fn2.output, subst_map) {
+                return false;
+            }
+
+            true
+        }
         _ => {
             let ret = ty1 == ty2;
             trace!(
@@ -543,22 +571,8 @@ fn is_second_subst_of_first_path_args(
                     return false;
                 }
             }
-
-            match (&p1.output, &p2.output) {
-                (syn::ReturnType::Default, syn::ReturnType::Default) => { /*ok*/ }
-                (syn::ReturnType::Type(_, ref ret_ty1), syn::ReturnType::Type(_, ref ret_ty2)) => {
-                    if !types_equal_inside_path(ret_ty1, ret_ty2, subst_map) {
-                        return false;
-                    }
-                }
-                _ => {
-                    trace!(
-                        "is_second_subst_of_first_path_args: ret output mismatch {} {}",
-                        DisplayToTokens(&p1.output),
-                        DisplayToTokens(&p2.output),
-                    );
-                    return false;
-                }
+            if !return_type_match(&p1.output, &p2.output, subst_map) {
+                return false;
             }
 
             true
@@ -599,6 +613,31 @@ fn types_equal_inside_path(
     if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
         return false;
     }
+    true
+}
+
+fn return_type_match(
+    out1: &syn::ReturnType,
+    out2: &syn::ReturnType,
+    subst_map: &mut TyParamsSubstMap,
+) -> bool {
+    match (out1, out2) {
+        (syn::ReturnType::Default, syn::ReturnType::Default) => { /*ok*/ }
+        (syn::ReturnType::Type(_, ref ret_ty1), syn::ReturnType::Type(_, ref ret_ty2)) => {
+            if !types_equal_inside_path(ret_ty1, ret_ty2, subst_map) {
+                return false;
+            }
+        }
+        _ => {
+            trace!(
+                "return_type_match: ret output mismatch {} {}",
+                DisplayToTokens(out1),
+                DisplayToTokens(out2),
+            );
+            return false;
+        }
+    }
+
     true
 }
 
