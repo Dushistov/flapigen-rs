@@ -83,7 +83,7 @@ impl TypeMap {
     ) -> Result<()> {
         assert!(!ri.contains_data_for_language_backend());
         assert!(!ri.is_generic());
-        if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map() {
+        if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map_no_lang_backend() {
             let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
             self.invalidate_conv_for_rust_type(r_ty);
             let ftype_idx = self.add_foreign_rust_ty_idx(

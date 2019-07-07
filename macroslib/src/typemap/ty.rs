@@ -142,9 +142,6 @@ impl<'a> TraitNamesSet<'a> {
     pub(crate) fn iter(&self) -> impl Iterator<Item = &syn::Path> {
         self.inner.iter().map(|x| *x)
     }
-    pub(crate) fn len(&self) -> usize {
-        self.inner.len()
-    }
 }
 
 #[derive(Debug)]

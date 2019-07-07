@@ -794,6 +794,14 @@ fn register_main_foreign_types(
 }
 
 fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()> {
+    debug!("merge_rule begin {:?}", rule);
+    if rule.is_empty() {
+        return Err(DiagnosticError::new(
+            rule.src_id,
+            rule.span,
+            format!("rule {:?} is empty", rule),
+        ));
+    }
     let all_options = {
         let mut opts = FxHashSet::<&'static str>::default();
         opts.extend(CppOptional::iter().map(|x| -> &'static str { x.into() }));
@@ -893,18 +901,13 @@ fn merge_c_types(
     flags: MergeCItemsFlags,
     rule_src_id: SourceId,
 ) -> Result<()> {
-    let module_name = &c_types.header_name;
-    let common_files = &mut ctx.common_files;
-    let mut c_header_f = file_for_module!(ctx, common_files, module_name);
-    register_c_type(ctx.conv_map, &c_types, c_header_f, rule_src_id)?;
-
-    ctx.rust_code.append(&mut cpp_code::generate_c_type(
-        ctx.conv_map,
-        &c_types,
-        flags,
-        rule_src_id,
-        &mut c_header_f,
-    )?);
+    {
+        let module_name = &c_types.header_name;
+        let common_files = &mut ctx.common_files;
+        let c_header_f = file_for_module!(ctx, common_files, module_name);
+        register_c_type(ctx.conv_map, &c_types, c_header_f, rule_src_id)?;
+    }
+    cpp_code::generate_c_type(ctx, &c_types, flags, rule_src_id)?;
 
     Ok(())
 }

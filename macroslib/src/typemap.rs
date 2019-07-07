@@ -606,7 +606,10 @@ impl TypeMap {
         }
 
         {
-            debug!("map foreign: graph node {:?}", self.conv_graph[rust_ty]);
+            debug!(
+                "map_through_conversation_to_foreign: graph node {:?}",
+                self.conv_graph[rust_ty]
+            );
             let find_path = |from, to| {
                 find_conversation_path(&self.conv_graph, from, to, invalid_src_id_span()).ok()
             };
