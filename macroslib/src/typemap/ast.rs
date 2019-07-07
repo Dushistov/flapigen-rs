@@ -373,34 +373,7 @@ pub(in crate::typemap) fn is_second_subst_of_first(
         (
             Type::Path(syn::TypePath { path: ref p1, .. }),
             Type::Path(syn::TypePath { path: ref p2, .. }),
-        ) => {
-            if p1.segments.len() == 1 {
-                if let Some(subst) = subst_map.get_mut(&p1.segments[0].ident) {
-                    if subst.is_none() {
-                        *subst = Some(ty2.clone());
-                        return true;
-                    }
-                }
-            }
-            if p1.segments.len() != p2.segments.len() {
-                trace!("is_second_substitude_of_first: path length not match");
-                return false;
-            }
-            for (s1, s2) in p1.segments.iter().zip(p2.segments.iter()) {
-                if s1.ident != s2.ident {
-                    trace!(
-                        "is_second_substitude_of_first: id different {} vs {}",
-                        s1.ident,
-                        s2.ident
-                    );
-                    return false;
-                }
-                if !is_second_subst_of_first_ppath(&s1.arguments, &s2.arguments, subst_map) {
-                    return false;
-                }
-            }
-            true
-        }
+        ) => is_second_substitude_of_first_path(p1, p2, subst_map, ty2),
         (Type::Reference(ref mut_ty1), Type::Reference(ref mut_ty2)) => {
             if mut_ty1.mutability != mut_ty2.mutability {
                 trace!("is_second_substitude_of_first mutable not match");
@@ -432,6 +405,40 @@ pub(in crate::typemap) fn is_second_subst_of_first(
             }
             true
         }
+        (Type::ImplTrait(ref trait1), Type::ImplTrait(ref trait2)) => {
+            if trait1.bounds.len() != trait2.bounds.len() {
+                trace!(
+                    "is_second_subst_of_first: impl Trait, number of traits different: {} vs {}",
+                    trait1.bounds.len(),
+                    trait2.bounds.len()
+                );
+                return false;
+            }
+            for (t1, t2) in trait1.bounds.iter().zip(trait2.bounds.iter()) {
+                use syn::TypeParamBound::*;
+                match (t1, t2) {
+                    (Trait(ref b1), Trait(ref b2)) => {
+                        if b1.modifier != b2.modifier {
+                            trace!("is_second_subst_of_first: impl Trait, trait bounds modifier mismatch");
+                            return false;
+                        }
+                        if !is_second_substitude_of_first_path(&b1.path, &b2.path, subst_map, ty2) {
+                            return false;
+                        }
+                    }
+                    (Lifetime(_), Lifetime(_)) => { /*skip*/ }
+                    (Trait(_), Lifetime(_)) => {
+                        trace!("is_second_subst_of_first: impl Trait, Trait vs Lifetime");
+                        return false;
+                    }
+                    (Lifetime(_), Trait(_)) => {
+                        trace!("is_second_subst_of_first: impl Trait, Lifetime vs Trait");
+                        return false;
+                    }
+                }
+            }
+            true
+        }
         _ => {
             let ret = ty1 == ty2;
             trace!(
@@ -445,7 +452,41 @@ pub(in crate::typemap) fn is_second_subst_of_first(
     }
 }
 
-fn is_second_subst_of_first_ppath(
+fn is_second_substitude_of_first_path(
+    p1: &syn::Path,
+    p2: &syn::Path,
+    subst_map: &mut TyParamsSubstMap,
+    ty2: &syn::Type,
+) -> bool {
+    if p1.segments.len() == 1 {
+        if let Some(subst) = subst_map.get_mut(&p1.segments[0].ident) {
+            if subst.is_none() {
+                *subst = Some(ty2.clone());
+                return true;
+            }
+        }
+    }
+    if p1.segments.len() != p2.segments.len() {
+        trace!("is_second_substitude_of_first: path length not match");
+        return false;
+    }
+    for (s1, s2) in p1.segments.iter().zip(p2.segments.iter()) {
+        if s1.ident != s2.ident {
+            trace!(
+                "is_second_substitude_of_first: id different {} vs {}",
+                s1.ident,
+                s2.ident
+            );
+            return false;
+        }
+        if !is_second_subst_of_first_path_args(&s1.arguments, &s2.arguments, subst_map) {
+            return false;
+        }
+    }
+    true
+}
+
+fn is_second_subst_of_first_path_args(
     p1: &syn::PathArguments,
     p2: &syn::PathArguments,
     subst_map: &mut TyParamsSubstMap,
@@ -457,7 +498,7 @@ fn is_second_subst_of_first_ppath(
         ) => {
             if p1.args.len() != p2.args.len() {
                 trace!(
-                    "is_second_subst_of_first_ppath: param types len not match {} vs {}",
+                    "is_second_subst_of_first_path_args: param types len not match {} vs {}",
                     p1.args.len(),
                     p2.args.len()
                 );
@@ -471,7 +512,7 @@ fn is_second_subst_of_first_ppath(
                     _ => {
                         if type_p1 != type_p2 {
                             trace!(
-                                "is_second_subst_of_first_ppath: generic args cmp {:?} != {:?}",
+                                "is_second_subst_of_first_path_args: generic args cmp {:?} != {:?}",
                                 type_p1,
                                 type_p2
                             );
@@ -494,16 +535,66 @@ fn is_second_subst_of_first_ppath(
                 } else {
                     (*type_p1).clone()
                 };
-                trace!("is_second_subst_of_first_ppath: go deeper");
+                trace!("is_second_subst_of_first_path_args: go deeper");
                 if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
                     return false;
                 }
             }
             true
         }
+        (syn::PathArguments::Parenthesized(ref p1), syn::PathArguments::Parenthesized(ref p2)) => {
+            if p1.inputs.len() != p2.inputs.len() {
+                trace!(
+                    "is_second_subst_of_first_path_args: param types len not match {} vs {}",
+                    p1.inputs.len(),
+                    p2.inputs.len()
+                );
+                return false;
+            }
+            for (type_p1, type_p2) in p1.inputs.iter().zip(p2.inputs.iter()) {
+                let type_p1_name = normalize_ty_lifetimes(type_p1);
+                let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
+                    match *subst {
+                        Some(ref x) => (*x).clone(),
+                        None => {
+                            *subst = Some(type_p2.clone());
+                            (*type_p2).clone()
+                            //return true;
+                        }
+                    }
+                } else {
+                    (*type_p1).clone()
+                };
+                trace!("is_second_subst_of_first_path_args: go deeper");
+                if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
+                    return false;
+                }
+            }
+
+            match (&p1.output, &p2.output) {
+                (syn::ReturnType::Default, syn::ReturnType::Default) => { /*ok*/ }
+                (syn::ReturnType::Type(_, _), syn::ReturnType::Type(_, _)) => {
+                    unimplemented!();
+                }
+                _ => {
+                    trace!(
+                        "is_second_subst_of_first_path_args: ret output mismatch {} {}",
+                        DisplayToTokens(&p1.output),
+                        DisplayToTokens(&p2.output),
+                    );
+                    return false;
+                }
+            }
+
+            true
+        }
         _ => {
             if p1 != p2 {
-                trace!("second_subst_of_first_ppath: p1 != p2 => {:?} {:?}", p1, p2);
+                trace!(
+                    "is_second_subst_of_first_path_args: p1 != p2 => {} {}",
+                    DisplayToTokens(p1),
+                    DisplayToTokens(p2)
+                );
                 false
             } else {
                 true

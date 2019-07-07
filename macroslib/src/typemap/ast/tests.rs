@@ -519,6 +519,21 @@ fn test_is_second_subst_of_first_char_pointer() {
     );
 }
 
+#[test]
+fn test_is_second_subst_of_first_impl_fnonce() {
+    let _ = env_logger::try_init();
+    let generics: syn::Generics = parse_quote! { <T> };
+    let mut subst_map = TyParamsSubstMap::default();
+    for ty_p in generics.type_params() {
+        subst_map.insert(&ty_p.ident, None);
+    }
+    let ty = parse_type! { impl FnOnce(u32) };
+    let generic_ty = parse_type! { impl FnOnce(T) };
+    assert!(is_second_subst_of_first(&generic_ty, &ty, &mut subst_map));
+    assert_eq!(1, subst_map.len());
+    assert_eq!(parse_type! { u32 }, *subst_map.get("T").unwrap().unwrap());
+}
+
 fn str_to_ty(code: &str) -> syn::Type {
     syn::parse_str::<syn::Type>(code).unwrap()
 }
