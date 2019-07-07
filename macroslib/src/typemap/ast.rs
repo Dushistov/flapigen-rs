@@ -522,21 +522,7 @@ fn is_second_subst_of_first_path_args(
                         }
                     }
                 };
-                let type_p1_name = normalize_ty_lifetimes(type_p1);
-                let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
-                    match *subst {
-                        Some(ref x) => (*x).clone(),
-                        None => {
-                            *subst = Some(type_p2.clone());
-                            (*type_p2).clone()
-                            //return true;
-                        }
-                    }
-                } else {
-                    (*type_p1).clone()
-                };
-                trace!("is_second_subst_of_first_path_args: go deeper");
-                if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
+                if !types_equal_inside_path(type_p1, type_p2, subst_map) {
                     return false;
                 }
             }
@@ -551,30 +537,19 @@ fn is_second_subst_of_first_path_args(
                 );
                 return false;
             }
+
             for (type_p1, type_p2) in p1.inputs.iter().zip(p2.inputs.iter()) {
-                let type_p1_name = normalize_ty_lifetimes(type_p1);
-                let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
-                    match *subst {
-                        Some(ref x) => (*x).clone(),
-                        None => {
-                            *subst = Some(type_p2.clone());
-                            (*type_p2).clone()
-                            //return true;
-                        }
-                    }
-                } else {
-                    (*type_p1).clone()
-                };
-                trace!("is_second_subst_of_first_path_args: go deeper");
-                if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
+                if !types_equal_inside_path(type_p1, type_p2, subst_map) {
                     return false;
                 }
             }
 
             match (&p1.output, &p2.output) {
                 (syn::ReturnType::Default, syn::ReturnType::Default) => { /*ok*/ }
-                (syn::ReturnType::Type(_, _), syn::ReturnType::Type(_, _)) => {
-                    unimplemented!();
+                (syn::ReturnType::Type(_, ref ret_ty1), syn::ReturnType::Type(_, ref ret_ty2)) => {
+                    if !types_equal_inside_path(ret_ty1, ret_ty2, subst_map) {
+                        return false;
+                    }
                 }
                 _ => {
                     trace!(
@@ -601,6 +576,30 @@ fn is_second_subst_of_first_path_args(
             }
         }
     }
+}
+
+fn types_equal_inside_path(
+    type_p1: &Type,
+    type_p2: &Type,
+    subst_map: &mut TyParamsSubstMap,
+) -> bool {
+    let type_p1_name = normalize_ty_lifetimes(type_p1);
+    let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
+        match *subst {
+            Some(ref x) => (*x).clone(),
+            None => {
+                *subst = Some(type_p2.clone());
+                (*type_p2).clone()
+            }
+        }
+    } else {
+        (*type_p1).clone()
+    };
+    trace!("is_second_subst_of_first_path_args: go deeper");
+    if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
+        return false;
+    }
+    true
 }
 
 pub(in crate::typemap) fn replace_all_types_with(

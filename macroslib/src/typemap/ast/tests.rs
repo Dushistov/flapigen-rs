@@ -520,7 +520,7 @@ fn test_is_second_subst_of_first_char_pointer() {
 }
 
 #[test]
-fn test_is_second_subst_of_first_impl_fnonce() {
+fn test_is_second_subst_of_first_impl_fnonce_no_ret() {
     let _ = env_logger::try_init();
     let generics: syn::Generics = parse_quote! { <T> };
     let mut subst_map = TyParamsSubstMap::default();
@@ -532,6 +532,25 @@ fn test_is_second_subst_of_first_impl_fnonce() {
     assert!(is_second_subst_of_first(&generic_ty, &ty, &mut subst_map));
     assert_eq!(1, subst_map.len());
     assert_eq!(parse_type! { u32 }, *subst_map.get("T").unwrap().unwrap());
+}
+
+#[test]
+fn test_is_second_subst_of_first_impl_fnonce_with_ret() {
+    let _ = env_logger::try_init();
+    let generics: syn::Generics = parse_quote! { <T, U> };
+    let mut subst_map = TyParamsSubstMap::default();
+    for ty_p in generics.type_params() {
+        subst_map.insert(&ty_p.ident, None);
+    }
+    let ty = parse_type! { impl FnOnce(u32) -> String };
+    let generic_ty = parse_type! { impl FnOnce(T) -> U };
+    assert!(is_second_subst_of_first(&generic_ty, &ty, &mut subst_map));
+    assert_eq!(2, subst_map.len());
+    assert_eq!(parse_type! { u32 }, *subst_map.get("T").unwrap().unwrap());
+    assert_eq!(
+        parse_type! { String },
+        *subst_map.get("U").unwrap().unwrap()
+    );
 }
 
 fn str_to_ty(code: &str) -> syn::Type {
