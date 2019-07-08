@@ -81,58 +81,8 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 if main_span.is_none() {
                     main_span = Some(span);
                 }
-                let mut ftype_cfg: Option<SpannedSmolStr> = None;
-                let mut ftype_req_modules = Vec::<ModuleName>::new();
-                while !params.is_empty() && params.peek(Token![,]) {
-                    params.parse::<Token![,]>()?;
-                    let la = params.lookahead1();
-                    if la.peek(kw::req_modules) {
-                        if let RuleType::RType(ref keyword) = rule {
-                            return Err(syn::Error::new(
-                                keyword.span(),
-                                format!(
-                                    "{} may be used only with f_type",
-                                    DisplayToTokens(&kw::req_modules::default())
-                                ),
-                            ));
-                        }
-                        params.parse::<kw::req_modules>()?;
-                        params.parse::<Token![=]>()?;
-                        let modules;
-                        bracketed!(modules in params);
-                        while !modules.is_empty() {
-                            let mod_name = modules.parse::<LitStr>()?;
-                            ftype_req_modules.push(ModuleName {
-                                name: mod_name.value().into(),
-                                sp: mod_name.span(),
-                            });
-                            if modules.peek(Token![,]) {
-                                modules.parse::<Token![,]>()?;
-                            } else if !modules.is_empty() {
-                                return Err(modules.error(format!(
-                                    "expect end of {} here",
-                                    DisplayToTokens(&kw::req_modules::default())
-                                )));
-                            }
-                        }
-                    } else if la.peek(kw::option) {
-                        if let RuleType::RType(ref rule) = rule {
-                            return Err(syn::Error::new(
-                                rule.span(),
-                                "option allowed only for f_type",
-                            ));
-                        }
-                        params.parse::<kw::option>()?;
-                        params.parse::<Token![=]>()?;
-                        let lit_str = params.parse::<LitStr>()?;
-                        ftype_cfg = Some(SpannedSmolStr {
-                            sp: lit_str.span(),
-                            value: lit_str.value().into(),
-                        });
-                    } else {
-                        return Err(la.error());
-                    }
-                }
+
+                let (ftype_cfg, ftype_req_modules) = parse_typemap_type_arm_param(&rule, &params)?;
                 match rule {
                     RuleType::RType(keyword) => {
                         parse_r_type_rule(
@@ -617,4 +567,65 @@ impl syn::parse::Parse for GenericAliasItemVecCommaSeparated {
             syn::punctuated::Punctuated::<GenericAliasItem, Token![,]>::parse_terminated(input)?;
         Ok(GenericAliasItemVecCommaSeparated(ret.into_iter().collect()))
     }
+}
+
+fn parse_typemap_type_arm_param(
+    rule: &RuleType,
+    params: syn::parse::ParseStream,
+) -> syn::Result<(Option<SpannedSmolStr>, Vec<ModuleName>)> {
+    let mut ftype_cfg: Option<SpannedSmolStr> = None;
+    let mut ftype_req_modules = Vec::<ModuleName>::new();
+
+    while !params.is_empty() && params.peek(Token![,]) {
+        params.parse::<Token![,]>()?;
+        let la = params.lookahead1();
+        if la.peek(kw::req_modules) {
+            if let RuleType::RType(ref keyword) = rule {
+                return Err(syn::Error::new(
+                    keyword.span(),
+                    format!(
+                        "{} may be used only with f_type",
+                        DisplayToTokens(&kw::req_modules::default())
+                    ),
+                ));
+            }
+            params.parse::<kw::req_modules>()?;
+            params.parse::<Token![=]>()?;
+            let modules;
+            bracketed!(modules in params);
+            while !modules.is_empty() {
+                let mod_name = modules.parse::<LitStr>()?;
+                ftype_req_modules.push(ModuleName {
+                    name: mod_name.value().into(),
+                    sp: mod_name.span(),
+                });
+                if modules.peek(Token![,]) {
+                    modules.parse::<Token![,]>()?;
+                } else if !modules.is_empty() {
+                    return Err(modules.error(format!(
+                        "expect end of {} here",
+                        DisplayToTokens(&kw::req_modules::default())
+                    )));
+                }
+            }
+        } else if la.peek(kw::option) {
+            if let RuleType::RType(ref rule) = rule {
+                return Err(syn::Error::new(
+                    rule.span(),
+                    "option allowed only for f_type",
+                ));
+            }
+            params.parse::<kw::option>()?;
+            params.parse::<Token![=]>()?;
+            let lit_str = params.parse::<LitStr>()?;
+            ftype_cfg = Some(SpannedSmolStr {
+                sp: lit_str.span(),
+                value: lit_str.value().into(),
+            });
+        } else {
+            return Err(la.error());
+        }
+    }
+
+    Ok((ftype_cfg, ftype_req_modules))
 }
