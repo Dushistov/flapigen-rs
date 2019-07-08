@@ -85,6 +85,7 @@ pub(in crate::cpp) fn map_type(
                     "subst. of generic params into rule failed",
                 )
             })?;
+        debug_assert!(!new_rule.is_empty());
         merge_rule(ctx, new_rule)?;
         if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
             arg_ty.to_idx(),
@@ -268,4 +269,30 @@ fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet
         );
         false
     }
+}
+
+pub(in crate::cpp) fn map_repr_c_type(
+    ctx: &mut CppContext,
+    rty: &RustType,
+    arg_ty_span: SourceIdSpan,
+) -> Result<CppForeignTypeInfo> {
+    debug!("map_repr_c_type: rty {}", rty);
+    let fti = map_type(
+        ctx,
+        rty,
+        Direction::Incoming, /*not important*/
+        arg_ty_span,
+    )?;
+
+    if fti.cpp_converter.is_some() || fti.base.correspoding_rust_type.to_idx() != rty.to_idx() {
+        return Err(DiagnosticError::new2(
+            arg_ty_span,
+            format!(
+                "we map {} to {}, but this is not repr(C) type",
+                rty, fti.base.name
+            ),
+        ));
+    }
+
+    Ok(fti)
 }

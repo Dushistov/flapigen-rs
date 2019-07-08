@@ -12,7 +12,7 @@ use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     Graph,
 };
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -42,25 +42,106 @@ pub(crate) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
 pub(in crate::typemap) static FUNCTION_RETURN_TYPE_TEMPLATE: &str = "{function_ret_type}";
 const MAX_TRY_BUILD_PATH_STEPS: usize = 7;
 
+/// contains code to convert from one type to another
+#[derive(Debug, Clone)]
+pub(crate) struct TypeConvCode {
+    pub(in crate::typemap) span: SourceIdSpan,
+    code: String,
+}
+
+impl PartialEq for TypeConvCode {
+    fn eq(&self, o: &Self) -> bool {
+        self.code == o.code
+    }
+}
+
+impl TypeConvCode {
+    fn invalid() -> Self {
+        TypeConvCode {
+            span: invalid_src_id_span(),
+            code: "invalid code".into(),
+        }
+    }
+    /// # Panics
+    pub(crate) fn new<S: Into<String>>(code: S, span: SourceIdSpan) -> TypeConvCode {
+        let code: String = code.into();
+        assert!(
+            code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE),
+            "code: '{}'",
+            code
+        );
+        TypeConvCode { code, span }
+    }
+    /// # Panics
+    pub(crate) fn new2<S: Into<String>>(code: S, span: SourceIdSpan) -> TypeConvCode {
+        let code: String = code.into();
+        assert!(
+            code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE),
+            "code: '{}'",
+            code
+        );
+        TypeConvCode { code, span }
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        self.code.as_str()
+    }
+    pub(crate) fn src_id(&self) -> SourceId {
+        self.span.0
+    }
+    pub(crate) fn span(&self) -> Span {
+        self.span.1
+    }
+
+    pub(crate) fn generate_code(
+        &self,
+        to_name: &str,
+        from_name: &str,
+        to_typename: &str,
+        func_ret_type: &str,
+    ) -> String {
+        let mut ret = String::with_capacity(self.code.len() + 5);
+        ret.push_str("    ");
+        ret.push_str(&self.code);
+        ret.push('\n');
+        ret.replace(TO_VAR_TEMPLATE, to_name)
+            .replace(FROM_VAR_TEMPLATE, from_name)
+            .replace(TO_VAR_TYPE_TEMPLATE, to_typename)
+            .replace(FUNCTION_RETURN_TYPE_TEMPLATE, func_ret_type)
+    }
+}
+
+impl ToString for TypeConvCode {
+    fn to_string(&self) -> String {
+        self.code.clone()
+    }
+}
+
+impl From<TypeConvCode> for String {
+    fn from(x: TypeConvCode) -> Self {
+        x.code
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct TypeConvEdge {
-    code_template: String,
+    code: TypeConvCode,
     dependency: Rc<RefCell<Option<TokenStream>>>,
 }
 
-impl From<String> for TypeConvEdge {
-    fn from(x: String) -> Self {
+impl From<TypeConvCode> for TypeConvEdge {
+    fn from(code: TypeConvCode) -> Self {
         TypeConvEdge {
-            code_template: x,
+            code,
             dependency: Rc::new(RefCell::new(None)),
         }
     }
 }
 
 impl TypeConvEdge {
-    fn new(code_template: String, dependency: Option<TokenStream>) -> TypeConvEdge {
+    fn new(code: TypeConvCode, dependency: Option<TokenStream>) -> TypeConvEdge {
         TypeConvEdge {
-            code_template,
+            code,
             dependency: Rc::new(RefCell::new(dependency)),
         }
     }
@@ -98,46 +179,51 @@ impl Default for TypeMap {
     fn default() -> Self {
         let generic_params: syn::Generics = parse_quote! { <T> };
         let default_rules = vec![
-            GenericTypeConv {
-                code_template: "let mut {to_var}: {to_var_type} = &{from_var};".into(),
-                ..GenericTypeConv::simple_new(
-                    parse_type! { T },
-                    parse_type! { &T },
-                    generic_params.clone(),
-                )
-            },
-            GenericTypeConv {
-                code_template: "let mut {to_var}: {to_var_type} = &mut {from_var};".into(),
-                ..GenericTypeConv::simple_new(
-                    parse_type! { T },
-                    parse_type! { &mut T },
-                    generic_params.clone(),
-                )
-            },
-            GenericTypeConv {
-                code_template: "let mut {to_var}: {to_var_type} = {from_var};".into(),
-                ..GenericTypeConv::simple_new(
-                    parse_type! { &mut T },
-                    parse_type! { &T },
-                    generic_params.clone(),
-                )
-            },
-            GenericTypeConv {
-                code_template: "let mut {to_var}: {to_var_type} = {from_var}.as_ref();".into(),
-                ..GenericTypeConv::simple_new(
-                    parse_type! { & Box<T> },
-                    parse_type! { &T },
-                    generic_params.clone(),
-                )
-            },
-            GenericTypeConv {
-                code_template: "let mut {to_var}: {to_var_type} = {from_var}.as_mut();".into(),
-                ..GenericTypeConv::simple_new(
-                    parse_type! { & mut Box<T> },
-                    parse_type! { &mut T },
-                    generic_params,
-                )
-            },
+            GenericTypeConv::new(
+                parse_type! { T },
+                parse_type! { &T },
+                generic_params.clone(),
+                TypeConvCode::new2(
+                    "let mut {to_var}: {to_var_type} = &{from_var};",
+                    invalid_src_id_span(),
+                ),
+            ),
+            GenericTypeConv::new(
+                parse_type! { T },
+                parse_type! { &mut T },
+                generic_params.clone(),
+                TypeConvCode::new2(
+                    "let mut {to_var}: {to_var_type} = &mut {from_var};",
+                    invalid_src_id_span(),
+                ),
+            ),
+            GenericTypeConv::new(
+                parse_type! { &mut T },
+                parse_type! { &T },
+                generic_params.clone(),
+                TypeConvCode::new2(
+                    "let mut {to_var}: {to_var_type} = {from_var};",
+                    invalid_src_id_span(),
+                ),
+            ),
+            GenericTypeConv::new(
+                parse_type! { & Box<T> },
+                parse_type! { &T },
+                generic_params.clone(),
+                TypeConvCode::new2(
+                    "let mut {to_var}: {to_var_type} = {from_var}.as_ref();",
+                    invalid_src_id_span(),
+                ),
+            ),
+            GenericTypeConv::new(
+                parse_type! { & mut Box<T> },
+                parse_type! { &mut T },
+                generic_params,
+                TypeConvCode::new2(
+                    "let mut {to_var}: {to_var_type} = {from_var}.as_mut();",
+                    invalid_src_id_span(),
+                ),
+            ),
         ];
         TypeMap {
             conv_graph: TypesConvGraph::new(),
@@ -518,8 +604,7 @@ impl TypeMap {
             if let Some(dep) = edge.dependency.borrow_mut().take() {
                 code_deps.push(dep);
             }
-            let code = apply_code_template(
-                &edge.code_template,
+            let code = edge.code.generate_code(
                 out_var_name,
                 if idx != 0 { out_var_name } else { in_var_name },
                 &target_typename,
@@ -606,7 +691,10 @@ impl TypeMap {
         }
 
         {
-            debug!("map foreign: graph node {:?}", self.conv_graph[rust_ty]);
+            debug!(
+                "map_through_conversation_to_foreign: graph node {:?}",
+                self.conv_graph[rust_ty]
+            );
             let find_path = |from, to| {
                 find_conversation_path(&self.conv_graph, from, to, invalid_src_id_span()).ok()
             };
@@ -1004,23 +1092,6 @@ pub(in crate::typemap) fn validate_code_template(sp: SourceIdSpan, code: &str) -
     }
 }
 
-fn apply_code_template(
-    code_temlate: &str,
-    to_name: &str,
-    from_name: &str,
-    to_typename: &str,
-    func_ret_type: &str,
-) -> String {
-    let mut ret = String::new();
-    ret.push_str("    ");
-    ret.push_str(code_temlate);
-    ret.push('\n');
-    ret.replace(TO_VAR_TEMPLATE, to_name)
-        .replace(FROM_VAR_TEMPLATE, from_name)
-        .replace(TO_VAR_TYPE_TEMPLATE, to_typename)
-        .replace(FUNCTION_RETURN_TYPE_TEMPLATE, func_ret_type)
-}
-
 fn find_conversation_path(
     conv_graph: &TypesConvGraph,
     from: RustTypeIdx,
@@ -1139,7 +1210,7 @@ fn try_build_path(
                         *from_ty,
                         to,
                         TypeConvEdge {
-                            code_template: edge.code_template.clone(),
+                            code: edge.code.clone(),
                             dependency: edge.dependency.clone(),
                         },
                     );

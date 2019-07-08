@@ -30,7 +30,10 @@ pub(in crate) use self::subst_map::{TyParamsSubstItem, TyParamsSubstList, TyPara
 use crate::{
     error::{panic_on_syn_error, SourceIdSpan},
     source_registry::SourceId,
-    typemap::ty::{RustType, RustTypeS, TraitNamesSet},
+    typemap::{
+        ty::{RustType, RustTypeS, TraitNamesSet},
+        TypeConvCode,
+    },
 };
 
 #[derive(Debug)]
@@ -184,7 +187,7 @@ pub(crate) struct GenericTypeConv {
     pub src_id: SourceId,
     pub from_ty: syn::Type,
     pub to_ty: syn::Type,
-    pub code_template: String,
+    pub code: TypeConvCode,
     pub dependency: Rc<RefCell<Option<TokenStream>>>,
     pub generic_params: syn::Generics,
     pub to_foreigner_hint: Option<String>,
@@ -192,15 +195,16 @@ pub(crate) struct GenericTypeConv {
 }
 
 impl GenericTypeConv {
-    pub(crate) fn simple_new(
+    pub(crate) fn new(
         from_ty: Type,
         to_ty: Type,
         generic_params: syn::Generics,
+        code: TypeConvCode,
     ) -> GenericTypeConv {
         GenericTypeConv {
             from_ty,
             to_ty,
-            code_template: String::new(),
+            code,
             dependency: Rc::new(RefCell::new(None)),
             generic_params,
             to_foreigner_hint: None,
@@ -373,34 +377,7 @@ pub(in crate::typemap) fn is_second_subst_of_first(
         (
             Type::Path(syn::TypePath { path: ref p1, .. }),
             Type::Path(syn::TypePath { path: ref p2, .. }),
-        ) => {
-            if p1.segments.len() == 1 {
-                if let Some(subst) = subst_map.get_mut(&p1.segments[0].ident) {
-                    if subst.is_none() {
-                        *subst = Some(ty2.clone());
-                        return true;
-                    }
-                }
-            }
-            if p1.segments.len() != p2.segments.len() {
-                trace!("is_second_substitude_of_first: path length not match");
-                return false;
-            }
-            for (s1, s2) in p1.segments.iter().zip(p2.segments.iter()) {
-                if s1.ident != s2.ident {
-                    trace!(
-                        "is_second_substitude_of_first: id different {} vs {}",
-                        s1.ident,
-                        s2.ident
-                    );
-                    return false;
-                }
-                if !is_second_subst_of_first_ppath(&s1.arguments, &s2.arguments, subst_map) {
-                    return false;
-                }
-            }
-            true
-        }
+        ) => is_second_substitude_of_first_path(p1, p2, subst_map, ty2),
         (Type::Reference(ref mut_ty1), Type::Reference(ref mut_ty2)) => {
             if mut_ty1.mutability != mut_ty2.mutability {
                 trace!("is_second_substitude_of_first mutable not match");
@@ -432,6 +409,68 @@ pub(in crate::typemap) fn is_second_subst_of_first(
             }
             true
         }
+        (Type::ImplTrait(ref trait1), Type::ImplTrait(ref trait2)) => {
+            if trait1.bounds.len() != trait2.bounds.len() {
+                trace!(
+                    "is_second_subst_of_first: impl Trait, number of traits different: {} vs {}",
+                    trait1.bounds.len(),
+                    trait2.bounds.len()
+                );
+                return false;
+            }
+            for (t1, t2) in trait1.bounds.iter().zip(trait2.bounds.iter()) {
+                use syn::TypeParamBound::*;
+                match (t1, t2) {
+                    (Trait(ref b1), Trait(ref b2)) => {
+                        if b1.modifier != b2.modifier {
+                            trace!("is_second_subst_of_first: impl Trait, trait bounds modifier mismatch");
+                            return false;
+                        }
+                        if !is_second_substitude_of_first_path(&b1.path, &b2.path, subst_map, ty2) {
+                            return false;
+                        }
+                    }
+                    (Lifetime(_), Lifetime(_)) => { /*skip*/ }
+                    (Trait(_), Lifetime(_)) => {
+                        trace!("is_second_subst_of_first: impl Trait, Trait vs Lifetime");
+                        return false;
+                    }
+                    (Lifetime(_), Trait(_)) => {
+                        trace!("is_second_subst_of_first: impl Trait, Lifetime vs Trait");
+                        return false;
+                    }
+                }
+            }
+            true
+        }
+        (Type::BareFn(ref fn1), Type::BareFn(ref fn2)) => {
+            if fn1.abi != fn2.abi {
+                trace!("is_second_subst_of_first: bare fn abi mismatch");
+                return false;
+            }
+            if fn1.unsafety != fn2.unsafety {
+                trace!("is_second_subst_of_first: bare fn unsafety mismatch");
+                return false;
+            }
+            if fn1.variadic != fn2.variadic {
+                trace!("is_second_subst_of_first: bare fn variadic mismatch");
+                return false;
+            }
+            if fn1.inputs.len() != fn2.inputs.len() {
+                trace!("is_second_subst_of_first: bare fn inputs len mismatch");
+                return false;
+            }
+            for (arg1, arg2) in fn1.inputs.iter().zip(fn2.inputs.iter()) {
+                if !types_equal_inside_path(&arg1.ty, &arg2.ty, subst_map) {
+                    return false;
+                }
+            }
+            if !return_type_match(&fn1.output, &fn2.output, subst_map) {
+                return false;
+            }
+
+            true
+        }
         _ => {
             let ret = ty1 == ty2;
             trace!(
@@ -445,7 +484,41 @@ pub(in crate::typemap) fn is_second_subst_of_first(
     }
 }
 
-fn is_second_subst_of_first_ppath(
+fn is_second_substitude_of_first_path(
+    p1: &syn::Path,
+    p2: &syn::Path,
+    subst_map: &mut TyParamsSubstMap,
+    ty2: &syn::Type,
+) -> bool {
+    if p1.segments.len() == 1 {
+        if let Some(subst) = subst_map.get_mut(&p1.segments[0].ident) {
+            if subst.is_none() {
+                *subst = Some(ty2.clone());
+                return true;
+            }
+        }
+    }
+    if p1.segments.len() != p2.segments.len() {
+        trace!("is_second_substitude_of_first: path length not match");
+        return false;
+    }
+    for (s1, s2) in p1.segments.iter().zip(p2.segments.iter()) {
+        if s1.ident != s2.ident {
+            trace!(
+                "is_second_substitude_of_first: id different {} vs {}",
+                s1.ident,
+                s2.ident
+            );
+            return false;
+        }
+        if !is_second_subst_of_first_path_args(&s1.arguments, &s2.arguments, subst_map) {
+            return false;
+        }
+    }
+    true
+}
+
+fn is_second_subst_of_first_path_args(
     p1: &syn::PathArguments,
     p2: &syn::PathArguments,
     subst_map: &mut TyParamsSubstMap,
@@ -457,7 +530,7 @@ fn is_second_subst_of_first_ppath(
         ) => {
             if p1.args.len() != p2.args.len() {
                 trace!(
-                    "is_second_subst_of_first_ppath: param types len not match {} vs {}",
+                    "is_second_subst_of_first_path_args: param types len not match {} vs {}",
                     p1.args.len(),
                     p2.args.len()
                 );
@@ -471,7 +544,7 @@ fn is_second_subst_of_first_ppath(
                     _ => {
                         if type_p1 != type_p2 {
                             trace!(
-                                "is_second_subst_of_first_ppath: generic args cmp {:?} != {:?}",
+                                "is_second_subst_of_first_path_args: generic args cmp {:?} != {:?}",
                                 type_p1,
                                 type_p2
                             );
@@ -481,35 +554,95 @@ fn is_second_subst_of_first_ppath(
                         }
                     }
                 };
-                let type_p1_name = normalize_ty_lifetimes(type_p1);
-                let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
-                    match *subst {
-                        Some(ref x) => (*x).clone(),
-                        None => {
-                            *subst = Some(type_p2.clone());
-                            (*type_p2).clone()
-                            //return true;
-                        }
-                    }
-                } else {
-                    (*type_p1).clone()
-                };
-                trace!("is_second_subst_of_first_ppath: go deeper");
-                if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
+                if !types_equal_inside_path(type_p1, type_p2, subst_map) {
                     return false;
                 }
             }
             true
         }
+        (syn::PathArguments::Parenthesized(ref p1), syn::PathArguments::Parenthesized(ref p2)) => {
+            if p1.inputs.len() != p2.inputs.len() {
+                trace!(
+                    "is_second_subst_of_first_path_args: param types len not match {} vs {}",
+                    p1.inputs.len(),
+                    p2.inputs.len()
+                );
+                return false;
+            }
+
+            for (type_p1, type_p2) in p1.inputs.iter().zip(p2.inputs.iter()) {
+                if !types_equal_inside_path(type_p1, type_p2, subst_map) {
+                    return false;
+                }
+            }
+            if !return_type_match(&p1.output, &p2.output, subst_map) {
+                return false;
+            }
+
+            true
+        }
         _ => {
             if p1 != p2 {
-                trace!("second_subst_of_first_ppath: p1 != p2 => {:?} {:?}", p1, p2);
+                trace!(
+                    "is_second_subst_of_first_path_args: p1 != p2 => {} {}",
+                    DisplayToTokens(p1),
+                    DisplayToTokens(p2)
+                );
                 false
             } else {
                 true
             }
         }
     }
+}
+
+fn types_equal_inside_path(
+    type_p1: &Type,
+    type_p2: &Type,
+    subst_map: &mut TyParamsSubstMap,
+) -> bool {
+    let type_p1_name = normalize_ty_lifetimes(type_p1);
+    let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
+        match *subst {
+            Some(ref x) => (*x).clone(),
+            None => {
+                *subst = Some(type_p2.clone());
+                (*type_p2).clone()
+            }
+        }
+    } else {
+        (*type_p1).clone()
+    };
+    trace!("is_second_subst_of_first_path_args: go deeper");
+    if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
+        return false;
+    }
+    true
+}
+
+fn return_type_match(
+    out1: &syn::ReturnType,
+    out2: &syn::ReturnType,
+    subst_map: &mut TyParamsSubstMap,
+) -> bool {
+    match (out1, out2) {
+        (syn::ReturnType::Default, syn::ReturnType::Default) => { /*ok*/ }
+        (syn::ReturnType::Type(_, ref ret_ty1), syn::ReturnType::Type(_, ref ret_ty2)) => {
+            if !types_equal_inside_path(ret_ty1, ret_ty2, subst_map) {
+                return false;
+            }
+        }
+        _ => {
+            trace!(
+                "return_type_match: ret output mismatch {} {}",
+                DisplayToTokens(out1),
+                DisplayToTokens(out2),
+            );
+            return false;
+        }
+    }
+
+    true
 }
 
 pub(in crate::typemap) fn replace_all_types_with(
@@ -636,7 +769,7 @@ pub(crate) fn if_option_return_some_type(ty: &RustType) -> Option<Type> {
     let from_ty: Type = parse_quote! { Option<T> };
     let to_ty: Type = parse_quote! { T };
 
-    GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
+    GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())
         .is_conv_possible(ty, None, |_| None)
         .map(|x| x.0)
 }
@@ -648,13 +781,18 @@ pub(crate) fn if_result_return_ok_err_types(ty: &RustType) -> Option<(Type, Type
     let generic_params: syn::Generics = parse_quote! { <T, E> };
 
     let ok_ty = {
-        GenericTypeConv::simple_new(from_ty.clone(), ok_ty, generic_params.clone())
-            .is_conv_possible(ty, None, |_| None)
-            .map(|x| x.0)
+        GenericTypeConv::new(
+            from_ty.clone(),
+            ok_ty,
+            generic_params.clone(),
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(ty, None, |_| None)
+        .map(|x| x.0)
     }?;
 
     let err_ty = {
-        GenericTypeConv::simple_new(from_ty, err_ty, generic_params)
+        GenericTypeConv::new(from_ty, err_ty, generic_params, TypeConvCode::invalid())
             .is_conv_possible(ty, None, |_| None)
             .map(|x| x.0)
     }?;
@@ -689,7 +827,7 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
         syn::parse_str(&format!("{}<T>", smart_ptr_name)).expect("smart pointer parse error");
     let to_ty: Type = parse_quote! { T };
 
-    GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
+    GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())
         .is_conv_possible(ty, None, |_| None)
         .map(|x| x.0)
 }

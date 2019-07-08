@@ -10,19 +10,19 @@ use syn::{spanned::Spanned, Type};
 
 use self::map_type::map_type;
 use crate::{
-    error::{DiagnosticError, Result},
+    error::{invalid_src_id_span, DiagnosticError, Result},
     source_registry::SourceId,
-    typemap::ast::{
-        if_result_return_ok_err_types, if_ty_result_return_ok_type,
-        parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
-    },
     typemap::{
+        ast::{
+            if_result_return_ok_err_types, if_ty_result_return_ok_type,
+            parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
+        },
         ty::RustType,
         utils::{
             convert_to_heap_pointer, unpack_from_heap_pointer, ForeignMethodSignature,
             ForeignTypeInfoT,
         },
-        ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        ForeignTypeInfo, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
@@ -151,15 +151,18 @@ impl JavaConfig {
             conv_map.add_conversation_rule(
                 jlong_ti.to_idx(),
                 this_type_ref.to_idx(),
-                format!(
-                    r#"
+                TypeConvCode::new2(
+                    format!(
+                        r#"
         let {to_var}: &{this_type} = unsafe {{
             jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
         }};
     "#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_for_method.normalized_name,
+                        to_var = TO_VAR_TEMPLATE,
+                        from_var = FROM_VAR_TEMPLATE,
+                        this_type = this_type_for_method.normalized_name,
+                    ),
+                    invalid_src_id_span(),
                 )
                 .into(),
             );
@@ -171,15 +174,18 @@ impl JavaConfig {
             conv_map.add_conversation_rule(
                 jlong_ti.to_idx(),
                 this_type_mut_ref.to_idx(),
-                format!(
-                    r#"
+                TypeConvCode::new2(
+                    format!(
+                        r#"
         let {to_var}: &mut {this_type} = unsafe {{
             jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
         }};
     "#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_for_method.normalized_name,
+                        to_var = TO_VAR_TEMPLATE,
+                        from_var = FROM_VAR_TEMPLATE,
+                        this_type = this_type_for_method.normalized_name,
+                    ),
+                    invalid_src_id_span(),
                 )
                 .into(),
             );
@@ -189,17 +195,20 @@ impl JavaConfig {
             conv_map.add_conversation_rule(
                 jlong_ti.to_idx(),
                 this_type.to_idx(),
-                format!(
-                    r#"
+                TypeConvCode::new2(
+                    format!(
+                        r#"
         let {to_var}: *mut {this_type} = unsafe {{
             jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
         }};
     {unpack_code}
     "#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_for_method.normalized_name,
-                    unpack_code = unpack_code,
+                        to_var = TO_VAR_TEMPLATE,
+                        from_var = FROM_VAR_TEMPLATE,
+                        this_type = this_type_for_method.normalized_name,
+                        unpack_code = unpack_code,
+                    ),
+                    invalid_src_id_span(),
                 )
                 .into(),
             );

@@ -62,10 +62,11 @@ fn generic_type_conv_find() {
             "check_subst: conv {} -> {} with {}",
             from_ty_name, to_ty_name, ty_check_name
         );
-        let (ret_ty, ret_ty_name) = GenericTypeConv::simple_new(
+        let (ret_ty, ret_ty_name) = GenericTypeConv::new(
             str_to_ty(from_ty_name),
             str_to_ty(to_ty_name),
             generic.clone(),
+            TypeConvCode::invalid(),
         )
         .is_conv_possible(&str_to_rust_ty(ty_check_name), None, map_others)
         .expect("check subst failed");
@@ -192,28 +193,34 @@ fn generic_type_conv_find() {
         |_| None,
     );
     assert_eq!(
-            &*GenericTypeConv::simple_new(
-                str_to_ty("MutexGuard<T>"),
-                str_to_ty("&T"),
-                generic.clone(),
-            )
-            .is_conv_possible(&mutex_guard_foo, None, |name| if name == "Foo" {
-                Some(&foo_spec)
-            } else {
-                None
-            })
-            .unwrap()
-            .1,
-            "& Foo"
-        );
+        &*GenericTypeConv::new(
+            str_to_ty("MutexGuard<T>"),
+            str_to_ty("&T"),
+            generic.clone(),
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(&mutex_guard_foo, None, |name| if name == "Foo" {
+            Some(&foo_spec)
+        } else {
+            None
+        })
+        .unwrap()
+        .1,
+        "& Foo"
+    );
 
     let box_foo: RustType = str_to_rust_ty("Box<Foo>");
 
     assert_eq!(
-        &*GenericTypeConv::simple_new(str_to_ty("jlong"), str_to_ty("Box<T>"), generic,)
-            .is_conv_possible(&str_to_rust_ty("jlong"), Some(&box_foo), |_| None)
-            .unwrap()
-            .1,
+        &*GenericTypeConv::new(
+            str_to_ty("jlong"),
+            str_to_ty("Box<T>"),
+            generic,
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(&str_to_rust_ty("jlong"), Some(&box_foo), |_| None)
+        .unwrap()
+        .1,
         "Box < Foo >"
     );
 
@@ -336,10 +343,15 @@ fn test_work_with_rc() {
     let generic_params: syn::Generics = parse_quote! { <T> };
     assert_eq!(
         "bool",
-        GenericTypeConv::simple_new(str_to_ty("RefCell<T>"), str_to_ty("T"), generic_params,)
-            .is_conv_possible(&str_to_rust_ty(normalize_ty_lifetimes(&ty)), None, |_| None)
-            .unwrap()
-            .1
+        GenericTypeConv::new(
+            str_to_ty("RefCell<T>"),
+            str_to_ty("T"),
+            generic_params,
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(&str_to_rust_ty(normalize_ty_lifetimes(&ty)), None, |_| None)
+        .unwrap()
+        .1
     );
 }
 
@@ -445,19 +457,24 @@ fn test_jlong_to_option_wrong_conv() {
     );
     assert_eq!(
         None,
-        GenericTypeConv::simple_new(str_to_ty("jlong"), str_to_ty("Option<T>"), generics)
-            .is_conv_possible(
-                &str_to_rust_ty("jlong"),
-                Some(&str_to_rust_ty("&Foo")),
-                |name| {
-                    println!("test rt map, check name {:?}", name);
-                    if name == "Foo" {
-                        Some(&foo_spec)
-                    } else {
-                        None
-                    }
-                },
-            )
+        GenericTypeConv::new(
+            str_to_ty("jlong"),
+            str_to_ty("Option<T>"),
+            generics,
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(
+            &str_to_rust_ty("jlong"),
+            Some(&str_to_rust_ty("&Foo")),
+            |name| {
+                println!("test rt map, check name {:?}", name);
+                if name == "Foo" {
+                    Some(&foo_spec)
+                } else {
+                    None
+                }
+            },
+        )
     );
 
     let generics = get_generic_params_from_code! {
@@ -470,19 +487,24 @@ fn test_jlong_to_option_wrong_conv() {
 
     assert_eq!(
         None,
-        GenericTypeConv::simple_new(str_to_ty("jobjectArray"), str_to_ty("Vec<T>"), generics)
-            .is_conv_possible(
-                &str_to_rust_ty("jobjectArray"),
-                Some(&str_to_rust_ty("Vec<Foo>")),
-                |name| {
-                    println!("test rt map, check name {:?}", name);
-                    if name == "Foo" {
-                        Some(&foo_spec)
-                    } else {
-                        None
-                    }
-                },
-            )
+        GenericTypeConv::new(
+            str_to_ty("jobjectArray"),
+            str_to_ty("Vec<T>"),
+            generics,
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(
+            &str_to_rust_ty("jobjectArray"),
+            Some(&str_to_rust_ty("Vec<Foo>")),
+            |name| {
+                println!("test rt map, check name {:?}", name);
+                if name == "Foo" {
+                    Some(&foo_spec)
+                } else {
+                    None
+                }
+            },
+        )
     );
 }
 
@@ -517,6 +539,56 @@ fn test_is_second_subst_of_first_char_pointer() {
         parse_type! { ::std::os::raw::c_char },
         *subst_map.get("T").unwrap().unwrap()
     );
+}
+
+#[test]
+fn test_is_second_subst_of_first_impl_fnonce_no_ret() {
+    let _ = env_logger::try_init();
+    let generics: syn::Generics = parse_quote! { <T> };
+    let mut subst_map = TyParamsSubstMap::default();
+    for ty_p in generics.type_params() {
+        subst_map.insert(&ty_p.ident, None);
+    }
+    let ty = parse_type! { impl FnOnce(u32) };
+    let generic_ty = parse_type! { impl FnOnce(T) };
+    assert!(is_second_subst_of_first(&generic_ty, &ty, &mut subst_map));
+    assert_eq!(1, subst_map.len());
+    assert_eq!(parse_type! { u32 }, *subst_map.get("T").unwrap().unwrap());
+}
+
+#[test]
+fn test_is_second_subst_of_first_impl_fnonce_with_ret() {
+    let _ = env_logger::try_init();
+    let generics: syn::Generics = parse_quote! { <T, U> };
+    let mut subst_map = TyParamsSubstMap::default();
+    for ty_p in generics.type_params() {
+        subst_map.insert(&ty_p.ident, None);
+    }
+    let ty = parse_type! { impl FnOnce(u32) -> String };
+    let generic_ty = parse_type! { impl FnOnce(T) -> U };
+    assert!(is_second_subst_of_first(&generic_ty, &ty, &mut subst_map));
+    assert_eq!(2, subst_map.len());
+    assert_eq!(parse_type! { u32 }, *subst_map.get("T").unwrap().unwrap());
+    assert_eq!(
+        parse_type! { String },
+        *subst_map.get("U").unwrap().unwrap()
+    );
+}
+
+#[test]
+fn test_is_second_subst_of_first_extern_c_fn_ptr() {
+    let _ = env_logger::try_init();
+    let generics: syn::Generics = parse_quote! { <T, U> };
+    let mut subst_map = TyParamsSubstMap::default();
+    for ty_p in generics.type_params() {
+        subst_map.insert(&ty_p.ident, None);
+    }
+    let ty = parse_type! { extern "C" fn(i32,f32) };
+    let generic_ty = parse_type! { extern "C" fn(T,U) };
+    assert!(is_second_subst_of_first(&generic_ty, &ty, &mut subst_map));
+    assert_eq!(2, subst_map.len());
+    assert_eq!(parse_type! { i32 }, *subst_map.get("T").unwrap().unwrap());
+    assert_eq!(parse_type! { f32 }, *subst_map.get("U").unwrap().unwrap());
 }
 
 fn str_to_ty(code: &str) -> syn::Type {

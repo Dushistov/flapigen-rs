@@ -83,7 +83,7 @@ impl TypeMap {
     ) -> Result<()> {
         assert!(!ri.contains_data_for_language_backend());
         assert!(!ri.is_generic());
-        if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map() {
+        if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map_no_lang_backend() {
             let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
             self.invalidate_conv_for_rust_type(r_ty);
             let ftype_idx = self.add_foreign_rust_ty_idx(
@@ -185,6 +185,7 @@ impl TypeMap {
                 ForeignConversationRule {
                     rust_ty: rty_left,
                     intermediate: Some(ForeignConversationIntermediate {
+                        input_to_output: rule.input_to_output,
                         intermediate_ty: rty_right,
                         conv_code,
                     }),
@@ -231,6 +232,7 @@ impl TypeMap {
                 ForeignConversationRule {
                     rust_ty: rty_left,
                     intermediate: Some(ForeignConversationIntermediate {
+                        input_to_output: rule.input_to_output,
                         intermediate_ty: rty_right,
                         conv_code,
                     }),
@@ -540,7 +542,7 @@ fn helper3() {
                 let from = types_map.rust_names_map["jboolean"];
                 let to = types_map.rust_names_map["bool"];
                 let conv = &types_map.conv_graph[types_map.conv_graph.find_edge(from, to).unwrap()];
-                conv.code_template.clone()
+                conv.code.to_string()
             },
         );
 

@@ -199,7 +199,32 @@ May be you need to use `private constructor = empty;` syntax?",
         };
 
         let mut rust_args_with_types = String::new();
+        let mut input_to_output_arg: Option<(&CppForeignTypeInfo, &str)> = None;
         for (f_type_info, arg_name) in f_method.input.iter().zip(method.arg_names_without_self()) {
+            if f_type_info.input_to_output {
+                if method.variant == MethodVariant::Constructor {
+                    return Err(DiagnosticError::new(
+                        class.src_id,
+                        method.rust_id.span(),
+                        "constructor has argument with 'intput_to_output' tag, but constructor can not return",
+                    ));
+                }
+                if input_to_output_arg.is_some() {
+                    return Err(DiagnosticError::new(
+                        class.src_id,
+                        method.rust_id.span(),
+                        "method has two arguments with 'intput_to_output' tag",
+                    ));
+                }
+                if method.fn_decl.output != syn::ReturnType::Default {
+                    return Err(DiagnosticError::new(
+                        class.src_id,
+                        method.rust_id.span(),
+                        "method has argument with 'intput_to_output' tag, but return type not '()'",
+                    ));
+                }
+                input_to_output_arg = Some((f_type_info, arg_name));
+            }
             write!(
                 &mut rust_args_with_types,
                 "{}: {}, ",
@@ -219,34 +244,54 @@ May be you need to use `private constructor = empty;` syntax?",
         };
 
         let method_name = method.short_name().as_str().to_string();
-        let (cpp_ret_type, convert_ret_for_cpp) =
-            if let Some(cpp_converter) = f_method.output.cpp_converter.as_ref() {
+        let f_output_type = if let Some((ref input_to_output_arg, _)) = input_to_output_arg {
+            input_to_output_arg
+        } else {
+            &f_method.output
+        };
+        let (cpp_ret_type, convert_ret_for_cpp) = match f_output_type.cpp_converter.as_ref() {
+            Some(cpp_converter) => {
                 let cpp_ret_type = cpp_converter.typename.clone();
-                let conv_code = cpp_converter
-                    .converter
-                    .replace(FROM_VAR_TEMPLATE, &ret_name);
-                if conv_code.contains(TO_VAR_TYPE_TEMPLATE) {
-                    let conv_code = conv_code
-                        .replace(
-                            TO_VAR_TYPE_TEMPLATE,
-                            &format!("{} {}", cpp_ret_type, conv_ret),
+                if input_to_output_arg.is_none() {
+                    let conv_code = cpp_converter
+                        .converter
+                        .replace(FROM_VAR_TEMPLATE, &ret_name);
+                    if conv_code.contains(TO_VAR_TYPE_TEMPLATE) {
+                        let conv_code = conv_code
+                            .replace(
+                                TO_VAR_TYPE_TEMPLATE,
+                                &format!("{} {}", cpp_ret_type, conv_ret),
+                            )
+                            .replace(TO_VAR_TEMPLATE, &conv_ret);
+                        (
+                            cpp_ret_type,
+                            format!("{}\n        return {};", conv_code, conv_ret),
                         )
-                        .replace(TO_VAR_TEMPLATE, &conv_ret);
-                    (
-                        cpp_ret_type,
-                        format!("{}\n        return {};", conv_code, conv_ret),
-                    )
+                    } else {
+                        (cpp_ret_type, format!("        return {};", conv_code))
+                    }
                 } else {
-                    (cpp_ret_type, format!("        return {};", conv_code))
+                    (cpp_ret_type, format!("        return {};", ret_name))
                 }
-            } else {
-                (
-                    f_method.output.as_ref().name.clone(),
-                    format!("        return {};", ret_name),
-                )
-            };
+            }
+            None => (
+                f_output_type.as_ref().name.clone(),
+                format!("        return {};", ret_name),
+            ),
+        };
         //rename types like "struct Foo" to "Foo" to make VC++ compiler happy
         let cpp_ret_type = cpp_ret_type.as_str().replace("struct", "");
+
+        let input_to_output_ret_code = if let Some((_, ref arg_name)) = input_to_output_arg {
+            format!(
+                r#"
+        return {};
+"#,
+                arg_name
+            )
+        } else {
+            String::new()
+        };
 
         match method.variant {
             MethodVariant::StaticMethod => {
@@ -306,11 +351,12 @@ May be you need to use `private constructor = empty;` syntax?",
                     write!(
                         &mut inline_impl,
                         r#"
-        {c_func_name}({cpp_args_for_c});
+        {c_func_name}({cpp_args_for_c});{input_to_output}
     }}
 "#,
                         c_func_name = c_func_name,
                         cpp_args_for_c = cpp_args_for_c,
+                        input_to_output = input_to_output_ret_code
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
@@ -384,7 +430,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     write!(
                         &mut inline_impl,
                         r#"
-        {c_func_name}(this->self_{cpp_args_for_c});
+        {c_func_name}(this->self_{cpp_args_for_c});{input_to_output}
     }}
 "#,
                         c_func_name = c_func_name,
@@ -393,6 +439,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         } else {
                             format!(", {}", cpp_args_for_c)
                         },
+                        input_to_output = input_to_output_ret_code
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 }

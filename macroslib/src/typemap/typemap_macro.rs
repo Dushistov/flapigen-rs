@@ -2,6 +2,7 @@ mod parse;
 #[cfg(test)]
 mod tests;
 
+use log::debug;
 use petgraph::Direction;
 use proc_macro2::{Span, TokenStream};
 use rustc_hash::FxHashSet;
@@ -18,7 +19,8 @@ use crate::{
             parse_ty_with_given_span, replace_all_types_with, DisplayToTokens, SpannedSmolStr,
             TyParamsSubstMap,
         },
-        ty::{FTypeConvCode, TraitNamesSet},
+        ty::TraitNamesSet,
+        TypeConvCode,
     },
     WRITE_TO_MEM_FAILED_MSG,
 };
@@ -111,12 +113,21 @@ pub(crate) struct GenericCItems {
 }
 
 impl TypeMapConvRuleInfo {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.rtype_generics.is_none()
+            && self.rtype_left_to_right.is_none()
+            && self.rtype_right_to_left.is_none()
+            && self.ftype_left_to_right.is_empty()
+            && self.ftype_right_to_left.is_empty()
+            && self.c_types.is_none()
+            && self.generic_c_types.is_none()
+            && self.f_code.is_empty()
+            && self.generic_aliases.is_empty()
+    }
     pub(crate) fn if_simple_rtype_ftype_map(&self) -> Option<(&Type, &FTypeName, &[ModuleName])> {
         if self.rtype_right_to_left.is_some()
             || !self.ftype_right_to_left.is_empty()
             || self.ftype_left_to_right.len() > 1
-            || !self.f_code.is_empty()
-            || self.c_types.is_some()
         {
             return None;
         }
@@ -139,6 +150,17 @@ impl TypeMapConvRuleInfo {
             ) => Some((r_ty, f_ty, req_modules.as_slice())),
             _ => None,
         }
+    }
+
+    /// it is possible to merge to `TypeMap` without help of language backend
+    pub(crate) fn if_simple_rtype_ftype_map_no_lang_backend(
+        &self,
+    ) -> Option<(&Type, &FTypeName, &[ModuleName])> {
+        if !self.f_code.is_empty() || self.c_types.is_some() {
+            return None;
+        }
+
+        self.if_simple_rtype_ftype_map()
     }
 
     pub(in crate::typemap) fn contains_data_for_language_backend(&self) -> bool {
@@ -171,11 +193,16 @@ impl TypeMapConvRuleInfo {
         TraitChecker: Fn(&Type, &TraitNamesSet) -> bool,
     {
         assert!(self.is_generic());
-        let rule = match direction {
-            Direction::Incoming => self.rtype_right_to_left.as_ref(),
-            Direction::Outgoing => self.rtype_left_to_right.as_ref(),
+        let generic_ty = if let Some((r_type, _, _)) = self.if_simple_rtype_ftype_map() {
+            r_type
+        } else {
+            let rule = match direction {
+                Direction::Incoming => self.rtype_right_to_left.as_ref(),
+                Direction::Outgoing => self.rtype_left_to_right.as_ref(),
+            };
+            let rule = rule?;
+            &rule.left_ty
         };
-        let rule = rule?;
 
         let generics = self
             .rtype_generics
@@ -185,7 +212,7 @@ impl TypeMapConvRuleInfo {
         for ty_p in generics.type_params() {
             subst_map.insert(&ty_p.ident, None);
         }
-        if !is_second_subst_of_first(&rule.left_ty, ty, &mut subst_map) {
+        if !is_second_subst_of_first(generic_ty, ty, &mut subst_map) {
             return None;
         }
         let bounds = get_trait_bounds(generics);
@@ -212,6 +239,7 @@ impl TypeMapConvRuleInfo {
         param_map: &TyParamsSubstMap,
         expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
     ) -> Result<Option<CItems>> {
+        debug!("subst_generic_params_to_c_items");
         assert!(self.is_generic());
         let type_aliases =
             build_generic_aliases(self.src_id, &self.generic_aliases, &param_map, expander)?;
@@ -260,29 +288,34 @@ impl TypeMapConvRuleInfo {
         direction: Direction,
         expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
     ) -> Result<Self> {
+        debug!(
+            "subst_generic_params: direction {:?}, rule {:?}",
+            direction, *self
+        );
         assert!(self.is_generic());
         let type_aliases =
             build_generic_aliases(self.src_id, &self.generic_aliases, &param_map, expander)?;
-        let (rtype_left_to_right, ftype_left_to_right) = if direction == Direction::Outgoing {
-            (
-                expand_rtype_rule(
-                    self.src_id,
-                    self.rtype_left_to_right.as_ref(),
-                    &param_map,
-                    expander,
-                    &type_aliases,
-                )?,
-                expand_ftype_rule(
-                    self.src_id,
-                    self.ftype_left_to_right.as_ref(),
-                    &param_map,
-                    expander,
-                    &type_aliases,
-                )?,
-            )
-        } else {
-            (None, vec![])
-        };
+        let (rtype_left_to_right, ftype_left_to_right) =
+            if direction == Direction::Outgoing || self.if_simple_rtype_ftype_map().is_some() {
+                (
+                    expand_rtype_rule(
+                        self.src_id,
+                        self.rtype_left_to_right.as_ref(),
+                        &param_map,
+                        expander,
+                        &type_aliases,
+                    )?,
+                    expand_ftype_rule(
+                        self.src_id,
+                        self.ftype_left_to_right.as_ref(),
+                        &param_map,
+                        expander,
+                        &type_aliases,
+                    )?,
+                )
+            } else {
+                (None, vec![])
+            };
         let (rtype_right_to_left, ftype_right_to_left) = if direction == Direction::Incoming {
             (
                 expand_rtype_rule(
@@ -354,7 +387,7 @@ impl TypeMapConvRuleInfo {
 pub(crate) struct RTypeConvRule {
     pub left_ty: Type,
     pub right_ty: Option<Type>,
-    pub code: Option<FTypeConvCode>,
+    pub code: Option<TypeConvCode>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -362,7 +395,8 @@ pub(crate) struct FTypeConvRule {
     pub req_modules: Vec<ModuleName>,
     pub cfg_option: Option<SpannedSmolStr>,
     pub left_right_ty: FTypeLeftRightPair,
-    pub code: Option<FTypeConvCode>,
+    pub input_to_output: bool,
+    pub code: Option<TypeConvCode>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -656,7 +690,7 @@ fn expand_rtype_rule(
                 generic_aliases,
                 (src_id, x.span()),
             )?;
-            Some(FTypeConvCode::new(code, (SourceId::none(), x.span())))
+            Some(TypeConvCode::new(code, (SourceId::none(), x.span())))
         }
         None => None,
     };
@@ -724,7 +758,7 @@ fn expand_ftype_rule(
                     generic_aliases,
                     (src_id, x.span()),
                 )?;
-                Some(FTypeConvCode::new(code, (SourceId::none(), x.span())))
+                Some(TypeConvCode::new(code, (SourceId::none(), x.span())))
             }
             None => None,
         };
@@ -743,6 +777,7 @@ fn expand_ftype_rule(
             req_modules: provides_by_module,
             cfg_option: grule.cfg_option.clone(),
             left_right_ty,
+            input_to_output: grule.input_to_output,
             code,
         });
     }
@@ -1025,6 +1060,24 @@ fn expand_foreign_code(
             match id {
                 _ if id == SWIG_F_TYPE => {
                     call_swig_f_type(ctx_span, params, out, param_map, expander, generic_aliases)?;
+                }
+                _ if id == SWIG_I_TYPE => {
+                    let param = if params.len() == 1 {
+                        &params[0]
+                    } else {
+                        return Err(DiagnosticError::new2(
+                            ctx_span,
+                            format!(
+                                "{} parameters in {} instead of 1",
+                                params.len(),
+                                SWIG_I_TYPE
+                            ),
+                        ));
+                    };
+                    let ty = find_type_param(param_map, param, ctx_span)?;
+                    let i_type = expander.swig_i_type(ty.as_ref())?;
+                    let f_type = expander.swig_f_type(&i_type, None)?;
+                    out.push_str(&f_type.name);
                 }
                 _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {
                     let (type_name, var_name) = if params.len() == 2 {
