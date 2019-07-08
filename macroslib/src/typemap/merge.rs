@@ -185,6 +185,7 @@ impl TypeMap {
                 ForeignConversationRule {
                     rust_ty: rty_left,
                     intermediate: Some(ForeignConversationIntermediate {
+                        input_to_output: rule.input_to_output,
                         intermediate_ty: rty_right,
                         conv_code,
                     }),
@@ -231,6 +232,7 @@ impl TypeMap {
                 ForeignConversationRule {
                     rust_ty: rty_left,
                     intermediate: Some(ForeignConversationIntermediate {
+                        input_to_output: rule.input_to_output,
                         intermediate_ty: rty_right,
                         conv_code,
                     }),

@@ -395,6 +395,7 @@ pub(crate) struct FTypeConvRule {
     pub req_modules: Vec<ModuleName>,
     pub cfg_option: Option<SpannedSmolStr>,
     pub left_right_ty: FTypeLeftRightPair,
+    pub input_to_output: bool,
     pub code: Option<TypeConvCode>,
 }
 
@@ -776,6 +777,7 @@ fn expand_ftype_rule(
             req_modules: provides_by_module,
             cfg_option: grule.cfg_option.clone(),
             left_right_ty,
+            input_to_output: grule.input_to_output,
             code,
         });
     }
@@ -1058,6 +1060,24 @@ fn expand_foreign_code(
             match id {
                 _ if id == SWIG_F_TYPE => {
                     call_swig_f_type(ctx_span, params, out, param_map, expander, generic_aliases)?;
+                }
+                _ if id == SWIG_I_TYPE => {
+                    let param = if params.len() == 1 {
+                        &params[0]
+                    } else {
+                        return Err(DiagnosticError::new2(
+                            ctx_span,
+                            format!(
+                                "{} parameters in {} instead of 1",
+                                params.len(),
+                                SWIG_I_TYPE
+                            ),
+                        ));
+                    };
+                    let ty = find_type_param(param_map, param, ctx_span)?;
+                    let i_type = expander.swig_i_type(ty.as_ref())?;
+                    let f_type = expander.swig_f_type(&i_type, None)?;
+                    out.push_str(&f_type.name);
                 }
                 _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {
                     let (type_name, var_name) = if params.len() == 2 {

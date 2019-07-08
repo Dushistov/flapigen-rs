@@ -50,8 +50,8 @@ where
     NI: Iterator<Item = &'a str>,
 {
     let mut buf = String::new();
-    for (i, (f_type_info, arg_name)) in f_method.input.iter().zip(name_iter).enumerate() {
-        if i > 0 {
+    for (f_type_info, arg_name) in f_method.input.iter().zip(name_iter) {
+        if !buf.is_empty() {
             buf.push_str(", ");
         }
         write!(&mut buf, "{} {}", f_type_info.as_ref().name, arg_name)
@@ -72,8 +72,11 @@ pub(in crate::cpp) fn cpp_generate_args_with_types<'a, NI: Iterator<Item = &'a s
     arg_name_iter: NI,
 ) -> String {
     let mut ret = String::new();
-    for (i, (f_type_info, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
-        if i > 0 {
+    for (f_type_info, arg_name) in f_method.input.iter().zip(arg_name_iter) {
+        if f_type_info.input_to_output {
+            continue;
+        }
+        if !ret.is_empty() {
             ret.push_str(", ");
         }
 

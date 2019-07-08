@@ -80,6 +80,7 @@ struct CppConverter {
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
     provides_by_module: Vec<SmolStr>,
+    input_to_output: bool,
     pub(in crate::cpp) cpp_converter: Option<CppConverter>,
 }
 
@@ -117,7 +118,9 @@ impl CppForeignTypeInfo {
         let mut provides_by_module = ftype.provides_by_module.clone();
         let base_rt;
         let base_ft_name;
+        let mut input_to_output = false;
         if let Some(intermediate) = rule.intermediate.as_ref() {
+            input_to_output = intermediate.input_to_output;
             base_rt = intermediate.intermediate_ty;
             let typename = ftype.typename();
             let converter = intermediate.conv_code.to_string();
@@ -139,6 +142,7 @@ impl CppForeignTypeInfo {
             cpp_converter
         );
         Ok(CppForeignTypeInfo {
+            input_to_output,
             base: ForeignTypeInfo {
                 name: base_ft_name,
                 correspoding_rust_type: tmap[base_rt].clone(),
@@ -163,6 +167,7 @@ struct CppForeignMethodSignature {
 impl From<ForeignTypeInfo> for CppForeignTypeInfo {
     fn from(x: ForeignTypeInfo) -> Self {
         CppForeignTypeInfo {
+            input_to_output: false,
             base: ForeignTypeInfo {
                 name: x.name,
                 correspoding_rust_type: x.correspoding_rust_type,
@@ -640,6 +645,7 @@ fn register_main_foreign_types(
         into_from_rust: Some(ForeignConversationRule {
             rust_ty: this_type,
             intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
                 intermediate_ty: void_ptr_rust_ty,
                 conv_code: TypeConvCode::new(
                     format!(
@@ -655,6 +661,7 @@ fn register_main_foreign_types(
         from_into_rust: Some(ForeignConversationRule {
             rust_ty: this_type,
             intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
                 intermediate_ty: void_ptr_rust_ty,
                 conv_code: TypeConvCode::new(
                     format!("{}.release()", FROM_VAR_TEMPLATE),
@@ -675,6 +682,7 @@ fn register_main_foreign_types(
         from_into_rust: Some(ForeignConversationRule {
             rust_ty: this_type_ref,
             intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
                 intermediate_ty: const_void_ptr_rust_ty,
                 conv_code: TypeConvCode::new(
                     format!(
@@ -700,6 +708,7 @@ fn register_main_foreign_types(
         into_from_rust: Some(ForeignConversationRule {
             rust_ty: this_type_ref,
             intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
                 intermediate_ty: const_void_ptr_rust_ty,
                 conv_code: TypeConvCode::new(
                     format!(
@@ -726,6 +735,7 @@ fn register_main_foreign_types(
         from_into_rust: Some(ForeignConversationRule {
             rust_ty: this_type_mut_ref,
             intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
                 intermediate_ty: void_ptr_rust_ty,
                 conv_code: TypeConvCode::new(
                     format!(
@@ -758,6 +768,7 @@ fn register_main_foreign_types(
                 from_into_rust: Some(ForeignConversationRule {
                     rust_ty: self_type_mut_ref.to_idx(),
                     intermediate: Some(ForeignConversationIntermediate {
+                        input_to_output: false,
                         intermediate_ty: void_ptr_rust_ty,
                         conv_code: TypeConvCode::new(
                             format!(
@@ -788,6 +799,7 @@ fn register_main_foreign_types(
                 from_into_rust: Some(ForeignConversationRule {
                     rust_ty: self_type_ref.to_idx(),
                     intermediate: Some(ForeignConversationIntermediate {
+                        input_to_output: false,
                         intermediate_ty: const_void_ptr_rust_ty,
                         conv_code: TypeConvCode::new(
                             format!(
@@ -1028,6 +1040,7 @@ fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInfo) -> Result<()> {
         into_from_rust: Some(ForeignConversationRule {
             rust_ty: enum_rty.to_idx(),
             intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
                 intermediate_ty: u32_rty.to_idx(),
                 conv_code: TypeConvCode::new(
                     format!(
@@ -1042,6 +1055,7 @@ fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInfo) -> Result<()> {
         from_into_rust: Some(ForeignConversationRule {
             rust_ty: enum_rty.to_idx(),
             intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
                 intermediate_ty: u32_rty.to_idx(),
                 conv_code: TypeConvCode::new(
                     format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),

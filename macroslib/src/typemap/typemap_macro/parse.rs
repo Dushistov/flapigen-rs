@@ -28,6 +28,7 @@ mod kw {
     custom_keyword!(req_modules);
     custom_keyword!(module);
     custom_keyword!(option);
+    custom_keyword!(input_to_output);
 }
 
 enum RuleType {
@@ -97,16 +98,13 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                         )?;
                     }
                     RuleType::FType(keyword) => {
-                        let (ftype_cfg, ftype_req_modules) =
-                            parse_typemap_type_arm_param(&rule, &params)?;
                         parse_f_type_rule(
                             input,
                             var_name,
                             keyword,
                             &mut ftype_left_to_right,
                             &mut ftype_right_to_left,
-                            ftype_cfg,
-                            ftype_req_modules,
+                            &params,
                         )?;
                     }
                 }
@@ -477,26 +475,17 @@ impl syn::parse::Parse for GenericAliasItemVecCommaSeparated {
     }
 }
 
-fn parse_typemap_type_arm_param(
-    rule: &RuleType,
+fn parse_typemap_f_type_arm_param(
     params: syn::parse::ParseStream,
-) -> syn::Result<(Option<SpannedSmolStr>, Vec<ModuleName>)> {
+) -> syn::Result<(Option<SpannedSmolStr>, Vec<ModuleName>, bool)> {
     let mut ftype_cfg: Option<SpannedSmolStr> = None;
     let mut ftype_req_modules = Vec::<ModuleName>::new();
+    let mut input_to_output = false;
 
     while !params.is_empty() && params.peek(Token![,]) {
         params.parse::<Token![,]>()?;
         let la = params.lookahead1();
         if la.peek(kw::req_modules) {
-            if let RuleType::RType(ref keyword) = rule {
-                return Err(syn::Error::new(
-                    keyword.span(),
-                    format!(
-                        "{} may be used only with f_type",
-                        DisplayToTokens(&kw::req_modules::default())
-                    ),
-                ));
-            }
             params.parse::<kw::req_modules>()?;
             params.parse::<Token![=]>()?;
             let modules;
@@ -517,12 +506,6 @@ fn parse_typemap_type_arm_param(
                 }
             }
         } else if la.peek(kw::option) {
-            if let RuleType::RType(ref rule) = rule {
-                return Err(syn::Error::new(
-                    rule.span(),
-                    "option allowed only for f_type",
-                ));
-            }
             params.parse::<kw::option>()?;
             params.parse::<Token![=]>()?;
             let lit_str = params.parse::<LitStr>()?;
@@ -530,12 +513,14 @@ fn parse_typemap_type_arm_param(
                 sp: lit_str.span(),
                 value: lit_str.value().into(),
             });
+        } else if la.peek(kw::input_to_output) {
+            params.parse::<kw::input_to_output>()?;
+            input_to_output = true;
         } else {
             return Err(la.error());
         }
     }
-
-    Ok((ftype_cfg, ftype_req_modules))
+    Ok((ftype_cfg, ftype_req_modules, input_to_output))
 }
 
 fn parse_f_type_rule(
@@ -544,9 +529,9 @@ fn parse_f_type_rule(
     keyword: kw::f_type,
     ftype_left_to_right: &mut Vec<FTypeConvRule>,
     ftype_right_to_left: &mut Vec<FTypeConvRule>,
-    ftype_cfg: Option<SpannedSmolStr>,
-    ftype_req_modules: Vec<ModuleName>,
+    params: syn::parse::ParseStream,
 ) -> syn::Result<()> {
+    let (ftype_cfg, ftype_req_modules, input_to_output) = parse_typemap_f_type_arm_param(params)?;
     let left_ty = if input.peek(LitStr) {
         Some(input.parse::<LitStr>()?.into())
     } else {
@@ -599,7 +584,14 @@ fn parse_f_type_rule(
                     "duplicate of f_type left to right rule with the same option",
                 ));
             }
+            if input_to_output {
+                return Err(syn::Error::new(
+                    keyword.span(),
+                    "Invalid input_to_output option for output rule",
+                ));
+            }
             ftype_left_to_right.push(FTypeConvRule {
+                input_to_output,
                 req_modules: ftype_req_modules,
                 cfg_option: ftype_cfg,
                 left_right_ty: if let Some(left_ty) = left_ty {
@@ -621,6 +613,7 @@ fn parse_f_type_rule(
                 ));
             }
             ftype_right_to_left.push(FTypeConvRule {
+                input_to_output,
                 cfg_option: ftype_cfg,
                 req_modules: ftype_req_modules,
                 left_right_ty: if let Some(left_ty) = left_ty {
@@ -648,6 +641,7 @@ fn parse_f_type_rule(
                 )
             })?;
             ftype_left_to_right.push(FTypeConvRule {
+                input_to_output,
                 req_modules: ftype_req_modules,
                 cfg_option: ftype_cfg,
                 left_right_ty: FTypeLeftRightPair::OnlyLeft(left_ty),

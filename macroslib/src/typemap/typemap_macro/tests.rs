@@ -89,6 +89,7 @@ fn test_foreign_typemap_cpp_bool() {
     assert_eq!(
         rule.ftype_left_to_right,
         vec![FTypeConvRule {
+            input_to_output: false,
             req_modules: vec![],
             left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
                 name: "bool".into(),
@@ -105,6 +106,7 @@ fn test_foreign_typemap_cpp_bool() {
     assert_eq!(
         rule.ftype_right_to_left,
         vec![FTypeConvRule {
+            input_to_output: false,
             req_modules: vec![],
             left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
                 name: "bool".into(),
@@ -191,12 +193,25 @@ fn test_foreign_typemap_callback_to_future() {
                 }
             };
 
-            ($p:f_type, req_modules = ["\"CFnOnce!().h\""]) "CFnOnce!()";
+            ($p:f_type, input_to_output, req_modules = ["\"CFnOnce!().h\"", "<future>"]) <= "std::future<swig_f_type!(T)>"
+                r#"
+        auto tmp = new std::promise<swig_f_type!(T)>;
+        $out = tmp->get_future();
+        CFnOnce!() $p;
+        $p.ctx = tmp;
+        $p.cb = [](swig_i_type!(T) arg, void *opaque) {
+            auto arg_cpp = swig_foreign_from_i_type!(T, arg);
+            auto promise = static_cast<std::promise<swig_f_type!(T)> *>(opaque);
+            promise->set_value(std::move(arg_cpp));
+            delete promise;
+        };
+"#;
         )
     });
     assert!(!rule.if_simple_rtype_ftype_map_no_lang_backend().is_some());
     assert!(rule.contains_data_for_language_backend());
     assert!(rule.is_generic());
+    assert!(rule.ftype_right_to_left[0].input_to_output);
 
     let ty = parse_type! { impl FnOnce(u32) };
     let subst_map = rule
@@ -263,6 +278,7 @@ fn test_foreign_typemap_simple_typemap() {
 
     assert_eq!(
         vec![FTypeConvRule {
+            input_to_output: false,
             req_modules: vec![],
             left_right_ty: FTypeLeftRightPair::OnlyLeft(FTypeName {
                 name: "long".into(),
