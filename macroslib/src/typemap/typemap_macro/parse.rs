@@ -370,22 +370,38 @@ fn parse_r_type_rule(
         let d_var_name = d_var_name.to_string();
         let out_var: TokenStream = parse_quote!($out);
         let out_var = out_var.to_string();
+        let out_var_no_type: TokenStream = parse_quote!($out_no_type);
+        let out_var_no_type = out_var_no_type.to_string();
+
         let mut code_str = conv_body.to_string();
-        if !code_str.contains(&d_var_name) || !code_str.contains(&out_var) {
+        if !(code_str.contains(&d_var_name)
+            && (code_str.contains(&out_var) || code_str.contains(&out_var_no_type)))
+        {
             return Err(syn::Error::new(
                 conv_body.span(),
-                format!("no $out or ${} in conversation code", var_name),
+                format!(
+                    "no $out or $out_no_type or ${} in conversation code",
+                    var_name
+                ),
             ));
         }
         code_str.push(';');
-
-        Some(TypeConvCode::new2(
-            code_str.replace(&d_var_name, FROM_VAR_TEMPLATE).replace(
-                &out_var,
-                &format!("let {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),
-            ),
-            (SourceId::none(), conv_body.span()),
-        ))
+        Some(if code_str.contains(&out_var_no_type) {
+            TypeConvCode::new2(
+                code_str
+                    .replace(&d_var_name, FROM_VAR_TEMPLATE)
+                    .replace(&out_var_no_type, &format!("let {}", TO_VAR_TEMPLATE)),
+                (SourceId::none(), conv_body.span()),
+            )
+        } else {
+            TypeConvCode::new2(
+                code_str.replace(&d_var_name, FROM_VAR_TEMPLATE).replace(
+                    &out_var,
+                    &format!("let {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),
+                ),
+                (SourceId::none(), conv_body.span()),
+            )
+        })
     } else {
         None
     };

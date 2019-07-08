@@ -244,6 +244,18 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
+    generic_alias!(CFnTwoArgsPtr = swig_concat_idents!(c_fn_, swig_i_type!(T1), swig_i_type!(T1), _t));
+    foreign_code!(
+        module = "CFnTwoArgsPtr!().h";
+        r##"
+typedef void (*CFnTwoArgsPtr!())(swig_f_type!(T1), swig_f_type!(T2));
+"##
+    );
+    (r_type) <T1: SwigTypeIsReprC, T2: SwigTypeIsReprC> extern "C" fn(T1, T2);
+    (f_type, req_modules = ["\"CFnTwoArgsPtr!().h\""]) "CFnTwoArgsPtr!()";
+);
+
+foreign_typemap!(
     generic_alias!(CRustPair = swig_concat_idents!(CRustPair, swig_i_type!(T1), swig_i_type!(T2)));
     generic_alias!(CRustPairModule = swig_concat_idents!(rust_tuple, swig_i_type!(T1), swig_i_type!(T2)));
     define_c_type!(

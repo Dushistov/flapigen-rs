@@ -468,7 +468,7 @@ fn handle_into_from_impl(
         )
     };
 
-    let conv_code = ret
+    let conv_code: &String = ret
         .traits_usage_code
         .get(&Ident::new(trait_name, Span::call_site()))
         .ok_or_else(|| {
@@ -486,7 +486,7 @@ fn handle_into_from_impl(
             src_id,
             from_ty,
             to_ty,
-            code: TypeConvCode::new(conv_code, (src_id, item_impl.span())),
+            code: TypeConvCode::new(conv_code.clone(), (src_id, item_impl.span())),
             dependency: Rc::new(RefCell::new(Some(item_code))),
             generic_params: item_impl.generics.clone(),
             to_foreigner_hint: get_foreigner_hint_for_generic(
@@ -509,7 +509,7 @@ fn handle_into_from_impl(
             (from_ty, from_suffix),
             (to_ty, to_suffix),
             item_code,
-            TypeConvCode::new(conv_code, (src_id, item_impl.span())),
+            TypeConvCode::new(conv_code.clone(), (src_id, item_impl.span())),
             ret,
         );
     }
@@ -551,7 +551,7 @@ fn handle_deref_impl(
         )
     };
 
-    let conv_code = ret
+    let conv_code: &String = ret
         .traits_usage_code
         .get(&Ident::new(deref_trait, Span::call_site()))
         .ok_or_else(|| {
@@ -570,7 +570,7 @@ fn handle_deref_impl(
             src_id,
             from_ty,
             to_ty: to_ref_ty,
-            code: TypeConvCode::new(conv_code, (src_id, item_impl.span())),
+            code: TypeConvCode::new(conv_code.clone(), (src_id, item_impl.span())),
             dependency: Rc::new(RefCell::new(Some(item_code))),
             generic_params: item_impl.generics.clone(),
             to_foreigner_hint: get_foreigner_hint_for_generic(
@@ -599,7 +599,7 @@ fn handle_deref_impl(
             (from_ty, None),
             (to_ty, None),
             item_code,
-            TypeConvCode::new(conv_code, (src_id, item_impl.span())),
+            TypeConvCode::new(conv_code.clone(), (src_id, item_impl.span())),
             ret,
         );
     }

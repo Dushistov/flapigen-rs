@@ -9,6 +9,7 @@
 #include <limits>
 #include <iostream>
 #include <sstream>
+#include <thread>
 #include <gtest/gtest.h>
 
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
@@ -37,6 +38,8 @@
 #include "rust_interface/GetSetStrTest.hpp"
 #include "rust_interface/TestWorkWithReprC.hpp"
 #include "rust_interface/TestFnInline.hpp"
+#include <future>
+#include "rust_interface/TestFuture.hpp"
 
 using namespace rust;
 
@@ -943,6 +946,26 @@ TEST(TestFnInline, smokeTest)
         auto s = TestFnInline::int_to_str(x);
         EXPECT_EQ(std::to_string(x), s.to_std_string());
     }
+}
+
+TEST(TestFuture, smokeTest)
+{
+    auto p = new std::promise<Foo>;
+    std::future<Foo> future = p->get_future();
+    CFnOnce4232mut3232c_void fn_once;
+    fn_once.ctx = p;
+    fn_once.cb = [](void *c_foo, void *opaque) {
+        auto promise = static_cast<std::promise<Foo> *>(opaque);
+        Foo foo{ static_cast<FooOpaque *>(c_foo) };
+        promise->set_value(std::move(foo));
+        delete promise;
+    };
+    std::thread t1{ [fn_once] { TestFuture::call_fn(fn_once); } };
+    future.wait();
+    Foo foo = future.get();
+    EXPECT_EQ(-1, foo.f(0, 0));
+    EXPECT_EQ("from callback", foo.getName());
+    t1.join();
 }
 
 int main(int argc, char *argv[])
