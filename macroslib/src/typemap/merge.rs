@@ -540,7 +540,7 @@ fn helper3() {
                 let from = types_map.rust_names_map["jboolean"];
                 let to = types_map.rust_names_map["bool"];
                 let conv = &types_map.conv_graph[types_map.conv_graph.find_edge(from, to).unwrap()];
-                conv.code_template.clone()
+                conv.code.to_string()
             },
         );
 

@@ -30,7 +30,10 @@ pub(in crate) use self::subst_map::{TyParamsSubstItem, TyParamsSubstList, TyPara
 use crate::{
     error::{panic_on_syn_error, SourceIdSpan},
     source_registry::SourceId,
-    typemap::ty::{RustType, RustTypeS, TraitNamesSet},
+    typemap::{
+        ty::{RustType, RustTypeS, TraitNamesSet},
+        TypeConvCode,
+    },
 };
 
 #[derive(Debug)]
@@ -184,7 +187,7 @@ pub(crate) struct GenericTypeConv {
     pub src_id: SourceId,
     pub from_ty: syn::Type,
     pub to_ty: syn::Type,
-    pub code_template: String,
+    pub code: TypeConvCode,
     pub dependency: Rc<RefCell<Option<TokenStream>>>,
     pub generic_params: syn::Generics,
     pub to_foreigner_hint: Option<String>,
@@ -192,15 +195,16 @@ pub(crate) struct GenericTypeConv {
 }
 
 impl GenericTypeConv {
-    pub(crate) fn simple_new(
+    pub(crate) fn new(
         from_ty: Type,
         to_ty: Type,
         generic_params: syn::Generics,
+        code: TypeConvCode,
     ) -> GenericTypeConv {
         GenericTypeConv {
             from_ty,
             to_ty,
-            code_template: String::new(),
+            code,
             dependency: Rc::new(RefCell::new(None)),
             generic_params,
             to_foreigner_hint: None,
@@ -765,7 +769,7 @@ pub(crate) fn if_option_return_some_type(ty: &RustType) -> Option<Type> {
     let from_ty: Type = parse_quote! { Option<T> };
     let to_ty: Type = parse_quote! { T };
 
-    GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
+    GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())
         .is_conv_possible(ty, None, |_| None)
         .map(|x| x.0)
 }
@@ -777,13 +781,18 @@ pub(crate) fn if_result_return_ok_err_types(ty: &RustType) -> Option<(Type, Type
     let generic_params: syn::Generics = parse_quote! { <T, E> };
 
     let ok_ty = {
-        GenericTypeConv::simple_new(from_ty.clone(), ok_ty, generic_params.clone())
-            .is_conv_possible(ty, None, |_| None)
-            .map(|x| x.0)
+        GenericTypeConv::new(
+            from_ty.clone(),
+            ok_ty,
+            generic_params.clone(),
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(ty, None, |_| None)
+        .map(|x| x.0)
     }?;
 
     let err_ty = {
-        GenericTypeConv::simple_new(from_ty, err_ty, generic_params)
+        GenericTypeConv::new(from_ty, err_ty, generic_params, TypeConvCode::invalid())
             .is_conv_possible(ty, None, |_| None)
             .map(|x| x.0)
     }?;
@@ -818,7 +827,7 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
         syn::parse_str(&format!("{}<T>", smart_ptr_name)).expect("smart pointer parse error");
     let to_ty: Type = parse_quote! { T };
 
-    GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
+    GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())
         .is_conv_possible(ty, None, |_| None)
         .map(|x| x.0)
 }

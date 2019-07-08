@@ -22,7 +22,7 @@ use crate::{
         },
         ty::{ForeignTypesStorage, RustTypeS},
         typemap_macro::TypeMapConvRuleInfo,
-        validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
+        validate_code_template, TypeConvCode, TypeConvEdge, TypeMap, TypesConvGraph,
     },
     FOREIGN_TYPEMAP,
 };
@@ -486,7 +486,7 @@ fn handle_into_from_impl(
             src_id,
             from_ty,
             to_ty,
-            code_template: conv_code.to_string(),
+            code: TypeConvCode::new(conv_code, (src_id, item_impl.span())),
             dependency: Rc::new(RefCell::new(Some(item_code))),
             generic_params: item_impl.generics.clone(),
             to_foreigner_hint: get_foreigner_hint_for_generic(
@@ -509,7 +509,7 @@ fn handle_into_from_impl(
             (from_ty, from_suffix),
             (to_ty, to_suffix),
             item_code,
-            conv_code.clone(),
+            TypeConvCode::new(conv_code, (src_id, item_impl.span())),
             ret,
         );
     }
@@ -570,7 +570,7 @@ fn handle_deref_impl(
             src_id,
             from_ty,
             to_ty: to_ref_ty,
-            code_template: conv_code.to_string(),
+            code: TypeConvCode::new(conv_code, (src_id, item_impl.span())),
             dependency: Rc::new(RefCell::new(Some(item_code))),
             generic_params: item_impl.generics.clone(),
             to_foreigner_hint: get_foreigner_hint_for_generic(
@@ -599,7 +599,7 @@ fn handle_deref_impl(
             (from_ty, None),
             (to_ty, None),
             item_code,
-            conv_code.to_string(),
+            TypeConvCode::new(conv_code, (src_id, item_impl.span())),
             ret,
         );
     }
@@ -674,13 +674,14 @@ fn handle_macro(
             ForeignHintVariant::From,
         )?;
 
+        let item_macro_span = (src_id, item_macro.span());
         let item_code = item_macro.into_token_stream();
 
         ret.generic_edges.push(GenericTypeConv {
             src_id,
             from_ty,
             to_ty,
-            code_template: code_template.to_string(),
+            code: TypeConvCode::new(code_template, item_macro_span),
             dependency: Rc::new(RefCell::new(Some(item_code))),
             generic_params,
             to_foreigner_hint,
@@ -798,7 +799,7 @@ fn add_conv_code(
     (from_ty, from_suffix): (Type, Option<String>),
     (to_ty, to_suffix): (Type, Option<String>),
     item_code: TokenStream,
-    conv_code: String,
+    conv_code: TypeConvCode,
     ret: &mut TypeMap,
 ) {
     let from = ret.find_or_alloc_rust_type_with_may_be_suffix(&from_ty, from_suffix, src_id);

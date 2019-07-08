@@ -121,7 +121,8 @@ impl CppForeignTypeInfo {
             base_rt = intermediate.intermediate_ty;
             let typename = ftype.typename();
             let converter = intermediate.conv_code.to_string();
-            let inter_ft = convert_rt_to_ft(tmap, intermediate.intermediate_ty)?;
+            let intermediate_ty = intermediate.intermediate_ty;
+            let inter_ft = convert_rt_to_ft(tmap, intermediate_ty)?;
             provides_by_module.extend_from_slice(&tmap[inter_ft].provides_by_module);
             base_ft_name = tmap[inter_ft].typename();
             cpp_converter = Some(CppConverter {
@@ -519,15 +520,18 @@ fn register_rust_ty_conversation_rules(
     conv_map.add_conversation_rule(
         const_void_ptr_rust_ty,
         this_type_ref,
-        format!(
-            r#"
+        TypeConvCode::new2(
+            format!(
+                r#"
     assert!(!{from_var}.is_null());
     let {to_var}: {this_type_ref} = unsafe {{ &*({from_var} as *const {this_type_inner}) }};
 "#,
-            to_var = TO_VAR_TEMPLATE,
-            from_var = FROM_VAR_TEMPLATE,
-            this_type_ref = conv_map[this_type_ref],
-            this_type_inner = conv_map[this_type_inner],
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE,
+                this_type_ref = conv_map[this_type_ref],
+                this_type_inner = conv_map[this_type_inner],
+            ),
+            invalid_src_id_span(),
         )
         .into(),
     );
@@ -536,15 +540,18 @@ fn register_rust_ty_conversation_rules(
     conv_map.add_conversation_rule(
         void_ptr_rust_ty,
         this_type_mut_ref,
-        format!(
-            r#"
+        TypeConvCode::new2(
+            format!(
+                r#"
     assert!(!{from_var}.is_null());
     let {to_var}: {this_type_mut_ref} = unsafe {{ &mut *({from_var} as *mut {this_type_inner}) }};
 "#,
-            to_var = TO_VAR_TEMPLATE,
-            from_var = FROM_VAR_TEMPLATE,
-            this_type_mut_ref = conv_map[this_type_mut_ref],
-            this_type_inner = conv_map[this_type_inner],
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE,
+                this_type_mut_ref = conv_map[this_type_mut_ref],
+                this_type_inner = conv_map[this_type_inner],
+            ),
+            invalid_src_id_span(),
         )
         .into(),
     );
@@ -558,14 +565,17 @@ fn register_rust_ty_conversation_rules(
     conv_map.add_conversation_rule(
         void_ptr_rust_ty,
         this_type_mut_ptr.to_idx(),
-        format!(
-            r#"
+        TypeConvCode::new2(
+            format!(
+                r#"
             assert!(!{from_var}.is_null());
             let {to_var}: {this_type_mut_ptr} = {from_var} as {this_type_mut_ptr};
         "#,
-            to_var = TO_VAR_TEMPLATE,
-            from_var = FROM_VAR_TEMPLATE,
-            this_type_mut_ptr = this_type_mut_ptr,
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE,
+                this_type_mut_ptr = this_type_mut_ptr,
+            ),
+            invalid_src_id_span(),
         )
         .into(),
     );
@@ -574,19 +584,22 @@ fn register_rust_ty_conversation_rules(
     conv_map.add_conversation_rule(
         this_type_mut_ptr.to_idx(),
         this_type.to_idx(),
-        format!("\n{}\n", unpack_code,).into(),
+        TypeConvCode::new(format!("\n{}\n", unpack_code,), invalid_src_id_span()).into(),
     );
 
     //"class" -> *mut void
     conv_map.add_conversation_rule(
         this_type.to_idx(),
         void_ptr_rust_ty,
-        format!(
-            "let {to_var}: {ptr_type} = <{this_type}>::box_object({from_var});",
-            to_var = TO_VAR_TEMPLATE,
-            ptr_type = conv_map[void_ptr_rust_ty].typename(),
-            this_type = this_type,
-            from_var = FROM_VAR_TEMPLATE
+        TypeConvCode::new(
+            format!(
+                "let {to_var}: {ptr_type} = <{this_type}>::box_object({from_var});",
+                to_var = TO_VAR_TEMPLATE,
+                ptr_type = conv_map[void_ptr_rust_ty].typename(),
+                this_type = this_type,
+                from_var = FROM_VAR_TEMPLATE
+            ),
+            invalid_src_id_span(),
         )
         .into(),
     );
@@ -595,12 +608,15 @@ fn register_rust_ty_conversation_rules(
     conv_map.add_conversation_rule(
         this_type_ref,
         const_void_ptr_rust_ty,
-        format!(
-            "let {to_var}: {ptr_type} = ({from_var} as *const {this_type}) as {ptr_type};",
-            to_var = TO_VAR_TEMPLATE,
-            ptr_type = conv_map[const_void_ptr_rust_ty].typename(),
-            this_type = conv_map[this_type_inner],
-            from_var = FROM_VAR_TEMPLATE,
+        TypeConvCode::new(
+            format!(
+                "let {to_var}: {ptr_type} = ({from_var} as *const {this_type}) as {ptr_type};",
+                to_var = TO_VAR_TEMPLATE,
+                ptr_type = conv_map[const_void_ptr_rust_ty].typename(),
+                this_type = conv_map[this_type_inner],
+                from_var = FROM_VAR_TEMPLATE,
+            ),
+            invalid_src_id_span(),
         )
         .into(),
     );

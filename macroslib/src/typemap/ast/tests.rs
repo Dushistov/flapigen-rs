@@ -62,10 +62,11 @@ fn generic_type_conv_find() {
             "check_subst: conv {} -> {} with {}",
             from_ty_name, to_ty_name, ty_check_name
         );
-        let (ret_ty, ret_ty_name) = GenericTypeConv::simple_new(
+        let (ret_ty, ret_ty_name) = GenericTypeConv::new(
             str_to_ty(from_ty_name),
             str_to_ty(to_ty_name),
             generic.clone(),
+            TypeConvCode::invalid(),
         )
         .is_conv_possible(&str_to_rust_ty(ty_check_name), None, map_others)
         .expect("check subst failed");
@@ -192,28 +193,34 @@ fn generic_type_conv_find() {
         |_| None,
     );
     assert_eq!(
-            &*GenericTypeConv::simple_new(
-                str_to_ty("MutexGuard<T>"),
-                str_to_ty("&T"),
-                generic.clone(),
-            )
-            .is_conv_possible(&mutex_guard_foo, None, |name| if name == "Foo" {
-                Some(&foo_spec)
-            } else {
-                None
-            })
-            .unwrap()
-            .1,
-            "& Foo"
-        );
+        &*GenericTypeConv::new(
+            str_to_ty("MutexGuard<T>"),
+            str_to_ty("&T"),
+            generic.clone(),
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(&mutex_guard_foo, None, |name| if name == "Foo" {
+            Some(&foo_spec)
+        } else {
+            None
+        })
+        .unwrap()
+        .1,
+        "& Foo"
+    );
 
     let box_foo: RustType = str_to_rust_ty("Box<Foo>");
 
     assert_eq!(
-        &*GenericTypeConv::simple_new(str_to_ty("jlong"), str_to_ty("Box<T>"), generic,)
-            .is_conv_possible(&str_to_rust_ty("jlong"), Some(&box_foo), |_| None)
-            .unwrap()
-            .1,
+        &*GenericTypeConv::new(
+            str_to_ty("jlong"),
+            str_to_ty("Box<T>"),
+            generic,
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(&str_to_rust_ty("jlong"), Some(&box_foo), |_| None)
+        .unwrap()
+        .1,
         "Box < Foo >"
     );
 
@@ -336,10 +343,15 @@ fn test_work_with_rc() {
     let generic_params: syn::Generics = parse_quote! { <T> };
     assert_eq!(
         "bool",
-        GenericTypeConv::simple_new(str_to_ty("RefCell<T>"), str_to_ty("T"), generic_params,)
-            .is_conv_possible(&str_to_rust_ty(normalize_ty_lifetimes(&ty)), None, |_| None)
-            .unwrap()
-            .1
+        GenericTypeConv::new(
+            str_to_ty("RefCell<T>"),
+            str_to_ty("T"),
+            generic_params,
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(&str_to_rust_ty(normalize_ty_lifetimes(&ty)), None, |_| None)
+        .unwrap()
+        .1
     );
 }
 
@@ -445,19 +457,24 @@ fn test_jlong_to_option_wrong_conv() {
     );
     assert_eq!(
         None,
-        GenericTypeConv::simple_new(str_to_ty("jlong"), str_to_ty("Option<T>"), generics)
-            .is_conv_possible(
-                &str_to_rust_ty("jlong"),
-                Some(&str_to_rust_ty("&Foo")),
-                |name| {
-                    println!("test rt map, check name {:?}", name);
-                    if name == "Foo" {
-                        Some(&foo_spec)
-                    } else {
-                        None
-                    }
-                },
-            )
+        GenericTypeConv::new(
+            str_to_ty("jlong"),
+            str_to_ty("Option<T>"),
+            generics,
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(
+            &str_to_rust_ty("jlong"),
+            Some(&str_to_rust_ty("&Foo")),
+            |name| {
+                println!("test rt map, check name {:?}", name);
+                if name == "Foo" {
+                    Some(&foo_spec)
+                } else {
+                    None
+                }
+            },
+        )
     );
 
     let generics = get_generic_params_from_code! {
@@ -470,19 +487,24 @@ fn test_jlong_to_option_wrong_conv() {
 
     assert_eq!(
         None,
-        GenericTypeConv::simple_new(str_to_ty("jobjectArray"), str_to_ty("Vec<T>"), generics)
-            .is_conv_possible(
-                &str_to_rust_ty("jobjectArray"),
-                Some(&str_to_rust_ty("Vec<Foo>")),
-                |name| {
-                    println!("test rt map, check name {:?}", name);
-                    if name == "Foo" {
-                        Some(&foo_spec)
-                    } else {
-                        None
-                    }
-                },
-            )
+        GenericTypeConv::new(
+            str_to_ty("jobjectArray"),
+            str_to_ty("Vec<T>"),
+            generics,
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(
+            &str_to_rust_ty("jobjectArray"),
+            Some(&str_to_rust_ty("Vec<Foo>")),
+            |name| {
+                println!("test rt map, check name {:?}", name);
+                if name == "Foo" {
+                    Some(&foo_spec)
+                } else {
+                    None
+                }
+            },
+        )
     );
 }
 
