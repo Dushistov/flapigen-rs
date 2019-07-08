@@ -82,9 +82,11 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                     main_span = Some(span);
                 }
 
-                let (ftype_cfg, ftype_req_modules) = parse_typemap_type_arm_param(&rule, &params)?;
                 match rule {
                     RuleType::RType(keyword) => {
+                        if !params.is_empty() {
+                            return Err(params.error("extra paramaters for r_type rule"));
+                        }
                         parse_r_type_rule(
                             input,
                             var_name,
@@ -95,111 +97,17 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                         )?;
                     }
                     RuleType::FType(keyword) => {
-                        let left_ty = if input.peek(LitStr) {
-                            Some(input.parse::<LitStr>()?.into())
-                        } else {
-                            None
-                        };
-                        let mut conv_rule_type = None;
-                        if input.peek(Token![=>]) {
-                            input.parse::<Token![=>]>()?;
-                            conv_rule_type = Some(ConvertRuleType::LeftToRight(
-                                input.parse::<LitStr>()?.into(),
-                            ));
-                        } else if input.peek(Token![<=]) {
-                            input.parse::<Token![<=]>()?;
-                            conv_rule_type = Some(ConvertRuleType::RightToLeft(
-                                input.parse::<LitStr>()?.into(),
-                            ));
-                        }
-                        let code = if conv_rule_type.is_some() && input.peek(LitStr) {
-                            let code_str = input.parse::<LitStr>()?;
-                            let var_name = var_name.ok_or_else(|| {
-                                syn::Error::new(keyword.span(), "there is conversation code, but name of input variable not defined here")
-                            })?;
-                            let var_name = format!("${}", var_name);
-                            Some(TypeConvCode::new(
-                                replace_first_and_other(
-                                    code_str
-                                        .value()
-                                        .replace(&var_name, FROM_VAR_TEMPLATE)
-                                        .as_str(),
-                                    "$out",
-                                    TO_VAR_TYPE_TEMPLATE,
-                                    TO_VAR_TEMPLATE,
-                                ),
-                                (SourceId::none(), code_str.span()),
-                            ))
-                        } else {
-                            None
-                        };
-                        match conv_rule_type {
-                            Some(ConvertRuleType::LeftToRight(right_ty)) => {
-                                if ftype_left_to_right
-                                    .iter()
-                                    .any(|x| x.cfg_option == ftype_cfg)
-                                {
-                                    return Err(syn::Error::new(
-                                        keyword.span(),
-                                        "duplicate of f_type left to right rule with the same option",
-                                    ));
-                                }
-                                ftype_left_to_right.push(FTypeConvRule {
-                                    req_modules: ftype_req_modules,
-                                    cfg_option: ftype_cfg,
-                                    left_right_ty: if let Some(left_ty) = left_ty {
-                                        FTypeLeftRightPair::Both(left_ty, right_ty)
-                                    } else {
-                                        FTypeLeftRightPair::OnlyRight(right_ty)
-                                    },
-                                    code,
-                                });
-                            }
-                            Some(ConvertRuleType::RightToLeft(right_ty)) => {
-                                if ftype_right_to_left
-                                    .iter()
-                                    .any(|x| x.cfg_option == ftype_cfg)
-                                {
-                                    return Err(syn::Error::new(
-                                        keyword.span(),
-                                        "duplicate of f_type right to left rule with the same option",
-                                    ));
-                                }
-                                ftype_right_to_left.push(FTypeConvRule {
-                                    cfg_option: ftype_cfg,
-                                    req_modules: ftype_req_modules,
-                                    left_right_ty: if let Some(left_ty) = left_ty {
-                                        FTypeLeftRightPair::Both(left_ty, right_ty)
-                                    } else {
-                                        FTypeLeftRightPair::OnlyRight(right_ty)
-                                    },
-                                    code,
-                                });
-                            }
-                            None => {
-                                if ftype_left_to_right
-                                    .iter()
-                                    .any(|x| x.cfg_option == ftype_cfg)
-                                {
-                                    return Err(syn::Error::new(
-                                        keyword.span(),
-                                        "duplicate of f_type left to right rule with the same option",
-                                    ));
-                                }
-                                let left_ty = left_ty.ok_or_else(|| {
-                                    syn::Error::new(
-                                        keyword.span(),
-                                        "expect type name in this kind of f_type rule",
-                                    )
-                                })?;
-                                ftype_left_to_right.push(FTypeConvRule {
-                                    req_modules: ftype_req_modules,
-                                    cfg_option: ftype_cfg,
-                                    left_right_ty: FTypeLeftRightPair::OnlyLeft(left_ty),
-                                    code: None,
-                                });
-                            }
-                        }
+                        let (ftype_cfg, ftype_req_modules) =
+                            parse_typemap_type_arm_param(&rule, &params)?;
+                        parse_f_type_rule(
+                            input,
+                            var_name,
+                            keyword,
+                            &mut ftype_left_to_right,
+                            &mut ftype_right_to_left,
+                            ftype_cfg,
+                            ftype_req_modules,
+                        )?;
                     }
                 }
             } else {
@@ -628,4 +536,124 @@ fn parse_typemap_type_arm_param(
     }
 
     Ok((ftype_cfg, ftype_req_modules))
+}
+
+fn parse_f_type_rule(
+    input: syn::parse::ParseStream,
+    var_name: Option<syn::Ident>,
+    keyword: kw::f_type,
+    ftype_left_to_right: &mut Vec<FTypeConvRule>,
+    ftype_right_to_left: &mut Vec<FTypeConvRule>,
+    ftype_cfg: Option<SpannedSmolStr>,
+    ftype_req_modules: Vec<ModuleName>,
+) -> syn::Result<()> {
+    let left_ty = if input.peek(LitStr) {
+        Some(input.parse::<LitStr>()?.into())
+    } else {
+        None
+    };
+    let mut conv_rule_type = None;
+    if input.peek(Token![=>]) {
+        input.parse::<Token![=>]>()?;
+        conv_rule_type = Some(ConvertRuleType::LeftToRight(
+            input.parse::<LitStr>()?.into(),
+        ));
+    } else if input.peek(Token![<=]) {
+        input.parse::<Token![<=]>()?;
+        conv_rule_type = Some(ConvertRuleType::RightToLeft(
+            input.parse::<LitStr>()?.into(),
+        ));
+    }
+    let code = if conv_rule_type.is_some() && input.peek(LitStr) {
+        let code_str = input.parse::<LitStr>()?;
+        let var_name = var_name.ok_or_else(|| {
+            syn::Error::new(
+                keyword.span(),
+                "there is conversation code, but name of input variable not defined here",
+            )
+        })?;
+        let var_name = format!("${}", var_name);
+        Some(TypeConvCode::new(
+            replace_first_and_other(
+                code_str
+                    .value()
+                    .replace(&var_name, FROM_VAR_TEMPLATE)
+                    .as_str(),
+                "$out",
+                TO_VAR_TYPE_TEMPLATE,
+                TO_VAR_TEMPLATE,
+            ),
+            (SourceId::none(), code_str.span()),
+        ))
+    } else {
+        None
+    };
+    match conv_rule_type {
+        Some(ConvertRuleType::LeftToRight(right_ty)) => {
+            if ftype_left_to_right
+                .iter()
+                .any(|x| x.cfg_option == ftype_cfg)
+            {
+                return Err(syn::Error::new(
+                    keyword.span(),
+                    "duplicate of f_type left to right rule with the same option",
+                ));
+            }
+            ftype_left_to_right.push(FTypeConvRule {
+                req_modules: ftype_req_modules,
+                cfg_option: ftype_cfg,
+                left_right_ty: if let Some(left_ty) = left_ty {
+                    FTypeLeftRightPair::Both(left_ty, right_ty)
+                } else {
+                    FTypeLeftRightPair::OnlyRight(right_ty)
+                },
+                code,
+            });
+        }
+        Some(ConvertRuleType::RightToLeft(right_ty)) => {
+            if ftype_right_to_left
+                .iter()
+                .any(|x| x.cfg_option == ftype_cfg)
+            {
+                return Err(syn::Error::new(
+                    keyword.span(),
+                    "duplicate of f_type right to left rule with the same option",
+                ));
+            }
+            ftype_right_to_left.push(FTypeConvRule {
+                cfg_option: ftype_cfg,
+                req_modules: ftype_req_modules,
+                left_right_ty: if let Some(left_ty) = left_ty {
+                    FTypeLeftRightPair::Both(left_ty, right_ty)
+                } else {
+                    FTypeLeftRightPair::OnlyRight(right_ty)
+                },
+                code,
+            });
+        }
+        None => {
+            if ftype_left_to_right
+                .iter()
+                .any(|x| x.cfg_option == ftype_cfg)
+            {
+                return Err(syn::Error::new(
+                    keyword.span(),
+                    "duplicate of f_type left to right rule with the same option",
+                ));
+            }
+            let left_ty = left_ty.ok_or_else(|| {
+                syn::Error::new(
+                    keyword.span(),
+                    "expect type name in this kind of f_type rule",
+                )
+            })?;
+            ftype_left_to_right.push(FTypeConvRule {
+                req_modules: ftype_req_modules,
+                cfg_option: ftype_cfg,
+                left_right_ty: FTypeLeftRightPair::OnlyLeft(left_ty),
+                code: None,
+            });
+        }
+    }
+    Ok(())
 }
