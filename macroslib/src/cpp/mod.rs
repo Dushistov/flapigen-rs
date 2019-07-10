@@ -37,7 +37,6 @@ mod map_type;
 use std::{fmt, io::Write, mem};
 
 use log::{debug, trace};
-use petgraph::Direction;
 use proc_macro2::TokenStream;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
@@ -45,7 +44,7 @@ use strum::IntoEnumIterator;
 use syn::{spanned::Spanned, Type};
 
 use crate::{
-    cpp::map_type::map_type,
+    cpp::map_type::{do_map_type, map_type},
     error::{invalid_src_id_span, DiagnosticError, Result},
     file_cache::FileWriteCache,
     source_registry::SourceId,
@@ -59,8 +58,8 @@ use crate::{
             boxed_type, unpack_from_heap_pointer, validate_cfg_options, ForeignMethodSignature,
             ForeignTypeInfoT,
         },
-        CItem, CItems, ForeignTypeInfo, MapToForeignFlag, RustTypeIdx, TypeConvCode,
-        TypeMapConvRuleInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        CItem, CItems, ForeignTypeInfo, RustTypeIdx, TypeConvCode, TypeMapConvRuleInfo,
+        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
@@ -95,11 +94,11 @@ impl ForeignTypeInfoT for CppForeignTypeInfo {
 
 impl CppForeignTypeInfo {
     pub(in crate::cpp) fn try_new(
-        tmap: &mut TypeMap,
+        ctx: &mut CppContext,
         direction: petgraph::Direction,
         ftype_idx: ForeignType,
     ) -> Result<Self> {
-        let ftype = &tmap[ftype_idx];
+        let ftype = &ctx.conv_map[ftype_idx];
         let mut cpp_converter = None;
 
         let rule = match direction {
@@ -125,9 +124,12 @@ impl CppForeignTypeInfo {
             let typename = ftype.typename();
             let converter = intermediate.conv_code.to_string();
             let intermediate_ty = intermediate.intermediate_ty;
-            let inter_ft = convert_rt_to_ft(tmap, intermediate_ty)?;
-            provides_by_module.extend_from_slice(&tmap[inter_ft].provides_by_module);
-            base_ft_name = tmap[inter_ft].typename();
+
+            let rty = ctx.conv_map[intermediate_ty].clone();
+            let arg_span = intermediate.conv_code.full_span();
+            let inter_ft = do_map_type(ctx, &rty, direction, arg_span)?;
+            provides_by_module.extend_from_slice(&ctx.conv_map[inter_ft].provides_by_module);
+            base_ft_name = ctx.conv_map[inter_ft].typename();
             cpp_converter = Some(CppConverter {
                 typename,
                 converter,
@@ -145,7 +147,7 @@ impl CppForeignTypeInfo {
             input_to_output,
             base: ForeignTypeInfo {
                 name: base_ft_name,
-                correspoding_rust_type: tmap[base_rt].clone(),
+                correspoding_rust_type: ctx.conv_map[base_rt].clone(),
             },
             provides_by_module,
             cpp_converter,
@@ -328,28 +330,6 @@ fn map_write_err<Err: fmt::Display>(err: Err) -> String {
 
 fn map_any_err_to_our_err<E: fmt::Display>(err: E) -> DiagnosticError {
     DiagnosticError::new_without_src_info(err)
-}
-
-fn convert_rt_to_ft(tmap: &mut TypeMap, rt: RustTypeIdx) -> Result<ForeignType> {
-    let rtype = tmap[rt].clone();
-    tmap.map_through_conversation_to_foreign(
-        rtype.to_idx(),
-        Direction::Outgoing,
-        MapToForeignFlag::FullSearch,
-        rtype.src_id_span(),
-        self::map_type::calc_this_type_for_method,
-    )
-    .ok_or_else(|| {
-        DiagnosticError::new(
-            rtype.src_id,
-            rtype.ty.span(),
-            format!(
-                "Do not know conversation from \
-                 such rust type '{}' to foreign",
-                rtype
-            ),
-        )
-    })
 }
 
 fn register_c_type(
