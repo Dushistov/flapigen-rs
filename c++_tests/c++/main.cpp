@@ -357,7 +357,7 @@ TEST(TestWorkWithVec, smokeTest)
     }
     {
         const std::array<int32_t, 5> a{ { -(int32_t(1) << 29), -10, 0, 17, int32_t(1) << 30 } };
-        auto v = TestWorkWithVec::test_i32_slice(RustSlice<int32_t>{ &a[0], a.size() });
+        auto v = TestWorkWithVec::test_i32_slice(RustSlice<const int32_t>{ &a[0], a.size() });
         ASSERT_EQ(a.size(), v.size());
         for (size_t i = 0; i < a.size(); ++i) {
             EXPECT_EQ(a[i] + 1, v[i]);
@@ -379,6 +379,14 @@ TEST(TestWorkWithVec, smokeTest)
             ASSERT_EQ(static_cast<int32_t>(i), e.get_data());
             ++i;
         }
+    }
+
+    {
+        std::array<int32_t, 5> a{ { -17, 60, 5, 33, 18 } };
+        auto a2 = a;
+        TestWorkWithVec::sort_i32_slice(RustSlice<int32_t>{ &a[0], a.size() });
+        std::sort(a2.begin(), a2.end());
+        EXPECT_EQ(a2, a);
     }
 }
 
