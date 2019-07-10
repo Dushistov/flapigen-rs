@@ -1,7 +1,8 @@
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use proc_macro2::TokenStream;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
+use smol_str::SmolStr;
 use syn::{spanned::Spanned, Type};
 
 use crate::{
@@ -10,6 +11,7 @@ use crate::{
         calc_this_type_for_method, java_class_full_name, java_class_name_to_jni, method_name,
         ForeignTypeInfo, JavaForeignTypeInfo, JniForeignMethodSignature,
     },
+    namegen::new_unique_name,
     source_registry::SourceId,
     typemap::ast::{list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
     typemap::{
@@ -35,6 +37,7 @@ struct MethodContext<'a> {
     jni_func_name: &'a str,
     decl_func_args: &'a str,
     real_output_typename: &'a str,
+    ret_name: &'a str,
 }
 
 pub(in crate::java_jni) fn generate_rust_code(
@@ -141,6 +144,21 @@ May be you need to use `private constructor = empty;` syntax?",
         )?;
         trace!("generate_rust_code jni name: {}", jni_func_name);
 
+        let mut known_names: FxHashSet<SmolStr> =
+            method.arg_names_without_self().map(|x| x.into()).collect();
+        if let MethodVariant::Method(_) = method.variant {
+            if known_names.contains("this") {
+                return Err(DiagnosticError::new(
+                    class.src_id,
+                    method.rust_id.span(),
+                    "Invalid argument name 'this' reserved for generate code purposes",
+                ));
+            }
+            known_names.insert("this".into());
+        }
+        let ret_name = new_unique_name(&known_names, "ret");
+        known_names.insert(ret_name.clone());
+
         let decl_func_args = {
             use std::fmt::Write;
             let mut buf = String::new();
@@ -170,6 +188,7 @@ May be you need to use `private constructor = empty;` syntax?",
             jni_func_name: &jni_func_name,
             decl_func_args: &decl_func_args,
             real_output_typename: &real_output_typename,
+            ret_name: &ret_name,
         };
 
         match method.variant {
@@ -606,7 +625,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
         mc.class.src_id,
         &mc.method.fn_decl.output,
         &mc.f_method.output,
-        "ret",
+        mc.ret_name,
         &jni_ret_type,
     )?;
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
@@ -624,9 +643,9 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
 #[no_mangle]
 pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_type} {{
 {convert_input_code}
-    let mut ret: {real_output_typename} = {call};
+    let mut {ret_name}: {real_output_typename} = {call};
 {convert_output_code}
-    ret
+    {ret_name}
 }}
 "#,
         func_name = mc.jni_func_name,
@@ -636,6 +655,7 @@ pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> 
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
         call = mc.method.generate_code_to_call_rust_func(),
+        ret_name = mc.ret_name,
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
@@ -724,7 +744,7 @@ fn generate_method(
         mc.class.src_id,
         &mc.method.fn_decl.output,
         &mc.f_method.output,
-        "ret",
+        mc.ret_name,
         &jni_ret_type,
     )?;
 
@@ -759,9 +779,9 @@ pub extern "C"
         jlong_to_pointer::<{this_type}>(this).as_mut().unwrap()
     }};
 {convert_this}
-    let mut ret: {real_output_typename} = {call};
+    let mut {ret_name}: {real_output_typename} = {call};
 {convert_output_code}
-    ret
+    {ret_name}
 }}
 "#,
         func_name = mc.jni_func_name,
@@ -774,6 +794,7 @@ pub extern "C"
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
         call = mc.method.generate_code_to_call_rust_func(),
+        ret_name = mc.ret_name,
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);

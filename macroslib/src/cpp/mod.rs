@@ -195,6 +195,7 @@ struct MethodContext<'a> {
     c_func_name: &'a str,
     decl_func_args: &'a str,
     real_output_typename: &'a str,
+    ret_name: &'a str,
 }
 
 impl CppConfig {
