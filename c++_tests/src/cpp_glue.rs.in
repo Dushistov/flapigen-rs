@@ -361,6 +361,9 @@ foreigner_class!(class TestWorkWithVec {
     static_method TestWorkWithVec::test_i32_slice(a: &[i32]) -> Vec<i32>;
     method TestWorkWithVec::set_vec_foo(&mut self, v: Vec<Foo>);
     static_method TestWorkWithVec::test_lifetime_objs<'a>(n: usize) -> Vec<TestObjectLifetime<'a>>;
+    fn sort_i32_slice(arr: &mut [i32]) {
+        arr.sort();
+    }
 });
 
 enum MyEnum {

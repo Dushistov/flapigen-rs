@@ -49,3 +49,4 @@ string_handling
 work_with_rc
 inline_function
 test_bare_fn_match
+cpp_generic_ptr_rule
