@@ -1,1 +1,1 @@
-"public Boo()  {";
+"public Boo() {";

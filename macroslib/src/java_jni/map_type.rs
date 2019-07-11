@@ -1,19 +1,92 @@
 use log::trace;
-use proc_macro2::Span;
-use syn::{parse_quote, Type};
+use petgraph::Direction;
+use syn::Type;
 
 use crate::{
-    error::{DiagnosticError, Result},
-    java_jni::{calc_this_type_for_method, JavaForeignTypeInfo, NullAnnotation},
-    typemap::ast::{if_option_return_some_type, normalize_ty_lifetimes},
-    typemap::{ty::RustType, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
-    ForeignEnumInfo, ForeignerClassInfo, TypeMap,
+    error::{DiagnosticError, Result, SourceIdSpan},
+    java_jni::{calc_this_type_for_method, JavaConverter, JavaForeignTypeInfo, NullAnnotation},
+    source_registry::SourceId,
+    typemap::{
+        ast::{if_option_return_some_type, normalize_ty_lifetimes},
+        ty::RustType,
+        ForeignTypeInfo, MapToForeignFlag, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+    },
+    types::{ForeignEnumInfo, ForeignerClassInfo},
+    TypeMap,
 };
+
+pub(in crate::java_jni) fn map_type(
+    conv_map: &mut TypeMap,
+    arg_ty: &RustType,
+    direction: Direction,
+    arg_ty_span: SourceIdSpan,
+) -> Result<JavaForeignTypeInfo> {
+    if direction == Direction::Incoming {
+        if let Some(fti) = special_type(conv_map, &arg_ty, arg_ty_span)? {
+            return Ok(fti);
+        }
+    }
+
+    let fti = {
+        let fti = conv_map
+            .map_through_conversation_to_foreign(
+                arg_ty.to_idx(),
+                direction,
+                MapToForeignFlag::FullSearch,
+                arg_ty_span,
+                calc_this_type_for_method,
+            )
+            .ok_or_else(|| {
+                DiagnosticError::new2(
+                    arg_ty_span,
+                    format!(
+                        "can not find conversation Java type {} \
+                         Rust type '{}'",
+                        match direction {
+                            Direction::Outgoing => "=>",
+                            Direction::Incoming => "<=",
+                        },
+                        arg_ty,
+                    ),
+                )
+            })?;
+        let ftype = &conv_map[fti];
+        let rtype_idx = match direction {
+            petgraph::Direction::Outgoing => {
+                ftype
+                    .into_from_rust
+                    .as_ref()
+                    .expect("Internal error: into_from_rust not defined")
+                    .rust_ty
+            }
+            petgraph::Direction::Incoming => {
+                ftype
+                    .from_into_rust
+                    .as_ref()
+                    .expect("Internal error: from_into_rust not defined")
+                    .rust_ty
+            }
+        };
+        ForeignTypeInfo {
+            name: ftype.name.typename.clone(),
+            correspoding_rust_type: conv_map[rtype_idx].clone(),
+        }
+    };
+    let mut fti: JavaForeignTypeInfo = fti.into();
+    if !is_primitive_type(&fti.base.name) {
+        fti.annotation = Some(if if_option_return_some_type(arg_ty).is_none() {
+            NullAnnotation::NonNull
+        } else {
+            NullAnnotation::Nullable
+        });
+    }
+    Ok(fti)
+}
 
 pub(in crate::java_jni) fn special_type(
     conv_map: &mut TypeMap,
     arg_ty: &RustType,
-    arg_ty_span: Span,
+    arg_ty_span: SourceIdSpan,
 ) -> Result<Option<JavaForeignTypeInfo>> {
     let foreign_class_trait = "SwigForeignClass";
 
@@ -30,7 +103,8 @@ pub(in crate::java_jni) fn special_type(
             )
             .ok_or_else(|| {
                 DiagnosticError::new(
-                    arg_ty_span,
+                    arg_ty_span.0,
+                    arg_ty_span.1,
                     format!("Can not find foreigner_class for '{}'", arg_ty),
                 )
             })?;
@@ -57,19 +131,21 @@ pub(in crate::java_jni) fn special_type(
                 name: foreign_class.name.to_string().into(),
                 correspoding_rust_type: jlong_ti,
             },
-            java_transition_type: Some("long".into()),
-            java_converter: format!(
-                "        long {to_var} = {from_var}.mNativeObj;",
-                to_var = TO_VAR_TEMPLATE,
-                from_var = FROM_VAR_TEMPLATE
-            ),
+            java_converter: Some(JavaConverter {
+                converter: format!(
+                    "        long {to_var} = {from_var}.mNativeObj;",
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE
+                ),
+                java_transition_type: "long".into(),
+            }),
             annotation: Some(NullAnnotation::NonNull),
         };
         return Ok(Some(converter));
     }
 
     if let Some(ty) = if_option_return_some_type(arg_ty) {
-        return handle_option_type_in_input(conv_map, &ty);
+        return handle_option_type_in_input(conv_map, &ty, arg_ty_span.0);
     }
 
     trace!("special_type: oridinary type {}", arg_ty);
@@ -84,7 +160,7 @@ fn calc_converter_for_foreign_class_arg(
     let this_ty = calc_this_type_for_method(conv_map, foreigner_class).unwrap();
     let this_ty = conv_map.ty_to_rust_type(&this_ty);
 
-    let java_converter = if this_ty.normalized_name == arg_ty.normalized_name {
+    let converter = if this_ty.normalized_name == arg_ty.normalized_name {
         format!(
             r#"
         long {to_var} = {from_var}.mNativeObj;
@@ -111,8 +187,10 @@ fn calc_converter_for_foreign_class_arg(
             name: foreigner_class.name.to_string().into(),
             correspoding_rust_type: jlong_ti,
         },
-        java_transition_type: Some("long".into()),
-        java_converter,
+        java_converter: Some(JavaConverter {
+            java_transition_type: "long".into(),
+            converter,
+        }),
         annotation: Some(NullAnnotation::NonNull),
     }
 }
@@ -122,7 +200,7 @@ fn calc_converter_for_enum(
     foreign_enum: &ForeignEnumInfo,
 ) -> JavaForeignTypeInfo {
     let jint_ti = conv_map.ty_to_rust_type(&parse_type! { jint });
-    let java_converter: String = format!(
+    let converter = format!(
         r#"
         int {to_var} = {from_var}.getValue();
 "#,
@@ -134,8 +212,10 @@ fn calc_converter_for_enum(
             name: foreign_enum.name.to_string().into(),
             correspoding_rust_type: jint_ti,
         },
-        java_transition_type: Some("int".into()),
-        java_converter,
+        java_converter: Some(JavaConverter {
+            java_transition_type: "int".into(),
+            converter,
+        }),
         annotation: Some(NullAnnotation::NonNull),
     }
 }
@@ -143,8 +223,9 @@ fn calc_converter_for_enum(
 fn handle_option_type_in_input(
     conv_map: &mut TypeMap,
     opt_inside_ty: &Type,
+    arg_src_id: SourceId,
 ) -> Result<Option<JavaForeignTypeInfo>> {
-    let opt_inside_rust_ty = conv_map.find_or_alloc_rust_type(opt_inside_ty);
+    let opt_inside_rust_ty = conv_map.find_or_alloc_rust_type(opt_inside_ty, arg_src_id);
     if let Some(fclass) =
         conv_map.find_foreigner_class_with_such_self_type(&opt_inside_rust_ty, false)
     {
@@ -154,21 +235,30 @@ fn handle_option_type_in_input(
                 name: fclass.name.to_string().into(),
                 correspoding_rust_type: jlong_ti,
             },
-            java_transition_type: Some("long".into()),
-            java_converter: format!(
-                r#"
+            java_converter: Some(JavaConverter {
+                converter: format!(
+                    r#"
         long {to_var} = 0;//TODO: use ptr::null() for corresponding constant
         if ({from_var} != null) {{
             {to_var} = {from_var}.mNativeObj;
             {from_var}.mNativeObj = 0;
         }}
 "#,
-                to_var = TO_VAR_TEMPLATE,
-                from_var = FROM_VAR_TEMPLATE
-            ),
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE
+                ),
+                java_transition_type: "long".into(),
+            }),
             annotation: Some(NullAnnotation::Nullable),
         }))
     } else {
         Ok(None)
+    }
+}
+
+fn is_primitive_type(type_name: &str) -> bool {
+    match type_name {
+        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => true,
+        _ => false,
     }
 }

@@ -1,1 +1,29 @@
-r#"fn Boo_with_foo ( a_0 : * mut :: std :: os :: raw :: c_void , ) -> * const :: std :: os :: raw :: c_void { assert ! ( ! a_0 . is_null ( ) ) ; let a_0 : * mut Foo = a_0 as * mut Foo ; let a_0 : Box < Foo > = unsafe { Box :: from_raw ( a_0 ) } ; let a_0 : Foo = * a_0 ; let this : Boo = Boo :: with_foo ( a_0 ) ; let this : Box < Boo > = Box :: new ( this ) ; let this : * mut Boo = Box :: into_raw ( this ) ; this as * const :: std :: os :: raw :: c_void }"#;
+r#"fn Boo_with_foo ( f : * mut :: std :: os :: raw :: c_void , ) -> * const :: std :: os :: raw :: c_void {
+ assert ! ( ! f . is_null ( ) ) ;
+ let f : * mut Foo = f as * mut Foo ;
+ let f : Box < Foo > = unsafe { Box :: from_raw ( f ) } ;
+ let f : Foo = * f ;
+ let this : Boo = Boo :: with_foo ( f ) ;
+ let this : Box < Boo > = Box :: new ( this ) ;
+ let this : * mut Boo = Box :: into_raw ( this ) ;
+ this as * const :: std :: os :: raw :: c_void
+ }"#;
+
+r##"# [ no_mangle ] pub extern "C" fn Boo_f ( this : * mut Boo , foo : * mut :: std :: os :: raw :: c_void , ) -> usize {
+ assert ! ( ! foo . is_null ( ) ) ;
+ let foo : * mut Foo = foo as * mut Foo ;
+ let foo : Box < Foo > = unsafe { Box :: from_raw ( foo ) } ;
+ let foo : Foo = * foo ;
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : usize = Boo :: f ( this , foo ) ;
+ ret
+ }"##;
+
+r##"# [ no_mangle ] pub extern "C" fn Boo_f2 ( a0 : f64 , foo : * mut :: std :: os :: raw :: c_void , ) -> i32 {
+ assert ! ( ! foo . is_null ( ) ) ;
+ let foo : * mut Foo = foo as * mut Foo ;
+ let foo : Box < Foo > = unsafe { Box :: from_raw ( foo ) } ;
+ let foo : Foo = * foo ;
+ let mut ret : i32 = Boo :: f2 ( a0 , foo ) ;
+ ret
+ }"##;

@@ -1,4 +1,4 @@
-# rust-swig [![Build status](https://travis-ci.org/Dushistov/rust_swig.svg?branch=master)](https://travis-ci.org/Dushistov/rust_swig) [![Build status](https://ci.appveyor.com/api/projects/status/db4rs7f96iba4bt8/branch/master?svg=true)](https://ci.appveyor.com/project/Dushistov/rust-swig/branch/master) [![Build Status](https://dev.azure.com/dushistov/rust_swig/_apis/build/status/Dushistov.rust_swig?branchName=master)](https://dev.azure.com/dushistov/rust_swig/_build/latest?definitionId=2&branchName=master) [![License](https://img.shields.io/badge/license-BSD-green.svg)](https://github.com/Dushistov/rust_swig/blob/master/LICENSE)
+# rust-swig [![Build status](https://travis-ci.org/Dushistov/rust_swig.svg?branch=master)](https://travis-ci.org/Dushistov/rust_swig) [![Build status](https://ci.appveyor.com/api/projects/status/db4rs7f96iba4bt8/branch/master?svg=true)](https://ci.appveyor.com/project/Dushistov/rust-swig/branch/master) [![Build Status](https://dev.azure.com/dushistov/rust_swig/_apis/build/status/Dushistov.rust_swig?branchName=master)](https://dev.azure.com/dushistov/rust_swig/_build/latest?definitionId=2&branchName=master) [![License](https://img.shields.io/badge/license-BSD-green.svg)](https://github.com/Dushistov/rust_swig/blob/master/LICENSE) [![Rust Documentation](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/rust_swig)
 
 Tool for connecting programs or libraries written in Rust with other languages.
 Currently implemented support for `C++` and `Java`, but you can write support
@@ -55,9 +55,9 @@ in Rust project you write (in Rust language):
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
-    method Foo::set_field(&mut self, _: i32);
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-    static_method f2(_: i32) -> i32;
+    fn Foo::set_field(&mut self, _: i32);
+    fn Foo::f(&self, _: i32, _: i32) -> i32;
+    fn f2(_: i32) -> i32;
 });
 ```
 
@@ -75,8 +75,8 @@ Also rust_swig support bypassing of code generation:
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;
-    static_method f2(_: i32) -> i32;
+    fn Foo::f(&self, _: i32, _: i32) -> i32;
+    fn f2(_: i32) -> i32;
     foreigner_code "    public int javaFunc() { return 17; }\n";
     foreigner_code r#"
     public Foo[] testHandArrayReturn() { return do_testHandArrayReturn(this.mNativeObj); }
@@ -95,7 +95,7 @@ Also you can create alias for function name:
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
+    fn Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
 });
 ```
 
@@ -111,7 +111,7 @@ class Foo {
     self_type Foo;
     /// Cool constructor
     constructor Foo::new(_: i32) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
+    fn Foo::f(&self, _: i32, _: i32) -> i32; alias getF;
 });
 ```
 
@@ -133,7 +133,7 @@ foreign_enum!(enum MyEnum {
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::default() -> Foo;
-    method f1(&mut self, v: MyEnum);
+    fn f1(&mut self, v: MyEnum);
 });
 ```
 
@@ -157,7 +157,7 @@ trait SomeTrait {
     fn on_state_changed(&self, item: i32, is_ok: bool);
 }
 
-foreign_interface!(interface SomeObserver {
+foreign_callback!(callback SomeObserver {
     self_type SomeTrait;
     onStateChanged = SomeTrait::on_state_changed(&self, _: i32, _: bool);
 });
@@ -165,7 +165,7 @@ foreign_interface!(interface SomeObserver {
 foreigner_class!(class ClassWithCallbacks {
     self_type Foo;
     constructor Foo::default() -> Foo;
-    method f1(&mut self, cb: Box<SomeTrait>);
+    fn f1(&mut self, cb: Box<SomeTrait>);
 });
 ```
 
@@ -188,6 +188,18 @@ class Boo : public SomeObserver {
 public:
     void onStateChanged(int, bool) override {}
 };
+```
+
+Also you can insert rust code into generated code:
+
+```rust
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -> Foo;
+	fn to_string(&self) -> String {
+        format!("{}", self)
+    }
+});
 ```
 
 ## Integration of rust_swig with your project

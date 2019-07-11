@@ -1,0 +1,13 @@
+r##"# [ no_mangle ] pub extern "C" fn Boo_f1 ( this : * mut Boo , a0 : CRustObjectMutSlice , ) -> CRustSliceu32 {
+ let a0 : & mut [ Foo ] = unsafe { :: std :: slice :: from_raw_parts_mut ( a0 . data as * mut Foo , a0 . len ) } ;
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : & [ u32 ] = Boo :: f1 ( this , a0 ) ;
+ let ret : CRustSliceu32 = CRustSliceu32 { data : ret . as_ptr ( ) , len : ret . len ( ) , } ;
+ ret }"##;
+
+r##"# [ no_mangle ] pub extern "C" fn Boo_f2 ( this : * mut Boo , a0 : CRustObjectSlice , ) -> CRustSliceu32 {
+ let a0 : & [ Foo ] = unsafe { :: std :: slice :: from_raw_parts ( a0 . data as * const Foo , a0 . len ) } ;
+ let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : & [ u32 ] = Boo :: f2 ( this , a0 ) ;
+ let ret : CRustSliceu32 = CRustSliceu32 { data : ret . as_ptr ( ) , len : ret . len ( ) , } ;
+ ret }"##;

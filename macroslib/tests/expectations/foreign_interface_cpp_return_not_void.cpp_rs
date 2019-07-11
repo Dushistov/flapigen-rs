@@ -1,6 +1,6 @@
 r#"pub struct C_SomeObserver {
  opaque : * const :: std :: os :: raw :: c_void ,
  C_SomeObserver_deref : extern "C" fn ( _ : * const :: std :: os :: raw :: c_void ) ,
- onStateChanged : extern "C" fn ( a_0 : i32 , a_1 : :: std :: os :: raw :: c_char , _ : * const :: std :: os :: raw :: c_void ) -> :: std :: os :: raw :: c_char ,
+ onStateChanged : extern "C" fn ( a0 : i32 , a1 : :: std :: os :: raw :: c_char , _ : * const :: std :: os :: raw :: c_void ) -> :: std :: os :: raw :: c_char ,
  onStateChangedWithoutArgs : extern "C" fn ( _ : * const :: std :: os :: raw :: c_void ) -> ( ) ,
  }"#;

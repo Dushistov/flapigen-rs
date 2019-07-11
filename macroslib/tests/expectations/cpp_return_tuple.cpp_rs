@@ -1,0 +1,7 @@
+r##"# [ no_mangle ] pub extern "C" fn Foo_f ( this : * mut Foo , ) -> CRustPair4232mut3232c_void4232mut3232c_void {
+ let this : & Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
+ let mut ret : ( One , Two ) = Foo :: f ( this , ) ;
+ let p0 : * mut :: std :: os :: raw :: c_void = < One >:: box_object ( ret . 0 ) ;
+ let p1 : * mut :: std :: os :: raw :: c_void = < Two >:: box_object ( ret . 1 ) ;
+ let ret : CRustPair4232mut3232c_void4232mut3232c_void = CRustPair4232mut3232c_void4232mut3232c_void { first : p0 , second : p1 , } ;
+ ret }"##;

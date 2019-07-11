@@ -1,4 +1,6 @@
 mod subst_map;
+#[cfg(test)]
+mod tests;
 
 use std::{
     cell::RefCell,
@@ -18,22 +20,26 @@ use syn::{
     parse_quote,
     visit::{visit_lifetime, Visit},
     visit_mut::{
-        visit_angle_bracketed_generic_arguments_mut, visit_type_mut, visit_type_reference_mut,
-        VisitMut,
+        visit_angle_bracketed_generic_arguments_mut, visit_parenthesized_generic_arguments_mut,
+        visit_type_mut, visit_type_reference_mut, VisitMut,
     },
     Type,
 };
 
-use self::subst_map::{TyParamsSubstItem, TyParamsSubstMap};
-use crate::typemap::{
-    make_unique_rust_typename, make_unique_rust_typename_if_need,
-    ty::{RustType, TraitNamesSet},
+pub(in crate) use self::subst_map::{TyParamsSubstItem, TyParamsSubstList, TyParamsSubstMap};
+use crate::{
+    error::{panic_on_syn_error, SourceIdSpan},
+    source_registry::SourceId,
+    typemap::{
+        ty::{RustType, RustTypeS, TraitNamesSet},
+        TypeConvCode,
+    },
 };
 
 #[derive(Debug)]
 pub(crate) struct TypeName {
     pub(crate) typename: SmolStr,
-    pub(crate) span: Span,
+    pub(crate) span: SourceIdSpan,
 }
 
 impl PartialEq for TypeName {
@@ -57,11 +63,14 @@ impl Display for TypeName {
 }
 
 impl TypeName {
-    pub(crate) fn new<S: Into<SmolStr>>(tn: S, span: Span) -> Self {
+    pub(crate) fn new<S: Into<SmolStr>>(tn: S, span: SourceIdSpan) -> Self {
         TypeName {
             typename: tn.into(),
             span,
         }
+    }
+    pub(crate) fn from_ident(id: &Ident, src_id: SourceId) -> Self {
+        TypeName::new(id.to_string(), (src_id, id.span()))
     }
     #[inline]
     pub(crate) fn as_str(&self) -> &str {
@@ -69,9 +78,27 @@ impl TypeName {
     }
 }
 
-impl<'a> From<&'a Ident> for TypeName {
-    fn from(id: &'a Ident) -> Self {
-        TypeName::new(id.to_string(), id.span())
+#[derive(Debug, Clone)]
+pub(crate) struct SpannedSmolStr {
+    pub sp: Span,
+    pub value: SmolStr,
+}
+
+impl SpannedSmolStr {
+    pub(crate) fn as_str(&self) -> &str {
+        self.value.as_str()
+    }
+}
+
+impl PartialEq for SpannedSmolStr {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl PartialEq<SmolStr> for SpannedSmolStr {
+    fn eq(&self, other: &SmolStr) -> bool {
+        self.value == *other
     }
 }
 
@@ -131,6 +158,20 @@ pub(crate) fn normalize_ty_lifetimes(ty: &syn::Type) -> &'static str {
                 .collect();
             visit_angle_bracketed_generic_arguments_mut(self, i);
         }
+        fn visit_path_arguments_mut(&mut self, i: &mut syn::PathArguments) {
+            match *i {
+                syn::PathArguments::None => {}
+                syn::PathArguments::AngleBracketed(ref mut b) => {
+                    self.visit_angle_bracketed_generic_arguments_mut(b);
+                    if b.args.is_empty() {
+                        *i = syn::PathArguments::None;
+                    }
+                }
+                syn::PathArguments::Parenthesized(ref mut b) => {
+                    visit_parenthesized_generic_arguments_mut(self, b);
+                }
+            }
+        }
     }
 
     let mut strip_lifetime = StripLifetime;
@@ -143,9 +184,10 @@ pub(crate) fn normalize_ty_lifetimes(ty: &syn::Type) -> &'static str {
 
 #[derive(Debug)]
 pub(crate) struct GenericTypeConv {
+    pub src_id: SourceId,
     pub from_ty: syn::Type,
     pub to_ty: syn::Type,
-    pub code_template: String,
+    pub code: TypeConvCode,
     pub dependency: Rc<RefCell<Option<TokenStream>>>,
     pub generic_params: syn::Generics,
     pub to_foreigner_hint: Option<String>,
@@ -153,19 +195,21 @@ pub(crate) struct GenericTypeConv {
 }
 
 impl GenericTypeConv {
-    pub(crate) fn simple_new(
+    pub(crate) fn new(
         from_ty: Type,
         to_ty: Type,
         generic_params: syn::Generics,
+        code: TypeConvCode,
     ) -> GenericTypeConv {
         GenericTypeConv {
             from_ty,
             to_ty,
-            code_template: String::new(),
+            code,
             dependency: Rc::new(RefCell::new(None)),
             generic_params,
             to_foreigner_hint: None,
             from_foreigner_hint: None,
+            src_id: SourceId::none(),
         }
     }
 
@@ -180,10 +224,10 @@ impl GenericTypeConv {
     {
         let mut subst_map = TyParamsSubstMap::default();
         trace!(
-            "is_conv_possible: begin generic: {:?} => from_ty: {:?} => ty: {}",
-            self.generic_params,
-            self.from_ty,
-            ty.normalized_name
+            "is_conv_possible: begin generic: {} => from_ty: {} => ty: {}",
+            DisplayToTokens(&self.generic_params),
+            DisplayToTokens(&self.from_ty),
+            ty
         );
         for ty_p in self.generic_params.type_params() {
             subst_map.insert(&ty_p.ident, None);
@@ -192,9 +236,9 @@ impl GenericTypeConv {
             return None;
         }
         trace!(
-            "is_conv_possible: {} is subst of {:?}, check trait bounds",
+            "is_conv_possible: {} is subst of {}, check trait bounds",
             ty,
-            self.from_ty
+            DisplayToTokens(&self.from_ty),
         );
         let trait_bounds = get_trait_bounds(&self.generic_params);
         let mut has_unbinded = false;
@@ -205,17 +249,8 @@ impl GenericTypeConv {
                     *subst_it,
                     trait_bounds
                 );
-                let traits_bound_not_match = |idx: usize| {
-                    let requires = &trait_bounds[idx].trait_names;
-                    let val_name = normalize_ty_lifetimes(val);
 
-                    others(val_name).map_or(true, |rt| !rt.implements.contains_subset(requires))
-                };
-                if trait_bounds
-                    .iter()
-                    .position(|it| it.ty_param.as_ref() == subst_it.ident)
-                    .map_or(false, traits_bound_not_match)
-                {
+                if !is_ty_satisfy_trait_bounds(subst_it.ident, val, &trait_bounds, &others) {
                     trace!("is_conv_possible: trait bounds check failed");
                     return None;
                 }
@@ -226,7 +261,30 @@ impl GenericTypeConv {
         if has_unbinded {
             trace!("is_conv_possible: has_unbinded: goal_ty {:?}", goal_ty);
             if let Some(goal_ty) = goal_ty {
-                is_second_subst_of_first(&self.to_ty, &goal_ty.ty, &mut subst_map);
+                /*
+                should be:
+                jlong -> Box<T> gool Box<Foo>, T = Foo,
+                jlong -> Box<T>, gool Foo, T = Foo
+                 */
+                if !is_second_subst_of_first(&self.to_ty, &goal_ty.ty, &mut subst_map)
+                    && subst_map.len() == 1
+                    && subst_map.as_slice()[0].ty.is_none()
+                {
+                    debug_assert_eq!(1, self.generic_params.type_params().count());
+                    if let Some(first_generic_ty) = self.generic_params.type_params().nth(0) {
+                        *subst_map
+                            .get_mut(&first_generic_ty.ident)
+                            .expect("Type should be there") = Some(goal_ty.ty.clone());
+                    }
+                }
+            }
+            for subst_it in subst_map.as_slice() {
+                if let Some(ref val) = subst_it.ty {
+                    if !is_ty_satisfy_trait_bounds(subst_it.ident, val, &trait_bounds, &others) {
+                        trace!("is_conv_possible: trait bounds check failed");
+                        return None;
+                    }
+                }
             }
         }
 
@@ -247,7 +305,9 @@ impl GenericTypeConv {
                 let foreign_name =
                     (*from_foreigner_hint.as_str()).replace(&key.to_string(), &val_name);
                 let clean_from_ty = normalize_ty_lifetimes(&self.from_ty);
-                if ty.normalized_name != make_unique_rust_typename(&clean_from_ty, &foreign_name) {
+                if ty.normalized_name
+                    != RustTypeS::make_unique_typename(&clean_from_ty, &foreign_name)
+                {
                     trace!("is_conv_possible: check failed by from_foreigner_hint check");
                     return None;
                 }
@@ -272,7 +332,7 @@ impl GenericTypeConv {
         } else {
             None
         };
-        let normalized_name = make_unique_rust_typename_if_need(
+        let normalized_name = RustTypeS::make_unique_typename_if_need(
             normalize_ty_lifetimes(&to_ty).to_string(),
             to_suffix,
         )
@@ -281,47 +341,57 @@ impl GenericTypeConv {
     }
 }
 
+fn is_ty_satisfy_trait_bounds<'a, OtherRustTypes>(
+    subst_ident: &syn::Ident,
+    val: &syn::Type,
+    trait_bounds: &[GenericTraitBound],
+    others: &OtherRustTypes,
+) -> bool
+where
+    OtherRustTypes: Fn(&str) -> Option<&'a RustType>,
+{
+    let traits_bound_not_match = |idx: usize| {
+        let requires = &trait_bounds[idx].trait_names;
+        let val_name = normalize_ty_lifetimes(val);
+
+        others(val_name).map_or(true, |rt| !rt.implements.contains_subset(requires))
+    };
+    !trait_bounds
+        .iter()
+        .position(|it| it.ty_param.as_ref() == subst_ident)
+        .map_or(false, traits_bound_not_match)
+}
+
 /// for example true for Result<T, E> Result<u8, u8>
-fn is_second_subst_of_first(ty1: &Type, ty2: &Type, subst_map: &mut TyParamsSubstMap) -> bool {
-    trace!("is_second_substitude_of_first {:?} vs {:?}", ty1, ty2);
+pub(in crate::typemap) fn is_second_subst_of_first(
+    ty1: &Type,
+    ty2: &Type,
+    subst_map: &mut TyParamsSubstMap,
+) -> bool {
+    trace!(
+        "is_second_substitude_of_first {} vs {}",
+        DisplayToTokens(ty1),
+        DisplayToTokens(ty2)
+    );
     match (ty1, ty2) {
         (
             Type::Path(syn::TypePath { path: ref p1, .. }),
             Type::Path(syn::TypePath { path: ref p2, .. }),
-        ) => {
-            if p1.segments.len() != p2.segments.len() {
-                trace!("is_second_substitude_of_first: path length not match");
-                return false;
-            }
-            if p1.segments.len() == 1 {
-                if let Some(subst) = subst_map.get_mut(&p1.segments[0].ident) {
-                    if subst.is_none() {
-                        *subst = Some(ty2.clone());
-                        return true;
-                    }
-                }
-            }
-            for (s1, s2) in p1.segments.iter().zip(p2.segments.iter()) {
-                if s1.ident != s2.ident {
-                    trace!(
-                        "is_second_substitude_of_first: id different {} vs {}",
-                        s1.ident,
-                        s2.ident
-                    );
-                    return false;
-                }
-                if !is_second_subst_of_first_ppath(&s1.arguments, &s2.arguments, subst_map) {
-                    return false;
-                }
-            }
-            true
-        }
+        ) => is_second_substitude_of_first_path(p1, p2, subst_map, ty2),
         (Type::Reference(ref mut_ty1), Type::Reference(ref mut_ty2)) => {
             if mut_ty1.mutability != mut_ty2.mutability {
                 trace!("is_second_substitude_of_first mutable not match");
                 false
             } else {
                 is_second_subst_of_first(&*mut_ty1.elem, &*mut_ty2.elem, subst_map)
+            }
+        }
+        (Type::Ptr(ref ptr_ty1), Type::Ptr(ref ptr_ty2)) => {
+            if ptr_ty1.mutability != ptr_ty2.mutability {
+                trace!("is_second_substitude_of_first mutable not match");
+                false
+            } else {
+                is_second_subst_of_first(&*ptr_ty1.elem, &*ptr_ty2.elem, subst_map)
             }
         }
         (Type::Slice(ref ty1), Type::Slice(ref ty2)) => {
@@ -339,12 +409,74 @@ fn is_second_subst_of_first(ty1: &Type, ty2: &Type, subst_map: &mut TyParamsSubs
             }
             true
         }
+        (Type::ImplTrait(ref trait1), Type::ImplTrait(ref trait2)) => {
+            if trait1.bounds.len() != trait2.bounds.len() {
+                trace!(
+                    "is_second_subst_of_first: impl Trait, number of traits different: {} vs {}",
+                    trait1.bounds.len(),
+                    trait2.bounds.len()
+                );
+                return false;
+            }
+            for (t1, t2) in trait1.bounds.iter().zip(trait2.bounds.iter()) {
+                use syn::TypeParamBound::*;
+                match (t1, t2) {
+                    (Trait(ref b1), Trait(ref b2)) => {
+                        if b1.modifier != b2.modifier {
+                            trace!("is_second_subst_of_first: impl Trait, trait bounds modifier mismatch");
+                            return false;
+                        }
+                        if !is_second_substitude_of_first_path(&b1.path, &b2.path, subst_map, ty2) {
+                            return false;
+                        }
+                    }
+                    (Lifetime(_), Lifetime(_)) => { /*skip*/ }
+                    (Trait(_), Lifetime(_)) => {
+                        trace!("is_second_subst_of_first: impl Trait, Trait vs Lifetime");
+                        return false;
+                    }
+                    (Lifetime(_), Trait(_)) => {
+                        trace!("is_second_subst_of_first: impl Trait, Lifetime vs Trait");
+                        return false;
+                    }
+                }
+            }
+            true
+        }
+        (Type::BareFn(ref fn1), Type::BareFn(ref fn2)) => {
+            if fn1.abi != fn2.abi {
+                trace!("is_second_subst_of_first: bare fn abi mismatch");
+                return false;
+            }
+            if fn1.unsafety != fn2.unsafety {
+                trace!("is_second_subst_of_first: bare fn unsafety mismatch");
+                return false;
+            }
+            if fn1.variadic != fn2.variadic {
+                trace!("is_second_subst_of_first: bare fn variadic mismatch");
+                return false;
+            }
+            if fn1.inputs.len() != fn2.inputs.len() {
+                trace!("is_second_subst_of_first: bare fn inputs len mismatch");
+                return false;
+            }
+            for (arg1, arg2) in fn1.inputs.iter().zip(fn2.inputs.iter()) {
+                if !types_equal_inside_path(&arg1.ty, &arg2.ty, subst_map) {
+                    return false;
+                }
+            }
+            if !return_type_match(&fn1.output, &fn2.output, subst_map) {
+                return false;
+            }
+
+            true
+        }
         _ => {
             let ret = ty1 == ty2;
             trace!(
-                "is_second_substitude_of_first just check equal {:?} vs {:?} => {}",
-                ty1,
-                ty2,
+                "is_second_substitude_of_first just check equal {} vs {} => {}",
+                DisplayToTokens(ty1),
+                DisplayToTokens(ty2),
                 ret
             );
             ret
@@ -352,7 +484,41 @@ fn is_second_subst_of_first(ty1: &Type, ty2: &Type, subst_map: &mut TyParamsSubs
     }
 }
 
-fn is_second_subst_of_first_ppath(
+fn is_second_substitude_of_first_path(
+    p1: &syn::Path,
+    p2: &syn::Path,
+    subst_map: &mut TyParamsSubstMap,
+    ty2: &syn::Type,
+) -> bool {
+    if p1.segments.len() == 1 {
+        if let Some(subst) = subst_map.get_mut(&p1.segments[0].ident) {
+            if subst.is_none() {
+                *subst = Some(ty2.clone());
+                return true;
+            }
+        }
+    }
+    if p1.segments.len() != p2.segments.len() {
+        trace!("is_second_substitude_of_first: path length not match");
+        return false;
+    }
+    for (s1, s2) in p1.segments.iter().zip(p2.segments.iter()) {
+        if s1.ident != s2.ident {
+            trace!(
+                "is_second_substitude_of_first: id different {} vs {}",
+                s1.ident,
+                s2.ident
+            );
+            return false;
+        }
+        if !is_second_subst_of_first_path_args(&s1.arguments, &s2.arguments, subst_map) {
+            return false;
+        }
+    }
+    true
+}
+
+fn is_second_subst_of_first_path_args(
     p1: &syn::PathArguments,
     p2: &syn::PathArguments,
     subst_map: &mut TyParamsSubstMap,
@@ -364,7 +530,7 @@ fn is_second_subst_of_first_ppath(
         ) => {
             if p1.args.len() != p2.args.len() {
                 trace!(
-                    "is_second_subst_of_first_ppath: param types len not match {} vs {}",
+                    "is_second_subst_of_first_path_args: param types len not match {} vs {}",
                     p1.args.len(),
                     p2.args.len()
                 );
@@ -378,7 +544,7 @@ fn is_second_subst_of_first_ppath(
                     _ => {
                         if type_p1 != type_p2 {
                             trace!(
-                                "is_second_subst_of_first_ppath: generic args cmp {:?} != {:?}",
+                                "is_second_subst_of_first_path_args: generic args cmp {:?} != {:?}",
                                 type_p1,
                                 type_p2
                             );
@@ -388,30 +554,40 @@ fn is_second_subst_of_first_ppath(
                         }
                     }
                 };
-                let type_p1_name = normalize_ty_lifetimes(type_p1);
-                let real_type_p1: Type =
-                    if let Some(subst) = subst_map.get_mut_by_str(&type_p1_name) {
-                        match *subst {
-                            Some(ref x) => (*x).clone(),
-                            None => {
-                                *subst = Some(type_p2.clone());
-                                (*type_p2).clone()
-                                //return true;
-                            }
-                        }
-                    } else {
-                        (*type_p1).clone()
-                    };
-                trace!("is_second_subst_of_first_ppath: go deeper");
-                if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
+                if !types_equal_inside_path(type_p1, type_p2, subst_map) {
                     return false;
                 }
             }
             true
         }
+        (syn::PathArguments::Parenthesized(ref p1), syn::PathArguments::Parenthesized(ref p2)) => {
+            if p1.inputs.len() != p2.inputs.len() {
+                trace!(
+                    "is_second_subst_of_first_path_args: param types len not match {} vs {}",
+                    p1.inputs.len(),
+                    p2.inputs.len()
+                );
+                return false;
+            }
+
+            for (type_p1, type_p2) in p1.inputs.iter().zip(p2.inputs.iter()) {
+                if !types_equal_inside_path(type_p1, type_p2, subst_map) {
+                    return false;
+                }
+            }
+            if !return_type_match(&p1.output, &p2.output, subst_map) {
+                return false;
+            }
+
+            true
+        }
         _ => {
             if p1 != p2 {
-                trace!("second_subst_of_first_ppath: p1 != p2 => {:?} {:?}", p1, p2);
+                trace!(
+                    "is_second_subst_of_first_path_args: p1 != p2 => {} {}",
+                    DisplayToTokens(p1),
+                    DisplayToTokens(p2)
+                );
                 false
             } else {
                 true
@@ -420,14 +596,66 @@ fn is_second_subst_of_first_ppath(
     }
 }
 
-fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
+fn types_equal_inside_path(
+    type_p1: &Type,
+    type_p2: &Type,
+    subst_map: &mut TyParamsSubstMap,
+) -> bool {
+    let type_p1_name = normalize_ty_lifetimes(type_p1);
+    let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
+        match *subst {
+            Some(ref x) => (*x).clone(),
+            None => {
+                *subst = Some(type_p2.clone());
+                (*type_p2).clone()
+            }
+        }
+    } else {
+        (*type_p1).clone()
+    };
+    trace!("is_second_subst_of_first_path_args: go deeper");
+    if !is_second_subst_of_first(&real_type_p1, type_p2, subst_map) {
+        return false;
+    }
+    true
+}
+
+fn return_type_match(
+    out1: &syn::ReturnType,
+    out2: &syn::ReturnType,
+    subst_map: &mut TyParamsSubstMap,
+) -> bool {
+    match (out1, out2) {
+        (syn::ReturnType::Default, syn::ReturnType::Default) => { /*ok*/ }
+        (syn::ReturnType::Type(_, ref ret_ty1), syn::ReturnType::Type(_, ref ret_ty2)) => {
+            if !types_equal_inside_path(ret_ty1, ret_ty2, subst_map) {
+                return false;
+            }
+        }
+        _ => {
+            trace!(
+                "return_type_match: ret output mismatch {} {}",
+                DisplayToTokens(out1),
+                DisplayToTokens(out2),
+            );
+            return false;
+        }
+    }
+
+    true
+}
+
+pub(in crate::typemap) fn replace_all_types_with(
+    in_ty: &Type,
+    subst_map: &TyParamsSubstMap,
+) -> Type {
     struct ReplaceTypes<'a, 'b> {
         subst_map: &'a TyParamsSubstMap<'b>,
     }
     impl<'a, 'b> VisitMut for ReplaceTypes<'a, 'b> {
         fn visit_type_mut(&mut self, t: &mut Type) {
             let ty_name = normalize_ty_lifetimes(t);
-            if let Some(&Some(ref subst)) = self.subst_map.get(&ty_name) {
+            if let Some(Some(subst)) = self.subst_map.get(&ty_name) {
                 *t = subst.clone();
             } else {
                 visit_type_mut(self, t);
@@ -536,42 +764,12 @@ pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> GenericTraitBoundVec 
     ret
 }
 
-pub(crate) fn if_type_slice_return_elem_type(ty: &Type, accept_mutbl_slice: bool) -> Option<&Type> {
-    if let syn::Type::Reference(syn::TypeReference {
-        ref elem,
-        mutability,
-        ..
-    }) = ty
-    {
-        if mutability.is_some() && !accept_mutbl_slice {
-            return None;
-        }
-        if let syn::Type::Slice(syn::TypeSlice { ref elem, .. }) = **elem {
-            Some(&*elem)
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
 pub(crate) fn if_option_return_some_type(ty: &RustType) -> Option<Type> {
     let generic_params: syn::Generics = parse_quote! { <T> };
     let from_ty: Type = parse_quote! { Option<T> };
     let to_ty: Type = parse_quote! { T };
 
-    GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
-        .is_conv_possible(ty, None, |_| None)
-        .map(|x| x.0)
-}
-
-pub(crate) fn if_vec_return_elem_type(ty: &RustType) -> Option<Type> {
-    let from_ty: Type = parse_quote! { Vec<T> };
-    let to_ty: Type = parse_quote! { T };
-    let generic_params: syn::Generics = parse_quote! { <T> };
-
-    GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
+    GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())
         .is_conv_possible(ty, None, |_| None)
         .map(|x| x.0)
 }
@@ -583,13 +781,18 @@ pub(crate) fn if_result_return_ok_err_types(ty: &RustType) -> Option<(Type, Type
     let generic_params: syn::Generics = parse_quote! { <T, E> };
 
     let ok_ty = {
-        GenericTypeConv::simple_new(from_ty.clone(), ok_ty, generic_params.clone())
-            .is_conv_possible(ty, None, |_| None)
-            .map(|x| x.0)
+        GenericTypeConv::new(
+            from_ty.clone(),
+            ok_ty,
+            generic_params.clone(),
+            TypeConvCode::invalid(),
+        )
+        .is_conv_possible(ty, None, |_| None)
+        .map(|x| x.0)
     }?;
 
     let err_ty = {
-        GenericTypeConv::simple_new(from_ty, err_ty, generic_params)
+        GenericTypeConv::new(from_ty, err_ty, generic_params, TypeConvCode::invalid())
             .is_conv_possible(ty, None, |_| None)
             .map(|x| x.0)
     }?;
@@ -624,18 +827,9 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
         syn::parse_str(&format!("{}<T>", smart_ptr_name)).expect("smart pointer parse error");
     let to_ty: Type = parse_quote! { T };
 
-    GenericTypeConv::simple_new(from_ty, to_ty, generic_params)
+    GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())
         .is_conv_possible(ty, None, |_| None)
         .map(|x| x.0)
-}
-
-pub(crate) fn fn_arg_type(a: &syn::FnArg) -> &syn::Type {
-    use syn::FnArg::*;
-    match a {
-        SelfRef(_) | SelfValue(_) => panic!("internal error: fn_arg_type for self type"),
-        Inferred(_) => panic!("internal erorr: fn_arg_type for inferred"),
-        Captured(syn::ArgCaptured { ref ty, .. }) | Ignored(ref ty) => ty,
-    }
 }
 
 pub(crate) fn list_lifetimes(ty: &Type) -> Vec<String> {
@@ -662,413 +856,15 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::typemap::ty::RustTypeS;
-    use smallvec::smallvec;
+pub(crate) fn parse_ty_with_given_span(
+    type_str: &str,
+    span: Span,
+) -> std::result::Result<Type, syn::Error> {
+    syn::LitStr::new(type_str, span).parse::<syn::Type>()
+}
 
-    #[test]
-    fn test_normalize_ty() {
-        assert_eq!(normalize_ty_lifetimes(&str_to_ty("&str")), "& str");
-        assert_eq!(normalize_ty_lifetimes(&str_to_ty("&'a str")), "& str");
-        assert_eq!(normalize_ty_lifetimes(&str_to_ty("string")), "string");
-        assert_eq!(normalize_ty_lifetimes(&str_to_ty("()")), "( )");
-        assert_eq!(
-            normalize_ty_lifetimes(&str_to_ty("Foo<'a, T>")),
-            "Foo < T >"
-        );
-    }
-
-    macro_rules! get_generic_params_from_code {
-        ($($tt:tt)*) => {{
-            let item: syn::ItemImpl = parse_quote! { $($tt)* };
-            item.generics
-        }}
-    }
-
-    #[test]
-    fn generic_type_conv_find() {
-        let _ = env_logger::try_init();
-        let generic = get_generic_params_from_code! {
-            #[swig_to_foreigner_hint = "T []"]
-            impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
-                fn swig_from(x: Vec<T>, env: *mut JNIEnv) -> Self {
-                    vec_of_objects_to_jobject_array(x, <T>::jni_class_name(), env)
-                }
-            }
-        };
-
-        let foo_spec = Rc::new(
-            RustTypeS::new_without_graph_idx(str_to_ty("Foo"), "Foo")
-                .implements("SwigForeignClass"),
-        );
-
-        let refcell_foo_spec = Rc::new(
-            RustTypeS::new_without_graph_idx(str_to_ty("RefCell<Foo>"), "RefCell<Foo>")
-                .implements("SwigForeignClass"),
-        );
-
-        fn check_subst<'a, FT: Fn(&str) -> Option<&'a RustType>>(
-            generic: &syn::Generics,
-            from_ty_name: &str,
-            to_ty_name: &str,
-            ty_check_name: &str,
-            expect_to_ty_name: &str,
-            map_others: FT,
-        ) -> RustType {
-            println!(
-                "check_subst: conv {} -> {} with {}",
-                from_ty_name, to_ty_name, ty_check_name
-            );
-            let (ret_ty, ret_ty_name) = GenericTypeConv::simple_new(
-                str_to_ty(from_ty_name),
-                str_to_ty(to_ty_name),
-                generic.clone(),
-            )
-            .is_conv_possible(&str_to_rust_ty(ty_check_name), None, map_others)
-            .expect("check subst failed");
-            assert_eq!(
-                ret_ty_name,
-                normalize_ty_lifetimes(&str_to_ty(expect_to_ty_name))
-            );
-
-            Rc::new(RustTypeS::new_without_graph_idx(ret_ty, ret_ty_name))
-        }
-
-        let pair_generic = get_generic_params_from_code! {
-            impl<T1: SwigForeignClass, T2: SwigForeignClass> SwigFrom<(T1, T2)> for CRustObjectPair {
-                fn swig_from((x1, x2): (T1, T2)) -> Self {
-                    unimplemented!();
-                }
-            }
-        };
-
-        let one_spec = Rc::new(
-            RustTypeS::new_without_graph_idx(str_to_ty("One"), "One")
-                .implements("SwigForeignClass"),
-        );
-        let two_spec = Rc::new(
-            RustTypeS::new_without_graph_idx(str_to_ty("One"), "One")
-                .implements("SwigForeignClass"),
-        );
-        check_subst(
-            &pair_generic,
-            "(T1, T2)",
-            "CRustObjectPair",
-            "(One, Two)",
-            "CRustObjectPair",
-            |name| {
-                println!("test pair map, check name {:?}", name);
-                if name == "One" {
-                    Some(&one_spec)
-                } else if name == "Two" {
-                    Some(&two_spec)
-                } else {
-                    None
-                }
-            },
-        );
-
-        check_subst(
-            &generic,
-            "Rc<T>",
-            "jlong",
-            "Rc<RefCell<Foo>>",
-            "jlong",
-            |name| {
-                println!("test rt map, check name {:?}", name);
-                if name == "Foo" {
-                    Some(&foo_spec)
-                } else if name == "RefCell < Foo >" {
-                    Some(&refcell_foo_spec)
-                } else {
-                    None
-                }
-            },
-        );
-
-        check_subst(
-            &generic,
-            "Vec<T>",
-            "jobjectArray",
-            "Vec<Foo>",
-            "jobjectArray",
-            |name| {
-                if name == "Foo" {
-                    Some(&foo_spec)
-                } else {
-                    None
-                }
-            },
-        );
-
-        let generic = get_generic_params_from_code! {
-            impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
-                fn swig_from(m: &'a RefCell<T>, _: *mut JNIEnv) -> RefMut<'a, T> {
-                    m.borrow_mut()
-                }
-            }
-        };
-
-        check_subst(
-            &generic,
-            "&RefCell<T>",
-            "RefMut<T>",
-            "&RefCell<Foo>",
-            "RefMut<Foo>",
-            |_| None,
-        );
-
-        check_subst(
-            &generic,
-            "&Rc<T>",
-            "&T",
-            "&Rc<RefCell<Foo>>",
-            "&RefCell<Foo>",
-            |_| None,
-        );
-
-        check_subst(
-            &generic,
-            "Arc<Mutex<T>>",
-            "&Mutex<T>",
-            "Arc<Mutex<Foo>>",
-            "&Mutex<Foo>",
-            |_| None,
-        );
-
-        let mutex_guard_foo = check_subst(
-            &generic,
-            "&Mutex<T>",
-            "MutexGuard<T>",
-            "&Mutex<Foo>",
-            "MutexGuard<Foo>",
-            |_| None,
-        );
-        assert_eq!(
-            &*GenericTypeConv::simple_new(
-                str_to_ty("MutexGuard<T>"),
-                str_to_ty("&T"),
-                generic.clone(),
-            )
-            .is_conv_possible(&mutex_guard_foo, None, |name| if name == "Foo" {
-                Some(&foo_spec)
-            } else {
-                None
-            })
-            .unwrap()
-            .1,
-            "& Foo"
-        );
-
-        let box_foo: RustType = str_to_rust_ty("Box<Foo>");
-
-        assert_eq!(
-            &*GenericTypeConv::simple_new(str_to_ty("jlong"), str_to_ty("Box<T>"), generic,)
-                .is_conv_possible(&str_to_rust_ty("jlong"), Some(&box_foo), |_| None)
-                .unwrap()
-                .1,
-            "Box < Foo >"
-        );
-
-        let generic = get_generic_params_from_code! {
-            impl<T: SwigForeignClass> SwigFrom<Box<T>> for jlong {
-                fn swig_from(x: Box<T>, _: *mut JNIEnv) -> jlong {
-                    unimplemented!();
-                }
-            }
-        };
-        check_subst(&generic, "T", "Box<T>", "Foo", "Box<Foo>", |name| {
-            if name == "Foo" {
-                Some(&foo_spec)
-            } else {
-                None
-            }
-        });
-
-        let generic = get_generic_params_from_code! {
-            impl<T, E> SwigFrom<Result<T,E>> for T {
-                fn swig_from(v: Result<T, E>, _: *mut JNIEnv) -> T {
-                    unimplemented!();
-                }
-            }
-        };
-        check_subst(
-            &generic,
-            "Result<T, E>",
-            "T",
-            "Result<u8, &'static str>",
-            "u8",
-            |_| None,
-        );
-    }
-
-    #[test]
-    fn test_get_trait_bounds() {
-        let _ = env_logger::try_init();
-
-        assert_eq!(
-            get_trait_bounds(&get_generic_params_from_code! {
-                impl<T> Foo for Boo {}
-            }),
-            GenericTraitBoundVec::new(),
-        );
-
-        let moo_path: syn::Path = parse_quote! { Moo };
-
-        assert_eq!(
-            get_trait_bounds(&get_generic_params_from_code! {
-                impl<T: Moo> Foo for Boo {}
-            }),
-            {
-                let mut trait_names = TraitNamesSet::default();
-                trait_names.insert(&moo_path);
-                let v: GenericTraitBoundVec = smallvec![GenericTraitBound {
-                    ty_param: TyParamRef::Own(Ident::new("T", Span::call_site())),
-                    trait_names,
-                }];
-                v
-            }
-        );
-
-        assert_eq!(
-            get_trait_bounds(&get_generic_params_from_code! {
-                impl<T> Foo for Boo where T: Moo {}
-            }),
-            {
-                let mut trait_names = TraitNamesSet::default();
-                trait_names.insert(&moo_path);
-                let v: GenericTraitBoundVec = smallvec![GenericTraitBound {
-                    ty_param: TyParamRef::Own(Ident::new("T", Span::call_site())),
-                    trait_names,
-                }];
-                v
-            }
-        );
-    }
-
-    #[test]
-    fn test_if_type_slice_return_elem_type() {
-        let ty: Type = parse_quote! {
-            &[i32]
-        };
-        let elem_ty: Type = parse_quote! { i32 };
-        assert_eq!(
-            elem_ty,
-            *if_type_slice_return_elem_type(&ty, false).unwrap()
-        );
-
-        assert!(if_type_slice_return_elem_type(&elem_ty, false).is_none());
-    }
-
-    #[test]
-    fn test_work_with_option() {
-        assert_eq!(
-            "String",
-            normalize_ty_lifetimes(
-                &if_option_return_some_type(&str_to_rust_ty("Option<String>")).unwrap()
-            )
-        );
-    }
-
-    #[test]
-    fn test_work_with_result() {
-        assert_eq!(
-            if_result_return_ok_err_types(&str_to_rust_ty("Result<bool, String>"))
-                .map(|(x, y)| (normalize_ty_lifetimes(&x), normalize_ty_lifetimes(&y)))
-                .unwrap(),
-            ("bool", "String")
-        );
-
-        assert_eq!(
-            if_ty_result_return_ok_type(&str_to_ty("Result<bool, String>"))
-                .map(|x| normalize_ty_lifetimes(&x))
-                .unwrap(),
-            "bool"
-        );
-
-        assert_eq!(
-            if_ty_result_return_ok_type(&str_to_ty("Result<Option<i32>, String>"))
-                .map(|x| normalize_ty_lifetimes(&x))
-                .unwrap(),
-            "Option < i32 >"
-        );
-    }
-
-    #[test]
-    fn test_work_with_vec() {
-        assert_eq!(
-            "bool",
-            if_vec_return_elem_type(&str_to_rust_ty("Vec<bool>"))
-                .map(|x| normalize_ty_lifetimes(&x))
-                .unwrap(),
-        );
-    }
-
-    #[test]
-    fn test_work_with_rc() {
-        let ty =
-            check_if_smart_pointer_return_inner_type(&str_to_rust_ty("Rc<RefCell<bool>>"), "Rc")
-                .unwrap();
-        assert_eq!("RefCell < bool >", normalize_ty_lifetimes(&ty));
-
-        let generic_params: syn::Generics = parse_quote! { <T> };
-        assert_eq!(
-            "bool",
-            GenericTypeConv::simple_new(str_to_ty("RefCell<T>"), str_to_ty("T"), generic_params,)
-                .is_conv_possible(&str_to_rust_ty(normalize_ty_lifetimes(&ty)), None, |_| None)
-                .unwrap()
-                .1
-        );
-    }
-
-    #[test]
-    fn test_replace_all_types_with() {
-        let t_ident: Ident = parse_quote! { T };
-        let e_ident: Ident = parse_quote! { E };
-        assert_eq!(
-            {
-                let ty: Type = parse_quote! { & Vec<T> };
-                ty
-            },
-            replace_all_types_with(&parse_quote! { &T }, &{
-                let mut subst_map = TyParamsSubstMap::default();
-                subst_map.insert(&t_ident, Some(parse_quote! { Vec<T> }));
-                subst_map
-            })
-        );
-
-        assert_eq!(
-            {
-                let ty: Type = parse_quote! { Result<i32, String> };
-                ty
-            },
-            replace_all_types_with(&parse_quote! { Result<T, E> }, &{
-                let mut subst_map = TyParamsSubstMap::default();
-                subst_map.insert(&t_ident, Some(parse_quote! { i32 }));
-                subst_map.insert(&e_ident, Some(parse_quote! { String }));
-                subst_map
-            })
-        );
-    }
-
-    #[test]
-    fn test_list_lifetimes() {
-        let my_list_lifetimes = |code| -> Vec<String> {
-            let ret = list_lifetimes(&str_to_ty(code));
-            ret.iter().map(|v| v.as_str().to_string()).collect()
-        };
-        assert_eq!(vec!["'a"], my_list_lifetimes("Rc<RefCell<Foo<'a>>>"));
-    }
-
-    fn str_to_ty(code: &str) -> syn::Type {
-        syn::parse_str::<syn::Type>(code).unwrap()
-    }
-
-    fn str_to_rust_ty(code: &str) -> RustType {
-        let ty = syn::parse_str::<syn::Type>(code).unwrap();
-        let name = normalize_ty_lifetimes(&ty);
-        Rc::new(RustTypeS::new_without_graph_idx(ty, name))
-    }
+pub(crate) fn parse_ty_with_given_span_checked(type_str: &str, span: Span) -> Type {
+    parse_ty_with_given_span(type_str, span).unwrap_or_else(|err| {
+        panic_on_syn_error("internal parse_ty_with_given_span", type_str.into(), err)
+    })
 }

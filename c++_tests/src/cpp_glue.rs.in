@@ -59,7 +59,7 @@ trait SomeObserver {
     fn is_odd(&self, x: i32) -> bool;
 }
 
-foreign_interface!(interface SomeObserver {
+foreign_callback!(callback SomeObserver {
     self_type SomeObserver;
     onStateChanged = SomeObserver::on_state_changed(&self, _: i32, _: bool);
     onStateChangedWithoutArgs = SomeObserver::on_state_changed_without_args(&self);
@@ -80,6 +80,7 @@ foreigner_class!(class Foo {
     foreigner_code r#"
 public:
     size_t cpp_func(const std::string &s) const { return s.size(); }
+    FooWrapper() noexcept: FooWrapper(nullptr) {}
 "#;
 });
 
@@ -331,6 +332,15 @@ impl TestWorkWithVec {
         }
         v
     }
+    fn test_lifetime_objs<'a>(n: usize) -> Vec<TestObjectLifetime<'a>> {
+        let mut ret = Vec::with_capacity(n);
+        for i in 0..n {
+            let mut obj = create_test_obj_with_lifetime();
+            obj.data.set(i as i32);
+            ret.push(obj);
+        }
+        ret
+    }
 }
 
 foreigner_class!(class TestWorkWithVec {
@@ -350,6 +360,7 @@ foreigner_class!(class TestWorkWithVec {
     static_method TestWorkWithVec::clone_foo_slice(v: &[Foo]) -> Vec<Foo>;
     static_method TestWorkWithVec::test_i32_slice(a: &[i32]) -> Vec<i32>;
     method TestWorkWithVec::set_vec_foo(&mut self, v: Vec<Foo>);
+    static_method TestWorkWithVec::test_lifetime_objs<'a>(n: usize) -> Vec<TestObjectLifetime<'a>>;
 });
 
 enum MyEnum {
@@ -606,6 +617,15 @@ impl TestResult {
             })
         }
     }
+
+    fn f_res_opt(var: u32) -> Result<Option<Foo>, String> {
+        match var {
+            0 => Ok(Some(Foo::new(17, "17"))),
+            1 => Ok(None),
+            2 => Err("this is bad".into()),
+            _ => panic!("unknown var {}", var),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -647,6 +667,7 @@ foreigner_class!(class TestResult {
     static_method TestResult::f4(is_ok: bool) -> Result<Vec<u8>, TestError>;
     static_method TestResult::f5(is_ok: bool) -> Result<Foo, ErrorEnum>;
     static_method TestResult::f6(is_ok: bool, val: i64) -> Result<i64, TestError>;
+    static_method TestResult::f_res_opt(var: u32) -> Result<Option<Foo>, String>;
 });
 
 pub struct TestReferences {
@@ -672,6 +693,13 @@ impl TestReferences {
         self.foo = foo.clone();
         foo.name.push('A');
     }
+    fn check_rc_pass1(x: &CheckPrimitiveTypesClass) -> i32 {
+        x.a
+    }
+    fn check_rc_pass2(x: &mut CheckPrimitiveTypesClass) -> i32 {
+        x.a += 42;
+        x.a
+    }
 }
 
 foreigner_class!(class TestReferences {
@@ -680,6 +708,8 @@ foreigner_class!(class TestReferences {
     method TestReferences::get_foo_ref(&self) -> &Foo;
     method TestReferences::update_foo(&mut self, foo: &Foo);
     method TestReferences::update_mut_foo(&mut self, foo: &mut Foo);
+    static_method TestReferences::check_rc_pass1(x: &CheckPrimitiveTypesClass) -> i32;
+    static_method TestReferences::check_rc_pass2(x: &mut CheckPrimitiveTypesClass) -> i32;
 });
 
 fn add_func(a: i32, b: i32) -> i32 {
@@ -761,7 +791,7 @@ foreigner_class!(class TestPassInterface {
     static_method TestPassInterface::use_interface(a: Box<Box<Interface>>, b: i32) -> i32;
 });
 
-foreign_interface!(interface ToString {
+foreign_callback!(callback ToString {
     self_type ::std::string::ToString;
     toString = ::std::string::ToString::to_string(&self) -> String;
 });
@@ -818,7 +848,7 @@ impl Boo {
     pub fn f(&self) -> i32 {
         self.f1
     }
-    pub fn return_pair() -> (Foo, Boo) {
+    pub fn return_pair_obj1() -> (Foo, Boo) {
         (
             Foo {
                 data: 5,
@@ -826,6 +856,21 @@ impl Boo {
             },
             Boo { f1: 17 },
         )
+    }
+    pub fn return_pair_obj2() -> (Boo, Foo) {
+        (
+            Boo { f1: 17 },
+            Foo {
+                data: 5,
+                name: "FooName".into(),
+            },
+        )
+    }
+    pub fn return_pair_f32_i32() -> (f32, i32) {
+        (42.42, 17)
+    }
+    pub fn swap_foo_boo((foo, boo): (Foo, Boo)) -> (Boo, Foo) {
+        (boo, foo)
     }
 }
 
@@ -835,8 +880,11 @@ foreigner_class!(class Boo {
     method Boo::f(&self) -> i32;
 });
 
-foreigner_class!(class TestReturnTuple {
-    static_method Boo::return_pair() -> (Foo, Boo);
+foreigner_class!(class TestPair {
+    static_method Boo::return_pair_obj1() -> (Foo, Boo);
+    static_method Boo::return_pair_obj2() -> (Boo, Foo);
+    static_method Boo::return_pair_f32_i32() -> (f32, i32);
+    static_method Boo::swap_foo_boo(foo_boo: (Foo, Boo)) -> (Boo, Foo);
 });
 
 #[derive(Clone)]
@@ -861,3 +909,100 @@ foreigner_class!(
         method TestCopy::get(&self) -> &str;
         method TestCopy::clone(&self) -> TestCopy;
     });
+
+#[derive(Default)]
+pub struct GetSetStrTest {
+    s: String,
+}
+
+impl GetSetStrTest {
+    fn get_str(&self) -> &str {
+        &self.s
+    }
+    fn set_str(&mut self, x: &str) {
+        self.s = x.into();
+    }
+}
+
+foreigner_class!(class GetSetStrTest {
+    self_type GetSetStrTest;
+    constructor GetSetStrTest::default() -> GetSetStrTest;
+    method GetSetStrTest::get_str(&self) -> &str;
+    method GetSetStrTest::set_str(&mut self, _: &str);
+});
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
+pub struct Vec2 {
+    x: f32,
+    y: f32,
+}
+
+foreign_typemap!(
+    define_c_type!(
+        module = "vec2.h";
+        #[repr(C)]
+        struct Vec2 {
+            x: f32,
+            y: f32,
+        }
+    );
+    (r_type) Vec2;
+    (f_type) "Vec2";
+);
+
+fn inc_vec2(v: Vec2) -> Vec2 {
+    Vec2 {
+        x: v.x + 1.1,
+        y: v.y + 1.,
+    }
+}
+
+foreigner_class!(class TestWorkWithReprC {
+    static_method inc_vec2(v: Vec2) -> Vec2;
+});
+
+foreigner_class!(class TestFnInline {
+    fn int_to_str(a: i32) -> String {
+        format!("{}", a)
+    }
+});
+
+foreign_typemap!(
+    generic_alias!(CFnOnce = swig_concat_idents!(CFnOnce, swig_i_type!(T)));
+    define_c_type!(
+        module = "CFnOnce!().h";
+        #[repr(C)]
+        pub struct CFnOnce!() {
+            cb: extern "C" fn(swig_i_type!(T), *mut ::std::os::raw::c_void),
+            ctx: *mut ::std::os::raw::c_void,
+        });
+
+    ($p:r_type) <T> impl FnOnce(T) <= CFnOnce!()
+    {
+        $out_no_type = |x| {
+            swig_from_rust_to_i_type!(T, x, x)
+            ($p.cb)(x, $p.ctx);
+        }
+    };
+
+    ($p:f_type, input_to_output, req_modules = ["\"CFnOnce!().h\"", "<future>"]) <= "std::future<swig_f_type!(T)>"
+        r#"
+        auto tmp = new std::promise<swig_f_type!(T)>;
+        auto $p = tmp->get_future();
+        $out;
+        $out.ctx = tmp;
+        $out.cb = [](swig_i_type!(T) arg, void *opaque) {
+            auto arg_cpp = swig_foreign_from_i_type!(T, arg);
+            auto promise = static_cast<std::promise<swig_f_type!(T)> *>(opaque);
+            promise->set_value(std::move(arg_cpp));
+            delete promise;
+        };
+"#;
+);
+
+foreigner_class!(class TestFuture {
+    fn call_fn(f: impl FnOnce(Foo)) {
+        f(Foo::new(-1, "from callback"));
+    }
+});

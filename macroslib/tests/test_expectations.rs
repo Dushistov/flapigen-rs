@@ -1,5 +1,4 @@
 use std::{
-    env,
     ffi::OsString,
     fs, panic,
     path::{Path, PathBuf},
@@ -9,86 +8,7 @@ use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
 use syn::Token;
 use tempfile::tempdir;
 
-#[test]
-fn test_expectations_main() {
-    let _ = env_logger::try_init();
-
-    let test_cases: Vec<PathBuf> = fs::read_dir(Path::new("tests").join("expectations"))
-        .expect("read_dir failed")
-        .into_iter()
-        .filter_map(|p| {
-            if let Ok(path) = p {
-                if let Ok(ft) = path.file_type() {
-                    if ft.is_file() && path.path().to_str().map_or(false, |x| x.ends_with(".rs")) {
-                        return Some(path.path());
-                    }
-                }
-            }
-            None
-        })
-        .collect();
-
-    let mut ntests = 0_usize;
-
-    fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bool {
-        let (main_ext, rust_ext) = match lang {
-            ForeignLang::Cpp => (".cpp", ".cpp_rs"),
-            ForeignLang::Java => (".java", ".java_rs"),
-        };
-        let main_expectation = new_path(test_case, main_ext);
-        if main_expectation.exists() {
-            let code_pair =
-                parse_code(&test_name, Source::Path(&test_case), lang).expect("parse_code failed");
-            let pats =
-                parse_code_expectation(&main_expectation).expect("parsing of patterns failed");
-
-            let mut print_test_info = PrintTestInfo::new(code_pair.clone(), test_name.into(), lang);
-            for pat in pats {
-                print_test_info.foreign_code_search_pattern = pat.clone();
-                assert!(code_pair.foreign_code.contains(&pat));
-            }
-            print_test_info.foreign_code_search_pattern.clear();
-
-            let rust_cpp_expectation = new_path(&test_case, rust_ext);
-            if rust_cpp_expectation.exists() {
-                let pats = parse_code_expectation(&rust_cpp_expectation)
-                    .expect("parsing of patterns failed");
-                let pats: Vec<String> = pats.into_iter().map(|v| v.replace("\n", "")).collect();
-                for pat in pats {
-                    print_test_info.rust_pat = pat.clone();
-                    assert!(code_pair.rust_code.contains(&pat));
-                }
-                print_test_info.rust_pat.clear();
-            }
-            print_test_info.success();
-            true
-        } else {
-            false
-        }
-    }
-
-    let filter = env::var("RUST_SWIG_EXPECT_RUN_ONLY").ok();
-
-    for test_case in test_cases {
-        let base_name = test_case.file_stem().expect("name without extenstion");
-        let test_name = base_name.to_string_lossy();
-        if filter.as_ref().map(|v| *v != test_name).unwrap_or(false) {
-            continue;
-        }
-
-        let mut test_something = false;
-        for lang in &[ForeignLang::Cpp, ForeignLang::Java] {
-            if check_expectation(&test_name, &test_case, *lang) {
-                test_something = true;
-            }
-        }
-        if test_something {
-            ntests += 1;
-        }
-    }
-
-    assert_eq!(42, ntests);
-}
+include!(concat!(env!("OUT_DIR"), "/test_expectations.rs"));
 
 #[test]
 fn test_expectations_class_with_methods_without_constructor() {
@@ -111,18 +31,21 @@ foreigner_class!(class Foo {
     }
     for lang in &langs {
         let name = format!("class_with_methods_without_constructor {:?}", lang);
-        parse_code(
-            &name,
-            Source::Str(
-                r#"
+        let ret = panic::catch_unwind(|| {
+            parse_code(
+                &name,
+                Source::Str(
+                    r#"
     foreigner_class!(class Foo {
        self_type SomeType;
     });
     "#,
-            ),
-            *lang,
-        )
-        .expect(&name);
+                ),
+                *lang,
+            )
+            .expect(&name)
+        });
+        assert!(ret.is_err());
     }
 
     for lang in &langs {
@@ -142,6 +65,31 @@ foreigner_class!(class Foo {
             )
             .expect(&name);
         });
+        assert!(result.is_err());
+    }
+}
+
+#[test]
+fn test_callback_without_self_err() {
+    let _ = env_logger::try_init();
+    for lang in &[ForeignLang::Java, ForeignLang::Cpp] {
+        let result = panic::catch_unwind(|| {
+            let name = format!("test_callback_without_self_err {:?}", lang);
+            parse_code(
+                &name,
+                Source::Str(
+                    r#"
+foreign_interface! (interface FooBar {
+    self_type Foo;
+    bar = Foo::bar();
+});
+    "#,
+                ),
+                *lang,
+            )
+            .expect(&name);
+        });
+        println!("result: {:?}", result);
         assert!(result.is_err());
     }
 }
@@ -184,9 +132,12 @@ fn test_expectations_foreign_vec_as_arg() {
 
     let name = "foreign_vec_as_arg";
     let src = r#"
-foreigner_class!(class Boo {
+foreigner_class!(
+#[derive(Clone)]
+class Boo {
     self_type Boo;
     constructor Boo::default() -> Boo;
+    method Boo::clone(&self) -> Boo;
 });
 foreigner_class!(class FooImpl {
     self_type Foo<'a>;
@@ -196,18 +147,19 @@ foreigner_class!(class FooImpl {
 });
 "#;
     ;
+
     for _ in 0..100 {
         let cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).expect("parse failed");
         println!("c/c++: {}", cpp_code.foreign_code);
         assert!(cpp_code
             .foreign_code
-            .contains("void setAlternateBoarding(RustForeignVecBoo a_0)"));
+            .contains("void setAlternateBoarding(RustForeignVecBoo p)"));
         let java_code =
             parse_code(name, Source::Str(src), ForeignLang::Java).expect("parse failed");
         println!("Java: {}", java_code.foreign_code);
         assert!(java_code
             .foreign_code
-            .contains("void setAlternateBoarding(@NonNull Boo [] a0)"));
+            .contains("void setAlternateBoarding(@NonNull Boo [] p)"));
     }
 }
 
@@ -290,7 +242,7 @@ foreigner_class!(class Moo {
     self_type Moo;
     constructor TestPathAndResult::default() -> Moo;
     method TestPathAndResult::get_boo(&self) -> &Boo;
-    method TestReferences::update_boo(&mut self, foo: &Boo);
+    method TestReferences::update_boo(&mut self, boo: &Boo);
 });
 "#,
             ),
@@ -301,10 +253,10 @@ foreigner_class!(class Moo {
         assert!(cpp_code.foreign_code.contains("BooRef get_boo() const"));
         assert!(cpp_code
             .foreign_code
-            .contains("void Moo_update_boo(MooOpaque * const self, const BooOpaque * a_0);"));
+            .contains("void Moo_update_boo(MooOpaque * const self, const BooOpaque * boo);"));
         assert!(cpp_code
             .foreign_code
-            .contains("void update_boo(const Boo & a_0)"));
+            .contains("void update_boo(const Boo & boo)"));
     }
 }
 
@@ -331,25 +283,27 @@ foreign_interface!(interface RepoChangedCallback {
         println!("c/c++: {}", cpp_code.foreign_code);
         assert!(cpp_code
             .foreign_code
-            .contains("virtual void on_save(UuidRef a_0) = 0;"));
+            .contains("virtual void on_save(UuidRef uuid) = 0;"));
         assert!(cpp_code
             .foreign_code
-            .contains("virtual void on_remove(UuidRef a_0) = 0;"));
+            .contains("virtual void on_remove(UuidRef uuid) = 0;"));
         assert!(cpp_code.foreign_code.contains(
             r#"
-   static void c_on_save(const UuidOpaque * a_0, void *opaque)
-   {
-        auto p = static_cast<RepoChangedCallback *>(opaque);
-        assert(p != nullptr);
-        p->on_save(UuidRef{a_0});
-   }
+    static void c_on_save(const UuidOpaque * uuid, void *opaque)
+    {
+        assert(opaque != nullptr);
+        auto pi = static_cast<RepoChangedCallback *>(opaque);
 
-   static void c_on_remove(const UuidOpaque * a_0, void *opaque)
-   {
-        auto p = static_cast<RepoChangedCallback *>(opaque);
-        assert(p != nullptr);
-        p->on_remove(UuidRef{a_0});
-   }
+        pi->on_save(UuidRef{ static_cast<const UuidOpaque *>(uuid) });
+    }
+
+    static void c_on_remove(const UuidOpaque * uuid, void *opaque)
+    {
+        assert(opaque != nullptr);
+        auto pi = static_cast<RepoChangedCallback *>(opaque);
+
+        pi->on_remove(UuidRef{ static_cast<const UuidOpaque *>(uuid) });
+    }
 "#
         ));
     }
@@ -537,4 +491,40 @@ fn new_path(main_path: &Path, ext: &str) -> PathBuf {
     let mut new_name: OsString = base_name.into();
     new_name.push(ext);
     main_path.with_file_name(new_name)
+}
+
+fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bool {
+    let (main_ext, rust_ext) = match lang {
+        ForeignLang::Cpp => (".cpp", ".cpp_rs"),
+        ForeignLang::Java => (".java", ".java_rs"),
+    };
+    let main_expectation = new_path(test_case, main_ext);
+    if main_expectation.exists() {
+        let code_pair =
+            parse_code(&test_name, Source::Path(&test_case), lang).expect("parse_code failed");
+        let pats = parse_code_expectation(&main_expectation).expect("parsing of patterns failed");
+
+        let mut print_test_info = PrintTestInfo::new(code_pair.clone(), test_name.into(), lang);
+        for pat in pats {
+            print_test_info.foreign_code_search_pattern = pat.clone();
+            assert!(code_pair.foreign_code.contains(&pat));
+        }
+        print_test_info.foreign_code_search_pattern.clear();
+
+        let rust_cpp_expectation = new_path(&test_case, rust_ext);
+        if rust_cpp_expectation.exists() {
+            let pats =
+                parse_code_expectation(&rust_cpp_expectation).expect("parsing of patterns failed");
+            let pats: Vec<String> = pats.into_iter().map(|v| v.replace("\n", "")).collect();
+            for pat in pats {
+                print_test_info.rust_pat = pat.clone();
+                assert!(code_pair.rust_code.contains(&pat));
+            }
+            print_test_info.rust_pat.clear();
+        }
+        print_test_info.success();
+        true
+    } else {
+        false
+    }
 }

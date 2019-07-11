@@ -1,3 +1,3 @@
 "std::variant<Foo, RustString> f()";
 "std::optional<Foo> f2()";
-"FooOpaque * Boo_f2(BooOpaque * const self)";
+"struct CRustOption4232mut3232c_void Boo_f2(BooOpaque * const self);";

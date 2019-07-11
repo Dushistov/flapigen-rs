@@ -9,7 +9,7 @@ public final class Foo {
      * some markdown example in the text
      * ```
      * 
-     * @param a0 id - somenumber
-     * @param a1 desc - more information
+     * @param id - some number
+     * @param desc - more information
      */
-    public Foo(int a0, @NonNull String a1)"#;
+    public Foo(int id, @NonNull String desc)"#;

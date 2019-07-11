@@ -1,4 +1,4 @@
-"virtual void onSessionUpdate(ControlItem a_0, bool a_1) = 0;";
+"virtual void onSessionUpdate(ControlItem item, bool is_ok) = 0;";
 
 r#"enum ControlItem {
 GNSS = 0,
@@ -13,6 +13,14 @@ r#"struct C_ControlStateObserver {
     void (*C_ControlStateObserver_deref)(void *opaque);
     
 
-    void (*onSessionUpdate)(ControlItem a_0, char a_1, void *opaque);
+    void (*onSessionUpdate)(uint32_t item, char is_ok, void *opaque);
 
 };"#;
+
+r#"static void c_onSessionUpdate(uint32_t item, char is_ok, void *opaque)
+    {
+        assert(opaque != nullptr);
+        auto pi = static_cast<ControlStateObserver *>(opaque);
+
+        pi->onSessionUpdate(static_cast<ControlItem>(item), (is_ok != 0));
+    }"#;

@@ -13,13 +13,18 @@ use syn::{
 };
 
 use crate::{
-    error::{DiagnosticError, Result},
+    error::{invalid_src_id_span, DiagnosticError, Result, SourceIdSpan},
+    source_registry::SourceId,
     typemap::{
-        ast::{normalize_ty_lifetimes, DisplayToTokens, GenericTypeConv, TypeName},
-        make_unique_rust_typename,
+        ast::{
+            normalize_ty_lifetimes, parse_ty_with_given_span, DisplayToTokens, GenericTypeConv,
+            TypeName,
+        },
         ty::{ForeignTypesStorage, RustTypeS},
-        validate_code_template, TypeConvEdge, TypeMap, TypesConvGraph,
+        typemap_macro::TypeMapConvRuleInfo,
+        validate_code_template, TypeConvCode, TypeConvEdge, TypeMap, TypesConvGraph,
     },
+    FOREIGN_TYPEMAP,
 };
 
 static MOD_NAME_WITH_FOREIGN_TYPES: &str = "swig_foreign_types_map";
@@ -43,25 +48,13 @@ static TARGET_ASSOC_TYPE: &str = "Target";
 type MyAttrs = FxHashMap<String, Vec<(String, Span)>>;
 
 pub(in crate::typemap) fn parse(
-    name: &str,
+    name: SourceId,
     code: &str,
     target_pointer_width: usize,
     traits_usage_code: FxHashMap<Ident, String>,
 ) -> Result<TypeMap> {
-    let mut ret = do_parse(code, target_pointer_width, traits_usage_code);
-    if let Err(ref mut err) = ret {
-        err.register_src_if_no(name.into(), code.into());
-    }
-    ret
-}
-
-fn do_parse(
-    code: &str,
-    target_pointer_width: usize,
-    traits_usage_code: FxHashMap<Ident, String>,
-) -> Result<TypeMap> {
-    let file = syn::parse_str::<syn::File>(code)?;
-
+    let file = syn::parse_str::<syn::File>(code)
+        .map_err(|err| DiagnosticError::from_syn_err(name, err))?;
     let sym_foreign_types_map = Ident::new(MOD_NAME_WITH_FOREIGN_TYPES, Span::call_site());
 
     let mut types_map_span: Option<Span> = None;
@@ -71,11 +64,15 @@ fn do_parse(
         rust_names_map: FxHashMap::default(),
         utils_code: Vec::with_capacity(file.items.len()),
         generic_edges: Vec::<GenericTypeConv>::new(),
+        rust_class_to_foreign_cache: FxHashMap::default(),
+        rust_from_foreign_cache: FxHashMap::default(),
         rust_to_foreign_cache: FxHashMap::default(),
         foreign_classes: Vec::new(),
         exported_enums: FxHashMap::default(),
         traits_usage_code,
         ftypes_storage: ForeignTypesStorage::default(),
+        not_merged_data: vec![],
+        generic_rules: vec![],
     };
 
     macro_rules! handle_attrs {
@@ -83,7 +80,7 @@ fn do_parse(
             if is_wrong_cfg_pointer_width(&$item.attrs, target_pointer_width) {
                 continue;
             }
-            my_syn_attrs_to_hashmap(&$item.attrs)?
+            my_syn_attrs_to_hashmap(name, &$item.attrs)?
         }};
     }
 
@@ -104,19 +101,20 @@ fn do_parse(
             Item::Mod(ref item_mod) if item_mod.ident == sym_foreign_types_map => {
                 if let Some(span) = types_map_span {
                     let mut err = DiagnosticError::new(
+                        name,
                         item_mod.span(),
                         format!(
                             "Should only one {} per types map",
                             MOD_NAME_WITH_FOREIGN_TYPES
                         ),
                     );
-                    err.span_note(span, "Previously defined here");
+                    err.span_note((name, span), "Previously defined here");
                     return Err(err);
                 }
                 types_map_span = Some(item_mod.span());
                 debug!("Found foreign_types_map_mod");
 
-                fill_foreign_types_map(item_mod, &mut ret)?;
+                fill_foreign_types_map(name, item_mod, &mut ret)?;
             }
             Item::Impl(ref mut item_impl)
                 if item_impl_path_is(item_impl, SWIG_INTO_TRAIT, SWIG_FROM_TRAIT) =>
@@ -124,15 +122,18 @@ fn do_parse(
                 let swig_attrs = handle_attrs!(item_impl);
                 let mut filter = FilterSwigAttrs;
                 filter.visit_item_impl_mut(item_impl);
-                handle_into_from_impl(&swig_attrs, item_impl, &mut ret)?;
+                handle_into_from_impl(name, &swig_attrs, item_impl, &mut ret)?;
             }
             syn::Item::Trait(mut item_trait) => {
                 let swig_attrs = handle_attrs!(item_trait);
                 let mut filter = FilterSwigAttrs;
                 filter.visit_item_trait_mut(&mut item_trait);
                 if !swig_attrs.is_empty() {
-                    let conv_code_template =
-                        get_swig_code_from_attrs(item_trait.span(), SWIG_CODE, &swig_attrs)?;
+                    let conv_code_template = get_swig_code_from_attrs(
+                        (name, item_trait.span()),
+                        SWIG_CODE,
+                        &swig_attrs,
+                    )?;
 
                     ret.traits_usage_code
                         .insert(item_trait.ident.clone(), conv_code_template.to_string());
@@ -145,16 +146,23 @@ fn do_parse(
                 let swig_attrs = handle_attrs!(item_impl);
                 let mut filter = FilterSwigAttrs;
                 filter.visit_item_impl_mut(item_impl);
-                handle_deref_impl(&swig_attrs, item_impl, &mut ret)?;
+                handle_deref_impl(name, &swig_attrs, item_impl, &mut ret)?;
             }
             Item::Macro(mut item_macro) => {
-                let swig_attrs = handle_attrs!(item_macro);
-                if swig_attrs.is_empty() {
-                    ret.utils_code.push(Item::Macro(item_macro));
+                if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
+                    let tmap_conv_rule: TypeMapConvRuleInfo = syn::parse2(item_macro.mac.tts)
+                        .map_err(|err| DiagnosticError::from_syn_err(name, err))?;
+
+                    ret.may_be_merge_conv_rule(name, tmap_conv_rule)?;
                 } else {
-                    let mut filter = FilterSwigAttrs;
-                    filter.visit_item_macro_mut(&mut item_macro);
-                    handle_macro(&swig_attrs, item_macro, &mut ret)?;
+                    let swig_attrs = handle_attrs!(item_macro);
+                    if swig_attrs.is_empty() {
+                        ret.utils_code.push(Item::Macro(item_macro));
+                    } else {
+                        let mut filter = FilterSwigAttrs;
+                        filter.visit_item_macro_mut(&mut item_macro);
+                        handle_macro(name, &swig_attrs, item_macro, &mut ret)?;
+                    }
                 }
             }
             _ => {
@@ -165,8 +173,12 @@ fn do_parse(
     Ok(ret)
 }
 
-fn fill_foreign_types_map(item_mod: &syn::ItemMod, ret: &mut TypeMap) -> Result<()> {
-    let names_map = parse_foreign_types_map_mod(item_mod)?;
+fn fill_foreign_types_map(
+    src_id: SourceId,
+    item_mod: &syn::ItemMod,
+    ret: &mut TypeMap,
+) -> Result<()> {
+    let names_map = parse_foreign_types_map_mod(src_id, item_mod)?;
     trace!("names_map {:?}", names_map);
     for entry in names_map {
         let TypeNamesMapEntry {
@@ -179,7 +191,7 @@ fn fill_foreign_types_map(item_mod: &syn::ItemMod, ret: &mut TypeMap) -> Result<
         let conv_graph = &mut ret.conv_graph;
         let graph_idx = *rust_names_map.entry(rust_name.clone()).or_insert_with(|| {
             let idx = conv_graph.add_node(Rc::new(RustTypeS::new_without_graph_idx(
-                rust_ty, rust_name,
+                rust_ty, rust_name, src_id,
             )));
             Rc::get_mut(&mut conv_graph[idx])
                 .expect("Internal error: can not modify Rc")
@@ -199,28 +211,33 @@ struct TypeNamesMapEntry {
     rust_ty: Type,
 }
 
-fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>> {
+fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>> {
     let mut ftype: Option<TypeName> = None;
 
     let mut names_map = FxHashMap::<TypeName, (TypeName, Type)>::default();
 
     for a in &item.attrs {
         if a.path.is_ident(SWIG_FOREIGNER_TYPE) {
-            let meta_attr = a.parse_meta()?;
+            let meta_attr = a
+                .parse_meta()
+                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
             if let syn::Meta::NameValue(syn::MetaNameValue {
                 lit: syn::Lit::Str(value),
                 ..
             }) = meta_attr
             {
-                ftype = Some(TypeName::new(value.value(), value.span()));
+                ftype = Some(TypeName::new(value.value(), (src_id, value.span())));
             } else {
                 return Err(DiagnosticError::new(
+                    src_id,
                     meta_attr.span(),
                     "Expect name value attribute",
                 ));
             }
         } else if a.path.is_ident(SWIG_RUST_TYPE) {
-            let meta_attr = a.parse_meta()?;
+            let meta_attr = a
+                .parse_meta()
+                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
             if let Some(ftype) = ftype.take() {
                 let attr_value = if let syn::Meta::NameValue(syn::MetaNameValue {
                     lit: syn::Lit::Str(value),
@@ -230,24 +247,29 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     value
                 } else {
                     return Err(DiagnosticError::new(
+                        src_id,
                         meta_attr.span(),
                         "Expect name value attribute",
                     ));
                 };
                 let span = attr_value.span();
-                let mut attr_value_tn = TypeName::new(attr_value.value(), span);
+                let mut attr_value_tn = TypeName::new(attr_value.value(), (src_id, span));
 
-                let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
+                let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)
+                    .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
                 attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
                 names_map.insert(ftype, (attr_value_tn, rust_ty));
             } else {
                 return Err(DiagnosticError::new(
+                    src_id,
                     a.span(),
                     format!("No {} for {}", SWIG_FOREIGNER_TYPE, SWIG_RUST_TYPE),
                 ));
             }
         } else if a.path.is_ident(SWIG_RUST_TYPE_NOT_UNIQUE) {
-            let meta_attr = a.parse_meta()?;
+            let meta_attr = a
+                .parse_meta()
+                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
 
             if let Some(ftype) = ftype.take() {
                 let attr_value = if let syn::Meta::NameValue(syn::MetaNameValue {
@@ -258,22 +280,25 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
                     value
                 } else {
                     return Err(DiagnosticError::new(
+                        src_id,
                         meta_attr.span(),
                         "Expect name value attribute",
                     ));
                 };
                 let span = attr_value.span();
-                let mut attr_value_tn = TypeName::new(attr_value.value(), span);
-                let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)?;
+                let mut attr_value_tn = TypeName::new(attr_value.value(), (src_id, span));
+                let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)
+                    .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
                 attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
                 let unique_name =
-                    make_unique_rust_typename(&attr_value_tn.typename, &ftype.typename);
+                    RustTypeS::make_unique_typename(&attr_value_tn.typename, &ftype.typename);
                 names_map.insert(
                     ftype,
-                    (TypeName::new(unique_name, Span::call_site()), rust_ty),
+                    (TypeName::new(unique_name, invalid_src_id_span()), rust_ty),
                 );
             } else {
                 return Err(DiagnosticError::new(
+                    src_id,
                     a.span(),
                     format!(
                         "No {} for {}",
@@ -283,6 +308,7 @@ fn parse_foreign_types_map_mod(item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>>
             }
         } else {
             return Err(DiagnosticError::new(
+                src_id,
                 a.span(),
                 format!("Unexpected attribute: '{}'", DisplayToTokens(a)),
             ));
@@ -330,7 +356,7 @@ fn is_wrong_cfg_pointer_width(attrs: &[syn::Attribute], target_pointer_width: us
     false
 }
 
-fn my_syn_attrs_to_hashmap(attrs: &[syn::Attribute]) -> Result<MyAttrs> {
+fn my_syn_attrs_to_hashmap(src_id: SourceId, attrs: &[syn::Attribute]) -> Result<MyAttrs> {
     static KNOWN_SWIG_ATTRS: [&str; 6] = [
         SWIG_TO_FOREIGNER_HINT,
         SWIG_FROM_FOREIGNER_HINT,
@@ -342,7 +368,9 @@ fn my_syn_attrs_to_hashmap(attrs: &[syn::Attribute]) -> Result<MyAttrs> {
     let mut ret = FxHashMap::default();
     for a in attrs {
         if KNOWN_SWIG_ATTRS.iter().any(|x| a.path.is_ident(x)) {
-            let meta = a.parse_meta()?;
+            let meta = a
+                .parse_meta()
+                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
             if let syn::Meta::NameValue(syn::MetaNameValue {
                 ref ident,
                 lit: syn::Lit::Str(ref value),
@@ -353,7 +381,7 @@ fn my_syn_attrs_to_hashmap(attrs: &[syn::Attribute]) -> Result<MyAttrs> {
                     .or_insert_with(Vec::new)
                     .push((value.value(), a.span()));
             } else {
-                return Err(DiagnosticError::new(a.span(), "Invalid attribute"));
+                return Err(DiagnosticError::new(src_id, a.span(), "Invalid attribute"));
             }
         }
     }
@@ -361,13 +389,13 @@ fn my_syn_attrs_to_hashmap(attrs: &[syn::Attribute]) -> Result<MyAttrs> {
 }
 
 fn get_swig_code_from_attrs<'a, 'b>(
-    item_span: Span,
+    item_span: SourceIdSpan,
     swig_code_attr_name: &'a str,
     attrs: &'b MyAttrs,
 ) -> Result<&'b str> {
     if let Some(swig_code) = attrs.get(swig_code_attr_name) {
         if swig_code.len() != 1 {
-            Err(DiagnosticError::new(
+            Err(DiagnosticError::new2(
                 item_span,
                 format!(
                     "Expect to have {} attribute, and it should be only one",
@@ -376,11 +404,11 @@ fn get_swig_code_from_attrs<'a, 'b>(
             ))
         } else {
             let (ref conv_code_template, sp) = swig_code[0];
-            validate_code_template(sp, &conv_code_template.as_str())?;
+            validate_code_template((item_span.0, sp), &conv_code_template.as_str())?;
             Ok(conv_code_template)
         }
     } else {
-        Err(DiagnosticError::new(
+        Err(DiagnosticError::new2(
             item_span,
             format!("No {} attribute", swig_code_attr_name),
         ))
@@ -388,6 +416,7 @@ fn get_swig_code_from_attrs<'a, 'b>(
 }
 
 fn handle_into_from_impl(
+    src_id: SourceId,
     swig_attrs: &MyAttrs,
     item_impl: &syn::ItemImpl,
     ret: &mut TypeMap,
@@ -395,6 +424,7 @@ fn handle_into_from_impl(
     let to_suffix = if !swig_attrs.is_empty() && swig_attrs.contains_key(SWIG_TO_FOREIGNER_HINT) {
         if swig_attrs.len() != 1 || swig_attrs[SWIG_TO_FOREIGNER_HINT].len() != 1 {
             return Err(DiagnosticError::new(
+                src_id,
                 item_impl.span(),
                 format!("Expect only {} attribute", SWIG_TO_FOREIGNER_HINT),
             ));
@@ -408,6 +438,7 @@ fn handle_into_from_impl(
     {
         if swig_attrs.len() != 1 || swig_attrs[SWIG_FROM_FOREIGNER_HINT].len() != 1 {
             return Err(DiagnosticError::new(
+                src_id,
                 item_impl.span(),
                 format!("Expect only {} attribute", SWIG_FROM_FOREIGNER_HINT),
             ));
@@ -421,7 +452,7 @@ fn handle_into_from_impl(
     } else {
         unreachable!();
     };
-    let type_param = extract_trait_param_type(trait_path)?;
+    let type_param = extract_trait_param_type(src_id, trait_path)?;
 
     let (from_ty, to_ty, trait_name) = if is_ident_ignore_params(trait_path, SWIG_INTO_TRAIT) {
         (
@@ -437,11 +468,12 @@ fn handle_into_from_impl(
         )
     };
 
-    let conv_code = ret
+    let conv_code: &String = ret
         .traits_usage_code
         .get(&Ident::new(trait_name, Span::call_site()))
         .ok_or_else(|| {
             DiagnosticError::new(
+                src_id,
                 item_impl.span(),
                 "Can not find conversation code for SwigInto/SwigFrom",
             )
@@ -451,17 +483,20 @@ fn handle_into_from_impl(
         trace!("handle_into_from_impl: generics {:?}", item_impl.generics);
         let item_code = item_impl.into_token_stream();
         ret.generic_edges.push(GenericTypeConv {
+            src_id,
             from_ty,
             to_ty,
-            code_template: conv_code.to_string(),
+            code: TypeConvCode::new(conv_code.clone(), (src_id, item_impl.span())),
             dependency: Rc::new(RefCell::new(Some(item_code))),
             generic_params: item_impl.generics.clone(),
             to_foreigner_hint: get_foreigner_hint_for_generic(
+                src_id,
                 &item_impl.generics,
                 &swig_attrs,
                 ForeignHintVariant::To,
             )?,
             from_foreigner_hint: get_foreigner_hint_for_generic(
+                src_id,
                 &item_impl.generics,
                 &swig_attrs,
                 ForeignHintVariant::From,
@@ -470,10 +505,11 @@ fn handle_into_from_impl(
     } else {
         let item_code = item_impl.into_token_stream();
         add_conv_code(
+            src_id,
             (from_ty, from_suffix),
             (to_ty, to_suffix),
             item_code,
-            conv_code.clone(),
+            TypeConvCode::new(conv_code.clone(), (src_id, item_impl.span())),
             ret,
         );
     }
@@ -481,12 +517,15 @@ fn handle_into_from_impl(
 }
 
 fn handle_deref_impl(
+    src_id: SourceId,
     swig_attrs: &MyAttrs,
     item_impl: &syn::ItemImpl,
     ret: &mut TypeMap,
 ) -> Result<()> {
-    let target_ty = unpack_first_associated_type(&item_impl.items, TARGET_ASSOC_TYPE)
-        .ok_or_else(|| DiagnosticError::new(item_impl.span(), "No Target associated type"))?;
+    let target_ty =
+        unpack_first_associated_type(&item_impl.items, TARGET_ASSOC_TYPE).ok_or_else(|| {
+            DiagnosticError::new(src_id, item_impl.span(), "No Target associated type")
+        })?;
     debug!(
         "parsing swigderef target {:?}, for_type {:?}",
         target_ty, item_impl.self_ty
@@ -501,20 +540,23 @@ fn handle_deref_impl(
     let (deref_trait, to_ref_ty) = if is_ident_ignore_params(trait_path, SWIG_DEREF_TRAIT) {
         (
             SWIG_DEREF_TRAIT,
-            parse_ty_with_given_span(&format!("&{}", deref_target_name), item_impl.span())?,
+            parse_ty_with_given_span(&format!("&{}", deref_target_name), item_impl.span())
+                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?,
         )
     } else {
         (
             SWIG_DEREF_MUT_TRAIT,
-            parse_ty_with_given_span(&format!("&mut {}", deref_target_name), item_impl.span())?,
+            parse_ty_with_given_span(&format!("&mut {}", deref_target_name), item_impl.span())
+                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?,
         )
     };
 
-    let conv_code = ret
+    let conv_code: &String = ret
         .traits_usage_code
         .get(&Ident::new(deref_trait, Span::call_site()))
         .ok_or_else(|| {
             DiagnosticError::new(
+                src_id,
                 item_impl.span(),
                 "Can not find conversation code for SwigDeref/SwigDerefMut",
             )
@@ -525,17 +567,20 @@ fn handle_deref_impl(
     //for_type -> &Target
     if item_impl.generics.type_params().next().is_some() {
         ret.generic_edges.push(GenericTypeConv {
+            src_id,
             from_ty,
             to_ty: to_ref_ty,
-            code_template: conv_code.to_string(),
+            code: TypeConvCode::new(conv_code.clone(), (src_id, item_impl.span())),
             dependency: Rc::new(RefCell::new(Some(item_code))),
             generic_params: item_impl.generics.clone(),
             to_foreigner_hint: get_foreigner_hint_for_generic(
+                src_id,
                 &item_impl.generics,
                 &swig_attrs,
                 ForeignHintVariant::To,
             )?,
             from_foreigner_hint: get_foreigner_hint_for_generic(
+                src_id,
                 &item_impl.generics,
                 &swig_attrs,
                 ForeignHintVariant::From,
@@ -550,23 +595,30 @@ fn handle_deref_impl(
         };
 
         add_conv_code(
+            src_id,
             (from_ty, None),
             (to_ty, None),
             item_code,
-            conv_code.to_string(),
+            TypeConvCode::new(conv_code.clone(), (src_id, item_impl.span())),
             ret,
         );
     }
     Ok(())
 }
 
-fn handle_macro(swig_attrs: &MyAttrs, item_macro: syn::ItemMacro, ret: &mut TypeMap) -> Result<()> {
+fn handle_macro(
+    src_id: SourceId,
+    swig_attrs: &MyAttrs,
+    item_macro: syn::ItemMacro,
+    ret: &mut TypeMap,
+) -> Result<()> {
     assert!(!swig_attrs.is_empty());
 
     debug!("conversation macro {:?}", item_macro.ident);
 
     let from_typename = swig_attrs.get(SWIG_FROM_ATTR_NAME).ok_or_else(|| {
         DiagnosticError::new(
+            src_id,
             item_macro.span(),
             format!(
                 "No {} but there are other attr {:?}",
@@ -578,6 +630,7 @@ fn handle_macro(swig_attrs: &MyAttrs, item_macro: syn::ItemMacro, ret: &mut Type
     assert!(!from_typename.is_empty());
     let to_typename = swig_attrs.get(SWIG_TO_ATTR_NAME).ok_or_else(|| {
         DiagnosticError::new(
+            src_id,
             item_macro.span(),
             format!(
                 "No {} but there are other attr {:?}",
@@ -587,36 +640,48 @@ fn handle_macro(swig_attrs: &MyAttrs, item_macro: syn::ItemMacro, ret: &mut Type
     })?;
     assert!(!to_typename.is_empty());
 
-    let code_template = get_swig_code_from_attrs(item_macro.span(), SWIG_CODE, &swig_attrs)?;
+    let code_template =
+        get_swig_code_from_attrs((src_id, item_macro.span()), SWIG_CODE, &swig_attrs)?;
 
     if let Some(generic_types) = swig_attrs.get(SWIG_GENERIC_ARG) {
         assert!(!generic_types.is_empty());
         let mut types_list = Punctuated::<Type, Token![,]>::new();
 
-        fn spanned_str_to_type((name, span): &(String, Span)) -> Result<Type> {
-            let ty: Type = parse_ty_with_given_span(name, *span)?;
+        fn spanned_str_to_type(src_id: SourceId, (name, span): &(String, Span)) -> Result<Type> {
+            let ty: Type = parse_ty_with_given_span(name, *span)
+                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
             Ok(ty)
         }
 
         for g_ty in generic_types {
-            types_list.push(spanned_str_to_type(g_ty)?);
+            types_list.push(spanned_str_to_type(src_id, g_ty)?);
         }
         let generic_params: syn::Generics = parse_quote! { <#types_list> };
 
-        let from_ty: Type = spanned_str_to_type(&from_typename[0])?;
-        let to_ty: Type = spanned_str_to_type(&to_typename[0])?;
+        let from_ty: Type = spanned_str_to_type(src_id, &from_typename[0])?;
+        let to_ty: Type = spanned_str_to_type(src_id, &to_typename[0])?;
 
-        let to_foreigner_hint =
-            get_foreigner_hint_for_generic(&generic_params, &swig_attrs, ForeignHintVariant::To)?;
-        let from_foreigner_hint =
-            get_foreigner_hint_for_generic(&generic_params, &swig_attrs, ForeignHintVariant::From)?;
+        let to_foreigner_hint = get_foreigner_hint_for_generic(
+            src_id,
+            &generic_params,
+            &swig_attrs,
+            ForeignHintVariant::To,
+        )?;
+        let from_foreigner_hint = get_foreigner_hint_for_generic(
+            src_id,
+            &generic_params,
+            &swig_attrs,
+            ForeignHintVariant::From,
+        )?;
 
+        let item_macro_span = (src_id, item_macro.span());
         let item_code = item_macro.into_token_stream();
 
         ret.generic_edges.push(GenericTypeConv {
+            src_id,
             from_ty,
             to_ty,
-            code_template: code_template.to_string(),
+            code: TypeConvCode::new(code_template, item_macro_span),
             dependency: Rc::new(RefCell::new(Some(item_code))),
             generic_params,
             to_foreigner_hint,
@@ -629,9 +694,10 @@ fn handle_macro(swig_attrs: &MyAttrs, item_macro: syn::ItemMacro, ret: &mut Type
     Ok(())
 }
 
-fn extract_trait_param_type(trait_path: &syn::Path) -> Result<&Type> {
+fn extract_trait_param_type(src_id: SourceId, trait_path: &syn::Path) -> Result<&Type> {
     if trait_path.segments.len() != 1 {
         return Err(DiagnosticError::new(
+            src_id,
             trait_path.span(),
             "Invalid trait path",
         ));
@@ -643,6 +709,7 @@ fn extract_trait_param_type(trait_path: &syn::Path) -> Result<&Type> {
     {
         if args.len() != 1 {
             return Err(DiagnosticError::new(
+                src_id,
                 args.span(),
                 "Should be only one generic argument",
             ));
@@ -650,10 +717,15 @@ fn extract_trait_param_type(trait_path: &syn::Path) -> Result<&Type> {
         if let syn::GenericArgument::Type(ref ty) = args[0] {
             Ok(ty)
         } else {
-            Err(DiagnosticError::new(args[0].span(), "Expect type here"))
+            Err(DiagnosticError::new(
+                src_id,
+                args[0].span(),
+                "Expect type here",
+            ))
         }
     } else {
         Err(DiagnosticError::new(
+            src_id,
             trait_path.segments[0].arguments.span(),
             "Expect generic arguments here",
         ))
@@ -667,6 +739,7 @@ enum ForeignHintVariant {
 }
 
 fn get_foreigner_hint_for_generic(
+    src_id: SourceId,
     generic: &syn::Generics,
     attrs: &MyAttrs,
     variant: ForeignHintVariant,
@@ -680,15 +753,19 @@ fn get_foreigner_hint_for_generic(
     if let Some(attrs) = attrs.get(attr_name) {
         assert!(!attrs.is_empty());
         if attrs.len() != 1 {
-            let mut err =
-                DiagnosticError::new(attrs[1].1, format!("Several {} attributes", attr_name));
-            err.span_note(attrs[0].1, &format!("First {}", attr_name));
+            let mut err = DiagnosticError::new(
+                src_id,
+                attrs[1].1,
+                format!("Several {} attributes", attr_name),
+            );
+            err.span_note((src_id, attrs[0].1), &format!("First {}", attr_name));
             return Err(err);
         }
         let mut ty_params = generic.type_params();
         let first_ty_param = ty_params.next();
         if first_ty_param.is_none() || ty_params.next().is_some() {
             return Err(DiagnosticError::new(
+                src_id,
                 generic.span(),
                 format!("Expect exactly one generic parameter for {}", attr_name),
             ));
@@ -701,11 +778,12 @@ fn get_foreigner_hint_for_generic(
             .contains(first_ty_param.ident.to_string().as_str())
         {
             let mut err = DiagnosticError::new(
+                src_id,
                 attrs[0].1,
                 format!("{} not contains {}", attr_name, first_ty_param.ident),
             );
             err.span_note(
-                generic.span(),
+                (src_id, generic.span()),
                 format!("{} defined here", first_ty_param.ident),
             );
             return Err(err);
@@ -717,15 +795,15 @@ fn get_foreigner_hint_for_generic(
 }
 
 fn add_conv_code(
+    src_id: SourceId,
     (from_ty, from_suffix): (Type, Option<String>),
     (to_ty, to_suffix): (Type, Option<String>),
     item_code: TokenStream,
-    conv_code: String,
+    conv_code: TypeConvCode,
     ret: &mut TypeMap,
 ) {
-    let from = ret.find_or_alloc_rust_type_with_may_be_suffix(&from_ty, from_suffix);
-    let to = ret.find_or_alloc_rust_type_with_may_be_suffix(&to_ty, to_suffix);
-
+    let from = ret.find_or_alloc_rust_type_with_may_be_suffix(&from_ty, from_suffix, src_id);
+    let to = ret.find_or_alloc_rust_type_with_may_be_suffix(&to_ty, to_suffix, src_id);
     debug!("add_conv_code: from {} to {}", from, to);
     ret.conv_graph.update_edge(
         from.graph_idx,
@@ -756,11 +834,6 @@ where
     path.leading_colon.is_none() && path.segments.len() == 1 && path.segments[0].ident == ident
 }
 
-fn parse_ty_with_given_span(type_str: &str, span: Span) -> Result<Type> {
-    let ty = syn::LitStr::new(type_str, span).parse::<syn::Type>()?;
-    Ok(ty)
-}
-
 struct FilterSwigAttrs;
 
 impl VisitMut for FilterSwigAttrs {
@@ -788,7 +861,7 @@ mod tests {
     fn test_parsing_only_types_map_mod() {
         let _ = env_logger::try_init();
         let types_map = parse(
-            "foreign_mod",
+            SourceId::none(),
             r#"
 mod swig_foreign_types_map {
     #![swig_foreigner_type="boolean"]
@@ -841,7 +914,7 @@ mod swig_foreign_types_map {
 "#,
         )
         .unwrap();
-        let map = parse_foreign_types_map_mod(&mod_item).unwrap();
+        let map = parse_foreign_types_map_mod(SourceId::none(), &mod_item).unwrap();
         assert_eq!(
             vec![
                 ("boolean".into(), "jboolean".into()),
@@ -862,7 +935,7 @@ mod swig_foreign_types_map {
     #[test]
     fn test_double_map_err() {
         parse(
-            "double_map_err",
+            SourceId::none(),
             r#"
 mod swig_foreign_types_map {}
 mod swig_foreign_types_map {}
@@ -902,7 +975,7 @@ mod swig_foreign_types_map {}
         };
         assert_eq!(
             vec![("swig_to_foreigner_hint".into(), vec!["T".into()])],
-            my_syn_attrs_to_hashmap(&item_impl.attrs)
+            my_syn_attrs_to_hashmap(SourceId::none(), &item_impl.attrs)
                 .unwrap()
                 .into_iter()
                 .map(|(k, v)| (k, v.into_iter().map(|v| v.0).collect::<Vec<_>>()))
@@ -935,7 +1008,7 @@ mod swig_foreign_types_map {}
                 v
             },
             {
-                let mut v: Vec<_> = my_syn_attrs_to_hashmap(&item_impl.attrs)
+                let mut v: Vec<_> = my_syn_attrs_to_hashmap(SourceId::none(), &item_impl.attrs)
                     .unwrap()
                     .into_iter()
                     .map(|(k, v)| (k, v.into_iter().map(|v| v.0).collect::<Vec<_>>()))
@@ -962,7 +1035,7 @@ mod swig_foreign_types_map {}
                 let ty: Type = parse_quote!(jobject);
                 ty
             },
-            *extract_trait_param_type(&trait_impl_path).unwrap()
+            *extract_trait_param_type(SourceId::none(), &trait_impl_path).unwrap()
         );
     }
 
@@ -976,12 +1049,17 @@ mod swig_foreign_types_map {}
                 }
             }
         };
-        let my_attrs = my_syn_attrs_to_hashmap(&trait_impl.attrs).unwrap();
+        let my_attrs = my_syn_attrs_to_hashmap(SourceId::none(), &trait_impl.attrs).unwrap();
         assert_eq!(
             "T",
-            get_foreigner_hint_for_generic(&trait_impl.generics, &my_attrs, ForeignHintVariant::To)
-                .unwrap()
-                .unwrap()
+            get_foreigner_hint_for_generic(
+                SourceId::none(),
+                &trait_impl.generics,
+                &my_attrs,
+                ForeignHintVariant::To
+            )
+            .unwrap()
+            .unwrap()
         );
     }
 
@@ -1009,7 +1087,7 @@ mod swig_foreign_types_map {}
     fn test_parse_trait_with_code() {
         let _ = env_logger::try_init();
         let mut conv_map = parse(
-            "trait_with_code",
+            SourceId::none(),
             r#"
 #[allow(dead_code)]
 #[swig_code = "let {to_var}: {to_var_type} = {from_var}.swig_into(env);"]
@@ -1043,20 +1121,35 @@ impl SwigFrom<bool> for jboolean {
         )
         .unwrap();
 
-        let jboolean_ty = conv_map.find_or_alloc_rust_type(&parse_type! { jboolean });
-        let bool_ty = conv_map.find_or_alloc_rust_type(&parse_type! { bool });
+        let jboolean_ty =
+            conv_map.find_or_alloc_rust_type(&parse_type! { jboolean }, SourceId::none());
+        let bool_ty = conv_map.find_or_alloc_rust_type(&parse_type! { bool }, SourceId::none());
 
         let (_, code) = conv_map
-            .convert_rust_types(&jboolean_ty, &bool_ty, "a0", "jlong", Span::call_site())
+            .convert_rust_types(
+                jboolean_ty.to_idx(),
+                bool_ty.to_idx(),
+                "a0",
+                "a1",
+                "jlong",
+                invalid_src_id_span(),
+            )
             .unwrap();
-        assert_eq!("    let a0: bool = a0.swig_into(env);\n".to_string(), code);
+        assert_eq!("    let a1: bool = a0.swig_into(env);\n".to_string(), code);
 
         let (_, code) = conv_map
-            .convert_rust_types(&bool_ty, &jboolean_ty, "a0", "jlong", Span::call_site())
+            .convert_rust_types(
+                bool_ty.to_idx(),
+                jboolean_ty.to_idx(),
+                "a0",
+                "a1",
+                "jlong",
+                invalid_src_id_span(),
+            )
             .unwrap();
 
         assert_eq!(
-            "    let a0: jboolean = <jboolean>::swig_from(a0, env);\n".to_string(),
+            "    let a1: jboolean = <jboolean>::swig_from(a0, env);\n".to_string(),
             code
         );
     }
@@ -1064,7 +1157,7 @@ impl SwigFrom<bool> for jboolean {
     #[test]
     fn test_parse_deref() {
         let mut conv_map = parse(
-            "deref_code",
+            SourceId::none(),
             r#"
 #[allow(dead_code)]
 #[swig_code = "let {to_var}: {to_var_type} = {from_var}.swig_deref();"]
@@ -1084,12 +1177,19 @@ impl SwigDeref for String {
             FxHashMap::default(),
         )
         .unwrap();
-        let string_ty = conv_map.find_or_alloc_rust_type(&parse_type! { String });
-        let str_ty = conv_map.find_or_alloc_rust_type(&parse_type! { &str });
+        let string_ty = conv_map.find_or_alloc_rust_type(&parse_type! { String }, SourceId::none());
+        let str_ty = conv_map.find_or_alloc_rust_type(&parse_type! { &str }, SourceId::none());
         let (_, code) = conv_map
-            .convert_rust_types(&string_ty, &str_ty, "a0", "jlong", Span::call_site())
+            .convert_rust_types(
+                string_ty.to_idx(),
+                str_ty.to_idx(),
+                "a0",
+                "a1",
+                "jlong",
+                invalid_src_id_span(),
+            )
             .unwrap();
-        assert_eq!("    let a0: & str = a0.swig_deref();\n".to_string(), code);
+        assert_eq!("    let a1: & str = a0.swig_deref();\n".to_string(), code);
     }
 
     #[test]
@@ -1097,7 +1197,7 @@ impl SwigDeref for String {
         let _ = env_logger::try_init();
 
         let mut conv_map = parse(
-            "trait_with_type_params_code",
+            SourceId::none(),
             r#"
 #[allow(dead_code)]
 #[swig_code = "let {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var}, env);"]
@@ -1143,17 +1243,29 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
         )
         .unwrap();
 
-        conv_map.find_or_alloc_rust_type_that_implements(&parse_type! { Foo }, "SwigForeignClass");
-        let arc_mutex_foo = conv_map.find_or_alloc_rust_type(&parse_type! { Arc<Mutex<Foo>> });
-        let foo_ref = conv_map.find_or_alloc_rust_type(&parse_type! { &Foo });
+        conv_map.find_or_alloc_rust_type_that_implements(
+            &parse_type! { Foo },
+            &["SwigForeignClass"],
+            SourceId::none(),
+        );
+        let arc_mutex_foo =
+            conv_map.find_or_alloc_rust_type(&parse_type! { Arc<Mutex<Foo>> }, SourceId::none());
+        let foo_ref = conv_map.find_or_alloc_rust_type(&parse_type! { &Foo }, SourceId::none());
 
         let (_, code) = conv_map
-            .convert_rust_types(&arc_mutex_foo, &foo_ref, "a0", "jlong", Span::call_site())
+            .convert_rust_types(
+                arc_mutex_foo.to_idx(),
+                foo_ref.to_idx(),
+                "a0",
+                "a1",
+                "jlong",
+                invalid_src_id_span(),
+            )
             .unwrap();
         assert_eq!(
-            r#"    let a0: & Mutex < Foo > = a0.swig_deref();
-    let a0: MutexGuard < Foo > = <MutexGuard < Foo >>::swig_from(a0, env);
-    let a0: & Foo = a0.swig_deref();
+            r#"    let a1: & Mutex < Foo > = a0.swig_deref();
+    let a1: MutexGuard < Foo > = <MutexGuard < Foo >>::swig_from(a1, env);
+    let a1: & Foo = a1.swig_deref();
 "#
             .to_string(),
             code
@@ -1163,7 +1275,7 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
     #[test]
     fn test_parse_macros_conv() {
         let mut conv_map = parse(
-            "macros",
+            SourceId::none(),
             r#"
 mod swig_foreign_types_map {
     #![swig_foreigner_type="byte"]
@@ -1210,43 +1322,63 @@ macro_rules! jni_unpack_return {
         )
         .unwrap();
 
-        let foo_ty = conv_map.find_or_alloc_rust_type(&parse_type! { Foo });
-        let result_foo_str_ty =
-            conv_map.find_or_alloc_rust_type(&parse_type! { Result<Foo, String> });
+        let foo_ty = conv_map.find_or_alloc_rust_type(&parse_type! { Foo }, SourceId::none());
+        let result_foo_str_ty = conv_map
+            .find_or_alloc_rust_type(&parse_type! { Result<Foo, String> }, SourceId::none());
 
         let (_, code) = conv_map
             .convert_rust_types(
-                &result_foo_str_ty,
-                &foo_ty,
+                result_foo_str_ty.to_idx(),
+                foo_ty.to_idx(),
                 "a0",
+                "a1",
                 "jlong",
-                Span::call_site(),
+                invalid_src_id_span(),
             )
             .unwrap();
         assert_eq!(
-            r#"    let a0: Foo = jni_unpack_return!(a0, env);
+            r#"    let a1: Foo = jni_unpack_return!(a0, env);
 "#,
             code
         );
 
-        let result_u8_str_ty =
-            conv_map.find_or_alloc_rust_type(&parse_type! { Result<u8, &'static str> });
-        let jshort_ty = conv_map.find_or_alloc_rust_type(&parse_type! { jshort });
+        let result_u8_str_ty = conv_map
+            .find_or_alloc_rust_type(&parse_type! { Result<u8, &'static str> }, SourceId::none());
+        let jshort_ty = conv_map.find_or_alloc_rust_type(&parse_type! { jshort }, SourceId::none());
 
         let (_, code) = conv_map
             .convert_rust_types(
-                &result_u8_str_ty,
-                &jshort_ty,
+                result_u8_str_ty.to_idx(),
+                jshort_ty.to_idx(),
                 "a0",
+                "a1",
                 "jlong",
-                Span::call_site(),
+                invalid_src_id_span(),
             )
             .unwrap();
         assert_eq!(
-            r#"    let a0: u8 = jni_unpack_return!(a0, env);
-    let a0: jshort = <jshort>::swig_from(a0, env);
+            r#"    let a1: u8 = jni_unpack_return!(a0, env);
+    let a1: jshort = <jshort>::swig_from(a1, env);
 "#,
             code
         );
+    }
+
+    #[test]
+    fn test_parse_main_lang_typemaps() {
+        parse(
+            SourceId::none(),
+            include_str!("../java_jni/jni-include.rs"),
+            64,
+            FxHashMap::default(),
+        )
+        .unwrap();
+        parse(
+            SourceId::none(),
+            include_str!("../cpp/cpp-include.rs"),
+            64,
+            FxHashMap::default(),
+        )
+        .unwrap();
     }
 }

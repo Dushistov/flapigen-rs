@@ -4,24 +4,29 @@ use std::{mem, rc::Rc};
 use log::{debug, info};
 use petgraph::graph::NodeIndex;
 use rustc_hash::FxHashMap;
+use smol_str::SmolStr;
+use syn::spanned::Spanned;
 
 use crate::{
-    error::Result,
+    error::{DiagnosticError, Result},
+    source_registry::SourceId,
     typemap::{
-        ty::{ForeignTypeS, ForeignTypesStorage},
-        TypeMap,
+        ast::TypeName,
+        ty::{ForeignConversationIntermediate, ForeignTypeS, ForeignTypesStorage},
+        typemap_macro::{FTypeLeftRightPair, ModuleName, TypeMapConvRuleInfo},
+        TypeConvEdge, TypeMap,
     },
 };
 
 impl TypeMap {
     pub(crate) fn merge(
         &mut self,
-        id_of_code: &str,
+        id_of_code: SourceId,
         code: &str,
         target_pointer_width: usize,
     ) -> Result<()> {
-        debug!("merging {} with our rules", id_of_code);
-        self.rust_to_foreign_cache.clear();
+        debug!("TypeMap::merge {:?} with our rules", id_of_code);
+        self.invalidate_conv_cache();
         let mut was_traits_usage_code = FxHashMap::default();
         mem::swap(&mut was_traits_usage_code, &mut self.traits_usage_code);
         let mut new_data = crate::typemap::parse::parse(
@@ -39,13 +44,270 @@ impl TypeMap {
             ftypes_storage: new_ftypes_storage,
             generic_edges: mut new_generic_edges,
             utils_code: mut new_utils_code,
+            not_merged_data: mut new_not_merged_data,
+            generic_rules: mut new_generic_rules,
             ..
         } = new_data;
-        add_new_ftypes(new_ftypes_storage, self, &new_node_to_our_map);
+        add_new_ftypes(new_ftypes_storage, self, &new_node_to_our_map)?;
 
         self.utils_code.append(&mut new_utils_code);
         //TODO: more intellect to process new generics
         self.generic_edges.append(&mut new_generic_edges);
+        //TODO: add more checks
+        self.not_merged_data.append(&mut new_not_merged_data);
+        self.generic_rules.append(&mut new_generic_rules);
+        Ok(())
+    }
+
+    pub(crate) fn may_be_merge_conv_rule(
+        &mut self,
+        src_id: SourceId,
+        mut ri: TypeMapConvRuleInfo,
+    ) -> Result<()> {
+        ri.set_src_id(src_id);
+        if ri.is_generic() {
+            self.generic_rules.push(Rc::new(ri));
+            return Ok(());
+        }
+        if ri.contains_data_for_language_backend() {
+            self.not_merged_data.push(ri);
+            return Ok(());
+        }
+        self.merge_conv_rule(src_id, ri)
+    }
+
+    pub(crate) fn merge_conv_rule(
+        &mut self,
+        src_id: SourceId,
+        mut ri: TypeMapConvRuleInfo,
+    ) -> Result<()> {
+        assert!(!ri.contains_data_for_language_backend());
+        assert!(!ri.is_generic());
+        if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map_no_lang_backend() {
+            let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
+            self.invalidate_conv_for_rust_type(r_ty);
+            let ftype_idx = self.add_foreign_rust_ty_idx(
+                TypeName::new(f_ty.name.clone(), (src_id, f_ty.sp)),
+                r_ty,
+            )?;
+            self.ftypes_storage[ftype_idx].provides_by_module =
+                convert_req_module_to_provides_by_module(req_modules.to_vec());
+
+            return Ok(());
+        }
+
+        let mut rtype_left_to_right = None;
+        if let Some(rule) = ri.rtype_left_to_right {
+            let (right_ty, code) = if let (Some(right_ty), Some(code)) = (rule.right_ty, rule.code)
+            {
+                (right_ty, code)
+            } else {
+                return Err(DiagnosticError::new2(
+                    (src_id, rule.left_ty.span()),
+                    "rule (r_type 'from type' => 'to type') is not simple, but no code or 'to type'",
+                ));
+            };
+
+            let from_ty = self
+                .find_or_alloc_rust_type(&rule.left_ty, src_id)
+                .graph_idx;
+            let to_ty = self.find_or_alloc_rust_type(&right_ty, src_id).graph_idx;
+
+            self.conv_graph
+                .update_edge(from_ty, to_ty, TypeConvEdge::new(code.into(), None));
+            rtype_left_to_right = Some((from_ty, to_ty));
+            self.invalidate_conv_for_rust_type(from_ty);
+            self.invalidate_conv_for_rust_type(to_ty);
+        }
+
+        let mut rtype_right_to_left = None;
+        if let Some(rule) = ri.rtype_right_to_left {
+            let (right_ty, code) = if let (Some(right_ty), Some(code)) = (rule.right_ty, rule.code)
+            {
+                (right_ty, code)
+            } else {
+                return Err(DiagnosticError::new(
+                    src_id, rule.left_ty.span(),
+                     "rule (r_type 'to type' <= 'from type') is not simple, but no code or 'from type'",
+                ));
+            };
+
+            let to_ty = self
+                .find_or_alloc_rust_type(&rule.left_ty, src_id)
+                .graph_idx;
+            let from_ty = self.find_or_alloc_rust_type(&right_ty, src_id).graph_idx;
+            self.conv_graph
+                .update_edge(from_ty, to_ty, TypeConvEdge::new(code.into(), None));
+            rtype_right_to_left = Some((from_ty, to_ty));
+            self.invalidate_conv_for_rust_type(from_ty);
+            self.invalidate_conv_for_rust_type(to_ty);
+        }
+
+        let mut req_modules = vec![];
+
+        let mut ft_into_from_rust = None;
+        assert!(ri.ftype_left_to_right.len() <= 1);
+        if !ri.ftype_left_to_right.is_empty() {
+            let mut rule = ri.ftype_left_to_right.remove(0);
+            req_modules.append(&mut rule.req_modules);
+            let right_fty = match rule.left_right_ty {
+                FTypeLeftRightPair::OnlyLeft(left_ty) => {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        left_ty.sp,
+                        "rule (f_type 'from type' => 'to type') is not simple, but no 'to type'",
+                    ));
+                }
+                FTypeLeftRightPair::Both(left_ty, _right_ty) => {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        left_ty.sp,
+                        "not supported rule type: f_type 'from_type' => 'to type'",
+                    ));
+                }
+                FTypeLeftRightPair::OnlyRight(right_ty) => right_ty,
+            };
+            let (rty_left, rty_right) = rtype_left_to_right.ok_or_else(|| {
+                DiagnosticError::new(
+                    src_id,
+                    right_fty.sp,
+                    "no r_type corresponding to this f_type rule",
+                )
+            })?;
+            let conv_code = rule.code.ok_or_else(|| {
+                DiagnosticError::new(src_id, right_fty.sp, "expect conversation code here")
+            })?;
+
+            self.invalidate_conv_for_rust_type(rty_right);
+            self.invalidate_conv_for_rust_type(rty_left);
+            ft_into_from_rust = Some((
+                right_fty,
+                ForeignConversationRule {
+                    rust_ty: rty_left,
+                    intermediate: Some(ForeignConversationIntermediate {
+                        input_to_output: rule.input_to_output,
+                        intermediate_ty: rty_right,
+                        conv_code,
+                    }),
+                },
+            ));
+        }
+
+        let mut ft_from_into_rust = None;
+        assert!(ri.ftype_right_to_left.len() <= 1);
+        if !ri.ftype_right_to_left.is_empty() {
+            let mut rule = ri.ftype_right_to_left.remove(0);
+            req_modules.append(&mut rule.req_modules);
+            let right_fty = match rule.left_right_ty {
+                FTypeLeftRightPair::OnlyLeft(left_ty) => {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        left_ty.sp,
+                        "rule (f_type 'to type' <= 'from type') is not simple, but no 'from type'",
+                    ));
+                }
+                FTypeLeftRightPair::Both(left_ty, _right_ty) => {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        left_ty.sp,
+                        "not supported rule type: f_type 'to type' <= 'from type'",
+                    ));
+                }
+                FTypeLeftRightPair::OnlyRight(right_ty) => right_ty,
+            };
+            let (rty_right, rty_left) = rtype_right_to_left.ok_or_else(|| {
+                DiagnosticError::new(
+                    src_id,
+                    right_fty.sp,
+                    "no r_type corresponding to this f_type rule",
+                )
+            })?;
+            let conv_code = rule.code.ok_or_else(|| {
+                DiagnosticError::new(src_id, right_fty.sp, "expect conversation code here")
+            })?;
+            self.invalidate_conv_for_rust_type(rty_right);
+            self.invalidate_conv_for_rust_type(rty_left);
+            ft_from_into_rust = Some((
+                right_fty,
+                ForeignConversationRule {
+                    rust_ty: rty_left,
+                    intermediate: Some(ForeignConversationIntermediate {
+                        input_to_output: rule.input_to_output,
+                        intermediate_ty: rty_right,
+                        conv_code,
+                    }),
+                },
+            ));
+        }
+
+        fn validate_rule_rewrite(
+            prev: Option<&ForeignConversationRule>,
+            new: &ForeignConversationRule,
+        ) -> Result<()> {
+            if let Some(prev) = prev {
+                if let (Some(prev_rule), Some(new_rule)) =
+                    (prev.intermediate.as_ref(), new.intermediate.as_ref())
+                {
+                    if !prev_rule.conv_code.src_id().is_none()
+                        && prev_rule.conv_code.src_id() == new_rule.conv_code.src_id()
+                    {
+                        return Err(DiagnosticError::new(
+                            new_rule.conv_code.src_id(),
+                            new_rule.conv_code.span(),
+                            "new rule f_type here",
+                        )
+                        .add_span_note(
+                            (prev_rule.conv_code.src_id(), prev_rule.conv_code.span()),
+                            "overwrite f_type defined in the same file",
+                        ));
+                    }
+                }
+            }
+
+            Ok(())
+        }
+
+        match (ft_into_from_rust, ft_from_into_rust) {
+            (Some((ft1, into_from_rust)), Some((ft2, from_into_rust))) => {
+                if ft1 != ft2 {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        ft1.sp,
+                        format!("types name mismatch, one type is {}", ft1.name),
+                    )
+                    .add_span_note((src_id, ft2.sp), format!("another type is {}", ft2.name)));
+                }
+                let name = TypeName::new(ft1.name, (src_id, ft1.sp));
+                let ftype_idx = self.ftypes_storage.find_or_alloc(name);
+                let res_ftype = &mut self.ftypes_storage[ftype_idx];
+                validate_rule_rewrite(res_ftype.into_from_rust.as_ref(), &into_from_rust)?;
+                res_ftype.into_from_rust = Some(into_from_rust);
+                validate_rule_rewrite(res_ftype.from_into_rust.as_ref(), &from_into_rust)?;
+                res_ftype.from_into_rust = Some(from_into_rust);
+                res_ftype.provides_by_module =
+                    convert_req_module_to_provides_by_module(req_modules);
+            }
+            (Some((ft, into_from_rust)), None) => {
+                let name = TypeName::new(ft.name, (src_id, ft.sp));
+                let ftype_idx = self.ftypes_storage.find_or_alloc(name);
+                let res_ftype = &mut self.ftypes_storage[ftype_idx];
+                validate_rule_rewrite(res_ftype.into_from_rust.as_ref(), &into_from_rust)?;
+                res_ftype.into_from_rust = Some(into_from_rust);
+                res_ftype.provides_by_module =
+                    convert_req_module_to_provides_by_module(req_modules);
+            }
+            (None, Some((ft, from_into_rust))) => {
+                let name = TypeName::new(ft.name, (src_id, ft.sp));
+                let ftype_idx = self.ftypes_storage.find_or_alloc(name);
+                let res_ftype = &mut self.ftypes_storage[ftype_idx];
+                validate_rule_rewrite(res_ftype.from_into_rust.as_ref(), &from_into_rust)?;
+                res_ftype.from_into_rust = Some(from_into_rust);
+                res_ftype.provides_by_module =
+                    convert_req_module_to_provides_by_module(req_modules);
+            }
+            (None, None) => {}
+        }
+
         Ok(())
     }
 }
@@ -107,7 +369,7 @@ fn add_new_ftypes(
     new_ftypes_storage: ForeignTypesStorage,
     data: &mut TypeMap,
     new_node_to_our_map: &FxHashMap<NodeIndex, NodeIndex>,
-) {
+) -> Result<()> {
     for mut new_ftype in new_ftypes_storage.into_iter() {
         ftype_map_rust_types(&mut new_ftype, new_node_to_our_map);
         match data
@@ -118,10 +380,11 @@ fn add_new_ftypes(
                 ftype_merge(&mut data.ftypes_storage[ftype_idx], new_ftype);
             }
             None => {
-                data.ftypes_storage.add_new_ftype(new_ftype);
+                data.ftypes_storage.add_new_ftype(new_ftype)?;
             }
         }
     }
+    Ok(())
 }
 
 fn ftype_map_rust_types(
@@ -159,20 +422,29 @@ fn ftype_merge(our: &mut ForeignTypeS, extrn_ft: ForeignTypeS) {
     }
 }
 
+fn convert_req_module_to_provides_by_module(v: Vec<ModuleName>) -> Vec<SmolStr> {
+    let mut ret = Vec::with_capacity(v.len());
+    for x in v {
+        ret.push(x.name);
+    }
+    ret
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::typemap::find_conversation_path;
-    use proc_macro2::Span;
+    use crate::{
+        error::invalid_src_id_span,
+        typemap::{find_conversation_path, MapToForeignFlag},
+    };
     use rustc_hash::FxHashSet;
-    use syn::{parse_quote, Type};
 
     #[test]
     fn test_merge() {
         let mut types_map = TypeMap::default();
         types_map
             .merge(
-                "base",
+                SourceId::none(),
                 r#"
 mod swig_foreign_types_map {
     #![swig_foreigner_type="boolean"]
@@ -186,7 +458,7 @@ mod swig_foreign_types_map {
             .unwrap();
         types_map
             .merge(
-                "test_merge",
+                SourceId::none(),
                 r#"
 mod swig_foreign_types_map {
     #![swig_foreigner_type="boolean"]
@@ -249,40 +521,42 @@ fn helper3() {
                 set
             }
         );
-        let ty_i32 = types_map.find_or_alloc_rust_type(&parse_type! { i32 });
-        assert_eq!(
-            types_map
-                .map_through_conversation_to_foreign(
-                    &ty_i32,
-                    petgraph::Direction::Outgoing,
-                    Span::call_site(),
-                    |_, fc| fc.constructor_ret_type.clone(),
-                )
-                .unwrap()
-                .name,
-            "int"
-        );
+        let ty_i32 = types_map.find_or_alloc_rust_type(&parse_type! { i32 }, SourceId::none());
+        let fti = types_map
+            .map_through_conversation_to_foreign(
+                ty_i32.to_idx(),
+                petgraph::Direction::Outgoing,
+                MapToForeignFlag::FullSearch,
+                invalid_src_id_span(),
+                |_, fc| {
+                    fc.self_desc
+                        .as_ref()
+                        .map(|x| x.constructor_ret_type.clone())
+                },
+            )
+            .unwrap();
+        assert_eq!("int", types_map[fti].name.as_str(),);
         assert_eq!(
             "let mut {to_var}: {to_var_type} = {from_var}.swig_into(env);",
             {
                 let from = types_map.rust_names_map["jboolean"];
                 let to = types_map.rust_names_map["bool"];
                 let conv = &types_map.conv_graph[types_map.conv_graph.find_edge(from, to).unwrap()];
-                conv.code_template.clone()
+                conv.code.to_string()
             },
         );
 
         let from = types_map.rust_names_map["jboolean"];
         let to = types_map.rust_names_map["bool"];
         assert_eq!(
-            find_conversation_path(&types_map.conv_graph, from, to, Span::call_site()).unwrap(),
+            find_conversation_path(&types_map.conv_graph, from, to, invalid_src_id_span()).unwrap(),
             vec![types_map.conv_graph.find_edge(from, to).unwrap()]
         );
 
         let from = types_map.rust_names_map["bool"];
         let to = types_map.rust_names_map["jboolean"];
         assert_eq!(
-            find_conversation_path(&types_map.conv_graph, from, to, Span::call_site()).unwrap(),
+            find_conversation_path(&types_map.conv_graph, from, to, invalid_src_id_span()).unwrap(),
             vec![types_map.conv_graph.find_edge(from, to).unwrap()]
         );
         assert_eq!(

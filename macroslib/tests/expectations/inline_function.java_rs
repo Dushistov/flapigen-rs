@@ -1,0 +1,21 @@
+r##"# [ no_mangle ]
+ pub extern "C" fn Java_org_example_BLAUtils_latitude_1to_1str ( env : * mut JNIEnv , _ : jclass , lat : jobject , plus_sym : jstring , minus_sym : jstring , ) -> jstring {
+ let mut lat : Option < f64 > = < Option < f64 >>:: swig_from ( lat , env ) ;
+ let mut plus_sym : JavaString = plus_sym . swig_into ( env ) ;
+ let mut plus_sym : & str = plus_sym . swig_deref ( ) ;
+ let mut minus_sym : JavaString = minus_sym . swig_into ( env ) ;
+ let mut minus_sym : & str = minus_sym . swig_deref ( ) ;
+ let mut ret : String = { format ! ( "{}" , Latitude :: new_with_symbols ( lat , plus_sym . into ( ) , minus_sym . into ( ) ) ) } ;
+ let mut ret : jstring = < jstring >:: swig_from ( ret , env ) ;
+ ret }"##;
+
+r##"# [ no_mangle ]
+ pub extern "C" fn Java_org_example_BLAUtils_longitude_1to_1str ( env : * mut JNIEnv , _ : jclass , lon : jobject , plus_sym : jstring , minus_sym : jstring , ) -> jstring {
+ let mut lon : Option < f64 > = < Option < f64 >>:: swig_from ( lon , env ) ;
+ let mut plus_sym : JavaString = plus_sym . swig_into ( env ) ;
+ let mut plus_sym : & str = plus_sym . swig_deref ( ) ;
+ let mut minus_sym : JavaString = minus_sym . swig_into ( env ) ;
+ let mut minus_sym : & str = minus_sym . swig_deref ( ) ;
+ let mut ret : String = { format ! ( "{}" , Longitude :: new_with_symbols ( lon , plus_sym . into ( ) , minus_sym . into ( ) ) ) } ;
+ let mut ret : jstring = < jstring >:: swig_from ( ret , env ) ;
+ ret }"##;
