@@ -174,7 +174,7 @@ def run_unit_tests(test_cfg, test_set):
 
 @show_timing
 def main():
-    print("Starting build and test")
+    print("Starting build and test: %s" % sys.version)
     sys.stdout.flush()
 
     test_cfg = set([RELEASE, DEBUG])
