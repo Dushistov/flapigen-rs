@@ -135,7 +135,7 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
 
             subprocess.check_call(["cmake", "--build", "."], cwd = str(cur_cmake_build_dir))
             subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cur_cmake_build_dir))
-            if sys.platform == "linux":
+            if sys.platform == "linux" or sys.platform == "linux2":
                 subprocess.check_call(["valgrind", "--error-exitcode=1", "--leak-check=full",
                                        "--show-leak-kinds=all", "--errors-for-leak-kinds=all",
                                        "--suppressions=../../valgrind.supp",
