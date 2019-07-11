@@ -9,7 +9,7 @@ use crate::{
     error::{DiagnosticError, Result, SourceIdSpan},
     typemap::{
         ast::{DisplayToTokens, TyParamsSubstList},
-        ty::{RustType, TraitNamesSet},
+        ty::{ForeignType, RustType, TraitNamesSet},
         ExpandedFType, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
     },
     types::ForeignerClassInfo,
@@ -22,6 +22,18 @@ pub(in crate::cpp) fn map_type(
     direction: Direction,
     arg_ty_span: SourceIdSpan,
 ) -> Result<CppForeignTypeInfo> {
+    debug!("map_type: arg_ty {}, direction {:?}", arg_ty, direction);
+    let ftype = do_map_type(ctx, arg_ty, direction, arg_ty_span)?;
+    CppForeignTypeInfo::try_new(ctx, direction, ftype)
+}
+
+pub(in crate::cpp) fn do_map_type(
+    ctx: &mut CppContext,
+    arg_ty: &RustType,
+    direction: Direction,
+    arg_ty_span: SourceIdSpan,
+) -> Result<ForeignType> {
+    debug!("do_map_type: arg_ty {}, direction {:?}", arg_ty, direction);
     if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
         arg_ty.to_idx(),
         direction,
@@ -29,7 +41,7 @@ pub(in crate::cpp) fn map_type(
         arg_ty_span,
         calc_this_type_for_method,
     ) {
-        return CppForeignTypeInfo::try_new(ctx.conv_map, direction, ftype);
+        return Ok(ftype);
     }
 
     let idx_subst_map: Option<(Rc<_>, TyParamsSubstList)> =
@@ -94,7 +106,7 @@ pub(in crate::cpp) fn map_type(
             arg_ty_span,
             calc_this_type_for_method,
         ) {
-            return CppForeignTypeInfo::try_new(ctx.conv_map, direction, ftype);
+            return Ok(ftype);
         }
     } else {
         if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
@@ -104,7 +116,7 @@ pub(in crate::cpp) fn map_type(
             arg_ty_span,
             calc_this_type_for_method,
         ) {
-            return CppForeignTypeInfo::try_new(ctx.conv_map, direction, ftype);
+            return Ok(ftype);
         }
     }
     match direction {

@@ -182,6 +182,16 @@ May be you need to use `private constructor = empty;` syntax?",
 
         let mut known_names: FxHashSet<SmolStr> =
             method.arg_names_without_self().map(|x| x.into()).collect();
+        if let MethodVariant::Method(_) = method.variant {
+            if known_names.contains("this") {
+                return Err(DiagnosticError::new(
+                    class.src_id,
+                    method.rust_id.span(),
+                    "Invalid argument name 'this' reserved for generate code purposes",
+                ));
+            }
+            known_names.insert("this".into());
+        }
         let ret_name = new_unique_name(&known_names, "ret");
         known_names.insert(ret_name.clone());
         let conv_ret = new_unique_name(&known_names, "conv_ret");
@@ -241,6 +251,7 @@ May be you need to use `private constructor = empty;` syntax?",
             c_func_name: &c_func_name,
             decl_func_args: &rust_args_with_types,
             real_output_typename: &real_output_typename,
+            ret_name: &ret_name,
         };
 
         let method_name = method.short_name().as_str().to_string();
@@ -698,7 +709,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
         mc.class.src_id,
         &mc.method.fn_decl.output,
         mc.f_method.output.as_ref(),
-        "ret",
+        mc.ret_name,
         &c_ret_type,
     )?;
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
@@ -715,9 +726,9 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
 #[no_mangle]
 pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
 {convert_input_code}
-    let mut ret: {real_output_typename} = {call};
+    let mut {ret_name}: {real_output_typename} = {call};
 {convert_output_code}
-    ret
+    {ret_name}
 }}
 "#,
         func_name = mc.c_func_name,
@@ -727,6 +738,7 @@ pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
         call = mc.method.generate_code_to_call_rust_func(),
+        ret_name = mc.ret_name,
     );
     let mut gen_code = deps_code_in;
     gen_code.append(&mut deps_code_out);
@@ -763,7 +775,7 @@ fn generate_method(
         mc.class.src_id,
         &mc.method.fn_decl.output,
         mc.f_method.output.as_ref(),
-        "ret",
+        mc.ret_name,
         &c_ret_type,
     )?;
     //&mut constructor_real_type -> &mut class.self_type
@@ -794,9 +806,9 @@ pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_re
         this.as_mut().unwrap()
     }};
 {convert_this}
-    let mut ret: {real_output_typename} = {call};
+    let mut {ret_name}: {real_output_typename} = {call};
 {convert_output_code}
-    ret
+    {ret_name}
 }}
 "#,
         func_name = mc.c_func_name,
@@ -809,6 +821,7 @@ pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_re
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
         call = mc.method.generate_code_to_call_rust_func(),
+        ret_name = mc.ret_name,
     );
 
     let mut gen_code = deps_code_in;

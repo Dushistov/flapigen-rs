@@ -10,7 +10,7 @@ public:
     using iterator = value_type *;
     using const_iterator = const value_type *;
 
-    explicit RustSlice(const value_type *p, size_t n) noexcept
+    explicit RustSlice(value_type *p, size_t n) noexcept
     {
         this->data = p;
         this->len = n;
@@ -35,6 +35,7 @@ public:
     size_t size() const noexcept { return this->len; }
     bool empty() const noexcept { return this->len == 0; }
     const value_type &operator[](size_t i) const noexcept { return this->data[i]; }
+    value_type &operator[](size_t i) noexcept { return this->data[i]; }
     iterator begin() noexcept { return this->data; }
     const_iterator begin() const noexcept { return this->data; }
     iterator end() noexcept { return this->data + this->len; }
@@ -45,7 +46,7 @@ public:
     }
 
 private:
-    const value_type *data;
+    value_type *data;
     uintptr_t len;
 
     static void reset(RustSlice &o) noexcept

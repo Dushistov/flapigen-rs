@@ -92,6 +92,9 @@ impl TypeConvCode {
     pub(crate) fn span(&self) -> Span {
         self.span.1
     }
+    pub(crate) fn full_span(&self) -> SourceIdSpan {
+        self.span
+    }
 
     pub(crate) fn generate_code(
         &self,
