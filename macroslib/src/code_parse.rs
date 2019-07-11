@@ -44,7 +44,9 @@ pub(crate) fn parse_foreigner_class(
             Ok(class.0)
         }
         LanguageConfig::PythonConfig(_) => {
-            let class: PythonClass = syn::parse2(tokens)?;
+            let mut class: PythonClass = 
+                syn::parse2(tokens).map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+            class.0.src_id = src_id;
             Ok(class.0)
         }
     }

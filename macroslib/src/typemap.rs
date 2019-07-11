@@ -56,7 +56,7 @@ impl PartialEq for TypeConvCode {
 }
 
 impl TypeConvCode {
-    fn invalid() -> Self {
+    pub(crate) fn invalid() -> Self {
         TypeConvCode {
             span: invalid_src_id_span(),
             code: "invalid code".into(),

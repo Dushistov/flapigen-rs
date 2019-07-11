@@ -23,8 +23,8 @@ mod cpp;
 mod error;
 pub mod file_cache;
 mod java_jni;
-mod python;
 mod namegen;
+mod python;
 mod source_registry;
 mod str_replace;
 mod typemap;
@@ -248,7 +248,6 @@ impl CppConfig {
 
 /// Configuration for Java binding generation
 pub struct PythonConfig {
-    module_initialization_code: RefCell<Vec<TokenStream>>,
     module_name: String,
 }
 
@@ -257,7 +256,6 @@ impl PythonConfig {
     /// # Arguments
     pub fn new(module_name: String) -> PythonConfig {
         PythonConfig {
-            module_initialization_code: RefCell::default(),
             module_name,
         }
     }
@@ -342,10 +340,10 @@ impl Generator {
                 });
             }
             LanguageConfig::PythonConfig(..) => {
-                conv_map_source.push(SourceCode {
+                conv_map_source.push(src_reg.register(SourceCode {
                     id_of_code: "python-include.rs".into(),
                     code: include_str!("python/python-include.rs").into(),
-                });
+                }));
             }
         }
         Generator {
@@ -406,16 +404,17 @@ impl Generator {
     ///
     /// # Panics
     /// Panics on error
-    pub fn expand_from_str<D>(self, crate_name: &str, src: &str, dst: D)
+    pub fn expand_from_str<D>(mut self, crate_name: &str, src: String, dst: D)
     where
         D: AsRef<Path>,
     {
-        if let Err(mut err) = self.expand_str(&src, dst) {
-            err.register_src_if_no(
-                format!("{}", crate_name),
-                src.into(),
-            );
-            panic_on_parse_error(&err);
+        let src_id = self.src_reg.register(SourceCode {
+            id_of_code: format!("{}: [string]", crate_name),
+            code: src,
+        });
+        
+        if let Err(err) = self.expand_str(src_id, dst) {
+            panic_on_parse_error(&self.src_reg, &err);
         }
     }
 
