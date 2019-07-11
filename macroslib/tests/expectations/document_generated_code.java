@@ -6,7 +6,7 @@ public final class Foo {"#;
 r#"/**
      * Some documentation comment
      */
-    public Foo(int a0, @NonNull String a1)  {"#;
+    public Foo(int a0, @NonNull String a1) {"#;
 
 r#"/**
      * 1 Some documentation comment

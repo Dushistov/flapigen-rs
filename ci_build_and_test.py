@@ -103,9 +103,13 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
         cmake_generator = "Unix Makefiles"
     cmake_args = ["cmake", "-G", cmake_generator] + addon_params
     if sys.platform == 'win32' or sys.platform == 'win64':
-        if not os.path.exists(cmake_build_dir):
-            os.makedirs(cmake_build_dir)
-            subprocess.check_call(cmake_args + [".."], cwd = str(cmake_build_dir))
+        if os.path.exists(cmake_build_dir):
+            #at there is problem with multiply build directories for one source tree
+            #TODO: move generated header from source tree to build tree
+            print("%s exists, we removing it" % cmake_build_dir)
+            shutil.rmtree(cmake_build_dir)
+        os.makedirs(cmake_build_dir)
+        subprocess.check_call(cmake_args + [".."], cwd = str(cmake_build_dir))
         os.environ["CTEST_OUTPUT_ON_FAILURE"] = "1"
         for cfg in test_cfg:
             subprocess.check_call(["cmake", "--build", ".", "--config", cfg], cwd = str(cmake_build_dir))
@@ -121,9 +125,14 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
                 cur_cmake_args.append("-DCMAKE_BUILD_TYPE:String=Debug")
                 cur_cmake_build_dir = cur_cmake_build_dir + "_dbg"
             print("cur_cmake_build_dir %s" % cur_cmake_build_dir)
-            if not os.path.exists(cur_cmake_build_dir):
-                os.makedirs(cur_cmake_build_dir)
-                subprocess.check_call(cur_cmake_args + [".."], cwd = str(cur_cmake_build_dir))
+            if os.path.exists(cur_cmake_build_dir):
+                #at there is problem with multiply build directories for one source tree
+                #TODO: move generated header from source tree to build tree
+                print("%s exists, we removing it" % cur_cmake_build_dir)
+                shutil.rmtree(cur_cmake_build_dir)
+
+            os.makedirs(cur_cmake_build_dir)
+            subprocess.check_call(cur_cmake_args + [".."], cwd = str(cur_cmake_build_dir))
 
             subprocess.check_call(["cmake", "--build", "."], cwd = str(cur_cmake_build_dir))
             subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cur_cmake_build_dir))

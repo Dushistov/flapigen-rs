@@ -1,16 +1,22 @@
-use crate::{error::DiagnosticError, typemap::ast::TypeName};
-use petgraph::graph::NodeIndex;
+use crate::{
+    error::DiagnosticError,
+    source_registry::SourceId,
+    typemap::{ast::TypeName, RustTypeIdx, TypeConvCode},
+};
+use proc_macro2::Span;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 use std::{fmt, ops, rc::Rc};
+use syn::spanned::Spanned;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RustTypeS {
+    pub src_id: SourceId,
     pub ty: syn::Type,
     pub normalized_name: SmolStr,
     pub implements: ImplementsSet,
-    pub(in crate::typemap) graph_idx: NodeIndex,
+    pub(in crate::typemap) graph_idx: RustTypeIdx,
 }
 
 impl fmt::Display for RustTypeS {
@@ -20,7 +26,11 @@ impl fmt::Display for RustTypeS {
 }
 
 impl RustTypeS {
-    pub(in crate::typemap) fn new_without_graph_idx<S>(ty: syn::Type, norm_name: S) -> RustTypeS
+    pub(in crate::typemap) fn new_without_graph_idx<S>(
+        ty: syn::Type,
+        norm_name: S,
+        src_id: SourceId,
+    ) -> RustTypeS
     where
         S: Into<SmolStr>,
     {
@@ -28,9 +38,11 @@ impl RustTypeS {
             ty,
             normalized_name: norm_name.into(),
             implements: ImplementsSet::default(),
-            graph_idx: NodeIndex::new(0),
+            graph_idx: RustTypeIdx::new(0),
+            src_id,
         }
     }
+    #[cfg(test)]
     pub(in crate::typemap) fn implements(mut self, trait_name: &str) -> RustTypeS {
         self.implements.insert(trait_name.into());
         self
@@ -39,6 +51,37 @@ impl RustTypeS {
         self.ty = other.ty.clone();
         self.normalized_name = other.normalized_name.clone();
         self.implements.insert_set(&other.implements);
+    }
+    pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
+        (self.src_id, self.ty.span())
+    }
+    pub(crate) fn to_idx(&self) -> RustTypeIdx {
+        self.graph_idx
+    }
+
+    pub(crate) fn make_unique_typename(
+        not_unique_name: &str,
+        suffix_to_make_unique: &str,
+    ) -> String {
+        format!("{}{}{}", not_unique_name, 0 as char, suffix_to_make_unique)
+    }
+
+    pub(crate) fn make_unique_typename_if_need(
+        rust_typename: String,
+        suffix: Option<String>,
+    ) -> String {
+        match suffix {
+            Some(s) => RustTypeS::make_unique_typename(&rust_typename, &s),
+            None => rust_typename,
+        }
+    }
+
+    pub(crate) fn typename(&self) -> &str {
+        let name = self.normalized_name.as_str();
+        match name.find('\0') {
+            Some(pos) => &name[0..pos],
+            None => name,
+        }
     }
 }
 
@@ -62,11 +105,7 @@ impl ImplementsSet {
     }
     pub(crate) fn contains_subset(&self, subset: &TraitNamesSet) -> bool {
         for path in &subset.inner {
-            if !self
-                .inner
-                .iter()
-                .any(|id: &SmolStr| path.is_ident(id.as_str()))
-            {
+            if !self.contains_path(path) {
                 return false;
             }
         }
@@ -74,6 +113,11 @@ impl ImplementsSet {
     }
     pub(crate) fn contains(&self, trait_name: &str) -> bool {
         self.inner.iter().any(|it| *it == trait_name)
+    }
+    pub(crate) fn contains_path(&self, path: &syn::Path) -> bool {
+        self.inner
+            .iter()
+            .any(|id: &SmolStr| path.is_ident(id.as_str()))
     }
 }
 
@@ -95,25 +139,51 @@ impl<'a> TraitNamesSet<'a> {
     pub(crate) fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &syn::Path> {
+        self.inner.iter().map(|x| *x)
+    }
 }
 
 #[derive(Debug)]
 pub(crate) struct ForeignTypeS {
-    pub(crate) name: TypeName,
-    pub(crate) into_from_rust: Option<ForeignConversationRule>,
-    pub(crate) from_into_rust: Option<ForeignConversationRule>,
+    pub name: TypeName,
+    /// specify which foreign module provides this type
+    /// it is possible that provided by multiplines modules
+    /// for example C++ `std::variant<TypeA, TypeB>
+    pub provides_by_module: Vec<SmolStr>,
+    pub into_from_rust: Option<ForeignConversationRule>,
+    pub from_into_rust: Option<ForeignConversationRule>,
+    /// sometimes you need make unique typename,
+    /// but do not show user this "uniqueness"
+    pub name_prefix: Option<&'static str>,
+}
+
+impl ForeignTypeS {
+    pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
+        self.name.span
+    }
+    pub(crate) fn typename(&self) -> SmolStr {
+        match self.name_prefix {
+            None => self.name.typename.clone(),
+            Some(prefix) => {
+                debug_assert!(self.name.typename.as_str().starts_with(prefix));
+                self.name.typename.as_str()[prefix.len()..].into()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationRule {
-    pub(crate) rust_ty: NodeIndex,
+    pub(crate) rust_ty: RustTypeIdx,
     pub(crate) intermediate: Option<ForeignConversationIntermediate>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationIntermediate {
-    pub(crate) intermediate_ty: NodeIndex,
-    pub(crate) conv_code: String,
+    pub(crate) input_to_output: bool,
+    pub(crate) intermediate_ty: RustTypeIdx,
+    pub(crate) conv_code: TypeConvCode,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -129,50 +199,53 @@ impl ForeignTypesStorage {
     pub(in crate::typemap) fn alloc_new(
         &mut self,
         tn: TypeName,
-        binded_rust_ty: NodeIndex,
+        binded_rust_ty: RustTypeIdx,
     ) -> Result<ForeignType, DiagnosticError> {
-        if let Some(ft) = self.name_to_ftype.get(tn.as_str()) {
-            let mut err = DiagnosticError::new(
-                self.ftypes[ft.0].name.span,
-                format!("Type {} already defined here", tn),
-            );
-            err.span_note(tn.span, format!("second mention of type {}", tn));
-            return Err(err);
-        }
-
         let rule = ForeignConversationRule {
             rust_ty: binded_rust_ty,
             intermediate: None,
         };
-        let idx = self.add_new_ftype(ForeignTypeS {
+        self.add_new_ftype(ForeignTypeS {
             name: tn,
+            provides_by_module: Vec::new(),
             into_from_rust: Some(rule.clone()),
             from_into_rust: Some(rule),
-        });
-        Ok(idx)
+            name_prefix: None,
+        })
     }
 
-    pub(in crate::typemap) fn add_new_ftype(&mut self, ft: ForeignTypeS) -> ForeignType {
+    pub(in crate::typemap) fn add_new_ftype(
+        &mut self,
+        ft: ForeignTypeS,
+    ) -> Result<ForeignType, DiagnosticError> {
+        if let Some(ft2) = self.name_to_ftype.get(ft.name.as_str()) {
+            let mut err = DiagnosticError::new2(
+                self.ftypes[ft2.0].name.span,
+                format!("Type {} already defined here", ft.name),
+            );
+            err.span_note(ft.name.span, format!("second mention of type {}", ft.name));
+            return Err(err);
+        }
         let idx = ForeignType(self.ftypes.len());
         self.ftypes.push(ft);
         self.name_to_ftype
             .insert(self.ftypes[idx.0].name.typename.clone(), idx);
-        idx
+        Ok(idx)
     }
 
     pub(in crate::typemap) fn find_or_alloc(&mut self, ftype_name: TypeName) -> ForeignType {
         if let Some(ft) = self.name_to_ftype.get(ftype_name.as_str()) {
             *ft
         } else {
-            let idx = ForeignType(self.ftypes.len());
-            self.ftypes.push(ForeignTypeS {
+            let ftype = ForeignTypeS {
                 name: ftype_name,
+                provides_by_module: Vec::new(),
                 into_from_rust: None,
                 from_into_rust: None,
-            });
-            self.name_to_ftype
-                .insert(self.ftypes[idx.0].name.typename.clone(), idx);
-            idx
+                name_prefix: None,
+            };
+            self.add_new_ftype(ftype)
+                .unwrap_or_else(|err| panic!("Internal error in find_or_alloc_ftype: {}", err))
         }
     }
 
@@ -182,6 +255,15 @@ impl ForeignTypesStorage {
 
     pub(in crate::typemap) fn iter(&self) -> impl Iterator<Item = &ForeignTypeS> {
         self.ftypes.iter()
+    }
+
+    pub(in crate::typemap) fn iter_enumerate(
+        &self,
+    ) -> impl Iterator<Item = (ForeignType, &ForeignTypeS)> {
+        self.ftypes
+            .iter()
+            .enumerate()
+            .map(|(idx, item)| (ForeignType(idx), item))
     }
 
     pub(in crate::typemap) fn into_iter(self) -> impl Iterator<Item = ForeignTypeS> {

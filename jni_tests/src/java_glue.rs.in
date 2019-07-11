@@ -54,6 +54,7 @@ fn chrono_now() -> DateTime<Utc> {
 
 foreigner_class!(
 /// Class comment description for Foo.
+#[derive(Clone)]
 class Foo {
     self_type Foo;
     /// some text about the new function
@@ -62,9 +63,9 @@ class Foo {
     /// some markdown example in the text
     /// ```
     ///
-    /// @param a0 id - somenumber
-    /// @param a1 desc - more information
-    constructor Foo::new(_: i32, _: &str) -> Foo;
+    /// @param val - some number
+    /// @param name - more information
+    constructor Foo::new(val: i32, name: &str) -> Foo;
     method Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
     method Foo::f_double(&self, _: f64, _: f64) -> f64;
     method Foo::name(&self) -> &str; alias getName;
@@ -546,7 +547,7 @@ foreigner_class!(class TestPassObjectsAsParams {
                                                           -> TestPassObjectsAsParams;
 });
 
-struct GnssInfo {
+pub struct GnssInfo {
     pub x: f64,
 }
 
@@ -554,10 +555,10 @@ struct GnssInfo {
 mod Position {
     use super::*;
 
-    pub(crate) fn timeStamp(_: &GnssInfo) -> SystemTime {
+    pub fn timeStamp(_: &GnssInfo) -> SystemTime {
         SystemTime::now()
     }
-    pub(crate) fn getLatitude(gi: &GnssInfo) -> f64 {
+    pub fn getLatitude(gi: &GnssInfo) -> f64 {
         gi.x
     }
 }
@@ -608,7 +609,7 @@ impl Moo {
     }
 
     fn next_enum(v: MyEnum) -> MyEnum {
-        use crate::MyEnum::*;
+        use MyEnum::*;
         match v {
             Item1 => Item2,
             Item2 => Item3,
@@ -645,7 +646,7 @@ impl Observable {
     }
 }
 
-foreign_interface!(interface MyObserver {
+foreign_callback!(callback MyObserver {
     self_type OnEvent;
     onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
 });
@@ -662,7 +663,7 @@ trait CheckAllTypesInCallbackArgs {
     fn check_all_types2(&self, _: u64, _: i64, _: f32, _: f64, _: usize, _: isize);
 }
 
-foreign_interface!(interface CheckAllTypesInCallbackArgs {
+foreign_callback!(callback CheckAllTypesInCallbackArgs {
     self_type CheckAllTypesInCallbackArgs;
     checkAllTypes1 = CheckAllTypesInCallbackArgs::check_all_types1(&self, _: u8, _: i8, _: u16,
                                                                    _: i16, _: u32, _: i32,
@@ -739,7 +740,6 @@ impl TestOptional {
 }
 
 foreigner_class!(class TestOptional {
-    self_type TestOptional;
     static_method TestOptional::f1(x: Option<f64>) -> Option<f64>;
     static_method TestOptional::f2(x: Option<i64>) -> Option<i64>;
     static_method TestOptional::f3(need_something: bool) -> Option<Foo>;
@@ -790,4 +790,121 @@ foreigner_class!(class CircularDepsB {
     self_type CircularDepsB;
     constructor CircularDepsB::new(_: f64) -> CircularDepsB;
     method CircularDepsB::b(&self, a: &CircularDepsA) -> String;
+});
+
+struct Gamepad(String);
+impl Gamepad {
+    fn new(s: &str) -> Self {
+        Gamepad(s.into())
+    }
+}
+
+foreigner_class!(class Gamepad {
+    self_type Gamepad;
+    constructor Gamepad::new(s: &str) -> Gamepad;
+});
+
+#[derive(Default)]
+struct EffectBuilder {
+    tag: Vec<String>,
+}
+
+impl EffectBuilder {
+    fn tag(&self) -> Vec<String> {
+        self.tag.clone()
+    }
+    fn add_gamepad(&mut self, gamepad: Gamepad) -> &mut EffectBuilder {
+        self.tag.push(gamepad.0);
+        self
+    }
+}
+
+struct EffectBuilderWrapper(Rc<RefCell<EffectBuilder>>);
+
+impl EffectBuilderWrapper {
+    fn new() -> Self {
+        EffectBuilderWrapper(Rc::new(RefCell::new(EffectBuilder::default())))
+    }
+    fn add_gamepad(&self, gamepad: Gamepad) -> EffectBuilderWrapper {
+        self.0.borrow_mut().add_gamepad(gamepad);
+        EffectBuilderWrapper(self.0.clone())
+    }
+    fn tag(&self) -> Vec<String> {
+        self.0.borrow().tag()
+    }
+}
+
+foreigner_class!(
+    class EffectBuilder {
+        self_type EffectBuilderWrapper;
+        constructor EffectBuilderWrapper::new() -> EffectBuilderWrapper;
+        method EffectBuilderWrapper::add_gamepad(&self, gamepad: Gamepad) -> EffectBuilderWrapper;
+        method EffectBuilderWrapper::tag(&self) -> Vec<String>;
+    }
+);
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+pub struct GamepadId(pub(crate) usize);
+impl GamepadId {
+    fn value(&self) -> usize {
+        self.0
+    }
+}
+
+foreigner_class!(
+    class GamepadId {
+        self_type GamepadId;
+        private constructor = empty;
+        method GamepadId::value(&self) -> usize;
+    }
+);
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct Code(pub(crate) i32);
+impl Code {
+    fn new(v: i32) -> Self {
+        Code(v)
+    }
+}
+
+foreigner_class!(
+    class Code {
+        self_type Code;
+        constructor Code::new(v: i32) -> Code;
+    });
+
+struct Gamepad2 {
+    id: GamepadId,
+}
+
+impl Gamepad2 {
+    fn new() -> Self {
+        Gamepad2 { id: GamepadId(17) }
+    }
+    fn deadzone(&self, axis: Code) -> Option<f64> {
+        if axis.0 == 5 {
+            None
+        } else {
+            Some(42.42)
+        }
+    }
+    fn id(&self) -> GamepadId {
+        self.id
+    }
+}
+
+foreigner_class!(
+    class Gamepad2 {
+        self_type Gamepad2;
+
+        constructor Gamepad2::new() -> Gamepad2;
+        method Gamepad2::deadzone(&self, axis: Code) -> Option<f64>; alias getID;
+        method Gamepad2::id(&self) -> GamepadId; alias getID;
+    }
+);
+
+foreigner_class!(class TestFnInline {
+    fn int_to_str(a: i32) -> String {
+        format!("{}", a)
+    }    
 });

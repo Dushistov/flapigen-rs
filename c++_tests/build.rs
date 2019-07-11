@@ -1,37 +1,40 @@
-use std::{env, path::Path, time::Instant};
+use std::{env, path::Path};
 
-use rust_swig::{CppConfig, LanguageConfig};
+use rust_swig::{CppConfig, CppOptional, CppStrView, CppVariant, LanguageConfig};
 
 fn main() {
     env_logger::init();
 
-    let now = Instant::now();
-
     let out_dir = env::var("OUT_DIR").unwrap();
-    rust_swig_expand(
-        Path::new("src/cpp_glue.rs.in"),
-        &Path::new(&out_dir).join("cpp_glue.rs"),
-    );
-    let expand_time = now.elapsed();
-    println!(
-        "rust swig expand time: {}",
-        expand_time.as_secs() as f64 + (expand_time.subsec_nanos() as f64) / 1_000_000_000.
-    );
-    println!("cargo:rerun-if-changed=src");
-    //rebuild if user remove generated code
-    println!("cargo:rerun-if-changed={}", out_dir);
-}
 
-fn rust_swig_expand(from: &Path, out: &Path) {
-    println!("Run rust_swig_expand");
     let cpp_gen_path = Path::new("c++").join("rust_interface");
-    println!("cargo:rerun-if-changed={}", cpp_gen_path.display());
     let cpp_cfg = if cfg!(feature = "boost") {
         CppConfig::new(cpp_gen_path, "rust".into()).use_boost()
     } else {
-        CppConfig::new(cpp_gen_path, "rust".into())
+        let mut cfg = CppConfig::new(cpp_gen_path, "rust".into())
+            .cpp_optional(CppOptional::Boost)
+            .cpp_variant(CppVariant::Boost)
+            .cpp_str_view(CppStrView::Boost);
+        if cfg!(feature = "cpp17_optional") {
+            cfg = cfg.cpp_optional(CppOptional::Std17);
+        }
+        if cfg!(feature = "cpp17_variant") {
+            cfg = cfg.cpp_variant(CppVariant::Std17);
+        }
+        if cfg!(feature = "cpp17_string_view") {
+            cfg = cfg.cpp_str_view(CppStrView::Std17);
+        }
+        cfg
     };
 
     let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
-    swig_gen.expand("rust_swig_test_c++", from, out);
+    swig_gen.expand(
+        "rust_swig_test_c++",
+        Path::new("src/cpp_glue.rs.in"),
+        &Path::new(&out_dir).join("cpp_glue.rs"),
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        Path::new("src").join("cpp_glue.rs.in").display()
+    );
 }

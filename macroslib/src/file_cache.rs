@@ -1,5 +1,6 @@
 /// To prevent modification time changing
 use std::{
+    collections::HashSet,
     fs::File,
     io,
     io::{Read, Write},
@@ -10,6 +11,11 @@ use std::{
 pub struct FileWriteCache {
     cnt: Vec<u8>,
     path: PathBuf,
+    /// To prevent redifining some items,
+    /// also it is possible to scan `cnt`, but it is possible to add
+    /// user defined comments into generated file, so this is more robust
+    #[allow(dead_code)]
+    already_defined_items: HashSet<String>,
 }
 
 impl FileWriteCache {
@@ -17,6 +23,7 @@ impl FileWriteCache {
         FileWriteCache {
             cnt: vec![],
             path: p.into(),
+            already_defined_items: HashSet::default(),
         }
     }
 
@@ -31,6 +38,16 @@ impl FileWriteCache {
         let mut f = File::create(&self.path)?;
         f.write_all(&self.cnt)?;
         Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn define_item<S: Into<String>>(&mut self, item: S) {
+        self.already_defined_items.insert(item.into());
+    }
+
+    #[allow(dead_code)]
+    pub fn is_item_defined(&self, item: &str) -> bool {
+        self.already_defined_items.contains(item)
     }
 }
 

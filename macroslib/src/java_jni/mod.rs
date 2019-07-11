@@ -2,26 +2,33 @@ mod java_code;
 mod map_type;
 mod rust_code;
 
-use std::fmt;
-
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
 use smol_str::SmolStr;
-use syn::{parse_quote, spanned::Spanned, Type};
+use syn::{spanned::Spanned, Type};
 
-use self::map_type::special_type;
+use self::map_type::map_type;
 use crate::{
-    error::{DiagnosticError, Result},
-    typemap::ast::{
-        fn_arg_type, if_option_return_some_type, if_result_return_ok_err_types,
-        if_ty_result_return_ok_type, DisplayToTokens,
-    },
+    error::{invalid_src_id_span, DiagnosticError, Result},
+    source_registry::SourceId,
     typemap::{
-        ty::RustType, ForeignMethodSignature, ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        ast::{
+            if_result_return_ok_err_types, if_ty_result_return_ok_type,
+            parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
+        },
+        ty::RustType,
+        utils::{
+            convert_to_heap_pointer, unpack_from_heap_pointer, ForeignMethodSignature,
+            ForeignTypeInfoT,
+        },
+        ForeignTypeInfo, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, JavaConfig,
-    LanguageGenerator, MethodVariant, SourceCode, TypeMap,
+    types::{
+        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
+        MethodVariant,
+    },
+    JavaConfig, LanguageGenerator, SourceCode, TypeMap,
 };
 
 #[derive(Clone, Copy)]
@@ -32,32 +39,27 @@ enum NullAnnotation {
 
 struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,
-    pub java_transition_type: Option<SmolStr>,
-    java_converter: String,
+    pub java_converter: Option<JavaConverter>,
     annotation: Option<NullAnnotation>,
+}
+
+impl ForeignTypeInfoT for JavaForeignTypeInfo {
+    fn name(&self) -> &str {
+        self.base.name.as_str()
+    }
+    fn correspoding_rust_type(&self) -> &RustType {
+        &self.base.correspoding_rust_type
+    }
+}
+
+struct JavaConverter {
+    java_transition_type: SmolStr,
+    converter: String,
 }
 
 impl AsRef<ForeignTypeInfo> for JavaForeignTypeInfo {
     fn as_ref(&self) -> &ForeignTypeInfo {
         &self.base
-    }
-}
-
-impl JavaForeignTypeInfo {
-    fn java_need_conversation(&self) -> bool {
-        !self.java_converter.is_empty()
-    }
-    fn java_convert<NameArg: Fn() -> (String, String)>(&self, name_arg: NameArg) -> Option<String> {
-        if !self.java_converter.is_empty() {
-            let (from_name, to_name) = name_arg();
-            Some(
-                self.java_converter
-                    .replace(TO_VAR_TEMPLATE, &to_name)
-                    .replace(FROM_VAR_TEMPLATE, &from_name),
-            )
-        } else {
-            None
-        }
     }
 }
 
@@ -68,8 +70,7 @@ impl From<ForeignTypeInfo> for JavaForeignTypeInfo {
                 name: x.name,
                 correspoding_rust_type: x.correspoding_rust_type,
             },
-            java_transition_type: None,
-            java_converter: String::new(),
+            java_converter: None,
             annotation: None,
         }
     }
@@ -82,7 +83,7 @@ struct JniForeignMethodSignature {
 
 impl ForeignMethodSignature for JniForeignMethodSignature {
     type FI = JavaForeignTypeInfo;
-    fn output(&self) -> &ForeignTypeInfo {
+    fn output(&self) -> &ForeignTypeInfoT {
         &self.output
     }
     fn input(&self) -> &[JavaForeignTypeInfo] {
@@ -90,26 +91,30 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
     }
 }
 
-impl LanguageGenerator for JavaConfig {
-    fn init(
-        &self,
-        conv_map: &mut TypeMap,
-        _code: &[SourceCode],
-    ) -> std::result::Result<(), String> {
-        conv_map.find_or_alloc_rust_type(&parse_type! { jint });
-        conv_map.find_or_alloc_rust_type(&parse_type! { jlong });
-        Ok(())
+impl JavaConfig {
+    fn init(&self, conv_map: &mut TypeMap, _code: &[SourceCode]) {
+        conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jint });
+        conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
     }
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
             .validate_class()
-            .map_err(|err| DiagnosticError::new(class.span(), &err))?;
-        if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
+        if let Some(constructor_ret_type) =
+            class.self_desc.as_ref().map(|x| &x.constructor_ret_type)
+        {
             let this_type_for_method = if_ty_result_return_ok_type(constructor_ret_type)
                 .unwrap_or_else(|| constructor_ret_type.clone());
 
-            let this_type: RustType = conv_map
-                .find_or_alloc_rust_type_that_implements(&this_type_for_method, "SwigForeignClass");
+            let mut traits = vec!["SwigForeignClass"];
+            if class.clone_derived {
+                traits.push("Clone");
+            }
+            let this_type: RustType = conv_map.find_or_alloc_rust_type_that_implements(
+                &this_type_for_method,
+                &traits,
+                class.src_id,
+            );
             debug!(
                 "register_class: add implements SwigForeignClass for {}",
                 this_type
@@ -118,82 +123,98 @@ impl LanguageGenerator for JavaConfig {
             let my_jobj_ti = conv_map.find_or_alloc_rust_type_with_suffix(
                 &parse_type! { jobject },
                 &this_type.normalized_name,
+                SourceId::none(),
             );
 
-            conv_map.cache_rust_to_foreign_conv(
+            conv_map.cache_class_for_rust_to_foreign_conv(
                 &this_type,
                 ForeignTypeInfo {
                     correspoding_rust_type: my_jobj_ti,
                     name: class.name.to_string().into(),
                 },
+                (class.src_id, class.name.span()),
             )?;
 
-            conv_map.find_or_alloc_rust_type(constructor_ret_type);
+            conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
 
             let (this_type_for_method, _code_box_this) =
-                conv_map.convert_to_heap_pointer(&this_type, "this");
+                convert_to_heap_pointer(conv_map, &this_type, "this");
 
-            let jlong_ti: RustType = conv_map.find_or_alloc_rust_type(&parse_type! { jlong });
+            let jlong_ti: RustType =
+                conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
             let this_type_for_method_ty = &this_type_for_method.ty;
+            let code = format!("& {}", DisplayToTokens(this_type_for_method_ty));
+            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method_ty.span());
             let this_type_ref =
-                conv_map.find_or_alloc_rust_type(&parse_type! { & #this_type_for_method_ty });
+                conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
-                jlong_ti.clone(),
-                this_type_ref,
-                format!(
-                    r#"
+                jlong_ti.to_idx(),
+                this_type_ref.to_idx(),
+                TypeConvCode::new2(
+                    format!(
+                        r#"
         let {to_var}: &{this_type} = unsafe {{
             jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
         }};
     "#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_for_method.normalized_name,
+                        to_var = TO_VAR_TEMPLATE,
+                        from_var = FROM_VAR_TEMPLATE,
+                        this_type = this_type_for_method.normalized_name,
+                    ),
+                    invalid_src_id_span(),
                 )
                 .into(),
             );
+            let code = format!("&mut {}", DisplayToTokens(this_type_for_method_ty));
+            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method_ty.span());
             let this_type_mut_ref =
-                conv_map.find_or_alloc_rust_type(&parse_type! { &mut #this_type_for_method_ty });
+                conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
             //handle foreigner_class as input arg
             conv_map.add_conversation_rule(
-                jlong_ti.clone(),
-                this_type_mut_ref,
-                format!(
-                    r#"
+                jlong_ti.to_idx(),
+                this_type_mut_ref.to_idx(),
+                TypeConvCode::new2(
+                    format!(
+                        r#"
         let {to_var}: &mut {this_type} = unsafe {{
             jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
         }};
     "#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_for_method.normalized_name,
+                        to_var = TO_VAR_TEMPLATE,
+                        from_var = FROM_VAR_TEMPLATE,
+                        this_type = this_type_for_method.normalized_name,
+                    ),
+                    invalid_src_id_span(),
                 )
                 .into(),
             );
 
             let unpack_code =
-                TypeMap::unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
+                unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
             conv_map.add_conversation_rule(
-                jlong_ti,
-                this_type,
-                format!(
-                    r#"
+                jlong_ti.to_idx(),
+                this_type.to_idx(),
+                TypeConvCode::new2(
+                    format!(
+                        r#"
         let {to_var}: *mut {this_type} = unsafe {{
             jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
         }};
     {unpack_code}
     "#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_for_method.normalized_name,
-                    unpack_code = unpack_code,
+                        to_var = TO_VAR_TEMPLATE,
+                        from_var = FROM_VAR_TEMPLATE,
+                        this_type = this_type_for_method.normalized_name,
+                        unpack_code = unpack_code,
+                    ),
+                    invalid_src_id_span(),
                 )
                 .into(),
             );
         }
 
-        let _ = conv_map.find_or_alloc_rust_type(&class.self_type_as_ty());
+        let _ = conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
 
         Ok(())
     }
@@ -201,12 +222,11 @@ impl LanguageGenerator for JavaConfig {
     fn generate(
         &self,
         conv_map: &mut TypeMap,
-        _: usize,
         class: &ForeignerClassInfo,
     ) -> Result<Vec<TokenStream>> {
         debug!(
             "generate: begin for {}, this_type_for_method {:?}",
-            class.name, class.constructor_ret_type
+            class.name, class.self_desc
         );
 
         let f_methods_sign = find_suitable_foreign_types_for_methods(conv_map, class)?;
@@ -218,7 +238,7 @@ impl LanguageGenerator for JavaConfig {
             &f_methods_sign,
             self.null_annotation_package.as_ref().map(String::as_str),
         )
-        .map_err(|err| DiagnosticError::new(class.span(), err))?;
+        .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
         debug!("generate: java code done");
         let ast_items =
             rust_code::generate_rust_code(conv_map, &self.package_name, class, &f_methods_sign)?;
@@ -234,13 +254,14 @@ impl LanguageGenerator for JavaConfig {
     ) -> Result<Vec<TokenStream>> {
         if (enum_info.items.len() as u64) >= (i32::max_value() as u64) {
             return Err(DiagnosticError::new(
+                enum_info.src_id,
                 enum_info.span(),
                 "Too many items in enum",
             ));
         }
 
         java_code::generate_java_code_for_enum(&self.output_dir, &self.package_name, enum_info)
-            .map_err(|err| DiagnosticError::new(enum_info.span(), &err))?;
+            .map_err(|err| DiagnosticError::new(enum_info.src_id, enum_info.span(), &err))?;
 
         rust_code::generate_rust_code_for_enum(
             &self.package_name,
@@ -264,7 +285,7 @@ impl LanguageGenerator for JavaConfig {
             &f_methods,
             self.null_annotation_package.as_ref().map(String::as_str),
         )
-        .map_err(|err| DiagnosticError::new(interface.span(), err))?;
+        .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;
         let items = rust_code::generate_interface(
             &self.package_name,
             conv_map,
@@ -276,14 +297,50 @@ impl LanguageGenerator for JavaConfig {
         let my_jobj_ti = conv_map.find_or_alloc_rust_type_with_suffix(
             &parse_type! { jobject },
             &interface.name.to_string(),
+            SourceId::none(),
         );
-        conv_map.add_foreign(my_jobj_ti, (&interface.name).into())?;
+        conv_map.add_foreign(
+            my_jobj_ti,
+            TypeName::from_ident(&interface.name, interface.src_id),
+        )?;
         Ok(items)
     }
 }
 
+impl LanguageGenerator for JavaConfig {
+    fn expand_items(
+        &self,
+        conv_map: &mut TypeMap,
+        pointer_target_width: usize,
+        code: &[SourceCode],
+        items: Vec<ItemToExpand>,
+    ) -> Result<Vec<TokenStream>> {
+        self.init(conv_map, code);
+        for item in &items {
+            if let ItemToExpand::Class(ref fclass) = item {
+                self.register_class(conv_map, fclass)?;
+            }
+        }
+        let mut ret = Vec::with_capacity(items.len());
+        for item in items {
+            match item {
+                ItemToExpand::Class(fclass) => ret.append(&mut self.generate(conv_map, &fclass)?),
+                ItemToExpand::Enum(fenum) => {
+                    ret.append(&mut self.generate_enum(conv_map, pointer_target_width, &fenum)?)
+                }
+                ItemToExpand::Interface(finterface) => ret.append(&mut self.generate_interface(
+                    conv_map,
+                    pointer_target_width,
+                    &finterface,
+                )?),
+            }
+        }
+        Ok(ret)
+    }
+}
+
 fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -> String {
-    let need_conv = f_method.input.iter().any(|v| v.java_need_conversation());
+    let need_conv = f_method.input.iter().any(|v| v.java_converter.is_some());
     match method.variant {
         MethodVariant::StaticMethod if !need_conv => method.short_name().as_str().to_string(),
         MethodVariant::Method(_) | MethodVariant::StaticMethod => {
@@ -299,31 +356,24 @@ fn find_suitable_ftypes_for_interace_methods(
 ) -> Result<Vec<JniForeignMethodSignature>> {
     let void_sym = "void";
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
     let mut f_methods = vec![];
 
     for method in &interace.items {
         let mut input = Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
         for arg in method.fn_decl.inputs.iter().skip(1) {
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg));
-            let f_arg_type = conv_map
-                .map_through_conversation_to_foreign(
-                    &arg_rust_ty,
-                    Direction::Outgoing,
-                    fn_arg_type(arg).span(),
-                    calc_this_type_for_method,
-                )
-                .ok_or_else(|| {
-                    DiagnosticError::new(
-                        fn_arg_type(arg).span(),
-                        format!(
-                            "Do not know conversation to foreign \
-                             from such rust type '{}'",
-                            arg_rust_ty
-                        ),
-                    )
-                })?;
-            input.push(f_arg_type.into());
+            let named_arg = arg
+                .as_named_arg()
+                .map_err(|err| DiagnosticError::from_syn_err(interace.src_id, err))?;
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, interace.src_id);
+            let f_arg_type = map_type(
+                conv_map,
+                &arg_rust_ty,
+                Direction::Outgoing,
+                (interace.src_id, named_arg.ty.span()),
+            )?;
+
+            input.push(f_arg_type);
         }
         let output = match method.fn_decl.output {
             syn::ReturnType::Default => ForeignTypeInfo {
@@ -344,7 +394,7 @@ fn find_suitable_foreign_types_for_methods(
     let mut ret = Vec::<JniForeignMethodSignature>::with_capacity(class.methods.len());
     let empty_symbol = "";
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type(&dummy_ty);
+    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
 
     for method in &class.methods {
         //skip self argument
@@ -356,40 +406,18 @@ fn find_suitable_foreign_types_for_methods(
         let mut input =
             Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
         for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(fn_arg_type(arg));
-            if let Some(converter) = special_type(conv_map, &arg_rust_ty, fn_arg_type(arg).span())?
-            {
-                input.push(converter);
-                continue;
-            }
-            let f_arg_type = conv_map
-                .map_through_conversation_to_foreign(
-                    &arg_rust_ty,
-                    Direction::Incoming,
-                    fn_arg_type(arg).span(),
-                    calc_this_type_for_method,
-                )
-                .ok_or_else(|| {
-                    DiagnosticError::new(
-                        fn_arg_type(arg).span(),
-                        format!(
-                            "Do not know conversation from foreign \
-                             to such rust type '{}'",
-                            arg_rust_ty,
-                        ),
-                    )
-                })?;
+            let named_arg = arg
+                .as_named_arg()
+                .map_err(|err| DiagnosticError::from_syn_err(class.src_id, err))?;
+            let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, class.src_id);
 
-            let mut f_arg_type: JavaForeignTypeInfo = f_arg_type.into();
-            if !primitive_type(&f_arg_type.base.name) {
-                f_arg_type.annotation =
-                    Some(if if_option_return_some_type(&arg_rust_ty).is_none() {
-                        NullAnnotation::NonNull
-                    } else {
-                        NullAnnotation::Nullable
-                    });
-            }
-            input.push(f_arg_type);
+            let fti = map_type(
+                conv_map,
+                &arg_rust_ty,
+                Direction::Incoming,
+                (class.src_id, named_arg.ty.span()),
+            )?;
+            input.push(fti);
         }
         let output = match method.variant {
             MethodVariant::Constructor => ForeignTypeInfo {
@@ -402,34 +430,20 @@ fn find_suitable_foreign_types_for_methods(
                     correspoding_rust_type: dummy_rust_ty.clone(),
                 },
                 syn::ReturnType::Type(_, ref rt) => {
-                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt);
-                    conv_map
-                        .map_through_conversation_to_foreign(
-                            &ret_rust_ty,
-                            Direction::Outgoing,
-                            rt.span(),
-                            calc_this_type_for_method,
-                        )
-                        .ok_or_else(|| {
-                            DiagnosticError::new(
-                                rt.span(),
-                                format!(
-                                    "Do not know conversation from \
-                                     such rust type '{}' to foreign",
-                                    ret_rust_ty,
-                                ),
-                            )
-                        })?
+                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt, class.src_id);
+                    let fti = map_type(
+                        conv_map,
+                        &ret_rust_ty,
+                        Direction::Outgoing,
+                        (class.src_id, rt.span()),
+                    )?;
+                    fti.base
                 }
             },
         };
         ret.push(JniForeignMethodSignature { output, input });
     }
     Ok(ret)
-}
-
-fn fmt_write_err_map(err: fmt::Error) -> String {
-    format!("fmt write error: {}", err)
 }
 
 fn java_class_full_name(package_name: &str, class_name: &str) -> String {
@@ -443,15 +457,8 @@ fn java_class_name_to_jni(full_name: &str) -> String {
     full_name.replace(".", "/")
 }
 
-fn primitive_type(type_name: &str) -> bool {
-    match type_name {
-        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => true,
-        _ => false,
-    }
-}
-
 fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignerClassInfo) -> Option<Type> {
-    if let Some(constructor_ret_type) = class.constructor_ret_type.as_ref() {
+    if let Some(constructor_ret_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
         Some(
             if_result_return_ok_err_types(
                 &tm.ty_to_rust_type_checked(constructor_ret_type)

@@ -3,13 +3,17 @@
 //! It is designed to be used from
 //! [cargo build scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html).
 //! The idea of this softwared based on [swig](http://www.swig.org).
-//! For macros expansion it uses [syntex](https://crates.io/crates/syntex).
 //! More details can be found at
 //! [README](https://github.com/Dushistov/rust_swig/blob/master/README.md)
 
+#![recursion_limit = "128"]
+
+#[macro_use]
+extern crate strum_macros;
+
 macro_rules! parse_type {
     ($($tt:tt)*) => {{
-        let ty: Type = parse_quote! { $($tt)* };
+        let ty: syn::Type = syn::parse_quote! { $($tt)* };
         ty
     }}
 }
@@ -19,11 +23,14 @@ mod cpp;
 mod error;
 pub mod file_cache;
 mod java_jni;
+mod namegen;
 mod python;
+mod source_registry;
+mod str_replace;
 mod typemap;
+mod types;
 
 use std::{
-    cell::RefCell,
     env,
     io::Write,
     mem,
@@ -31,15 +38,18 @@ use std::{
     str::FromStr,
 };
 
-use log::{debug, trace};
-use proc_macro2::{Ident, Span, TokenStream};
-use rustc_hash::FxHashSet;
-use syn::{parse_quote, spanned::Spanned, Token, Type};
+use log::debug;
+use proc_macro2::TokenStream;
+use syn::spanned::Spanned;
 
 use crate::{
     error::{panic_on_parse_error, DiagnosticError, Result},
+    source_registry::{SourceId, SourceRegistry},
     typemap::{ast::DisplayToTokens, TypeMap},
+    types::ItemToExpand,
 };
+
+pub(crate) static WRITE_TO_MEM_FAILED_MSG: &str = "Write to memory buffer failed, no free mem?";
 
 /// Calculate target pointer width from environment variable
 /// that `cargo` inserts
@@ -123,14 +133,14 @@ pub struct CppConfig {
     namespace_name: String,
     cpp_optional: CppOptional,
     cpp_variant: CppVariant,
-    generated_helper_files: RefCell<FxHashSet<PathBuf>>,
-    to_generate: RefCell<Vec<TokenStream>>,
+    cpp_str_view: CppStrView,
     /// Create separate *_impl.hpp files with methods implementations.
     /// Can be necessary for the project with circular dependencies between classes.
     separate_impl_headers: bool,
 }
 
 /// To which `C++` type map `std::option::Option`
+#[derive(Clone, Copy, EnumIter)]
 pub enum CppOptional {
     /// `std::optional` from C++17 standard
     Std17,
@@ -138,12 +148,49 @@ pub enum CppOptional {
     Boost,
 }
 
+impl From<CppOptional> for &'static str {
+    fn from(x: CppOptional) -> Self {
+        match x {
+            CppOptional::Std17 => "CppOptional::Std17",
+            CppOptional::Boost => "CppOptional::Boost",
+        }
+    }
+}
+
 /// To which `C++` type map `std::result::Result`
+#[derive(Clone, Copy, EnumIter)]
 pub enum CppVariant {
     /// `std::variant` from C++17 standard
     Std17,
     /// `boost::variant`
     Boost,
+}
+
+impl From<CppVariant> for &'static str {
+    fn from(x: CppVariant) -> Self {
+        match x {
+            CppVariant::Std17 => "CppVariant::Std17",
+            CppVariant::Boost => "CppVariant::Boost",
+        }
+    }
+}
+
+/// To whcih `C++` type map `&str`
+#[derive(Clone, Copy, EnumIter)]
+pub enum CppStrView {
+    /// `std::string_view` from C++17 standard
+    Std17,
+    /// `boost::string_view`
+    Boost,
+}
+
+impl From<CppStrView> for &'static str {
+    fn from(x: CppStrView) -> Self {
+        match x {
+            CppStrView::Std17 => "CppStrView::Std17",
+            CppStrView::Boost => "CppStrView::Boost",
+        }
+    }
 }
 
 impl CppConfig {
@@ -157,8 +204,7 @@ impl CppConfig {
             namespace_name,
             cpp_optional: CppOptional::Std17,
             cpp_variant: CppVariant::Std17,
-            generated_helper_files: RefCell::new(FxHashSet::default()),
-            to_generate: RefCell::new(vec![]),
+            cpp_str_view: CppStrView::Std17,
             separate_impl_headers: false,
         }
     }
@@ -174,10 +220,19 @@ impl CppConfig {
             ..self
         }
     }
+    pub fn cpp_str_view(self, cpp_str_view: CppStrView) -> CppConfig {
+        CppConfig {
+            cpp_str_view,
+            ..self
+        }
+    }
+    /// Use boost for that fit: Result -> boost::variant,
+    /// Option -> boost::optional, &str -> boost::string_view
     pub fn use_boost(self) -> CppConfig {
         CppConfig {
             cpp_variant: CppVariant::Boost,
             cpp_optional: CppOptional::Boost,
+            cpp_str_view: CppStrView::Boost,
             ..self
         }
     }
@@ -193,7 +248,6 @@ impl CppConfig {
 
 /// Configuration for Java binding generation
 pub struct PythonConfig {
-    module_initialization_code: RefCell<Vec<TokenStream>>,
     module_name: String,
 }
 
@@ -202,7 +256,6 @@ impl PythonConfig {
     /// # Arguments
     pub fn new(module_name: String) -> PythonConfig {
         PythonConfig {
-            module_initialization_code: RefCell::default(),
             module_name,
         }
     }
@@ -215,9 +268,10 @@ pub struct Generator {
     init_done: bool,
     config: LanguageConfig,
     conv_map: TypeMap,
-    conv_map_source: Vec<SourceCode>,
+    conv_map_source: Vec<SourceId>,
     foreign_lang_helpers: Vec<SourceCode>,
     pointer_target_width: usize,
+    src_reg: SourceRegistry,
 }
 
 struct SourceCode {
@@ -228,65 +282,68 @@ struct SourceCode {
 static FOREIGNER_CLASS: &str = "foreigner_class";
 static FOREIGN_ENUM: &str = "foreign_enum";
 static FOREIGN_INTERFACE: &str = "foreign_interface";
-
-enum OutputCode {
-    Item(syn::Item),
-    Class(ForeignerClassInfo),
-    Interface(ForeignInterface),
-    Enum(ForeignEnumInfo),
-}
+static FOREIGN_CALLBACK: &str = "foreign_callback";
+static FOREIGNER_CODE: &str = "foreigner_code";
+static FOREIGN_CODE: &str = "foreign_code";
+static FOREIGN_TYPEMAP: &str = "foreign_typemap";
 
 impl Generator {
     pub fn new(config: LanguageConfig) -> Generator {
         let pointer_target_width = target_pointer_width_from_env();
         let mut conv_map_source = Vec::new();
         let mut foreign_lang_helpers = Vec::new();
+        let mut src_reg = SourceRegistry::default();
         match config {
             LanguageConfig::JavaConfig(ref java_cfg) => {
-                conv_map_source.push(SourceCode {
-                    id_of_code: "jni-include.rs".into(),
-                    code: include_str!("java_jni/jni-include.rs")
-                        .replace(
-                            "java.util.Optional",
-                            &format!("{}.Optional", java_cfg.optional_package),
-                        )
-                        .replace(
-                            "java/util/Optional",
-                            &format!("{}/Optional", java_cfg.optional_package.replace('.', "/")),
-                        ),
-                });
+                conv_map_source.push(
+                    src_reg.register(SourceCode {
+                        id_of_code: "jni-include.rs".into(),
+                        code: include_str!("java_jni/jni-include.rs")
+                            .replace(
+                                "java.util.Optional",
+                                &format!("{}.Optional", java_cfg.optional_package),
+                            )
+                            .replace(
+                                "java/util/Optional",
+                                &format!(
+                                    "{}/Optional",
+                                    java_cfg.optional_package.replace('.', "/")
+                                ),
+                            ),
+                    }),
+                );
             }
             LanguageConfig::CppConfig(..) => {
-                conv_map_source.push(SourceCode {
+                conv_map_source.push(src_reg.register(SourceCode {
                     id_of_code: "cpp-include.rs".into(),
                     code: include_str!("cpp/cpp-include.rs").into(),
+                }));
+                foreign_lang_helpers.push(SourceCode {
+                    id_of_code: "rust_vec_impl.hpp".into(),
+                    code: include_str!("cpp/rust_vec_impl.hpp").into(),
                 });
                 foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_str.h".into(),
-                    code: include_str!("cpp/rust_str.h").into(),
+                    id_of_code: "rust_foreign_vec_impl.hpp".into(),
+                    code: include_str!("cpp/rust_foreign_vec_impl.hpp").into(),
                 });
                 foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_vec.h".into(),
-                    code: include_str!("cpp/rust_vec.h").into(),
+                    id_of_code: "rust_foreign_slice_iter.hpp".into(),
+                    code: include_str!("cpp/rust_foreign_slice_iter.hpp").into(),
                 });
                 foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_result.h".into(),
-                    code: include_str!("cpp/rust_result.h").into(),
+                    id_of_code: "rust_foreign_slice_impl.hpp".into(),
+                    code: include_str!("cpp/rust_foreign_slice_impl.hpp").into(),
                 });
                 foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_option.h".into(),
-                    code: include_str!("cpp/rust_option.h").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_tuple.h".into(),
-                    code: include_str!("cpp/rust_tuple.h").into(),
+                    id_of_code: "rust_slice_tmpl.hpp".into(),
+                    code: include_str!("cpp/rust_slice_tmpl.hpp").into(),
                 });
             }
             LanguageConfig::PythonConfig(..) => {
-                conv_map_source.push(SourceCode {
+                conv_map_source.push(src_reg.register(SourceCode {
                     id_of_code: "python-include.rs".into(),
                     code: include_str!("python/python-include.rs").into(),
-                });
+                }));
             }
         }
         Generator {
@@ -296,6 +353,7 @@ impl Generator {
             conv_map_source,
             foreign_lang_helpers,
             pointer_target_width: pointer_target_width.unwrap_or(0),
+            src_reg,
         }
     }
 
@@ -308,10 +366,10 @@ impl Generator {
 
     /// Add new foreign langauge type <-> Rust mapping
     pub fn merge_type_map(mut self, id_of_code: &str, code: &str) -> Generator {
-        self.conv_map_source.push(SourceCode {
+        self.conv_map_source.push(self.src_reg.register(SourceCode {
             id_of_code: id_of_code.into(),
             code: code.into(),
-        });
+        }));
         self
     }
 
@@ -319,7 +377,7 @@ impl Generator {
     ///
     /// # Panics
     /// Panics on error
-    pub fn expand<S, D>(self, crate_name: &str, src: S, dst: D)
+    pub fn expand<S, D>(mut self, crate_name: &str, src: S, dst: D)
     where
         S: AsRef<Path>,
         D: AsRef<Path>,
@@ -331,12 +389,14 @@ impl Generator {
                 err
             )
         });
-        if let Err(mut err) = self.expand_str(&src_cnt, dst) {
-            err.register_src_if_no(
-                format!("{}: {}", crate_name, src.as_ref().display()),
-                src_cnt.into(),
-            );
-            panic_on_parse_error(&err);
+
+        let src_id = self.src_reg.register(SourceCode {
+            id_of_code: format!("{}: {}", crate_name, src.as_ref().display()),
+            code: src_cnt,
+        });
+
+        if let Err(err) = self.expand_str(src_id, dst) {
+            panic_on_parse_error(&self.src_reg, &err);
         }
     }
 
@@ -344,16 +404,17 @@ impl Generator {
     ///
     /// # Panics
     /// Panics on error
-    pub fn expand_from_str<D>(self, crate_name: &str, src: &str, dst: D)
+    pub fn expand_from_str<D>(mut self, crate_name: &str, src: String, dst: D)
     where
         D: AsRef<Path>,
     {
-        if let Err(mut err) = self.expand_str(&src, dst) {
-            err.register_src_if_no(
-                format!("{}", crate_name),
-                src.into(),
-            );
-            panic_on_parse_error(&err);
+        let src_id = self.src_reg.register(SourceCode {
+            id_of_code: format!("{}: [string]", crate_name),
+            code: src,
+        });
+        
+        if let Err(err) = self.expand_str(src_id, dst) {
+            panic_on_parse_error(&self.src_reg, &err);
         }
     }
 
@@ -361,7 +422,7 @@ impl Generator {
     ///
     /// # Panics
     /// Panics on I/O errors
-    fn expand_str<D>(mut self, src: &str, dst: D) -> Result<()>
+    fn expand_str<D>(&mut self, src_id: SourceId, dst: D) -> Result<()>
     where
         D: AsRef<Path>,
     {
@@ -375,7 +436,8 @@ impl Generator {
         }
         let items = self.init_types_map(self.pointer_target_width)?;
 
-        let syn_file = syn::parse_file(src)?;
+        let syn_file = syn::parse_file(self.src_reg.src(src_id))
+            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
 
         let mut file = file_cache::FileWriteCache::new(dst.as_ref());
 
@@ -383,85 +445,67 @@ impl Generator {
             write!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
         }
 
-        let mut output_code = vec![];
+        // n / 2 - just guess
+        let mut items_to_expand = Vec::with_capacity(syn_file.items.len() / 2);
 
         for item in syn_file.items {
             if let syn::Item::Macro(mut item_macro) = item {
-                let is_our_macro = [FOREIGNER_CLASS, FOREIGN_ENUM, FOREIGN_INTERFACE]
-                    .iter()
-                    .any(|x| item_macro.mac.path.is_ident(x));
+                let is_our_macro = [
+                    FOREIGNER_CLASS,
+                    FOREIGN_ENUM,
+                    FOREIGN_INTERFACE,
+                    FOREIGN_CALLBACK,
+                    FOREIGN_TYPEMAP,
+                ]
+                .iter()
+                .any(|x| item_macro.mac.path.is_ident(x));
                 if !is_our_macro {
                     writeln!(&mut file, "{}", DisplayToTokens(&item_macro))
                         .expect("mem I/O failed");
                     continue;
                 }
-                trace!("Found {:?}", item_macro.mac.path);
+                debug!("Found {}", DisplayToTokens(&item_macro.mac.path));
+                if item_macro.mac.tts.is_empty() {
+                    return Err(DiagnosticError::new(
+                        src_id,
+                        item_macro.span(),
+                        format!(
+                            "missing tokens in call of macro '{}'",
+                            DisplayToTokens(&item_macro.mac.path)
+                        ),
+                    ));
+                }
                 let mut tts = TokenStream::new();
                 mem::swap(&mut tts, &mut item_macro.mac.tts);
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS) {
-                    let fclass = code_parse::parse_foreigner_class(&self.config, tts)?;
-                    debug!(
-                        "expand_foreigner_class: self {:?}, constructor {:?}",
-                        fclass.self_type, fclass.constructor_ret_type
-                    );
+                    let fclass = code_parse::parse_foreigner_class(src_id, &self.config, tts)?;
+                    debug!("expand_foreigner_class: self_desc {:?}", fclass.self_desc);
                     self.conv_map.register_foreigner_class(&fclass);
-                    Generator::language_generator(&self.config)
-                        .register_class(&mut self.conv_map, &fclass)?;
-                    output_code.push(OutputCode::Class(fclass));
+                    items_to_expand.push(ItemToExpand::Class(fclass));
                 } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
-                    let fenum = code_parse::parse_foreign_enum(tts)?;
-                    output_code.push(OutputCode::Enum(fenum));
-                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE) {
-                    let finterface = code_parse::parse_foreign_interface(tts)?;
-                    output_code.push(OutputCode::Interface(finterface));
+                    let fenum = code_parse::parse_foreign_enum(src_id, tts)?;
+                    items_to_expand.push(ItemToExpand::Enum(fenum));
+                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE)
+                    || item_macro.mac.path.is_ident(FOREIGN_CALLBACK)
+                {
+                    let finterface = code_parse::parse_foreign_interface(src_id, tts)?;
+                    items_to_expand.push(ItemToExpand::Interface(finterface));
+                } else if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
+                    self.conv_map.parse_foreign_typemap_macro(src_id, tts)?;
                 } else {
                     unreachable!();
                 }
             } else {
-                output_code.push(OutputCode::Item(item));
+                writeln!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
             }
         }
 
-
-        for code_item in output_code {
-            match code_item {
-                OutputCode::Class(fclass) => {
-                    let code = Generator::language_generator(&self.config).generate(
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &fclass,
-                    )?;
-                    for elem in code {
-                        writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
-                    }
-                }
-                OutputCode::Enum(fenum) => {
-                    let code = Generator::language_generator(&self.config).generate_enum(
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &fenum,
-                    )?;
-                    for elem in code {
-                        writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
-                    }
-                }
-                OutputCode::Interface(finterface) => {
-                    let code = Generator::language_generator(&self.config).generate_interface(
-                        &mut self.conv_map,
-                        self.pointer_target_width,
-                        &finterface,
-                    )?;
-                    for elem in code {
-                        writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
-                    }
-                }
-                OutputCode::Item(item) => {
-                    writeln!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
-                }
-            }
-        }
-
-        let code = Generator::language_generator(&self.config).finish_glue_rs(&mut self.conv_map)?;
+        let code = Generator::language_generator(&self.config).expand_items(
+            &mut self.conv_map,
+            self.pointer_target_width,
+            &self.foreign_lang_helpers,
+            items_to_expand,
+        )?;
         for elem in code {
             writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
         }
@@ -481,26 +525,16 @@ impl Generator {
             return Ok(vec![]);
         }
         self.init_done = true;
-        for code in &self.conv_map_source {
-            self.conv_map
-                .merge(&code.id_of_code, &code.code, target_pointer_width)?;
+        for code_id in &self.conv_map_source {
+            let code = self.src_reg.src(*code_id);
+            self.conv_map.merge(*code_id, code, target_pointer_width)?;
         }
 
         if self.conv_map.is_empty() {
-            return Err(DiagnosticError::new(
-                Span::call_site(),
+            return Err(DiagnosticError::new_without_src_info(
                 "After merge all \"types maps\" have no convertion code",
             ));
         }
-
-        Generator::language_generator(&self.config)
-            .init(&mut self.conv_map, &self.foreign_lang_helpers)
-            .map_err(|err| {
-                DiagnosticError::new(
-                    Span::call_site(),
-                    format!("Can not put/generate foreign lang helpers: {}", err),
-                )
-            })?;
 
         Ok(self.conv_map.take_utils_code())
     }
@@ -514,214 +548,12 @@ impl Generator {
     }
 }
 
-#[derive(Debug, Clone)]
-struct ForeignerClassInfo {
-    name: Ident,
-    methods: Vec<ForeignerMethod>,
-    self_type: Option<Type>,
-    foreigner_code: String,
-    /// For example if we have `fn new(x: X) -> Result<Y, Z>`, then Result<Y, Z>
-    constructor_ret_type: Option<Type>,
-    doc_comments: Vec<String>,
-    copy_derived: bool,
-}
-
-impl ForeignerClassInfo {
-    fn span(&self) -> Span {
-        self.name.span()
-    }
-    fn self_type_as_ty(&self) -> Type {
-        self.self_type
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| parse_quote! { () })
-    }
-    /// common for several language binding generator code
-    fn validate_class(&self) -> Result<()> {
-        let mut has_constructor = false;
-        let mut has_methods = false;
-        for x in &self.methods {
-            match x.variant {
-                MethodVariant::Constructor => has_constructor = true,
-                MethodVariant::Method(_) => has_methods = true,
-                _ => {}
-            }
-        }
-        if self.self_type.is_none() && has_constructor {
-            Err(DiagnosticError::new(
-                self.span(),
-                format!(
-                    "class {} has constructor, but no self_type defined",
-                    self.name
-                ),
-            ))
-        } else if self.self_type.is_none() && has_methods {
-            Err(DiagnosticError::new(
-                self.span(),
-                format!("class {} has methods, but no self_type defined", self.name),
-            ))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignerMethod {
-    variant: MethodVariant,
-    rust_id: syn::Path,
-    fn_decl: FnDecl,
-    name_alias: Option<Ident>,
-    access: MethodAccess,
-    doc_comments: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-struct FnDecl {
-    span: Span,
-    inputs: syn::punctuated::Punctuated<syn::FnArg, Token![,]>,
-    output: syn::ReturnType,
-}
-
-impl From<syn::FnDecl> for crate::FnDecl {
-    fn from(x: syn::FnDecl) -> Self {
-        crate::FnDecl {
-            span: x.fn_token.span(),
-            inputs: x.inputs,
-            output: x.output,
-        }
-    }
-}
-
-impl ForeignerMethod {
-    fn short_name(&self) -> String {
-        if let Some(ref name) = self.name_alias {
-            name.to_string()
-        } else {
-            match self.rust_id.segments.len() {
-                0 => String::new(),
-                n => self.rust_id.segments[n - 1].ident.to_string(),
-            }
-        }
-    }
-
-    fn span(&self) -> Span {
-        self.rust_id.span()
-    }
-
-    fn is_dummy_constructor(&self) -> bool {
-        self.rust_id.segments.is_empty()
-    }
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum MethodAccess {
-    Private,
-    Public,
-    Protected,
-}
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum MethodVariant {
-    Constructor,
-    Method(SelfTypeVariant),
-    StaticMethod,
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum SelfTypeVariant {
-    RptrMut,
-    Rptr,
-    Mut,
-    Default,
-}
-
-impl SelfTypeVariant {
-    fn is_read_only(self) -> bool {
-        match self {
-            SelfTypeVariant::RptrMut | SelfTypeVariant::Mut => false,
-            SelfTypeVariant::Default | SelfTypeVariant::Rptr => true,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignEnumInfo {
-    name: Ident,
-    items: Vec<ForeignEnumItem>,
-    doc_comments: Vec<String>,
-}
-
-impl ForeignEnumInfo {
-    fn rust_enum_name(&self) -> String {
-        self.name.to_string()
-    }
-    fn span(&self) -> Span {
-        self.name.span()
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ForeignEnumItem {
-    name: Ident,
-    rust_name: syn::Path,
-    doc_comments: Vec<String>,
-}
-
-struct ForeignInterface {
-    name: Ident,
-    self_type: syn::Path,
-    doc_comments: Vec<String>,
-    items: Vec<ForeignInterfaceMethod>,
-}
-
-impl ForeignInterface {
-    fn span(&self) -> Span {
-        self.name.span()
-    }
-}
-
-struct ForeignInterfaceMethod {
-    name: Ident,
-    rust_name: syn::Path,
-    fn_decl: FnDecl,
-    doc_comments: Vec<String>,
-}
-
 trait LanguageGenerator {
-    
-    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()>;
-
-    fn generate(
+    fn expand_items(
         &self,
         conv_map: &mut TypeMap,
         pointer_target_width: usize,
-        class: &ForeignerClassInfo,
+        code: &[SourceCode],
+        items: Vec<ItemToExpand>,
     ) -> Result<Vec<TokenStream>>;
-
-    fn generate_enum(
-        &self,
-        conv_map: &mut TypeMap,
-        pointer_target_width: usize,
-        enum_info: &ForeignEnumInfo,
-    ) -> Result<Vec<TokenStream>>;
-
-    fn generate_interface(
-        &self,
-        conv_map: &mut TypeMap,
-        pointer_target_width: usize,
-        interace: &ForeignInterface,
-    ) -> Result<Vec<TokenStream>>;
-
-    /// Called before any other methods and only once
-    fn init(
-        &self,
-        _type_map: &mut TypeMap,
-        _foreign_lang_helpers: &[SourceCode],
-    ) -> std::result::Result<(), String> {
-        Ok(())
-    }
-    
-    fn finish_glue_rs(&self, _conv_map: &mut TypeMap) -> Result<Vec<TokenStream>> {
-        Ok(vec![])
-    }
 }
