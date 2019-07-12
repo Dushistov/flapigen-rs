@@ -41,6 +41,16 @@ impl FileWriteCache {
     }
 
     #[allow(dead_code)]
+    pub fn take_content(&mut self) -> Vec<u8> {
+        ::std::mem::replace(&mut self.cnt, vec![])
+    }
+
+    #[allow(dead_code)]
+    pub fn replace_content(&mut self, bytes: Vec<u8>) {
+        self.cnt = bytes;
+    }
+
+    #[allow(dead_code)]
     pub fn define_item<S: Into<String>>(&mut self, item: S) {
         self.already_defined_items.insert(item.into());
     }

@@ -27,7 +27,8 @@ fn main() {
         cfg
     };
 
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
+    let swig_gen =
+        rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg)).rustfmt_bindings(true);
     swig_gen.expand(
         "rust_swig_test_c++",
         Path::new("src/cpp_glue.rs.in"),
