@@ -47,6 +47,12 @@ steps:
       echo ##vso[task.setvariable variable=PATH]%PATH%;%USERPROFILE%\.cargo\bin
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: Install Rust on windows
+  - bash: |
+      set -e
+      rustup default $RUSTUP_TOOLCHAIN
+      rustup update $RUSTUP_TOOLCHAIN
+      rustc --version
+    displayName: "Set correct Rust version"
   - script: |
       curl http://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
       7z x llvm-installer.exe -oc:\llvm-binary
