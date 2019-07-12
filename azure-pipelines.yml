@@ -52,7 +52,9 @@ steps:
       rustup default $RUSTUP_TOOLCHAIN
       rustup update $RUSTUP_TOOLCHAIN
       rustc --version
-    displayName: "Set correct Rust version"
+      rustup component add rustfmt --toolchain $RUSTUP_TOOLCHAIN
+      rustfmt --version
+    displayName: "Rust post-install"
   - script: |
       curl http://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
       7z x llvm-installer.exe -oc:\llvm-binary
