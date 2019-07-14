@@ -210,7 +210,7 @@ impl CppConfig {
             let this_type_for_method = constructor_ret_type;
             let mut traits = vec!["SwigForeignClass"];
             if class.clone_derived {
-                traits.push("Copy");
+                traits.push("Clone");
             }
             if class.copy_derived {
                 if !class.clone_derived {
