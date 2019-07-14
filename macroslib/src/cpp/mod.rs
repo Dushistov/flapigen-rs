@@ -736,8 +736,10 @@ fn register_main_foreign_types(
     if self_type != this_type {
         let self_type = conv_map[self_type].clone();
         {
-            let code = format!("&mut {}", self_type);
-            let gen_ty = parse_ty_with_given_span_checked(&code, self_type.ty.span());
+            let gen_ty = parse_ty_with_given_span_checked(
+                &format!("&mut {}", self_type),
+                self_type.ty.span(),
+            );
             let self_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
             let class_ftype_mut_ref_in = ForeignTypeS {
