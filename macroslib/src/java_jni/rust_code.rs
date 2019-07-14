@@ -244,7 +244,8 @@ May be you need to use `private constructor = empty;` syntax?",
                 output: ForeignTypeInfo {
                     name: "".into(),
                     correspoding_rust_type: dummy_rust_ty.clone(),
-                },
+                }
+                .into(),
                 input: vec![JavaForeignTypeInfo {
                     base: ForeignTypeInfo {
                         name: "long".into(),
@@ -619,7 +620,7 @@ fn generate_jni_func_name(
 }
 
 fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<Vec<TokenStream>> {
-    let jni_ret_type = mc.f_method.output.correspoding_rust_type.typename();
+    let jni_ret_type = mc.f_method.output.base.correspoding_rust_type.typename();
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         conv_map,
         mc.class.src_id,
@@ -729,7 +730,7 @@ fn generate_method(
     self_variant: SelfTypeVariant,
     this_type_for_method: &RustType,
 ) -> Result<Vec<TokenStream>> {
-    let jni_ret_type = mc.f_method.output.correspoding_rust_type.typename();
+    let jni_ret_type = mc.f_method.output.base.correspoding_rust_type.typename();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
         mc.class.src_id,
@@ -839,11 +840,11 @@ fn jni_method_signature(
     }
     ret.push(')');
     let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-        .get(&*method.output.name.as_str())
+        .get(&*method.output.base.name.as_str())
         .unwrap_or_else(|| {
             panic!(
                 "Unknown type `{}`, can not generate jni signature",
-                method.output.name
+                method.output.base.name
             )
         });
     ret.push_str(sig);

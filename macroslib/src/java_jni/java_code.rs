@@ -162,7 +162,7 @@ public final class {class_name} {{
         class_name = class.name,
         doc_comments = class_doc_comments,
     )
-    .map_err(&map_write_err)?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
     let mut have_methods = false;
     let mut have_constructor = false;
@@ -218,7 +218,7 @@ public final class {class_name} {{
 
         match method.variant {
             MethodVariant::StaticMethod => {
-                let ret_type = &f_method.output.name;
+                let ret_type = &f_method.output.base.name;
                 let (native, end) = if convert_code.is_empty() {
                     ("native ", ";\n")
                 } else {
@@ -264,7 +264,7 @@ public final class {class_name} {{
             }
             MethodVariant::Method(_) => {
                 have_methods = true;
-                let ret_type = &f_method.output.name;
+                let ret_type = &f_method.output.base.name;
                 write!(
                     file,
                     r#"

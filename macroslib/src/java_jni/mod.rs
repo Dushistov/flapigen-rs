@@ -77,7 +77,7 @@ impl From<ForeignTypeInfo> for JavaForeignTypeInfo {
 }
 
 struct JniForeignMethodSignature {
-    output: ForeignTypeInfo,
+    output: JavaForeignTypeInfo,
     input: Vec<JavaForeignTypeInfo>,
 }
 
@@ -379,7 +379,8 @@ fn find_suitable_ftypes_for_interace_methods(
             syn::ReturnType::Default => ForeignTypeInfo {
                 name: void_sym.into(),
                 correspoding_rust_type: dummy_rust_ty.clone(),
-            },
+            }
+            .into(),
             _ => unimplemented!(),
         };
         f_methods.push(JniForeignMethodSignature { output, input });
@@ -441,7 +442,10 @@ fn find_suitable_foreign_types_for_methods(
                 }
             },
         };
-        ret.push(JniForeignMethodSignature { output, input });
+        ret.push(JniForeignMethodSignature {
+            output: output.into(),
+            input,
+        });
     }
     Ok(ret)
 }
