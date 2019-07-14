@@ -888,6 +888,9 @@ foreigner_class!(class TestPair {
     static_method Boo::return_pair_obj2() -> (Boo, Foo);
     static_method Boo::return_pair_f32_i32() -> (f32, i32);
     static_method Boo::swap_foo_boo(foo_boo: (Foo, Boo)) -> (Boo, Foo);
+    fn return_tuple3() -> (bool, i32, String) {
+        (true, 17, "tuple3".to_string())
+    }
 });
 
 #[derive(Clone)]

@@ -1,6 +1,4 @@
 mod swig_foreign_types_map {
-    #![swig_foreigner_type = "uint8_t"]
-    #![swig_rust_type = "u8"]
     #![swig_foreigner_type = "int16_t"]
     #![swig_rust_type = "i16"]
     #![swig_foreigner_type = "uint16_t"]
@@ -33,6 +31,11 @@ foreign_typemap!(
 foreign_typemap!(
     (r_type) i8;
     (f_type, req_modules = ["<stdint.h>"]) "int8_t";
+);
+
+foreign_typemap!(
+    (r_type) u8;
+    (f_type, req_modules = ["<stdint.h>"]) "uint8_t";
 );
 
 #[allow(unused_macros)]
@@ -290,6 +293,47 @@ foreign_typemap!(
             "std::make_pair(swig_foreign_from_i_type!(T1, $p.first), swig_foreign_from_i_type!(T2, $p.second))";
     ($p:f_type, req_modules = ["\"CRustPairModule!().h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
         "swig_f_type!(CRustPair!()) { swig_foreign_to_i_type!(T1, $p.first), swig_foreign_to_i_type!(T2, $p.second) }";
+ );
+
+foreign_typemap!(
+    generic_alias!(CRustTuple3 = swig_concat_idents!(CRustTuple3, swig_i_type!(T1), swig_i_type!(T2), swig_i_type!(T3)));
+    generic_alias!(CRustTuple3Module = swig_concat_idents!(rust_tuple, swig_i_type!(T1), swig_i_type!(T2), swig_i_type!(T3)));
+    define_c_type!(
+         module = "CRustTuple3Module!().h";
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustTuple3!() {
+            first: swig_i_type!(T1),
+            second: swig_i_type!(T2),
+            third: swig_i_type!(T3),
+        }
+    );
+    ($p:r_type) <T1, T2, T3> (T1, T2, T3) => CRustTuple3!() {
+        swig_from_rust_to_i_type!(T1, $p.0, p0)
+        swig_from_rust_to_i_type!(T2, $p.1, p1)
+        swig_from_rust_to_i_type!(T3, $p.2, p2)
+        $out = CRustTuple3!() {
+            first: p0,
+            second: p1,
+            third: p2,
+        }
+    };
+    ($p:r_type) <T1, T2, T3> (T1, T2, T3) <= CRustTuple3!() {
+        swig_from_i_type_to_rust!(T1, $p.first, p0)
+        swig_from_i_type_to_rust!(T2, $p.second, p1)
+        swig_from_i_type_to_rust!(T3, $p.third, p2)
+        $out = (p0, p1, p2)
+    };
+    ($p:f_type, req_modules = ["\"CRustTuple3Module!().h\"", "<tuple>"]) => "std::tuple<swig_f_type!(T1), swig_f_type!(T2), swig_f_type!(T3)>"
+        r#"std::make_tuple(swig_foreign_from_i_type!(T1, $p.first),
+                           swig_foreign_from_i_type!(T2, $p.second),
+                           swig_foreign_from_i_type!(T3, $p.third))"#;
+    ($p:f_type, req_modules = ["\"CRustTuple3Module!().h\"", "<tuple>"]) <= "std::tuple<swig_f_type!(T1), swig_f_type!(T2), swig_f_type!(T3)>"
+        r#"swig_f_type!(CRustTuple3!()) {
+               swig_foreign_to_i_type!(T1, $p.first),
+               swig_foreign_to_i_type!(T2, $p.second),
+               swig_foreign_to_i_type!(T3, $p.third),
+        }"#;
  );
 
 foreign_typemap!(
