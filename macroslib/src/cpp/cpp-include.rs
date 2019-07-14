@@ -1,8 +1,4 @@
 mod swig_foreign_types_map {
-    #![swig_foreigner_type = "void"]
-    #![swig_rust_type = "()"]
-    #![swig_foreigner_type = "int8_t"]
-    #![swig_rust_type = "i8"]
     #![swig_foreigner_type = "uint8_t"]
     #![swig_rust_type = "u8"]
     #![swig_foreigner_type = "int16_t"]
@@ -28,6 +24,16 @@ mod swig_foreign_types_map {
     #![swig_foreigner_type = "int"]
     #![swig_rust_type = "::std::os::raw::c_int"]
 }
+
+foreign_typemap!(
+    (r_type) ();
+    (f_type) "void";
+);
+
+foreign_typemap!(
+    (r_type) i8;
+    (f_type, req_modules = ["<stdint.h>"]) "int8_t";
+);
 
 #[allow(unused_macros)]
 macro_rules! swig_c_str {
