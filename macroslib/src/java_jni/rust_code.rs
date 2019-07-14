@@ -697,8 +697,8 @@ fn generate_constructor(
 
     let code = format!(
         r#"
-#[no_mangle]
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[no_mangle]
 pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
 {convert_input_code}
     let this: {real_output_typename} = {call};
