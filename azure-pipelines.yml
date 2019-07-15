@@ -47,6 +47,14 @@ steps:
       echo ##vso[task.setvariable variable=PATH]%PATH%;%USERPROFILE%\.cargo\bin
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: Install Rust on windows
+  - bash: |
+      set -e
+      rustup default $RUSTUP_TOOLCHAIN
+      rustup update $RUSTUP_TOOLCHAIN
+      rustc --version
+      rustup component add rustfmt --toolchain $RUSTUP_TOOLCHAIN
+      rustfmt --version
+    displayName: "Rust post-install"
   - script: |
       curl http://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
       7z x llvm-installer.exe -oc:\llvm-binary
@@ -78,8 +86,10 @@ steps:
       echo "##vso[task.setvariable variable=RUSTC_WRAPPER]$HOME/.cargo/bin/sccache"
       echo "##vso[task.setvariable variable=SCCACHE_BUCKET]$IMAGENAME"
       sccache --version
+      sudo apt-get install valgrind
+      valgrind --version
     condition: eq( variables['Agent.OS'], 'Linux' )
-    displayName: Setup sccache on linux
+    displayName: Setup sccache and valgrind on linux
   - bash: |
       set -e
       if [ "$GCC_VARIANT" == "gcc-8" ]; then sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt-get update -qq && sudo apt-get install -qq g++-8 && sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 90; fi
@@ -103,7 +113,8 @@ steps:
       echo "##vso[task.setvariable variable=BOOST_ROOT]$PWD/boost_1_66_0"
     condition: eq( variables['Agent.OS'], 'Darwin' )
     displayName: Install boost on mac os
-  - script: |
+  - bash: |
+      set -e
       clang --version
       rustc -vV
       cargo -vV
@@ -117,6 +128,7 @@ steps:
       cp workspace.Cargo.toml Cargo.toml
       python -c "fin = open('Cargo.toml', 'r'); res = fin.read().replace('debug = true', ''); fin.close(); fout = open('Cargo.toml', 'w'); fout.write(res + '\n'); fout.close();"
       python ci_build_and_test.py --skip-android-tests
+      sccache -s
     displayName: Build and run tests
     env:
       AWS_ACCESS_KEY_ID: $(S_AWS_ACCESS_KEY_ID)

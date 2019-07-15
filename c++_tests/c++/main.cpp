@@ -892,6 +892,16 @@ TEST(TestPair, smokeTest)
     EXPECT_EQ(17, pair4.first.f());
     EXPECT_EQ(11, pair4.second.f(0, 0));
     EXPECT_EQ(std::string("FooName"), pair4.second.getName());
+
+    {
+        bool p1 = false;
+        int32_t p2 = -1;
+        RustString p3;
+        std::tie(p1, p2, p3) = TestPair::return_tuple3();
+        EXPECT_TRUE(p1);
+        EXPECT_EQ(17, p2);
+        EXPECT_EQ("tuple3", p3.to_std_string());
+    }
 }
 
 TEST(TestCopy, smokeTest)
