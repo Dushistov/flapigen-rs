@@ -35,6 +35,7 @@ use std::{
     mem,
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    str,
     str::FromStr,
     sync::Arc,
 };
@@ -534,13 +535,16 @@ trait LanguageGenerator {
     ) -> Result<Vec<TokenStream>>;
 }
 
-fn rustfmt_cnt(source: Vec<u8>) -> io::Result<Vec<u8>> {
+#[doc(hidden)]
+pub fn rustfmt_cnt(source: Vec<u8>) -> io::Result<Vec<u8>> {
     let rustfmt = which::which("rustfmt")
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))?;
 
     let mut cmd = Command::new(&*rustfmt);
 
-    cmd.stdin(Stdio::piped()).stdout(Stdio::piped());
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     let mut child = cmd.spawn()?;
     let mut child_stdin = child.stdin.take().unwrap();
@@ -554,6 +558,7 @@ fn rustfmt_cnt(source: Vec<u8>) -> io::Result<Vec<u8>> {
         let _ = child_stdin.write_all(src.as_slice());
         src
     });
+
     let mut output = Vec::with_capacity(src_len);
     io::copy(&mut child_stdout, &mut output)?;
     let status = child.wait()?;

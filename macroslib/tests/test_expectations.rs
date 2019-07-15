@@ -4,7 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
+use log::warn;
+use rust_swig::{rustfmt_cnt, CppConfig, Generator, JavaConfig, LanguageConfig};
 use syn::Token;
 use tempfile::tempdir;
 
@@ -369,7 +370,9 @@ impl Drop for PrintTestInfo {
             );
             println!(
                 "{} / {:?}: rust_swig generated such rust_code: {}",
-                self.test_name, self.lang, self.code_pair.rust_code
+                self.test_name,
+                self.lang,
+                rustfmt_without_errors(self.code_pair.rust_code.clone()),
             );
         }
     }
@@ -515,10 +518,14 @@ fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bo
         if rust_cpp_expectation.exists() {
             let pats =
                 parse_code_expectation(&rust_cpp_expectation).expect("parsing of patterns failed");
-            let pats: Vec<String> = pats.into_iter().map(|v| v.replace("\n", "")).collect();
+            let pats: Vec<String> = pats
+                .into_iter()
+                .map(|v| rustfmt_without_errors(v))
+                .collect();
+            let rust_code = rustfmt_without_errors(code_pair.rust_code);
             for pat in pats {
                 print_test_info.rust_pat = pat.clone();
-                assert!(code_pair.rust_code.contains(&pat));
+                assert!(rust_code.contains(&pat));
             }
             print_test_info.rust_pat.clear();
         }
@@ -526,5 +533,16 @@ fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bo
         true
     } else {
         false
+    }
+}
+
+fn rustfmt_without_errors(rust_code: String) -> String {
+    let rust_code2 = rust_code.clone();
+    match rustfmt_cnt(rust_code.into_bytes()) {
+        Ok(code) => String::from_utf8(code).expect("not valid utf-8"),
+        Err(err) => {
+            warn!("rustfmt failed: {}", err);
+            rust_code2
+        }
     }
 }

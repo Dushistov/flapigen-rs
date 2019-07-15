@@ -1,3 +1,9 @@
-r#"onStateChanged1 : extern "C" fn ( a0 : i32 , a1 : :: std :: os :: raw :: c_char , _ : * const :: std :: os :: raw :: c_void ) -> ( ) ,"#;
+r#"onStateChanged1:
+        extern "C" fn(a0: i32, a1: ::std::os::raw::c_char, _: *const ::std::os::raw::c_void) -> (),"#;
 
-r#"onStateChanged2 : extern "C" fn ( a0 : :: std :: os :: raw :: c_char , a1 : f64 , _ : * const :: std :: os :: raw :: c_void ) -> :: std :: os :: raw :: c_char ,"#;
+r#"onStateChanged2: extern "C" fn(
+        a0: ::std::os::raw::c_char,
+        a1: f64,
+        _: *const ::std::os::raw::c_void,
+    ) -> ::std::os::raw::c_char,"#;
+
