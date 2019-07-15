@@ -10,4 +10,6 @@ foreigner_class!(class TestPassObjectsAsParams {
     method TestPassObjectsAsParams::f1(&self, _: &RefCell<Foo>);
     method TestPassObjectsAsParams::f2(&self, _: Rc<RefCell<Foo>>);
     method TestPassObjectsAsParams::f3(&self, _: &mut RefCell<Foo>);
+    fn TestPassObjectsAsParams::f4(&self, _: &Foo);
+    fn TestPassObjectsAsParams::f5(&self, _: &mut Foo);
 });
