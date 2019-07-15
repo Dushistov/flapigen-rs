@@ -1,6 +1,6 @@
 
 #[macro_use] extern crate cpython;
-use cpython::{ObjectProtocol, PyObject, PythonObjectWithTypeObject};
+use cpython::{ObjectProtocol as CPythonObjectProtocol, PythonObjectWithTypeObject as CPythonObjectWithTypeObject};
 
 // It is currently unused.
 mod swig_foreign_types_map {

@@ -143,13 +143,18 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
                                        "./c++-rust-swig-test"], cwd = str(cur_cmake_build_dir))
 
 @show_timing
-def test_python(is_windows):
-    subprocess.check_call(["cargo", "build", "-v", "--package", "rust_swig_test_python"], shell = False)
-    if is_windows:
-        shutil.copyfile("target/debug/rust_swig_test_python.dll", "python_tests/python/rust_swig_test_python.dll")
-    else:
-        shutil.copyfile("target/debug/librust_swig_test_python.so", "python_tests/python/rust_swig_test_python.so")
-    subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
+def test_python(is_windows, test_cfg):
+    for cfg in test_cfg:
+        cmd = ["cargo", "build", "-v", "--package", "rust_swig_test_python"]
+        if cfg == RELEASE:
+            cmd.append("--release")
+        subprocess.check_call(cmd, shell = False)
+        target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
+        if is_windows:
+            shutil.copyfile(os.path.join(target_dir, "rust_swig_test_python.dll"), "python_tests/python/rust_swig_test_python.pyd")
+        else:
+            shutil.copyfile(os.path.join(target_dir, "librust_swig_test_python.so"), "python_tests/python/rust_swig_test_python.so")
+        subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
 
 
 @show_timing
@@ -239,7 +244,7 @@ def main():
         build_for_android(is_windows)
 
     if PYTHON_TESTS in test_set:
-        test_python(is_windows)
+        test_python(is_windows, test_cfg)
 
 if __name__ == "__main__":
     main()
