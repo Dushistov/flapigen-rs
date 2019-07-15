@@ -1,8 +1,6 @@
 mod swig_foreign_types_map {
     #![swig_foreigner_type = "void"]
     #![swig_rust_type = "()"]
-    #![swig_foreigner_type = "boolean"]
-    #![swig_rust_type = "jboolean"]
     #![swig_foreigner_type = "byte"]
     #![swig_rust_type = "jbyte"]
     #![swig_foreigner_type = "short"]
@@ -464,21 +462,16 @@ macro_rules! jni_unpack_return {
     }};
 }
 
-impl SwigInto<bool> for jboolean {
-    fn swig_into(self, _: *mut JNIEnv) -> bool {
-        self != 0
-    }
-}
-
-impl SwigFrom<bool> for jboolean {
-    fn swig_from(x: bool, _: *mut JNIEnv) -> Self {
-        if x {
-            1 as jboolean
-        } else {
-            0 as jboolean
-        }
-    }
-}
+foreign_typemap!(
+    ($p:r_type) bool => jboolean {
+        $out = if $p { 1 as jboolean } else { 0 as jboolean }
+    };
+    ($p:f_type) => "boolean";
+    ($p:r_type) bool <= jboolean {
+        $out = $p != 0
+    };
+    ($p:f_type) <= "boolean";
+);
 
 impl SwigFrom<i8> for jbyte {
     fn swig_from(x: i8, _: *mut JNIEnv) -> Self {

@@ -18,6 +18,7 @@ fn main() {
         Path::new("java").join("com").join("example").join("rust"),
         "com.example.rust".into(),
     )))
+    .rustfmt_bindings(true)
     .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"));
     swig_gen.expand("rust_swig_test_jni", &in_src, &out_src);
 

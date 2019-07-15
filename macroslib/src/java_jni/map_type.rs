@@ -8,7 +8,7 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{if_option_return_some_type, normalize_ty_lifetimes},
-        ty::RustType,
+        ty::{ForeignType, RustType},
         ForeignTypeInfo, MapToForeignFlag, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{ForeignEnumInfo, ForeignerClassInfo},
@@ -26,53 +26,59 @@ pub(in crate::java_jni) fn map_type(
             return Ok(fti);
         }
     }
-
-    let fti = {
-        let fti = conv_map
-            .map_through_conversation_to_foreign(
-                arg_ty.to_idx(),
-                direction,
-                MapToForeignFlag::FullSearch,
-                arg_ty_span,
-                calc_this_type_for_method,
-            )
-            .ok_or_else(|| {
-                DiagnosticError::new2(
-                    arg_ty_span,
-                    format!(
-                        "can not find conversation Java type {} \
-                         Rust type '{}'",
-                        match direction {
-                            Direction::Outgoing => "=>",
-                            Direction::Incoming => "<=",
-                        },
-                        arg_ty,
-                    ),
-                )
-            })?;
-        let ftype = &conv_map[fti];
-        let rtype_idx = match direction {
-            petgraph::Direction::Outgoing => {
-                ftype
-                    .into_from_rust
-                    .as_ref()
-                    .expect("Internal error: into_from_rust not defined")
-                    .rust_ty
-            }
-            petgraph::Direction::Incoming => {
-                ftype
-                    .from_into_rust
-                    .as_ref()
-                    .expect("Internal error: from_into_rust not defined")
-                    .rust_ty
-            }
-        };
-        ForeignTypeInfo {
-            name: ftype.name.typename.clone(),
-            correspoding_rust_type: conv_map[rtype_idx].clone(),
+    let fti = do_map_type(conv_map, arg_ty, direction, arg_ty_span)?;
+    let ftype = &conv_map[fti];
+    if !ftype.provides_by_module.is_empty() {
+        unimplemented!();
+    }
+    let rule = match direction {
+        petgraph::Direction::Outgoing => ftype.into_from_rust.as_ref(),
+        petgraph::Direction::Incoming => ftype.from_into_rust.as_ref(),
+    }
+    .ok_or_else(|| {
+        DiagnosticError::new2(
+            ftype.src_id_span(),
+            format!(
+                "No rule to convert foreign type {} as input/output type",
+                ftype.name
+            ),
+        )
+    })?;
+    let base_rt;
+    let base_ft_name;
+    let mut java_converter = None;
+    if let Some(intermediate) = rule.intermediate.as_ref() {
+        if intermediate.input_to_output {
+            unimplemented!();
         }
+        base_rt = intermediate.intermediate_ty;
+        let typename = ftype.typename();
+        let converter = intermediate.conv_code.to_string();
+        let intermediate_ty = intermediate.intermediate_ty;
+
+        let rty = conv_map[intermediate_ty].clone();
+        let arg_span = intermediate.conv_code.full_span();
+        let inter_ft = do_map_type(conv_map, &rty, direction, arg_span)?;
+        if !conv_map[inter_ft].provides_by_module.is_empty() {
+            unimplemented!();
+        }
+        base_ft_name = conv_map[inter_ft].typename();
+        java_converter = Some(JavaConverter {
+            java_transition_type: typename,
+            converter,
+        });
+    } else {
+        base_rt = rule.rust_ty;
+        base_ft_name = ftype.typename();
+    }
+    let mut fti = JavaForeignTypeInfo {
+        base: ForeignTypeInfo {
+            name: base_ft_name,
+            correspoding_rust_type: conv_map[base_rt].clone(),
+        },
+        java_converter,
+        annotation: None,
     };
-    let mut fti: JavaForeignTypeInfo = fti.into();
     if !is_primitive_type(&fti.base.name) {
         fti.annotation = Some(if if_option_return_some_type(arg_ty).is_none() {
             NullAnnotation::NonNull
@@ -81,6 +87,36 @@ pub(in crate::java_jni) fn map_type(
         });
     }
     Ok(fti)
+}
+
+fn do_map_type(
+    conv_map: &mut TypeMap,
+    arg_ty: &RustType,
+    direction: Direction,
+    arg_ty_span: SourceIdSpan,
+) -> Result<ForeignType> {
+    conv_map
+        .map_through_conversation_to_foreign(
+            arg_ty.to_idx(),
+            direction,
+            MapToForeignFlag::FullSearch,
+            arg_ty_span,
+            calc_this_type_for_method,
+        )
+        .ok_or_else(|| {
+            DiagnosticError::new2(
+                arg_ty_span,
+                format!(
+                    "can not find conversation Java type {} \
+                     Rust type '{}'",
+                    match direction {
+                        Direction::Outgoing => "=>",
+                        Direction::Incoming => "<=",
+                    },
+                    arg_ty,
+                ),
+            )
+        })
 }
 
 pub(in crate::java_jni) fn special_type(
