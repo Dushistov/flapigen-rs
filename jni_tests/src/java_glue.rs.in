@@ -40,18 +40,6 @@ impl Foo {
     }
 }
 
-fn f_hypot(a: f64, b: f64) -> f64 {
-    a.hypot(b)
-}
-
-fn now() -> SystemTime {
-    return SystemTime::now();
-}
-
-fn chrono_now() -> DateTime<Utc> {
-    Utc::now()
-}
-
 foreigner_class!(
 /// Class comment description for Foo.
 #[derive(Clone)]
@@ -69,9 +57,15 @@ class Foo {
     method Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
     method Foo::f_double(&self, _: f64, _: f64) -> f64;
     method Foo::name(&self) -> &str; alias getName;
-    static_method f_hypot(_: f64, _: f64) -> f64; alias fHypot;
-    static_method now() -> SystemTime;
-    static_method chrono_now() -> DateTime<Utc>;
+    fn fHypot(a: f64, b: f64) -> f64 {
+        a.hypot(b)
+    }
+    fn now() -> SystemTime {
+        SystemTime::now()
+    }
+    fn chrono_now() -> DateTime<Utc> {
+        Utc::now()
+    }
 });
 
 struct Boo {
@@ -402,8 +396,12 @@ foreigner_class!(class TestContainers {
     method TestContainers::set_struct_vec(&mut self, _: Vec<Foo>);
 });
 
+fn f_hypot(a: f64, b: f64) -> f64 {
+    a.hypot(b)
+}
+
 foreigner_class!(class OneStaticFunctionTest {
-    static_method f_hypot(_ :f64, _: f64) -> f64;
+    fn f_hypot(_ :f64, _: f64) -> f64;
 });
 
 #[derive(Default)]
@@ -906,5 +904,5 @@ foreigner_class!(
 foreigner_class!(class TestFnInline {
     fn int_to_str(a: i32) -> String {
         format!("{}", a)
-    }    
+    }
 });
