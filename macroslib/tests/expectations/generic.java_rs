@@ -1,0 +1,44 @@
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Boo_do_1get_1foo_1arr(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+) -> jobjectArray {
+    let this: &Boo = unsafe { jlong_to_pointer::<Boo>(this).as_mut().unwrap() };
+    let mut ret: Vec<Foo> = Boo::get_foo_arr(this);
+    let mut ret: jobjectArray = <jobjectArray>::swig_from(ret, env);
+    ret
+}"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Boo_do_1get_1one_1foo(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+) -> jobject {
+    let this: &Boo = unsafe { jlong_to_pointer::<Boo>(this).as_mut().unwrap() };
+    let mut ret: Result<Foo, String> = Boo::get_one_foo(this);
+    let mut ret: Foo = jni_unpack_return!(ret, jobject, env);
+    let mut ret: jobject = <jobject>::swig_from(ret, env);
+    ret
+}"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Boo_now(env: *mut JNIEnv, _: jclass) -> jobject {
+    let mut ret: SystemTime = now();
+    let mut ret: jobject = <jobject>::swig_from(ret, env);
+    ret
+}"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Boo_r_1test_1u8(
+    env: *mut JNIEnv,
+    _: jclass,
+    v: jshort,
+) -> jshort {
+    let mut v: u8 = v.swig_into(env);
+    let mut ret: Result<u8, &str> = r_test_u8(v);
+    let mut ret: u8 = jni_unpack_return!(ret, jshort, env);
+    let mut ret: jshort = <jshort>::swig_from(ret, env);
+    ret
+}"##;
