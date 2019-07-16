@@ -473,6 +473,19 @@ foreign_typemap!(
     ($p:f_type) <= "boolean";
 );
 
+foreign_typemap!(
+    ($p:r_type) SystemTime => jlong {
+        let since_unix_epoch = $p
+            .duration_since(::std::time::UNIX_EPOCH)
+            .expect("SystemTime to Unix time conv. error");
+        $out = <i64 as ::std::convert::TryFrom<u64>>::try_from(
+            since_unix_epoch.as_secs() * 1_000 + u64::from(since_unix_epoch.subsec_nanos() / 1_000_000),
+        )
+        .expect("SystemTime: milleseconds u64 to i64 convert error")
+    };
+    ($p:f_type) => "java.util.Date" "$out = new java.util.Date($p);";
+);
+
 impl SwigFrom<i8> for jbyte {
     fn swig_from(x: i8, _: *mut JNIEnv) -> Self {
         x
@@ -640,37 +653,6 @@ fn from_std_string_jstring(x: String, env: *mut JNIEnv) -> jstring {
     unsafe {
         let x = ::std::ffi::CString::from_vec_unchecked(x);
         (**env).NewStringUTF.unwrap()(env, x.as_ptr())
-    }
-}
-
-#[swig_to_foreigner_hint = "java.util.Date"]
-impl SwigFrom<SystemTime> for jobject {
-    fn swig_from(x: SystemTime, env: *mut JNIEnv) -> Self {
-        let since_unix_epoch = x.duration_since(::std::time::UNIX_EPOCH).unwrap();
-        let mills: jlong = (since_unix_epoch.as_secs() * 1_000
-            + (since_unix_epoch.subsec_nanos() / 1_000_000) as u64)
-            as jlong;
-        let date_class: jclass =
-            unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/Date")) };
-        assert!(
-            !date_class.is_null(),
-            "FindClass for `java/util/Date` failed"
-        );
-        let init: jmethodID = unsafe {
-            (**env).GetMethodID.unwrap()(
-                env,
-                date_class,
-                swig_c_str!("<init>"),
-                swig_c_str!("(J)V"),
-            )
-        };
-        assert!(
-            !init.is_null(),
-            "java/util/Date GetMethodID for init failed"
-        );
-        let x = unsafe { (**env).NewObject.unwrap()(env, date_class, init, mills) };
-        assert!(!x.is_null());
-        x
     }
 }
 

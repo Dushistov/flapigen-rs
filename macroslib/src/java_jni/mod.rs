@@ -31,12 +31,13 @@ use crate::{
     JavaConfig, LanguageGenerator, SourceCode, TypeMap,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum NullAnnotation {
     NonNull,
     Nullable,
 }
 
+#[derive(Debug)]
 struct JavaForeignTypeInfo {
     pub base: ForeignTypeInfo,
     pub java_converter: Option<JavaConverter>,
@@ -52,6 +53,7 @@ impl ForeignTypeInfoT for JavaForeignTypeInfo {
     }
 }
 
+#[derive(Debug)]
 struct JavaConverter {
     java_transition_type: SmolStr,
     converter: String,
@@ -340,7 +342,8 @@ impl LanguageGenerator for JavaConfig {
 }
 
 fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -> String {
-    let need_conv = f_method.input.iter().any(|v| v.java_converter.is_some());
+    let need_conv = f_method.input.iter().any(|v| v.java_converter.is_some())
+        || f_method.output.java_converter.is_some();
     match method.variant {
         MethodVariant::StaticMethod if !need_conv => method.short_name().as_str().to_string(),
         MethodVariant::Method(_) | MethodVariant::StaticMethod => {
@@ -424,28 +427,26 @@ fn find_suitable_foreign_types_for_methods(
             MethodVariant::Constructor => ForeignTypeInfo {
                 name: empty_symbol.into(),
                 correspoding_rust_type: dummy_rust_ty.clone(),
-            },
+            }
+            .into(),
             _ => match method.fn_decl.output {
                 syn::ReturnType::Default => ForeignTypeInfo {
                     name: "void".into(),
                     correspoding_rust_type: dummy_rust_ty.clone(),
-                },
+                }
+                .into(),
                 syn::ReturnType::Type(_, ref rt) => {
                     let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt, class.src_id);
-                    let fti = map_type(
+                    map_type(
                         conv_map,
                         &ret_rust_ty,
                         Direction::Outgoing,
                         (class.src_id, rt.span()),
-                    )?;
-                    fti.base
+                    )?
                 }
             },
         };
-        ret.push(JniForeignMethodSignature {
-            output: output.into(),
-            input,
-        });
+        ret.push(JniForeignMethodSignature { output, input });
     }
     Ok(ret)
 }

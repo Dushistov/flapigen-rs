@@ -4,11 +4,16 @@ use bitflags::bitflags;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 
+use super::{
+    method_name, JavaConverter, JavaForeignTypeInfo, JniForeignMethodSignature, NullAnnotation,
+};
 use crate::{
     file_cache::FileWriteCache,
-    java_jni::{method_name, JniForeignMethodSignature, NullAnnotation},
     namegen::new_unique_name,
-    typemap::{ast::if_result_return_ok_err_types, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE},
+    typemap::{
+        ast::if_result_return_ok_err_types, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        TO_VAR_TYPE_TEMPLATE,
+    },
     types::{ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, MethodAccess, MethodVariant},
     WRITE_TO_MEM_FAILED_MSG,
 };
@@ -143,6 +148,8 @@ pub(in crate::java_jni) fn generate_java_code(
     methods_sign: &[JniForeignMethodSignature],
     null_annotation_package: Option<&str>,
 ) -> Result<(), String> {
+    let java_rust_self_name = "mNativeObj";
+
     let path = output_dir.join(format!("{}.java", class.name));
     let mut file = FileWriteCache::new(&path);
 
@@ -199,8 +206,20 @@ public final class {class_name} {{
             MethodVariant::Method(_) => ArgsFormatFlags::COMMA_BEFORE | ArgsFormatFlags::INTERNAL,
             MethodVariant::Constructor => ArgsFormatFlags::INTERNAL,
         };
-        let known_names: FxHashSet<SmolStr> =
+        let mut known_names: FxHashSet<SmolStr> =
             method.arg_names_without_self().map(|x| x.into()).collect();
+        if let MethodVariant::Method(_) = method.variant {
+            if known_names.contains(java_rust_self_name) {
+                return Err(format!("In method {} there is argument with name {}, this name reserved for generated code",
+                                   method.short_name(), java_rust_self_name));
+            }
+            known_names.insert(java_rust_self_name.into());
+        }
+        let ret_name = new_unique_name(&known_names, "ret");
+        known_names.insert(ret_name.clone());
+        let conv_ret = new_unique_name(&known_names, "conv_ret");
+        known_names.insert(conv_ret.clone());
+
         let (convert_code, args_for_call_internal) = convert_code_for_method(
             f_method,
             method.arg_names_without_self(),
@@ -215,11 +234,47 @@ public final class {class_name} {{
             ArgsFormatFlags::EXTERNAL,
             null_annotation_package.is_some(),
         );
+        fn calc_output_conv<'a>(
+            output: &'a JavaForeignTypeInfo,
+            conv: &'a JavaConverter,
+            ret_name: &str,
+            conv_ret: &str,
+        ) -> (&'a str, &'a str, String) {
+            let ret_type = conv.java_transition_type.as_str();
+            let intermidiate_ret_type = output.base.name.as_str();
+            let conv_code = conv
+                .converter
+                .replace(FROM_VAR_TEMPLATE, ret_name)
+                .replace(TO_VAR_TYPE_TEMPLATE, &format!("{} {}", ret_type, conv_ret))
+                .replace(TO_VAR_TEMPLATE, &conv_ret);
+            (ret_type, intermidiate_ret_type, conv_code)
+        }
+
+        let (ret_type, intermidiate_ret_type, ret_conv_code) = match method.variant {
+            MethodVariant::StaticMethod => {
+                if let Some(conv) = f_method.output.java_converter.as_ref() {
+                    calc_output_conv(&f_method.output, conv, &ret_name, &conv_ret)
+                } else {
+                    let ret_type = f_method.output.base.name.as_str();
+                    (ret_type, ret_type, String::new())
+                }
+            }
+            MethodVariant::Method(_) => {
+                if let Some(conv) = f_method.output.java_converter.as_ref() {
+                    calc_output_conv(&f_method.output, conv, &ret_name, &conv_ret)
+                } else {
+                    let ret_type = f_method.output.base.name.as_str();
+                    (ret_type, ret_type, String::new())
+                }
+            }
+            MethodVariant::Constructor => ("long", "long", String::new()),
+        };
+
+        let need_conversation = !convert_code.is_empty() || !ret_conv_code.is_empty();
 
         match method.variant {
             MethodVariant::StaticMethod => {
-                let ret_type = &f_method.output.base.name;
-                let (native, end) = if convert_code.is_empty() {
+                let (native, end) = if !need_conversation {
                     ("native ", ";\n")
                 } else {
                     ("", " {\n")
@@ -238,57 +293,146 @@ public final class {class_name} {{
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                if !convert_code.is_empty() {
+                if need_conversation {
+                    if !convert_code.is_empty() {
+                        let mut code = convert_code.as_bytes();
+                        if code[0] == b'\n' {
+                            code = &code[1..];
+                        }
+                        file.write_all(code).expect(WRITE_TO_MEM_FAILED_MSG);
+                        file.write_all(b"\n").expect(WRITE_TO_MEM_FAILED_MSG);
+                    }
+                    if ret_conv_code.is_empty() {
+                        write!(
+                            file,
+                            r#"        {return_code}{func_name}({args});
+    }}"#,
+                            func_name = func_name,
+                            return_code = if ret_type != "void" { "return " } else { "" },
+                            args = args_for_call_internal,
+                        )
+                        .expect(WRITE_TO_MEM_FAILED_MSG);
+                    } else {
+                        write!(
+                            file,
+                            r#"        {intermidiate_ret_type} {ret_name} = {func_name}({args});
+        {ret_conv_code}
+"#,
+                            ret_conv_code = ret_conv_code,
+                            ret_name = ret_name,
+                            intermidiate_ret_type = intermidiate_ret_type,
+                            func_name = func_name,
+                            args = args_for_call_internal,
+                        )
+                        .expect(WRITE_TO_MEM_FAILED_MSG);
+                        if ret_type != "void" {
+                            write!(
+                                file,
+                                r#"
+        return {conv_ret};
+"#,
+                                conv_ret = conv_ret
+                            )
+                            .expect(WRITE_TO_MEM_FAILED_MSG);
+                        }
+                        file.write_all("    }".as_bytes())
+                            .expect(WRITE_TO_MEM_FAILED_MSG);
+                    }
+
                     write!(
                         file,
-                        r#"{convert_code}
-        {return_code}{func_name}({args});
-    }}
-    private static native {ret_type} {func_name}({args_with_types}){exception_spec};
-"#,
-                        ret_type = ret_type,
+                        r#"
+    private static native {intermidiate_ret_type} {func_name}({args_with_types}){exception_spec};
+                           "#,
                         func_name = func_name,
-                        return_code = if ret_type != "void" { "return " } else { "" },
+                        intermidiate_ret_type = intermidiate_ret_type,
+                        exception_spec = exception_spec,
                         args_with_types = args_with_java_types(
                             f_method,
                             method.arg_names_without_self(),
                             ArgsFormatFlags::INTERNAL,
                             null_annotation_package.is_some()
                         ),
-                        exception_spec = exception_spec,
-                        convert_code = convert_code,
-                        args = args_for_call_internal,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
             }
             MethodVariant::Method(_) => {
                 have_methods = true;
-                let ret_type = &f_method.output.base.name;
                 write!(
                     file,
                     r#"
-    {method_access} final {ret_type} {method_name}({single_args_with_types}){exception_spec} {{
-{convert_code}
-        {return_code}{func_name}(mNativeObj{args});
-    }}
-    private static native {ret_type} {func_name}(long self{args_with_types}){exception_spec};
-"#,
+    {method_access} final {ret_type} {method_name}({single_args_with_types}){exception_spec} {{"#,
                     method_access = method_access,
                     ret_type = ret_type,
                     method_name = method.short_name(),
                     exception_spec = exception_spec,
-                    return_code = if ret_type != "void" { "return " } else { "" },
-                    func_name = func_name,
-                    convert_code = convert_code,
                     single_args_with_types = external_args_except_self,
+                )
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+                if !convert_code.is_empty() {
+                    if convert_code.as_bytes()[0] != b'\n' {
+                        file.write_all(b"\n").expect(WRITE_TO_MEM_FAILED_MSG);
+                    }
+                    file.write_all(convert_code.as_bytes())
+                        .expect(WRITE_TO_MEM_FAILED_MSG);
+                }
+                if ret_conv_code.is_empty() {
+                    write!(
+                        file,
+                        r#"
+        {return_code}{func_name}({rust_self_name}{args});
+"#,
+                        rust_self_name = java_rust_self_name,
+                        return_code = if ret_type != "void" { "return " } else { "" },
+                        args = args_for_call_internal,
+                        func_name = func_name,
+                    )
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                } else {
+                    write!(
+                        file,
+                        r#"
+        {intermidiate_ret_type} {ret_name} = {func_name}({rust_self_name}{args});
+        {ret_conv_code}
+"#,
+                        rust_self_name = java_rust_self_name,
+                        ret_conv_code = ret_conv_code,
+                        ret_name = ret_name,
+                        intermidiate_ret_type = intermidiate_ret_type,
+                        func_name = func_name,
+                        args = args_for_call_internal,
+                    )
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                    if ret_type != "void" {
+                        write!(
+                            file,
+                            r#"
+        return {conv_ret};
+"#,
+                            conv_ret = conv_ret
+                        )
+                        .expect(WRITE_TO_MEM_FAILED_MSG);
+                    }
+                }
+
+                file.write_all("    }".as_bytes())
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
+
+                write!(
+                    file,
+                    r#"
+    private static native {intermidiate_ret_type} {func_name}(long self{args_with_types}){exception_spec};
+"#,
+                    intermidiate_ret_type = intermidiate_ret_type,
+                    exception_spec = exception_spec,
+                    func_name = func_name,
                     args_with_types = args_with_java_types(
                         f_method,
                         method.arg_names_without_self(),
                         ArgsFormatFlags::USE_COMMA_IF_NEED | ArgsFormatFlags::INTERNAL,
                         null_annotation_package.is_some()
                     ),
-                    args = args_for_call_internal,
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
             }
@@ -308,25 +452,38 @@ public final class {class_name} {{
                 } else {
                     write!(
                         file,
-                        "
+                        r#"
     {method_access} {class_name}({ext_args_with_types}){exception_spec} {{
-{convert_code}
-        mNativeObj = init({args});
-    }}
-    private static native long {func_name}({args_with_types}){exception_spec};
-",
+"#,
                         method_access = method_access,
                         class_name = class.name,
                         exception_spec = exception_spec,
-                        func_name = func_name,
                         ext_args_with_types = external_args_except_self,
+                    )
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                    if !convert_code.is_empty() {
+                        let mut code = convert_code.as_bytes();
+                        if code[0] == b'\n' {
+                            code = &code[1..];
+                        }
+                        file.write_all(code).expect(WRITE_TO_MEM_FAILED_MSG);
+                        file.write_all(b"\n").expect(WRITE_TO_MEM_FAILED_MSG);
+                    }
+                    write!(
+                        file,
+                        "        {rust_self_name} = init({args});
+    }}
+    private static native long {func_name}({args_with_types}){exception_spec};
+",
+                        rust_self_name = java_rust_self_name,
+                        exception_spec = exception_spec,
+                        func_name = func_name,
                         args_with_types = args_with_java_types(
                             f_method,
                             method.arg_names_without_self(),
                             ArgsFormatFlags::INTERNAL,
                             null_annotation_package.is_some()
                         ),
-                        convert_code = convert_code,
                         args = args_for_call_internal,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
@@ -347,9 +504,9 @@ May be you need to use `private constructor = empty;` syntax?",
             file,
             "
     public synchronized void delete() {{
-        if (mNativeObj != 0) {{
-            do_delete(mNativeObj);
-            mNativeObj = 0;
+        if ({rust_self_name} != 0) {{
+            do_delete({rust_self_name});
+            {rust_self_name} = 0;
        }}
     }}
     @Override
@@ -362,10 +519,11 @@ May be you need to use `private constructor = empty;` syntax?",
         }}
     }}
     private static native void do_delete(long me);
-    /*package*/ long mNativeObj;
-"
+    /*package*/ long {rust_self_name};
+",
+            rust_self_name = java_rust_self_name,
         )
-        .map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     //utility class, so add private constructor
