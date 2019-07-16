@@ -24,8 +24,7 @@ use crate::{
         TO_VAR_TEMPLATE,
     },
     types::{
-        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant,
-        SelfTypeVariant,
+        ForeignInterface, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
     },
     TypeMap, WRITE_TO_MEM_FAILED_MSG,
 };
@@ -282,104 +281,6 @@ pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong
     }
 
     Ok(gen_code)
-}
-
-pub(in crate::java_jni) fn generate_rust_code_for_enum(
-    package_name: &str,
-    conv_map: &mut TypeMap,
-    pointer_target_width: usize,
-    enum_info: &ForeignEnumInfo,
-) -> Result<Vec<TokenStream>> {
-    use std::fmt::Write;
-
-    let rust_enum_name = enum_info.rust_enum_name();
-    let mut code = format!(
-        r#"
-impl SwigFrom<jint> for {rust_enum_name} {{
-    fn swig_from(x: jint, _: *mut JNIEnv) -> {rust_enum_name} {{
-        match x {{
-
-"#,
-        rust_enum_name = rust_enum_name,
-    );
-    for (i, item) in enum_info.items.iter().enumerate() {
-        writeln!(
-            &mut code,
-            "{index} => {item_name},",
-            index = i,
-            item_name = DisplayToTokens(&item.rust_name),
-        )
-        .unwrap();
-    }
-    write!(
-        &mut code,
-        r#"
-        _ => panic!("{{}} not expected for {rust_enum_name}", x),
-        }}
-    }}
-}}
-"#,
-        rust_enum_name = rust_enum_name,
-    )
-    .unwrap();
-
-    let java_enum_full_name = java_class_full_name(package_name, &enum_info.name.to_string());
-    let enum_class_name = java_class_name_to_jni(&java_enum_full_name);
-
-    write!(
-        &mut code,
-        r#"
-mod swig_foreign_types_map {{
-    #![swig_foreigner_type = "{enum_name}"]
-    #![swig_rust_type_not_unique = "jobject"]
-}}
-#[swig_to_foreigner_hint = "{enum_name}"]
-impl SwigFrom<{rust_enum_name}> for jobject {{
-   fn swig_from(x: {rust_enum_name}, env: *mut JNIEnv) -> jobject {{
-       let cls: jclass = unsafe {{ (**env).FindClass.unwrap()(env, swig_c_str!("{class_name}")) }};
-       assert!(!cls.is_null(), "FindClass {class_name} failed");
-       let static_field_id = match x {{
-"#,
-        enum_name = enum_info.name,
-        rust_enum_name = rust_enum_name,
-        class_name = enum_class_name,
-    )
-    .unwrap();
-
-    for item in &enum_info.items {
-        write!(
-            &mut code,
-            r#"
-           {rust_item} => swig_c_str!("{java_item}"),
-"#,
-            rust_item = DisplayToTokens(&item.rust_name),
-            java_item = item.name,
-        )
-        .unwrap();
-    }
-    write!(
-        &mut code,
-        r#"
-      }};
-      let item_id: jfieldID = unsafe {{
-          (**env).GetStaticFieldID.unwrap()(env, cls , static_field_id,
-                                             swig_c_str!("L{class_name};"))
-      }};
-      assert!(!item_id.is_null(), "Can not find item in {class_name}");
-      let ret: jobject = unsafe {{
-        (**env).GetStaticObjectField.unwrap()(env, cls, item_id)
-      }};
-      assert!(!ret.is_null(), "Can get value of item in {class_name}");
-      ret
-   }}
-}}
-"#,
-        class_name = enum_class_name,
-    )
-    .unwrap();
-    conv_map.register_exported_enum(enum_info);
-    conv_map.merge(SourceId::none(), &code, pointer_target_width)?;
-    Ok(vec![])
 }
 
 pub(in crate::java_jni) fn generate_interface(

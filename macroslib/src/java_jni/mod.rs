@@ -1,3 +1,4 @@
+mod fenum;
 mod java_code;
 mod map_type;
 mod rust_code;
@@ -7,6 +8,7 @@ use petgraph::Direction;
 use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
+use std::fmt;
 use syn::{spanned::Spanned, Type};
 
 use self::map_type::map_type;
@@ -25,10 +27,7 @@ use crate::{
         },
         ForeignTypeInfo, TypeConvCode, TypeMapConvRuleInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    types::{
-        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
-        MethodVariant,
-    },
+    types::{ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodVariant},
     JavaConfig, LanguageGenerator, SourceCode, TypeMap,
 };
 
@@ -36,6 +35,8 @@ use crate::{
 struct JavaContext<'a> {
     cfg: &'a JavaConfig,
     conv_map: &'a mut TypeMap,
+    pointer_target_width: usize,
+    rust_code: &'a mut Vec<TokenStream>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -101,21 +102,6 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 }
 
 impl JavaConfig {
-    fn init(&self, conv_map: &mut TypeMap, _code: &[SourceCode]) -> Result<()> {
-        conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jint });
-        conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
-        let not_merged_data = conv_map.take_not_merged_not_generic_rules();
-        for rule in not_merged_data {
-            merge_rule(
-                &mut JavaContext {
-                    cfg: self,
-                    conv_map: conv_map,
-                },
-                rule,
-            )?;
-        }
-        Ok(())
-    }
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
             .validate_class()
@@ -266,31 +252,6 @@ impl JavaConfig {
         Ok(ast_items)
     }
 
-    fn generate_enum(
-        &self,
-        conv_map: &mut TypeMap,
-        pointer_target_width: usize,
-        enum_info: &ForeignEnumInfo,
-    ) -> Result<Vec<TokenStream>> {
-        if (enum_info.items.len() as u64) >= (i32::max_value() as u64) {
-            return Err(DiagnosticError::new(
-                enum_info.src_id,
-                enum_info.span(),
-                "Too many items in enum",
-            ));
-        }
-
-        java_code::generate_java_code_for_enum(&self.output_dir, &self.package_name, enum_info)
-            .map_err(|err| DiagnosticError::new(enum_info.src_id, enum_info.span(), &err))?;
-
-        rust_code::generate_rust_code_for_enum(
-            &self.package_name,
-            conv_map,
-            pointer_target_width,
-            enum_info,
-        )
-    }
-
     fn generate_interface(
         &self,
         conv_map: &mut TypeMap,
@@ -335,18 +296,34 @@ impl LanguageGenerator for JavaConfig {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
     ) -> Result<Vec<TokenStream>> {
-        self.init(conv_map, code)?;
+        let mut ret = Vec::with_capacity(items.len());
+        init(
+            &mut JavaContext {
+                cfg: self,
+                conv_map,
+                pointer_target_width,
+                rust_code: &mut ret,
+            },
+            code,
+        )?;
         for item in &items {
             if let ItemToExpand::Class(ref fclass) = item {
                 self.register_class(conv_map, fclass)?;
             }
         }
-        let mut ret = Vec::with_capacity(items.len());
         for item in items {
             match item {
                 ItemToExpand::Class(fclass) => ret.append(&mut self.generate(conv_map, &fclass)?),
                 ItemToExpand::Enum(fenum) => {
-                    ret.append(&mut self.generate_enum(conv_map, pointer_target_width, &fenum)?)
+                    fenum::generate_enum(
+                        &mut JavaContext {
+                            cfg: self,
+                            conv_map,
+                            pointer_target_width,
+                            rust_code: &mut ret,
+                        },
+                        &fenum,
+                    )?;
                 }
                 ItemToExpand::Interface(finterface) => ret.append(&mut self.generate_interface(
                     conv_map,
@@ -540,4 +517,20 @@ fn merge_rule(ctx: &mut JavaContext, mut rule: TypeMapConvRuleInfo) -> Result<()
     configure_ftype_rule(&mut rule.ftype_right_to_left, "<=", rule.src_id, &options)?;
     ctx.conv_map.merge_conv_rule(rule.src_id, rule)?;
     Ok(())
+}
+
+fn init(ctx: &mut JavaContext, _code: &[SourceCode]) -> Result<()> {
+    ctx.conv_map
+        .find_or_alloc_rust_type_no_src_id(&parse_type! { jint });
+    ctx.conv_map
+        .find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
+    let not_merged_data = ctx.conv_map.take_not_merged_not_generic_rules();
+    for rule in not_merged_data {
+        merge_rule(ctx, rule)?;
+    }
+    Ok(())
+}
+
+fn map_write_err<Err: fmt::Display>(err: Err) -> String {
+    format!("write failed: {}", err)
 }
