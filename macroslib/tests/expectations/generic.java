@@ -18,7 +18,7 @@ r#"public final Foo get_one_foo() throws Exception {
         return do_get_one_foo(mNativeObj);
     }
     private static native Foo do_get_one_foo(long self) throws Exception;"#;
-r#"public static java.util.Date now() {
+r#"public static @NonNull java.util.Date now() {
         long ret = do_now();
         java.util.Date conv_ret = new java.util.Date(ret);
 

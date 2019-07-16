@@ -5,6 +5,7 @@ mod rust_code;
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
+use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use syn::{spanned::Spanned, Type};
 
@@ -19,10 +20,10 @@ use crate::{
         },
         ty::RustType,
         utils::{
-            convert_to_heap_pointer, unpack_from_heap_pointer, ForeignMethodSignature,
-            ForeignTypeInfoT,
+            configure_ftype_rule, convert_to_heap_pointer, unpack_from_heap_pointer,
+            validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT,
         },
-        ForeignTypeInfo, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        ForeignTypeInfo, TypeConvCode, TypeMapConvRuleInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
@@ -30,6 +31,12 @@ use crate::{
     },
     JavaConfig, LanguageGenerator, SourceCode, TypeMap,
 };
+
+#[derive(Debug)]
+struct JavaContext<'a> {
+    cfg: &'a JavaConfig,
+    conv_map: &'a mut TypeMap,
+}
 
 #[derive(Clone, Copy, Debug)]
 enum NullAnnotation {
@@ -94,9 +101,20 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 }
 
 impl JavaConfig {
-    fn init(&self, conv_map: &mut TypeMap, _code: &[SourceCode]) {
+    fn init(&self, conv_map: &mut TypeMap, _code: &[SourceCode]) -> Result<()> {
         conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jint });
         conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
+        let not_merged_data = conv_map.take_not_merged_not_generic_rules();
+        for rule in not_merged_data {
+            merge_rule(
+                &mut JavaContext {
+                    cfg: self,
+                    conv_map: conv_map,
+                },
+                rule,
+            )?;
+        }
+        Ok(())
     }
     fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
         class
@@ -317,7 +335,7 @@ impl LanguageGenerator for JavaConfig {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
     ) -> Result<Vec<TokenStream>> {
-        self.init(conv_map, code);
+        self.init(conv_map, code)?;
         for item in &items {
             if let ItemToExpand::Class(ref fclass) = item {
                 self.register_class(conv_map, fclass)?;
@@ -481,4 +499,45 @@ fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignerClassInfo) -> Option
     } else {
         None
     }
+}
+
+fn merge_rule(ctx: &mut JavaContext, mut rule: TypeMapConvRuleInfo) -> Result<()> {
+    debug!("merge_rule begin {:?}", rule);
+    if rule.is_empty() {
+        return Err(DiagnosticError::new(
+            rule.src_id,
+            rule.span,
+            format!("rule {:?} is empty", rule),
+        ));
+    }
+    let all_options = {
+        let mut opts = FxHashSet::<&'static str>::default();
+        opts.insert("NullAnnotations");
+        opts.insert("NoNullAnnotations");
+        opts
+    };
+    validate_cfg_options(&rule, &all_options)?;
+    let options = {
+        let mut opts = FxHashSet::<&'static str>::default();
+        if ctx.cfg.null_annotation_package.is_some() {
+            opts.insert("NullAnnotations");
+        } else {
+            opts.insert("NoNullAnnotations");
+        }
+        opts
+    };
+    if rule.c_types.is_some() {
+        return Err(DiagnosticError::new(
+            rule.src_id,
+            rule.span,
+            format!("c_types not supported for Java/JNI"),
+        ));
+    }
+    if !rule.f_code.is_empty() {
+        unimplemented!();
+    }
+    configure_ftype_rule(&mut rule.ftype_left_to_right, "=>", rule.src_id, &options)?;
+    configure_ftype_rule(&mut rule.ftype_right_to_left, "<=", rule.src_id, &options)?;
+    ctx.conv_map.merge_conv_rule(rule.src_id, rule)?;
+    Ok(())
 }

@@ -327,3 +327,39 @@ pub(crate) fn unpack_from_heap_pointer(
         unbox_code = unbox_code
     )
 }
+
+pub(crate) fn configure_ftype_rule(
+    f_type_rules: &mut Vec<FTypeConvRule>,
+    rule_type: &str,
+    rule_src_id: SourceId,
+    options: &FxHashSet<&'static str>,
+) -> Result<()> {
+    f_type_rules.retain(|rule| {
+        rule.cfg_option
+            .as_ref()
+            .map(|opt| options.contains(opt.as_str()))
+            .unwrap_or(true)
+    });
+    if f_type_rules.len() > 1 {
+        let first_rule = f_type_rules.remove(0);
+        let mut err = DiagnosticError::new(
+            rule_src_id,
+            first_rule.left_right_ty.span(),
+            format!(
+                "multiply f_type '{}' rules, that possible to use in this configuration, first",
+                rule_type,
+            ),
+        );
+        for other in f_type_rules.iter() {
+            err.span_note(
+                (rule_src_id, other.left_right_ty.span()),
+                format!("other f_type '{}' rule", rule_type),
+            );
+        }
+        return Err(err);
+    }
+    if f_type_rules.len() == 1 {
+        f_type_rules[0].cfg_option = None;
+    }
+    Ok(())
+}

@@ -246,7 +246,11 @@ public final class {class_name} {{
                 .converter
                 .replace(FROM_VAR_TEMPLATE, ret_name)
                 .replace(TO_VAR_TYPE_TEMPLATE, &format!("{} {}", ret_type, conv_ret))
-                .replace(TO_VAR_TEMPLATE, &conv_ret);
+                .replace(TO_VAR_TEMPLATE, &conv_ret)
+                .replace("@NonNull", "")
+                .replace("@Nullable", "")
+                .trim()
+                .into();
             (ret_type, intermidiate_ret_type, conv_code)
         }
 

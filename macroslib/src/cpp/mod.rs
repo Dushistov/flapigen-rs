@@ -58,7 +58,9 @@ use crate::{
             ForeignConversationIntermediate, ForeignConversationRule, ForeignType, ForeignTypeS,
             RustType,
         },
-        utils::{validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT},
+        utils::{
+            configure_ftype_rule, validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT,
+        },
         CItem, CItems, ForeignTypeInfo, TypeConvCode, TypeMapConvRuleInfo, FROM_VAR_TEMPLATE,
     },
     types::{
@@ -436,44 +438,8 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
         }
     }
 
-    macro_rules! configure_ftype_rule {
-        ($f_type_rules:ident, $rule_type:tt) => {{
-            $f_type_rules.retain(|rule| {
-                rule.cfg_option
-                    .as_ref()
-                    .map(|opt| options.contains(opt.as_str()))
-                    .unwrap_or(true)
-            });
-            if $f_type_rules.len() > 1 {
-                let first_rule = $f_type_rules.remove(0);
-                let mut err = DiagnosticError::new(
-                    rule.src_id,
-                    first_rule.left_right_ty.span(),
-                    concat!(
-                        "multiply f_type '",
-                        stringify!($rule_type),
-                        "' rules, that possible to use in this configuration, first"
-                    ),
-                );
-                for other in $f_type_rules.iter() {
-                    err.span_note(
-                        (rule.src_id, other.left_right_ty.span()),
-                        concat!("other f_type '", stringify!($rule_type), "' rule"),
-                    );
-                }
-                return Err(err);
-            }
-            if $f_type_rules.len() == 1 {
-                $f_type_rules[0].cfg_option = None;
-            }
-        }};
-    }
-
-    let ftype_left_to_right = &mut rule.ftype_left_to_right;
-    configure_ftype_rule!(ftype_left_to_right, =>);
-
-    let ftype_right_to_left = &mut rule.ftype_right_to_left;
-    configure_ftype_rule!(ftype_right_to_left, <=);
+    configure_ftype_rule(&mut rule.ftype_left_to_right, "=>", rule.src_id, &options)?;
+    configure_ftype_rule(&mut rule.ftype_right_to_left, "<=", rule.src_id, &options)?;
 
     ctx.conv_map.merge_conv_rule(rule.src_id, rule)?;
     Ok(())

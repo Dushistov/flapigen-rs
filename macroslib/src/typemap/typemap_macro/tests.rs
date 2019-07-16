@@ -231,11 +231,12 @@ fn test_foreign_typemap_java_datetime() {
                         + (since_unix_epoch.subsec_nanos() / 1_000_000) as u64)
                     as jlong;
             };
-            ($pin:f_type) => "java.util.Date" "$out = new java.util.Date($pin);";
+            ($pin:f_type, option = "NoNullAnnotation") => "java.util.Date" "$out = new java.util.Date($pin);";
+            ($p:f_type, option = "NullAnnotation") => "@NonNull java.util.Date" "$out = new java.util.Date($p);";
         )
     });
-    assert!(!rule.if_simple_rtype_ftype_map_no_lang_backend().is_some());
-    assert!(!rule.contains_data_for_language_backend());
+    assert!(rule.if_simple_rtype_ftype_map_no_lang_backend().is_none());
+    assert!(rule.contains_data_for_language_backend());
 }
 
 #[test]

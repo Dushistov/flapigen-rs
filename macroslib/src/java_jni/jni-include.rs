@@ -483,7 +483,8 @@ foreign_typemap!(
         )
         .expect("SystemTime: milleseconds u64 to i64 convert error")
     };
-    ($p:f_type) => "java.util.Date" "$out = new java.util.Date($p);";
+    ($p:f_type, option = "NoNullAnnotations") => "java.util.Date" "$out = new java.util.Date($p);";
+    ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Date" "$out = new java.util.Date($p);";
 );
 
 impl SwigFrom<i8> for jbyte {

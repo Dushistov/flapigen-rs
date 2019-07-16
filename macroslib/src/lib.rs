@@ -71,6 +71,7 @@ pub enum LanguageConfig {
 }
 
 /// Configuration for Java binding generation
+#[derive(Debug)]
 pub struct JavaConfig {
     output_dir: PathBuf,
     package_name: String,
