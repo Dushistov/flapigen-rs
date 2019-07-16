@@ -80,6 +80,14 @@ trait SwigForeignClass {
     fn unbox_object(x: jlong) -> Self;
 }
 
+#[allow(dead_code)]
+pub trait SwigForeignCLikeEnum {
+    fn as_jint(&self) -> jint;
+    /// # Panics
+    /// Panics on error
+    fn from_jint(_: jint) -> Self;
+}
+
 #[allow(unused_macros)]
 macro_rules! swig_c_str {
     ($lit:expr) => {

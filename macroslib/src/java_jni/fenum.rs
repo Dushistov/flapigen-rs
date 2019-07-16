@@ -1,3 +1,4 @@
+use quote::quote;
 use std::{io::Write, path::Path};
 
 use super::{
@@ -88,6 +89,35 @@ public enum {enum_name} {{
 }
 
 fn generate_rust_code_for_enum(ctx: &mut JavaContext, enum_info: &ForeignEnumInfo) -> Result<()> {
+    let mut arms_to_jint = Vec::with_capacity(enum_info.items.len());
+    let mut arms_from_jint = Vec::with_capacity(enum_info.items.len());
+    assert!((enum_info.items.len() as u64) <= u64::from(i32::max_value() as u32));
+    for (i, item) in enum_info.items.iter().enumerate() {
+        let item_name = &item.rust_name;
+        let idx = i as i32;
+        arms_to_jint.push(quote! { #item_name => #idx });
+        arms_from_jint.push(quote! { #idx => #item_name });
+    }
+
+    let rust_enum_name = &enum_info.name;
+
+    ctx.rust_code.push(quote! {
+        impl SwigForeignCLikeEnum for #rust_enum_name {
+            fn as_jint(&self) -> jint {
+                match *self {
+                    #(#arms_to_jint),*
+                }
+            }
+            fn from_jint(x: jint) -> Self {
+                match x {
+                    #(#arms_from_jint),*
+                    ,
+                    _ => panic!(concat!("{} not expected for ", stringify!(#rust_enum_name)), x),
+                }
+            }
+        }
+    });
+
     use std::fmt::Write;
 
     let rust_enum_name = enum_info.rust_enum_name();
@@ -95,31 +125,12 @@ fn generate_rust_code_for_enum(ctx: &mut JavaContext, enum_info: &ForeignEnumInf
         r#"
 impl SwigFrom<jint> for {rust_enum_name} {{
     fn swig_from(x: jint, _: *mut JNIEnv) -> {rust_enum_name} {{
-        match x {{
-
-"#,
-        rust_enum_name = rust_enum_name,
-    );
-    for (i, item) in enum_info.items.iter().enumerate() {
-        writeln!(
-            &mut code,
-            "{index} => {item_name},",
-            index = i,
-            item_name = DisplayToTokens(&item.rust_name),
-        )
-        .unwrap();
-    }
-    write!(
-        &mut code,
-        r#"
-        _ => panic!("{{}} not expected for {rust_enum_name}", x),
-        }}
+        {rust_enum_name}::from_jint(x)
     }}
 }}
 "#,
         rust_enum_name = rust_enum_name,
-    )
-    .expect(WRITE_TO_MEM_FAILED_MSG);
+    );
 
     let java_enum_full_name =
         java_class_full_name(&ctx.cfg.package_name, &enum_info.name.to_string());
