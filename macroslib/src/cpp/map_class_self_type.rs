@@ -4,7 +4,6 @@ use syn::spanned::Spanned;
 use super::cpp_code;
 use crate::{
     error::{invalid_src_id_span, Result},
-    source_registry::SourceId,
     typemap::{
         ast::{parse_ty_with_given_span_checked, TypeName},
         ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
@@ -26,7 +25,7 @@ pub(in crate::cpp) fn register_typemap_for_self_type(
     let void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
         &void_ptr_ty,
         &this_type.normalized_name,
-        SourceId::none(),
+        class.src_id,
     );
 
     let const_void_ptr_ty =
@@ -34,7 +33,7 @@ pub(in crate::cpp) fn register_typemap_for_self_type(
     let const_void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
         &const_void_ptr_ty,
         &this_type.normalized_name,
-        SourceId::none(),
+        class.src_id,
     );
 
     let this_type_inner = boxed_type(conv_map, &this_type);
