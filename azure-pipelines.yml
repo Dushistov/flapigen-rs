@@ -63,8 +63,8 @@ steps:
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: Install llvm on windows
   - script: |
-      set SCCACHE_VER=0.2.8
-      curl -L https://github.com/mozilla/sccache/releases/download/0.2.8/sccache-0.2.8-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
+      set SCCACHE_VER=0.2.9
+      curl -L https://github.com/mozilla/sccache/releases/download/0.2.9/sccache-0.2.9-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
       7z x sccache.tar.gz
       7z x sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc.tar
       copy /Y sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc\sccache.exe %USERPROFILE%\.cargo\bin\sccache.exe
@@ -79,7 +79,7 @@ steps:
     displayName: Setup sccache on windows
   - bash: |
       set -e
-      export SCCACHE_VER=0.2.8
+      export SCCACHE_VER=0.2.9
       curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl.tar.gz -o sccache.tar.gz
       tar -xzvf sccache.tar.gz
       cp -v sccache-$SCCACHE_VER-x86_64-unknown-linux-musl/sccache $HOME/.cargo/bin/
@@ -99,8 +99,10 @@ steps:
     displayName: Install gcc-8 if required
   - bash: |
       set -e
-      curl -fo $HOME/.cargo/bin/sccache  https://s3-us-west-1.amazonaws.com/rust-lang-ci2/rust-ci-mirror/2018-04-02-sccache-x86_64-apple-darwin
-      chmod +x $HOME/.cargo/bin/sccache
+      export SCCACHE_VER=0.2.9
+      curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-apple-darwin.tar.gz -o sccache.tar.gz
+      tar -xzvf sccache.tar.gz
+      cp -v sccache-$SCCACHE_VER-x86_64-apple-darwin/sccache $HOME/.cargo/bin/
       echo "##vso[task.setvariable variable=RUSTC_WRAPPER]$HOME/.cargo/bin/sccache"
       echo "##vso[task.setvariable variable=SCCACHE_BUCKET]$IMAGENAME"
       sccache --version
@@ -126,7 +128,7 @@ steps:
       cargo build
       cd ..
       cp workspace.Cargo.toml Cargo.toml
-      python -c "fin = open('Cargo.toml', 'r'); res = fin.read().replace('debug = true', ''); fin.close(); fout = open('Cargo.toml', 'w'); fout.write(res + '\n'); fout.close();"
+      python -c "fin = open('Cargo.toml', 'r'); res = fin.read().replace('debug = true', '').replace('incremental = true', ''); fin.close(); fout = open('Cargo.toml', 'w'); fout.write(res + '\n'); fout.close();"
       python ci_build_and_test.py --skip-android-tests
       sccache -s
     displayName: Build and run tests
