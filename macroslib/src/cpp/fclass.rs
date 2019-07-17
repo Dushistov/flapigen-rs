@@ -29,7 +29,42 @@ use crate::{
     WRITE_TO_MEM_FAILED_MSG,
 };
 
-pub(in crate::cpp) fn generate(
+pub(in crate::cpp) fn generate(ctx: &mut CppContext, class: &ForeignerClassInfo) -> Result<()> {
+    debug!(
+        "generate: begin for {}, this_type_for_method {:?}",
+        class.name, class.self_desc
+    );
+    let has_methods = class.methods.iter().any(|m| match m.variant {
+        MethodVariant::Method(_) => true,
+        _ => false,
+    });
+    let has_constructor = class
+        .methods
+        .iter()
+        .any(|m| m.variant == MethodVariant::Constructor);
+
+    if has_methods && !has_constructor {
+        return Err(DiagnosticError::new(
+            class.src_id,
+            class.span(),
+            format!(
+                "namespace {}, class {}: has methods, but no constructor\n
+May be you need to use `private constructor = empty;` syntax?",
+                ctx.cfg.namespace_name, class.name
+            ),
+        ));
+    }
+
+    let mut m_sigs = find_suitable_foreign_types_for_methods(ctx, class)?;
+    let mut req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
+    let my_self_cpp = format!("\"{}\"", cpp_code::cpp_header_name(class));
+    let my_self_c = format!("\"{}\"", cpp_code::c_header_name(class));
+    req_includes.retain(|el| *el != my_self_cpp && *el != my_self_c);
+    do_generate(ctx, class, &req_includes, &m_sigs)?;
+    Ok(())
+}
+
+fn do_generate(
     ctx: &mut CppContext,
     class: &ForeignerClassInfo,
     req_includes: &[SmolStr],
@@ -906,7 +941,7 @@ fn write_methods_impls(
     )
 }
 
-pub(in crate::cpp) fn find_suitable_foreign_types_for_methods(
+fn find_suitable_foreign_types_for_methods(
     ctx: &mut CppContext,
     class: &ForeignerClassInfo,
 ) -> Result<Vec<CppForeignMethodSignature>> {

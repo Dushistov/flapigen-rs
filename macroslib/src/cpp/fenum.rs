@@ -1,14 +1,86 @@
+use log::trace;
+use quote::quote;
 use std::{io::Write, path::Path};
+use syn::Type;
 
 use crate::{
     cpp::{cpp_code, map_write_err, CppContext},
-    error::Result,
+    error::{invalid_src_id_span, DiagnosticError, Result},
     file_cache::FileWriteCache,
+    typemap::{
+        ast::{parse_ty_with_given_span, TypeName},
+        ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS},
+        TypeConvCode, FROM_VAR_TEMPLATE,
+    },
     types::ForeignEnumInfo,
 };
-use quote::quote;
 
-pub(in crate::cpp) fn generate_c_code_for_enum(
+pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInfo) -> Result<()> {
+    if (fenum.items.len() as u64) >= u64::from(u32::max_value()) {
+        return Err(DiagnosticError::new(
+            fenum.src_id,
+            fenum.span(),
+            "Too many items in enum",
+        ));
+    }
+
+    trace!("enum_ti: {}", fenum.name);
+    let enum_name = &fenum.name;
+    let enum_ti: Type = parse_ty_with_given_span(&enum_name.to_string(), fenum.name.span())
+        .map_err(|err| DiagnosticError::from_syn_err(fenum.src_id, err))?;
+    let enum_rty = ctx.conv_map.find_or_alloc_rust_type_that_implements(
+        &enum_ti,
+        &["SwigForeignEnum"],
+        fenum.src_id,
+    );
+
+    generate_c_code_for_enum(&ctx.cfg.output_dir, fenum)
+        .map_err(|err| DiagnosticError::new(fenum.src_id, fenum.span(), err))?;
+    generate_rust_trait_for_enum(ctx, fenum)?;
+
+    let u32_rty = ctx
+        .conv_map
+        .find_or_alloc_rust_type_no_src_id(&parse_type! { u32 });
+
+    let enum_ftype = ForeignTypeS {
+        name: TypeName::new(fenum.name.to_string(), (fenum.src_id, fenum.name.span())),
+        provides_by_module: vec![
+            format!("\"{}\"", cpp_code::cpp_header_name_for_enum(fenum)).into()
+        ],
+        into_from_rust: Some(ForeignConversationRule {
+            rust_ty: enum_rty.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
+                intermediate_ty: u32_rty.to_idx(),
+                conv_code: TypeConvCode::new(
+                    format!(
+                        "static_cast<{enum_name}>({var})",
+                        enum_name = fenum.name,
+                        var = FROM_VAR_TEMPLATE
+                    ),
+                    invalid_src_id_span(),
+                ),
+            }),
+        }),
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: enum_rty.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
+                intermediate_ty: u32_rty.to_idx(),
+                conv_code: TypeConvCode::new(
+                    format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
+                    invalid_src_id_span(),
+                ),
+            }),
+        }),
+        name_prefix: None,
+    };
+    ctx.conv_map.alloc_foreign_type(enum_ftype)?;
+    ctx.conv_map.register_exported_enum(fenum);
+    Ok(())
+}
+
+fn generate_c_code_for_enum(
     output_dir: &Path,
     enum_info: &ForeignEnumInfo,
 ) -> std::result::Result<(), String> {
@@ -50,10 +122,7 @@ enum {enum_name} {{
     Ok(())
 }
 
-pub(in crate::cpp) fn generate_rust_trait_for_enum(
-    ctx: &mut CppContext,
-    enum_info: &ForeignEnumInfo,
-) -> Result<()> {
+fn generate_rust_trait_for_enum(ctx: &mut CppContext, enum_info: &ForeignEnumInfo) -> Result<()> {
     let mut arms_to_u32 = Vec::with_capacity(enum_info.items.len());
     let mut arms_from_u32 = Vec::with_capacity(enum_info.items.len());
     assert!((enum_info.items.len() as u64) <= u64::from(u32::max_value()));
