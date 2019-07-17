@@ -29,8 +29,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "jdoubleArray"]
     #![swig_foreigner_type = "Object"]
     #![swig_rust_type_not_unique = "jobject"]
-    #![swig_foreigner_type = "java.util.Date"]
-    #![swig_rust_type_not_unique = "jobject"]
     #![swig_foreigner_type = "Object []"]
     #![swig_rust_type_not_unique = "jobjectArray"]
     #![swig_foreigner_type = "java.lang.String []"]
@@ -86,6 +84,18 @@ pub trait SwigForeignCLikeEnum {
     /// # Panics
     /// Panics on error
     fn from_jint(_: jint) -> Self;
+}
+
+impl<T: SwigForeignCLikeEnum> SwigFrom<T> for jint {
+    fn swig_from(x: T, _: *mut JNIEnv) -> jint {
+        x.as_jint()
+    }
+}
+
+impl<T: SwigForeignCLikeEnum> SwigFrom<jint> for T {
+    fn swig_from(x: jint, _: *mut JNIEnv) -> T {
+        T::from_jint(x)
+    }
 }
 
 #[allow(unused_macros)]

@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.OptionalDouble;
 import java.util.OptionalLong;
 import java.util.Optional;
+import java.util.ArrayList;
 import com.example.rust.Foo;
 import com.example.rust.Boo;
 import com.example.rust.TestPathAndResult;
@@ -29,6 +30,7 @@ import com.example.rust.Gamepad2;
 import com.example.rust.Code;
 import com.example.rust.GamepadId;
 import com.example.rust.TestFnInline;
+import com.example.rust.EnumObserver;
 
 class Main {
     public static void main(String[] args) {
@@ -199,11 +201,34 @@ class Main {
         assert Math.abs(nowChrono.getTime() - today.getTime()) < 2000;
     }
 
+    private static class TestEnumObserver implements EnumObserver {
+	boolean values[] = new boolean[3];
+
+	public void onStateUpdate(MyEnum item, boolean is_ok) {
+	    switch (item) {
+	    case ITEM1:
+		values[0] = is_ok;
+		break;
+	    case ITEM2:
+		values[1] = is_ok;
+		break;
+	    case ITEM3:
+		values[2] = is_ok;
+		break;
+	    }
+	}
+    }
+
     private static void testTestEnumClass() {
         MyEnum v1 = MyEnum.ITEM1;
         TestEnumClass o = new TestEnumClass();
         assert o.f1(v1) == -5;
         assert o.f1(MyEnum.ITEM2) == 17;
+	TestEnumObserver obs = new TestEnumObserver();
+	TestEnumClass.call_cb(obs);
+	assert !obs.values[0];
+	assert obs.values[1];
+	assert !obs.values[2];
     }
 
     private static class TestObserver implements MyObserver {

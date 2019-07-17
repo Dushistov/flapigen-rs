@@ -185,8 +185,8 @@ public final class {class_name} {{
             ret_name: &str,
             conv_ret: &str,
         ) -> (&'a str, &'a str, String) {
-            let ret_type = conv.java_transition_type.as_str();
-            let intermidiate_ret_type = output.base.name.as_str();
+            let ret_type = output.base.name.as_str();
+            let intermidiate_ret_type = conv.java_transition_type.as_str();
             let conv_code = conv
                 .converter
                 .replace(FROM_VAR_TEMPLATE, ret_name)

@@ -142,7 +142,7 @@ impl From<TypeConvCode> for TypeConvEdge {
 }
 
 impl TypeConvEdge {
-    fn new(code: TypeConvCode, dependency: Option<TokenStream>) -> TypeConvEdge {
+    pub(crate) fn new(code: TypeConvCode, dependency: Option<TokenStream>) -> TypeConvEdge {
         TypeConvEdge {
             code,
             dependency: Rc::new(RefCell::new(dependency)),
@@ -548,10 +548,6 @@ impl TypeMap {
     pub(crate) fn register_exported_enum(&mut self, enum_info: &ForeignEnumInfo) {
         self.exported_enums
             .insert(enum_info.name.to_string().into(), enum_info.clone());
-    }
-
-    pub(crate) fn is_this_exported_enum(&self, ty: &RustType) -> Option<&ForeignEnumInfo> {
-        self.exported_enums.get(&ty.normalized_name)
     }
 
     pub(crate) fn is_generated_foreign_type(&self, foreign_name: &str) -> bool {

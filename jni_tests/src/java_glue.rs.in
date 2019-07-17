@@ -580,6 +580,7 @@ foreigner_class!(class LocationService {
     static_method LocationService::position() -> Result<GnssInfo, &'static str>;
 });
 
+#[derive(Clone, Copy)]
 enum MyEnum {
     Item1,
     Item2,
@@ -616,11 +617,27 @@ impl Moo {
     }
 }
 
+trait EnumObserver {
+    fn on_state_changed(&self, item: MyEnum, is_ok: bool);
+}
+
+foreign_callback!(callback EnumObserver {
+    self_type EnumObserver;
+    onStateUpdate = EnumObserver::on_state_changed(&self, item: MyEnum, is_ok: bool);
+});
+
 foreigner_class!(class TestEnumClass {
     self_type Moo;
     constructor Moo::default() -> Moo;
-    method Moo::f1(&mut self, v: MyEnum) -> i32;
-    static_method Moo::next_enum(v: MyEnum) -> MyEnum;
+    fn Moo::f1(&mut self, v: MyEnum) -> i32;
+    fn Moo::next_enum(v: MyEnum) -> MyEnum;
+    fn call_cb(cb: Box<EnumObserver>) {
+        let mut state = false;
+        for e in &[MyEnum::Item1, MyEnum::Item2, MyEnum::Item3] {
+            cb.on_state_changed(*e, state);
+            state = !state;
+        }
+    }
 });
 
 trait OnEvent {

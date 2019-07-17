@@ -1,3 +1,4 @@
+use log::debug;
 use log::trace;
 use petgraph::Direction;
 use syn::Type;
@@ -11,7 +12,7 @@ use crate::{
         ty::{ForeignType, RustType},
         ForeignTypeInfo, MapToForeignFlag, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    types::{ForeignEnumInfo, ForeignerClassInfo},
+    types::ForeignerClassInfo,
     TypeMap,
 };
 
@@ -21,6 +22,7 @@ pub(in crate::java_jni) fn map_type(
     direction: Direction,
     arg_ty_span: SourceIdSpan,
 ) -> Result<JavaForeignTypeInfo> {
+    debug!("map_type: arg_ty {}", arg_ty);
     if direction == Direction::Incoming {
         if let Some(fti) = special_type(conv_map, &arg_ty, arg_ty_span)? {
             return Ok(fti);
@@ -62,9 +64,9 @@ pub(in crate::java_jni) fn map_type(
         if !conv_map[inter_ft].provides_by_module.is_empty() {
             unimplemented!();
         }
-        base_ft_name = conv_map[inter_ft].typename();
+        base_ft_name = typename;
         java_converter = Some(JavaConverter {
-            java_transition_type: typename,
+            java_transition_type: conv_map[inter_ft].typename(),
             converter,
         });
     } else {
@@ -86,6 +88,7 @@ pub(in crate::java_jni) fn map_type(
             NullAnnotation::Nullable
         });
     }
+    debug!("map_type: return fti: {:?}", fti);
     Ok(fti)
 }
 
@@ -147,15 +150,6 @@ pub(in crate::java_jni) fn special_type(
         let converter = calc_converter_for_foreign_class_arg(conv_map, foreigner_class, arg_ty);
         return Ok(Some(converter));
     }
-    trace!(
-        "special_type: check is arg.ty({}) implements exported enum",
-        arg_ty
-    );
-    if let Some(foreign_enum) = conv_map.is_this_exported_enum(arg_ty) {
-        let converter = calc_converter_for_enum(conv_map, foreign_enum);
-        return Ok(Some(converter));
-    }
-
     trace!(
         "special_type: check is arg.ty({}) self type of foreign class",
         arg_ty
@@ -225,31 +219,6 @@ fn calc_converter_for_foreign_class_arg(
         },
         java_converter: Some(JavaConverter {
             java_transition_type: "long".into(),
-            converter,
-        }),
-        annotation: Some(NullAnnotation::NonNull),
-    }
-}
-
-fn calc_converter_for_enum(
-    conv_map: &TypeMap,
-    foreign_enum: &ForeignEnumInfo,
-) -> JavaForeignTypeInfo {
-    let jint_ti = conv_map.ty_to_rust_type(&parse_type! { jint });
-    let converter = format!(
-        r#"
-        int {to_var} = {from_var}.getValue();
-"#,
-        to_var = TO_VAR_TEMPLATE,
-        from_var = FROM_VAR_TEMPLATE
-    );
-    JavaForeignTypeInfo {
-        base: ForeignTypeInfo {
-            name: foreign_enum.name.to_string().into(),
-            correspoding_rust_type: jint_ti,
-        },
-        java_converter: Some(JavaConverter {
-            java_transition_type: "int".into(),
             converter,
         }),
         annotation: Some(NullAnnotation::NonNull),

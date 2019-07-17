@@ -355,7 +355,8 @@ fn find_suitable_ftypes_for_interace_methods(
     let void_sym = "void";
     let dummy_ty = parse_type! { () };
     let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
-    let mut f_methods = vec![];
+    let mut f_methods = Vec::with_capacity(interace.items.len());
+    let jobject_ty = conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jobject });
 
     for method in &interace.items {
         let mut input = Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
@@ -364,12 +365,22 @@ fn find_suitable_ftypes_for_interace_methods(
                 .as_named_arg()
                 .map_err(|err| DiagnosticError::from_syn_err(interace.src_id, err))?;
             let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, interace.src_id);
-            let f_arg_type = map_type(
-                conv_map,
-                &arg_rust_ty,
-                Direction::Outgoing,
-                (interace.src_id, named_arg.ty.span()),
-            )?;
+            let arg_span = (interace.src_id, named_arg.ty.span());
+            let mut f_arg_type = map_type(conv_map, &arg_rust_ty, Direction::Outgoing, arg_span)?;
+            if f_arg_type.java_converter.is_some() {
+                // it is hard to use Java code during callback, so may be
+                // there is way to convert it to jobject ?
+                conv_map.convert_rust_types(
+                    arg_rust_ty.to_idx(),
+                    jobject_ty.to_idx(),
+                    "x",
+                    "y",
+                    "ret",
+                    arg_span,
+                )?;
+                f_arg_type.java_converter = None;
+                f_arg_type.base.correspoding_rust_type = jobject_ty.clone();
+            }
 
             input.push(f_arg_type);
         }

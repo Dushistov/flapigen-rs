@@ -179,16 +179,16 @@ foreign_enum!(enum MyEnum {
 foreigner_class!(class TestEnumClass {
     self_type Moo;
     constructor Moo::default() -> Moo;
-    method Moo::f1(&mut self, v: MyEnum) -> i32;
-    static_method Moo::next_enum(v: MyEnum) -> MyEnum;
+    fn Moo::f1(&mut self, v: MyEnum) -> i32;
+    fn Moo::next_enum(v: MyEnum) -> MyEnum;
 });
 "#;
     for _ in 0..10 {
-        let _cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).unwrap();
         let java_code = parse_code(name, Source::Str(src), ForeignLang::Java).unwrap();
-        println!("{}", java_code.rust_code);
         println!("{}", java_code.foreign_code);
         assert!(java_code.foreign_code.contains("int f1(@NonNull MyEnum"));
+
+        let _cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).unwrap();
     }
 }
 

@@ -1,9 +1,10 @@
 use lazy_static::lazy_static;
 use log::{debug, trace};
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
-use syn::{spanned::Spanned, Type};
+use syn::{spanned::Spanned, Ident, Type};
 
 use crate::{
     error::{panic_on_syn_error, DiagnosticError, Result},
@@ -333,14 +334,9 @@ impl SwigFrom<jobject> for Box<{trait_name}> {{
     .unwrap();
     conv_map.merge(SourceId::none(), &new_conv_code, pointer_target_width)?;
 
-    let mut gen_items = Vec::<TokenStream>::new();
+    let mut trait_impl_funcs = Vec::<TokenStream>::with_capacity(interface.items.len());
 
-    let mut impl_trait_code = format!(
-        r#"
-impl {trait_name} for JavaCallback {{
-"#,
-        trait_name = DisplayToTokens(&interface.self_type)
-    );
+    let mut gen_items = Vec::with_capacity(1);
 
     for (method_idx, (method, f_method)) in interface.items.iter().zip(methods_sign).enumerate() {
         let func_name = &method
@@ -356,27 +352,30 @@ impl {trait_name} for JavaCallback {{
             })?
             .value()
             .ident;
-        let rest_args_with_types: String = method
-            .fn_decl
-            .inputs
-            .iter()
-            .skip(1)
-            .enumerate()
-            .map(|(i, v)| format!("a{}: {}", i, DisplayToTokens(&v.as_named_arg().unwrap().ty)))
-            .fold(String::new(), |mut acc, x| {
-                acc.push_str(", ");
-                acc.push_str(&x);
-                acc
-            });
-        let self_arg = format!(
-            "{}",
-            method.fn_decl.inputs[0].as_self_arg(interface.src_id)?
+
+        let self_arg: TokenStream = method.fn_decl.inputs[0]
+            .as_self_arg(interface.src_id)?
+            .into();
+        let mut args_with_types = Vec::with_capacity(method.fn_decl.inputs.len());
+        args_with_types.push(self_arg);
+        args_with_types.extend(
+            method
+                .fn_decl
+                .inputs
+                .iter()
+                .skip(1)
+                .enumerate()
+                .map(|(i, v)| {
+                    let arg_ty = &v.as_named_arg().unwrap().ty;
+                    let arg_name = Ident::new(&format!("a{}", i), Span::call_site());
+                    quote!(#arg_name: #arg_ty)
+                }),
         );
-        let args_with_types: String = [self_arg.to_string(), rest_args_with_types].concat();
         assert!(!method.fn_decl.inputs.is_empty());
         let n_args = method.fn_decl.inputs.len() - 1;
         let (args, type_size_asserts) = convert_args_for_variadic_function_call(f_method);
-        let (mut conv_deps, convert_args) = rust_to_foreign_convert_method_inputs(
+
+        let (mut conv_deps, convert_args_code) = rust_to_foreign_convert_method_inputs(
             conv_map,
             interface.src_id,
             method,
@@ -384,49 +383,44 @@ impl {trait_name} for JavaCallback {{
             (0..n_args).map(|v| format!("a{}", v)),
             "()",
         )?;
-
-        write!(
-            &mut impl_trait_code,
-            r#"
-    #[allow(unused_mut)]
-    fn {func_name}({args_with_types}) {{
-{type_size_asserts}
-        let env = self.get_jni_env();
-        if let Some(env) = env.env {{
-{convert_args}
-            unsafe {{
-                (**env).CallVoidMethod.unwrap()(env, self.this, self.methods[{method_idx}]
-                                                {args});
-                if (**env).ExceptionCheck.unwrap()(env) != 0 {{
-                    error!("{func_name}: java throw exception");
-                    (**env).ExceptionDescribe.unwrap()(env);
-                    (**env).ExceptionClear.unwrap()(env);
-                }}
-            }};
-        }}
-    }}
-"#,
-            func_name = func_name,
-            args_with_types = args_with_types,
-            method_idx = method_idx,
-            args = args,
-            convert_args = convert_args,
-            type_size_asserts = type_size_asserts,
-        )
-        .unwrap();
         gen_items.append(&mut conv_deps);
+        let convert_args: TokenStream = syn::parse_str(&convert_args_code).unwrap_or_else(|err| {
+            panic_on_syn_error(
+                "java/jni internal parse failed for convert arguments code",
+                convert_args_code,
+                err,
+            )
+        });
+
+        trait_impl_funcs.push(quote! {
+            #[allow(unused_mut)]
+            fn #func_name(#(#args_with_types),*) {
+                #type_size_asserts
+                let env = self.get_jni_env();
+                if let Some(env) = env.env {
+                    #convert_args
+                    unsafe {
+                        (**env).CallVoidMethod.unwrap()(env, self.this,
+                                                        self.methods[#method_idx],
+                                                        #(#args),*);
+                        if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                            error!(concat!(stringify!(#func_name), ": java throw exception"));
+                            (**env).ExceptionDescribe.unwrap()(env);
+                            (**env).ExceptionClear.unwrap()(env);
+                        }
+                    };
+                }
+            }
+        });
     }
 
-    write!(
-        &mut impl_trait_code,
-        r#"
-}}
-"#
-    )
-    .unwrap();
-    gen_items.push(syn::parse_str(&impl_trait_code).unwrap_or_else(|err| {
-        panic_on_syn_error("java/jni internal impl_trait_code", impl_trait_code, err)
-    }));
+    let self_type_name = &interface.self_type;
+    let tt: TokenStream = quote! {
+        impl #self_type_name for JavaCallback {
+            #(#trait_impl_funcs)*
+        }
+    };
+    gen_items.push(tt);
     Ok(gen_items)
 }
 
@@ -759,23 +753,28 @@ fn jni_method_signature(
 // return arg with conversation plus asserts
 fn convert_args_for_variadic_function_call(
     f_method: &JniForeignMethodSignature,
-) -> (String, &'static str) {
-    use std::fmt::Write;
-
-    let mut ret = String::new();
+) -> (Vec<TokenStream>, TokenStream) {
+    let mut ret = Vec::with_capacity(f_method.input.len());
     for (i, arg) in f_method.input.iter().enumerate() {
-        if let Some(conv_type) = JNI_FOR_VARIADIC_C_FUNC_CALL
+        let arg_name = Ident::new(&format!("a{}", i), Span::call_site());
+        if let Some(conv_type_str) = JNI_FOR_VARIADIC_C_FUNC_CALL
             .get(&*arg.as_ref().correspoding_rust_type.normalized_name.as_str())
         {
-            write!(&mut ret, ", a{} as {}", i, conv_type)
+            let conv_type: TokenStream = syn::parse_str(*conv_type_str).unwrap_or_else(|err| {
+                panic_on_syn_error(
+                    "java/jni internal error: can not parse type for variable conversation",
+                    conv_type_str.to_string(),
+                    err,
+                )
+            });
+            ret.push(quote!(#arg_name as #conv_type));
         } else {
-            write!(&mut ret, ", a{}", i)
+            ret.push(quote!(#arg_name));
         }
-        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
-    let check_sizes = r#"
-    swig_assert_eq_size!(::std::os::raw::c_uint, u32);
-    swig_assert_eq_size!(::std::os::raw::c_int, i32);
-"#;
+    let check_sizes = quote! {
+        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
+        swig_assert_eq_size!(::std::os::raw::c_int, i32);
+    };
     (ret, check_sizes)
 }

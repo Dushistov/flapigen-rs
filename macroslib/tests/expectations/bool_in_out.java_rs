@@ -42,12 +42,15 @@ r##"impl SomeTrait for JavaCallback {
                 (**env).CallVoidMethod.unwrap()(
                     env,
                     self.this,
-                    self.methods[0],
+                    self.methods[0usize],
                     a0,
                     a1 as ::std::os::raw::c_uint,
                 );
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                    error!("on_state_changed1: java throw exception");
+                    error!(concat!(
+                        stringify!(on_state_changed1),
+                        ": java throw exception"
+                    ));
                     (**env).ExceptionDescribe.unwrap()(env);
                     (**env).ExceptionClear.unwrap()(env);
                 }
