@@ -1,24 +1,24 @@
+mod fclass;
 mod fenum;
+mod finterface;
 mod java_code;
 mod map_type;
 mod rust_code;
 
 use log::debug;
-use petgraph::Direction;
 use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use std::fmt;
 use syn::{spanned::Spanned, Type};
 
-use self::map_type::map_type;
 use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result},
     source_registry::SourceId,
     typemap::{
         ast::{
             if_result_return_ok_err_types, if_ty_result_return_ok_type,
-            parse_ty_with_given_span_checked, DisplayToTokens, TypeName,
+            parse_ty_with_given_span_checked, DisplayToTokens,
         },
         ty::RustType,
         utils::{
@@ -27,7 +27,7 @@ use crate::{
         },
         ForeignTypeInfo, TypeConvCode, TypeMapConvRuleInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    types::{ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodVariant},
+    types::{ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodVariant},
     JavaConfig, LanguageGenerator, SourceCode, TypeMap,
 };
 
@@ -224,68 +224,6 @@ impl JavaConfig {
 
         Ok(())
     }
-
-    fn generate(
-        &self,
-        conv_map: &mut TypeMap,
-        class: &ForeignerClassInfo,
-    ) -> Result<Vec<TokenStream>> {
-        debug!(
-            "generate: begin for {}, this_type_for_method {:?}",
-            class.name, class.self_desc
-        );
-
-        let f_methods_sign = find_suitable_foreign_types_for_methods(conv_map, class)?;
-        java_code::generate_java_code(
-            conv_map,
-            &self.output_dir,
-            &self.package_name,
-            class,
-            &f_methods_sign,
-            self.null_annotation_package.as_ref().map(String::as_str),
-        )
-        .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
-        debug!("generate: java code done");
-        let ast_items =
-            rust_code::generate_rust_code(conv_map, &self.package_name, class, &f_methods_sign)?;
-
-        Ok(ast_items)
-    }
-
-    fn generate_interface(
-        &self,
-        conv_map: &mut TypeMap,
-        pointer_target_width: usize,
-        interface: &ForeignInterface,
-    ) -> Result<Vec<TokenStream>> {
-        let f_methods = find_suitable_ftypes_for_interace_methods(conv_map, interface)?;
-        java_code::generate_java_code_for_interface(
-            &self.output_dir,
-            &self.package_name,
-            interface,
-            &f_methods,
-            self.null_annotation_package.as_ref().map(String::as_str),
-        )
-        .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;
-        let items = rust_code::generate_interface(
-            &self.package_name,
-            conv_map,
-            pointer_target_width,
-            interface,
-            &f_methods,
-        )?;
-
-        let my_jobj_ti = conv_map.find_or_alloc_rust_type_with_suffix(
-            &parse_type! { jobject },
-            &interface.name.to_string(),
-            SourceId::none(),
-        );
-        conv_map.add_foreign(
-            my_jobj_ti,
-            TypeName::from_ident(&interface.name, interface.src_id),
-        )?;
-        Ok(items)
-    }
 }
 
 impl LanguageGenerator for JavaConfig {
@@ -311,25 +249,23 @@ impl LanguageGenerator for JavaConfig {
                 self.register_class(conv_map, fclass)?;
             }
         }
+        let mut ctx = JavaContext {
+            cfg: self,
+            conv_map,
+            pointer_target_width,
+            rust_code: &mut ret,
+        };
         for item in items {
             match item {
-                ItemToExpand::Class(fclass) => ret.append(&mut self.generate(conv_map, &fclass)?),
-                ItemToExpand::Enum(fenum) => {
-                    fenum::generate_enum(
-                        &mut JavaContext {
-                            cfg: self,
-                            conv_map,
-                            pointer_target_width,
-                            rust_code: &mut ret,
-                        },
-                        &fenum,
-                    )?;
+                ItemToExpand::Class(fclass) => {
+                    fclass::generate(&mut ctx, &fclass)?;
                 }
-                ItemToExpand::Interface(finterface) => ret.append(&mut self.generate_interface(
-                    conv_map,
-                    pointer_target_width,
-                    &finterface,
-                )?),
+                ItemToExpand::Enum(fenum) => {
+                    fenum::generate_enum(&mut ctx, &fenum)?;
+                }
+                ItemToExpand::Interface(finterface) => {
+                    finterface::generate_interface(&mut ctx, &finterface)?;
+                }
             }
         }
         Ok(ret)
@@ -346,115 +282,6 @@ fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -
         }
         MethodVariant::Constructor => "init".into(),
     }
-}
-
-fn find_suitable_ftypes_for_interace_methods(
-    conv_map: &mut TypeMap,
-    interace: &ForeignInterface,
-) -> Result<Vec<JniForeignMethodSignature>> {
-    let void_sym = "void";
-    let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
-    let mut f_methods = Vec::with_capacity(interace.items.len());
-    let jobject_ty = conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jobject });
-
-    for method in &interace.items {
-        let mut input = Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - 1);
-        for arg in method.fn_decl.inputs.iter().skip(1) {
-            let named_arg = arg
-                .as_named_arg()
-                .map_err(|err| DiagnosticError::from_syn_err(interace.src_id, err))?;
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, interace.src_id);
-            let arg_span = (interace.src_id, named_arg.ty.span());
-            let mut f_arg_type = map_type(conv_map, &arg_rust_ty, Direction::Outgoing, arg_span)?;
-            if f_arg_type.java_converter.is_some() {
-                // it is hard to use Java code during callback, so may be
-                // there is way to convert it to jobject ?
-                conv_map.convert_rust_types(
-                    arg_rust_ty.to_idx(),
-                    jobject_ty.to_idx(),
-                    "x",
-                    "y",
-                    "ret",
-                    arg_span,
-                )?;
-                f_arg_type.java_converter = None;
-                f_arg_type.base.correspoding_rust_type = jobject_ty.clone();
-            }
-
-            input.push(f_arg_type);
-        }
-        let output = match method.fn_decl.output {
-            syn::ReturnType::Default => ForeignTypeInfo {
-                name: void_sym.into(),
-                correspoding_rust_type: dummy_rust_ty.clone(),
-            }
-            .into(),
-            _ => unimplemented!(),
-        };
-        f_methods.push(JniForeignMethodSignature { output, input });
-    }
-    Ok(f_methods)
-}
-
-fn find_suitable_foreign_types_for_methods(
-    conv_map: &mut TypeMap,
-    class: &ForeignerClassInfo,
-) -> Result<Vec<JniForeignMethodSignature>> {
-    let mut ret = Vec::<JniForeignMethodSignature>::with_capacity(class.methods.len());
-    let empty_symbol = "";
-    let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
-
-    for method in &class.methods {
-        //skip self argument
-        let skip_n = match method.variant {
-            MethodVariant::Method(_) => 1,
-            _ => 0,
-        };
-        assert!(method.fn_decl.inputs.len() >= skip_n);
-        let mut input =
-            Vec::<JavaForeignTypeInfo>::with_capacity(method.fn_decl.inputs.len() - skip_n);
-        for arg in method.fn_decl.inputs.iter().skip(skip_n) {
-            let named_arg = arg
-                .as_named_arg()
-                .map_err(|err| DiagnosticError::from_syn_err(class.src_id, err))?;
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, class.src_id);
-
-            let fti = map_type(
-                conv_map,
-                &arg_rust_ty,
-                Direction::Incoming,
-                (class.src_id, named_arg.ty.span()),
-            )?;
-            input.push(fti);
-        }
-        let output = match method.variant {
-            MethodVariant::Constructor => ForeignTypeInfo {
-                name: empty_symbol.into(),
-                correspoding_rust_type: dummy_rust_ty.clone(),
-            }
-            .into(),
-            _ => match method.fn_decl.output {
-                syn::ReturnType::Default => ForeignTypeInfo {
-                    name: "void".into(),
-                    correspoding_rust_type: dummy_rust_ty.clone(),
-                }
-                .into(),
-                syn::ReturnType::Type(_, ref rt) => {
-                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt, class.src_id);
-                    map_type(
-                        conv_map,
-                        &ret_rust_ty,
-                        Direction::Outgoing,
-                        (class.src_id, rt.span()),
-                    )?
-                }
-            },
-        };
-        ret.push(JniForeignMethodSignature { output, input });
-    }
-    Ok(ret)
 }
 
 fn java_class_full_name(package_name: &str, class_name: &str) -> String {
