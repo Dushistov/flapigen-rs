@@ -2,6 +2,7 @@ mod fclass;
 mod fenum;
 mod finterface;
 mod java_code;
+mod map_class_self_type;
 mod map_type;
 mod rust_code;
 
@@ -10,26 +11,22 @@ use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use std::fmt;
-use syn::{spanned::Spanned, Type};
+use syn::Type;
 
 use crate::{
-    error::{invalid_src_id_span, DiagnosticError, Result},
-    source_registry::SourceId,
+    error::{DiagnosticError, Result},
     typemap::{
-        ast::{
-            if_result_return_ok_err_types, if_ty_result_return_ok_type,
-            parse_ty_with_given_span_checked, DisplayToTokens,
-        },
+        ast::{if_result_return_ok_err_types, if_ty_result_return_ok_type, DisplayToTokens},
         ty::RustType,
         utils::{
-            configure_ftype_rule, convert_to_heap_pointer, unpack_from_heap_pointer,
-            validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT,
+            configure_ftype_rule, validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT,
         },
-        ForeignTypeInfo, TypeConvCode, TypeMapConvRuleInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        ForeignTypeInfo, TypeMapConvRuleInfo,
     },
     types::{ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodVariant},
     JavaConfig, LanguageGenerator, SourceCode, TypeMap,
 };
+use map_class_self_type::register_typemap_for_self_type;
 
 #[derive(Debug)]
 struct JavaContext<'a> {
@@ -106,9 +103,8 @@ impl JavaConfig {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
-        if let Some(constructor_ret_type) =
-            class.self_desc.as_ref().map(|x| &x.constructor_ret_type)
-        {
+        if let Some(self_desc) = class.self_desc.as_ref() {
+            let constructor_ret_type = &self_desc.constructor_ret_type;
             let this_type_for_method = if_ty_result_return_ok_type(constructor_ret_type)
                 .unwrap_or_else(|| constructor_ret_type.clone());
 
@@ -121,103 +117,7 @@ impl JavaConfig {
                 &traits,
                 class.src_id,
             );
-            debug!(
-                "register_class: add implements SwigForeignClass for {}",
-                this_type
-            );
-
-            let my_jobj_ti = conv_map.find_or_alloc_rust_type_with_suffix(
-                &parse_type! { jobject },
-                &this_type.normalized_name,
-                SourceId::none(),
-            );
-
-            conv_map.cache_class_for_rust_to_foreign_conv(
-                &this_type,
-                ForeignTypeInfo {
-                    correspoding_rust_type: my_jobj_ti,
-                    name: class.name.to_string().into(),
-                },
-                (class.src_id, class.name.span()),
-            )?;
-
-            conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
-
-            let (this_type_for_method, _code_box_this) =
-                convert_to_heap_pointer(conv_map, &this_type, "this");
-
-            let jlong_ti: RustType =
-                conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
-            let this_type_for_method_ty = &this_type_for_method.ty;
-            let code = format!("& {}", DisplayToTokens(this_type_for_method_ty));
-            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method_ty.span());
-            let this_type_ref =
-                conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
-            //handle foreigner_class as input arg
-            conv_map.add_conversation_rule(
-                jlong_ti.to_idx(),
-                this_type_ref.to_idx(),
-                TypeConvCode::new2(
-                    format!(
-                        r#"
-        let {to_var}: &{this_type} = unsafe {{
-            jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
-        }};
-    "#,
-                        to_var = TO_VAR_TEMPLATE,
-                        from_var = FROM_VAR_TEMPLATE,
-                        this_type = this_type_for_method.normalized_name,
-                    ),
-                    invalid_src_id_span(),
-                )
-                .into(),
-            );
-            let code = format!("&mut {}", DisplayToTokens(this_type_for_method_ty));
-            let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method_ty.span());
-            let this_type_mut_ref =
-                conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
-            //handle foreigner_class as input arg
-            conv_map.add_conversation_rule(
-                jlong_ti.to_idx(),
-                this_type_mut_ref.to_idx(),
-                TypeConvCode::new2(
-                    format!(
-                        r#"
-        let {to_var}: &mut {this_type} = unsafe {{
-            jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
-        }};
-    "#,
-                        to_var = TO_VAR_TEMPLATE,
-                        from_var = FROM_VAR_TEMPLATE,
-                        this_type = this_type_for_method.normalized_name,
-                    ),
-                    invalid_src_id_span(),
-                )
-                .into(),
-            );
-
-            let unpack_code =
-                unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
-            conv_map.add_conversation_rule(
-                jlong_ti.to_idx(),
-                this_type.to_idx(),
-                TypeConvCode::new2(
-                    format!(
-                        r#"
-        let {to_var}: *mut {this_type} = unsafe {{
-            jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
-        }};
-    {unpack_code}
-    "#,
-                        to_var = TO_VAR_TEMPLATE,
-                        from_var = FROM_VAR_TEMPLATE,
-                        this_type = this_type_for_method.normalized_name,
-                        unpack_code = unpack_code,
-                    ),
-                    invalid_src_id_span(),
-                )
-                .into(),
-            );
+            register_typemap_for_self_type(conv_map, class, this_type, self_desc)?;
         }
 
         let _ = conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
