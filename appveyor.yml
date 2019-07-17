@@ -51,6 +51,11 @@ install:
   - javac -version
   - cmake --version
   - set RUSTC_WRAPPER=C:\rust\bin\sccache.exe
+  - set PYTHON_SYS_EXECUTABLE=C:\python37\python.exe
+  - set PATH=C:\Python37;%PATH%
+  - python --version
+  - py -3 --version
+  - set PATH=%cd%\python_tests\python;%PATH%
 cache:
   - '%USERPROFILE%\.cargo'
 build: off

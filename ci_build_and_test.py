@@ -152,9 +152,14 @@ def test_python(is_windows, test_cfg):
         target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
         if is_windows:
             shutil.copyfile(os.path.join(target_dir, "rust_swig_test_python.dll"), "python_tests/python/rust_swig_test_python.pyd")
+            if os.getenv('platform') == "x64":
+                subprocess.check_call(["py", "-3", "main.py"], cwd = "python_tests/python")
+            else:
+                # If we choose 32, we must also choose specific, minor python version.
+                subprocess.check_call(["py", "-3.7-32", "main.py"], cwd = "python_tests/python")
         else:
             shutil.copyfile(os.path.join(target_dir, "librust_swig_test_python.so"), "python_tests/python/rust_swig_test_python.so")
-        subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
+            subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
 
 
 @show_timing
