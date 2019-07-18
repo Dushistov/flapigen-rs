@@ -31,6 +31,8 @@ import com.example.rust.Code;
 import com.example.rust.GamepadId;
 import com.example.rust.TestFnInline;
 import com.example.rust.EnumObserver;
+import com.example.rust.LocationService;
+import com.example.rust.Position;
 
 class Main {
     public static void main(String[] args) {
@@ -122,6 +124,7 @@ class Main {
 	    testBuilderPattern();
 	    testGetIDOverloading();
 	    testFnInline();
+	    testGetObjectWithException();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -454,5 +457,17 @@ class Main {
 	    String s = TestFnInline.int_to_str(i);
 	    assert expected.equals(s);
 	}
+    }
+
+    private static void testGetObjectWithException() {
+	Position pos = null;
+	try {
+	    pos = LocationService.position();
+	} catch (Exception ex) {
+	    System.out.println("Have exception: " + ex);
+	    pos = null;
+	}
+	assert pos != null;
+	assert Math.abs(pos.getLatitude() - 17.17) < 1e-16;
     }
 }

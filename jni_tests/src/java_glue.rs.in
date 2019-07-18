@@ -95,112 +95,74 @@ fn create_boo() -> Rc<RefCell<Boo>> {
     Rc::new(RefCell::new(Boo::new()))
 }
 
-fn test_u8(v: u8) -> u8 {
-    v + 1
-}
-
-fn test_i8(v: i8) -> i8 {
-    v + 1
-}
-
-fn test_u16(v: u16) -> u16 {
-    v + 1
-}
-
-fn test_i16(v: i16) -> i16 {
-    v + 1
-}
-
-fn test_i32(v: i32) -> i32 {
-    v + 1
-}
-
-fn test_u32(v: u32) -> u32 {
-    v + 1
-}
-
-fn test_u64(v: u64) -> u64 {
-    v + 1
-}
-
-fn test_i64(v: i64) -> i64 {
-    v + 1
-}
-
-fn test_f32(v: f32) -> f32 {
-    v + 1.
-}
-fn test_f64(v: f64) -> f64 {
-    v + 1.
-}
-
-fn r_test_u8(v: u8) -> Result<u8, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_i8(v: i8) -> Result<i8, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_u16(v: u16) -> Result<u16, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_i16(v: i16) -> Result<i16, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_i32(v: i32) -> Result<i32, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_u32(v: u32) -> Result<u32, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_u64(v: u64) -> Result<u64, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_i64(v: i64) -> Result<i64, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_f32(v: f32) -> Result<f32, &'static str> {
-    Ok(v + 1.)
-}
-fn r_test_f64(v: f64) -> Result<f64, &'static str> {
-    Ok(v + 1.)
-}
-
 foreigner_class!(class Boo {
     self_type Boo;
     constructor create_boo() -> Rc<RefCell<Boo>>;
     method Boo::test(&self, _: bool) -> f32;
     method Boo::set_a(&mut self, _: i32); alias setA;
     method Boo::get_a(&self) -> i32; alias getA;
-    static_method test_u8(v: u8) -> u8;
-    static_method test_i8(v: i8) -> i8;
-    static_method test_u16(v: u16) -> u16;
-    static_method test_i16(v: i16) -> i16;
-    static_method test_i32(v: i32) -> i32;
-    static_method test_u32(v: u32) -> u32;
-    static_method test_u64(v: u64) -> u64;
-    static_method test_i64(v: i64) -> i64;
-    static_method test_f32(v: f32) -> f32;
-    static_method test_f64(v: f64) -> f64;
+    
+    fn test_u8(v: u8) -> u8 {
+        v + 1
+    }
+    fn test_i8(v: i8) -> i8 {
+        v + 1
+    }
+    fn test_u16(v: u16) -> u16 {
+        v + 1
+    }
+    fn test_i16(v: i16) -> i16 {
+        v + 1
+    }
+    fn test_i32(v: i32) -> i32 {
+        v + 1
+    }
+    fn test_u32(v: u32) -> u32 {
+        v + 1
+    }
+    fn test_u64(v: u64) -> u64 {
+        v + 1
+    }
+    fn test_i64(v: i64) -> i64 {
+        v + 1
+    }
+    fn test_f32(v: f32) -> f32 {
+        v + 1.
+    }
+    fn test_f64(v: f64) -> f64 {
+        v + 1.
+    }
 
-
-    static_method r_test_u8(v: u8) -> Result<u8, &'static str>;
-    static_method r_test_i8(v: i8) -> Result<i8, &'static str>;
-    static_method r_test_u16(v: u16) -> Result<u16, &'static str>;
-    static_method r_test_i16(v: i16) -> Result<i16, &'static str>;
-    static_method r_test_i32(v: i32) -> Result<i32, &'static str>;
-    static_method r_test_u32(v: u32) -> Result<u32, &'static str>;
-    static_method r_test_u64(v: u64) -> Result<u64, &'static str>;
-    static_method r_test_i64(v: i64) -> Result<i64, &'static str>;
-    static_method r_test_f32(v: f32) -> Result<f32, &'static str>;
-    static_method r_test_f64(v: f64) -> Result<f64, &'static str>;
+    fn r_test_u8(v: u8) -> Result<u8, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_i8(v: i8) -> Result<i8, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_u16(v: u16) -> Result<u16, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_i16(v: i16) -> Result<i16, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_i32(v: i32) -> Result<i32, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_u32(v: u32) -> Result<u32, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_u64(v: u64) -> Result<u64, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_i64(v: i64) -> Result<i64, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_f32(v: f32) -> Result<f32, &'static str> {
+        Ok(v + 1.)
+    }
+    fn r_test_f64(v: f64) -> Result<f64, &'static str> {
+        Ok(v + 1.)
+    }
 });
 
 struct TestPathAndResult {
@@ -549,23 +511,15 @@ pub struct GnssInfo {
     pub x: f64,
 }
 
-#[allow(non_snake_case)]
-mod Position {
-    use super::*;
-
-    pub fn timeStamp(_: &GnssInfo) -> SystemTime {
-        SystemTime::now()
-    }
-    pub fn getLatitude(gi: &GnssInfo) -> f64 {
-        gi.x
-    }
-}
-
 foreigner_class!(class Position {
     self_type GnssInfo;
     private constructor = empty;
-    method Position::timeStamp(&self) -> SystemTime;
-    method Position::getLatitude(&self) -> f64;
+    fn Position::timeStamp(&self) -> SystemTime {
+        SystemTime::now()
+    }
+    fn Position::getLatitude(&self) -> f64 {
+        this.x
+    }
 });
 
 struct LocationService;
@@ -577,7 +531,7 @@ impl LocationService {
 }
 
 foreigner_class!(class LocationService {
-    static_method LocationService::position() -> Result<GnssInfo, &'static str>;
+    fn LocationService::position() -> Result<GnssInfo, &'static str>;
 });
 
 #[derive(Clone, Copy)]
