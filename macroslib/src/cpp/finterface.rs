@@ -398,7 +398,7 @@ struct C_{interface_name} {{
         write!(
             &mut cpp_virtual_methods,
             r#"{doc_comments}
-    virtual {cpp_ret_type} {method_name}({single_args_with_types}) = 0;
+    virtual {cpp_ret_type} {method_name}({single_args_with_types}) noexcept = 0;
 "#,
             method_name = method.name,
             doc_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false),

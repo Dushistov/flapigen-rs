@@ -290,10 +290,10 @@ foreign_interface!(interface RepoChangedCallback {
         println!("c/c++: {}", cpp_code.foreign_code);
         assert!(cpp_code
             .foreign_code
-            .contains("virtual void on_save(UuidRef uuid) = 0;"));
+            .contains("virtual void on_save(UuidRef uuid) noexcept = 0;"));
         assert!(cpp_code
             .foreign_code
-            .contains("virtual void on_remove(UuidRef uuid) = 0;"));
+            .contains("virtual void on_remove(UuidRef uuid) noexcept = 0;"));
         assert!(cpp_code.foreign_code.contains(
             r#"
     static void c_on_save(const UuidOpaque * uuid, void *opaque)

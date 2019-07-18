@@ -146,19 +146,19 @@ struct MySomeObserver final : public SomeObserver {
         deleted = 0;
     }
     ~MySomeObserver() { ++deleted; }
-    void onStateChanged(int32_t a, bool b) override
+    void onStateChanged(int32_t a, bool b) noexcept override
     {
         std::cout << "onStateChanged: a: " << a << ", b: " << b << "\n";
         ASSERT_EQ(2, a);
         ASSERT_FALSE(!!b);
         ++f1_call;
     }
-    void onStateChangedWithoutArgs(void) override
+    void onStateChangedWithoutArgs(void) noexcept override
     {
         std::cout << "onStateChangedWithoutArgs\n";
         ++f2_call;
     }
-    bool isOdd(int32_t num) override { return num % 2 == 1; }
+    bool isOdd(int32_t num) noexcept override { return num % 2 == 1; }
 };
 
 size_t MySomeObserver::f1_call = 0;
