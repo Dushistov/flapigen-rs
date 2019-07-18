@@ -1,5 +1,6 @@
 use log::debug;
 use smol_str::SmolStr;
+use std::fmt::Write;
 use syn::spanned::Spanned;
 
 use super::{INTERNAL_PTR_MARKER, JAVA_RUST_SELF_NAME};
@@ -13,6 +14,7 @@ use crate::{
         RustTypeIdx, TypeConvCode, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{ForeignerClassInfo, SelfTypeDesc},
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::java_jni) fn register_typemap_for_self_type(
@@ -168,28 +170,51 @@ fn register_main_foreign_types(
         let this_type2 = conv_map[this_type].clone();
         let (this_type_for_method, _code_box_this) =
             convert_to_heap_pointer(conv_map, &this_type2, "this");
-
-        let unpack_code = unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
-        conv_map.add_conversation_rule(
-            jlong_in_val_rty.to_idx(),
-            this_type,
-            TypeConvCode::new2(
-                format!(
-                    r#"
+        if !class.copy_derived {
+            let unpack_code =
+                unpack_from_heap_pointer(&this_type_for_method, TO_VAR_TEMPLATE, true);
+            conv_map.add_conversation_rule(
+                jlong_in_val_rty.to_idx(),
+                this_type,
+                TypeConvCode::new2(
+                    format!(
+                        r#"
         let {to_var}: *mut {this_type} = unsafe {{
             jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
         }};
     {unpack_code}
     "#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                    this_type = this_type_for_method,
-                    unpack_code = unpack_code,
-                ),
-                invalid_src_id_span(),
-            )
-            .into(),
-        );
+                        to_var = TO_VAR_TEMPLATE,
+                        from_var = FROM_VAR_TEMPLATE,
+                        this_type = this_type_for_method,
+                        unpack_code = unpack_code,
+                    ),
+                    invalid_src_id_span(),
+                )
+                .into(),
+            );
+        } else {
+            conv_map.add_conversation_rule(
+                jlong_in_val_rty.to_idx(),
+                this_type,
+                TypeConvCode::new2(
+                    format!(
+                        r#"
+        let {to_var}: &{this_type} = unsafe {{
+            jlong_to_pointer::<{this_type}>({from_var}).as_mut().unwrap()
+        }};
+        let {to_var}: {this_type} = {to_var}.clone();
+    "#,
+                        to_var = TO_VAR_TEMPLATE,
+                        from_var = FROM_VAR_TEMPLATE,
+                        this_type = this_type_for_method,
+                    ),
+                    invalid_src_id_span(),
+                )
+                .into(),
+            );
+        }
+
         let name_prefix: SmolStr = format!("/*{}*/", in_val_prefix).into();
         conv_map.alloc_foreign_type(ForeignTypeS {
             name: TypeName::new(
@@ -204,6 +229,24 @@ fn register_main_foreign_types(
             }),
             name_prefix: Some(name_prefix),
         })?;
+    }
+
+    let mut java_code_in_val_to_long = format!(
+        r#"
+        long {to_var} = {from_var}.{class_raw_ptr};
+"#,
+        to_var = TO_VAR_TEMPLATE,
+        from_var = FROM_VAR_TEMPLATE,
+        class_raw_ptr = JAVA_RUST_SELF_NAME,
+    );
+    if !class.copy_derived {
+        writeln!(
+            &mut java_code_in_val_to_long,
+            "        {from_var}.{class_raw_ptr} = 0;",
+            from_var = FROM_VAR_TEMPLATE,
+            class_raw_ptr = JAVA_RUST_SELF_NAME,
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     let class_ftype = ForeignTypeS {
@@ -232,15 +275,7 @@ fn register_main_foreign_types(
                 input_to_output: false,
                 intermediate_ty: jlong_in_val_rty.to_idx(),
                 conv_code: TypeConvCode::new(
-                  format!(
-            r#"
-        long {to_var} = {from_var}.{class_raw_ptr};
-        {from_var}.{class_raw_ptr} = 0;
-"#,
-                      to_var = TO_VAR_TEMPLATE,
-                      from_var = FROM_VAR_TEMPLATE,
-                      class_raw_ptr = JAVA_RUST_SELF_NAME,
-                  ),
+                    java_code_in_val_to_long,
                     invalid_src_id_span(),
                 ),
             }),

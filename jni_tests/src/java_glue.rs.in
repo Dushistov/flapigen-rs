@@ -101,7 +101,7 @@ foreigner_class!(class Boo {
     method Boo::test(&self, _: bool) -> f32;
     method Boo::set_a(&mut self, _: i32); alias setA;
     method Boo::get_a(&self) -> i32; alias getA;
-    
+
     fn test_u8(v: u8) -> u8 {
         v + 1
     }
@@ -289,23 +289,40 @@ pub fn Java_com_example_rust_TestInner_getInner(env: *mut JNIEnv, _: jclass) -> 
     ret
 }
 
-#[derive(Clone)]
-struct Xyz;
+#[derive(Clone, Copy)]
+struct Xyz {
+    x: f64,
+    y: f64,
+    z: f64,
+}
 
 impl Xyz {
     fn zero() -> Xyz {
-        Xyz
-    }
-    fn new(_: f64, _: f64, _: f64) -> Xyz {
-        Xyz
+        Xyz {
+            x: 0.,
+            y: 0.,
+            z: 0.,
+        }
     }
 }
 
-foreigner_class!(class Xyz {
-    self_type Xyz;
-    constructor Xyz::zero() -> Xyz;
-    constructor Xyz::new(_: f64, _: f64, _: f64) -> Xyz;
-});
+foreigner_class!(
+    #[derive(Copy)]
+    class Xyz {
+        self_type Xyz;
+        constructor Xyz::zero() -> Xyz;            
+        constructor new(x: f64, y: f64, z: f64) -> Xyz {
+            Xyz { x, y, z }
+        }
+        fn x(&self) -> f64 { this.x }
+        fn y(&self) -> f64 { this.y }
+        fn z(&self) -> f64 { this.z }
+        fn Xyz::clone(&self) -> Xyz;
+        fn add(a: Xyz, b: Xyz) -> Xyz {
+            Xyz { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }
+        }
+    }
+);
 
 struct TestContainers {
     empty_struct_vec: Vec<Xyz>,
@@ -352,10 +369,10 @@ impl TestContainers {
 foreigner_class!(class TestContainers {
     self_type TestContainers;
     constructor TestContainers::default() -> TestContainers;
-    method TestContainers::get_struct_vec(&self) -> Vec<Foo>;
-    method TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
-    method TestContainers::get_string_vec(&self) -> Vec<String>;
-    method TestContainers::set_struct_vec(&mut self, _: Vec<Foo>);
+    fn TestContainers::get_struct_vec(&self) -> Vec<Foo>;
+    fn TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
+    fn TestContainers::get_string_vec(&self) -> Vec<String>;
+    fn TestContainers::set_struct_vec(&mut self, _: Vec<Foo>);
 });
 
 fn f_hypot(a: f64, b: f64) -> f64 {

@@ -116,6 +116,12 @@ impl JavaConfig {
             if class.clone_derived {
                 traits.push("Clone");
             }
+            if class.copy_derived {
+                if !class.clone_derived {
+                    traits.push("Clone");
+                }
+                traits.push("Copy");
+            }
             let this_type: RustType = conv_map.find_or_alloc_rust_type_that_implements(
                 &this_type_for_method,
                 &traits,

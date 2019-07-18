@@ -125,6 +125,7 @@ class Main {
 	    testGetIDOverloading();
 	    testFnInline();
 	    testGetObjectWithException();
+	    testCopyDerivedObjects();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -469,5 +470,12 @@ class Main {
 	}
 	assert pos != null;
 	assert Math.abs(pos.getLatitude() - 17.17) < 1e-16;
+    }
+
+    private static void testCopyDerivedObjects() {
+	Xyz z = new Xyz();
+	Xyz u = new Xyz(1., 1., 1.);
+	Xyz r1 = Xyz.add(z, u);
+	Xyz r2 = Xyz.add(z, u);
     }
 }
