@@ -3,6 +3,6 @@ foreigner_class!(
     class BtAddr {
     self_type BtAddr;
     private constructor = empty;
-    method BtAddr::to_string(&self) -> String;
-    method BtAddr::clone(&self) -> BtAddr;
+    fn BtAddr::to_string(&self) -> String;
+    fn BtAddr::clone(&self) -> BtAddr;
 });
