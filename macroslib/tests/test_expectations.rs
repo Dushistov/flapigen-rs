@@ -213,9 +213,15 @@ foreigner_class!(class LocationService {
         println!("iter {}", i);
         let java_code = parse_code(name, Source::Str(src), ForeignLang::Java).unwrap();
         println!("{}", java_code.foreign_code);
-        assert!(java_code
-            .foreign_code
-            .contains("public static native Position position() throws Exception;"));
+        assert!(java_code.foreign_code.contains(
+            r#"public static Position position() throws Exception {
+        long ret = do_position();
+        Position conv_ret = new Position(InternalPointerMarker.RAW_PTR, ret);
+
+        return conv_ret;
+    }
+    private static native long do_position() throws Exception;"#
+        ));
         let cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).unwrap();
         println!("c/c++: {}", cpp_code.foreign_code);
         assert!(cpp_code

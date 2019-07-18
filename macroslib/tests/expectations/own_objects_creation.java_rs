@@ -1,0 +1,77 @@
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jclass, a0: jint) -> jlong {
+    let mut a0: i32 = a0.swig_into(env);
+    let this: Foo = Foo::new(a0);
+    let this: Box<Foo> = Box::new(this);
+    let this: *mut Foo = Box::into_raw(this);
+    this as jlong
+}"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Foo_do_1f(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    a0: jint,
+    a1: jint,
+) -> jint {
+    let mut a0: i32 = a0.swig_into(env);
+    let mut a1: i32 = a1.swig_into(env);
+    let this: &Foo = unsafe { jlong_to_pointer::<Foo>(this).as_mut().unwrap() };
+    let mut ret: i32 = Foo::f(this, a0, a1);
+    let mut ret: jint = <jint>::swig_from(ret, env);
+    ret
+}"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Boo_init(
+    env: *mut JNIEnv,
+    _: jclass,
+    a0: jint,
+    a1: jlong,
+) -> jlong {
+    let mut a0: i32 = a0.swig_into(env);
+    let mut a1: i64 = a1.swig_into(env);
+    let mut a1: usize = a1.swig_into(env);
+    let this: Result<Boo, String> = Boo::new(a0, a1);
+    let mut this: Boo = jni_unpack_return!(this, jlong, env);
+    let this: Box<Boo> = Box::new(this);
+    let this: *mut Boo = Box::into_raw(this);
+    this as jlong
+}"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Boo_do_1factory_1method(env: *mut JNIEnv, _: jclass) -> jlong {
+    let mut ret: Result<Boo, String> = Boo::factory_method();
+    let mut ret: Boo = jni_unpack_return!(ret, jlong, env);
+    let ret: jlong = <Boo>::box_object(ret);
+    ret
+}"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Boo_do_1boo_1as_1arg(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    a0: jlong,
+) -> jint {
+    let a0: *mut Boo = unsafe { jlong_to_pointer::<Boo>(a0).as_mut().unwrap() };
+    let a0: Box<Boo> = unsafe { Box::from_raw(a0) };
+    let a0: Boo = *a0;
+    let this: &Boo = unsafe { jlong_to_pointer::<Boo>(this).as_mut().unwrap() };
+    let mut ret: i32 = Boo::boo_as_arg(this, a0);
+    let mut ret: jint = <jint>::swig_from(ret, env);
+    ret
+}"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Boo_do_1get_1one_1foo(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+) -> jlong {
+    let this: &Boo = unsafe { jlong_to_pointer::<Boo>(this).as_mut().unwrap() };
+    let mut ret: Foo = Boo::get_one_foo(this);
+    let ret: jlong = <Foo>::box_object(ret);
+    ret
+}"##;

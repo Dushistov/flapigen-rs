@@ -16,14 +16,14 @@ foreigner_class!(class LocationService {
     static_method LocationService::f1() -> Result<GnssInfo, String>;
     static_method LocationService::f2() -> Result<(), String>;
 
-    method LocationService::f3(&self) -> Result<GnssInfo, PosErr>;
-    static_method LocationService::f4() -> Result<(), PosErr>;
-    static_method LocationService::f5() -> Result<Vec<GnssInfo>, PosErr>;
-    static_method LocationService::create() -> Result<LocationService, String>;
+    fn LocationService::f3(&self) -> Result<GnssInfo, PosErr>;
+    fn LocationService::f4() -> Result<(), PosErr>;
+    fn LocationService::f5() -> Result<Vec<GnssInfo>, PosErr>;
+    fn LocationService::create() -> Result<LocationService, String>;
 });
 
 foreigner_class!(class Foo {
     self_type Foo<'a>;
     constructor Foo::create() -> Foo<'a>;
-    static_method Foo::from_string<'a>(_: &str) -> Result<Foo<'a>, String>;
+    fn Foo::from_string<'a>(_: &str) -> Result<Foo<'a>, String>;
 });

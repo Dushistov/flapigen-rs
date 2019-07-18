@@ -163,8 +163,6 @@ pub(crate) struct TypeMap {
     ftypes_storage: ForeignTypesStorage,
     rust_to_foreign_cache: FxHashMap<RustTypeIdx, ForeignType>,
     rust_from_foreign_cache: FxHashMap<RustTypeIdx, ForeignType>,
-    //TODO: deprecate and remove this cache
-    rust_class_to_foreign_cache: FxHashMap<SmolStr, ForeignType>,
     rust_names_map: RustTypeNameToGraphIdx,
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
@@ -235,7 +233,6 @@ impl Default for TypeMap {
             generic_edges: default_rules,
             rust_from_foreign_cache: FxHashMap::default(),
             rust_to_foreign_cache: FxHashMap::default(),
-            rust_class_to_foreign_cache: FxHashMap::default(),
             foreign_classes: Vec::new(),
             exported_enums: FxHashMap::default(),
             traits_usage_code: FxHashMap::default(),
@@ -468,40 +465,6 @@ impl TypeMap {
         None
     }
 
-    //TODO: deprecate and remove this method
-    pub(crate) fn cache_class_for_rust_to_foreign_conv(
-        &mut self,
-        from: &RustType,
-        to: ForeignTypeInfo,
-        span: SourceIdSpan,
-    ) -> Result<()> {
-        trace!("cache_rust_to_foreign_conv: {} / {}", to.name, from);
-        let to_id = to.correspoding_rust_type.graph_idx;
-        let ftype = self
-            .ftypes_storage
-            .alloc_new(TypeName::new(to.name, span), to_id)?;
-        self.rust_class_to_foreign_cache
-            .insert(from.normalized_name.clone(), ftype);
-        Ok(())
-    }
-
-    pub(crate) fn is_ty_implements(&self, ty: &RustType, trait_name: &str) -> Option<RustType> {
-        if ty.implements.contains(trait_name) {
-            Some(ty.clone())
-        } else if let syn::Type::Reference(syn::TypeReference { ref elem, .. }) = ty.ty {
-            let ty_name = normalize_ty_lifetimes(&*elem);
-            self.rust_names_map.get(ty_name).and_then(|idx| {
-                if self.conv_graph[*idx].implements.contains(trait_name) {
-                    Some(self.conv_graph[*idx].clone())
-                } else {
-                    None
-                }
-            })
-        } else {
-            None
-        }
-    }
-
     pub(crate) fn find_foreigner_class_with_such_self_type(
         &self,
         may_be_self_ty: &RustType,
@@ -668,19 +631,6 @@ impl TypeMap {
             self[rust_ty], direction
         );
 
-        if direction == petgraph::Direction::Outgoing {
-            let rust_ty_info = self[rust_ty].clone();
-            if let Some(ftype) = self
-                .rust_class_to_foreign_cache
-                .get(&rust_ty_info.normalized_name)
-            {
-                let fts = &self.ftypes_storage[*ftype];
-                if fts.into_from_rust.is_some() {
-                    return Some(*ftype);
-                }
-            }
-        }
-
         let cached = match direction {
             petgraph::Direction::Outgoing => self.rust_to_foreign_cache.get(&rust_ty),
             petgraph::Direction::Incoming => self.rust_from_foreign_cache.get(&rust_ty),
@@ -717,7 +667,7 @@ impl TypeMap {
                 };
                 if let Some(path) = path {
                     trace!(
-                        "map foreign: path found: {} / {}",
+                        "map_through_conversation_to_foreign: path found: {} / {}",
                         ftype.name,
                         self.conv_graph[related_rty_idx]
                     );
@@ -867,6 +817,18 @@ impl TypeMap {
                 break;
             }
         }
+        // remove the same paths: ty -> intermediate_ty)
+        // ty -> ftype(intermediate_ty), they have the same length,
+        // so min_by_key can not find appropriate
+        {
+            let mut inter_ty_set = FxHashSet::default();;
+            for (_, _, _, inter_ty) in &possible_paths {
+                if let Some(inter_ty) = inter_ty {
+                    inter_ty_set.insert(*inter_ty);
+                }
+            }
+            possible_paths.retain(|(_, _, idx, _)| !inter_ty_set.contains(idx));
+        }
         let ret = possible_paths
             .into_iter()
             .min_by_key(|(path, ftype_idx, other, inter_ty)| {
@@ -903,12 +865,18 @@ impl TypeMap {
                 );
                 ftype
             });
-        if ret.is_none() {
-            debug!(
-                "map to foreign failed, foreign_map {}\n conv_graph: {}",
-                self.ftypes_storage,
-                DisplayTypesConvGraph(&self.conv_graph),
-            );
+        if log_enabled!(log::Level::Debug) {
+            match ret {
+                Some(f_idx) => debug!(
+                    "map_through_conversation_to_foreign: we found path after deep search: r {} <-> f {}",
+                    self[rust_ty], self[f_idx].name,
+                ),
+                None => debug!(
+                    "map to foreign failed, foreign_map {}\n conv_graph: {}",
+                    self.ftypes_storage,
+                    DisplayTypesConvGraph(&self.conv_graph),
+                ),
+            }
         }
         ret
     }
@@ -1051,7 +1019,6 @@ impl TypeMap {
     pub(in crate::typemap) fn invalidate_conv_cache(&mut self) {
         self.rust_to_foreign_cache.clear();
         self.rust_from_foreign_cache.clear();
-        self.rust_class_to_foreign_cache.clear();
     }
     pub(in crate::typemap) fn invalidate_conv_for_rust_type(&mut self, rti: RustTypeIdx) {
         self.rust_from_foreign_cache.remove(&rti);
@@ -1155,7 +1122,7 @@ fn try_build_path(
 ) -> Option<PossiblePath> {
     let goal_to = conv_graph[goal_to_idx].clone();
     debug!(
-        "try_build_path: from {} to {}, ty names len {}, graph nodes {}, edges {}",
+        "try_build_path: from '{}' to '{}', ty names len {}, graph nodes {}, edges {}",
         conv_graph[start_from_idx],
         goal_to,
         rust_names_map.len(),
@@ -1220,7 +1187,6 @@ fn try_build_path(
                         goal_to_idx,
                         None,
                     ) {
-                        debug!("try_build_path: NEW ALGO: we found PATH!!!!");
                         let path = find_conversation_path(
                             &ty_graph.conv_graph,
                             start_from_idx,
@@ -1228,6 +1194,7 @@ fn try_build_path(
                             build_for_sp,
                         )
                         .expect("path must exists");
+                        debug!("try_build_path: we found PATH({})!!!!", path.len());
                         if log_enabled!(log::Level::Debug) {
                             for edge in &path {
                                 if let Some((from, to)) = ty_graph.conv_graph.edge_endpoints(*edge)

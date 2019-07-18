@@ -398,7 +398,7 @@ fn register_main_foreign_types(
                     }),
                 }),
                 into_from_rust: None,
-                name_prefix: Some("/**/"),
+                name_prefix: Some("/**/".into()),
             };
             conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
         }
@@ -429,7 +429,7 @@ fn register_main_foreign_types(
                     }),
                 }),
                 into_from_rust: None,
-                name_prefix: Some("/**/"),
+                name_prefix: Some("/**/".into()),
             };
             conv_map.alloc_foreign_type(class_ftype_ref_in)?;
         }

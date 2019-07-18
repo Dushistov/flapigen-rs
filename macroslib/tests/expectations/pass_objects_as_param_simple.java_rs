@@ -1,0 +1,98 @@
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f1(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    a0: jlong,
+) -> () {
+    let a0: &Foo = unsafe { jlong_to_pointer::<Foo>(a0).as_mut().unwrap() };
+    let this: &TestPassObjectsAsParams = unsafe {
+        jlong_to_pointer::<TestPassObjectsAsParams>(this)
+            .as_mut()
+            .unwrap()
+    };
+    let mut ret: () = TestPassObjectsAsParams::f1(this, a0);
+    ret
+}"##;
+
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f2(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    a0: jlong,
+) -> () {
+    let a0: *mut Foo = unsafe { jlong_to_pointer::<Foo>(a0).as_mut().unwrap() };
+    let a0: Box<Foo> = unsafe { Box::from_raw(a0) };
+    let a0: Foo = *a0;
+    let this: &TestPassObjectsAsParams = unsafe {
+        jlong_to_pointer::<TestPassObjectsAsParams>(this)
+            .as_mut()
+            .unwrap()
+    };
+    let mut ret: () = TestPassObjectsAsParams::f2(this, a0);
+    ret
+}"##;
+
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f3(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    a0: jlong,
+) -> () {
+    let a0: &mut Foo = unsafe { jlong_to_pointer::<Foo>(a0).as_mut().unwrap() };
+    let this: &TestPassObjectsAsParams = unsafe {
+        jlong_to_pointer::<TestPassObjectsAsParams>(this)
+            .as_mut()
+            .unwrap()
+    };
+    let mut ret: () = TestPassObjectsAsParams::f3(this, a0);
+    ret
+}"##;
+
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f3_1a(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    a0: jlong,
+) -> () {
+    let a0: &mut Moo = unsafe { jlong_to_pointer::<Moo>(a0).as_mut().unwrap() };
+    let this: &TestPassObjectsAsParams = unsafe {
+        jlong_to_pointer::<TestPassObjectsAsParams>(this)
+            .as_mut()
+            .unwrap()
+    };
+    let mut ret: () = TestPassObjectsAsParams::f3_a(this, a0);
+    ret
+}"##;
+
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f4(
+    env: *mut JNIEnv,
+    _: jclass,
+    a0: jlong,
+) -> () {
+    let a0: &Foo = unsafe { jlong_to_pointer::<Foo>(a0).as_mut().unwrap() };
+    let mut ret: () = TestPassObjectsAsParams::f4(a0);
+    ret
+}"##;
+
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f5(
+    env: *mut JNIEnv,
+    _: jclass,
+    a0: jlong,
+) -> () {
+    let a0: *mut Foo = unsafe { jlong_to_pointer::<Foo>(a0).as_mut().unwrap() };
+    let a0: Box<Foo> = unsafe { Box::from_raw(a0) };
+    let a0: Foo = *a0;
+    let mut ret: () = TestPassObjectsAsParams::f5(a0);
+    ret
+}"##;

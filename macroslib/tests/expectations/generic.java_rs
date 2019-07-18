@@ -15,11 +15,11 @@ pub extern "C" fn Java_org_example_Boo_do_1get_1one_1foo(
     env: *mut JNIEnv,
     _: jclass,
     this: jlong,
-) -> jobject {
+) -> jlong {
     let this: &Boo = unsafe { jlong_to_pointer::<Boo>(this).as_mut().unwrap() };
     let mut ret: Result<Foo, String> = Boo::get_one_foo(this);
-    let mut ret: Foo = jni_unpack_return!(ret, jobject, env);
-    let mut ret: jobject = <jobject>::swig_from(ret, env);
+    let mut ret: Foo = jni_unpack_return!(ret, jlong, env);
+    let ret: jlong = <Foo>::box_object(ret);
     ret
 }"##;
 

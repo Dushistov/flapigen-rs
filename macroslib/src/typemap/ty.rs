@@ -111,9 +111,6 @@ impl ImplementsSet {
         }
         true
     }
-    pub(crate) fn contains(&self, trait_name: &str) -> bool {
-        self.inner.iter().any(|it| *it == trait_name)
-    }
     pub(crate) fn contains_path(&self, path: &syn::Path) -> bool {
         self.inner
             .iter()
@@ -155,7 +152,7 @@ pub(crate) struct ForeignTypeS {
     pub from_into_rust: Option<ForeignConversationRule>,
     /// sometimes you need make unique typename,
     /// but do not show user this "uniqueness"
-    pub name_prefix: Option<&'static str>,
+    pub name_prefix: Option<SmolStr>,
 }
 
 impl ForeignTypeS {
@@ -165,8 +162,8 @@ impl ForeignTypeS {
     pub(crate) fn typename(&self) -> SmolStr {
         match self.name_prefix {
             None => self.name.typename.clone(),
-            Some(prefix) => {
-                debug_assert!(self.name.typename.as_str().starts_with(prefix));
+            Some(ref prefix) => {
+                debug_assert!(self.name.typename.as_str().starts_with(prefix.as_str()));
                 self.name.typename.as_str()[prefix.len()..].into()
             }
         }

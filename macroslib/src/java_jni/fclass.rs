@@ -8,7 +8,7 @@ use syn::{spanned::Spanned, Type};
 use super::{
     calc_this_type_for_method, java_class_full_name, java_class_name_to_jni, java_code,
     map_type::map_type, map_write_err, method_name, rust_code, JavaContext, JavaConverter,
-    JavaForeignTypeInfo, JniForeignMethodSignature,
+    JavaForeignTypeInfo, JniForeignMethodSignature, INTERNAL_PTR_MARKER, JAVA_RUST_SELF_NAME,
 };
 use crate::{
     error::{panic_on_syn_error, DiagnosticError, Result},
@@ -73,8 +73,6 @@ fn generate_java_code(
     methods_sign: &[JniForeignMethodSignature],
     null_annotation_package: Option<&str>,
 ) -> std::result::Result<(), String> {
-    let java_rust_self_name = "mNativeObj";
-
     let path = output_dir.join(format!("{}.java", class.name));
     let mut file = FileWriteCache::new(&path);
 
@@ -136,11 +134,11 @@ public final class {class_name} {{
         let mut known_names: FxHashSet<SmolStr> =
             method.arg_names_without_self().map(|x| x.into()).collect();
         if let MethodVariant::Method(_) = method.variant {
-            if known_names.contains(java_rust_self_name) {
+            if known_names.contains(JAVA_RUST_SELF_NAME) {
                 return Err(format!("In method {} there is argument with name {}, this name reserved for generated code",
-                                   method.short_name(), java_rust_self_name));
+                                   method.short_name(), JAVA_RUST_SELF_NAME));
             }
-            known_names.insert(java_rust_self_name.into());
+            known_names.insert(JAVA_RUST_SELF_NAME.into());
         }
         let ret_name = new_unique_name(&known_names, "ret");
         known_names.insert(ret_name.clone());
@@ -314,7 +312,7 @@ public final class {class_name} {{
                         r#"
         {return_code}{func_name}({rust_self_name}{args});
 "#,
-                        rust_self_name = java_rust_self_name,
+                        rust_self_name = JAVA_RUST_SELF_NAME,
                         return_code = if ret_type != "void" { "return " } else { "" },
                         args = args_for_call_internal,
                         func_name = func_name,
@@ -327,7 +325,7 @@ public final class {class_name} {{
         {intermidiate_ret_type} {ret_name} = {func_name}({rust_self_name}{args});
         {ret_conv_code}
 "#,
-                        rust_self_name = java_rust_self_name,
+                        rust_self_name = JAVA_RUST_SELF_NAME,
                         ret_conv_code = ret_conv_code,
                         ret_name = ret_name,
                         intermidiate_ret_type = intermidiate_ret_type,
@@ -406,7 +404,7 @@ public final class {class_name} {{
     }}
     private static native long {func_name}({args_with_types}){exception_spec};
 ",
-                        rust_self_name = java_rust_self_name,
+                        rust_self_name = JAVA_RUST_SELF_NAME,
                         exception_spec = exception_spec,
                         func_name = func_name,
                         args_with_types = java_code::args_with_java_types(
@@ -450,9 +448,15 @@ May be you need to use `private constructor = empty;` syntax?",
         }}
     }}
     private static native void do_delete(long me);
+    /*package*/ {class_name}({internal_ptr_marker} marker, long ptr) {{
+        assert marker == {internal_ptr_marker}.RAW_PTR;
+        this.{rust_self_name} = ptr;
+    }}
     /*package*/ long {rust_self_name};
 ",
-            rust_self_name = java_rust_self_name,
+            rust_self_name = JAVA_RUST_SELF_NAME,
+            class_name = class.name,
+            internal_ptr_marker = INTERNAL_PTR_MARKER,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
@@ -727,6 +731,11 @@ fn find_suitable_foreign_types_for_methods(
     let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
 
     for method in &class.methods {
+        debug!(
+            "find_suitable_foreign_types_for_methods: class {}, method {}",
+            class.name,
+            method.short_name()
+        );
         //skip self argument
         let skip_n = match method.variant {
             MethodVariant::Method(_) => 1,
