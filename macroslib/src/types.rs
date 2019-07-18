@@ -21,6 +21,7 @@ pub(crate) struct ForeignerClassInfo {
     pub copy_derived: bool,
     /// constructor type implements Clone trait
     pub clone_derived: bool,
+    pub smart_ptr_copy_derived: bool,
 }
 
 /// Two types instead of one, to simplify live to developer

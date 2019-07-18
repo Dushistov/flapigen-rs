@@ -11,13 +11,16 @@ use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use std::{fmt, io::Write};
-use syn::Type;
+use syn::{spanned::Spanned, Type};
 
 use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result},
     file_cache::FileWriteCache,
     typemap::{
-        ast::{if_result_return_ok_err_types, if_ty_result_return_ok_type, DisplayToTokens},
+        ast::{
+            check_if_smart_pointer_return_inner_type, if_result_return_ok_err_types,
+            if_ty_result_return_ok_type, DisplayToTokens,
+        },
         ty::RustType,
         utils::{
             configure_ftype_rule, validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT,
@@ -25,7 +28,8 @@ use crate::{
         ForeignTypeInfo, TypeMapConvRuleInfo,
     },
     types::{ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodVariant},
-    JavaConfig, LanguageGenerator, SourceCode, TypeMap, WRITE_TO_MEM_FAILED_MSG,
+    JavaConfig, LanguageGenerator, SourceCode, TypeMap, SMART_PTR_COPY_TRAIT,
+    WRITE_TO_MEM_FAILED_MSG,
 };
 use map_class_self_type::register_typemap_for_self_type;
 
@@ -122,11 +126,35 @@ impl JavaConfig {
                 }
                 traits.push("Copy");
             }
+            if class.smart_ptr_copy_derived {
+                traits.push(SMART_PTR_COPY_TRAIT);
+            }
+
             let this_type: RustType = conv_map.find_or_alloc_rust_type_that_implements(
                 &this_type_for_method,
                 &traits,
                 class.src_id,
             );
+            if class.smart_ptr_copy_derived {
+                if class.copy_derived {
+                    println!(
+                        "warning=class {} marked as Copy and {}, ignore Copy",
+                        class.name, SMART_PTR_COPY_TRAIT
+                    );
+                }
+                if check_if_smart_pointer_return_inner_type(&this_type, "Rc").is_none()
+                    && check_if_smart_pointer_return_inner_type(&this_type, "Arc").is_none()
+                {
+                    return Err(DiagnosticError::new(
+                        class.src_id,
+                        this_type.ty.span(),
+                        format!(
+                            "class {} marked as {}, but type '{}' is not Arc<> or Rc<>",
+                            class.name, SMART_PTR_COPY_TRAIT, this_type
+                        ),
+                    ));
+                }
+            }
             register_typemap_for_self_type(conv_map, class, this_type, self_desc)?;
         }
 

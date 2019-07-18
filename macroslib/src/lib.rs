@@ -52,6 +52,7 @@ use crate::{
 };
 
 pub(crate) static WRITE_TO_MEM_FAILED_MSG: &str = "Write to memory buffer failed, no free mem?";
+pub(crate) static SMART_PTR_COPY_TRAIT: &str = "SmartPtrCopy";
 
 /// Calculate target pointer width from environment variable
 /// that `cargo` inserts

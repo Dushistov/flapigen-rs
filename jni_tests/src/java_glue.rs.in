@@ -824,8 +824,8 @@ foreigner_class!(
     class EffectBuilder {
         self_type EffectBuilderWrapper;
         constructor EffectBuilderWrapper::new() -> EffectBuilderWrapper;
-        method EffectBuilderWrapper::add_gamepad(&self, gamepad: Gamepad) -> EffectBuilderWrapper;
-        method EffectBuilderWrapper::tag(&self) -> Vec<String>;
+        fn EffectBuilderWrapper::add_gamepad(&self, gamepad: Gamepad) -> EffectBuilderWrapper;
+        fn EffectBuilderWrapper::tag(&self) -> Vec<String>;
     }
 );
 
@@ -893,4 +893,55 @@ foreigner_class!(class TestFnInline {
     fn int_to_str(a: i32) -> String {
         format!("{}", a)
     }
+});
+
+
+struct Session {
+    name: String,
+}
+
+foreigner_class!(
+    #[derive(SmartPtrCopy)]
+    class Session {
+        self_type Session;
+        constructor session_init() -> Rc<RefCell<Session>> {
+            Rc::new(RefCell::new(Session::default()))
+        }
+        fn name(&self) -> &str {
+            &this.name
+        }
+    }
+);
+
+impl Default for Session {
+    fn default() -> Self {
+        Self {
+            name: "Session".into(),
+        }
+    }
+}
+
+#[derive(Default)]
+struct NavigationService {    
+    on_gnss_updates_cb: Vec<Box<FnMut(i32)>>,
+}
+
+impl NavigationService {
+    fn call_callbacks(&mut self) {
+        for cb in &mut self.on_gnss_updates_cb {
+            (*cb)(17);
+        }
+    }
+}
+
+foreigner_class!(class NavigationService {
+    self_type NavigationService;
+
+    constructor init() -> Rc<RefCell<NavigationService>> {
+        Rc::new(RefCell::new(NavigationService::default()))
+    }
+    fn subscribeOnUpdates(&mut self, session: Rc<RefCell<Session>>) {
+        this.on_gnss_updates_cb.push(Box::new(move |x| session.borrow_mut().name = format!("{}", x)));
+    }
+    fn NavigationService::call_callbacks(&mut self); alias callCallbacks;
 });

@@ -213,6 +213,11 @@ impl CppConfig {
                 }
                 traits.push("Copy");
             }
+
+            if class.smart_ptr_copy_derived {
+                unimplemented!();
+            }
+
             let this_type = conv_map.find_or_alloc_rust_type_that_implements(
                 this_type_for_method,
                 &traits,

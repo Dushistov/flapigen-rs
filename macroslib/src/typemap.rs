@@ -1254,6 +1254,7 @@ mod tests {
             doc_comments: vec![],
             copy_derived: false,
             clone_derived: false,
+            smart_ptr_copy_derived: false,
         });
 
         let rc_refcell_foo_ty = types_map

@@ -33,6 +33,8 @@ import com.example.rust.TestFnInline;
 import com.example.rust.EnumObserver;
 import com.example.rust.LocationService;
 import com.example.rust.Position;
+import com.example.rust.Session;
+import com.example.rust.NavigationService;
 
 class Main {
     public static void main(String[] args) {
@@ -126,6 +128,7 @@ class Main {
 	    testFnInline();
 	    testGetObjectWithException();
 	    testCopyDerivedObjects();
+	    testSmartPtrCopyDerivedObjects();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -477,5 +480,14 @@ class Main {
 	Xyz u = new Xyz(1., 1., 1.);
 	Xyz r1 = Xyz.add(z, u);
 	Xyz r2 = Xyz.add(z, u);
+    }
+
+    private static void testSmartPtrCopyDerivedObjects() {
+	Session session = new Session();
+	assert session.name().equals("Session");
+	NavigationService nav_serv = new NavigationService();
+	nav_serv.subscribeOnUpdates(session);
+	nav_serv.callCallbacks();
+	assert session.name().equals("17");
     }
 }

@@ -1,0 +1,27 @@
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_NavigationService_do_1subscribeOnUpdates(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    session: jlong,
+) -> () {
+    let session: *mut RefCell<Session> = unsafe {
+        jlong_to_pointer::<RefCell<Session>>(session)
+            .as_mut()
+            .unwrap()
+    };
+    let session: Rc<RefCell<Session>> = unsafe { Rc::from_raw(session) };
+    let tmp: Rc<RefCell<Session>> = session;
+    let session: Rc<RefCell<Session>> = tmp.clone();
+    ::std::mem::forget(tmp);
+    let this: &mut RefCell<NavigationService> = unsafe {
+        jlong_to_pointer::<RefCell<NavigationService>>(this)
+            .as_mut()
+            .unwrap()
+    };
+    let mut this: &RefCell<NavigationService> = this;
+    let mut this: RefMut<NavigationService> = <RefMut<NavigationService>>::swig_from(this, env);
+    let mut this: &mut NavigationService = this.swig_deref_mut();
+    let mut ret: () = subscribeOnUpdates(this, session);
+    ret
+}"##;
