@@ -11,7 +11,6 @@ r#"struct C_ControlStateObserver {
     void *opaque;
     //! call by Rust side when callback not need anymore
     void (*C_ControlStateObserver_deref)(void *opaque);
-    
 
     void (*onSessionUpdate)(uint32_t item, char is_ok, void *opaque);
 

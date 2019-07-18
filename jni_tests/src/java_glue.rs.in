@@ -310,7 +310,7 @@ foreigner_class!(
     #[derive(Copy)]
     class Xyz {
         self_type Xyz;
-        constructor Xyz::zero() -> Xyz;            
+        constructor Xyz::zero() -> Xyz;
         constructor new(x: f64, y: f64, z: f64) -> Xyz {
             Xyz { x, y, z }
         }
@@ -647,16 +647,35 @@ foreigner_class!(class Observable {
 trait CheckAllTypesInCallbackArgs {
     fn check_all_types1(&self, _: u8, _: i8, _: u16, _: i16, _: u32, _: i32, _: u32, _: i32);
     fn check_all_types2(&self, _: u64, _: i64, _: f32, _: f64, _: usize, _: isize);
+    fn check_foo(&self, foo: Foo);
 }
 
 foreign_callback!(callback CheckAllTypesInCallbackArgs {
     self_type CheckAllTypesInCallbackArgs;
-    checkAllTypes1 = CheckAllTypesInCallbackArgs::check_all_types1(&self, _: u8, _: i8, _: u16,
-                                                                   _: i16, _: u32, _: i32,
+    checkAllTypes1 = CheckAllTypesInCallbackArgs::check_all_types1(&self,
+                                                                   _: u8, _: i8,
+                                                                   _: u16, _: i16,
+                                                                   _: u32, _: i32,
                                                                    _: u32, _: i32);
     checkAllTypes2 = CheckAllTypesInCallbackArgs::check_all_types2(&self, _: u64, _: i64, _: f32,
                                                                    _: f64, _: usize, _: isize);
+    checkFoo = CheckAllTypesInCallbackArgs::check_foo(&self, foo: Foo);
 });
+
+foreigner_class!(
+    class TestCheckAllTypesInCallbackArgs {
+        fn call_cb(cb: Box<CheckAllTypesInCallbackArgs>) {
+            cb.check_all_types1(u8::max_value(), i8::min_value(),
+                                u16::max_value(), i16::min_value(),
+                                u32::max_value(), i32::min_value(),
+                                u32::min_value(), i32::max_value());
+            cb.check_all_types2(u64::from(u32::max_value()) + 1, i64::max_value(),
+                                ::std::f32::consts::PI, ::std::f64::consts::E,
+                                17, -17);
+            cb.check_foo(Foo { data: 17, name: "17".into() });
+        }
+    }
+);
 
 struct FooWithLifetime<'a> {
     data: Box<OnEvent + 'a>,
@@ -895,7 +914,6 @@ foreigner_class!(class TestFnInline {
     }
 });
 
-
 struct Session {
     name: String,
 }
@@ -922,7 +940,7 @@ impl Default for Session {
 }
 
 #[derive(Default)]
-struct NavigationService {    
+struct NavigationService {
     on_gnss_updates_cb: Vec<Box<FnMut(i32)>>,
 }
 

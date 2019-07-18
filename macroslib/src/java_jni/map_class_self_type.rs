@@ -112,6 +112,24 @@ fn register_rust_ty_conversation_rules(conv_map: &mut TypeMap, this_type: &RustT
         .into(),
     );
 
+    let jobject_ty = conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jobject });
+    conv_map.add_conversation_rule(
+        this_type.to_idx(),
+        jobject_ty.to_idx(),
+        TypeConvCode::new2(
+            format!(
+                r#"
+        let {to_var}: jobject = object_to_jobject({from_var}, <{this_type}>::jni_class_name(), env);
+"#,
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE,
+                this_type = this_type
+            ),
+            invalid_src_id_span(),
+        )
+        .into(),
+    );
+
     Ok(())
 }
 

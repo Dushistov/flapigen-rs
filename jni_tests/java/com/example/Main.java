@@ -35,6 +35,8 @@ import com.example.rust.LocationService;
 import com.example.rust.Position;
 import com.example.rust.Session;
 import com.example.rust.NavigationService;
+import com.example.rust.CheckAllTypesInCallbackArgs;
+import com.example.rust.TestCheckAllTypesInCallbackArgs;
 
 class Main {
     public static void main(String[] args) {
@@ -129,6 +131,7 @@ class Main {
 	    testGetObjectWithException();
 	    testCopyDerivedObjects();
 	    testSmartPtrCopyDerivedObjects();
+	    testAllTypesInCallbackArgs();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -211,6 +214,7 @@ class Main {
     private static class TestEnumObserver implements EnumObserver {
 	boolean values[] = new boolean[3];
 
+	@Override
 	public void onStateUpdate(MyEnum item, boolean is_ok) {
 	    switch (item) {
 	    case ITEM1:
@@ -242,6 +246,7 @@ class Main {
         int x;
         String s;
 
+	@Override
         public void onStateChanged(int x, String s) {
             //System.out.println(String.format("TestObserver.onStateChange %d", x));
             this.x = x;
@@ -489,5 +494,59 @@ class Main {
 	nav_serv.subscribeOnUpdates(session);
 	nav_serv.callCallbacks();
 	assert session.name().equals("17");
+    }
+
+    private static class TesterAllTypesInCallbackArgs implements CheckAllTypesInCallbackArgs {
+	private boolean types1_called;
+	private boolean types2_called;
+	private boolean foo_called;
+
+	@Override
+	public void checkAllTypes1(short a0, byte a1, int a2, short a3, long a4, int a5, long a6, int a7) {
+	    assert a0 == 255;
+	    assert a1 == -128;
+	    assert a2 == ((1 << 16) - 1);
+	    assert a3 == -(1 << 15);
+	    assert a4 == ((1l << 32) - 1);
+	    assert a5 == -(1 << 31);
+	    assert a6 == 0;
+	    assert a7 == ((1 << 31) - 1);
+	    types1_called = true;
+	}
+
+	public void checkAllTypes2(long a0, long a1, float a2, double a3, long a4, long a5) {
+	    assert a0 == (1l << 32);
+	    assert a1 == ((1l << 63) - 1);
+            assert Math.abs((float )Math.PI - a2) < 1e-10;
+	    assert Math.abs(Math.E - a3) < 1e-10;
+	    assert a4 == 17;
+	    assert a5 == -17;
+	    types2_called = true;
+	}
+
+	public void checkAllTypes2(long a0, long a1, float a2, double a3, long a4, int a5) {
+	    assert a0 == (1l << 32);
+	    assert a1 == ((1l << 63) - 1);
+            assert Math.abs((float )Math.PI - a2) < 1e-10;
+	    assert Math.abs(Math.E - a3) < 1e-10;
+	    assert a4 == 17;
+	    assert a5 == -17;
+	    types2_called = true;
+	}
+
+	@Override
+	public void checkFoo(Foo foo) {
+	    assert 17 == foo.calcF(0, 0);
+	    assert foo.getName().equals("17");
+	    foo_called = true;
+	}
+    }
+
+    private static void testAllTypesInCallbackArgs() {
+	TesterAllTypesInCallbackArgs cb = new TesterAllTypesInCallbackArgs();
+	TestCheckAllTypesInCallbackArgs.call_cb(cb);
+	assert cb.types1_called;
+	assert cb.types2_called;
+	assert cb.foo_called;
     }
 }

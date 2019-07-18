@@ -334,7 +334,7 @@ struct C_{interface_name} {{
     void *opaque;
     //! call by Rust side when callback not need anymore
     void (*C_{interface_name}_deref)(void *opaque);
-    "#,
+"#,
         interface_name = interface.name,
         doc_comments = interface_comments
     )
@@ -381,8 +381,7 @@ struct C_{interface_name} {{
             };
         write!(
             file_c,
-            r#"
-{doc_comments}
+            r#"{doc_comments}
     {c_ret_type} (*{method_name})({single_args_with_types}void *opaque);
 "#,
             method_name = method.name,
@@ -398,8 +397,7 @@ struct C_{interface_name} {{
 
         write!(
             &mut cpp_virtual_methods,
-            r#"
-{doc_comments}
+            r#"{doc_comments}
     virtual {cpp_ret_type} {method_name}({single_args_with_types}) = 0;
 "#,
             method_name = method.name,
