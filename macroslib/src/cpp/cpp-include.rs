@@ -1,16 +1,4 @@
 mod swig_foreign_types_map {
-    #![swig_foreigner_type = "int16_t"]
-    #![swig_rust_type = "i16"]
-    #![swig_foreigner_type = "uint16_t"]
-    #![swig_rust_type = "u16"]
-    #![swig_foreigner_type = "int32_t"]
-    #![swig_rust_type = "i32"]
-    #![swig_foreigner_type = "uint32_t"]
-    #![swig_rust_type = "u32"]
-    #![swig_foreigner_type = "int64_t"]
-    #![swig_rust_type = "i64"]
-    #![swig_foreigner_type = "uint64_t"]
-    #![swig_rust_type = "u64"]
     #![swig_foreigner_type = "uintptr_t"]
     #![swig_rust_type = "usize"]
     #![swig_foreigner_type = "float"]
@@ -36,6 +24,36 @@ foreign_typemap!(
 foreign_typemap!(
     (r_type) u8;
     (f_type, req_modules = ["<stdint.h>"]) "uint8_t";
+);
+
+foreign_typemap!(
+    (r_type) i16;
+    (f_type, req_modules = ["<stdint.h>"]) "int16_t";
+);
+
+foreign_typemap!(
+    (r_type) u16;
+    (f_type, req_modules = ["<stdint.h>"]) "uint16_t";
+);
+
+foreign_typemap!(
+    (r_type) i32;
+    (f_type, req_modules = ["<stdint.h>"]) "int32_t";
+);
+
+foreign_typemap!(
+    (r_type) u32;
+    (f_type, req_modules = ["<stdint.h>"]) "uint32_t";
+);
+
+foreign_typemap!(
+    (r_type) i64;
+    (f_type, req_modules = ["<stdint.h>"]) "int64_t";
+);
+
+foreign_typemap!(
+    (r_type) u64;
+    (f_type, req_modules = ["<stdint.h>"]) "uint64_t";
 );
 
 #[allow(unused_macros)]

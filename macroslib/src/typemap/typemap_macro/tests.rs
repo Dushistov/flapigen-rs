@@ -231,27 +231,33 @@ fn test_foreign_typemap_java_datetime() {
                         + (since_unix_epoch.subsec_nanos() / 1_000_000) as u64)
                     as jlong;
             };
-            ($pin:f_type) => "java.util.Date" "$out = new java.util.Date($pin);";
+            ($pin:f_type, option = "NoNullAnnotation") => "java.util.Date" "$out = new java.util.Date($pin);";
+            ($p:f_type, option = "NullAnnotation") => "@NonNull java.util.Date" "$out = new java.util.Date($p);";
         )
     });
-    assert!(!rule.if_simple_rtype_ftype_map_no_lang_backend().is_some());
-    assert!(!rule.contains_data_for_language_backend());
+    assert!(rule.if_simple_rtype_ftype_map_no_lang_backend().is_none());
+    assert!(rule.contains_data_for_language_backend());
 }
 
-#[ignore]
 #[test]
-fn test_foreign_typemap_jstring() {
+fn test_foreign_typemap_jboolean() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
-            ($pin:r_type, $jstr:variable) &str <= jstring {
-                $jstr = JavaString::new(env, $pin);
-                $out = $jstr.to_str();
+            ($p:r_type) bool => jboolean {
+                $out = if $p { 1 as jboolean } else { 0 as jboolean }
             };
-            ($pin:f_type, non_null) <= "String";
+            ($p:f_type) => "boolean";
+            ($p:r_type) bool <= jboolean {
+                $out = ($p != 0)
+            };
+            ($p:f_type) <= "boolean";
         )
     });
+    assert!(!rule.is_empty());
+    assert!(!rule.is_generic());
+    assert!(!rule.if_simple_rtype_ftype_map().is_some());
     assert!(!rule.if_simple_rtype_ftype_map_no_lang_backend().is_some());
-    assert!(rule.contains_data_for_language_backend());
+    assert!(!rule.contains_data_for_language_backend());
 }
 
 #[test]

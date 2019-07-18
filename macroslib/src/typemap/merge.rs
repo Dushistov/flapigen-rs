@@ -64,6 +64,7 @@ impl TypeMap {
         src_id: SourceId,
         mut ri: TypeMapConvRuleInfo,
     ) -> Result<()> {
+        debug!("may_be_merge_conv_rule: {:?}", ri);
         ri.set_src_id(src_id);
         if ri.is_generic() {
             self.generic_rules.push(Rc::new(ri));
@@ -81,6 +82,7 @@ impl TypeMap {
         src_id: SourceId,
         mut ri: TypeMapConvRuleInfo,
     ) -> Result<()> {
+        debug!("merge_conv_rule: ri {:?}", ri);
         assert!(!ri.contains_data_for_language_backend());
         assert!(!ri.is_generic());
         if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map_no_lang_backend() {
@@ -174,23 +176,33 @@ impl TypeMap {
                     "no r_type corresponding to this f_type rule",
                 )
             })?;
-            let conv_code = rule.code.ok_or_else(|| {
-                DiagnosticError::new(src_id, right_fty.sp, "expect conversation code here")
-            })?;
 
             self.invalidate_conv_for_rust_type(rty_right);
             self.invalidate_conv_for_rust_type(rty_left);
-            ft_into_from_rust = Some((
-                right_fty,
-                ForeignConversationRule {
-                    rust_ty: rty_left,
-                    intermediate: Some(ForeignConversationIntermediate {
-                        input_to_output: rule.input_to_output,
-                        intermediate_ty: rty_right,
-                        conv_code,
-                    }),
-                },
-            ));
+            match rule.code {
+                Some(conv_code) => {
+                    ft_into_from_rust = Some((
+                        right_fty,
+                        ForeignConversationRule {
+                            rust_ty: rty_left,
+                            intermediate: Some(ForeignConversationIntermediate {
+                                input_to_output: rule.input_to_output,
+                                intermediate_ty: rty_right,
+                                conv_code,
+                            }),
+                        },
+                    ));
+                }
+                None => {
+                    ft_into_from_rust = Some((
+                        right_fty,
+                        ForeignConversationRule {
+                            rust_ty: rty_right,
+                            intermediate: None,
+                        },
+                    ));
+                }
+            }
         }
 
         let mut ft_from_into_rust = None;
@@ -222,22 +234,33 @@ impl TypeMap {
                     "no r_type corresponding to this f_type rule",
                 )
             })?;
-            let conv_code = rule.code.ok_or_else(|| {
-                DiagnosticError::new(src_id, right_fty.sp, "expect conversation code here")
-            })?;
+
             self.invalidate_conv_for_rust_type(rty_right);
             self.invalidate_conv_for_rust_type(rty_left);
-            ft_from_into_rust = Some((
-                right_fty,
-                ForeignConversationRule {
-                    rust_ty: rty_left,
-                    intermediate: Some(ForeignConversationIntermediate {
-                        input_to_output: rule.input_to_output,
-                        intermediate_ty: rty_right,
-                        conv_code,
-                    }),
-                },
-            ));
+            match rule.code {
+                Some(conv_code) => {
+                    ft_from_into_rust = Some((
+                        right_fty,
+                        ForeignConversationRule {
+                            rust_ty: rty_left,
+                            intermediate: Some(ForeignConversationIntermediate {
+                                input_to_output: rule.input_to_output,
+                                intermediate_ty: rty_right,
+                                conv_code,
+                            }),
+                        },
+                    ));
+                }
+                None => {
+                    ft_from_into_rust = Some((
+                        right_fty,
+                        ForeignConversationRule {
+                            rust_ty: rty_right,
+                            intermediate: None,
+                        },
+                    ));
+                }
+            }
         }
 
         fn validate_rule_rewrite(

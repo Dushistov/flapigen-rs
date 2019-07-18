@@ -1,4 +1,5 @@
-use proc_macro2::{Ident, Span};
+use proc_macro2::{Ident, Span, TokenStream};
+use quote::quote;
 use smol_str::SmolStr;
 use std::fmt;
 use syn::{parse_quote, spanned::Spanned, Type};
@@ -20,6 +21,7 @@ pub(crate) struct ForeignerClassInfo {
     pub copy_derived: bool,
     /// constructor type implements Clone trait
     pub clone_derived: bool,
+    pub smart_ptr_copy_derived: bool,
 }
 
 /// Two types instead of one, to simplify live to developer
@@ -205,6 +207,17 @@ pub(crate) enum SelfTypeVariant {
     Default,
 }
 
+impl From<SelfTypeVariant> for TokenStream {
+    fn from(x: SelfTypeVariant) -> TokenStream {
+        match x {
+            SelfTypeVariant::RptrMut => quote!(&mut self),
+            SelfTypeVariant::Rptr => quote!(&self),
+            SelfTypeVariant::Mut => quote!(mut self),
+            SelfTypeVariant::Default => quote!(self),
+        }
+    }
+}
+
 impl fmt::Display for SelfTypeVariant {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
         use SelfTypeVariant::*;
@@ -235,9 +248,6 @@ pub(crate) struct ForeignEnumInfo {
 }
 
 impl ForeignEnumInfo {
-    pub(crate) fn rust_enum_name(&self) -> String {
-        self.name.to_string()
-    }
     pub(crate) fn span(&self) -> Span {
         self.name.span()
     }

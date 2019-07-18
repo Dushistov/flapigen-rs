@@ -2,7 +2,6 @@
 "public final java.util.OptionalLong f2(@Nullable Long a0)";
 "public final java.util.Optional<Boo> f3()";
 r#"public final void f4(@Nullable Boo foo) {
-
         long a0 = 0;//TODO: use ptr::null() for corresponding constant
         if (foo != null) {
             a0 = foo.mNativeObj;

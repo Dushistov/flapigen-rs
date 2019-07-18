@@ -1,8 +1,6 @@
 mod swig_foreign_types_map {
     #![swig_foreigner_type = "void"]
     #![swig_rust_type = "()"]
-    #![swig_foreigner_type = "boolean"]
-    #![swig_rust_type = "jboolean"]
     #![swig_foreigner_type = "byte"]
     #![swig_rust_type = "jbyte"]
     #![swig_foreigner_type = "short"]
@@ -30,8 +28,6 @@ mod swig_foreign_types_map {
     #![swig_foreigner_type = "double []"]
     #![swig_rust_type = "jdoubleArray"]
     #![swig_foreigner_type = "Object"]
-    #![swig_rust_type_not_unique = "jobject"]
-    #![swig_foreigner_type = "java.util.Date"]
     #![swig_rust_type_not_unique = "jobject"]
     #![swig_foreigner_type = "Object []"]
     #![swig_rust_type_not_unique = "jobjectArray"]
@@ -80,6 +76,26 @@ trait SwigForeignClass {
     fn jni_class_name() -> *const ::std::os::raw::c_char;
     fn box_object(x: Self) -> jlong;
     fn unbox_object(x: jlong) -> Self;
+}
+
+#[allow(dead_code)]
+pub trait SwigForeignCLikeEnum {
+    fn as_jint(&self) -> jint;
+    /// # Panics
+    /// Panics on error
+    fn from_jint(_: jint) -> Self;
+}
+
+impl<T: SwigForeignCLikeEnum> SwigFrom<T> for jint {
+    fn swig_from(x: T, _: *mut JNIEnv) -> jint {
+        x.as_jint()
+    }
+}
+
+impl<T: SwigForeignCLikeEnum> SwigFrom<jint> for T {
+    fn swig_from(x: jint, _: *mut JNIEnv) -> T {
+        T::from_jint(x)
+    }
 }
 
 #[allow(unused_macros)]
@@ -464,21 +480,30 @@ macro_rules! jni_unpack_return {
     }};
 }
 
-impl SwigInto<bool> for jboolean {
-    fn swig_into(self, _: *mut JNIEnv) -> bool {
-        self != 0
-    }
-}
+foreign_typemap!(
+    ($p:r_type) bool => jboolean {
+        $out = if $p { 1 as jboolean } else { 0 as jboolean }
+    };
+    ($p:f_type) => "boolean";
+    ($p:r_type) bool <= jboolean {
+        $out = $p != 0
+    };
+    ($p:f_type) <= "boolean";
+);
 
-impl SwigFrom<bool> for jboolean {
-    fn swig_from(x: bool, _: *mut JNIEnv) -> Self {
-        if x {
-            1 as jboolean
-        } else {
-            0 as jboolean
-        }
-    }
-}
+foreign_typemap!(
+    ($p:r_type) SystemTime => jlong {
+        let since_unix_epoch = $p
+            .duration_since(::std::time::UNIX_EPOCH)
+            .expect("SystemTime to Unix time conv. error");
+        $out = <i64 as ::std::convert::TryFrom<u64>>::try_from(
+            since_unix_epoch.as_secs() * 1_000 + u64::from(since_unix_epoch.subsec_nanos() / 1_000_000),
+        )
+        .expect("SystemTime: milleseconds u64 to i64 convert error")
+    };
+    ($p:f_type, option = "NoNullAnnotations") => "java.util.Date" "$out = new java.util.Date($p);";
+    ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Date" "$out = new java.util.Date($p);";
+);
 
 impl SwigFrom<i8> for jbyte {
     fn swig_from(x: i8, _: *mut JNIEnv) -> Self {
@@ -647,37 +672,6 @@ fn from_std_string_jstring(x: String, env: *mut JNIEnv) -> jstring {
     unsafe {
         let x = ::std::ffi::CString::from_vec_unchecked(x);
         (**env).NewStringUTF.unwrap()(env, x.as_ptr())
-    }
-}
-
-#[swig_to_foreigner_hint = "java.util.Date"]
-impl SwigFrom<SystemTime> for jobject {
-    fn swig_from(x: SystemTime, env: *mut JNIEnv) -> Self {
-        let since_unix_epoch = x.duration_since(::std::time::UNIX_EPOCH).unwrap();
-        let mills: jlong = (since_unix_epoch.as_secs() * 1_000
-            + (since_unix_epoch.subsec_nanos() / 1_000_000) as u64)
-            as jlong;
-        let date_class: jclass =
-            unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/Date")) };
-        assert!(
-            !date_class.is_null(),
-            "FindClass for `java/util/Date` failed"
-        );
-        let init: jmethodID = unsafe {
-            (**env).GetMethodID.unwrap()(
-                env,
-                date_class,
-                swig_c_str!("<init>"),
-                swig_c_str!("(J)V"),
-            )
-        };
-        assert!(
-            !init.is_null(),
-            "java/util/Date GetMethodID for init failed"
-        );
-        let x = unsafe { (**env).NewObject.unwrap()(env, date_class, init, mills) };
-        assert!(!x.is_null());
-        x
     }
 }
 

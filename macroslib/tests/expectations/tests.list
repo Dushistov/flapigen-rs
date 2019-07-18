@@ -17,7 +17,7 @@ foreign_interface_cpp_return_not_void
 foreign_interface
 foreign_vec_as_arg_cpp
 foreign_vec_return
-generated_cpp_ref_classes
+generated_ref_classes
 generic
 int_array
 interface_with_str
@@ -50,3 +50,4 @@ work_with_rc
 inline_function
 test_bare_fn_match
 cpp_generic_ptr_rule
+smart_ptr_copy_derived

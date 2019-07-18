@@ -3,7 +3,7 @@ use std::io::Write;
 use petgraph::Direction;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
-use syn::spanned::Spanned;
+use syn::{spanned::Spanned, Type};
 
 use crate::{
     cpp::{
@@ -15,14 +15,42 @@ use crate::{
     namegen::new_unique_name,
     source_registry::SourceId,
     typemap::{
-        ast::DisplayToTokens, ty::RustType, utils::rust_to_foreign_convert_method_inputs,
+        ast::{parse_ty_with_given_span, DisplayToTokens, TypeName},
+        ty::RustType,
+        utils::rust_to_foreign_convert_method_inputs,
         ForeignTypeInfo, FROM_VAR_TEMPLATE,
     },
     types::ForeignInterface,
     WRITE_TO_MEM_FAILED_MSG,
 };
 
-pub(in crate::cpp) fn rust_code_generate_interface(
+pub(in crate::cpp) fn generate_interface(
+    ctx: &mut CppContext,
+    interface: &ForeignInterface,
+) -> Result<()> {
+    let mut f_methods = find_suitable_ftypes_for_interace_methods(ctx, interface)?;
+    let req_includes = cpp_code::cpp_list_required_includes(&mut f_methods);
+    generate_for_interface(ctx, interface, &req_includes, &f_methods)
+        .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;
+    rust_code_generate_interface(ctx, interface, &f_methods)?;
+
+    let c_struct_name = format!("C_{}", interface.name);
+    let rust_struct_pointer = format!("*const {}", c_struct_name);
+    let rust_ty: Type = parse_ty_with_given_span(&rust_struct_pointer, interface.name.span())
+        .map_err(|err| DiagnosticError::from_syn_err(interface.src_id, err))?;
+    let c_struct_pointer = format!("const struct {} * const", c_struct_name);
+
+    let rust_ty = ctx.conv_map.find_or_alloc_rust_type_no_src_id(&rust_ty);
+
+    ctx.conv_map.add_foreign(
+        rust_ty,
+        TypeName::new(c_struct_pointer, interface.src_id_span()),
+    )?;
+
+    Ok(())
+}
+
+fn rust_code_generate_interface(
     ctx: &mut CppContext,
     interface: &ForeignInterface,
     methods_sign: &[CppForeignMethodSignature],
@@ -234,7 +262,7 @@ impl Drop for {struct_with_funcs} {{
     Ok(())
 }
 
-pub(in crate::cpp) fn find_suitable_ftypes_for_interace_methods(
+fn find_suitable_ftypes_for_interace_methods(
     ctx: &mut CppContext,
     interace: &ForeignInterface,
 ) -> Result<Vec<CppForeignMethodSignature>> {
@@ -306,7 +334,7 @@ struct C_{interface_name} {{
     void *opaque;
     //! call by Rust side when callback not need anymore
     void (*C_{interface_name}_deref)(void *opaque);
-    "#,
+"#,
         interface_name = interface.name,
         doc_comments = interface_comments
     )
@@ -353,8 +381,7 @@ struct C_{interface_name} {{
             };
         write!(
             file_c,
-            r#"
-{doc_comments}
+            r#"{doc_comments}
     {c_ret_type} (*{method_name})({single_args_with_types}void *opaque);
 "#,
             method_name = method.name,
@@ -370,9 +397,8 @@ struct C_{interface_name} {{
 
         write!(
             &mut cpp_virtual_methods,
-            r#"
-{doc_comments}
-    virtual {cpp_ret_type} {method_name}({single_args_with_types}) = 0;
+            r#"{doc_comments}
+    virtual {cpp_ret_type} {method_name}({single_args_with_types}) noexcept = 0;
 "#,
             method_name = method.name,
             doc_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false),

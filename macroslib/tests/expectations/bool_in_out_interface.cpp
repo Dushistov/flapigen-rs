@@ -1,4 +1,4 @@
-"virtual void onStateChanged1(int32_t a0, bool a1) = 0;";
+"virtual void onStateChanged1(int32_t a0, bool a1) noexcept = 0;";
 r#"static void c_onStateChanged1(int32_t a0, char a1, void *opaque)
     {
         assert(opaque != nullptr);
@@ -9,7 +9,7 @@ r#"static void c_onStateChanged1(int32_t a0, char a1, void *opaque)
 "void (*onStateChanged1)(int32_t a0, char a1, void *opaque);";
 
 
-"virtual bool onStateChanged2(bool a0, double a1) = 0;";
+"virtual bool onStateChanged2(bool a0, double a1) noexcept = 0;";
 r#"static char c_onStateChanged2(char a0, double a1, void *opaque)
     {
         assert(opaque != nullptr);

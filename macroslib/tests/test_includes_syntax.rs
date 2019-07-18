@@ -10,7 +10,6 @@ mod jni {
         path::Path,
         rc::Rc,
         sync::{Arc, Mutex, MutexGuard},
-        time::SystemTime,
     };
 
     include!(concat!(env!("OUT_DIR"), "/jni-include.rs"));

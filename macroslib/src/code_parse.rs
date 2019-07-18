@@ -22,7 +22,7 @@ use crate::{
         ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
         SelfTypeVariant,
     },
-    LanguageConfig, FOREIGNER_CODE, FOREIGN_CODE,
+    LanguageConfig, FOREIGNER_CODE, FOREIGN_CODE, SMART_PTR_COPY_TRAIT,
 };
 
 pub(crate) fn parse_foreigner_class(
@@ -448,6 +448,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
 
     let copy_derived = derive_list.iter().any(|x| x == "Copy");
     let clone_derived = derive_list.iter().any(|x| x == "Clone");
+    let smart_ptr_copy_derived = derive_list.iter().any(|x| x == SMART_PTR_COPY_TRAIT);
     let has_clone = |m: &ForeignerMethod| {
         if let Some(seg) = m.rust_id.segments.last() {
             let seg = seg.into_value();
@@ -492,6 +493,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         doc_comments: class_doc_comments,
         copy_derived,
         clone_derived,
+        smart_ptr_copy_derived,
     })
 }
 
