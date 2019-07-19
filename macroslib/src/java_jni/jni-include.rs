@@ -108,11 +108,7 @@ macro_rules! swig_c_str {
 #[allow(unused_macros)]
 macro_rules! swig_assert_eq_size {
     ($x:ty, $($xs:ty),+ $(,)*) => {
-        #[allow(unknown_lints, forget_copy, unused_unsafe, useless_transmute)]
-        unsafe {
-            use std::mem::{forget, transmute, uninitialized};
-            $(forget::<$xs>(transmute(uninitialized::<$x>()));)+
-        }
+        $(let _ = ::std::mem::transmute::<$x, $xs>;)+
     };
 }
 
@@ -497,7 +493,7 @@ foreign_typemap!(
             .duration_since(::std::time::UNIX_EPOCH)
             .expect("SystemTime to Unix time conv. error");
         $out = <i64 as ::std::convert::TryFrom<u64>>::try_from(
-            since_unix_epoch.as_secs() * 1_000 + u64::from(since_unix_epoch.subsec_nanos() / 1_000_000),
+            since_unix_epoch.as_secs() * 1_000 + u64::from(since_unix_epoch.subsec_millis()),
         )
         .expect("SystemTime: milleseconds u64 to i64 convert error")
     };
