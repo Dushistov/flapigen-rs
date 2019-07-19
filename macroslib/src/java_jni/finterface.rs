@@ -143,12 +143,7 @@ public interface {interface_name} {{"#,
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
-    file.write_all(
-        br#"
-}
-"#,
-    )
-    .expect(WRITE_TO_MEM_FAILED_MSG);
+    file.write_all(b"\n}\n").expect(WRITE_TO_MEM_FAILED_MSG);
     file.update_file_if_necessary().map_err(&map_write_err)?;
     Ok(())
 }
