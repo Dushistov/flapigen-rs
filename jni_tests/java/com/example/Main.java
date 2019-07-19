@@ -213,6 +213,7 @@ class Main {
 
     private static class TestEnumObserver implements EnumObserver {
 	boolean values[] = new boolean[3];
+	boolean is_called;
 
 	@Override
 	public void onStateUpdate(MyEnum item, boolean is_ok) {
@@ -227,6 +228,7 @@ class Main {
 		values[2] = is_ok;
 		break;
 	    }
+	    is_called = true;
 	}
     }
 
@@ -236,7 +238,9 @@ class Main {
         assert o.f1(v1) == -5;
         assert o.f1(MyEnum.ITEM2) == 17;
 	TestEnumObserver obs = new TestEnumObserver();
+	assert !obs.is_called;
 	TestEnumClass.call_cb(obs);
+	assert obs.is_called;
 	assert !obs.values[0];
 	assert obs.values[1];
 	assert !obs.values[2];
