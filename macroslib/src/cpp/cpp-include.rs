@@ -1,6 +1,4 @@
 mod swig_foreign_types_map {
-    #![swig_foreigner_type = "uintptr_t"]
-    #![swig_rust_type = "usize"]
     #![swig_foreigner_type = "float"]
     #![swig_rust_type = "f32"]
     #![swig_foreigner_type = "double"]
@@ -54,6 +52,16 @@ foreign_typemap!(
 foreign_typemap!(
     (r_type) u64;
     (f_type, req_modules = ["<stdint.h>"]) "uint64_t";
+);
+
+foreign_typemap!(
+    (r_type) usize;
+    (f_type, req_modules = ["<stdint.h>"]) "uintptr_t";
+);
+
+foreign_typemap!(
+    (r_type) isize;
+    (f_type, req_modules = ["<stdint.h>"]) "intptr_t";
 );
 
 #[allow(unused_macros)]
