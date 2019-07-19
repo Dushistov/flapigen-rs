@@ -559,17 +559,17 @@ impl SwigInto<u16> for jint {
     }
 }
 
-impl SwigInto<i32> for jint {
-    fn swig_into(self, _: *mut JNIEnv) -> i32 {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) jint => i32 {
+        $out = $p
+    };
+);
 
-impl SwigFrom<i32> for jint {
-    fn swig_from(x: i32, _: *mut JNIEnv) -> Self {
-        x
-    }
-}
+foreign_typemap!(
+    ($p:r_type) jint <= i32 {
+        $out = $p
+    };
+);
 
 impl SwigFrom<u32> for jlong {
     fn swig_from(x: u32, _: *mut JNIEnv) -> Self {

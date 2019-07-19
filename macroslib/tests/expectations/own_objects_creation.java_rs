@@ -1,6 +1,6 @@
 r##"#[no_mangle]
 pub extern "C" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jclass, a0: jint) -> jlong {
-    let mut a0: i32 = a0.swig_into(env);
+    let a0: i32 = a0;
     let this: Foo = Foo::new(a0);
     let this: Box<Foo> = Box::new(this);
     let this: *mut Foo = Box::into_raw(this);
@@ -15,11 +15,11 @@ pub extern "C" fn Java_org_example_Foo_do_1f(
     a0: jint,
     a1: jint,
 ) -> jint {
-    let mut a0: i32 = a0.swig_into(env);
-    let mut a1: i32 = a1.swig_into(env);
+    let a0: i32 = a0;
+    let a1: i32 = a1;
     let this: &Foo = unsafe { jlong_to_pointer::<Foo>(this).as_mut().unwrap() };
     let mut ret: i32 = Foo::f(this, a0, a1);
-    let mut ret: jint = <jint>::swig_from(ret, env);
+    let ret: jint = ret;
     ret
 }"##;
 
@@ -30,7 +30,7 @@ pub extern "C" fn Java_org_example_Boo_init(
     a0: jint,
     a1: jlong,
 ) -> jlong {
-    let mut a0: i32 = a0.swig_into(env);
+    let a0: i32 = a0;
     let mut a1: i64 = a1.swig_into(env);
     let mut a1: usize = a1.swig_into(env);
     let this: Result<Boo, String> = Boo::new(a0, a1);
@@ -60,7 +60,7 @@ pub extern "C" fn Java_org_example_Boo_do_1boo_1as_1arg(
     let a0: Boo = *a0;
     let this: &Boo = unsafe { jlong_to_pointer::<Boo>(this).as_mut().unwrap() };
     let mut ret: i32 = Boo::boo_as_arg(this, a0);
-    let mut ret: jint = <jint>::swig_from(ret, env);
+    let ret: jint = ret;
     ret
 }"##;
 

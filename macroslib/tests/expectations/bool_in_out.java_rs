@@ -36,7 +36,7 @@ r##"impl SomeTrait for JavaCallback {
         swig_assert_eq_size!(::std::os::raw::c_int, i32);
         let env = self.get_jni_env();
         if let Some(env) = env.env {
-            let mut a0: jint = <jint>::swig_from(a0, env);
+            let a0: jint = a0;
             let a1: jboolean = if a1 { 1 as jboolean } else { 0 as jboolean };
             unsafe {
                 (**env).CallVoidMethod.unwrap()(
