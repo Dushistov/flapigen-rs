@@ -137,7 +137,7 @@ impl<'a> TraitNamesSet<'a> {
         self.inner.is_empty()
     }
     pub(crate) fn iter(&self) -> impl Iterator<Item = &syn::Path> {
-        self.inner.iter().map(|x| *x)
+        self.inner.iter().copied()
     }
 }
 

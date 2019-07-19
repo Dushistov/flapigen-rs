@@ -108,17 +108,16 @@ pub(in crate::cpp) fn do_map_type(
         ) {
             return Ok(ftype);
         }
-    } else {
-        if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
-            arg_ty.to_idx(),
-            direction,
-            MapToForeignFlag::FullSearch,
-            arg_ty_span,
-            calc_this_type_for_method,
-        ) {
-            return Ok(ftype);
-        }
+    } else if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
+        arg_ty.to_idx(),
+        direction,
+        MapToForeignFlag::FullSearch,
+        arg_ty_span,
+        calc_this_type_for_method,
+    ) {
+        return Ok(ftype);
     }
+
     match direction {
         Direction::Outgoing => Err(DiagnosticError::new2(
             arg_ty_span,

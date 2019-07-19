@@ -296,7 +296,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             _ if func_type_name == STATIC_METHOD => MethodVariant::StaticMethod,
             _ if func_type_name == METHOD => MethodVariant::Method(SelfTypeVariant::Default),
             _ if func_type_name == FN => {
-                if args_in.len() >= 1 {
+                if !args_in.is_empty() {
                     use syn::FnArg::*;
                     match args_in[0] {
                         SelfRef(_) | SelfValue(_) => {

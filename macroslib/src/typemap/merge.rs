@@ -116,7 +116,7 @@ impl TypeMap {
             let to_ty = self.find_or_alloc_rust_type(&right_ty, src_id).graph_idx;
 
             self.conv_graph
-                .update_edge(from_ty, to_ty, TypeConvEdge::new(code.into(), None));
+                .update_edge(from_ty, to_ty, TypeConvEdge::new(code, None));
             rtype_left_to_right = Some((from_ty, to_ty));
             self.invalidate_conv_for_rust_type(from_ty);
             self.invalidate_conv_for_rust_type(to_ty);
@@ -139,7 +139,7 @@ impl TypeMap {
                 .graph_idx;
             let from_ty = self.find_or_alloc_rust_type(&right_ty, src_id).graph_idx;
             self.conv_graph
-                .update_edge(from_ty, to_ty, TypeConvEdge::new(code.into(), None));
+                .update_edge(from_ty, to_ty, TypeConvEdge::new(code, None));
             rtype_right_to_left = Some((from_ty, to_ty));
             self.invalidate_conv_for_rust_type(from_ty);
             self.invalidate_conv_for_rust_type(to_ty);

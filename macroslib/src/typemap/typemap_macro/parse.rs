@@ -451,13 +451,13 @@ impl syn::parse::Parse for GenericAliasItem {
                 let item: syn::Ident = syn::parse2(mac.tts)?;
                 Ok(GenericAliasItem::SwigFType(item))
             } else {
-                return Err(syn::Error::new(
+                Err(syn::Error::new(
                     mac.span(),
                     format!(
                         "uknown macro '{}' in this context",
                         DisplayToTokens(&mac.path)
                     ),
-                ));
+                ))
             }
         } else {
             Ok(GenericAliasItem::Ident(input.parse()?))

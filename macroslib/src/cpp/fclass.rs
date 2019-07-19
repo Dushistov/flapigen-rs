@@ -341,22 +341,20 @@ May be you need to use `private constructor = empty;` syntax?",
 
         match method.variant {
             MethodVariant::StaticMethod => {
-                write!(
+                writeln!(
                     c_include_f,
                     r#"
-    {ret_type} {c_func_name}({args_with_types});
-"#,
+    {ret_type} {c_func_name}({args_with_types});"#,
                     ret_type = f_method.output.as_ref().name,
                     c_func_name = c_func_name,
                     args_with_types = c_args_with_types,
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                write!(
+                writeln!(
                     cpp_include_f,
                     r#"
-    static {cpp_ret_type} {method_name}({cpp_args_with_types}) noexcept;
-"#,
+    static {cpp_ret_type} {method_name}({cpp_args_with_types}) noexcept;"#,
                     method_name = method_name,
                     cpp_ret_type = cpp_ret_type,
                     cpp_args_with_types = cpp_args_with_types,
@@ -379,13 +377,12 @@ May be you need to use `private constructor = empty;` syntax?",
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
                 if f_method.output.as_ref().name != "void" {
-                    write!(
+                    writeln!(
                         &mut inline_impl,
                         r#"
         {c_ret_type} {ret} = {c_func_name}({cpp_args_for_c});
 {convert_ret_for_cpp}
-    }}
-"#,
+    }}"#,
                         c_ret_type = f_method.output.as_ref().name,
                         convert_ret_for_cpp = convert_ret_for_cpp,
                         cpp_args_for_c = cpp_args_for_c,
@@ -394,12 +391,11 @@ May be you need to use `private constructor = empty;` syntax?",
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
-                    write!(
+                    writeln!(
                         &mut inline_impl,
                         r#"
         {c_func_name}({cpp_args_for_c});{input_to_output}
-    }}
-"#,
+    }}"#,
                         c_func_name = c_func_name,
                         cpp_args_for_c = cpp_args_for_c,
                         input_to_output = input_to_output_ret_code
@@ -415,11 +411,10 @@ May be you need to use `private constructor = empty;` syntax?",
                 } else {
                     ""
                 };
-                write!(
+                writeln!(
                     c_include_f,
                     r#"
-    {ret_type} {func_name}({const_if_readonly}{c_class_type} * const self{args_with_types});
-"#,
+    {ret_type} {func_name}({const_if_readonly}{c_class_type} * const self{args_with_types});"#,
                     ret_type = f_method.output.as_ref().name,
                     c_class_type = c_class_type,
                     func_name = c_func_name,
@@ -428,11 +423,10 @@ May be you need to use `private constructor = empty;` syntax?",
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                write!(
+                writeln!(
                     cpp_include_f,
                     r#"
-    {cpp_ret_type} {method_name}({cpp_args_with_types}) {const_if_readonly}noexcept;
-"#,
+    {cpp_ret_type} {method_name}({cpp_args_with_types}) {const_if_readonly}noexcept;"#,
                     method_name = method_name,
                     cpp_ret_type = cpp_ret_type,
                     cpp_args_with_types = cpp_args_with_types,
@@ -454,13 +448,12 @@ May be you need to use `private constructor = empty;` syntax?",
           ).expect(WRITE_TO_MEM_FAILED_MSG);
 
                 if f_method.output.as_ref().name != "void" {
-                    write!(
+                    writeln!(
                         &mut inline_impl,
                         r#"
         {c_ret_type} {ret} = {c_func_name}(this->self_{cpp_args_for_c});
 {convert_ret_for_cpp}
-    }}
-"#,
+    }}"#,
                         convert_ret_for_cpp = convert_ret_for_cpp,
                         c_ret_type = f_method.output.as_ref().name,
                         c_func_name = c_func_name,
@@ -473,12 +466,11 @@ May be you need to use `private constructor = empty;` syntax?",
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
-                    write!(
+                    writeln!(
                         &mut inline_impl,
                         r#"
         {c_func_name}(this->self_{cpp_args_for_c});{input_to_output}
-    }}
-"#,
+    }}"#,
                         c_func_name = c_func_name,
                         cpp_args_for_c = if !have_args_except_self {
                             String::new()
@@ -501,27 +493,25 @@ May be you need to use `private constructor = empty;` syntax?",
             MethodVariant::Constructor => {
                 need_destructor = true;
                 if method.is_dummy_constructor() {
-                    write!(
+                    writeln!(
                         cpp_include_f,
                         r#"
-    {class_name}() noexcept {{}}
-"#,
+    {class_name}() noexcept {{}}"#,
                         class_name = class_name,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
-                    write!(
+                    writeln!(
                         c_include_f,
                         r#"
-    {c_class_type} *{func_name}({args_with_types});
-"#,
+    {c_class_type} *{func_name}({args_with_types});"#,
                         c_class_type = c_class_type,
                         func_name = c_func_name,
                         args_with_types = c_args_with_types,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                    write!(
+                    writeln!(
                         cpp_include_f,
                         r#"
     {class_name}({cpp_args_with_types}) noexcept
@@ -531,8 +521,7 @@ May be you need to use `private constructor = empty;` syntax?",
         if (this->self_ == nullptr) {{
             std::abort();
         }}
-    }}
-"#,
+    }}"#,
                         c_func_name = c_func_name,
                         cpp_args_with_types = cpp_args_with_types,
                         class_name = class_name,
@@ -590,17 +579,16 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
                 panic_on_syn_error("internal cpp desctructor code", code, err)
             }),
         );
-        write!(
+        writeln!(
             c_include_f,
             r#"
-    void {c_destructor_name}(const {c_class_type} *self);
-"#,
+    void {c_destructor_name}(const {c_class_type} *self);"#,
             c_class_type = c_class_type,
             c_destructor_name = c_destructor_name,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
-        write!(
+        writeln!(
             cpp_include_f,
             r#"
 private:
@@ -615,33 +603,30 @@ public:
     ~{class_name}() noexcept
     {{
         free_mem(this->self_);
-    }}
-"#,
+    }}"#,
             c_destructor_name = c_destructor_name,
             class_name = class_name,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     } else if !static_only {
         // not need_destructor
-        write!(
+        writeln!(
             cpp_include_f,
             r#"
 private:
    static void free_mem(SelfType &) noexcept
    {{
-   }}
-"#,
+   }}"#,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
-    write!(
+    writeln!(
         c_include_f,
         r#"
 #ifdef __cplusplus
 }}
 #endif
-
 "#
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);
@@ -667,26 +652,24 @@ private:
     .expect(WRITE_TO_MEM_FAILED_MSG);
     // Write method implementations.
     if ctx.cfg.separate_impl_headers {
-        write!(
+        writeln!(
             cpp_include_f,
             r#"
 
-}} // namespace {namespace}
-"#,
+}} // namespace {namespace}"#,
             namespace = ctx.cfg.namespace_name
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
         let cpp_impl_path = ctx.cfg.output_dir.join(format!("{}_impl.hpp", class.name));
         let mut cpp_impl_f = FileWriteCache::new(&cpp_impl_path);
-        write!(
+        writeln!(
             cpp_impl_f,
             r#"// Automaticaly generated by rust_swig
 #pragma once
 
 #include "{class_name}.hpp"
 
-namespace {namespace} {{
-"#,
+namespace {namespace} {{"#,
             class_name = class.name,
             namespace = ctx.cfg.namespace_name,
         )
@@ -702,7 +685,7 @@ namespace {namespace} {{
             .map_err(map_write_err!(cpp_path))?;
     }
 
-    write!(
+    writeln!(
         cpp_fwd_f,
         r#"// Automaticaly generated by rust_swig
 #pragma once
@@ -712,8 +695,7 @@ template<bool>
 class {base_class_name};
 using {class_name} = {base_class_name}<true>;
 using {class_name}Ref = {base_class_name}<false>;
-}} // namespace {namespace}
-"#,
+}} // namespace {namespace}"#,
         namespace = ctx.cfg.namespace_name,
         class_name = class.name,
         base_class_name = class_name
@@ -930,12 +912,11 @@ fn write_methods_impls(
     namespace_name: &str,
     inline_impl: &str,
 ) -> std::io::Result<()> {
-    write!(
+    writeln!(
         file,
         r#"
 {inline_impl}
-}} // namespace {namespace}
-"#,
+}} // namespace {namespace}"#,
         namespace = namespace_name,
         inline_impl = inline_impl,
     )
@@ -1006,7 +987,7 @@ fn generte_c_header_preamble(
     c_class_type: &str,
     c_include_f: &mut FileWriteCache,
 ) {
-    write!(
+    writeln!(
         c_include_f,
         r##"// Automaticaly generated by rust_swig
 {doc_comments}
@@ -1022,7 +1003,6 @@ extern "C" {{
 #endif
 
     typedef struct {c_class_type} {c_class_type};
-
 "##,
         doc_comments = class_doc_comments,
         c_class_type = c_class_type,
@@ -1046,7 +1026,7 @@ fn generate_cpp_header_preamble(
     for inc in req_includes {
         writeln!(&mut includes, "#include {}", inc).unwrap();
     }
-    write!(
+    writeln!(
         cpp_include_f,
         r#"// Automaticaly generated by rust_swig
 #pragma once
@@ -1074,8 +1054,7 @@ class {class_name} {{
 public:
     using value_type = {class_name}<true>;
     friend class {class_name}<true>;
-    friend class {class_name}<false>;
-"#,
+    friend class {class_name}<false>;"#,
         includes = includes,
         class_name = tmp_class_name,
         class_dot_name = class.name,
@@ -1085,7 +1064,7 @@ public:
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
     if !static_only {
-        write!(
+        writeln!(
         cpp_include_f,
 r#"
     using SelfType = typename std::conditional<OWN_DATA, {c_class_type} *, const {c_class_type} *>::type;
@@ -1112,8 +1091,7 @@ r#"
     }}
     explicit operator SelfType() const noexcept {{ return self_; }}
     {class_name}<false> as_rref() const noexcept {{ return {class_name}<false>{{ self_ }}; }}
-    const {class_name}<true> &as_cref() const noexcept {{ return reinterpret_cast<const {class_name}<true> &>(*this); }}
-"#,
+    const {class_name}<true> &as_cref() const noexcept {{ return reinterpret_cast<const {class_name}<true> &>(*this); }}"#,
         c_class_type = c_class_type,
         class_name = tmp_class_name,
     ).expect(WRITE_TO_MEM_FAILED_MSG);
@@ -1121,12 +1099,11 @@ r#"
 
     if !static_only {
         if !class.copy_derived {
-            write!(
+            writeln!(
                 cpp_include_f,
                 r#"
     {class_name}(const {class_name}&) = delete;
-    {class_name} &operator=(const {class_name}&) = delete;
-"#,
+    {class_name} &operator=(const {class_name}&) = delete;"#,
                 class_name = tmp_class_name
             )
             .expect(WRITE_TO_MEM_FAILED_MSG);
@@ -1154,7 +1131,7 @@ r#"
                 })?;
             let c_clone_func = c_func_name(class, &class.methods[pos]);
 
-            write!(
+            writeln!(
                 cpp_include_f,
                 r#"
     {class_name}(const {class_name}& o) noexcept {{
@@ -1177,8 +1154,7 @@ r#"
             }}
         }}
         return *this;
-    }}
-"#,
+    }}"#,
                 c_clone_func = c_clone_func,
                 class_name = tmp_class_name
             )

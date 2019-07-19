@@ -98,10 +98,7 @@ pub(crate) enum FnArg {
 impl FnArg {
     pub(crate) fn as_named_arg(&self) -> syn::Result<&NamedArg> {
         match self {
-            FnArg::SelfArg(sp, _) => Err(syn::Error::new(
-                *sp,
-                format!("expect not self argument here"),
-            )),
+            FnArg::SelfArg(sp, _) => Err(syn::Error::new(*sp, "expect not self argument here")),
             FnArg::Default(ref arg) => Ok(arg),
         }
     }
@@ -111,7 +108,7 @@ impl FnArg {
             FnArg::Default(ref arg) => Err(DiagnosticError::new(
                 src_id,
                 arg.span,
-                format!("expect self argument here"),
+                "expect self argument here",
             )),
         }
     }

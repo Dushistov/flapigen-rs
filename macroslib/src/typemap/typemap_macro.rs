@@ -562,7 +562,7 @@ fn concat_idents(
     Ok(())
 }
 
-fn expand_macroses<'a, E>(code: &str, mut expander: E) -> Result<String>
+fn expand_macroses<E>(code: &str, mut expander: E) -> Result<String>
 where
     E: FnMut(&str, Vec<&str>, &mut String) -> Result<()>,
 {
@@ -604,12 +604,12 @@ where
 fn find_macro(code: &str) -> Option<(&str, Vec<&str>, usize)> {
     let id_end = code.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))?;
     let mut next_pos = id_end + (&code[id_end..]).find(|ch: char| !ch.is_whitespace())?;
-    if &code[next_pos..(next_pos + 1)] != "!" {
+    if &code[next_pos..=next_pos] != "!" {
         return None;
     }
     next_pos += 1;
     next_pos = next_pos + (&code[next_pos..]).find(|ch: char| !ch.is_whitespace())?;
-    if &code[next_pos..(next_pos + 1)] != "(" {
+    if &code[next_pos..=next_pos] != "(" {
         return None;
     }
     next_pos += 1;
@@ -627,7 +627,7 @@ fn find_macro(code: &str) -> Option<(&str, Vec<&str>, usize)> {
             bracket_counter += 1;
         }
     }
-    next_pos = next_pos + close_bracket_pos?;
+    next_pos += close_bracket_pos?;
     let cnt_end = next_pos;
     let id = &code[0..id_end];
     let params: Vec<&str> = (&code[cnt_start..cnt_end])
@@ -937,7 +937,7 @@ fn expand_module_name(
     expand_macroses(
         generic_mod_name,
         |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
-            if params.len() != 0 {
+            if !params.is_empty() {
                 Err(DiagnosticError::new2(
                     ctx_sp,
                     format!(
