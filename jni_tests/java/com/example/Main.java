@@ -102,17 +102,7 @@ class Main {
             TestInner.Inner testInner = TestInner.getInner();
             assert testInner.name.equals("Boo Boo");
 
-            assert Boo.test_u8((short) 1) == (short) 2;
-            assert Boo.test_i8((byte) -1) == (byte) 0;
-            assert Boo.test_u16((int) 1) == (int) 2;
-            assert Boo.test_i16((short) -1) == (short) 0;
-            assert Boo.test_u32((long) 1) == (long) 2;
-            assert Boo.test_i32((int) -1) == (int) 0;
-            assert Boo.test_u64((long) 1) == (long) 2;
-            assert Boo.test_i64((long) -1) == (long) 0;
-            assert Math.abs(Boo.test_f32((float) 1.1) - (float) 2.1) < 1e-12;
-            assert Math.abs(Boo.test_f64((double) -1.0)) < 1e-12;
-
+	    testNumberInputOutput();
             testDoubleOverload();
 	    testContainers();
 	    testNullString();
@@ -552,5 +542,22 @@ class Main {
 	assert cb.types1_called;
 	assert cb.types2_called;
 	assert cb.foo_called;
+    }
+
+    private static void testNumberInputOutput() {
+	assert Boo.test_u8((short) 1) == (short) 2;
+
+	assert Boo.test_i8((byte) -1) == (byte) 0;
+	assert Boo.test_i8((byte) 126) == 127;
+	assert Boo.test_i8((byte) -128) == -127;
+
+	assert Boo.test_u16((int) 1) == (int) 2;
+	assert Boo.test_i16((short) -1) == (short) 0;
+	assert Boo.test_u32((long) 1) == (long) 2;
+	assert Boo.test_i32((int) -1) == (int) 0;
+	assert Boo.test_u64((long) 1) == (long) 2;
+	assert Boo.test_i64((long) -1) == (long) 0;
+	assert Math.abs(Boo.test_f32((float) 1.1) - (float) 2.1) < 1e-12;
+	assert Math.abs(Boo.test_f64((double) -1.0)) < 1e-12;
     }
 }

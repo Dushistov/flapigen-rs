@@ -505,17 +505,14 @@ foreign_typemap!(
     ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Date" "$out = new java.util.Date($p);";
 );
 
-impl SwigFrom<i8> for jbyte {
-    fn swig_from(x: i8, _: *mut JNIEnv) -> Self {
-        x
-    }
-}
-
-impl SwigInto<i8> for jbyte {
-    fn swig_into(self, _: *mut JNIEnv) -> i8 {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) jbyte => i8 {
+        $out = $p
+    };
+    ($p:r_type) jbyte <= i8 {
+        $out = $p
+    };
+);
 
 impl SwigFrom<u8> for jshort {
     fn swig_from(x: u8, _: *mut JNIEnv) -> Self {
