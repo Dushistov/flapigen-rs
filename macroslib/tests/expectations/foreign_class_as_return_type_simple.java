@@ -1,8 +1,8 @@
 r#"public static Boo factory_method() {
         long ret = do_factory_method();
-        Boo conv_ret = new Boo(InternalPointerMarker.RAW_PTR, ret);
+        Boo convRet = new Boo(InternalPointerMarker.RAW_PTR, ret);
 
-        return conv_ret;
+        return convRet;
     }
     private static native long do_factory_method();"#;
 "public final Foo get_one_foo() {";

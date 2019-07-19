@@ -142,7 +142,7 @@ public final class {class_name} {{
         }
         let ret_name = new_unique_name(&known_names, "ret");
         known_names.insert(ret_name.clone());
-        let conv_ret = new_unique_name(&known_names, "conv_ret");
+        let conv_ret = new_unique_name(&known_names, "convRet");
         known_names.insert(conv_ret.clone());
 
         let (convert_code, args_for_call_internal) = convert_code_for_method(

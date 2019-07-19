@@ -216,9 +216,9 @@ foreigner_class!(class LocationService {
         assert!(java_code.foreign_code.contains(
             r#"public static Position position() throws Exception {
         long ret = do_position();
-        Position conv_ret = new Position(InternalPointerMarker.RAW_PTR, ret);
+        Position convRet = new Position(InternalPointerMarker.RAW_PTR, ret);
 
-        return conv_ret;
+        return convRet;
     }
     private static native long do_position() throws Exception;"#
         ));
