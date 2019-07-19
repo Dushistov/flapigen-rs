@@ -560,9 +560,6 @@ foreign_typemap!(
     ($p:r_type) jint => i32 {
         $out = $p
     };
-);
-
-foreign_typemap!(
     ($p:r_type) jint <= i32 {
         $out = $p
     };
