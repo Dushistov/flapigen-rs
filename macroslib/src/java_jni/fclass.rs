@@ -338,8 +338,7 @@ public final class {class_name} {{"#,
                     }
                 }
 
-                file.write_all("    }".as_bytes())
-                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                file.write_all(b"    }").expect(WRITE_TO_MEM_FAILED_MSG);
 
                 writeln!(
                     file,
