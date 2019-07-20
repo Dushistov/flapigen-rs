@@ -400,6 +400,10 @@ class Main {
 
 	    assert !TestOptional.f6(null).isPresent();
 	}
+
+	assert TestOptional.test_opt_str("test_opt_str1").isPresent();
+	assert TestOptional.test_opt_str("test_opt_str2").get().equals("test_opt_str2");
+	assert !TestOptional.test_opt_str(null).isPresent();
     }
 
     private static void testCircularDeps() {

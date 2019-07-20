@@ -753,6 +753,9 @@ foreigner_class!(class TestOptional {
     fn f6(foo: Option<&Foo>) -> Option<String> {
         foo.map(|x| x.name.clone())
     }
+    fn test_opt_str(s: Option<&str>) -> Option<String> {
+        s.map(|x| x.into())
+    }
 });
 
 struct CircularDepsA {

@@ -20,4 +20,5 @@ foreigner_class!(class Foo {
     fn Foo::f4(&self, boo: Option<Boo>);
     fn Foo::f5(&self) -> Option<String>;
     fn Foo::f6(&self, boo: Option<&Boo>);
+    fn Foo::f7(&self, _: Option<&str>);
 });

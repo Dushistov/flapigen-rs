@@ -1381,3 +1381,17 @@ foreign_typemap!(
         $out = java.util.Optional.ofNullable($p);
 "#;
 );
+
+foreign_typemap!(
+    ($p:r_type) Option<&str> <= jstring {
+        let tmp: JavaString;
+        $out = if !$p.is_null() {
+            tmp = $p.swig_into(env);
+            Some(tmp.swig_deref())
+        } else {
+            None
+        }
+    };
+    ($p:f_type, option = "NoNullAnnotations") <= "/*opt*/String";
+    ($p:f_type, option = "NullAnnotations") <= "@Nullable /*opt*/String";
+);
