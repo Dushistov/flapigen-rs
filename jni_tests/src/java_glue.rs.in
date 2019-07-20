@@ -745,11 +745,14 @@ impl TestOptional {
 }
 
 foreigner_class!(class TestOptional {
-    static_method TestOptional::f1(x: Option<f64>) -> Option<f64>;
-    static_method TestOptional::f2(x: Option<i64>) -> Option<i64>;
-    static_method TestOptional::f3(need_something: bool) -> Option<Foo>;
-    static_method TestOptional::f4(foo: Option<Foo>) -> Option<i64>;
-    static_method TestOptional::f5(need_something: bool) -> Option<String>;
+    fn TestOptional::f1(x: Option<f64>) -> Option<f64>;
+    fn TestOptional::f2(x: Option<i64>) -> Option<i64>;
+    fn TestOptional::f3(need_something: bool) -> Option<Foo>;
+    fn TestOptional::f4(foo: Option<Foo>) -> Option<i64>;
+    fn TestOptional::f5(need_something: bool) -> Option<String>;
+    fn f6(foo: Option<&Foo>) -> Option<String> {
+        foo.map(|x| x.name.clone())
+    }
 });
 
 struct CircularDepsA {

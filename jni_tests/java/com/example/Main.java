@@ -357,34 +357,49 @@ class Main {
     }
 
     private static void testOptional() {
-        OptionalDouble d = TestOptional.f1(null);
-        assert !d.isPresent();
-        d = TestOptional.f1(1.7);
-        assert d.isPresent();
-        assert Math.abs(d.getAsDouble() - 2.7) < 1e-12;
+	{
+	    OptionalDouble d = TestOptional.f1(null);
+	    assert !d.isPresent();
+	    d = TestOptional.f1(1.7);
+	    assert d.isPresent();
+	    assert Math.abs(d.getAsDouble() - 2.7) < 1e-12;
 
-        OptionalLong l = TestOptional.f2(null);
-        assert !l.isPresent();
-        l = TestOptional.f2(17l);
-        assert l.isPresent();
-        assert l.getAsLong() == 18;
+	    OptionalLong l = TestOptional.f2(null);
+	    assert !l.isPresent();
+	    l = TestOptional.f2(17l);
+	    assert l.isPresent();
+	    assert l.getAsLong() == 18;
 
-        Optional<Foo> foo_o = TestOptional.f3(false);
-        assert !foo_o.isPresent();
-        foo_o = TestOptional.f3(true);
-        assert foo_o.isPresent();
-        Foo foo = foo_o.get();
-        assert foo.calcF(0, 0) == 5;
-        assert foo.getName().equals("Some");
+	    Optional<Foo> foo_o = TestOptional.f3(false);
+	    assert !foo_o.isPresent();
+	    foo_o = TestOptional.f3(true);
+	    assert foo_o.isPresent();
+	    Foo foo = foo_o.get();
+	    assert foo.calcF(0, 0) == 5;
+	    assert foo.getName().equals("Some");
 
-        assert !TestOptional.f4(null).isPresent();
-        l = TestOptional.f4(foo);
-        assert l.isPresent();
-        assert l.getAsLong() == 5;
+	    assert !TestOptional.f4(null).isPresent();
+	    l = TestOptional.f4(foo);
+	    assert l.isPresent();
+	    assert l.getAsLong() == 5;
 
-        assert TestOptional.f5(true).isPresent();
-        assert TestOptional.f5(true).get().equals("true");
-        assert !TestOptional.f5(false).isPresent();
+	    assert TestOptional.f5(true).isPresent();
+	    assert TestOptional.f5(true).get().equals("true");
+	    assert !TestOptional.f5(false).isPresent();
+	}
+	{
+	    Foo foo = new Foo(17, "test");
+
+	    assert TestOptional.f6(foo).isPresent();
+	    assert TestOptional.f6(foo).get().equals("test");
+	    assert foo.getName().equals("test");
+
+	    assert TestOptional.f6(foo).isPresent();
+	    assert TestOptional.f6(foo).get().equals("test");
+	    assert foo.getName().equals("test");
+
+	    assert !TestOptional.f6(null).isPresent();
+	}
     }
 
     private static void testCircularDeps() {

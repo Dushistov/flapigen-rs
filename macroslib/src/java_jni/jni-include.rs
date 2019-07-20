@@ -73,9 +73,11 @@ trait SwigDerefMut {
 
 #[allow(dead_code)]
 trait SwigForeignClass {
+    type PointedType;
     fn jni_class_name() -> *const ::std::os::raw::c_char;
     fn box_object(x: Self) -> jlong;
     fn unbox_object(x: jlong) -> Self;
+    fn to_pointer(x: jlong) -> ::std::ptr::NonNull<Self::PointedType>;
 }
 
 #[allow(dead_code)]
@@ -1336,6 +1338,31 @@ foreign_typemap!(
         if ($p != null) {
             $out = $p.mNativeObj;
             $p.mNativeObj = 0;
+        }
+"#;
+);
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignClass> Option<&T> <= jlong {
+        let obj_ptr;
+        $out = if $p != 0{
+            obj_ptr = <swig_subst_type!(T)>::to_pointer($p);
+            let o: &swig_subst_type!(T) = unsafe { obj_ptr.as_ref() };
+            Some(o)
+        } else {
+            None
+        }
+    };
+    ($p:f_type, option = "NoNullAnnotations") <= "/*opt ref*/swig_f_type!(T)" r#"
+        $out = 0;//TODO: use ptr::null() for corresponding constant
+        if ($p != null) {
+            $out = $p.mNativeObj;
+        }
+"#;
+    ($p:f_type, option = "NullAnnotations") <= "@Nullable /*opt ref*/swig_f_type!(T)" r#"
+        $out = 0;//TODO: use ptr::null() for corresponding constant
+        if ($p != null) {
+            $out = $p.mNativeObj;
         }
 "#;
 );

@@ -498,6 +498,7 @@ fn generate_rust_code(
                 java_class_full_name(&ctx.cfg.package_name, &class.name.to_string());
             let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
             let lifetimes = list_lifetimes(&this_type.ty);
+            let lifetimes = &lifetimes;
 
             let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true)
                 .replace(TO_VAR_TEMPLATE, "x");
@@ -505,9 +506,12 @@ fn generate_rust_code(
                 panic_on_syn_error("internal/java foreign class unpack code", unpack_code, err)
             });
             let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
+            let this_type_for_method_ty_as_is = &this_type_for_method.ty;
             let class_name = &this_type.ty;
             let fclass_impl_code = quote! {
                 impl<#(#lifetimes),*> SwigForeignClass for #class_name {
+                    type PointedType = #this_type_for_method_ty_as_is;
+
                     fn jni_class_name() -> *const ::std::os::raw::c_char {
                         swig_c_str!(#class_name_for_jni)
                     }
@@ -521,6 +525,12 @@ fn generate_rust_code(
                         };
                         #unpack_code
                         x
+                    }
+                    fn to_pointer(x: jlong) -> ::std::ptr::NonNull<Self::PointedType> {
+                        let x: *mut #this_type_for_method_ty = unsafe {
+                            jlong_to_pointer::<#this_type_for_method_ty>(x).as_mut().unwrap()
+                        };
+                        ::std::ptr::NonNull::<Self::PointedType>::new(x).unwrap()
                     }
                 }
             };
