@@ -1294,66 +1294,6 @@ impl SwigFrom<jobject> for Option<i64> {
     }
 }
 
-#[allow(dead_code)]
-fn opt_jobject_to_optional_class(x: Option<jobject>, env: *mut JNIEnv) -> jobject {
-    let class: jclass =
-        unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/Optional")) };
-    assert!(
-        !class.is_null(),
-        "FindClass for `java/util/Optional` failed"
-    );
-    match x {
-        Some(obj) => {
-            let of_m: jmethodID = unsafe {
-                (**env).GetStaticMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("of"),
-                    swig_c_str!("(Ljava/lang/Object;)Ljava/util/Optional;"),
-                )
-            };
-            assert!(
-                !of_m.is_null(),
-                "java/util/Optional GetStaticMethodID for `of` failed"
-            );
-
-            let ret = unsafe {
-                let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, of_m, obj);
-                if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                    panic!("Optional.of failed: catch exception");
-                }
-                ret
-            };
-
-            assert!(!ret.is_null());
-            ret
-        }
-        None => {
-            let empty_m: jmethodID = unsafe {
-                (**env).GetStaticMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("empty"),
-                    swig_c_str!("()Ljava/util/Optional;"),
-                )
-            };
-            assert!(
-                !empty_m.is_null(),
-                "java/util/Optional GetStaticMethodID for `empty` failed"
-            );
-            let ret = unsafe {
-                let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, empty_m);
-                if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                    panic!("Optional.empty failed: catch exception");
-                }
-                ret
-            };
-            assert!(!ret.is_null());
-            ret
-        }
-    }
-}
-
 foreign_typemap!(
     ($p:r_type) <T: SwigForeignClass> Option<T> => jlong {
         $out = match $p {
@@ -1400,10 +1340,17 @@ foreign_typemap!(
 "#;
 );
 
-#[swig_to_foreigner_hint = "java.util.Optional<String>"]
-impl SwigInto<jobject> for Option<String> {
-    fn swig_into(self, env: *mut JNIEnv) -> jobject {
-        let opt_jobject = self.map(|x| from_std_string_jstring(x, env));
-        opt_jobject_to_optional_class(opt_jobject, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) Option<String> => jstring {
+        $out = match $p {
+            Some(s) => from_std_string_jstring(s, env),
+            None => ::std::ptr::null_mut(),
+        }
+    };
+    ($p:f_type, option = "NoNullAnnotations") => "java.util.Optional<String>" r#"
+        $out = java.util.Optional.ofNullable($p);
+"#;
+    ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Optional<String>" r#"
+        $out = java.util.Optional.ofNullable($p);
+"#;
+);
