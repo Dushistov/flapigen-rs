@@ -312,13 +312,6 @@ fn jni_throw_exception(env: *mut JNIEnv, message: &str) {
     jni_throw(env, swig_c_str!("java/lang/Exception"), message)
 }
 
-#[swig_to_foreigner_hint = "T"]
-impl<T: SwigForeignClass> SwigFrom<T> for jobject {
-    fn swig_from(x: T, env: *mut JNIEnv) -> Self {
-        object_to_jobject(x, <T>::jni_class_name(), env)
-    }
-}
-
 #[allow(dead_code)]
 fn object_to_jobject<T: SwigForeignClass>(
     obj: T,
