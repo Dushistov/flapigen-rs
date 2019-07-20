@@ -1354,13 +1354,26 @@ fn opt_jobject_to_optional_class(x: Option<jobject>, env: *mut JNIEnv) -> jobjec
     }
 }
 
-#[swig_to_foreigner_hint = "java.util.Optional<T>"]
-impl<T: SwigForeignClass> SwigFrom<Option<T>> for jobject {
-    fn swig_from(x: Option<T>, env: *mut JNIEnv) -> Self {
-        let opt_jobject = x.map(|obj| object_to_jobject(obj, <T>::jni_class_name(), env));
-        opt_jobject_to_optional_class(opt_jobject, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignClass> Option<T> => jlong {
+        $out = match $p {
+            Some(x) => {
+                let ptr = <swig_subst_type!(T)>::box_object(x);
+                debug_assert_ne!(0, ptr);
+                ptr
+            }
+            None => 0,
+        }
+    };
+    ($p:f_type, option = "NoNullAnnotations") => "java.util.Optional<swig_f_type!(T)>" r#"
+        $out = ($p != 0) ? java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p)) :
+                           java.util.Optional.empty();
+"#;
+    ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Optional<swig_f_type!(T)>" r#"
+        $out = ($p != 0) ? java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p)) :
+                           java.util.Optional.empty();
+"#;
+);
 
 impl<T: SwigForeignClass> SwigFrom<jlong> for Option<T> {
     fn swig_from(x: jlong, _: *mut JNIEnv) -> Self {

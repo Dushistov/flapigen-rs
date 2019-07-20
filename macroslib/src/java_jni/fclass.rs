@@ -39,7 +39,7 @@ pub(in crate::java_jni) fn generate(
         class.name, class.self_desc
     );
 
-    let f_methods_sign = find_suitable_foreign_types_for_methods(ctx.conv_map, class)?;
+    let f_methods_sign = find_suitable_foreign_types_for_methods(ctx, class)?;
     generate_java_code(
         ctx.conv_map,
         &ctx.cfg.output_dir,
@@ -709,13 +709,13 @@ pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong
 }
 
 fn find_suitable_foreign_types_for_methods(
-    conv_map: &mut TypeMap,
+    ctx: &mut JavaContext,
     class: &ForeignerClassInfo,
 ) -> Result<Vec<JniForeignMethodSignature>> {
     let mut ret = Vec::<JniForeignMethodSignature>::with_capacity(class.methods.len());
     let empty_symbol = "";
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
+    let dummy_rust_ty = ctx.conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
 
     for method in &class.methods {
         debug!(
@@ -735,10 +735,12 @@ fn find_suitable_foreign_types_for_methods(
             let named_arg = arg
                 .as_named_arg()
                 .map_err(|err| DiagnosticError::from_syn_err(class.src_id, err))?;
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, class.src_id);
+            let arg_rust_ty = ctx
+                .conv_map
+                .find_or_alloc_rust_type(&named_arg.ty, class.src_id);
 
             let fti = map_type(
-                conv_map,
+                ctx,
                 &arg_rust_ty,
                 Direction::Incoming,
                 (class.src_id, named_arg.ty.span()),
@@ -758,9 +760,9 @@ fn find_suitable_foreign_types_for_methods(
                 }
                 .into(),
                 syn::ReturnType::Type(_, ref rt) => {
-                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt, class.src_id);
+                    let ret_rust_ty = ctx.conv_map.find_or_alloc_rust_type(rt, class.src_id);
                     map_type(
-                        conv_map,
+                        ctx,
                         &ret_rust_ty,
                         Direction::Outgoing,
                         (class.src_id, rt.span()),
