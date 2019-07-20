@@ -8,7 +8,7 @@ r#"public final @NonNull java.util.Optional<Boo> f3() {
         return convRet;
     }
     private static native long do_f3(long self);"#;
-r#"public final void f4(@Nullable Boo foo) {
+r#"public final void f4(@Nullable /*opt*/Boo foo) {
         long a0 = 0;//TODO: use ptr::null() for corresponding constant
         if (foo != null) {
             a0 = foo.mNativeObj;

@@ -1,7 +1,6 @@
-use log::{debug, trace};
+use log::debug;
 use petgraph::Direction;
 use std::rc::Rc;
-use syn::Type;
 
 use super::{
     calc_this_type_for_method, merge_rule, JavaContext, JavaConverter, JavaForeignTypeInfo,
@@ -9,12 +8,10 @@ use super::{
 };
 use crate::{
     error::{DiagnosticError, Result, SourceIdSpan},
-    source_registry::SourceId,
     typemap::{
         ast::{if_option_return_some_type, DisplayToTokens, TyParamsSubstList},
         ty::{ForeignType, RustType, TraitNamesSet},
         ExpandedFType, ForeignTypeInfo, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper,
-        FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     TypeMap,
 };
@@ -32,11 +29,7 @@ pub(in crate::java_jni) fn map_type(
     arg_ty_span: SourceIdSpan,
 ) -> Result<JavaForeignTypeInfo> {
     debug!("map_type: arg_ty {}", arg_ty);
-    if direction == Direction::Incoming {
-        if let Some(fti) = special_type(ctx.conv_map, &arg_ty, arg_ty_span)? {
-            return Ok(fti);
-        }
-    }
+
     let fti = do_map_type(ctx, arg_ty, direction, arg_ty_span)?;
     let ftype = &ctx.conv_map[fti];
     if !ftype.provides_by_module.is_empty() {
@@ -194,57 +187,6 @@ fn do_map_type(
                 arg_ty
             ),
         )),
-    }
-}
-
-pub(in crate::java_jni) fn special_type(
-    conv_map: &mut TypeMap,
-    arg_ty: &RustType,
-    arg_ty_span: SourceIdSpan,
-) -> Result<Option<JavaForeignTypeInfo>> {
-    trace!("special_type: check is arg.ty({}) Option", arg_ty);
-
-    if let Some(ty) = if_option_return_some_type(arg_ty) {
-        return handle_option_type_in_input(conv_map, &ty, arg_ty_span.0);
-    }
-
-    trace!("special_type: oridinary type {}", arg_ty);
-    Ok(None)
-}
-
-fn handle_option_type_in_input(
-    conv_map: &mut TypeMap,
-    opt_inside_ty: &Type,
-    arg_src_id: SourceId,
-) -> Result<Option<JavaForeignTypeInfo>> {
-    let opt_inside_rust_ty = conv_map.find_or_alloc_rust_type(opt_inside_ty, arg_src_id);
-    if let Some(fclass) =
-        conv_map.find_foreigner_class_with_such_self_type(&opt_inside_rust_ty, false)
-    {
-        let jlong_ti = conv_map.ty_to_rust_type(&parse_type! { jlong });
-        Ok(Some(JavaForeignTypeInfo {
-            base: ForeignTypeInfo {
-                name: fclass.name.to_string().into(),
-                correspoding_rust_type: jlong_ti,
-            },
-            java_converter: Some(JavaConverter {
-                converter: format!(
-                    r#"
-        long {to_var} = 0;//TODO: use ptr::null() for corresponding constant
-        if ({from_var} != null) {{
-            {to_var} = {from_var}.mNativeObj;
-            {from_var}.mNativeObj = 0;
-        }}
-"#,
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE
-                ),
-                java_transition_type: "long".into(),
-            }),
-            annotation: Some(NullAnnotation::Nullable),
-        }))
-    } else {
-        Ok(None)
     }
 }
 

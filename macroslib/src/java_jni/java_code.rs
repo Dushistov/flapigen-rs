@@ -36,9 +36,19 @@ pub(in crate::java_jni) fn args_with_java_types<'a, NI: Iterator<Item = &'a str>
             }
             _ => arg.as_ref().name.as_str(),
         };
+        let type_arlready_null_anotated =
+            type_name.contains("@NonNull") || type_name.contains("@Nullable");
         let annotation = match arg.annotation {
-            Some(NullAnnotation::NonNull) if external && use_null_annotation => "@NonNull ",
-            Some(NullAnnotation::Nullable) if external && use_null_annotation => "@Nullable ",
+            Some(NullAnnotation::NonNull)
+                if external && use_null_annotation && !type_arlready_null_anotated =>
+            {
+                "@NonNull "
+            }
+            Some(NullAnnotation::Nullable)
+                if external && use_null_annotation && !type_arlready_null_anotated =>
+            {
+                "@Nullable "
+            }
             _ => "",
         };
         if i == (method.input.len() - 1) {

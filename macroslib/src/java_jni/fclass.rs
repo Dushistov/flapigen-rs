@@ -984,19 +984,25 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
     }
 
     for (i, (arg, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
-        let after_conv_arg_name =
-            if let Some(code) = arg.java_converter.as_ref().map(|x| &x.converter) {
-                let templ = format!("a{}", i);
-                let after_conv_arg_name = new_unique_name(&known_names, &templ);
-                known_names.insert(after_conv_arg_name.clone());
-                let java_code = code
-                    .replace(TO_VAR_TEMPLATE, &after_conv_arg_name)
-                    .replace(FROM_VAR_TEMPLATE, arg_name);
-                conv_code.push_str(&java_code);
-                Some(after_conv_arg_name)
-            } else {
-                None
-            };
+        let after_conv_arg_name = if let Some(java_conv) = arg.java_converter.as_ref() {
+            let templ = format!("a{}", i);
+            let after_conv_arg_name = new_unique_name(&known_names, &templ);
+            known_names.insert(after_conv_arg_name.clone());
+            let java_code: String = java_conv
+                .converter
+                .replace(
+                    TO_VAR_TYPE_TEMPLATE,
+                    &format!("{} {}", java_conv.java_transition_type, after_conv_arg_name),
+                )
+                .replace(TO_VAR_TEMPLATE, &after_conv_arg_name)
+                .replace(FROM_VAR_TEMPLATE, arg_name)
+                .replace("@NonNull ", "")
+                .replace("@Nullable ", "");
+            conv_code.push_str(&java_code);
+            Some(after_conv_arg_name)
+        } else {
+            None
+        };
         if let Some(after_conv_arg_name) = after_conv_arg_name {
             args_for_call_internal.push_str(&after_conv_arg_name);
         } else {

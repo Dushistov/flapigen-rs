@@ -1375,16 +1375,30 @@ foreign_typemap!(
 "#;
 );
 
-impl<T: SwigForeignClass> SwigFrom<jlong> for Option<T> {
-    fn swig_from(x: jlong, _: *mut JNIEnv) -> Self {
-        if x != 0 {
-            let o: T = T::unbox_object(x);
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignClass> Option<T> <= jlong {
+        $out = if $p != 0{
+            let o: swig_subst_type!(T) = <swig_subst_type!(T)>::unbox_object($p);
             Some(o)
         } else {
             None
         }
-    }
-}
+    };
+    ($p:f_type, option = "NoNullAnnotations") <= "/*opt*/swig_f_type!(T)" r#"
+        $out = 0;//TODO: use ptr::null() for corresponding constant
+        if ($p != null) {
+            $out = $p.mNativeObj;
+            $p.mNativeObj = 0;
+        }
+"#;
+    ($p:f_type, option = "NullAnnotations") <= "@Nullable /*opt*/swig_f_type!(T)" r#"
+        $out = 0;//TODO: use ptr::null() for corresponding constant
+        if ($p != null) {
+            $out = $p.mNativeObj;
+            $p.mNativeObj = 0;
+        }
+"#;
+);
 
 #[swig_to_foreigner_hint = "java.util.Optional<String>"]
 impl SwigInto<jobject> for Option<String> {
