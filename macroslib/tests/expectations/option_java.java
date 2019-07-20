@@ -27,3 +27,8 @@ r#"public final @NonNull java.util.Optional<String> f5() {
         return convRet;
     }
     private static native String do_f5(long self);"#;
+
+r#"public final void f7(@Nullable String a0) {
+        do_f7(mNativeObj, a0);
+    }
+    private static native void do_f7(long self, String a0);"#;

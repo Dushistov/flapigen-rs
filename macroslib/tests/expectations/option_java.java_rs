@@ -1,0 +1,18 @@
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Foo_do_1f7(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    a0: jstring,
+) -> () {
+    let tmp: JavaString;
+    let a0: Option<&str> = if !a0.is_null() {
+        tmp = a0.swig_into(env);
+        Some(tmp.swig_deref())
+    } else {
+        None
+    };
+    let this: &Foo = unsafe { jlong_to_pointer::<Foo>(this).as_mut().unwrap() };
+    let mut ret: () = Foo::f7(this, a0);
+    ret
+}"##;
