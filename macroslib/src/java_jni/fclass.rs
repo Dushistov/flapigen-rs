@@ -1,5 +1,7 @@
 use log::{debug, trace};
 use petgraph::Direction;
+use proc_macro2::TokenStream;
+use quote::quote;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use std::{io::Write, path::Path};
@@ -15,10 +17,8 @@ use crate::{
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
-        ast::{
-            if_result_return_ok_err_types, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens,
-        },
-        ty::RustType,
+        ast::{if_result_return_ok_err_types, list_lifetimes, normalize_ty_lifetimes},
+        ty::{normalized_type, RustType},
         utils::{
             convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
@@ -497,53 +497,37 @@ fn generate_rust_code(
             let class_name_for_user =
                 java_class_full_name(&ctx.cfg.package_name, &class.name.to_string());
             let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
-            let lifetimes = {
-                let mut ret = String::new();
-                let lifetimes = list_lifetimes(&this_type.ty);
-                for (i, l) in lifetimes.iter().enumerate() {
-                    ret.push_str(&*l.as_str());
-                    if i != lifetimes.len() - 1 {
-                        ret.push(',');
+            let lifetimes = list_lifetimes(&this_type.ty);
+
+            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true)
+                .replace(TO_VAR_TEMPLATE, "x");
+            let unpack_code: TokenStream = syn::parse_str(&unpack_code).unwrap_or_else(|err| {
+                panic_on_syn_error("internal/java foreign class unpack code", unpack_code, err)
+            });
+            let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
+            let class_name = &this_type.ty;
+            let fclass_impl_code = quote! {
+                impl<#(#lifetimes),*> SwigForeignClass for #class_name {
+                    fn jni_class_name() -> *const ::std::os::raw::c_char {
+                        swig_c_str!(#class_name_for_jni)
+                    }
+                    fn box_object(this: Self) -> jlong {
+                        #code_box_this
+                        this as jlong
+                    }
+                    fn unbox_object(x: jlong) -> Self {
+                        let x: *mut #this_type_for_method_ty = unsafe {
+                            jlong_to_pointer::<#this_type_for_method_ty>(x).as_mut().unwrap()
+                        };
+                        #unpack_code
+                        x
                     }
                 }
-                ret
             };
-
-            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-
-            let fclass_impl_code = format!(
-                r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
-    fn jni_class_name() -> *const ::std::os::raw::c_char {{
-        swig_c_str!("{jni_class_name}")
-    }}
-    fn box_object(this: Self) -> jlong {{
-{code_box_this}
-       this as jlong
-    }}
-    fn unbox_object(x: jlong) -> Self {{
-        let x: *mut {this_type} = unsafe {{
-           jlong_to_pointer::<{this_type}>(x).as_mut().unwrap()
-        }};
-    {unpack_code}
-        x
-    }}
-}}"#,
-                lifetimes = lifetimes,
-                class_name = DisplayToTokens(&this_type.ty),
-                jni_class_name = class_name_for_jni,
-                code_box_this = code_box_this,
-                unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "x"),
-                this_type = this_type_for_method.normalized_name,
-            );
-
-            ctx.rust_code
-                .push(syn::parse_str(&fclass_impl_code).unwrap_or_else(|err| {
-                    panic_on_syn_error("java internal fclass impl code", fclass_impl_code, err)
-                }));
-
+            ctx.rust_code.push(fclass_impl_code);
             (this_type_for_method, code_box_this)
         } else {
-            (dummy_rust_ty.clone(), String::new())
+            (dummy_rust_ty.clone(), TokenStream::new())
         };
 
     let no_this_info = || {
@@ -830,7 +814,7 @@ fn generate_constructor(
     mc: &MethodContext,
     construct_ret_type: Type,
     this_type: Type,
-    code_box_this: &str,
+    code_box_this: &TokenStream,
 ) -> Result<()> {
     let (mut deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         ctx.conv_map,

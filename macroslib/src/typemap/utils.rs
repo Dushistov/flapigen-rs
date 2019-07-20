@@ -1,16 +1,17 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
 use rustc_hash::FxHashSet;
-use syn::{spanned::Spanned, Type};
+use syn::{spanned::Spanned, Ident, Type};
 
 use crate::{
-    error::{DiagnosticError, Result},
+    error::{panic_on_syn_error, DiagnosticError, Result},
     source_registry::SourceId,
     typemap::{
         ast::{
             check_if_smart_pointer_return_inner_type, normalize_ty_lifetimes,
             parse_ty_with_given_span_checked, DisplayToTokens,
         },
-        ty::RustType,
+        ty::{normalized_type, RustType},
         typemap_macro::{FTypeConvRule, TypeMapConvRuleInfo},
         ForeignTypeInfo, TypeMap,
     },
@@ -258,35 +259,36 @@ pub(crate) fn convert_to_heap_pointer(
     tmap: &mut TypeMap,
     from: &RustType,
     var_name: &str,
-) -> (RustType, String) {
+) -> (RustType, TokenStream) {
+    let var_name = Ident::new(var_name, Span::call_site());
+
     for smart_pointer in &["Box", "Rc", "Arc"] {
         if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, *smart_pointer) {
             let inner_ty: RustType = tmap.find_or_alloc_rust_type(&inner_ty, from.src_id);
-            let code = format!(
-                r#"
-    let {var_name}: *const {inner_ty} = {smart_pointer}::into_raw({var_name});
-"#,
-                var_name = var_name,
-                inner_ty = inner_ty.normalized_name,
-                smart_pointer = *smart_pointer,
-            );
+            let inner_ty_norm: Type = normalized_type(&inner_ty.normalized_name);
+            let smart_pointer_ty: Type = syn::parse_str(&smart_pointer).unwrap_or_else(|err| {
+                panic_on_syn_error(
+                    "typemap::utils internal error, can not parse smart ptr",
+                    (*smart_pointer).into(),
+                    err,
+                )
+            });
+            let code: TokenStream = quote! {
+                let #var_name: *const #inner_ty_norm = #smart_pointer_ty::into_raw(#var_name);
+            };
             return (inner_ty, code);
         }
     }
-
     let inner_ty = from.clone();
     let inner_ty_str = normalize_ty_lifetimes(&inner_ty.ty);
-    (
-        inner_ty,
-        format!(
-            r#"
-    let {var_name}: Box<{inner_ty}> = Box::new({var_name});
-    let {var_name}: *mut {inner_ty} = Box::into_raw({var_name});
-"#,
-            var_name = var_name,
-            inner_ty = inner_ty_str
-        ),
-    )
+    let inner_ty_norm = normalized_type(inner_ty_str);
+
+    let code = quote! {
+        let #var_name: Box<#inner_ty_norm> = Box::new(#var_name);
+        let #var_name: *mut #inner_ty_norm = Box::into_raw(#var_name);
+    };
+
+    (inner_ty, code)
 }
 
 pub(crate) fn unpack_from_heap_pointer(
