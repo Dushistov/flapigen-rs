@@ -45,6 +45,13 @@ mod swig_foreign_types_map {
     #![swig_rust_type_not_unique = "jobject"]
 }
 
+mod internal_aliases {
+    use super::*;
+    pub type JStringOptStr = jstring;
+    pub type JOptionalInt = jobject;
+    pub type JInteger = jobject;
+}
+
 #[allow(dead_code)]
 #[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_into(env);"]
 trait SwigInto<T> {
@@ -1289,6 +1296,119 @@ impl SwigFrom<jobject> for Option<i64> {
     }
 }
 
+#[allow(dead_code)]
+fn from_java_lang_int_to_rust(env: *mut JNIEnv, x: internal_aliases::JInteger) -> Option<i32> {
+    if x.is_null() {
+        None
+    } else {
+        let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
+        if x.is_null() {
+            None
+        } else {
+            let class: jclass =
+                unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Integer")) };
+            assert!(!class.is_null(), "FindClass for `java/lang/Integer` failed");
+
+            let int_value_m: jmethodID = unsafe {
+                (**env).GetMethodID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!("intValue"),
+                    swig_c_str!("()I"),
+                )
+            };
+            assert!(
+                !int_value_m.is_null(),
+                "java/lang/Integer GetMethodID for intValue failed"
+            );
+            let ret: i32 = unsafe {
+                let ret = (**env).CallIntMethod.unwrap()(env, x, int_value_m);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("Integer.intValue failed: catch exception");
+                }
+                (**env).DeleteLocalRef.unwrap()(env, x);
+                ret
+            };
+            Some(ret)
+        }
+    }
+}
+
+foreign_typemap!(
+    ($p:r_type) Option<i32> <= internal_aliases::JInteger {
+        $out = from_java_lang_int_to_rust(env, $p)
+    };
+    (f_type, option = "NoNullAnnotations") <= "Integer";
+    (f_type, option = "NullAnnotations") <= "@Nullable Integer";
+);
+
+#[allow(dead_code)]
+fn to_java_util_optional_int(env: *mut JNIEnv, x: Option<i32>) -> jobject {
+    let class: jclass =
+        unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/OptionalInt")) };
+    assert!(
+        !class.is_null(),
+        "FindClass for `java/util/OptionalInt` failed"
+    );
+    match x {
+        Some(val) => {
+            let of_m: jmethodID = unsafe {
+                (**env).GetStaticMethodID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!("of"),
+                    swig_c_str!("(I)Ljava/util/OptionalInt;"),
+                )
+            };
+            assert!(
+                !of_m.is_null(),
+                "java/util/OptionalInt GetStaticMethodID for `of` failed"
+            );
+            let ret = unsafe {
+                let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, of_m, val);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("OptionalInt.of failed: catch exception");
+                }
+                ret
+            };
+
+            assert!(!ret.is_null());
+            ret
+        }
+        None => {
+            let empty_m: jmethodID = unsafe {
+                (**env).GetStaticMethodID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!("empty"),
+                    swig_c_str!("()Ljava/util/OptionalInt;"),
+                )
+            };
+            assert!(
+                !empty_m.is_null(),
+                "java/util/OptionalInt GetStaticMethodID for `empty` failed"
+            );
+            let ret = unsafe {
+                let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, empty_m);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("OptionalInt.empty failed: catch exception");
+                }
+                ret
+            };
+            assert!(!ret.is_null());
+            ret
+        }
+    }
+}
+
+foreign_typemap!(
+    ($p:r_type) Option<i32> => internal_aliases::JOptionalInt {
+        $out = to_java_util_optional_int(env, $p)
+    };
+    (f_type, option = "NoNullAnnotations") => "java.util.OptionalInt";
+    (f_type, option = "NullAnnotations") => "@NonNull java.util.OptionalInt";
+);
+
 foreign_typemap!(
     ($p:r_type) <T: SwigForeignClass> Option<T> => jlong {
         $out = match $p {
@@ -1374,11 +1494,6 @@ foreign_typemap!(
         $out = java.util.Optional.ofNullable($p);
 "#;
 );
-
-mod internal_aliases {
-    use super::*;
-    pub type JStringOptStr = jstring;
-}
 
 foreign_typemap!(
     (r_type) internal_aliases::JStringOptStr;

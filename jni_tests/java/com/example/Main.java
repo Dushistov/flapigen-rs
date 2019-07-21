@@ -404,6 +404,12 @@ class Main {
 	assert TestOptional.test_opt_str("test_opt_str1").isPresent();
 	assert TestOptional.test_opt_str("test_opt_str2").get().equals("test_opt_str2");
 	assert !TestOptional.test_opt_str(null).isPresent();
+
+	assert TestOptional.test_opt_i32(Integer.MAX_VALUE - 1).isPresent();
+	assert TestOptional.test_opt_i32(Integer.MAX_VALUE - 1).getAsInt() == Integer.MAX_VALUE;
+	assert !TestOptional.test_opt_i32(null).isPresent();
+	assert TestOptional.test_opt_i32(Integer.MIN_VALUE).isPresent();
+	assert TestOptional.test_opt_i32(Integer.MIN_VALUE).getAsInt() == (Integer.MIN_VALUE + 1);
     }
 
     private static void testCircularDeps() {
