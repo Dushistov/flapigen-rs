@@ -512,32 +512,26 @@ foreign_typemap!(
     };
 );
 
-impl SwigFrom<u8> for jshort {
-    fn swig_from(x: u8, _: *mut JNIEnv) -> Self {
-        jshort::from(x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) u8 => jshort {
+        $out = jshort::from($p)
+    };
+);
+foreign_typemap!(
+    ($p:r_type) u8 <= jshort {
+        $out = <u8 as ::std::convert::TryFrom<jshort>>::try_from($p)
+            .expect("invalid jshort, in jshort => u8 conversation")
+    };
+);
 
-impl SwigInto<u8> for jshort {
-    fn swig_into(self, _: *mut JNIEnv) -> u8 {
-        if self < 0 || self > (::std::u8::MAX as jshort) {
-            panic!("Expect self from 0 to {}, got {}", ::std::u8::MAX, self);
-        }
-        self as u8
-    }
-}
-
-impl SwigInto<i16> for jshort {
-    fn swig_into(self, _: *mut JNIEnv) -> i16 {
-        self
-    }
-}
-
-impl SwigFrom<i16> for jshort {
-    fn swig_from(x: i16, _: *mut JNIEnv) -> Self {
-        x
-    }
-}
+foreign_typemap!(
+    ($p:r_type) i16 => jshort {
+        $out = $p
+    };
+    ($p:r_type) i16 <= jshort {
+        $out = $p
+    };
+);
 
 impl SwigFrom<u16> for jint {
     fn swig_from(x: u16, _: *mut JNIEnv) -> Self {
@@ -578,17 +572,14 @@ impl SwigInto<u32> for jlong {
     }
 }
 
-impl SwigInto<i64> for jlong {
-    fn swig_into(self, _: *mut JNIEnv) -> i64 {
-        self
-    }
-}
-
-impl SwigFrom<i64> for jlong {
-    fn swig_from(x: i64, _: *mut JNIEnv) -> Self {
-        x
-    }
-}
+foreign_typemap!(
+    ($p:r_type) i64 => jlong {
+        $out = $p
+    };
+    ($p:r_type) i64 <= jlong {
+        $out = $p
+    };
+);
 
 impl SwigInto<u64> for jlong {
     fn swig_into(self, _: *mut JNIEnv) -> u64 {
