@@ -424,6 +424,11 @@ class Main {
 	assert !TestOptional.test_opt_i16(null).isPresent();
 	assert TestOptional.test_opt_i16((short)Short.MIN_VALUE).isPresent();
 	assert TestOptional.test_opt_i16((short)Short.MIN_VALUE).getAsInt() == (Short.MIN_VALUE + 1);
+
+
+	assert TestOptional.test_opt_f32(1.3f).isPresent();
+	assert Math.abs(TestOptional.test_opt_f32(1.3f).getAsDouble() - 3.f) < 1e-12;
+	assert !TestOptional.test_opt_f32(null).isPresent();
     }
 
     private static void testCircularDeps() {

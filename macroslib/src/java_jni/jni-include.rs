@@ -1203,6 +1203,58 @@ foreign_typemap!(
     (f_type, option = "NullAnnotations") => "@NonNull java.util.OptionalDouble";
 );
 
+#[allow(dead_code)]
+fn from_java_lang_float_to_rust(env: *mut JNIEnv, x: internal_aliases::JFloat) -> Option<f32> {
+    if x.is_null() {
+        None
+    } else {
+        let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
+        if x.is_null() {
+            None
+        } else {
+            let class: jclass =
+                unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Float")) };
+            assert!(!class.is_null(), "FindClass for `java/lang/Float` failed");
+
+            let float_value_m: jmethodID = unsafe {
+                (**env).GetMethodID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!("floatValue"),
+                    swig_c_str!("()F"),
+                )
+            };
+            assert!(
+                !float_value_m.is_null(),
+                "java/lang/Float GetMethodID for floatValue failed"
+            );
+            let ret: f32 = unsafe {
+                let ret = (**env).CallFloatMethod.unwrap()(env, x, float_value_m);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("Float.floatValue failed: catch exception");
+                }
+                (**env).DeleteLocalRef.unwrap()(env, x);
+                ret
+            };
+            Some(ret)
+        }
+    }
+}
+
+foreign_typemap!(
+    ($p:r_type) Option<f32> <= internal_aliases::JFloat {
+        $out = from_java_lang_float_to_rust(env, $p)
+    };
+    (f_type, option = "NoNullAnnotations") <= "Float";
+    (f_type, option = "NullAnnotations") <= "@Nullable Float";
+);
+
+foreign_typemap!(
+    ($p:r_type) Option<f32> => internal_aliases::JOptionalDouble {
+        $out = to_java_util_optional_double(env, $p.map(f64::from))
+    };
+);
+
 #[swig_to_foreigner_hint = "java.util.OptionalLong"]
 impl SwigFrom<Option<i64>> for jobject {
     fn swig_from(x: Option<i64>, env: *mut JNIEnv) -> Self {
