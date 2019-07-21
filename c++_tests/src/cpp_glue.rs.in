@@ -37,11 +37,11 @@ impl Foo {
         assert!(!cb.is_odd(2));
     }
     fn one_and_half(&self) -> f64 {
-        (self.data as f64) * 1.5
+        f64::from(self.data) * 1.5
     }
 
     fn f_double(&self, a: f64, b: f64) -> f64 {
-        a.hypot(b) + self.data as f64
+        a.hypot(b) + f64::from(self.data)
     }
 
     fn ret_string(&self) -> String {
@@ -223,7 +223,7 @@ impl DummySetterGetter for i32 {
 impl<'a> TestObjectLifetime<'a> {
     fn set_data(&mut self, v1: i8, v2: i16, v3: i32, v4: f64, v5: f32) {
         self.data
-            .set(v1 as i32 + v2 as i32 + v3 + v4 as i32 + v5 as i32);
+            .set(i32::from(v1) + i32::from(v2) + v3 + v4 as i32 + v5 as i32);
     }
 
     fn get_data(&self) -> i32 {
@@ -317,7 +317,7 @@ impl TestWorkWithVec {
         v.sort_by(|ref x, ref y| x.data.cmp(&y.data))
     }
     fn clone_foo_slice(v: &[Foo]) -> Vec<Foo> {
-        v.iter().cloned().collect()
+        v.to_vec()
     }
     fn return_usize_slice(&self) -> &[usize] {
         &self.vec_usize
@@ -405,8 +405,8 @@ impl TestEnumClass {
 foreigner_class!(class TestEnumClass {
     self_type TestEnumClass;
     constructor TestEnumClass::default() -> TestEnumClass;
-    method TestEnumClass::f1(&mut self, v: MyEnum) -> i32;
-    static_method TestEnumClass::next_enum(v: MyEnum) -> MyEnum;
+    fn TestEnumClass::f1(&mut self, v: MyEnum) -> i32;
+    fn TestEnumClass::next_enum(v: MyEnum) -> MyEnum;
 });
 
 #[derive(Default)]
@@ -484,11 +484,11 @@ impl TestOptional {
         Some(MyEnum::Item1)
     }
     fn f8(&self, x: Option<MyEnum>) -> Option<MyEnum> {
-        x.map(|v| TestEnumClass::next_enum(v))
+        x.map(TestEnumClass::next_enum)
     }
     fn f9(&self, x: Option<&str>) -> String {
         x.map(|x| format!("your name is {}", x))
-            .unwrap_or("None".to_string())
+            .unwrap_or_else(|| "None".to_string())
     }
     fn f10(&self, is_some: bool) -> Option<&str> {
         if is_some {
@@ -782,16 +782,12 @@ foreigner_class!(class Interface {
 #[derive(Default)]
 pub struct TestPassInterface;
 
-impl TestPassInterface {
-    fn use_interface(a: Box<Box<Interface>>, b: i32) -> i32 {
-        (**a).f(b)
-    }
-}
-
 foreigner_class!(class TestPassInterface {
     self_type TestPassInterface;
     constructor TestPassInterface::default() -> TestPassInterface;
-    static_method TestPassInterface::use_interface(a: Box<Box<Interface>>, b: i32) -> i32;
+    fn use_interface(a: Box<Box<Interface>>, b: i32) -> i32 {
+        (**a).f(b)
+    }
 });
 
 foreign_callback!(callback ToString {

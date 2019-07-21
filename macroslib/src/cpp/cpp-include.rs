@@ -1,13 +1,19 @@
 mod swig_foreign_types_map {
-    #![swig_foreigner_type = "float"]
-    #![swig_rust_type = "f32"]
-    #![swig_foreigner_type = "double"]
-    #![swig_rust_type = "f64"]
     #![swig_foreigner_type = "char"]
     #![swig_rust_type = "::std::os::raw::c_char"]
     #![swig_foreigner_type = "int"]
     #![swig_rust_type = "::std::os::raw::c_int"]
 }
+
+foreign_typemap!(
+    (r_type) f32;
+    (f_type) "float";
+);
+
+foreign_typemap!(
+    (r_type) f64;
+    (f_type) "double";
+);
 
 foreign_typemap!(
     (r_type) ();
