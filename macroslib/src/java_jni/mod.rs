@@ -1,5 +1,6 @@
 mod fclass;
 mod fenum;
+mod find_cache;
 mod finterface;
 mod java_code;
 mod map_class_self_type;
@@ -107,7 +108,7 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 }
 
 impl JavaConfig {
-    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
+    fn register_class(&self, ctx: &mut JavaContext, class: &ForeignerClassInfo) -> Result<()> {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
@@ -130,7 +131,7 @@ impl JavaConfig {
                 traits.push(SMART_PTR_COPY_TRAIT);
             }
 
-            let this_type: RustType = conv_map.find_or_alloc_rust_type_that_implements(
+            let this_type: RustType = ctx.conv_map.find_or_alloc_rust_type_that_implements(
                 &this_type_for_method,
                 &traits,
                 class.src_id,
@@ -155,10 +156,12 @@ impl JavaConfig {
                     ));
                 }
             }
-            register_typemap_for_self_type(conv_map, class, this_type, self_desc)?;
+            register_typemap_for_self_type(ctx, class, this_type, self_desc)?;
         }
 
-        let _ = conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
+        let _ = ctx
+            .conv_map
+            .find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
 
         Ok(())
     }
@@ -173,26 +176,18 @@ impl LanguageGenerator for JavaConfig {
         items: Vec<ItemToExpand>,
     ) -> Result<Vec<TokenStream>> {
         let mut ret = Vec::with_capacity(items.len());
-        init(
-            &mut JavaContext {
-                cfg: self,
-                conv_map,
-                pointer_target_width,
-                rust_code: &mut ret,
-            },
-            code,
-        )?;
-        for item in &items {
-            if let ItemToExpand::Class(ref fclass) = item {
-                self.register_class(conv_map, fclass)?;
-            }
-        }
         let mut ctx = JavaContext {
             cfg: self,
             conv_map,
             pointer_target_width,
             rust_code: &mut ret,
         };
+        init(&mut ctx, code)?;
+        for item in &items {
+            if let ItemToExpand::Class(ref fclass) = item {
+                self.register_class(&mut ctx, fclass)?;
+            }
+        }
         for item in items {
             match item {
                 ItemToExpand::Class(fclass) => {
@@ -207,6 +202,15 @@ impl LanguageGenerator for JavaConfig {
             }
         }
         Ok(ret)
+    }
+    fn post_proccess_code(
+        &self,
+        _conv_map: &mut TypeMap,
+        _pointer_target_width: usize,
+        mut generated_code: Vec<u8>,
+    ) -> Result<Vec<u8>> {
+        rust_code::generate_load_unload_jni_funcs(&mut generated_code)?;
+        Ok(generated_code)
     }
 }
 

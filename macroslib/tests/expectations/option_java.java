@@ -2,8 +2,12 @@
 "public final java.util.OptionalLong f2(@Nullable Long a0)";
 r#"public final @NonNull java.util.Optional<Boo> f3() {
         long ret = do_f3(mNativeObj);
-        java.util.Optional<Boo> convRet = (ret != 0) ? java.util.Optional.of(new Boo(InternalPointerMarker.RAW_PTR, ret)) :
-                           java.util.Optional.empty();
+        java.util.Optional<Boo> convRet;
+        if (ret != 0) {
+            convRet = java.util.Optional.of(new Boo(InternalPointerMarker.RAW_PTR, ret));
+        } else {
+            convRet = java.util.Optional.empty();
+        }
 
         return convRet;
     }

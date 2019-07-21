@@ -7,9 +7,15 @@ use std::{
 };
 
 use chrono::{DateTime, Utc};
-use log::{debug, error};
+use log::debug;
 
 use crate::jni_c_header::*;
+
+foreigner_class!(class RustLogging {
+    fn init() {
+        env_logger::init();
+    }
+});
 
 #[derive(Clone)]
 struct Foo {

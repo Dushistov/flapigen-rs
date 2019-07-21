@@ -54,6 +54,47 @@ mod internal_aliases {
     pub type JOptionalDouble = jobject;
 }
 
+/// Default JNI_VERSION
+const SWIG_JNI_VERSION: jint = JNI_VERSION_1_6 as jint;
+
+/// Marker for what to cache in JNI_OnLoad
+#[allow(unused_macros)]
+macro_rules! swig_jni_find_class {
+    ($id:ident, $path:expr) => {
+        unsafe { $id }
+    };
+    ($id:ident, $path:expr,) => {
+        unsafe { $id }
+    };
+}
+#[allow(unused_macros)]
+macro_rules! swig_jni_get_method_id {
+    ($global_id:ident, $class_id:ident, $name:expr, $sig:expr) => {
+        unsafe { $global_id }
+    };
+    ($global_id:ident, $class_id:ident, $name:expr, $sig:expr,) => {
+        unsafe { $global_id }
+    };
+}
+#[allow(unused_macros)]
+macro_rules! swig_jni_get_static_method_id {
+    ($global_id:ident, $class_id:ident, $name:expr, $sig:expr) => {
+        unsafe { $global_id }
+    };
+    ($global_id:ident, $class_id:ident, $name:expr, $sig:expr,) => {
+        unsafe { $global_id }
+    };
+}
+#[allow(unused_macros)]
+macro_rules! swig_jni_get_static_field_id {
+    ($global_id:ident, $class_id:ident, $name:expr, $sig:expr) => {
+        unsafe { $global_id }
+    };
+    ($global_id:ident, $class_id:ident, $name:expr, $sig:expr,) => {
+        unsafe { $global_id }
+    };
+}
+
 #[allow(dead_code)]
 #[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_into(env);"]
 trait SwigInto<T> {
@@ -207,7 +248,7 @@ impl<'a> Drop for JniEnvHolder<'a> {
                 (**self.callback.java_vm).DetachCurrentThread.unwrap()(self.callback.java_vm)
             };
             if res != 0 {
-                error!("JniEnvHolder: DetachCurrentThread failed: {}", res);
+                log::error!("JniEnvHolder: DetachCurrentThread failed: {}", res);
             }
         }
     }
@@ -241,7 +282,7 @@ impl JavaCallback {
             (**self.java_vm).GetEnv.unwrap()(
                 self.java_vm,
                 (&mut env) as *mut *mut JNIEnv as *mut *mut ::std::os::raw::c_void,
-                JNI_VERSION_1_6 as jint,
+                SWIG_JNI_VERSION,
             )
         };
         if res == (JNI_OK as jint) {
@@ -263,7 +304,7 @@ impl JavaCallback {
             )
         };
         if res != 0 {
-            error!(
+            log::error!(
                 "JavaCallback::get_jnienv: AttachCurrentThread failed: {}",
                 res
             );
@@ -291,44 +332,33 @@ impl Drop for JavaCallback {
             assert!(!env.is_null());
             unsafe { (**env).DeleteGlobalRef.unwrap()(env, self.this) };
         } else {
-            error!("JavaCallback::drop failed, can not get JNIEnv");
+            log::error!("JavaCallback::drop failed, can not get JNIEnv");
         }
     }
 }
 
 #[allow(dead_code)]
-fn jni_throw(env: *mut JNIEnv, class_name: *const ::std::os::raw::c_char, message: &str) {
-    let ex_class = unsafe { (**env).FindClass.unwrap()(env, class_name) };
-    if ex_class.is_null() {
-        error!(
-            "throw_exception: can not find exp class {:?}, msg {}",
-            unsafe { ::std::ffi::CStr::from_ptr(class_name) },
-            message
-        );
-        return;
-    }
+fn jni_throw(env: *mut JNIEnv, ex_class: jclass, message: &str) {
     let c_message = ::std::ffi::CString::new(message).unwrap();
     let res = unsafe { (**env).ThrowNew.unwrap()(env, ex_class, c_message.as_ptr()) };
     if res != 0 {
-        error!("ThrowNew({}) for class {:?} failed", message, unsafe {
-            ::std::ffi::CStr::from_ptr(class_name)
-        });
+        log::error!(
+            "JNI ThrowNew({}) failed for class {:?} failed",
+            message,
+            ex_class
+        );
     }
 }
 
 #[allow(dead_code)]
 fn jni_throw_exception(env: *mut JNIEnv, message: &str) {
-    jni_throw(env, swig_c_str!("java/lang/Exception"), message)
+    let exception_class = swig_jni_find_class!(JAVA_LANG_EXCEPTION, "java/lang/Exception");
+    jni_throw(env, exception_class, message)
 }
 
 #[allow(dead_code)]
-fn object_to_jobject<T: SwigForeignClass>(
-    obj: T,
-    class_id: *const ::std::os::raw::c_char,
-    env: *mut JNIEnv,
-) -> jobject {
-    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
-    assert!(!jcls.is_null(), "object_to_jobject: FindClass failed");
+fn object_to_jobject<T: SwigForeignClass>(obj: T, jcls: jclass, env: *mut JNIEnv) -> jobject {
+    assert!(!jcls.is_null());
     let jobj: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
     assert!(!jobj.is_null(), "object_to_jobject: AllocObject failed");
     let field_id: jfieldID = unsafe {
@@ -595,7 +625,7 @@ impl SwigInto<u64> for jlong {
 #[allow(dead_code)]
 pub fn u64_to_jlong_checked(x: u64) -> jlong {
     if x > (::std::i64::MAX as u64) {
-        error!("u64->jlong type overflow: {}", x);
+        log::error!("u64->jlong type overflow: {}", x);
         ::std::i64::MAX
     } else {
         x as i64
@@ -688,8 +718,7 @@ impl<'a> SwigInto<&'a Path> for &'a str {
 #[swig_to_foreigner_hint = "java.lang.String []"]
 impl SwigInto<jobjectArray> for Vec<String> {
     fn swig_into(mut self, env: *mut JNIEnv) -> jobjectArray {
-        let class_id = swig_c_str!("java/lang/String");
-        let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
+        let jcls: jclass = swig_jni_find_class!(JAVA_LANG_STRING, "java/lang/String");
         assert!(!jcls.is_null());
         let obj_arr: jobjectArray = unsafe {
             (**env).NewObjectArray.unwrap()(env, self.len() as jsize, jcls, ::std::ptr::null_mut())
@@ -1092,26 +1121,19 @@ fn to_java_util_optional_double(
     env: *mut JNIEnv,
     x: Option<f64>,
 ) -> internal_aliases::JOptionalDouble {
-    let class: jclass =
-        unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/OptionalDouble")) };
-    assert!(
-        !class.is_null(),
-        "FindClass for `java/util/OptionalDouble` failed"
-    );
+    let class: jclass = swig_jni_find_class!(JAVA_UTIL_OPTIONAL_DOUBLE, "java/util/OptionalDouble");
+    assert!(!class.is_null(),);
+
     match x {
         Some(val) => {
-            let of_m: jmethodID = unsafe {
-                (**env).GetStaticMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("of"),
-                    swig_c_str!("(D)Ljava/util/OptionalDouble;"),
-                )
-            };
-            assert!(
-                !of_m.is_null(),
-                "java/util/OptionalDouble GetStaticMethodID for `of` failed"
+            let of_m: jmethodID = swig_jni_get_static_method_id!(
+                JAVA_UTIL_OPTIONAL_DOUBLE_OF,
+                JAVA_UTIL_OPTIONAL_DOUBLE,
+                "of",
+                "(D)Ljava/util/OptionalDouble;"
             );
+            assert!(!of_m.is_null());
+
             let ret = unsafe {
                 let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, of_m, val);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1124,18 +1146,14 @@ fn to_java_util_optional_double(
             ret
         }
         None => {
-            let empty_m: jmethodID = unsafe {
-                (**env).GetStaticMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("empty"),
-                    swig_c_str!("()Ljava/util/OptionalDouble;"),
-                )
-            };
-            assert!(
-                !empty_m.is_null(),
-                "java/util/OptionalDouble GetStaticMethodID for `empty` failed"
+            let empty_m: jmethodID = swig_jni_get_static_method_id!(
+                JAVA_UTIL_OPTIONAL_DOUBLE_EMPTY,
+                JAVA_UTIL_OPTIONAL_DOUBLE,
+                "empty",
+                "()Ljava/util/OptionalDouble;"
             );
+            assert!(!empty_m.is_null());
+
             let ret = unsafe {
                 let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, empty_m);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1158,22 +1176,15 @@ fn from_java_lang_double_to_rust(env: *mut JNIEnv, x: internal_aliases::JDouble)
         if x.is_null() {
             None
         } else {
-            let class: jclass =
-                unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Double")) };
-            assert!(!class.is_null(), "FindClass for `java/lang/Double` failed");
-
-            let double_value_m: jmethodID = unsafe {
-                (**env).GetMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("doubleValue"),
-                    swig_c_str!("()D"),
-                )
-            };
-            assert!(
-                !double_value_m.is_null(),
-                "java/lang/Double GetMethodID for doubleValue failed"
+            let class: jclass = swig_jni_find_class!(JAVA_LANG_DOUBLE, "java/lang/Double");
+            assert!(!class.is_null());
+            let double_value_m: jmethodID = swig_jni_get_method_id!(
+                JAVA_LANG_DOUBLE_DOUBLE_VALUE_METHOD,
+                JAVA_LANG_DOUBLE,
+                "doubleValue",
+                "()D",
             );
+            assert!(!double_value_m.is_null(),);
             let ret: f64 = unsafe {
                 let ret = (**env).CallDoubleMethod.unwrap()(env, x, double_value_m);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1212,22 +1223,16 @@ fn from_java_lang_float_to_rust(env: *mut JNIEnv, x: internal_aliases::JFloat) -
         if x.is_null() {
             None
         } else {
-            let class: jclass =
-                unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Float")) };
-            assert!(!class.is_null(), "FindClass for `java/lang/Float` failed");
-
-            let float_value_m: jmethodID = unsafe {
-                (**env).GetMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("floatValue"),
-                    swig_c_str!("()F"),
-                )
-            };
-            assert!(
-                !float_value_m.is_null(),
-                "java/lang/Float GetMethodID for floatValue failed"
+            let class: jclass = swig_jni_find_class!(JAVA_LANG_FLOAT, "java/lang/Float");
+            assert!(!class.is_null());
+            let float_value_m: jmethodID = swig_jni_get_method_id!(
+                JAVA_LANG_FLOAT_FLOAT_VALUE,
+                JAVA_LANG_FLOAT,
+                "floatValue",
+                "()F"
             );
+            assert!(!float_value_m.is_null());
+
             let ret: f32 = unsafe {
                 let ret = (**env).CallFloatMethod.unwrap()(env, x, float_value_m);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1258,26 +1263,18 @@ foreign_typemap!(
 #[swig_to_foreigner_hint = "java.util.OptionalLong"]
 impl SwigFrom<Option<i64>> for jobject {
     fn swig_from(x: Option<i64>, env: *mut JNIEnv) -> Self {
-        let class: jclass =
-            unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/OptionalLong")) };
-        assert!(
-            !class.is_null(),
-            "FindClass for `java/util/OptionalLong` failed"
-        );
+        let class: jclass = swig_jni_find_class!(JAVA_UTIL_OPTIONAL_LONG, "java/util/OptionalLong");
+        assert!(!class.is_null(),);
         match x {
             Some(val) => {
-                let of_m: jmethodID = unsafe {
-                    (**env).GetStaticMethodID.unwrap()(
-                        env,
-                        class,
-                        swig_c_str!("of"),
-                        swig_c_str!("(J)Ljava/util/OptionalLong;"),
-                    )
-                };
-                assert!(
-                    !of_m.is_null(),
-                    "java/util/OptionalLong GetStaticMethodID for `of` failed"
+                let of_m: jmethodID = swig_jni_get_static_method_id!(
+                    JAVA_UTIL_OPTIONAL_LONG_OF,
+                    JAVA_UTIL_OPTIONAL_LONG,
+                    "of",
+                    "(J)Ljava/util/OptionalLong;"
                 );
+                assert!(!of_m.is_null());
+
                 let ret = unsafe {
                     let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, of_m, val);
                     if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1290,18 +1287,14 @@ impl SwigFrom<Option<i64>> for jobject {
                 ret
             }
             None => {
-                let empty_m: jmethodID = unsafe {
-                    (**env).GetStaticMethodID.unwrap()(
-                        env,
-                        class,
-                        swig_c_str!("empty"),
-                        swig_c_str!("()Ljava/util/OptionalLong;"),
-                    )
-                };
-                assert!(
-                    !empty_m.is_null(),
-                    "java/util/OptionalLong GetStaticMethodID for `empty` failed"
+                let empty_m: jmethodID = swig_jni_get_static_method_id!(
+                    JAVA_UTIL_OPTIONAL_LONG_EMPTY,
+                    JAVA_UTIL_OPTIONAL_LONG,
+                    "empty",
+                    "()Ljava/util/OptionalLong;",
                 );
+                assert!(!empty_m.is_null());
+
                 let ret = unsafe {
                     let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, empty_m);
                     if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1326,22 +1319,16 @@ impl SwigFrom<jobject> for Option<i64> {
             if x.is_null() {
                 None
             } else {
-                let class: jclass =
-                    unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Long")) };
-                assert!(!class.is_null(), "FindClass for `java/lang/Long` failed");
-
-                let long_value_m: jmethodID = unsafe {
-                    (**env).GetMethodID.unwrap()(
-                        env,
-                        class,
-                        swig_c_str!("longValue"),
-                        swig_c_str!("()J"),
-                    )
-                };
-                assert!(
-                    !long_value_m.is_null(),
-                    "java/lang/Long GetMethodID for longValue failed"
+                let class: jclass = swig_jni_find_class!(JAVA_LANG_LONG, "java/lang/Long");
+                assert!(!class.is_null());
+                let long_value_m: jmethodID = swig_jni_get_method_id!(
+                    JAVA_LANG_LONG_LONG_VALUE,
+                    JAVA_LANG_LONG,
+                    "longValue",
+                    "()J"
                 );
+                assert!(!long_value_m.is_null());
+
                 let ret: i64 = unsafe {
                     let ret = (**env).CallLongMethod.unwrap()(env, x, long_value_m);
                     if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1365,22 +1352,16 @@ fn from_java_lang_int_to_rust(env: *mut JNIEnv, x: internal_aliases::JInteger) -
         if x.is_null() {
             None
         } else {
-            let class: jclass =
-                unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Integer")) };
-            assert!(!class.is_null(), "FindClass for `java/lang/Integer` failed");
-
-            let int_value_m: jmethodID = unsafe {
-                (**env).GetMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("intValue"),
-                    swig_c_str!("()I"),
-                )
-            };
-            assert!(
-                !int_value_m.is_null(),
-                "java/lang/Integer GetMethodID for intValue failed"
+            let class: jclass = swig_jni_find_class!(JAVA_LANG_INTEGER, "java/lang/Integer");
+            assert!(!class.is_null());
+            let int_value_m: jmethodID = swig_jni_get_method_id!(
+                JAVA_LANG_INTEGER_INT_VALUE,
+                JAVA_LANG_INTEGER,
+                "intValue",
+                "()I"
             );
+            assert!(!int_value_m.is_null(),);
+
             let ret: i32 = unsafe {
                 let ret = (**env).CallIntMethod.unwrap()(env, x, int_value_m);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1403,22 +1384,16 @@ fn from_java_lang_byte_to_rust(env: *mut JNIEnv, x: internal_aliases::JByte) -> 
         if x.is_null() {
             None
         } else {
-            let class: jclass =
-                unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Byte")) };
-            assert!(!class.is_null(), "FindClass for `java/lang/Byte` failed");
-
-            let byte_value_m: jmethodID = unsafe {
-                (**env).GetMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("byteValue"),
-                    swig_c_str!("()B"),
-                )
-            };
-            assert!(
-                !byte_value_m.is_null(),
-                "java/lang/Byte GetMethodID for byteValue failed"
+            let class: jclass = swig_jni_find_class!(JAVA_LANG_BYTE, "java/lang/Byte");
+            assert!(!class.is_null());
+            let byte_value_m: jmethodID = swig_jni_get_method_id!(
+                JAVA_LANG_BYTE_BYTE_VALUE,
+                JAVA_LANG_BYTE,
+                "byteValue",
+                "()B"
             );
+            assert!(!byte_value_m.is_null(),);
+
             let ret: i8 = unsafe {
                 let ret = (**env).CallByteMethod.unwrap()(env, x, byte_value_m);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1441,22 +1416,16 @@ fn from_java_lang_short_to_rust(env: *mut JNIEnv, x: internal_aliases::JByte) ->
         if x.is_null() {
             None
         } else {
-            let class: jclass =
-                unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Short")) };
-            assert!(!class.is_null(), "FindClass for `java/lang/Short` failed");
-
-            let short_value_m: jmethodID = unsafe {
-                (**env).GetMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("shortValue"),
-                    swig_c_str!("()S"),
-                )
-            };
-            assert!(
-                !short_value_m.is_null(),
-                "java/lang/Short GetMethodID for shortValue failed"
+            let class: jclass = swig_jni_find_class!(JAVA_LANG_SHORT, "java/lang/Short");
+            assert!(!class.is_null());
+            let short_value_m: jmethodID = swig_jni_get_method_id!(
+                JAVA_LANG_SHORT_SHORT_VALUE,
+                JAVA_LANG_SHORT,
+                "shortValue",
+                "()S"
             );
+            assert!(!short_value_m.is_null());
+
             let ret: i16 = unsafe {
                 let ret = (**env).CallShortMethod.unwrap()(env, x, short_value_m);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1480,26 +1449,18 @@ foreign_typemap!(
 
 #[allow(dead_code)]
 fn to_java_util_optional_int(env: *mut JNIEnv, x: Option<i32>) -> jobject {
-    let class: jclass =
-        unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/util/OptionalInt")) };
-    assert!(
-        !class.is_null(),
-        "FindClass for `java/util/OptionalInt` failed"
-    );
+    let class: jclass = swig_jni_find_class!(JAVA_UTIL_OPTIONAL_INT, "java/util/OptionalInt");
+    assert!(!class.is_null(),);
     match x {
         Some(val) => {
-            let of_m: jmethodID = unsafe {
-                (**env).GetStaticMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("of"),
-                    swig_c_str!("(I)Ljava/util/OptionalInt;"),
-                )
-            };
-            assert!(
-                !of_m.is_null(),
-                "java/util/OptionalInt GetStaticMethodID for `of` failed"
+            let of_m: jmethodID = swig_jni_get_static_method_id!(
+                JAVA_UTIL_OPTIONAL_INT_OF,
+                JAVA_UTIL_OPTIONAL_INT,
+                "of",
+                "(I)Ljava/util/OptionalInt;"
             );
+            assert!(!of_m.is_null());
+
             let ret = unsafe {
                 let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, of_m, val);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1512,18 +1473,14 @@ fn to_java_util_optional_int(env: *mut JNIEnv, x: Option<i32>) -> jobject {
             ret
         }
         None => {
-            let empty_m: jmethodID = unsafe {
-                (**env).GetStaticMethodID.unwrap()(
-                    env,
-                    class,
-                    swig_c_str!("empty"),
-                    swig_c_str!("()Ljava/util/OptionalInt;"),
-                )
-            };
-            assert!(
-                !empty_m.is_null(),
-                "java/util/OptionalInt GetStaticMethodID for `empty` failed"
+            let empty_m: jmethodID = swig_jni_get_static_method_id!(
+                JAVA_UTIL_OPTIONAL_INT_EMPTY,
+                JAVA_UTIL_OPTIONAL_INT,
+                "empty",
+                "()Ljava/util/OptionalInt;"
             );
+            assert!(!empty_m.is_null());
+
             let ret = unsafe {
                 let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, empty_m);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
@@ -1585,12 +1542,20 @@ foreign_typemap!(
         }
     };
     ($p:f_type, option = "NoNullAnnotations") => "java.util.Optional<swig_f_type!(T)>" r#"
-        $out = ($p != 0) ? java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p)) :
-                           java.util.Optional.empty();
+        $out;
+        if ($p != 0) {
+            $out = java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p));
+        } else {
+            $out = java.util.Optional.empty();
+        }
 "#;
     ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Optional<swig_f_type!(T)>" r#"
-        $out = ($p != 0) ? java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p)) :
-                           java.util.Optional.empty();
+        $out;
+        if ($p != 0) {
+            $out = java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p));
+        } else {
+            $out = java.util.Optional.empty();
+        }
 "#;
 );
 
@@ -1685,12 +1650,20 @@ foreign_typemap!(
         }
     };
     ($p:f_type, option = "NoNullAnnotations") => "java.util.Optional<swig_f_type!(T)>" r#"
-        $out = ($p != -1) ? java.util.Optional.of(swig_f_type!(T).fromInt($p)) :
-                            java.util.Optional.empty();
+        $out;
+        if ($p != -1) {
+            $out = java.util.Optional.of(swig_f_type!(T).fromInt($p));
+        } else {
+            $out = java.util.Optional.empty();
+        }
 "#;
     ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Optional<swig_f_type!(T)>" r#"
-        $out = ($p != -1) ? java.util.Optional.of(swig_f_type!(T).fromInt($p)) :
-                            java.util.Optional.empty();
+        $out;
+        if ($p != -1) {
+            $out = java.util.Optional.of(swig_f_type!(T).fromInt($p));
+        } else {
+            $out = java.util.Optional.empty();
+        }
 "#;
 );
 

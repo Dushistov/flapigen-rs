@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 log = "0.4.6"
 chrono = "0.4.6"
+env_logger = "0.6"
 
 [build-dependencies]
 env_logger = "0.6"

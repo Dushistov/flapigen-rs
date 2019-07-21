@@ -1,11 +1,15 @@
 use lazy_static::lazy_static;
+use quote::quote;
 use rustc_hash::FxHashMap;
+use std::{io::Write, str};
+use syn::{parse_quote, visit::Visit};
 
+use super::{find_cache::JniCacheMacroCalls, java_class_full_name, JniForeignMethodSignature};
 use crate::{
-    error::{DiagnosticError, Result},
-    java_jni::{java_class_full_name, JniForeignMethodSignature},
+    error::{invalid_src_id_span, panic_on_syn_error, DiagnosticError, Result},
+    typemap::ast::DisplayToTokens,
     types::{ForeignerClassInfo, MethodVariant},
-    TypeMap,
+    TypeMap, WRITE_TO_MEM_FAILED_MSG,
 };
 
 lazy_static! {
@@ -132,4 +136,157 @@ pub(in crate::java_jni) fn jni_method_signature(
         });
     ret.push_str(sig);
     ret
+}
+
+pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
+    generated_code: &mut Vec<u8>,
+) -> Result<()> {
+    let code = str::from_utf8(&generated_code).map_err(|err| {
+        DiagnosticError::new2(
+            invalid_src_id_span(),
+            format!("Generated code not valid utf-8: {}", err),
+        )
+    })?;
+
+    let file = syn::parse_file(code)
+        .unwrap_or_else(|err| panic_on_syn_error("generated code", code.into(), err));
+    let mut jni_cache_macro_calls = JniCacheMacroCalls::default();
+    jni_cache_macro_calls.visit_file(&file);
+
+    let mut addon_code = Vec::with_capacity(3);
+
+    addon_code.append(&mut jni_cache_macro_calls.global_vars());
+
+    let mut find_calls = Vec::with_capacity(jni_cache_macro_calls.calls.len());
+    let mut free_find_calls = Vec::with_capacity(jni_cache_macro_calls.calls.len());
+    for find_class in jni_cache_macro_calls.calls.values() {
+        let mut class_get_method_id_calls = Vec::new();
+        let class_name = &find_class.path;
+        for m in &find_class.methods {
+            let method_id = &m.id;
+            let method_name = &m.name;
+            let method_sig = &m.sig;
+            class_get_method_id_calls.push(quote! {
+                let method_id: jmethodID = (**env).GetMethodID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!(#method_name),
+                    swig_c_str!(#method_sig),
+                );
+                assert!(!method_id.is_null(),
+                        concat!("GetMethodID for class ", #class_name,
+                                " method ", #method_name,
+                                " sig ", #method_sig, " failed"));
+                #method_id = method_id;
+            });
+        }
+
+        for m in &find_class.static_methods {
+            let method_id = &m.id;
+            let method_name = &m.name;
+            let method_sig = &m.sig;
+            class_get_method_id_calls.push(quote! {
+                let method_id: jmethodID = (**env).GetStaticMethodID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!(#method_name),
+                    swig_c_str!(#method_sig),
+                );
+                assert!(!method_id.is_null(),
+                        concat!("GetStaticMethodID for class ", #class_name,
+                                " method ", #method_name,
+                                " sig ", #method_sig, " failed"));
+                #method_id = method_id;
+            });
+        }
+
+        for m in &find_class.static_fields {
+            let field_id = &m.id;
+            let method_name = &m.name;
+            let method_sig = &m.sig;
+            class_get_method_id_calls.push(quote! {
+                let field_id: jfieldID = (**env).GetStaticFieldID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!(#method_name),
+                    swig_c_str!(#method_sig),
+                );
+                assert!(!field_id.is_null(),
+                        concat!("GetStaticFieldID for class ", #class_name,
+                                " method ", #method_name,
+                                " sig ", #method_sig, " failed"));
+                #field_id = field_id;
+            });
+        }
+
+        let id = &find_class.id;
+        find_calls.push(quote! {
+            unsafe {
+                let class_local_ref = (**env).FindClass.unwrap()(env, swig_c_str!(#class_name));
+                assert!(!class_local_ref.is_null(), concat!("FindClass failed for ", #class_name));
+                let class = (**env).NewGlobalRef.unwrap()(env, class_local_ref);
+                assert!(!class.is_null(), concat!("FindClass failed for ", #class_name));
+                (**env).DeleteLocalRef.unwrap()(env, class_local_ref);
+                #id = class;
+                #(#class_get_method_id_calls)*
+            }
+        });
+        free_find_calls.push(quote! {
+            unsafe {
+                (**env).DeleteGlobalRef.unwrap()(env, #id);
+                #id = ::std::ptr::null_mut()
+            }
+        });
+    }
+
+    let jni_load_func: syn::Item = parse_quote! {
+        #[no_mangle]
+        pub extern "C" fn JNI_OnLoad(java_vm: *mut JavaVM, _reserved: *mut ::std::os::raw::c_void) -> jint {
+            println!("JNI_OnLoad begin");
+            assert!(!java_vm.is_null());
+            let mut env: *mut JNIEnv = ::std::ptr::null_mut();
+            let res = unsafe {
+                (**java_vm).GetEnv.unwrap()(
+                    java_vm,
+                    (&mut env) as *mut *mut JNIEnv as *mut *mut ::std::os::raw::c_void,
+                    SWIG_JNI_VERSION,
+                )
+            };
+            if res != (JNI_OK as jint) {
+                panic!("JNI GetEnv in JNI_OnLoad failed, return code {}", res);
+            }
+            assert!(!env.is_null());
+            #(#find_calls)*
+
+            SWIG_JNI_VERSION
+        }
+    };
+    addon_code.push(jni_load_func);
+    let jni_unload_func: syn::Item = parse_quote! {
+        #[no_mangle]
+        pub extern "C" fn JNI_OnUnload(java_vm: *mut JavaVM, _reserved: *mut ::std::os::raw::c_void) {
+            println!("JNI_OnUnLoad begin");
+            assert!(!java_vm.is_null());
+            let mut env: *mut JNIEnv = ::std::ptr::null_mut();
+            let res = unsafe {
+                (**java_vm).GetEnv.unwrap()(
+                    java_vm,
+                    (&mut env) as *mut *mut JNIEnv as *mut *mut ::std::os::raw::c_void,
+                    SWIG_JNI_VERSION,
+                )
+            };
+            if res != (JNI_OK as jint) {
+                panic!("JNI GetEnv in JNI_OnLoad failed, return code {}", res);
+            }
+            assert!(!env.is_null());
+            #(#free_find_calls)*
+        }
+    };
+    addon_code.push(jni_unload_func);
+
+    for elem in addon_code {
+        write!(generated_code, "{}", DisplayToTokens(&elem)).expect(WRITE_TO_MEM_FAILED_MSG);
+    }
+
+    Ok(())
 }

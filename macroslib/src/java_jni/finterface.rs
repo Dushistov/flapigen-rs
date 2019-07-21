@@ -267,7 +267,7 @@ impl SwigFrom<jobject> for Box<{trait_name}> {{
                                                         self.methods[#method_idx],
                                                         #(#args),*);
                         if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                            error!(concat!(stringify!(#func_name), ": java throw exception"));
+                            log::error!(concat!(stringify!(#func_name), ": java throw exception"));
                             (**env).ExceptionDescribe.unwrap()(env);
                             (**env).ExceptionClear.unwrap()(env);
                         }
