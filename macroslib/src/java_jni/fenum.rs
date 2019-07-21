@@ -2,7 +2,7 @@ use log::trace;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::{io::Write, path::Path};
-use syn::Type;
+use syn::{Ident, Type};
 
 use super::{
     java_class_full_name, java_class_name_to_jni, java_code::doc_comments_to_java_comments,
@@ -210,32 +210,44 @@ fn add_conversation_from_enum_to_jobject_for_callbacks(
 ) {
     let java_enum_full_name = java_class_full_name(&ctx.cfg.package_name, &fenum.name.to_string());
     let enum_class_name = java_class_name_to_jni(&java_enum_full_name);
+    let enum_type = &fenum.name;
+    let enum_id_upper = Ident::new(
+        &format!("FOREIGN_ENUM_{}", fenum.name.to_string().to_uppercase()),
+        Span::call_site(),
+    );
 
     let mut arms_match_fields_names = Vec::with_capacity(fenum.items.len());
     for item in &fenum.items {
         let rust_name = &item.rust_name;
-        let java_item = &item.name;
-        arms_match_fields_names.push(quote! { #rust_name => swig_c_str!(stringify!(#java_item)) });
-    }
+        let java_item = item.name.to_string();
+        let enum_sig = format!("L{};", enum_class_name);
+        let enum_filed_global_var = Ident::new(
+            &format!("{}_{}", enum_id_upper, java_item.to_uppercase()),
+            Span::call_site(),
+        );
 
-    let enum_type = &fenum.name;
+        arms_match_fields_names.push(quote! {
+            #rust_name => {
+                let field = swig_jni_get_static_field_id!(#enum_filed_global_var, #enum_id_upper,
+                                                         #java_item, #enum_sig);
+                assert!(!field.is_null());
+                field
+            }
+        });
+    }
 
     let conv_code: TokenStream = quote! {
         #[allow(dead_code)]
         impl SwigFrom<#enum_type> for jobject {
             fn swig_from(x: #enum_type, env: *mut JNIEnv) -> jobject {
-                let cls: jclass = unsafe { (**env).FindClass.unwrap()(env, swig_c_str!(#enum_class_name)) };
-                assert!(!cls.is_null(), concat!("FindClass ", #enum_class_name, " failed"));
-                let static_field_id = match x {
+                let cls: jclass = swig_jni_find_class!(#enum_id_upper, #enum_class_name);
+                assert!(!cls.is_null());
+                let static_field_id: jfieldID = match x {
                     #(#arms_match_fields_names),*
                 };
-                let item_id: jfieldID = unsafe {
-                    (**env).GetStaticFieldID.unwrap()(env, cls , static_field_id,
-                                             swig_c_str!(concat!("L", #enum_class_name, ";")))
-                };
-                assert!(!item_id.is_null(), concat!("Can not find item in ", #enum_class_name));
+                assert!(!static_field_id.is_null());
                 let ret: jobject = unsafe {
-                    (**env).GetStaticObjectField.unwrap()(env, cls, item_id)
+                    (**env).GetStaticObjectField.unwrap()(env, cls, static_field_id)
                 };
                 assert!(!ret.is_null(), concat!("Can get value of item in ", #enum_class_name));
                 ret

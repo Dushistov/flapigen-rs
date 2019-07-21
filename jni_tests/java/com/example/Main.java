@@ -37,6 +37,7 @@ import com.example.rust.Session;
 import com.example.rust.NavigationService;
 import com.example.rust.CheckAllTypesInCallbackArgs;
 import com.example.rust.TestCheckAllTypesInCallbackArgs;
+import com.example.rust.RustLogging;
 
 class Main {
     public static void main(String[] args) {
@@ -46,6 +47,7 @@ class Main {
             System.out.println("Can not load library");
             throw e;
         }
+	RustLogging.init();
         try {
             testFoo();
             Boo boo = new Boo();

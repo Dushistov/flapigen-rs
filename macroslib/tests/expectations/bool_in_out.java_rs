@@ -47,7 +47,7 @@ r##"impl SomeTrait for JavaCallback {
                     a1 as ::std::os::raw::c_uint,
                 );
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                    error!(concat!(
+                    log::error!(concat!(
                         stringify!(on_state_changed1),
                         ": java throw exception"
                     ));

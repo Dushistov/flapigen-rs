@@ -3,7 +3,10 @@ use smol_str::SmolStr;
 use std::fmt::Write;
 use syn::spanned::Spanned;
 
-use super::{INTERNAL_PTR_MARKER, JAVA_RUST_SELF_NAME};
+use super::{
+    java_class_full_name, java_class_name_to_jni, JavaContext, INTERNAL_PTR_MARKER,
+    JAVA_RUST_SELF_NAME,
+};
 use crate::{
     error::{invalid_src_id_span, Result},
     source_registry::SourceId,
@@ -18,7 +21,7 @@ use crate::{
 };
 
 pub(in crate::java_jni) fn register_typemap_for_self_type(
-    conv_map: &mut TypeMap,
+    ctx: &mut JavaContext,
     class: &ForeignerClassInfo,
     this_type: RustType,
     self_desc: &SelfTypeDesc,
@@ -29,28 +32,31 @@ pub(in crate::java_jni) fn register_typemap_for_self_type(
     );
     let constructor_ret_type = &self_desc.constructor_ret_type;
 
-    conv_map.find_or_alloc_rust_type_with_suffix(
+    ctx.conv_map.find_or_alloc_rust_type_with_suffix(
         &parse_type! { jobject },
         &this_type.normalized_name,
         SourceId::none(),
     );
 
-    conv_map.find_or_alloc_rust_type(constructor_ret_type, class.src_id);
+    ctx.conv_map
+        .find_or_alloc_rust_type(constructor_ret_type, class.src_id);
 
-    let this_type_inner = boxed_type(conv_map, &this_type);
+    let this_type_inner = boxed_type(ctx.conv_map, &this_type);
 
     let code = format!("& {}", this_type_inner);
     let gen_ty = parse_ty_with_given_span_checked(&code, this_type_inner.ty.span());
-    let this_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+    let this_type_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
     let code = format!("&mut {}", this_type_inner);
     let gen_ty = parse_ty_with_given_span_checked(&code, this_type_inner.ty.span());
-    let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+    let this_type_mut_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
-    register_rust_ty_conversation_rules(conv_map, &this_type)?;
-    let self_type = conv_map.find_or_alloc_rust_type(&self_desc.self_type, class.src_id);
+    register_rust_ty_conversation_rules(ctx, &this_type, class)?;
+    let self_type = ctx
+        .conv_map
+        .find_or_alloc_rust_type(&self_desc.self_type, class.src_id);
     register_main_foreign_types(
-        conv_map,
+        ctx.conv_map,
         class,
         this_type.to_idx(),
         self_type.to_idx(),
@@ -61,17 +67,25 @@ pub(in crate::java_jni) fn register_typemap_for_self_type(
     Ok(())
 }
 
-fn register_rust_ty_conversation_rules(conv_map: &mut TypeMap, this_type: &RustType) -> Result<()> {
+fn register_rust_ty_conversation_rules(
+    ctx: &mut JavaContext,
+    this_type: &RustType,
+    class: &ForeignerClassInfo,
+) -> Result<()> {
     let (this_type_for_method, _code_box_this) =
-        convert_to_heap_pointer(conv_map, this_type, "this");
+        convert_to_heap_pointer(ctx.conv_map, this_type, "this");
 
-    let jlong_ti: RustType = conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
+    let jlong_ti: RustType = ctx
+        .conv_map
+        .find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
     let this_type_for_method_ty = &this_type_for_method.ty;
     let code = format!("& {}", DisplayToTokens(&this_type_for_method_ty));
     let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method_ty.span());
-    let this_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
+    let this_type_ref = ctx
+        .conv_map
+        .find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
     //handle foreigner_class as input arg
-    conv_map.add_conversation_rule(
+    ctx.conv_map.add_conversation_rule(
         jlong_ti.to_idx(),
         this_type_ref.to_idx(),
         TypeConvCode::new2(
@@ -91,9 +105,11 @@ fn register_rust_ty_conversation_rules(conv_map: &mut TypeMap, this_type: &RustT
     );
     let code = format!("&mut {}", DisplayToTokens(&this_type_for_method_ty));
     let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method_ty.span());
-    let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
+    let this_type_mut_ref = ctx
+        .conv_map
+        .find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
     //handle foreigner_class as input arg
-    conv_map.add_conversation_rule(
+    ctx.conv_map.add_conversation_rule(
         jlong_ti.to_idx(),
         this_type_mut_ref.to_idx(),
         TypeConvCode::new2(
@@ -112,18 +128,25 @@ fn register_rust_ty_conversation_rules(conv_map: &mut TypeMap, this_type: &RustT
         .into(),
     );
 
-    let jobject_ty = conv_map.find_or_alloc_rust_type_no_src_id(&parse_type! { jobject });
-    conv_map.add_conversation_rule(
+    let class_name_for_user = java_class_full_name(&ctx.cfg.package_name, &class.name.to_string());
+    let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
+    let class_name_upper = class.name.to_string().to_uppercase();
+    let jobject_ty = ctx
+        .conv_map
+        .find_or_alloc_rust_type_no_src_id(&parse_type! { jobject });
+    ctx.conv_map.add_conversation_rule(
         this_type.to_idx(),
         jobject_ty.to_idx(),
         TypeConvCode::new2(
             format!(
                 r#"
-        let {to_var}: jobject = object_to_jobject({from_var}, <{this_type}>::jni_class_name(), env);
+        let java_class = swig_jni_find_class!(FOREIGN_CLASS_{class_name_upper}, "{jni_class_name}");
+        let {to_var}: jobject = object_to_jobject({from_var}, java_class, env);
 "#,
                 to_var = TO_VAR_TEMPLATE,
                 from_var = FROM_VAR_TEMPLATE,
-                this_type = this_type
+                class_name_upper = class_name_upper,
+                jni_class_name = class_name_for_jni,
             ),
             invalid_src_id_span(),
         )

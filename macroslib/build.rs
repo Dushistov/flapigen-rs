@@ -6,7 +6,7 @@ use std::{
 };
 
 use quote::ToTokens;
-use syn::{parse_quote, visit_mut::VisitMut};
+use syn::{parse_quote, visit::Visit, visit_mut::VisitMut};
 
 struct FilterSwigAttrs;
 
@@ -25,6 +25,10 @@ impl VisitMut for FilterSwigAttrs {
 
 mod file_cache {
     include!("src/file_cache.rs");
+}
+
+mod jni_find_cache {
+    include!("src/java_jni/find_cache.rs");
 }
 
 fn main() {
@@ -50,6 +54,11 @@ fn main() {
 
         let mut filter_swig_attrs = FilterSwigAttrs;
         filter_swig_attrs.visit_file_mut(&mut file);
+
+        let mut jni_cache_macro_cache = jni_find_cache::JniCacheMacroCalls::default();
+        jni_cache_macro_cache.visit_file(&file);
+        let mut jni_global_vars = jni_cache_macro_cache.global_vars();
+        file.items.append(&mut jni_global_vars);
 
         let out_path = Path::new(&out_dir).join(include_path.file_name().expect("No file name"));
         let mut cache = file_cache::FileWriteCache::new(&out_path);

@@ -414,7 +414,7 @@ impl Generator {
         let mut file = file_cache::FileWriteCache::new(dst.as_ref());
 
         for item in items {
-            write!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
+            write!(&mut file, "{}", DisplayToTokens(&item)).expect(WRITE_TO_MEM_FAILED_MSG);
         }
 
         // n / 2 - just guess
@@ -471,16 +471,25 @@ impl Generator {
                 writeln!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
             }
         }
+        let generator = Generator::language_generator(&self.config);
 
-        let code = Generator::language_generator(&self.config).expand_items(
+        let code = generator.expand_items(
             &mut self.conv_map,
             self.pointer_target_width,
             &self.foreign_lang_helpers,
             items_to_expand,
         )?;
         for elem in code {
-            writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
+            writeln!(&mut file, "{}", elem).expect(WRITE_TO_MEM_FAILED_MSG);
         }
+
+        let source_bytes = file.take_content();
+        let source_bytes = generator.post_proccess_code(
+            &mut self.conv_map,
+            self.pointer_target_width,
+            source_bytes,
+        )?;
+        file.replace_content(source_bytes);
 
         if self.rustfmt_bindings {
             let source_bytes = file.take_content();
@@ -535,6 +544,15 @@ trait LanguageGenerator {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
     ) -> Result<Vec<TokenStream>>;
+
+    fn post_proccess_code(
+        &self,
+        _conv_map: &mut TypeMap,
+        _pointer_target_width: usize,
+        generated_code: Vec<u8>,
+    ) -> Result<Vec<u8>> {
+        Ok(generated_code)
+    }
 }
 
 #[doc(hidden)]
