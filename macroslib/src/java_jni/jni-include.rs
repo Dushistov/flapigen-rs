@@ -1542,12 +1542,20 @@ foreign_typemap!(
         }
     };
     ($p:f_type, option = "NoNullAnnotations") => "java.util.Optional<swig_f_type!(T)>" r#"
-        $out = ($p != 0) ? java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p)) :
-                           java.util.Optional.empty();
+        $out;
+        if ($p != 0) {
+            $out = java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p));
+        } else {
+            $out = java.util.Optional.empty();
+        }
 "#;
     ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Optional<swig_f_type!(T)>" r#"
-        $out = ($p != 0) ? java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p)) :
-                           java.util.Optional.empty();
+        $out;
+        if ($p != 0) {
+            $out = java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p));
+        } else {
+            $out = java.util.Optional.empty();
+        }
 "#;
 );
 
@@ -1642,12 +1650,20 @@ foreign_typemap!(
         }
     };
     ($p:f_type, option = "NoNullAnnotations") => "java.util.Optional<swig_f_type!(T)>" r#"
-        $out = ($p != -1) ? java.util.Optional.of(swig_f_type!(T).fromInt($p)) :
-                            java.util.Optional.empty();
+        $out;
+        if ($p != -1) {
+            $out = java.util.Optional.of(swig_f_type!(T).fromInt($p));
+        } else {
+            $out = java.util.Optional.empty();
+        }
 "#;
     ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Optional<swig_f_type!(T)>" r#"
-        $out = ($p != -1) ? java.util.Optional.of(swig_f_type!(T).fromInt($p)) :
-                            java.util.Optional.empty();
+        $out;
+        if ($p != -1) {
+            $out = java.util.Optional.of(swig_f_type!(T).fromInt($p));
+        } else {
+            $out = java.util.Optional.empty();
+        }
 "#;
 );
 
