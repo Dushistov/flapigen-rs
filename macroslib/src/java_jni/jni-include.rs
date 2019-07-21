@@ -1676,3 +1676,36 @@ foreign_typemap!(
         }
     };
 );
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignCLikeEnum> Option<T> => jint {
+        $out = match $p {
+            Some(v) => v.as_jint(),
+            None => -1,
+        }
+    };
+    ($p:f_type, option = "NoNullAnnotations") => "java.util.Optional<swig_f_type!(T)>" r#"
+        $out = ($p != -1) ? java.util.Optional.of(swig_f_type!(T).fromInt($p)) :
+                            java.util.Optional.empty();
+"#;
+    ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Optional<swig_f_type!(T)>" r#"
+        $out = ($p != -1) ? java.util.Optional.of(swig_f_type!(T).fromInt($p)) :
+                            java.util.Optional.empty();
+"#;
+);
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignCLikeEnum> Option<T> <= jint {
+        $out = if $p != -1 {
+            Some(<swig_subst_type!(T)>::from_jint($p))
+        } else {
+            None
+        }
+    };
+    ($p:f_type, option = "NoNullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/swig_f_type!(T)" r#"
+        $out = ($p != null) ? $p.getValue() : -1;
+"#;
+    ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/@Nullable swig_f_type!(T)" r#"
+        $out = ($p != null) ? $p.getValue() : -1;
+"#;
+);

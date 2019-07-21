@@ -429,6 +429,12 @@ class Main {
 	assert TestOptional.test_opt_f32(1.3f).isPresent();
 	assert Math.abs(TestOptional.test_opt_f32(1.3f).getAsDouble() - 3.f) < 1e-12;
 	assert !TestOptional.test_opt_f32(null).isPresent();
+
+	assert !TestOptional.test_enum(null).isPresent();
+	assert TestOptional.test_enum(MyEnum.ITEM1).isPresent();
+	assert TestOptional.test_enum(MyEnum.ITEM1).get().equals(MyEnum.ITEM2);
+	assert TestOptional.test_enum(MyEnum.ITEM2).isPresent();
+	assert TestOptional.test_enum(MyEnum.ITEM2).get().equals(MyEnum.ITEM3);
     }
 
     private static void testCircularDeps() {

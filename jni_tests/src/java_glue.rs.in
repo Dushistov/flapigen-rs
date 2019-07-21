@@ -765,9 +765,11 @@ foreigner_class!(class TestOptional {
     fn test_opt_i32(o: Option<i32>) -> Option<i32> {
         o.map(|x| x + 1)
     }
-
     fn test_opt_f32(o: Option<f32>) -> Option<f32> {
         o.map(|x| x + 1.7)
+    }
+    fn test_enum(o: Option<MyEnum>) -> Option<MyEnum> {
+        o.map(|x| Moo::next_enum(x))
     }
 });
 
