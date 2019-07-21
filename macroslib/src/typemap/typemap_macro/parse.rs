@@ -6,9 +6,9 @@ use syn::{
 };
 
 use super::{
-    CItem, CItems, FTypeConvRule, FTypeLeftRightPair, ForeignCode, GenericAlias, GenericAliasItem,
-    GenericCItems, ModuleName, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE, GENERIC_ALIAS,
-    SWIG_CONCAT_IDENTS, SWIG_F_TYPE, SWIG_I_TYPE,
+    CItem, CItems, FTypeConvRule, FTypeLeftRightPair, FTypeName, ForeignCode, GenericAlias,
+    GenericAliasItem, GenericCItems, ModuleName, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE,
+    GENERIC_ALIAS, SWIG_CONCAT_IDENTS, SWIG_F_TYPE, SWIG_I_TYPE,
 };
 use crate::{
     source_registry::SourceId,
@@ -558,12 +558,12 @@ fn parse_f_type_rule(
         unique_prefix,
     } = parse_typemap_f_type_arm_param(params)?;
 
-    let left_ty = if input.peek(LitStr) {
+    let left_ty: Option<FTypeName> = if input.peek(LitStr) {
         Some(input.parse::<LitStr>()?.into())
     } else {
         None
     };
-    let mut conv_rule_type = None;
+    let mut conv_rule_type: Option<ConvertRuleType<FTypeName>> = None;
     if input.peek(Token![=>]) {
         input.parse::<Token![=>]>()?;
         conv_rule_type = Some(ConvertRuleType::LeftToRight(
@@ -574,6 +574,36 @@ fn parse_f_type_rule(
         conv_rule_type = Some(ConvertRuleType::RightToLeft(
             input.parse::<LitStr>()?.into(),
         ));
+    }
+    if let Some(unique_prefix) = unique_prefix.as_ref() {
+        let to_error = |tname: &FTypeName| {
+            Err(syn::Error::new(
+                tname.sp,
+                format!("type name shoulds starts with {}", unique_prefix.value),
+            ))
+        };
+        match (conv_rule_type.as_ref(), left_ty.as_ref()) {
+            (Some(ConvertRuleType::LeftToRight(tname)), Some(left_ty))
+            | (Some(ConvertRuleType::RightToLeft(tname)), Some(left_ty)) => {
+                if !tname.name.starts_with(unique_prefix.value.as_str())
+                    && !left_ty.name.starts_with(unique_prefix.value.as_str())
+                {
+                    return to_error(tname);
+                }
+            }
+            (Some(ConvertRuleType::LeftToRight(tname)), None)
+            | (Some(ConvertRuleType::RightToLeft(tname)), None) => {
+                if !tname.name.starts_with(unique_prefix.value.as_str()) {
+                    return to_error(tname);
+                }
+            }
+            (_, Some(left_ty)) => {
+                if !left_ty.name.starts_with(unique_prefix.value.as_str()) {
+                    return to_error(left_ty);
+                }
+            }
+            (None, None) => {}
+        }
     }
     let code = if conv_rule_type.is_some() && input.peek(LitStr) {
         let code_str = input.parse::<LitStr>()?;

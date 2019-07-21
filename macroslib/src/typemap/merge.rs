@@ -501,6 +501,12 @@ fn set_unique_prefix(
             ));
         }
     }
+    if let Some(unique_prefix) = unique_prefix.as_ref() {
+        if !ft.name.as_str().starts_with(unique_prefix.as_str()) {
+            //just ignore prefix
+            return Ok(());
+        }
+    }
     ft.name_prefix = unique_prefix.map(|x| x.value);
     Ok(())
 }
