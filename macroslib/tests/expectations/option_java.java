@@ -1,4 +1,4 @@
-"public final java.util.OptionalDouble f1(@Nullable Double a0)";
+"public final @NonNull java.util.OptionalDouble f1(@Nullable Double a0)";
 "public final java.util.OptionalLong f2(@Nullable Long a0)";
 r#"public final @NonNull java.util.Optional<Boo> f3() {
         long ret = do_f3(mNativeObj);
