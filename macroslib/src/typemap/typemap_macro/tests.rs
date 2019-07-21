@@ -89,6 +89,7 @@ fn test_foreign_typemap_cpp_bool() {
     assert_eq!(
         rule.ftype_left_to_right,
         vec![FTypeConvRule {
+            unique_prefix: None,
             input_to_output: false,
             req_modules: vec![],
             left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
@@ -106,6 +107,7 @@ fn test_foreign_typemap_cpp_bool() {
     assert_eq!(
         rule.ftype_right_to_left,
         vec![FTypeConvRule {
+            unique_prefix: None,
             input_to_output: false,
             req_modules: vec![],
             left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
@@ -284,6 +286,7 @@ fn test_foreign_typemap_simple_typemap() {
 
     assert_eq!(
         vec![FTypeConvRule {
+            unique_prefix: None,
             input_to_output: false,
             req_modules: vec![],
             left_right_ty: FTypeLeftRightPair::OnlyLeft(FTypeName {
@@ -470,6 +473,30 @@ fn test_foreign_typemap_cpp_pair_syntax() {
             |_, _| false,
         )
     );
+}
+
+#[test]
+fn test_foreign_typemap_unique_prefix() {
+    let rule = macro_to_conv_rule(parse_quote! {
+        foreign_typemap!(
+            ($p:r_type) Option<&str> <= jstring {
+                let tmp: JavaString;
+                $out = if !$p.is_null() {
+                    tmp = $p.swig_into(env);
+                    Some(tmp.swig_deref())
+                } else {
+                    None
+                }
+            };
+            ($p:f_type, option = "NoNullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/String";
+            ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/@Nullable String";
+        )
+    });
+    assert!(!rule.is_empty());
+    assert_eq!(None, rule.if_simple_rtype_ftype_map());
+    assert_eq!(None, rule.if_simple_rtype_ftype_map_no_lang_backend());
+    assert!(rule.contains_data_for_language_backend());
+    assert!(!rule.is_generic());
 }
 
 fn cpp_pair_rule() -> TypeMapConvRuleInfo {

@@ -1319,14 +1319,14 @@ foreign_typemap!(
             None
         }
     };
-    ($p:f_type, option = "NoNullAnnotations") <= "/*opt*/swig_f_type!(T)" r#"
+    ($p:f_type, option = "NoNullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/swig_f_type!(T)" r#"
         $out = 0;//TODO: use ptr::null() for corresponding constant
         if ($p != null) {
             $out = $p.mNativeObj;
             $p.mNativeObj = 0;
         }
 "#;
-    ($p:f_type, option = "NullAnnotations") <= "@Nullable /*opt*/swig_f_type!(T)" r#"
+    ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/@Nullable swig_f_type!(T)" r#"
         $out = 0;//TODO: use ptr::null() for corresponding constant
         if ($p != null) {
             $out = $p.mNativeObj;
@@ -1346,13 +1346,13 @@ foreign_typemap!(
             None
         }
     };
-    ($p:f_type, option = "NoNullAnnotations") <= "/*opt ref*/swig_f_type!(T)" r#"
+    ($p:f_type, option = "NoNullAnnotations", unique_prefix = "/*opt ref*/") <= "/*opt ref*/swig_f_type!(T)" r#"
         $out = 0;//TODO: use ptr::null() for corresponding constant
         if ($p != null) {
             $out = $p.mNativeObj;
         }
 "#;
-    ($p:f_type, option = "NullAnnotations") <= "@Nullable /*opt ref*/swig_f_type!(T)" r#"
+    ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt ref*/") <= "/*opt ref*/@Nullable swig_f_type!(T)" r#"
         $out = 0;//TODO: use ptr::null() for corresponding constant
         if ($p != null) {
             $out = $p.mNativeObj;
@@ -1375,8 +1375,19 @@ foreign_typemap!(
 "#;
 );
 
+mod internal_aliases {
+    use super::*;
+    pub type JStringOptStr = jstring;
+}
+
 foreign_typemap!(
-    ($p:r_type) Option<&str> <= jstring {
+    (r_type) internal_aliases::JStringOptStr;
+    (f_type, option = "NoNullAnnotations", unique_prefix = "/*opt*/") "/*opt*/String";
+    (f_type, option = "NullAnnotations", unique_prefix = "/*opt*/") "/*opt*/@Nullable String";
+);
+
+foreign_typemap!(
+    ($p:r_type) Option<&str> <= internal_aliases::JStringOptStr {
         let tmp: JavaString;
         $out = if !$p.is_null() {
             tmp = $p.swig_into(env);
@@ -1385,6 +1396,4 @@ foreign_typemap!(
             None
         }
     };
-    ($p:f_type, option = "NoNullAnnotations") <= "/*opt*/String";
-    ($p:f_type, option = "NullAnnotations") <= "@Nullable /*opt*/String";
 );

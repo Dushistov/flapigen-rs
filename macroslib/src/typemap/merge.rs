@@ -11,7 +11,7 @@ use crate::{
     error::{DiagnosticError, Result},
     source_registry::SourceId,
     typemap::{
-        ast::TypeName,
+        ast::{SpannedSmolStr, TypeName},
         ty::{ForeignConversationIntermediate, ForeignTypeS, ForeignTypesStorage},
         typemap_macro::{FTypeLeftRightPair, ModuleName, TypeMapConvRuleInfo},
         TypeConvEdge, TypeMap,
@@ -85,16 +85,19 @@ impl TypeMap {
         debug!("merge_conv_rule: ri {:?}", ri);
         assert!(!ri.contains_data_for_language_backend());
         assert!(!ri.is_generic());
-        if let Some((r_ty, f_ty, req_modules)) = ri.if_simple_rtype_ftype_map_no_lang_backend() {
+        if let Some((r_ty, f_ty, req_modules, unique_prefix)) =
+            ri.if_simple_rtype_ftype_map_no_lang_backend()
+        {
             let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
             self.invalidate_conv_for_rust_type(r_ty);
             let ftype_idx = self.add_foreign_rust_ty_idx(
                 TypeName::new(f_ty.name.clone(), (src_id, f_ty.sp)),
                 r_ty,
             )?;
-            self.ftypes_storage[ftype_idx].provides_by_module =
+            let ftype = &mut self.ftypes_storage[ftype_idx];
+            ftype.provides_by_module =
                 convert_req_module_to_provides_by_module(req_modules.to_vec());
-
+            set_unique_prefix(ftype, unique_prefix.cloned(), src_id)?;
             return Ok(());
         }
 
@@ -148,6 +151,7 @@ impl TypeMap {
         let mut req_modules = vec![];
 
         let mut ft_into_from_rust = None;
+        let mut ft_unique_prefix = None;
         assert!(ri.ftype_left_to_right.len() <= 1);
         if !ri.ftype_left_to_right.is_empty() {
             let mut rule = ri.ftype_left_to_right.remove(0);
@@ -179,6 +183,7 @@ impl TypeMap {
 
             self.invalidate_conv_for_rust_type(rty_right);
             self.invalidate_conv_for_rust_type(rty_left);
+            ft_unique_prefix = rule.unique_prefix;
             match rule.code {
                 Some(conv_code) => {
                     ft_into_from_rust = Some((
@@ -234,6 +239,24 @@ impl TypeMap {
                     "no r_type corresponding to this f_type rule",
                 )
             })?;
+            if let Some(ref ft_unique_prefix) = ft_unique_prefix {
+                if let Some(rule_prefix) = rule.unique_prefix {
+                    if rule_prefix.as_str() != ft_unique_prefix.as_str() {
+                        return Err(DiagnosticError::new(
+                            src_id,
+                            rule_prefix.sp,
+                            format!(
+                                "unique_prefix mismatch '{}' vs '{}'",
+                                rule_prefix.as_str(),
+                                ft_unique_prefix.as_str()
+                            ),
+                        )
+                        .add_span_note((src_id, ft_unique_prefix.sp), "previous unique_prefix"));
+                    }
+                }
+            } else {
+                ft_unique_prefix = rule.unique_prefix;
+            }
 
             self.invalidate_conv_for_rust_type(rty_right);
             self.invalidate_conv_for_rust_type(rty_left);
@@ -263,33 +286,6 @@ impl TypeMap {
             }
         }
 
-        fn validate_rule_rewrite(
-            prev: Option<&ForeignConversationRule>,
-            new: &ForeignConversationRule,
-        ) -> Result<()> {
-            if let Some(prev) = prev {
-                if let (Some(prev_rule), Some(new_rule)) =
-                    (prev.intermediate.as_ref(), new.intermediate.as_ref())
-                {
-                    if !prev_rule.conv_code.src_id().is_none()
-                        && prev_rule.conv_code.src_id() == new_rule.conv_code.src_id()
-                    {
-                        return Err(DiagnosticError::new(
-                            new_rule.conv_code.src_id(),
-                            new_rule.conv_code.span(),
-                            "new rule f_type here",
-                        )
-                        .add_span_note(
-                            (prev_rule.conv_code.src_id(), prev_rule.conv_code.span()),
-                            "overwrite f_type defined in the same file",
-                        ));
-                    }
-                }
-            }
-
-            Ok(())
-        }
-
         match (ft_into_from_rust, ft_from_into_rust) {
             (Some((ft1, into_from_rust)), Some((ft2, from_into_rust))) => {
                 if ft1 != ft2 {
@@ -309,6 +305,7 @@ impl TypeMap {
                 res_ftype.from_into_rust = Some(from_into_rust);
                 res_ftype.provides_by_module =
                     convert_req_module_to_provides_by_module(req_modules);
+                set_unique_prefix(res_ftype, ft_unique_prefix, src_id)?;
             }
             (Some((ft, into_from_rust)), None) => {
                 let name = TypeName::new(ft.name, (src_id, ft.sp));
@@ -318,6 +315,7 @@ impl TypeMap {
                 res_ftype.into_from_rust = Some(into_from_rust);
                 res_ftype.provides_by_module =
                     convert_req_module_to_provides_by_module(req_modules);
+                set_unique_prefix(res_ftype, ft_unique_prefix, src_id)?;
             }
             (None, Some((ft, from_into_rust))) => {
                 let name = TypeName::new(ft.name, (src_id, ft.sp));
@@ -327,6 +325,7 @@ impl TypeMap {
                 res_ftype.from_into_rust = Some(from_into_rust);
                 res_ftype.provides_by_module =
                     convert_req_module_to_provides_by_module(req_modules);
+                set_unique_prefix(res_ftype, ft_unique_prefix, src_id)?;
             }
             (None, None) => {}
         }
@@ -451,6 +450,59 @@ fn convert_req_module_to_provides_by_module(v: Vec<ModuleName>) -> Vec<SmolStr> 
         ret.push(x.name);
     }
     ret
+}
+
+fn validate_rule_rewrite(
+    prev: Option<&ForeignConversationRule>,
+    new: &ForeignConversationRule,
+) -> Result<()> {
+    if let Some(prev) = prev {
+        if let (Some(prev_rule), Some(new_rule)) =
+            (prev.intermediate.as_ref(), new.intermediate.as_ref())
+        {
+            if !prev_rule.conv_code.src_id().is_none()
+                && prev_rule.conv_code.src_id() == new_rule.conv_code.src_id()
+            {
+                return Err(DiagnosticError::new(
+                    new_rule.conv_code.src_id(),
+                    new_rule.conv_code.span(),
+                    "new rule f_type here",
+                )
+                .add_span_note(
+                    (prev_rule.conv_code.src_id(), prev_rule.conv_code.span()),
+                    "overwrite f_type defined in the same file",
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn set_unique_prefix(
+    ft: &mut ForeignTypeS,
+    unique_prefix: Option<SpannedSmolStr>,
+    src_id: SourceId,
+) -> Result<()> {
+    let different = match (&unique_prefix, &ft.name_prefix) {
+        (Some(x), Some(y)) => x.as_str() != y.as_str(),
+        (None, None) => false,
+        (Some(_), None) | (None, Some(_)) => true,
+    };
+    if let Some(ref name_prefix) = ft.name_prefix {
+        if different && !ft.name.span.0.is_none() && ft.name.span.0 == src_id {
+            return Err(DiagnosticError::new2(
+                ft.name.span,
+                format!(
+                    "you change unique_prefix in the same file, was '{}', new '{:?}'",
+                    name_prefix.as_str(),
+                    unique_prefix
+                ),
+            ));
+        }
+    }
+    ft.name_prefix = unique_prefix.map(|x| x.value);
+    Ok(())
 }
 
 #[cfg(test)]

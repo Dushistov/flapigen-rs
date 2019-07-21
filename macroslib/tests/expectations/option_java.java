@@ -8,7 +8,7 @@ r#"public final @NonNull java.util.Optional<Boo> f3() {
         return convRet;
     }
     private static native long do_f3(long self);"#;
-r#"public final void f4(@Nullable /*opt*/Boo boo) {
+r#"public final void f4(@Nullable Boo boo) {
         long a0 = 0;//TODO: use ptr::null() for corresponding constant
         if (boo != null) {
             a0 = boo.mNativeObj;
@@ -28,7 +28,17 @@ r#"public final @NonNull java.util.Optional<String> f5() {
     }
     private static native String do_f5(long self);"#;
 
+r#"public final void f6(@Nullable Boo boo) {
+        long a0 = 0;//TODO: use ptr::null() for corresponding constant
+        if (boo != null) {
+            a0 = boo.mNativeObj;
+        }
+
+        do_f6(mNativeObj, a0);
+    }
+    private static native void do_f6(long self, long boo);"#;
+
 r#"public final void f7(@Nullable String a0) {
         do_f7(mNativeObj, a0);
     }
-    private static native void do_f7(long self, String a0);"#;
+    private static native void do_f7(long self, @Nullable String a0);"#;
