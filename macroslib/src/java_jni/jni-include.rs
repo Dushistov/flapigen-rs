@@ -45,11 +45,14 @@ mod swig_foreign_types_map {
     #![swig_rust_type_not_unique = "jobject"]
 }
 
+#[allow(dead_code)]
 mod internal_aliases {
     use super::*;
     pub type JStringOptStr = jstring;
     pub type JOptionalInt = jobject;
     pub type JInteger = jobject;
+    pub type JByte = jobject;
+    pub type JShort = jobject;
 }
 
 #[allow(dead_code)]
@@ -1325,6 +1328,82 @@ fn from_java_lang_int_to_rust(env: *mut JNIEnv, x: internal_aliases::JInteger) -
     }
 }
 
+#[allow(dead_code)]
+fn from_java_lang_byte_to_rust(env: *mut JNIEnv, x: internal_aliases::JByte) -> Option<i8> {
+    if x.is_null() {
+        None
+    } else {
+        let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
+        if x.is_null() {
+            None
+        } else {
+            let class: jclass =
+                unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Byte")) };
+            assert!(!class.is_null(), "FindClass for `java/lang/Byte` failed");
+
+            let byte_value_m: jmethodID = unsafe {
+                (**env).GetMethodID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!("byteValue"),
+                    swig_c_str!("()B"),
+                )
+            };
+            assert!(
+                !byte_value_m.is_null(),
+                "java/lang/Byte GetMethodID for byteValue failed"
+            );
+            let ret: i8 = unsafe {
+                let ret = (**env).CallByteMethod.unwrap()(env, x, byte_value_m);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("Byte.byteValue failed: catch exception");
+                }
+                (**env).DeleteLocalRef.unwrap()(env, x);
+                ret
+            };
+            Some(ret)
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn from_java_lang_short_to_rust(env: *mut JNIEnv, x: internal_aliases::JByte) -> Option<i16> {
+    if x.is_null() {
+        None
+    } else {
+        let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
+        if x.is_null() {
+            None
+        } else {
+            let class: jclass =
+                unsafe { (**env).FindClass.unwrap()(env, swig_c_str!("java/lang/Short")) };
+            assert!(!class.is_null(), "FindClass for `java/lang/Short` failed");
+
+            let short_value_m: jmethodID = unsafe {
+                (**env).GetMethodID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!("shortValue"),
+                    swig_c_str!("()S"),
+                )
+            };
+            assert!(
+                !short_value_m.is_null(),
+                "java/lang/Short GetMethodID for shortValue failed"
+            );
+            let ret: i16 = unsafe {
+                let ret = (**env).CallShortMethod.unwrap()(env, x, short_value_m);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("Short.shortValue failed: catch exception");
+                }
+                (**env).DeleteLocalRef.unwrap()(env, x);
+                ret
+            };
+            Some(ret)
+        }
+    }
+}
+
 foreign_typemap!(
     ($p:r_type) Option<i32> <= internal_aliases::JInteger {
         $out = from_java_lang_int_to_rust(env, $p)
@@ -1398,6 +1477,34 @@ foreign_typemap!(
     };
     (f_type, option = "NoNullAnnotations") => "java.util.OptionalInt";
     (f_type, option = "NullAnnotations") => "@NonNull java.util.OptionalInt";
+);
+
+foreign_typemap!(
+    ($p:r_type) Option<i8> <= internal_aliases::JByte {
+        $out = from_java_lang_byte_to_rust(env, $p)
+    };
+    (f_type, option = "NoNullAnnotations") <= "Byte";
+    (f_type, option = "NullAnnotations") <= "@Nullable Byte";
+);
+
+foreign_typemap!(
+    ($p:r_type) Option<i8> => internal_aliases::JOptionalInt {
+        $out = to_java_util_optional_int(env, $p.map(i32::from))
+    };
+);
+
+foreign_typemap!(
+    ($p:r_type) Option<i16> <= internal_aliases::JShort {
+        $out = from_java_lang_short_to_rust(env, $p)
+    };
+    (f_type, option = "NoNullAnnotations") <= "Short";
+    (f_type, option = "NullAnnotations") <= "@Nullable Short";
+);
+
+foreign_typemap!(
+    ($p:r_type) Option<i16> => internal_aliases::JOptionalInt {
+        $out = to_java_util_optional_int(env, $p.map(i32::from))
+    };
 );
 
 foreign_typemap!(

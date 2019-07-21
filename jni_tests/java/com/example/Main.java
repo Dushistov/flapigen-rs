@@ -410,6 +410,20 @@ class Main {
 	assert !TestOptional.test_opt_i32(null).isPresent();
 	assert TestOptional.test_opt_i32(Integer.MIN_VALUE).isPresent();
 	assert TestOptional.test_opt_i32(Integer.MIN_VALUE).getAsInt() == (Integer.MIN_VALUE + 1);
+
+
+	assert TestOptional.test_opt_i8((byte)(Byte.MAX_VALUE - 1)).isPresent();
+	assert TestOptional.test_opt_i8((byte)(Byte.MAX_VALUE - 1)).getAsInt() == Byte.MAX_VALUE;
+	assert !TestOptional.test_opt_i8(null).isPresent();
+	assert TestOptional.test_opt_i8((byte)Byte.MIN_VALUE).isPresent();
+	assert TestOptional.test_opt_i8((byte)Byte.MIN_VALUE).getAsInt() == (Byte.MIN_VALUE + 1);
+
+
+	assert TestOptional.test_opt_i16((short)(Short.MAX_VALUE - 1)).isPresent();
+	assert TestOptional.test_opt_i16((short)(Short.MAX_VALUE - 1)).getAsInt() == Short.MAX_VALUE;
+	assert !TestOptional.test_opt_i16(null).isPresent();
+	assert TestOptional.test_opt_i16((short)Short.MIN_VALUE).isPresent();
+	assert TestOptional.test_opt_i16((short)Short.MIN_VALUE).getAsInt() == (Short.MIN_VALUE + 1);
     }
 
     private static void testCircularDeps() {

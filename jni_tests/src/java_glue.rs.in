@@ -756,6 +756,12 @@ foreigner_class!(class TestOptional {
     fn test_opt_str(s: Option<&str>) -> Option<String> {
         s.map(|x| x.into())
     }
+    fn test_opt_i8(o: Option<i8>) -> Option<i8> {
+        o.map(|x| x + 1)
+    }
+    fn test_opt_i16(o: Option<i16>) -> Option<i16> {
+        o.map(|x| x + 1)
+    }
     fn test_opt_i32(o: Option<i32>) -> Option<i32> {
         o.map(|x| x + 1)
     }
