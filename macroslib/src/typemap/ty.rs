@@ -1,5 +1,5 @@
 use crate::{
-    error::DiagnosticError,
+    error::{panic_on_syn_error, DiagnosticError},
     source_registry::SourceId,
     typemap::{ast::TypeName, RustTypeIdx, TypeConvCode},
 };
@@ -83,6 +83,13 @@ impl RustTypeS {
             None => name,
         }
     }
+}
+
+/// # Panics
+pub(crate) fn normalized_type(normalized_name: &str) -> syn::Type {
+    syn::parse_str(normalized_name).unwrap_or_else(|err| {
+        panic_on_syn_error("Can not parse normalized type", normalized_name.into(), err)
+    })
 }
 
 pub(crate) type RustType = Rc<RustTypeS>;

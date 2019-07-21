@@ -29,10 +29,11 @@ pub extern "C" fn Java_org_example_Boo_r_1test_1u8(
     _: jclass,
     v: jshort,
 ) -> jshort {
-    let mut v: u8 = v.swig_into(env);
+    let v: u8 =
+        <u8 as ::std::convert::TryFrom<jshort>>::try_from(v).expect("invalid jshort, in jshort => u8 conversation");
     let mut ret: Result<u8, &str> = r_test_u8(v);
     let mut ret: u8 = jni_unpack_return!(ret, jshort, env);
-    let mut ret: jshort = <jshort>::swig_from(ret, env);
+    let ret: jshort = jshort::from(ret);
     ret
 }"##;
 
@@ -43,7 +44,7 @@ pub extern "C" fn Java_org_example_Boo_do_1now(env: *mut JNIEnv, _: jclass) -> j
         .duration_since(::std::time::UNIX_EPOCH)
         .expect("SystemTime to Unix time conv. error");
     let ret: jlong = <i64 as ::std::convert::TryFrom<u64>>::try_from(
-        since_unix_epoch.as_secs() * 1_000 + u64::from(since_unix_epoch.subsec_nanos() / 1_000_000),
+        since_unix_epoch.as_secs() * 1_000 + u64::from(since_unix_epoch.subsec_millis()),
     )
     .expect("SystemTime: milleseconds u64 to i64 convert error");
     ret

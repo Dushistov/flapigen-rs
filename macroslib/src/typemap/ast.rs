@@ -832,11 +832,11 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
         .map(|x| x.0)
 }
 
-pub(crate) fn list_lifetimes(ty: &Type) -> Vec<String> {
-    struct CatchLifetimes(Vec<String>);
-    impl<'ast> Visit<'ast> for CatchLifetimes {
-        fn visit_lifetime(&mut self, lifetime: &syn::Lifetime) {
-            self.0.push(format!("'{}", lifetime.ident.to_string()));
+pub(crate) fn list_lifetimes(ty: &Type) -> Vec<&syn::Lifetime> {
+    struct CatchLifetimes<'a>(Vec<&'a syn::Lifetime>);
+    impl<'ast> Visit<'ast> for CatchLifetimes<'ast> {
+        fn visit_lifetime(&mut self, lifetime: &'ast syn::Lifetime) {
+            self.0.push(&lifetime);
             visit_lifetime(self, lifetime)
         }
     }

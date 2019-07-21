@@ -102,17 +102,7 @@ class Main {
             TestInner.Inner testInner = TestInner.getInner();
             assert testInner.name.equals("Boo Boo");
 
-            assert Boo.test_u8((short) 1) == (short) 2;
-            assert Boo.test_i8((byte) -1) == (byte) 0;
-            assert Boo.test_u16((int) 1) == (int) 2;
-            assert Boo.test_i16((short) -1) == (short) 0;
-            assert Boo.test_u32((long) 1) == (long) 2;
-            assert Boo.test_i32((int) -1) == (int) 0;
-            assert Boo.test_u64((long) 1) == (long) 2;
-            assert Boo.test_i64((long) -1) == (long) 0;
-            assert Math.abs(Boo.test_f32((float) 1.1) - (float) 2.1) < 1e-12;
-            assert Math.abs(Boo.test_f64((double) -1.0)) < 1e-12;
-
+	    testNumberInputOutput();
             testDoubleOverload();
 	    testContainers();
 	    testNullString();
@@ -367,34 +357,84 @@ class Main {
     }
 
     private static void testOptional() {
-        OptionalDouble d = TestOptional.f1(null);
-        assert !d.isPresent();
-        d = TestOptional.f1(1.7);
-        assert d.isPresent();
-        assert Math.abs(d.getAsDouble() - 2.7) < 1e-12;
+	{
+	    OptionalDouble d = TestOptional.f1(null);
+	    assert !d.isPresent();
+	    d = TestOptional.f1(1.7);
+	    assert d.isPresent();
+	    assert Math.abs(d.getAsDouble() - 2.7) < 1e-12;
 
-        OptionalLong l = TestOptional.f2(null);
-        assert !l.isPresent();
-        l = TestOptional.f2(17l);
-        assert l.isPresent();
-        assert l.getAsLong() == 18;
+	    OptionalLong l = TestOptional.f2(null);
+	    assert !l.isPresent();
+	    l = TestOptional.f2(17l);
+	    assert l.isPresent();
+	    assert l.getAsLong() == 18;
 
-        Optional<Foo> foo_o = TestOptional.f3(false);
-        assert !foo_o.isPresent();
-        foo_o = TestOptional.f3(true);
-        assert foo_o.isPresent();
-        Foo foo = foo_o.get();
-        assert foo.calcF(0, 0) == 5;
-        assert foo.getName().equals("Some");
+	    Optional<Foo> foo_o = TestOptional.f3(false);
+	    assert !foo_o.isPresent();
+	    foo_o = TestOptional.f3(true);
+	    assert foo_o.isPresent();
+	    Foo foo = foo_o.get();
+	    assert foo.calcF(0, 0) == 5;
+	    assert foo.getName().equals("Some");
 
-        assert !TestOptional.f4(null).isPresent();
-        l = TestOptional.f4(foo);
-        assert l.isPresent();
-        assert l.getAsLong() == 5;
+	    assert !TestOptional.f4(null).isPresent();
+	    l = TestOptional.f4(foo);
+	    assert l.isPresent();
+	    assert l.getAsLong() == 5;
 
-        assert TestOptional.f5(true).isPresent();
-        assert TestOptional.f5(true).get().equals("true");
-        assert !TestOptional.f5(false).isPresent();
+	    assert TestOptional.f5(true).isPresent();
+	    assert TestOptional.f5(true).get().equals("true");
+	    assert !TestOptional.f5(false).isPresent();
+	}
+	{
+	    Foo foo = new Foo(17, "test");
+
+	    assert TestOptional.f6(foo).isPresent();
+	    assert TestOptional.f6(foo).get().equals("test");
+	    assert foo.getName().equals("test");
+
+	    assert TestOptional.f6(foo).isPresent();
+	    assert TestOptional.f6(foo).get().equals("test");
+	    assert foo.getName().equals("test");
+
+	    assert !TestOptional.f6(null).isPresent();
+	}
+
+	assert TestOptional.test_opt_str("test_opt_str1").isPresent();
+	assert TestOptional.test_opt_str("test_opt_str2").get().equals("test_opt_str2");
+	assert !TestOptional.test_opt_str(null).isPresent();
+
+	assert TestOptional.test_opt_i32(Integer.MAX_VALUE - 1).isPresent();
+	assert TestOptional.test_opt_i32(Integer.MAX_VALUE - 1).getAsInt() == Integer.MAX_VALUE;
+	assert !TestOptional.test_opt_i32(null).isPresent();
+	assert TestOptional.test_opt_i32(Integer.MIN_VALUE).isPresent();
+	assert TestOptional.test_opt_i32(Integer.MIN_VALUE).getAsInt() == (Integer.MIN_VALUE + 1);
+
+
+	assert TestOptional.test_opt_i8((byte)(Byte.MAX_VALUE - 1)).isPresent();
+	assert TestOptional.test_opt_i8((byte)(Byte.MAX_VALUE - 1)).getAsInt() == Byte.MAX_VALUE;
+	assert !TestOptional.test_opt_i8(null).isPresent();
+	assert TestOptional.test_opt_i8((byte)Byte.MIN_VALUE).isPresent();
+	assert TestOptional.test_opt_i8((byte)Byte.MIN_VALUE).getAsInt() == (Byte.MIN_VALUE + 1);
+
+
+	assert TestOptional.test_opt_i16((short)(Short.MAX_VALUE - 1)).isPresent();
+	assert TestOptional.test_opt_i16((short)(Short.MAX_VALUE - 1)).getAsInt() == Short.MAX_VALUE;
+	assert !TestOptional.test_opt_i16(null).isPresent();
+	assert TestOptional.test_opt_i16((short)Short.MIN_VALUE).isPresent();
+	assert TestOptional.test_opt_i16((short)Short.MIN_VALUE).getAsInt() == (Short.MIN_VALUE + 1);
+
+
+	assert TestOptional.test_opt_f32(1.3f).isPresent();
+	assert Math.abs(TestOptional.test_opt_f32(1.3f).getAsDouble() - 3.f) < 1e-12;
+	assert !TestOptional.test_opt_f32(null).isPresent();
+
+	assert !TestOptional.test_enum(null).isPresent();
+	assert TestOptional.test_enum(MyEnum.ITEM1).isPresent();
+	assert TestOptional.test_enum(MyEnum.ITEM1).get().equals(MyEnum.ITEM2);
+	assert TestOptional.test_enum(MyEnum.ITEM2).isPresent();
+	assert TestOptional.test_enum(MyEnum.ITEM2).get().equals(MyEnum.ITEM3);
     }
 
     private static void testCircularDeps() {
@@ -552,5 +592,22 @@ class Main {
 	assert cb.types1_called;
 	assert cb.types2_called;
 	assert cb.foo_called;
+    }
+
+    private static void testNumberInputOutput() {
+	assert Boo.test_u8((short) 1) == (short) 2;
+
+	assert Boo.test_i8((byte) -1) == (byte) 0;
+	assert Boo.test_i8((byte) 126) == 127;
+	assert Boo.test_i8((byte) -128) == -127;
+
+	assert Boo.test_u16((int) 1) == (int) 2;
+	assert Boo.test_i16((short) -1) == (short) 0;
+	assert Boo.test_u32((long) 1) == (long) 2;
+	assert Boo.test_i32((int) -1) == (int) 0;
+	assert Boo.test_u64((long) 1) == (long) 2;
+	assert Boo.test_i64((long) -1) == (long) 0;
+	assert Math.abs(Boo.test_f32((float) 1.1) - (float) 2.1) < 1e-12;
+	assert Math.abs(Boo.test_f64((double) -1.0)) < 1e-12;
     }
 }

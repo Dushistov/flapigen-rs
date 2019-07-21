@@ -1,8 +1,19 @@
-r#"
-impl <> SwigForeignClass for Rc < RefCell < Boo > > {
- fn jni_class_name ( ) -> * const :: std :: os :: raw :: c_char { swig_c_str ! ( "org/example/Boo" ) }
- fn box_object ( this : Self ) -> jlong { let this : * const RefCell < Boo > = Rc :: into_raw ( this ) ; this as jlong }
- fn unbox_object ( x : jlong ) -> Self {
- let x : * mut RefCell < Boo > = unsafe { jlong_to_pointer ::< RefCell < Boo >> ( x ) . as_mut ( ) . unwrap ( ) } ;
- let x : Rc < RefCell < Boo > > = unsafe { Rc :: from_raw ( x ) } ; x } }
-"#;
+r#"impl SwigForeignClass for Rc<RefCell<Boo>> {
+    type PointedType = RefCell<Boo>;
+    fn jni_class_name() -> *const ::std::os::raw::c_char {
+        swig_c_str!("org/example/Boo")
+    }
+    fn box_object(this: Self) -> jlong {
+        let this: *const RefCell<Boo> = Rc::into_raw(this);
+        this as jlong
+    }
+    fn unbox_object(x: jlong) -> Self {
+        let x: *mut RefCell<Boo> = unsafe { jlong_to_pointer::<RefCell<Boo>>(x).as_mut().unwrap() };
+        let x: Rc<RefCell<Boo>> = unsafe { Rc::from_raw(x) };
+        x
+    }
+    fn to_pointer(x: jlong) -> ::std::ptr::NonNull<Self::PointedType> {
+        let x: *mut RefCell<Boo> = unsafe { jlong_to_pointer::<RefCell<Boo>>(x).as_mut().unwrap() };
+        ::std::ptr::NonNull::<Self::PointedType>::new(x).unwrap()
+    }
+}"#;

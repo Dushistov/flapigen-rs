@@ -54,7 +54,7 @@ pub(in crate::cpp) fn do_map_type(
         });
     if let Some((grule, subst_list)) = idx_subst_map {
         debug!(
-            "map_type: we found generic rule for {}: {:?}",
+            "do_map_type: we found generic rule for {}: {:?}",
             arg_ty, subst_list
         );
         let subst_map = subst_list.as_slice().into();

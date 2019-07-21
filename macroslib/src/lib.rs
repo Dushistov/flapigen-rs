@@ -580,9 +580,9 @@ pub fn rustfmt_cnt(source: Vec<u8>) -> io::Result<Vec<u8>> {
             println!("warning=Rustfmt could not format some lines.");
             Ok(src)
         }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Internal rustfmt error".to_string(),
-        )),
+        _ => {
+            println!("warning=Internal rustfmt error");
+            Ok(src)
+        }
     }
 }

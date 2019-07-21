@@ -465,36 +465,6 @@ impl TypeMap {
         None
     }
 
-    pub(crate) fn find_foreigner_class_with_such_self_type(
-        &self,
-        may_be_self_ty: &RustType,
-        if_ref_search_reftype: bool,
-    ) -> Option<&ForeignerClassInfo> {
-        let type_name = match may_be_self_ty.ty {
-            syn::Type::Reference(syn::TypeReference { ref elem, .. }) if if_ref_search_reftype => {
-                normalize_ty_lifetimes(&*elem)
-            }
-            _ => may_be_self_ty.normalized_name.as_str(),
-        };
-
-        trace!("find self type: possible name {}", type_name);
-        for fc in &self.foreign_classes {
-            let self_rust_ty = self
-                .ty_to_rust_type_checked(&fc.self_type_as_ty())
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Internal error: self_type ({}) not registered",
-                        DisplayToTokens(&fc.self_type_as_ty())
-                    )
-                });
-            trace!("self_type {}", self_rust_ty);
-            if self_rust_ty.normalized_name == type_name {
-                return Some(fc);
-            }
-        }
-        None
-    }
-
     pub(crate) fn add_conversation_rule(
         &mut self,
         from: RustTypeIdx,

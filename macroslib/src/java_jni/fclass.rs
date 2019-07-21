@@ -1,5 +1,7 @@
 use log::{debug, trace};
 use petgraph::Direction;
+use proc_macro2::TokenStream;
+use quote::quote;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use std::{io::Write, path::Path};
@@ -15,10 +17,8 @@ use crate::{
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
-        ast::{
-            if_result_return_ok_err_types, list_lifetimes, normalize_ty_lifetimes, DisplayToTokens,
-        },
-        ty::RustType,
+        ast::{if_result_return_ok_err_types, list_lifetimes, normalize_ty_lifetimes},
+        ty::{normalized_type, RustType},
         utils::{
             convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
@@ -39,7 +39,7 @@ pub(in crate::java_jni) fn generate(
         class.name, class.self_desc
     );
 
-    let f_methods_sign = find_suitable_foreign_types_for_methods(ctx.conv_map, class)?;
+    let f_methods_sign = find_suitable_foreign_types_for_methods(ctx, class)?;
     generate_java_code(
         ctx.conv_map,
         &ctx.cfg.output_dir,
@@ -338,8 +338,7 @@ public final class {class_name} {{"#,
                     }
                 }
 
-                file.write_all("    }".as_bytes())
-                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                file.write_all(b"    }").expect(WRITE_TO_MEM_FAILED_MSG);
 
                 writeln!(
                     file,
@@ -497,53 +496,47 @@ fn generate_rust_code(
             let class_name_for_user =
                 java_class_full_name(&ctx.cfg.package_name, &class.name.to_string());
             let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
-            let lifetimes = {
-                let mut ret = String::new();
-                let lifetimes = list_lifetimes(&this_type.ty);
-                for (i, l) in lifetimes.iter().enumerate() {
-                    ret.push_str(&*l.as_str());
-                    if i != lifetimes.len() - 1 {
-                        ret.push(',');
+            let lifetimes = list_lifetimes(&this_type.ty);
+            let lifetimes = &lifetimes;
+
+            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true)
+                .replace(TO_VAR_TEMPLATE, "x");
+            let unpack_code: TokenStream = syn::parse_str(&unpack_code).unwrap_or_else(|err| {
+                panic_on_syn_error("internal/java foreign class unpack code", unpack_code, err)
+            });
+            let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
+            let this_type_for_method_ty_as_is = &this_type_for_method.ty;
+            let class_name = &this_type.ty;
+            let fclass_impl_code = quote! {
+                impl<#(#lifetimes),*> SwigForeignClass for #class_name {
+                    type PointedType = #this_type_for_method_ty_as_is;
+
+                    fn jni_class_name() -> *const ::std::os::raw::c_char {
+                        swig_c_str!(#class_name_for_jni)
+                    }
+                    fn box_object(this: Self) -> jlong {
+                        #code_box_this
+                        this as jlong
+                    }
+                    fn unbox_object(x: jlong) -> Self {
+                        let x: *mut #this_type_for_method_ty = unsafe {
+                            jlong_to_pointer::<#this_type_for_method_ty>(x).as_mut().unwrap()
+                        };
+                        #unpack_code
+                        x
+                    }
+                    fn to_pointer(x: jlong) -> ::std::ptr::NonNull<Self::PointedType> {
+                        let x: *mut #this_type_for_method_ty = unsafe {
+                            jlong_to_pointer::<#this_type_for_method_ty>(x).as_mut().unwrap()
+                        };
+                        ::std::ptr::NonNull::<Self::PointedType>::new(x).unwrap()
                     }
                 }
-                ret
             };
-
-            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-
-            let fclass_impl_code = format!(
-                r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
-    fn jni_class_name() -> *const ::std::os::raw::c_char {{
-        swig_c_str!("{jni_class_name}")
-    }}
-    fn box_object(this: Self) -> jlong {{
-{code_box_this}
-       this as jlong
-    }}
-    fn unbox_object(x: jlong) -> Self {{
-        let x: *mut {this_type} = unsafe {{
-           jlong_to_pointer::<{this_type}>(x).as_mut().unwrap()
-        }};
-    {unpack_code}
-        x
-    }}
-}}"#,
-                lifetimes = lifetimes,
-                class_name = DisplayToTokens(&this_type.ty),
-                jni_class_name = class_name_for_jni,
-                code_box_this = code_box_this,
-                unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "x"),
-                this_type = this_type_for_method.normalized_name,
-            );
-
-            ctx.rust_code
-                .push(syn::parse_str(&fclass_impl_code).unwrap_or_else(|err| {
-                    panic_on_syn_error("java internal fclass impl code", fclass_impl_code, err)
-                }));
-
+            ctx.rust_code.push(fclass_impl_code);
             (this_type_for_method, code_box_this)
         } else {
-            (dummy_rust_ty.clone(), String::new())
+            (dummy_rust_ty.clone(), TokenStream::new())
         };
 
     let no_this_info = || {
@@ -709,13 +702,13 @@ pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong
 }
 
 fn find_suitable_foreign_types_for_methods(
-    conv_map: &mut TypeMap,
+    ctx: &mut JavaContext,
     class: &ForeignerClassInfo,
 ) -> Result<Vec<JniForeignMethodSignature>> {
     let mut ret = Vec::<JniForeignMethodSignature>::with_capacity(class.methods.len());
     let empty_symbol = "";
     let dummy_ty = parse_type! { () };
-    let dummy_rust_ty = conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
+    let dummy_rust_ty = ctx.conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);
 
     for method in &class.methods {
         debug!(
@@ -735,10 +728,12 @@ fn find_suitable_foreign_types_for_methods(
             let named_arg = arg
                 .as_named_arg()
                 .map_err(|err| DiagnosticError::from_syn_err(class.src_id, err))?;
-            let arg_rust_ty = conv_map.find_or_alloc_rust_type(&named_arg.ty, class.src_id);
+            let arg_rust_ty = ctx
+                .conv_map
+                .find_or_alloc_rust_type(&named_arg.ty, class.src_id);
 
             let fti = map_type(
-                conv_map,
+                ctx,
                 &arg_rust_ty,
                 Direction::Incoming,
                 (class.src_id, named_arg.ty.span()),
@@ -758,9 +753,9 @@ fn find_suitable_foreign_types_for_methods(
                 }
                 .into(),
                 syn::ReturnType::Type(_, ref rt) => {
-                    let ret_rust_ty = conv_map.find_or_alloc_rust_type(rt, class.src_id);
+                    let ret_rust_ty = ctx.conv_map.find_or_alloc_rust_type(rt, class.src_id);
                     map_type(
-                        conv_map,
+                        ctx,
                         &ret_rust_ty,
                         Direction::Outgoing,
                         (class.src_id, rt.span()),
@@ -828,7 +823,7 @@ fn generate_constructor(
     mc: &MethodContext,
     construct_ret_type: Type,
     this_type: Type,
-    code_box_this: &str,
+    code_box_this: &TokenStream,
 ) -> Result<()> {
     let (mut deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         ctx.conv_map,
@@ -982,19 +977,25 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
     }
 
     for (i, (arg, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
-        let after_conv_arg_name =
-            if let Some(code) = arg.java_converter.as_ref().map(|x| &x.converter) {
-                let templ = format!("a{}", i);
-                let after_conv_arg_name = new_unique_name(&known_names, &templ);
-                known_names.insert(after_conv_arg_name.clone());
-                let java_code = code
-                    .replace(TO_VAR_TEMPLATE, &after_conv_arg_name)
-                    .replace(FROM_VAR_TEMPLATE, arg_name);
-                conv_code.push_str(&java_code);
-                Some(after_conv_arg_name)
-            } else {
-                None
-            };
+        let after_conv_arg_name = if let Some(java_conv) = arg.java_converter.as_ref() {
+            let templ = format!("a{}", i);
+            let after_conv_arg_name = new_unique_name(&known_names, &templ);
+            known_names.insert(after_conv_arg_name.clone());
+            let java_code: String = java_conv
+                .converter
+                .replace(
+                    TO_VAR_TYPE_TEMPLATE,
+                    &format!("{} {}", java_conv.java_transition_type, after_conv_arg_name),
+                )
+                .replace(TO_VAR_TEMPLATE, &after_conv_arg_name)
+                .replace(FROM_VAR_TEMPLATE, arg_name)
+                .replace("@NonNull ", "")
+                .replace("@Nullable ", "");
+            conv_code.push_str(&java_code);
+            Some(after_conv_arg_name)
+        } else {
+            None
+        };
         if let Some(after_conv_arg_name) = after_conv_arg_name {
             args_for_call_internal.push_str(&after_conv_arg_name);
         } else {

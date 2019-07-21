@@ -124,7 +124,9 @@ impl TypeMapConvRuleInfo {
             && self.f_code.is_empty()
             && self.generic_aliases.is_empty()
     }
-    pub(crate) fn if_simple_rtype_ftype_map(&self) -> Option<(&Type, &FTypeName, &[ModuleName])> {
+    pub(crate) fn if_simple_rtype_ftype_map(
+        &self,
+    ) -> Option<(&Type, &FTypeName, &[ModuleName], Option<&SpannedSmolStr>)> {
         if self.rtype_right_to_left.is_some()
             || !self.ftype_right_to_left.is_empty()
             || self.ftype_left_to_right.len() > 1
@@ -145,9 +147,10 @@ impl TypeMapConvRuleInfo {
                     left_right_ty: FTypeLeftRightPair::OnlyLeft(ref f_ty),
                     code: None,
                     ref req_modules,
+                    ref unique_prefix,
                     ..
                 }),
-            ) => Some((r_ty, f_ty, req_modules.as_slice())),
+            ) => Some((r_ty, f_ty, req_modules.as_slice(), unique_prefix.as_ref())),
             _ => None,
         }
     }
@@ -155,7 +158,7 @@ impl TypeMapConvRuleInfo {
     /// it is possible to merge to `TypeMap` without help of language backend
     pub(crate) fn if_simple_rtype_ftype_map_no_lang_backend(
         &self,
-    ) -> Option<(&Type, &FTypeName, &[ModuleName])> {
+    ) -> Option<(&Type, &FTypeName, &[ModuleName], Option<&SpannedSmolStr>)> {
         if !self.f_code.is_empty() || self.c_types.is_some() {
             return None;
         }
@@ -193,7 +196,7 @@ impl TypeMapConvRuleInfo {
         TraitChecker: Fn(&Type, &TraitNamesSet) -> bool,
     {
         assert!(self.is_generic());
-        let generic_ty = if let Some((r_type, _, _)) = self.if_simple_rtype_ftype_map() {
+        let generic_ty = if let Some((r_type, _, _, _)) = self.if_simple_rtype_ftype_map() {
             r_type
         } else {
             let rule = match direction {
@@ -396,6 +399,7 @@ pub(crate) struct FTypeConvRule {
     pub cfg_option: Option<SpannedSmolStr>,
     pub left_right_ty: FTypeLeftRightPair,
     pub input_to_output: bool,
+    pub unique_prefix: Option<SpannedSmolStr>,
     pub code: Option<TypeConvCode>,
 }
 
@@ -774,6 +778,7 @@ fn expand_ftype_rule(
         provides_by_module.retain(|e| mod_uniques.insert(e.name.clone()));
 
         ret.push(FTypeConvRule {
+            unique_prefix: grule.unique_prefix.clone(),
             req_modules: provides_by_module,
             cfg_option: grule.cfg_option.clone(),
             left_right_ty,

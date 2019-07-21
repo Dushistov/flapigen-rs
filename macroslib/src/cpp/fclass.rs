@@ -3,6 +3,7 @@ use std::io::Write;
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
+use quote::quote;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use syn::{spanned::Spanned, Type};
@@ -16,8 +17,8 @@ use crate::{
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
-        ast::{list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
-        ty::RustType,
+        ast::{list_lifetimes, normalize_ty_lifetimes},
+        ty::{normalized_type, RustType},
         utils::{
             convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
@@ -124,46 +125,34 @@ fn do_generate(
 
             let (this_type_for_method, code_box_this) =
                 convert_to_heap_pointer(ctx.conv_map, &this_type, "this");
-            let lifetimes = {
-                let mut ret = String::new();
-                let lifetimes = list_lifetimes(&this_type.ty);
-                for (i, l) in lifetimes.iter().enumerate() {
-                    ret.push_str(&*l.as_str());
-                    if i != lifetimes.len() - 1 {
-                        ret.push(',');
+            let lifetimes = list_lifetimes(&this_type.ty);
+            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+            let class_name = &this_type.ty;
+            let unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "p");
+            let unpack_code: TokenStream = syn::parse_str(&unpack_code).unwrap_or_else(|err| {
+                panic_on_syn_error("internal/c++ foreign class unpack code", unpack_code, err)
+            });
+            let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
+            let fclass_impl_code: TokenStream = quote! {
+                impl<#(#lifetimes),*> SwigForeignClass for #class_name {
+                    fn c_class_name() -> *const ::std::os::raw::c_char {
+                        swig_c_str!(stringify!(#class_name))
+                    }
+                    fn box_object(this: Self) -> *mut ::std::os::raw::c_void {
+                        #code_box_this
+                        this as *mut ::std::os::raw::c_void
+                    }
+                    fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self {
+                        let p = p as *mut #this_type_for_method_ty;
+                        #unpack_code
+                        p
                     }
                 }
-                ret
             };
-            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-            let fclass_impl_code = format!(
-                r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
-    fn c_class_name() -> *const ::std::os::raw::c_char {{
-        swig_c_str!("{class_name}")
-    }}
-    fn box_object(this: Self) -> *mut ::std::os::raw::c_void {{
-{code_box_this}
-        this as *mut ::std::os::raw::c_void
-    }}
-    fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self {{
-        let p = p as *mut {this_type_for_method};
-{unpack_code}
-       p
-    }}
-}}"#,
-                lifetimes = lifetimes,
-                class_name = DisplayToTokens(&this_type.ty),
-                code_box_this = code_box_this,
-                unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "p"),
-                this_type_for_method = this_type_for_method.normalized_name.clone()
-            );
-            ctx.rust_code
-                .push(syn::parse_str(&fclass_impl_code).unwrap_or_else(|err| {
-                    panic_on_syn_error("internal foreign class impl code", fclass_impl_code, err)
-                }));
+            ctx.rust_code.push(fclass_impl_code);
             (this_type_for_method, code_box_this)
         } else {
-            (dummy_rust_ty.clone(), String::new())
+            (dummy_rust_ty.clone(), TokenStream::new())
         };
     let no_this_info = || {
         DiagnosticError::new(
@@ -856,7 +845,7 @@ fn generate_constructor(
     mc: &MethodContext,
     construct_ret_type: Type,
     this_type: Type,
-    code_box_this: &str,
+    code_box_this: &TokenStream,
 ) -> Result<Vec<TokenStream>> {
     let this_type: RustType = conv_map.ty_to_rust_type(&this_type);
     let ret_type_name = this_type.normalized_name.as_str();
