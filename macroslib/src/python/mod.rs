@@ -586,7 +586,10 @@ fn generate_conversion_for_return(
             quote! {
                 match #rust_call {
                     Ok(ok_inner) => #inner_conversion,
-                    Err(err_inner) => return Err(cpython::PyErr::new::<super::py_error::Error, _>(py, err_inner.to_string())),
+                    Err(err_inner) => return Err(cpython::PyErr::new::<super::py_error::Error, _>(
+                        py,
+                        swig_collect_error_message(&err_inner)
+                    )),
                 }
             },
         ))
@@ -661,7 +664,7 @@ fn py_wrapper_mod_name(type_name: &str) -> String {
 }
 
 // `rust_cpython` provides access only to non-mutable reference of the wrapped Rust object.
-// What's more `rust_cpytho`n requires the object to be `Send + 'static`, because Python VM
+// What's more `rust_cpython` requires the object to be `Send + 'static`, because Python VM
 // can move it between threads without any control from Rust.
 // As a result, we need to wrap the object in `Mutex`, to provide mutability.
 // By default, `Mutex` is used.

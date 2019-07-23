@@ -410,6 +410,24 @@ impl Generator {
         }
     }
 
+    /// process string `src` and save result of macro expansion to `dst`
+    ///
+    /// # Panics
+    /// Panics on error
+    pub fn expand_from_str<D>(mut self, crate_name: &str, src: String, dst: D)
+    where
+        D: AsRef<Path>,
+    {
+        let src_id = self.src_reg.register(SourceCode {
+            id_of_code: format!("{}: [string]", crate_name),
+            code: src,
+        });
+        
+        if let Err(err) = self.expand_str(src_id, dst) {
+            panic_on_parse_error(&self.src_reg, &err);
+        }
+    }
+
     /// process `src` and save result of macro expansion to `dst`
     ///
     /// # Panics

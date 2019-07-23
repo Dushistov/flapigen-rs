@@ -47,14 +47,6 @@ def test_arrays():
     assert TestStaticClass.count_slice_of_objects([TestClass(), TestClass()]) == 2
 
 def test_results():
-    TestStaticClass.test_result_str_ok()
-    exception_occured = False
-    try:
-        TestStaticClass.test_result_str_err()
-    except TestError as ex:
-        exception_occured = True
-    assert exception_occured
-
     TestStaticClass.test_result_ok()
     exception_occured = False
     try:
