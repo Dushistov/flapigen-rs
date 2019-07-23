@@ -14,7 +14,7 @@ use crate::{
         ast::{parse_ty_with_given_span_checked, DisplayToTokens, TypeName},
         ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
         utils::{boxed_type, convert_to_heap_pointer, unpack_from_heap_pointer},
-        RustTypeIdx, TypeConvCode, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        RustTypeIdx, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::{ForeignerClassInfo, SelfTypeDesc},
     WRITE_TO_MEM_FAILED_MSG,
@@ -56,7 +56,7 @@ pub(in crate::java_jni) fn register_typemap_for_self_type(
         .conv_map
         .find_or_alloc_rust_type(&self_desc.self_type, class.src_id);
     register_main_foreign_types(
-        ctx.conv_map,
+        ctx,
         class,
         this_type.to_idx(),
         self_type.to_idx(),
@@ -157,7 +157,7 @@ fn register_rust_ty_conversation_rules(
 }
 
 fn register_main_foreign_types(
-    conv_map: &mut TypeMap,
+    ctx: &mut JavaContext,
     class: &ForeignerClassInfo,
     this_type: RustTypeIdx,
     self_type: RustTypeIdx,
@@ -166,14 +166,15 @@ fn register_main_foreign_types(
 ) -> Result<()> {
     debug!(
         "register_main_foreign_types: ftype for this_type {}",
-        conv_map[this_type]
+        ctx.conv_map[this_type]
     );
-    let jlong_ty = parse_ty_with_given_span_checked("jlong", conv_map[this_type].ty.span());
+    let jlong_ty = parse_ty_with_given_span_checked("jlong", ctx.conv_map[this_type].ty.span());
     let out_val_prefix = format!("{}OutVal", class.name);
     let jlong_out_val_rty =
-        conv_map.find_or_alloc_rust_type_with_suffix(&jlong_ty, &out_val_prefix, class.src_id);
+        ctx.conv_map
+            .find_or_alloc_rust_type_with_suffix(&jlong_ty, &out_val_prefix, class.src_id);
     {
-        conv_map.add_conversation_rule(
+        ctx.conv_map.add_conversation_rule(
             this_type,
             jlong_out_val_rty.to_idx(),
             TypeConvCode::new2(
@@ -181,7 +182,7 @@ fn register_main_foreign_types(
                     r#"
     let {to_var}: jlong = <{this_type}>::box_object({from_var});
 "#,
-                    this_type = conv_map[this_type],
+                    this_type = ctx.conv_map[this_type],
                     to_var = TO_VAR_TEMPLATE,
                     from_var = FROM_VAR_TEMPLATE,
                 ),
@@ -190,7 +191,7 @@ fn register_main_foreign_types(
             .into(),
         );
         let name_prefix: SmolStr = format!("/*{}*/", out_val_prefix).into();
-        conv_map.alloc_foreign_type(ForeignTypeS {
+        ctx.conv_map.alloc_foreign_type(ForeignTypeS {
             name: TypeName::new(
                 format!("{}long", name_prefix),
                 (class.src_id, class.name.span()),
@@ -206,15 +207,16 @@ fn register_main_foreign_types(
     }
     let in_val_prefix = format!("{}InVal", class.name);
     let jlong_in_val_rty =
-        conv_map.find_or_alloc_rust_type_with_suffix(&jlong_ty, &in_val_prefix, class.src_id);
+        ctx.conv_map
+            .find_or_alloc_rust_type_with_suffix(&jlong_ty, &in_val_prefix, class.src_id);
     {
-        let this_type2 = conv_map[this_type].clone();
+        let this_type2 = ctx.conv_map[this_type].clone();
         let (this_type_for_method, _code_box_this) =
-            convert_to_heap_pointer(conv_map, &this_type2, "this");
+            convert_to_heap_pointer(ctx.conv_map, &this_type2, "this");
 
         if class.smart_ptr_copy_derived {
             let unpack_code = unpack_from_heap_pointer(&this_type2, TO_VAR_TEMPLATE, true);
-            conv_map.add_conversation_rule(
+            ctx.conv_map.add_conversation_rule(
                 jlong_in_val_rty.to_idx(),
                 this_type,
                 TypeConvCode::new2(
@@ -239,7 +241,7 @@ fn register_main_foreign_types(
                 .into(),
             );
         } else if class.copy_derived {
-            conv_map.add_conversation_rule(
+            ctx.conv_map.add_conversation_rule(
                 jlong_in_val_rty.to_idx(),
                 this_type,
                 TypeConvCode::new2(
@@ -260,7 +262,7 @@ fn register_main_foreign_types(
             );
         } else {
             let unpack_code = unpack_from_heap_pointer(&this_type2, TO_VAR_TEMPLATE, true);
-            conv_map.add_conversation_rule(
+            ctx.conv_map.add_conversation_rule(
                 jlong_in_val_rty.to_idx(),
                 this_type,
                 TypeConvCode::new2(
@@ -283,7 +285,7 @@ fn register_main_foreign_types(
         }
 
         let name_prefix: SmolStr = format!("/*{}*/", in_val_prefix).into();
-        conv_map.alloc_foreign_type(ForeignTypeS {
+        ctx.conv_map.alloc_foreign_type(ForeignTypeS {
             name: TypeName::new(
                 format!("{}long", name_prefix),
                 (class.src_id, class.name.span()),
@@ -316,8 +318,14 @@ fn register_main_foreign_types(
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
+    let null_annot = if ctx.cfg.null_annotation_package.is_some() {
+        "@NonNull "
+    } else {
+        ""
+    };
+
     let class_ftype = ForeignTypeS {
-        name: TypeName::new(class.name.to_string(), (class.src_id, class.name.span())),
+        name: TypeName::new(format!("{}{}", null_annot, class.name), (class.src_id, class.name.span())),
         provides_by_module: vec![],
         into_from_rust: Some(ForeignConversationRule {
             rust_ty: this_type,
@@ -349,16 +357,16 @@ fn register_main_foreign_types(
         }),
         name_prefix: None,
     };
-    conv_map.alloc_foreign_type(class_ftype)?;
+    ctx.conv_map.alloc_foreign_type(class_ftype)?;
 
-    let jlong_ty = conv_map.ty_to_rust_type(&parse_type! { jlong });
+    let jlong_ty = ctx.conv_map.ty_to_rust_type(&parse_type! { jlong });
     debug!(
         "register_main_foreign_types: ftype for this_type_ref {}",
-        conv_map[this_type_ref]
+        ctx.conv_map[this_type_ref]
     );
     let class_ftype_ref_in = ForeignTypeS {
         name: TypeName::new(
-            format!("/*ref*/{}", class.name),
+            format!("/*ref*/{}{}", null_annot, class.name),
             (class.src_id, class.name.span()),
         ),
         provides_by_module: vec![],
@@ -381,15 +389,15 @@ fn register_main_foreign_types(
         into_from_rust: None,
         name_prefix: Some("/*ref*/".into()),
     };
-    conv_map.alloc_foreign_type(class_ftype_ref_in)?;
+    ctx.conv_map.alloc_foreign_type(class_ftype_ref_in)?;
 
     debug!(
         "register_main_foreign_types: ftype for this_type_mut_ref {}",
-        conv_map[this_type_mut_ref]
+        ctx.conv_map[this_type_mut_ref]
     );
     let class_ftype_mut_ref_in = ForeignTypeS {
         name: TypeName::new(
-            format!("/*mut ref*/{}", class.name),
+            format!("/*mut ref*/{}{}", null_annot, class.name),
             (class.src_id, class.name.span()),
         ),
         provides_by_module: vec![],
@@ -412,20 +420,20 @@ fn register_main_foreign_types(
         into_from_rust: None,
         name_prefix: Some("/*mut ref*/".into()),
     };
-    conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
+    ctx.conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
 
     if self_type != this_type {
         debug!(
             "register_main_foreign_types: self_type {} != this_type {}",
-            conv_map[self_type], conv_map[this_type]
+            ctx.conv_map[self_type], ctx.conv_map[this_type]
         );
-        let self_type = conv_map[self_type].clone();
+        let self_type = ctx.conv_map[self_type].clone();
         {
             let gen_ty = parse_ty_with_given_span_checked(
                 &format!("&mut {}", self_type),
                 self_type.ty.span(),
             );
-            let self_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+            let self_type_mut_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
             debug!(
                 "register_main_foreign_types: ftype for self_type_mut_ref {}",
@@ -433,7 +441,7 @@ fn register_main_foreign_types(
             );
             let class_ftype_mut_ref_in = ForeignTypeS {
                 name: TypeName::new(
-                    format!("/*ref 2*/{}", class.name),
+                    format!("/*ref 2*/{}{}", null_annot, class.name),
                     (class.src_id, class.name.span()),
                 ),
                 provides_by_module: vec![],
@@ -456,16 +464,16 @@ fn register_main_foreign_types(
                 into_from_rust: None,
                 name_prefix: Some("/*ref 2*/".into()),
             };
-            conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
+            ctx.conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
         }
         {
             let code = format!("& {}", self_type);
             let gen_ty = parse_ty_with_given_span_checked(&code, self_type.ty.span());
-            let self_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
+            let self_type_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
             let class_ftype_ref_in = ForeignTypeS {
                 name: TypeName::new(
-                    format!("/*mut ref 2*/{}", class.name),
+                    format!("/*mut ref 2*/{}{}", null_annot, class.name),
                     (class.src_id, class.name.span()),
                 ),
                 provides_by_module: vec![],
@@ -488,7 +496,7 @@ fn register_main_foreign_types(
                 into_from_rust: None,
                 name_prefix: Some("/*mut ref 2*/".into()),
             };
-            conv_map.alloc_foreign_type(class_ftype_ref_in)?;
+            ctx.conv_map.alloc_foreign_type(class_ftype_ref_in)?;
         }
     }
 

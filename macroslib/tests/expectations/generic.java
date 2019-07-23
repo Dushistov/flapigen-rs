@@ -14,7 +14,7 @@ r#"public final Foo [] get_foo_arr() {
         return do_get_foo_arr(mNativeObj);
     }
     private static native Foo [] do_get_foo_arr(long self);"#;
-r#"public final Foo get_one_foo() throws Exception {
+r#"public final @NonNull Foo get_one_foo() throws Exception {
         long ret = do_get_one_foo(mNativeObj);
         Foo convRet = new Foo(InternalPointerMarker.RAW_PTR, ret);
 

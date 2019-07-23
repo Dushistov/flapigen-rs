@@ -20,3 +20,9 @@ foreigner_class!(class Boo {
     constructor Boo::default() -> Boo;
     fn latDirection(&self) -> &str;
 });
+
+foreigner_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: f64, _: f64, _: f64, _: f64, _: f64) -> Foo;
+    fn Foo::drop_point(&self) -> Boo; alias dropPoint;
+});

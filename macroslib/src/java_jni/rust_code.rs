@@ -40,10 +40,14 @@ lazy_static! {
 }
 
 fn java_type_to_jni_signature(java_type: &str) -> Option<&'static str> {
-    let java_type = filter_null_annotation(java_type);
-    JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-        .get(&java_type.trim())
-        .cloned()
+    if java_type.contains("@NonNull") || java_type.contains("@Nullable") {
+        let java_type = filter_null_annotation(java_type);
+        JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
+            .get(&java_type.trim())
+            .cloned()
+    } else {
+        JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE.get(&java_type).cloned()
+    }
 }
 
 pub(in crate::java_jni) fn generate_jni_func_name(
@@ -113,13 +117,13 @@ pub(in crate::java_jni) fn jni_method_signature(
     let mut ret: String = "(".into();
     for arg in &method.input {
         let mut gen_sig = String::new();
-        let sig = java_type_to_jni_signature(arg.as_ref().name.as_str())
+        let java_type: String = filter_null_annotation(arg.as_ref().name.as_str())
+            .trim()
+            .into();
+        let sig = java_type_to_jni_signature(&java_type)
             .or_else(|| {
-                if conv_map.is_generated_foreign_type(&arg.as_ref().name) {
-                    gen_sig = format!(
-                        "L{};",
-                        &java_class_full_name(package_name, &*arg.as_ref().name.as_str())
-                    );
+                if conv_map.is_generated_foreign_type(&java_type) {
+                    gen_sig = format!("L{};", &java_class_full_name(package_name, &java_type));
                     Some(&gen_sig)
                 } else {
                     None
@@ -128,7 +132,7 @@ pub(in crate::java_jni) fn jni_method_signature(
             .unwrap_or_else(|| {
                 panic!(
                     "Unknown type `{}`, can not generate jni signature",
-                    arg.as_ref().name
+                    java_type
                 )
             });
         let sig = sig.replace('.', "/");
