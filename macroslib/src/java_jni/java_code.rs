@@ -103,7 +103,11 @@ pub(in crate::java_jni) fn get_null_annotation_imports(
         let mut has_nullable = false;
 
         for f_method in methods_sign {
-            for arg in &f_method.input {
+            for arg in f_method
+                .input
+                .iter()
+                .chain(std::iter::once(&f_method.output))
+            {
                 match arg.annotation {
                     Some(NullAnnotation::NonNull) => has_non_null = true,
                     Some(NullAnnotation::Nullable) => has_nullable = true,
