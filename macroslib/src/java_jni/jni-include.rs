@@ -31,8 +31,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type_not_unique = "jobjectArray"]
     #![swig_foreigner_type = "java.lang.String []"]
     #![swig_rust_type_not_unique = "jobjectArray"]
-    #![swig_foreigner_type = "java.util.Optional<String>"]
-    #![swig_rust_type_not_unique = "jobject"]
 }
 
 #[allow(dead_code)]
