@@ -19,6 +19,7 @@ fn main() {
         "com.example.rust".into(),
     )))
     .rustfmt_bindings(true)
+    .remove_not_generated_files_from_output_directory(true)
     .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"));
     swig_gen.expand("rust_swig_test_jni", &in_src, &out_src);
 

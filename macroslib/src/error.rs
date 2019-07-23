@@ -45,6 +45,9 @@ impl DiagnosticError {
             data: vec![(SourceId::none(), syn::Error::new(Span::call_site(), err))],
         }
     }
+    pub(crate) fn map_any_err_to_our_err<E: Display>(err: E) -> Self {
+        DiagnosticError::new_without_src_info(err)
+    }
 }
 
 impl Display for DiagnosticError {

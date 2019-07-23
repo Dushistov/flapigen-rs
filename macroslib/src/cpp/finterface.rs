@@ -311,9 +311,9 @@ pub(in crate::cpp) fn generate_for_interface(
 
     let c_interface_struct_header = format!("c_{}.h", interface.name);
     let c_path = ctx.cfg.output_dir.join(&c_interface_struct_header);
-    let mut file_c = FileWriteCache::new(&c_path);
+    let mut file_c = FileWriteCache::new(&c_path, ctx.generated_foreign_files);
     let cpp_path = ctx.cfg.output_dir.join(format!("{}.hpp", interface.name));
-    let mut file_cpp = FileWriteCache::new(&cpp_path);
+    let mut file_cpp = FileWriteCache::new(&cpp_path, ctx.generated_foreign_files);
     let interface_comments = cpp_code::doc_comments_to_c_comments(&interface.doc_comments, true);
 
     writeln!(
