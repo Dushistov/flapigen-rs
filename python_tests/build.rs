@@ -17,11 +17,8 @@ fn main() {
         "rust swig expand time: {}",
         expand_time.as_secs() as f64 + (expand_time.subsec_nanos() as f64) / 1_000_000_000.
     );
-    println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed=src/glue.rs.in");
     println!("cargo:rerun-if-changed=src/lib.rs");
-    //rebuild if user remove generated code
-    println!("cargo:rerun-if-changed={}", out_dir);
 }
 
 fn rust_swig_expand(from: &Path, out: &Path) {

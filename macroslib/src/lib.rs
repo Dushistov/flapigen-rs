@@ -31,11 +31,13 @@ mod typemap;
 mod types;
 
 use std::{
-    env,
+    env, io,
     io::Write,
     mem,
     path::{Path, PathBuf},
+    process::{Command, Stdio},
     str::FromStr,
+    sync::Arc,
 };
 
 use log::debug;
@@ -272,6 +274,7 @@ pub struct Generator {
     foreign_lang_helpers: Vec<SourceCode>,
     pointer_target_width: usize,
     src_reg: SourceRegistry,
+    rustfmt_bindings: bool,
 }
 
 struct SourceCode {
@@ -354,13 +357,20 @@ impl Generator {
             foreign_lang_helpers,
             pointer_target_width: pointer_target_width.unwrap_or(0),
             src_reg,
+            rustfmt_bindings: false,
         }
     }
 
     /// By default we get pointer_target_width via cargo (more exactly CARGO_CFG_TARGET_POINTER_WIDTH),
     /// but you can change default value via this method
-    pub fn with_pointer_target_width(mut self, pointer_target_width: usize) -> Generator {
+    pub fn with_pointer_target_width(mut self, pointer_target_width: usize) -> Self {
         self.pointer_target_width = pointer_target_width;
+        self
+    }
+
+    /// Set whether rustfmt should format the generated bindings.
+    pub fn rustfmt_bindings(mut self, doit: bool) -> Self {
+        self.rustfmt_bindings = doit;
         self
     }
 
@@ -395,24 +405,6 @@ impl Generator {
             code: src_cnt,
         });
 
-        if let Err(err) = self.expand_str(src_id, dst) {
-            panic_on_parse_error(&self.src_reg, &err);
-        }
-    }
-
-    /// process string `src` and save result of macro expansion to `dst`
-    ///
-    /// # Panics
-    /// Panics on error
-    pub fn expand_from_str<D>(mut self, crate_name: &str, src: String, dst: D)
-    where
-        D: AsRef<Path>,
-    {
-        let src_id = self.src_reg.register(SourceCode {
-            id_of_code: format!("{}: [string]", crate_name),
-            code: src,
-        });
-        
         if let Err(err) = self.expand_str(src_id, dst) {
             panic_on_parse_error(&self.src_reg, &err);
         }
@@ -510,6 +502,14 @@ impl Generator {
             writeln!(&mut file, "{}", elem.to_string()).expect("mem I/O failed");
         }
 
+        if self.rustfmt_bindings {
+            let source_bytes = file.take_content();
+            let new_cnt = rustfmt_cnt(source_bytes).unwrap_or_else(|err| {
+                panic!("Error during running of rustfmt: {}", err);
+            });
+            file.replace_content(new_cnt);
+        }
+
         file.update_file_if_necessary().unwrap_or_else(|err| {
             panic!(
                 "Error during write to file {}: {}",
@@ -556,4 +556,50 @@ trait LanguageGenerator {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
     ) -> Result<Vec<TokenStream>>;
+}
+
+fn rustfmt_cnt(source: Vec<u8>) -> io::Result<Vec<u8>> {
+    let rustfmt = which::which("rustfmt")
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))?;
+
+    let mut cmd = Command::new(&*rustfmt);
+
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped());
+
+    let mut child = cmd.spawn()?;
+    let mut child_stdin = child.stdin.take().unwrap();
+    let mut child_stdout = child.stdout.take().unwrap();
+    let src_len = source.len();
+    let src = Arc::new(source);
+    // Write to stdin in a new thread, so that we can read from stdout on this
+    // thread. This keeps the child from blocking on writing to its stdout which
+    // might block us from writing to its stdin.
+    let stdin_handle = ::std::thread::spawn(move || {
+        let _ = child_stdin.write_all(src.as_slice());
+        src
+    });
+    let mut output = Vec::with_capacity(src_len);
+    io::copy(&mut child_stdout, &mut output)?;
+    let status = child.wait()?;
+    let src = stdin_handle.join().expect(
+        "The thread writing to rustfmt's stdin doesn't do \
+         anything that could panic",
+    );
+    let src =
+        Arc::try_unwrap(src).expect("Internal error: rusftfmt_cnt should only one Arc refernce");
+    match status.code() {
+        Some(0) => Ok(output),
+        Some(2) => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Rustfmt parsing errors.".to_string(),
+        )),
+        Some(3) => {
+            println!("warning=Rustfmt could not format some lines.");
+            Ok(src)
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Internal rustfmt error".to_string(),
+        )),
+    }
 }
