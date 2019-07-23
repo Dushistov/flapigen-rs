@@ -166,11 +166,8 @@ public final class {class_name} {{"#,
                 .converter
                 .replace(FROM_VAR_TEMPLATE, ret_name)
                 .replace(TO_VAR_TYPE_TEMPLATE, &format!("{} {}", ret_type, conv_ret))
-                .replace(TO_VAR_TEMPLATE, &conv_ret)
-                .replace("@NonNull", "")
-                .replace("@Nullable", "")
-                .trim()
-                .into();
+                .replace(TO_VAR_TEMPLATE, &conv_ret);
+            let conv_code = java_code::filter_null_annotation(&conv_code).trim().into();
             (ret_type, intermidiate_ret_type, conv_code)
         }
 
@@ -243,7 +240,8 @@ public final class {class_name} {{"#,
         {ret_conv_code}"#,
                             ret_conv_code = ret_conv_code,
                             ret_name = ret_name,
-                            intermidiate_ret_type = intermidiate_ret_type,
+                            intermidiate_ret_type =
+                                java_code::filter_null_annotation(intermidiate_ret_type).trim(),
                             func_name = func_name,
                             args = args_for_call_internal,
                         )
@@ -318,7 +316,8 @@ public final class {class_name} {{"#,
                         rust_self_name = JAVA_RUST_SELF_NAME,
                         ret_conv_code = ret_conv_code,
                         ret_name = ret_name,
-                        intermidiate_ret_type = intermidiate_ret_type,
+                        intermidiate_ret_type =
+                            java_code::filter_null_annotation(intermidiate_ret_type).trim(),
                         func_name = func_name,
                         args = args_for_call_internal,
                     )
@@ -984,9 +983,8 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
                     &format!("{} {}", java_conv.java_transition_type, after_conv_arg_name),
                 )
                 .replace(TO_VAR_TEMPLATE, &after_conv_arg_name)
-                .replace(FROM_VAR_TEMPLATE, arg_name)
-                .replace("@NonNull ", "")
-                .replace("@Nullable ", "");
+                .replace(FROM_VAR_TEMPLATE, arg_name);
+            let java_code = java_code::filter_null_annotation(&java_code);
             conv_code.push_str(&java_code);
             Some(after_conv_arg_name)
         } else {

@@ -214,7 +214,7 @@ foreigner_class!(class LocationService {
         let java_code = parse_code(name, Source::Str(src), ForeignLang::Java).unwrap();
         println!("{}", java_code.foreign_code);
         assert!(java_code.foreign_code.contains(
-            r#"public static Position position() throws Exception {
+            r#"public static @NonNull Position position() throws Exception {
         long ret = do_position();
         Position convRet = new Position(InternalPointerMarker.RAW_PTR, ret);
 

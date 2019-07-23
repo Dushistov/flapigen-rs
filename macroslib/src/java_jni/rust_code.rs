@@ -4,7 +4,10 @@ use rustc_hash::FxHashMap;
 use std::{io::Write, str};
 use syn::{parse_quote, visit::Visit};
 
-use super::{find_cache::JniCacheMacroCalls, java_class_full_name, JniForeignMethodSignature};
+use super::{
+    find_cache::JniCacheMacroCalls, java_class_full_name, java_code::filter_null_annotation,
+    JniForeignMethodSignature,
+};
 use crate::{
     error::{invalid_src_id_span, panic_on_syn_error, DiagnosticError, Result},
     typemap::ast::DisplayToTokens,
@@ -16,8 +19,11 @@ lazy_static! {
     static ref JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE: FxHashMap<&'static str, &'static str> = {
         let mut m = FxHashMap::default();
         m.insert("String", "Ljava.lang.String;");
+        m.insert("Byte", "Ljava.lang.Byte");
+        m.insert("Short", "Ljava.lang.Short");
         m.insert("Integer", "Ljava.lang.Integer");
         m.insert("Long", "Ljava.lang.Long");
+        m.insert("Float", "Ljava.lang.Float");
         m.insert("Double", "Ljava.lang.Double");
         m.insert("boolean", "Z");
         m.insert("byte", "B");
@@ -31,6 +37,17 @@ lazy_static! {
         m.insert("void", "V");
         m
     };
+}
+
+fn java_type_to_jni_signature(java_type: &str) -> Option<&'static str> {
+    if java_type.contains("@NonNull") || java_type.contains("@Nullable") {
+        let java_type = filter_null_annotation(java_type);
+        JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
+            .get(&java_type.trim())
+            .cloned()
+    } else {
+        JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE.get(&java_type).cloned()
+    }
 }
 
 pub(in crate::java_jni) fn generate_jni_func_name(
@@ -72,20 +89,18 @@ pub(in crate::java_jni) fn generate_jni_func_name(
                 .map(|x| x.java_transition_type.as_str())
                 .unwrap_or_else(|| arg.as_ref().name.as_str());
 
-            let type_name = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-                .get(type_name)
-                .ok_or_else(|| {
-                    DiagnosticError::new(
-                        class.src_id,
-                        class.span(),
-                        format!(
-                            "Can not generate JNI function name for overload method '{}',\
-                             unknown java type '{}'",
-                            java_method_name,
-                            arg.as_ref().name
-                        ),
-                    )
-                })?;
+            let type_name = java_type_to_jni_signature(type_name).ok_or_else(|| {
+                DiagnosticError::new(
+                    class.src_id,
+                    class.span(),
+                    format!(
+                        "Can not generate JNI function name for overload method '{}',\
+                         unknown java type '{}'",
+                        java_method_name,
+                        arg.as_ref().name
+                    ),
+                )
+            })?;
 
             escape_underscore(type_name, &mut output);
         }
@@ -102,15 +117,13 @@ pub(in crate::java_jni) fn jni_method_signature(
     let mut ret: String = "(".into();
     for arg in &method.input {
         let mut gen_sig = String::new();
-        let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-            .get(&arg.as_ref().name.as_str())
-            .cloned()
+        let java_type: String = filter_null_annotation(arg.as_ref().name.as_str())
+            .trim()
+            .into();
+        let sig = java_type_to_jni_signature(&java_type)
             .or_else(|| {
-                if conv_map.is_generated_foreign_type(&arg.as_ref().name) {
-                    gen_sig = format!(
-                        "L{};",
-                        &java_class_full_name(package_name, &*arg.as_ref().name.as_str())
-                    );
+                if conv_map.is_generated_foreign_type(&java_type) {
+                    gen_sig = format!("L{};", &java_class_full_name(package_name, &java_type));
                     Some(&gen_sig)
                 } else {
                     None
@@ -119,21 +132,19 @@ pub(in crate::java_jni) fn jni_method_signature(
             .unwrap_or_else(|| {
                 panic!(
                     "Unknown type `{}`, can not generate jni signature",
-                    arg.as_ref().name
+                    java_type
                 )
             });
         let sig = sig.replace('.', "/");
         ret.push_str(&sig);
     }
     ret.push(')');
-    let sig = JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-        .get(&*method.output.base.name.as_str())
-        .unwrap_or_else(|| {
-            panic!(
-                "Unknown type `{}`, can not generate jni signature",
-                method.output.base.name
-            )
-        });
+    let sig = java_type_to_jni_signature(method.output.base.name.as_str()).unwrap_or_else(|| {
+        panic!(
+            "Unknown type `{}`, can not generate jni signature",
+            method.output.base.name
+        )
+    });
     ret.push_str(sig);
     ret
 }

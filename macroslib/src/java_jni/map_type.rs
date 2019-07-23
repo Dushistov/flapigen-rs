@@ -3,8 +3,8 @@ use petgraph::Direction;
 use std::rc::Rc;
 
 use super::{
-    calc_this_type_for_method, merge_rule, JavaContext, JavaConverter, JavaForeignTypeInfo,
-    NullAnnotation,
+    calc_this_type_for_method, java_code, merge_rule, JavaContext, JavaConverter,
+    JavaForeignTypeInfo, NullAnnotation,
 };
 use crate::{
     error::{DiagnosticError, Result, SourceIdSpan},
@@ -252,7 +252,9 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let direction = direction.unwrap_or(self.direction);
         let f_info = map_type(self.ctx, &rust_ty, direction, self.arg_ty_span)?;
-        let fname = f_info.base.name.clone();
+        let fname = java_code::filter_null_annotation(&f_info.base.name)
+            .trim()
+            .into();
 
         Ok(ExpandedFType {
             name: fname,
