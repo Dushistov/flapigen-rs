@@ -1,6 +1,6 @@
 use log::trace;
 use quote::quote;
-use std::{io::Write, path::Path};
+use std::io::Write;
 use syn::Type;
 
 use crate::{
@@ -34,7 +34,7 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
         fenum.src_id,
     );
 
-    generate_c_code_for_enum(&ctx.cfg.output_dir, fenum)
+    generate_c_code_for_enum(ctx, fenum)
         .map_err(|err| DiagnosticError::new(fenum.src_id, fenum.span(), err))?;
     generate_rust_trait_for_enum(ctx, fenum)?;
 
@@ -81,11 +81,14 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
 }
 
 fn generate_c_code_for_enum(
-    output_dir: &Path,
+    ctx: &mut CppContext,
     enum_info: &ForeignEnumInfo,
 ) -> std::result::Result<(), String> {
-    let c_path = output_dir.join(cpp_code::cpp_header_name_for_enum(enum_info));
-    let mut file = FileWriteCache::new(&c_path);
+    let c_path = ctx
+        .cfg
+        .output_dir
+        .join(cpp_code::cpp_header_name_for_enum(enum_info));
+    let mut file = FileWriteCache::new(&c_path, ctx.generated_foreign_files);
     let enum_doc_comments = cpp_code::doc_comments_to_c_comments(&enum_info.doc_comments, true);
 
     writeln!(

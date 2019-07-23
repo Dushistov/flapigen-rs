@@ -27,8 +27,9 @@ fn main() {
         cfg
     };
 
-    let swig_gen =
-        rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg)).rustfmt_bindings(true);
+    let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg))
+        .rustfmt_bindings(true)
+        .remove_not_generated_files_from_output_directory(true);
     swig_gen.expand(
         "rust_swig_test_c++",
         Path::new("src/cpp_glue.rs.in"),

@@ -61,7 +61,8 @@ fn main() {
         file.items.append(&mut jni_global_vars);
 
         let out_path = Path::new(&out_dir).join(include_path.file_name().expect("No file name"));
-        let mut cache = file_cache::FileWriteCache::new(&out_path);
+        let mut cache =
+            file_cache::FileWriteCache::new(&out_path, &mut file_cache::NoNeedFsOpsRegistration);
         let write_err_msg = format!("Error during write to file {}", out_path.display());
         write!(&mut cache, "{}", file.into_token_stream().to_string()).expect(&write_err_msg);
         cache.update_file_if_necessary().expect(&write_err_msg);
@@ -74,7 +75,8 @@ fn main() {
         .unwrap_or_else(|err| panic!("Can not open {}: {}", exp_tests_list_path.display(), err));
     let expectation_tests = BufReader::new(&expectation_tests);
     let exp_code_path = Path::new(&out_dir).join("test_expectations.rs");
-    let mut exp_code = file_cache::FileWriteCache::new(&exp_code_path);
+    let mut exp_code =
+        file_cache::FileWriteCache::new(&exp_code_path, &mut file_cache::NoNeedFsOpsRegistration);
     for name in expectation_tests.lines() {
         let name = name.unwrap_or_else(|err| {
             panic!("Can not read {}: {}", exp_tests_list_path.display(), err)

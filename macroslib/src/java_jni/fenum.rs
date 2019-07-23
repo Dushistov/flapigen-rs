@@ -1,7 +1,7 @@
 use log::trace;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use std::{io::Write, path::Path};
+use std::io::Write;
 use syn::{Ident, Type};
 
 use super::{
@@ -43,7 +43,7 @@ pub(in crate::java_jni) fn generate_enum(
         fenum.src_id,
     );
 
-    generate_java_code_for_enum(&ctx.cfg.output_dir, &ctx.cfg.package_name, fenum)
+    generate_java_code_for_enum(ctx, fenum)
         .map_err(|err| DiagnosticError::new(fenum.src_id, fenum.span(), &err))?;
     generate_rust_code_for_enum(ctx, fenum)?;
 
@@ -90,12 +90,11 @@ pub(in crate::java_jni) fn generate_enum(
 }
 
 fn generate_java_code_for_enum(
-    output_dir: &Path,
-    package_name: &str,
+    ctx: &mut JavaContext,
     fenum: &ForeignEnumInfo,
 ) -> std::result::Result<(), String> {
-    let path = output_dir.join(format!("{}.java", fenum.name));
-    let mut file = FileWriteCache::new(&path);
+    let path = ctx.cfg.output_dir.join(format!("{}.java", fenum.name));
+    let mut file = FileWriteCache::new(&path, ctx.generated_foreign_files);
     let enum_doc_comments = doc_comments_to_java_comments(&fenum.doc_comments, true);
     writeln!(
         file,
@@ -104,7 +103,7 @@ package {package_name};
 
 {doc_comments}
 public enum {enum_name} {{"#,
-        package_name = package_name,
+        package_name = ctx.cfg.package_name,
         enum_name = fenum.name,
         doc_comments = enum_doc_comments,
     )

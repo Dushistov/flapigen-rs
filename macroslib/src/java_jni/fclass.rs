@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
-use std::{io::Write, path::Path};
+use std::io::Write;
 use syn::{spanned::Spanned, Type};
 
 use super::{
@@ -27,7 +27,7 @@ use crate::{
         ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
     types::{ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, SelfTypeVariant},
-    TypeMap, WRITE_TO_MEM_FAILED_MSG,
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::java_jni) fn generate(
@@ -41,9 +41,7 @@ pub(in crate::java_jni) fn generate(
 
     let f_methods_sign = find_suitable_foreign_types_for_methods(ctx, class)?;
     generate_java_code(
-        ctx.conv_map,
-        &ctx.cfg.output_dir,
-        &ctx.cfg.package_name,
+        ctx,
         class,
         &f_methods_sign,
         ctx.cfg.null_annotation_package.as_ref().map(String::as_str),
@@ -66,15 +64,13 @@ struct MethodContext<'a> {
 }
 
 fn generate_java_code(
-    conv_map: &mut TypeMap,
-    output_dir: &Path,
-    package_name: &str,
+    ctx: &mut JavaContext,
     class: &ForeignerClassInfo,
     methods_sign: &[JniForeignMethodSignature],
     null_annotation_package: Option<&str>,
 ) -> std::result::Result<(), String> {
-    let path = output_dir.join(format!("{}.java", class.name));
-    let mut file = FileWriteCache::new(&path);
+    let path = ctx.cfg.output_dir.join(format!("{}.java", class.name));
+    let mut file = FileWriteCache::new(&path, ctx.generated_foreign_files);
 
     let imports = java_code::get_null_annotation_imports(null_annotation_package, methods_sign);
 
@@ -86,7 +82,7 @@ package {package_name};
 {imports}
 {doc_comments}
 public final class {class_name} {{"#,
-        package_name = package_name,
+        package_name = ctx.cfg.package_name,
         imports = imports,
         class_name = class.name,
         doc_comments = class_doc_comments,
@@ -107,7 +103,7 @@ public final class {class_name} {{"#,
         let may_return_error = match method.fn_decl.output {
             syn::ReturnType::Default => false,
             syn::ReturnType::Type(_, ref ptype) => {
-                let ret_rust_ty = conv_map.find_or_alloc_rust_type(ptype, class.src_id);
+                let ret_rust_ty = ctx.conv_map.find_or_alloc_rust_type(ptype, class.src_id);
                 if_result_return_ok_err_types(&ret_rust_ty).is_some()
             }
         };
@@ -413,7 +409,7 @@ public final class {class_name} {{"#,
         return Err(format!(
             "package {}, class {}: has methods, but no constructor\n
 May be you need to use `private constructor = empty;` syntax?",
-            package_name, class.name
+            ctx.cfg.package_name, class.name
         ));
     }
     if have_constructor {

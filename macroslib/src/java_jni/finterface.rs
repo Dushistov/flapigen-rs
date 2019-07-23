@@ -3,7 +3,7 @@ use petgraph::Direction;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use rustc_hash::FxHashMap;
-use std::{io::Write, path::Path};
+use std::io::Write;
 use syn::{spanned::Spanned, Ident};
 
 use super::{
@@ -29,8 +29,7 @@ pub(in crate::java_jni) fn generate_interface(
 ) -> Result<()> {
     let f_methods = find_suitable_ftypes_for_interace_methods(ctx, interface)?;
     generate_java_code_for_interface(
-        &ctx.cfg.output_dir,
-        &ctx.cfg.package_name,
+        ctx,
         interface,
         &f_methods,
         ctx.cfg.null_annotation_package.as_ref().map(String::as_str),
@@ -104,14 +103,13 @@ fn find_suitable_ftypes_for_interace_methods(
 }
 
 fn generate_java_code_for_interface(
-    output_dir: &Path,
-    package_name: &str,
+    ctx: &mut JavaContext,
     interface: &ForeignInterface,
     methods_sign: &[JniForeignMethodSignature],
     use_null_annotation: Option<&str>,
 ) -> std::result::Result<(), String> {
-    let path = output_dir.join(format!("{}.java", interface.name));
-    let mut file = FileWriteCache::new(&path);
+    let path = ctx.cfg.output_dir.join(format!("{}.java", interface.name));
+    let mut file = FileWriteCache::new(&path, ctx.generated_foreign_files);
     let imports = java_code::get_null_annotation_imports(use_null_annotation, methods_sign);
     let interface_comments =
         java_code::doc_comments_to_java_comments(&interface.doc_comments, true);
@@ -122,7 +120,7 @@ package {package_name};
 {imports}
 {doc_comments}
 public interface {interface_name} {{"#,
-        package_name = package_name,
+        package_name = ctx.cfg.package_name,
         interface_name = interface.name,
         doc_comments = interface_comments,
         imports = imports,

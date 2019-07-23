@@ -8,10 +8,7 @@ use syn::spanned::Spanned;
 
 use crate::{
     code_parse::parse_fn_args,
-    cpp::{
-        map_any_err_to_our_err, map_type::map_repr_c_type, CppContext, CppForeignMethodSignature,
-        MergeCItemsFlags,
-    },
+    cpp::{map_type::map_repr_c_type, CppContext, CppForeignMethodSignature, MergeCItemsFlags},
     error::{panic_on_syn_error, DiagnosticError},
     file_cache::FileWriteCache,
     namegen::new_unique_name,
@@ -264,7 +261,7 @@ fn test_{name}_layout() {{
         name = ctype.name(),
     );
     let mut mem_out = Vec::<u8>::new();
-    writeln!(&mut mem_out, "{} {{", s_id).map_err(map_any_err_to_our_err)?;
+    writeln!(&mut mem_out, "{} {{", s_id).expect(WRITE_TO_MEM_FAILED_MSG);
 
     let mut includes = FxHashSet::<SmolStr>::default();
 
@@ -291,7 +288,7 @@ fn test_{name}_layout() {{
         writeln!(&mut mem_out, "    {} {};", field_fty.base.name, id)
             .expect(WRITE_TO_MEM_FAILED_MSG);
         writeln!(&mut rust_layout_test, "{}: {},", id, DisplayToTokens(&f.ty))
-            .map_err(map_any_err_to_our_err)?;
+            .expect(WRITE_TO_MEM_FAILED_MSG);
 
         writeln!(
                         &mut fields_asserts_code,
@@ -308,9 +305,9 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
                         field_name = id,
                         field_type = DisplayToTokens(&f.ty),
                     )
-                    .map_err(map_any_err_to_our_err)?;
+            .expect(WRITE_TO_MEM_FAILED_MSG);
     }
-    mem_out.write_all(b"};\n").map_err(map_any_err_to_our_err)?;
+    mem_out.write_all(b"};\n").expect(WRITE_TO_MEM_FAILED_MSG);
 
     writeln!(
         &mut rust_layout_test,
@@ -326,7 +323,7 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
         name = ctype.name(),
         fields_asserts = fields_asserts_code,
     )
-    .map_err(map_any_err_to_our_err)?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
     match flags {
         MergeCItemsFlags::DefineOnlyCItem => {
             let tt: TokenStream = syn::parse_str(&rust_layout_test).unwrap_or_else(|err| {
@@ -344,7 +341,7 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
 
     for inc in &includes {
         if self_inc != *inc {
-            writeln!(file_out, "#include {}", inc).map_err(map_any_err_to_our_err)?;
+            writeln!(file_out, "#include {}", inc).expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }
     file_out

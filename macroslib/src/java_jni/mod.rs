@@ -11,7 +11,7 @@ use log::debug;
 use proc_macro2::TokenStream;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
-use std::{fmt, io::Write};
+use std::{fmt, io::Write, path::PathBuf};
 use syn::{spanned::Spanned, Type};
 
 use crate::{
@@ -24,7 +24,8 @@ use crate::{
         },
         ty::RustType,
         utils::{
-            configure_ftype_rule, validate_cfg_options, ForeignMethodSignature, ForeignTypeInfoT,
+            configure_ftype_rule, remove_files_if, validate_cfg_options, ForeignMethodSignature,
+            ForeignTypeInfoT,
         },
         ForeignTypeInfo, TypeMapConvRuleInfo,
     },
@@ -43,6 +44,7 @@ struct JavaContext<'a> {
     conv_map: &'a mut TypeMap,
     pointer_target_width: usize,
     rust_code: &'a mut Vec<TokenStream>,
+    generated_foreign_files: &'a mut FxHashSet<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -174,13 +176,16 @@ impl LanguageGenerator for JavaConfig {
         pointer_target_width: usize,
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
+        remove_not_generated_files: bool,
     ) -> Result<Vec<TokenStream>> {
         let mut ret = Vec::with_capacity(items.len());
+        let mut generated_foreign_files = FxHashSet::default();
         let mut ctx = JavaContext {
             cfg: self,
             conv_map,
             pointer_target_width,
             rust_code: &mut ret,
+            generated_foreign_files: &mut generated_foreign_files,
         };
         init(&mut ctx, code)?;
         for item in &items {
@@ -201,6 +206,21 @@ impl LanguageGenerator for JavaConfig {
                 }
             }
         }
+
+        if remove_not_generated_files {
+            remove_files_if(&self.output_dir, |path| {
+                if let Some(ext) = path.extension() {
+                    if ext == "java" {
+                        if !generated_foreign_files.contains(path) {
+                            return true;
+                        }
+                    }
+                }
+                false
+            })
+            .map_err(DiagnosticError::map_any_err_to_our_err)?;
+        }
+
         Ok(ret)
     }
     fn post_proccess_code(
@@ -312,7 +332,7 @@ fn init(ctx: &mut JavaContext, _code: &[SourceCode]) -> Result<()> {
         .cfg
         .output_dir
         .join(&format!("{}.java", INTERNAL_PTR_MARKER));
-    let mut src_file = FileWriteCache::new(&src_path);
+    let mut src_file = FileWriteCache::new(&src_path, ctx.generated_foreign_files);
     writeln!(
         src_file,
         r#"

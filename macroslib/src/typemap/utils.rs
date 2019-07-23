@@ -1,10 +1,15 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use rustc_hash::FxHashSet;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use syn::{spanned::Spanned, Ident, Type};
 
 use crate::{
     error::{panic_on_syn_error, DiagnosticError, Result},
+    file_cache::FileOperationsRegistrator,
     source_registry::SourceId,
     typemap::{
         ast::{
@@ -364,4 +369,37 @@ pub(crate) fn configure_ftype_rule(
         f_type_rules[0].cfg_option = None;
     }
     Ok(())
+}
+
+pub(crate) fn remove_files_if<Filter>(
+    output_dir: &Path,
+    if_remove_filter: Filter,
+) -> std::result::Result<(), String>
+where
+    Filter: Fn(&Path) -> bool,
+{
+    let entries = fs::read_dir(&output_dir)
+        .map_err(|err| format!("read_dir({}) failed: {}", output_dir.display(), err))?;
+
+    for path in entries {
+        let path = path
+            .map_err(|err| {
+                format!(
+                    "Can not get next entry during parsing read_dir output: {}",
+                    err
+                )
+            })?
+            .path();
+        if if_remove_filter(&path) {
+            fs::remove_file(&path)
+                .map_err(|err| format!("error during remove {}: {}", path.display(), err))?;
+        }
+    }
+    Ok(())
+}
+
+impl FileOperationsRegistrator for FxHashSet<PathBuf> {
+    fn register(&mut self, p: &Path) {
+        self.insert(p.into());
+    }
 }
