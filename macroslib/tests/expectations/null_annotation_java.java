@@ -1,7 +1,5 @@
 r##"package org.example;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-
 
 public final class TrackInfo {
 
@@ -15,7 +13,7 @@ public final class TrackInfo {
     }
     private static native long do_start_time(long self);
 
-    public final java.util.OptionalLong end_time() {
+    public final @NonNull java.util.OptionalLong end_time() {
         return do_end_time(mNativeObj);
     }
-    private static native java.util.OptionalLong do_end_time(long self);"##;
+    private static native @NonNull java.util.OptionalLong do_end_time(long self);"##;
