@@ -33,10 +33,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type_not_unique = "jobjectArray"]
     #![swig_foreigner_type = "java.lang.String []"]
     #![swig_rust_type_not_unique = "jobjectArray"]
-    #![swig_foreigner_type = "java.util.OptionalLong"]
-    #![swig_rust_type_not_unique = "jobject"]
-    #![swig_foreigner_type = "Long"]
-    #![swig_rust_type_not_unique = "jobject"]
     #![swig_foreigner_type = "java.util.Optional<String>"]
     #![swig_rust_type_not_unique = "jobject"]
 }
@@ -52,6 +48,8 @@ mod internal_aliases {
     pub type JFloat = jobject;
     pub type JDouble = jobject;
     pub type JOptionalDouble = jobject;
+    pub type JLong = jobject;
+    pub type JOptionalLong = jobject;
 }
 
 /// Default JNI_VERSION
@@ -1260,88 +1258,100 @@ foreign_typemap!(
     };
 );
 
-#[swig_to_foreigner_hint = "java.util.OptionalLong"]
-impl SwigFrom<Option<i64>> for jobject {
-    fn swig_from(x: Option<i64>, env: *mut JNIEnv) -> Self {
-        let class: jclass = swig_jni_find_class!(JAVA_UTIL_OPTIONAL_LONG, "java/util/OptionalLong");
-        assert!(!class.is_null(),);
-        match x {
-            Some(val) => {
-                let of_m: jmethodID = swig_jni_get_static_method_id!(
-                    JAVA_UTIL_OPTIONAL_LONG_OF,
-                    JAVA_UTIL_OPTIONAL_LONG,
-                    "of",
-                    "(J)Ljava/util/OptionalLong;"
-                );
-                assert!(!of_m.is_null());
+#[allow(dead_code)]
+fn to_java_util_optional_long(env: *mut JNIEnv, x: Option<i64>) -> internal_aliases::JOptionalLong {
+    let class: jclass = swig_jni_find_class!(JAVA_UTIL_OPTIONAL_LONG, "java/util/OptionalLong");
+    assert!(!class.is_null(),);
+    match x {
+        Some(val) => {
+            let of_m: jmethodID = swig_jni_get_static_method_id!(
+                JAVA_UTIL_OPTIONAL_LONG_OF,
+                JAVA_UTIL_OPTIONAL_LONG,
+                "of",
+                "(J)Ljava/util/OptionalLong;"
+            );
+            assert!(!of_m.is_null());
 
-                let ret = unsafe {
-                    let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, of_m, val);
-                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                        panic!("OptionalLong.of failed: catch exception");
-                    }
-                    ret
-                };
-
-                assert!(!ret.is_null());
+            let ret = unsafe {
+                let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, of_m, val);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("OptionalLong.of failed: catch exception");
+                }
                 ret
-            }
-            None => {
-                let empty_m: jmethodID = swig_jni_get_static_method_id!(
-                    JAVA_UTIL_OPTIONAL_LONG_EMPTY,
-                    JAVA_UTIL_OPTIONAL_LONG,
-                    "empty",
-                    "()Ljava/util/OptionalLong;",
-                );
-                assert!(!empty_m.is_null());
+            };
 
-                let ret = unsafe {
-                    let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, empty_m);
-                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                        panic!("OptionalLong.empty failed: catch exception");
-                    }
-                    ret
-                };
-                assert!(!ret.is_null());
+            assert!(!ret.is_null());
+            ret
+        }
+        None => {
+            let empty_m: jmethodID = swig_jni_get_static_method_id!(
+                JAVA_UTIL_OPTIONAL_LONG_EMPTY,
+                JAVA_UTIL_OPTIONAL_LONG,
+                "empty",
+                "()Ljava/util/OptionalLong;",
+            );
+            assert!(!empty_m.is_null());
+
+            let ret = unsafe {
+                let ret = (**env).CallStaticObjectMethod.unwrap()(env, class, empty_m);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("OptionalLong.empty failed: catch exception");
+                }
                 ret
-            }
+            };
+            assert!(!ret.is_null());
+            ret
         }
     }
 }
 
-#[swig_from_foreigner_hint = "Long"]
-impl SwigFrom<jobject> for Option<i64> {
-    fn swig_from(x: jobject, env: *mut JNIEnv) -> Self {
+#[allow(dead_code)]
+fn from_java_lang_long_to_rust(env: *mut JNIEnv, x: internal_aliases::JLong) -> Option<i64> {
+    if x.is_null() {
+        None
+    } else {
+        let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
         if x.is_null() {
             None
         } else {
-            let x = unsafe { (**env).NewLocalRef.unwrap()(env, x) };
-            if x.is_null() {
-                None
-            } else {
-                let class: jclass = swig_jni_find_class!(JAVA_LANG_LONG, "java/lang/Long");
-                assert!(!class.is_null());
-                let long_value_m: jmethodID = swig_jni_get_method_id!(
-                    JAVA_LANG_LONG_LONG_VALUE,
-                    JAVA_LANG_LONG,
-                    "longValue",
-                    "()J"
-                );
-                assert!(!long_value_m.is_null());
+            let class: jclass = swig_jni_find_class!(JAVA_LANG_LONG, "java/lang/Long");
+            assert!(!class.is_null());
+            let long_value_m: jmethodID = swig_jni_get_method_id!(
+                JAVA_LANG_LONG_LONG_VALUE,
+                JAVA_LANG_LONG,
+                "longValue",
+                "()J"
+            );
+            assert!(!long_value_m.is_null());
 
-                let ret: i64 = unsafe {
-                    let ret = (**env).CallLongMethod.unwrap()(env, x, long_value_m);
-                    if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                        panic!("Long.longValue failed: catch exception");
-                    }
-                    (**env).DeleteLocalRef.unwrap()(env, x);
-                    ret
-                };
-                Some(ret)
-            }
+            let ret: i64 = unsafe {
+                let ret = (**env).CallLongMethod.unwrap()(env, x, long_value_m);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    panic!("Long.longValue failed: catch exception");
+                }
+                (**env).DeleteLocalRef.unwrap()(env, x);
+                ret
+            };
+            Some(ret)
         }
     }
 }
+
+foreign_typemap!(
+    ($p:r_type) Option<i64> <= internal_aliases::JLong {
+        $out = from_java_lang_long_to_rust(env, $p)
+    };
+    (f_type, option = "NoNullAnnotations") <= "Long";
+    (f_type, option = "NullAnnotations") <= "@Nullable Long";
+);
+
+foreign_typemap!(
+    ($p:r_type) Option<i64> => internal_aliases::JOptionalLong {
+        $out = to_java_util_optional_long(env, $p)
+    };
+    (f_type, option = "NoNullAnnotations") => "java.util.OptionalLong";
+    (f_type, option = "NullAnnotations") => "@NonNull java.util.OptionalLong";
+);
 
 #[allow(dead_code)]
 fn from_java_lang_int_to_rust(env: *mut JNIEnv, x: internal_aliases::JInteger) -> Option<i32> {

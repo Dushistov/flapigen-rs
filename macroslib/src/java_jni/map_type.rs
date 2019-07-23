@@ -75,15 +75,22 @@ pub(in crate::java_jni) fn map_type(
         base_rt = rule.rust_ty;
         base_ft_name = ftype.typename();
     }
+    let annotation = if base_ft_name.contains("@Nullable") {
+        Some(NullAnnotation::Nullable)
+    } else if base_ft_name.contains("@NonNull") {
+        Some(NullAnnotation::NonNull)
+    } else {
+        None
+    };
     let mut fti = JavaForeignTypeInfo {
         base: ForeignTypeInfo {
             name: base_ft_name,
             correspoding_rust_type: ctx.conv_map[base_rt].clone(),
         },
         java_converter,
-        annotation: None,
+        annotation,
     };
-    if !is_primitive_type(&fti.base.name) {
+    if fti.annotation.is_none() && !is_primitive_type(&fti.base.name) {
         fti.annotation = Some(if if_option_return_some_type(arg_ty).is_none() {
             NullAnnotation::NonNull
         } else {

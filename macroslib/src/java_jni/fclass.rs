@@ -264,7 +264,7 @@ public final class {class_name} {{"#,
                         file,
                         r#"
     private static native {intermidiate_ret_type} {func_name}({args_with_types}){exception_spec};
-                           "#,
+"#,
                         func_name = func_name,
                         intermidiate_ret_type = intermidiate_ret_type,
                         exception_spec = exception_spec,
