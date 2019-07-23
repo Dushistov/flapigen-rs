@@ -138,3 +138,7 @@ pub(in crate::java_jni) fn get_null_annotation_imports(
 
     String::new()
 }
+
+pub(in crate::java_jni) fn filter_null_annotation(type_name: &str) -> String {
+    type_name.replace("@NonNull", "").replace("@Nullable", "")
+}

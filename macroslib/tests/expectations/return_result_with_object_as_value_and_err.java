@@ -28,4 +28,4 @@ r#"public static Foo from_string(@NonNull String a0) throws Exception {
 
         return convRet;
     }
-    private static native long do_from_string(String a0) throws Exception;"#;
+    private static native long do_from_string(@NonNull String a0) throws Exception;"#;

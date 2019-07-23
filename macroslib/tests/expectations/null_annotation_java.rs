@@ -14,3 +14,9 @@ foreigner_class!(
         fn end_time(&self) -> Option<i64>;
     }
 );
+
+foreigner_class!(class Boo {
+    self_type Boo;
+    constructor Boo::default() -> Boo;
+    fn latDirection(&self) -> &str;
+});

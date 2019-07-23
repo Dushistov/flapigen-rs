@@ -30,7 +30,7 @@ r#"public final @NonNull java.util.Optional<String> f5() {
 
         return convRet;
     }
-    private static native String do_f5(long self);"#;
+    private static native @Nullable String do_f5(long self);"#;
 
 r#"public final void f6(@Nullable Boo boo) {
         long a0 = 0;//TODO: use ptr::null() for corresponding constant

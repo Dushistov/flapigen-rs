@@ -9,8 +9,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type = "jint"]
     #![swig_foreigner_type = "long"]
     #![swig_rust_type = "jlong"]
-    #![swig_foreigner_type = "String"]
-    #![swig_rust_type = "jstring"]
     #![swig_foreigner_type = "float"]
     #![swig_rust_type = "jfloat"]
     #![swig_foreigner_type = "double"]
@@ -171,6 +169,12 @@ pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
 pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
     val as *mut T
 }
+
+foreign_typemap!(
+    (r_type) jstring;
+    (f_type, option = "NoNullAnnotations") "String";
+    (f_type, option = "NullAnnotations") "@NonNull String";
+);
 
 #[allow(dead_code)]
 pub struct JavaString {
@@ -1620,7 +1624,7 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
-    ($p:r_type) Option<String> => jstring {
+    ($p:r_type) Option<String> => internal_aliases::JStringOptStr {
         $out = match $p {
             Some(s) => from_std_string_jstring(s, env),
             None => ::std::ptr::null_mut(),
