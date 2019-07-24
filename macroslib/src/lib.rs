@@ -464,7 +464,7 @@ impl Generator {
                     let fclass = code_parse::parse_foreigner_class(src_id, &self.config, tts)?;
                     debug!("expand_foreigner_class: self_desc {:?}", fclass.self_desc);
                     self.conv_map.register_foreigner_class(&fclass);
-                    items_to_expand.push(ItemToExpand::Class(fclass));
+                    items_to_expand.push(ItemToExpand::Class(Box::new(fclass)));
                 } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
                     let fenum = code_parse::parse_foreign_enum(src_id, tts)?;
                     items_to_expand.push(ItemToExpand::Enum(fenum));

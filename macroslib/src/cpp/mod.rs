@@ -294,10 +294,8 @@ impl LanguageGenerator for CppConfig {
         if remove_not_generated_files {
             remove_files_if(&self.output_dir, |path| {
                 if let Some(ext) = path.extension() {
-                    if ext == "h" || ext == "hpp" {
-                        if !generated_foreign_files.contains(path) {
-                            return true;
-                        }
+                    if (ext == "h" || ext == "hpp") && !generated_foreign_files.contains(path) {
+                        return true;
                     }
                 }
                 false
