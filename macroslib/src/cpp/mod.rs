@@ -45,11 +45,8 @@ use smol_str::SmolStr;
 use strum::IntoEnumIterator;
 
 use crate::{
-    cpp::{
-        map_class_self_type::register_typemap_for_self_type,
-        map_type::{do_map_type, map_type},
-    },
-    error::{DiagnosticError, Result},
+    cpp::{map_class_self_type::register_typemap_for_self_type, map_type::map_type},
+    error::{invalid_src_id_span, DiagnosticError, Result},
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
@@ -98,13 +95,15 @@ impl CppForeignTypeInfo {
         let ftype = &ctx.conv_map[ftype_idx];
         let mut cpp_converter = None;
 
+        let origin_ftype_span = ftype.src_id_span();
+
         let rule = match direction {
             petgraph::Direction::Outgoing => ftype.into_from_rust.as_ref(),
             petgraph::Direction::Incoming => ftype.from_into_rust.as_ref(),
         }
         .ok_or_else(|| {
             DiagnosticError::new2(
-                ftype.src_id_span(),
+                origin_ftype_span,
                 format!(
                     "No rule to convert foreign type {} as input/output type",
                     ftype.name
@@ -124,9 +123,40 @@ impl CppForeignTypeInfo {
 
             let rty = ctx.conv_map[intermediate_ty].clone();
             let arg_span = intermediate.conv_code.full_span();
-            let inter_ft = do_map_type(ctx, &rty, direction, arg_span)?;
-            provides_by_module.extend_from_slice(&ctx.conv_map[inter_ft].provides_by_module);
-            base_ft_name = ctx.conv_map[inter_ft].typename();
+            let inter_ft = map_type(ctx, &rty, direction, arg_span)?;
+            if inter_ft.cpp_converter.is_some()
+                || base_rt != inter_ft.base.correspoding_rust_type.to_idx()
+            {
+                return Err(DiagnosticError::new2(
+                    origin_ftype_span,
+                    format!(
+                        "Error during conversation {} for {},\n
+                    intermidiate type '{}' can not directrly converted to C",
+                        typename,
+                        match direction {
+                            petgraph::Direction::Outgoing => "output",
+                            petgraph::Direction::Incoming => "input",
+                        },
+                        rty
+                    ),
+                )
+                .add_span_note(
+                    invalid_src_id_span(),
+                    if let Some(cpp_conv) = inter_ft.cpp_converter {
+                        format!(
+                            "it requires C++ code to convert from '{}' to '{}'",
+                            inter_ft.base.name, cpp_conv.typename
+                        )
+                    } else {
+                        format!(
+                            "Type '{}' require conversation to type '{}' before usage as C type",
+                            ctx.conv_map[base_rt], inter_ft.base.correspoding_rust_type
+                        )
+                    },
+                ));
+            }
+            provides_by_module.extend_from_slice(&inter_ft.provides_by_module);
+            base_ft_name = inter_ft.base.name;
             cpp_converter = Some(CppConverter {
                 typename,
                 converter,

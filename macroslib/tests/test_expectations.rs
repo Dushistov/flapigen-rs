@@ -71,6 +71,45 @@ foreigner_class!(class Foo {
 }
 
 #[test]
+fn test_foreign_typemap_not_direct_intermidiate() {
+    let name = "test_foreign_typemap_not_direct_intermidiate";
+    let _ = env_logger::try_init();
+    for lang in &[ForeignLang::Java, ForeignLang::Cpp] {
+        let ret = panic::catch_unwind(|| {
+            parse_code(
+                name,
+                Source::Str(
+                    r###"
+foreign_typemap!(
+   ($p:r_type) Type2 => Type3 { $out = $p };
+   ($p:f_type) => "Type3";
+);
+
+foreign_typemap!(
+    ($p:r_type) TypeX => Type2 {
+        $out = typex_to_type2($p)
+    };
+    ($p:f_type) => "FType4"
+        r#"
+        $out = f_type2_to_type4($p);
+"#;
+);
+
+foreigner_class!(class Foo {
+    fn f1() -> TypeX;
+});
+
+"###,
+                ),
+                *lang,
+            )
+            .unwrap_or_else(|err| panic!("Test {} failed for lang {:?}: {}", name, lang, err));
+        });
+        assert!(ret.is_err());
+    }
+}
+
+#[test]
 fn test_callback_without_self_err() {
     let _ = env_logger::try_init();
     for lang in &[ForeignLang::Java, ForeignLang::Cpp] {
