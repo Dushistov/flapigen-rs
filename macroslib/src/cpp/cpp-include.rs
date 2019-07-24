@@ -1,9 +1,14 @@
-mod swig_foreign_types_map {
-    #![swig_foreigner_type = "char"]
-    #![swig_rust_type = "::std::os::raw::c_char"]
-    #![swig_foreigner_type = "int"]
-    #![swig_rust_type = "::std::os::raw::c_int"]
-}
+mod swig_foreign_types_map {}
+
+foreign_typemap!(
+    (r_type) ::std::os::raw::c_char;
+    (f_type) "char";
+);
+
+foreign_typemap!(
+    (r_type) ::std::os::raw::c_int;
+    (f_type) "int";
+);
 
 foreign_typemap!(
     (r_type) f32;

@@ -1,10 +1,6 @@
 mod swig_foreign_types_map {
     #![swig_foreigner_type = "void"]
     #![swig_rust_type = "()"]
-    #![swig_foreigner_type = "byte"]
-    #![swig_rust_type = "jbyte"]
-    #![swig_foreigner_type = "short"]
-    #![swig_rust_type = "jshort"]
     #![swig_foreigner_type = "int"]
     #![swig_rust_type = "jint"]
     #![swig_foreigner_type = "long"]
@@ -167,6 +163,16 @@ pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
 pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
     val as *mut T
 }
+
+foreign_typemap!(
+    (r_type) jbyte;
+    (f_type) "byte";
+);
+
+foreign_typemap!(
+    (r_type) jshort;
+    (f_type) "short";
+);
 
 foreign_typemap!(
     (r_type) jstring;
@@ -565,20 +571,15 @@ foreign_typemap!(
     };
 );
 
-impl SwigFrom<u16> for jint {
-    fn swig_from(x: u16, _: *mut JNIEnv) -> Self {
-        jint::from(x)
-    }
-}
-
-impl SwigInto<u16> for jint {
-    fn swig_into(self, _: *mut JNIEnv) -> u16 {
-        if self < 0 || self > (::std::u16::MAX as jint) {
-            panic!("Expect self from 0 to {}, got {}", ::std::u16::MAX, self);
-        }
-        self as u16
-    }
-}
+foreign_typemap!(
+    ($p:r_type) u16 => jint {
+        $out = jint::from($p)
+    };
+    ($p:r_type) u16 <= jint {
+        $out = <u16 as ::std::convert::TryFrom<jint>>::try_from($p)
+            .expect("invalid jint, in jint => u16 conversation")
+    };
+);
 
 foreign_typemap!(
     ($p:r_type) jint => i32 {
