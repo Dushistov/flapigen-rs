@@ -210,10 +210,8 @@ impl LanguageGenerator for JavaConfig {
         if remove_not_generated_files {
             remove_files_if(&self.output_dir, |path| {
                 if let Some(ext) = path.extension() {
-                    if ext == "java" {
-                        if !generated_foreign_files.contains(path) {
-                            return true;
-                        }
+                    if ext == "java" && !generated_foreign_files.contains(path) {
+                        return true;
                     }
                 }
                 false

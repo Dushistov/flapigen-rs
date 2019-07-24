@@ -192,15 +192,25 @@ class Main {
     }
 
     private static void testDateTime() {
-        final Date now = Foo.now();
-        final Date nowChrono = Foo.chrono_now();
-        final DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
-        System.out.println("now: " + df.format(now));
-        final Date today = Calendar.getInstance().getTime();
-        System.out.println("now: " + now);
-        System.out.println("today: " + today);
-        assert Math.abs(today.getTime() - now.getTime()) < 2000;
-        assert Math.abs(nowChrono.getTime() - today.getTime()) < 2000;
+	{
+	    final Date now = Foo.now();
+	    final Date nowChrono = Foo.chrono_now();
+	    final DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+	    System.out.println("now: " + df.format(now));
+	    final Date today = Calendar.getInstance().getTime();
+	    System.out.println("now: " + now);
+	    System.out.println("today: " + today);
+	    assert Math.abs(today.getTime() - now.getTime()) < 2000;
+	    assert Math.abs(nowChrono.getTime() - today.getTime()) < 2000;
+	}
+
+	{
+	    assert !Foo.chrono_now_opt(false).isPresent();
+	    assert Foo.chrono_now_opt(true).isPresent();
+	    final Date today = Calendar.getInstance().getTime();
+	    final Date nowChrono = Foo.chrono_now_opt(true).get();
+	    assert Math.abs(nowChrono.getTime() - today.getTime()) < 2000;
+	}
     }
 
     private static class TestEnumObserver implements EnumObserver {

@@ -7,7 +7,7 @@ use super::{
     JavaForeignTypeInfo, NullAnnotation,
 };
 use crate::{
-    error::{DiagnosticError, Result, SourceIdSpan},
+    error::{invalid_src_id_span, DiagnosticError, Result, SourceIdSpan},
     typemap::{
         ast::{if_option_return_some_type, DisplayToTokens, TyParamsSubstList},
         ty::{ForeignType, RustType, TraitNamesSet},
@@ -32,6 +32,7 @@ pub(in crate::java_jni) fn map_type(
 
     let fti = do_map_type(ctx, arg_ty, direction, arg_ty_span)?;
     let ftype = &ctx.conv_map[fti];
+    let origin_ftype_span = ftype.src_id_span();
     if !ftype.provides_by_module.is_empty() {
         unimplemented!();
     }
@@ -41,7 +42,7 @@ pub(in crate::java_jni) fn map_type(
     }
     .ok_or_else(|| {
         DiagnosticError::new2(
-            ftype.src_id_span(),
+            origin_ftype_span,
             format!(
                 "No rule to convert foreign type {} as input/output type",
                 ftype.name
@@ -49,7 +50,7 @@ pub(in crate::java_jni) fn map_type(
         )
     })?;
     let base_rt;
-    let base_ft_name;
+    let base_ft_name = ftype.typename();
     let mut java_converter = None;
     if let Some(intermediate) = rule.intermediate.as_ref() {
         if intermediate.input_to_output {
@@ -62,18 +63,45 @@ pub(in crate::java_jni) fn map_type(
 
         let rty = ctx.conv_map[intermediate_ty].clone();
         let arg_span = intermediate.conv_code.full_span();
-        let inter_ft = do_map_type(ctx, &rty, direction, arg_span)?;
-        if !ctx.conv_map[inter_ft].provides_by_module.is_empty() {
-            unimplemented!();
+        let inter_ft = map_type(ctx, &rty, direction, arg_span)?;
+        if inter_ft.java_converter.is_some()
+            || base_rt != inter_ft.base.correspoding_rust_type.to_idx()
+        {
+            return Err(DiagnosticError::new2(
+                origin_ftype_span,
+                format!(
+                    "Error during conversation {} for {},\n
+                    intermidiate type '{}' can not directrly converted to Java",
+                    typename,
+                    match direction {
+                        petgraph::Direction::Outgoing => "output",
+                        petgraph::Direction::Incoming => "input",
+                    },
+                    rty
+                ),
+            )
+            .add_span_note(
+                invalid_src_id_span(),
+                if let Some(java_conv) = inter_ft.java_converter {
+                    format!(
+                        "it requires Java code to convert from '{}' to '{}'",
+                        java_conv.java_transition_type, inter_ft.base.name
+                    )
+                } else {
+                    format!(
+                        "Type '{}' require conversation to type '{}' before usage as Java type",
+                        ctx.conv_map[base_rt], inter_ft.base.correspoding_rust_type
+                    )
+                },
+            ));
         }
-        base_ft_name = typename;
+
         java_converter = Some(JavaConverter {
-            java_transition_type: ctx.conv_map[inter_ft].typename(),
+            java_transition_type: inter_ft.base.name,
             converter,
         });
     } else {
         base_rt = rule.rust_ty;
-        base_ft_name = ftype.typename();
     }
     let annotation = if base_ft_name.contains("@Nullable") {
         Some(NullAnnotation::Nullable)

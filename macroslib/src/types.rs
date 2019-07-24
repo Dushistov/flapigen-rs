@@ -292,7 +292,7 @@ impl ForeignInterfaceMethod {
 }
 
 pub(crate) enum ItemToExpand {
-    Class(ForeignerClassInfo),
+    Class(Box<ForeignerClassInfo>),
     Interface(ForeignInterface),
     Enum(ForeignEnumInfo),
 }

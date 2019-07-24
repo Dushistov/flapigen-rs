@@ -27,7 +27,7 @@ pub(in crate::cpp) fn map_type(
     CppForeignTypeInfo::try_new(ctx, direction, ftype)
 }
 
-pub(in crate::cpp) fn do_map_type(
+fn do_map_type(
     ctx: &mut CppContext,
     arg_ty: &RustType,
     direction: Direction,

@@ -258,11 +258,10 @@ public final class {class_name} {{"#,
                         file.write_all(b"    }").expect(WRITE_TO_MEM_FAILED_MSG);
                     }
 
-                    write!(
+                    writeln!(
                         file,
                         r#"
-    private static native {intermidiate_ret_type} {func_name}({args_with_types}){exception_spec};
-"#,
+    private static native {intermidiate_ret_type} {func_name}({args_with_types}){exception_spec};"#,
                         func_name = func_name,
                         intermidiate_ret_type = intermidiate_ret_type,
                         exception_spec = exception_spec,

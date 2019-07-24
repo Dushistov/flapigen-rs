@@ -72,6 +72,13 @@ class Foo {
     fn chrono_now() -> DateTime<Utc> {
         Utc::now()
     }
+    fn chrono_now_opt(flag: bool) -> Option<DateTime<Utc>> {
+        if flag {
+            Some(Utc::now())
+        } else {
+            None
+        }
+    }
 });
 
 struct Boo {
