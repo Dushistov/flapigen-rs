@@ -13,9 +13,6 @@ strategy:
     linux-beta:
       imageName: 'ubuntu-16.04'
       rustup_toolchain: beta
-    mac-beta:
-      imageName: 'macos-10.14'
-      rustup_toolchain: beta
     windows-stable-64bit:
       imageName: 'vs2017-win2016'
       rustup_toolchain: stable
@@ -51,7 +48,7 @@ steps:
       set -e
       rustup default $RUSTUP_TOOLCHAIN
       rustup update $RUSTUP_TOOLCHAIN
-      rustc --version
+      rustc -vV
       rustup component add rustfmt --toolchain $RUSTUP_TOOLCHAIN
       rustfmt --version
     displayName: "Rust post-install"
