@@ -31,8 +31,8 @@ pub extern "C" fn Java_org_example_Boo_init(
     a1: jlong,
 ) -> jlong {
     let a0: i32 = a0;
-    let a1: i64 = a1;
-    let mut a1: usize = a1.swig_into(env);
+    let a1: usize = <usize as ::std::convert::TryFrom<jlong>>::try_from(a1)
+        .expect("invalid jlong, in jlong => usize conversation");
     let this: Result<Boo, String> = Boo::new(a0, a1);
     let mut this: Boo = jni_unpack_return!(this, jlong, env);
     let this: Box<Boo> = Box::new(this);

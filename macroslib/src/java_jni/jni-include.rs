@@ -1,14 +1,4 @@
 mod swig_foreign_types_map {
-    #![swig_foreigner_type = "void"]
-    #![swig_rust_type = "()"]
-    #![swig_foreigner_type = "int"]
-    #![swig_rust_type = "jint"]
-    #![swig_foreigner_type = "long"]
-    #![swig_rust_type = "jlong"]
-    #![swig_foreigner_type = "float"]
-    #![swig_rust_type = "jfloat"]
-    #![swig_foreigner_type = "double"]
-    #![swig_rust_type = "jdouble"]
     #![swig_foreigner_type = "byte []"]
     #![swig_rust_type = "jbyteArray"]
     #![swig_foreigner_type = "short []"]
@@ -111,6 +101,71 @@ trait SwigDerefMut {
     fn swig_deref_mut(&mut self) -> &mut Self::Target;
 }
 
+#[allow(unused_macros)]
+macro_rules! swig_c_str {
+    ($lit:expr) => {
+        concat!($lit, "\0").as_ptr() as *const ::std::os::raw::c_char
+    };
+}
+
+#[allow(unused_macros)]
+macro_rules! swig_assert_eq_size {
+    ($x:ty, $($xs:ty),+ $(,)*) => {
+        $(let _ = ::std::mem::transmute::<$x, $xs>;)+
+    };
+}
+
+#[cfg(target_pointer_width = "32")]
+pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+    (val as u32) as *mut T
+}
+
+#[cfg(target_pointer_width = "64")]
+pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+    val as *mut T
+}
+
+foreign_typemap!(
+    (r_type) ();
+    (f_type) "void";
+);
+
+foreign_typemap!(
+    (r_type) jbyte;
+    (f_type) "byte";
+);
+
+foreign_typemap!(
+    (r_type) jshort;
+    (f_type) "short";
+);
+
+foreign_typemap!(
+    (r_type) jint;
+    (f_type) "int";
+);
+
+foreign_typemap!(
+    (r_type) jlong;
+    (f_type) "long";
+);
+
+foreign_typemap!(
+    (r_type) jfloat;
+    (f_type) "float";
+);
+
+foreign_typemap!(
+    (r_type) jdouble;
+    (f_type) "double";
+);
+
+foreign_typemap!(
+    (r_type) jstring;
+    (f_type, option = "NoNullAnnotations") "String";
+    (f_type, option = "NullAnnotations") "@NonNull String";
+);
+
 #[allow(dead_code)]
 trait SwigForeignClass {
     type PointedType;
@@ -139,46 +194,6 @@ impl<T: SwigForeignCLikeEnum> SwigFrom<jint> for T {
         T::from_jint(x)
     }
 }
-
-#[allow(unused_macros)]
-macro_rules! swig_c_str {
-    ($lit:expr) => {
-        concat!($lit, "\0").as_ptr() as *const ::std::os::raw::c_char
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! swig_assert_eq_size {
-    ($x:ty, $($xs:ty),+ $(,)*) => {
-        $(let _ = ::std::mem::transmute::<$x, $xs>;)+
-    };
-}
-
-#[cfg(target_pointer_width = "32")]
-pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    (val as u32) as *mut T
-}
-
-#[cfg(target_pointer_width = "64")]
-pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    val as *mut T
-}
-
-foreign_typemap!(
-    (r_type) jbyte;
-    (f_type) "byte";
-);
-
-foreign_typemap!(
-    (r_type) jshort;
-    (f_type) "short";
-);
-
-foreign_typemap!(
-    (r_type) jstring;
-    (f_type, option = "NoNullAnnotations") "String";
-    (f_type, option = "NullAnnotations") "@NonNull String";
-);
 
 #[allow(dead_code)]
 pub struct JavaString {
@@ -590,20 +605,15 @@ foreign_typemap!(
     };
 );
 
-impl SwigFrom<u32> for jlong {
-    fn swig_from(x: u32, _: *mut JNIEnv) -> Self {
-        jlong::from(x)
-    }
-}
-
-impl SwigInto<u32> for jlong {
-    fn swig_into(self, _: *mut JNIEnv) -> u32 {
-        if self < 0 || self > (::std::u32::MAX as jlong) {
-            panic!("Expect self from 0 to {}, got {}", ::std::u32::MAX, self);
-        }
-        self as u32
-    }
-}
+foreign_typemap!(
+    ($p:r_type) u32 => jlong {
+        $out = jlong::from($p)
+    };
+    ($p:r_type) u32 <= jlong {
+        $out = <u32 as ::std::convert::TryFrom<jlong>>::try_from($p)
+            .expect("invalid jlong, in jlong => u32 conversation")
+    };
+);
 
 foreign_typemap!(
     ($p:r_type) i64 => jlong {
@@ -614,54 +624,40 @@ foreign_typemap!(
     };
 );
 
-impl SwigInto<u64> for jlong {
-    fn swig_into(self, _: *mut JNIEnv) -> u64 {
-        if self < 0 {
-            panic!("Expect self to be positive, got {}", self);
-        }
-        self as u64
-    }
-}
+foreign_typemap!(
+    ($p:r_type) u64 => jlong {
+        $out = <jlong as ::std::convert::TryFrom<u64>>::try_from($p)
+            .expect("invalid u64, in u64 => jlong conversation")
+    };
+    ($p:r_type) u64 <= jlong {
+        $out = <u64 as ::std::convert::TryFrom<jlong>>::try_from($p)
+            .expect("invalid jlong, in jlong => u64 conversation")
+    };
+);
 
 #[allow(dead_code)]
 pub fn u64_to_jlong_checked(x: u64) -> jlong {
-    if x > (::std::i64::MAX as u64) {
-        log::error!("u64->jlong type overflow: {}", x);
-        ::std::i64::MAX
-    } else {
-        x as i64
-    }
+    <jlong as ::std::convert::TryFrom<u64>>::try_from(x)
+        .expect("invalid u64, in u64 => jlong conversation")
 }
 
-impl SwigFrom<u64> for jlong {
-    fn swig_from(x: u64, _: *mut JNIEnv) -> Self {
-        u64_to_jlong_checked(x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) f32 => jfloat {
+        $out = $p
+    };
+    ($p:r_type) f32 <= jfloat {
+        $out = $p
+    };
+);
 
-impl SwigInto<f32> for jfloat {
-    fn swig_into(self, _: *mut JNIEnv) -> f32 {
-        self
-    }
-}
-
-impl SwigFrom<f32> for jfloat {
-    fn swig_from(x: f32, _: *mut JNIEnv) -> Self {
-        x
-    }
-}
-
-impl SwigInto<f64> for jdouble {
-    fn swig_into(self, _: *mut JNIEnv) -> f64 {
-        self
-    }
-}
-
-impl SwigFrom<f64> for jdouble {
-    fn swig_from(x: f64, _: *mut JNIEnv) -> Self {
-        x
-    }
-}
+foreign_typemap!(
+    ($p:r_type) f64 => jdouble {
+        $out = $p
+    };
+    ($p:r_type) f64 <= jdouble {
+        $out = $p
+    };
+);
 
 impl<'a> SwigFrom<&'a str> for jstring {
     fn swig_from(x: &'a str, env: *mut JNIEnv) -> Self {
@@ -691,22 +687,12 @@ fn from_std_string_jstring(x: String, env: *mut JNIEnv) -> jstring {
     }
 }
 
-impl SwigInto<usize> for i64 {
-    fn swig_into(self, _: *mut JNIEnv) -> usize {
-        if self < 0 {
-            panic!(
-                "{}:{} expect self to be positive, got {}",
-                file!(),
-                line!(),
-                self
-            );
-        } else if (self as u64) > (::std::usize::MAX as u64) {
-            panic!("{}:{} too big value for usize {}", file!(), line!(), self);
-        } else {
-            self as usize
-        }
-    }
-}
+foreign_typemap!(
+    ($p:r_type) usize <= jlong {
+        $out = <usize as ::std::convert::TryFrom<jlong>>::try_from($p)
+            .expect("invalid jlong, in jlong => usize conversation")
+    };
+);
 
 // &str -> &Path
 impl<'a> SwigInto<&'a Path> for &'a str {
