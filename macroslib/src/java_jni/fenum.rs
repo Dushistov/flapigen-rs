@@ -1,7 +1,7 @@
 use log::trace;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use std::io::Write;
+use std::{io::Write, rc::Rc};
 use syn::{Ident, Type};
 
 use super::{
@@ -57,7 +57,7 @@ pub(in crate::java_jni) fn generate_enum(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: jint_rty.to_idx(),
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!(
                         "        {enum_name} {out} = {enum_name}.fromInt({var});",
                         out = TO_VAR_TEMPLATE,
@@ -65,7 +65,7 @@ pub(in crate::java_jni) fn generate_enum(
                         var = FROM_VAR_TEMPLATE
                     ),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         from_into_rust: Some(ForeignConversationRule {
@@ -73,10 +73,10 @@ pub(in crate::java_jni) fn generate_enum(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: jint_rty.to_idx(),
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!("        int {out} = {in}.getValue();", out = TO_VAR_TEMPLATE, in = FROM_VAR_TEMPLATE),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         name_prefix: None,

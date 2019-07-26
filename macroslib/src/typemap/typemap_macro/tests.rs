@@ -195,12 +195,12 @@ fn test_foreign_typemap_callback_to_future() {
                 };
             };
 
-            ($p:f_type, input_to_output, req_modules = ["\"CFnOnce!().h\"", "<future>"]) <= "std::future<swig_f_type!(T)>"
+            ($p:f_type, $tmp:temporary, input_to_output, req_modules = ["\"CFnOnce!().h\"", "<future>"]) <= "std::future<swig_f_type!(T)>"
                 r#"
-        auto tmp = new std::promise<swig_f_type!(T)>;
-        $out = tmp->get_future();
+        auto $tmp = new std::promise<swig_f_type!(T)>;
+        $out = $tmp->get_future();
         CFnOnce!() $p;
-        $p.ctx = tmp;
+        $p.ctx = $tmp;
         $p.cb = [](swig_i_type!(T) arg, void *opaque) {
             auto arg_cpp = swig_foreign_from_i_type!(T, arg);
             auto promise = static_cast<std::promise<swig_f_type!(T)> *>(opaque);

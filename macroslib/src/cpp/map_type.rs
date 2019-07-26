@@ -229,7 +229,10 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let f_info = map_type(self.ctx, &rust_ty, Direction::Incoming, self.arg_ty_span)?;
         if let Some(cpp_conv) = f_info.cpp_converter {
-            Ok(cpp_conv.converter.replace(FROM_VAR_TEMPLATE, var_name))
+            Ok(cpp_conv
+                .converter
+                .as_str()
+                .replace(FROM_VAR_TEMPLATE, var_name))
         } else {
             Ok(var_name.into())
         }
@@ -241,7 +244,10 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let f_info = map_type(self.ctx, &rust_ty, Direction::Outgoing, self.arg_ty_span)?;
         if let Some(cpp_conv) = f_info.cpp_converter {
-            Ok(cpp_conv.converter.replace(FROM_VAR_TEMPLATE, var_name))
+            Ok(cpp_conv
+                .converter
+                .as_str()
+                .replace(FROM_VAR_TEMPLATE, var_name))
         } else {
             Ok(var_name.into())
         }

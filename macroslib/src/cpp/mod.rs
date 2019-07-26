@@ -36,7 +36,7 @@ mod finterface;
 mod map_class_self_type;
 mod map_type;
 
-use std::{fmt, io::Write, mem, path::PathBuf};
+use std::{io::Write, mem, path::PathBuf, rc::Rc};
 
 use log::{debug, trace};
 use proc_macro2::TokenStream;
@@ -56,7 +56,7 @@ use crate::{
             configure_ftype_rule, remove_files_if, validate_cfg_options, ForeignMethodSignature,
             ForeignTypeInfoT,
         },
-        CItem, CItems, ForeignTypeInfo, TypeMapConvRuleInfo,
+        CItem, CItems, ForeignTypeInfo, TypeConvCode, TypeMapConvRuleInfo,
     },
     types::{ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodAccess},
     CppConfig, CppOptional, CppStrView, CppVariant, LanguageGenerator, SourceCode, TypeMap,
@@ -66,7 +66,7 @@ use crate::{
 #[derive(Debug)]
 struct CppConverter {
     typename: SmolStr,
-    converter: String,
+    converter: Rc<TypeConvCode>,
 }
 
 #[derive(Debug)]
@@ -118,7 +118,7 @@ impl CppForeignTypeInfo {
             input_to_output = intermediate.input_to_output;
             base_rt = intermediate.intermediate_ty;
             let typename = ftype.typename();
-            let converter = intermediate.conv_code.to_string();
+            let converter = intermediate.conv_code.clone();
             let intermediate_ty = intermediate.intermediate_ty;
 
             let rty = ctx.conv_map[intermediate_ty].clone();
@@ -364,14 +364,6 @@ fn rust_generate_args_with_types(f_method: &CppForeignMethodSignature) -> String
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
     buf
-}
-
-fn fmt_write_err_map(err: fmt::Error) -> String {
-    format!("fmt write error: {}", err)
-}
-
-fn map_write_err<Err: fmt::Display>(err: Err) -> String {
-    format!("write failed: {}", err)
 }
 
 fn register_c_type(

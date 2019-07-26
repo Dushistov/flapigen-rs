@@ -193,7 +193,7 @@ impl TypeMap {
                             intermediate: Some(ForeignConversationIntermediate {
                                 input_to_output: rule.input_to_output,
                                 intermediate_ty: rty_right,
-                                conv_code,
+                                conv_code: Rc::new(conv_code),
                             }),
                         },
                     ));
@@ -269,7 +269,7 @@ impl TypeMap {
                             intermediate: Some(ForeignConversationIntermediate {
                                 input_to_output: rule.input_to_output,
                                 intermediate_ty: rty_right,
-                                conv_code,
+                                conv_code: Rc::new(conv_code),
                             }),
                         },
                     ));

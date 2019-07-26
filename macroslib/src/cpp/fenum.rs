@@ -1,10 +1,10 @@
 use log::trace;
 use quote::quote;
-use std::io::Write;
+use std::{io::Write, rc::Rc};
 use syn::Type;
 
 use crate::{
-    cpp::{cpp_code, map_write_err, CppContext},
+    cpp::{cpp_code, CppContext},
     error::{invalid_src_id_span, DiagnosticError, Result},
     file_cache::FileWriteCache,
     typemap::{
@@ -13,6 +13,7 @@ use crate::{
         TypeConvCode, FROM_VAR_TEMPLATE,
     },
     types::ForeignEnumInfo,
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInfo) -> Result<()> {
@@ -52,14 +53,14 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: u32_rty.to_idx(),
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!(
                         "static_cast<{enum_name}>({var})",
                         enum_name = fenum.name,
                         var = FROM_VAR_TEMPLATE
                     ),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         from_into_rust: Some(ForeignConversationRule {
@@ -67,10 +68,10 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: u32_rty.to_idx(),
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         name_prefix: None,
@@ -83,7 +84,7 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
 fn generate_c_code_for_enum(
     ctx: &mut CppContext,
     enum_info: &ForeignEnumInfo,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<(), DiagnosticError> {
     let c_path = ctx
         .cfg
         .output_dir
@@ -101,7 +102,7 @@ enum {enum_name} {{"#,
         enum_name = enum_info.name,
         doc_comments = enum_doc_comments,
     )
-    .map_err(&map_write_err)?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
     for (i, item) in enum_info.items.iter().enumerate() {
         writeln!(
@@ -116,11 +117,12 @@ enum {enum_name} {{"#,
                 ","
             },
         )
-        .map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
-    writeln!(file, "}};").map_err(&map_write_err)?;
-    file.update_file_if_necessary().map_err(&map_write_err)?;
+    writeln!(file, "}};").expect(WRITE_TO_MEM_FAILED_MSG);
+    file.update_file_if_necessary()
+        .map_err(DiagnosticError::map_any_err_to_our_err)?;
     Ok(())
 }
 

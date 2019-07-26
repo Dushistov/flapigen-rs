@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{borrow::Cow, io::Write};
 
 use log::debug;
 use petgraph::Direction;
@@ -24,7 +24,8 @@ use crate::{
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
             unpack_from_heap_pointer,
         },
-        ForeignTypeInfo, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
+        ForeignTypeInfo, TypeConvCodeSubstParam, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        TO_VAR_TYPE_TEMPLATE,
     },
     types::{ForeignerClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
     WRITE_TO_MEM_FAILED_MSG,
@@ -225,7 +226,7 @@ May be you need to use `private constructor = empty;` syntax?",
             cpp_code::cpp_generate_args_with_types(f_method, method.arg_names_without_self());
 
         let (conv_args_code, cpp_args_for_c) =
-            cpp_code::convert_args(f_method, known_names, method.arg_names_without_self());
+            cpp_code::convert_args(f_method, &mut known_names, method.arg_names_without_self())?;
 
         let real_output_typename = match method.fn_decl.output {
             syn::ReturnType::Default => "()",
@@ -288,16 +289,29 @@ May be you need to use `private constructor = empty;` syntax?",
             Some(cpp_converter) => {
                 let cpp_ret_type = cpp_converter.typename.clone();
                 if input_to_output_arg.is_none() {
-                    let conv_code = cpp_converter
-                        .converter
-                        .replace(FROM_VAR_TEMPLATE, &ret_name);
-                    if conv_code.contains(TO_VAR_TYPE_TEMPLATE) {
-                        let conv_code = conv_code
-                            .replace(
-                                TO_VAR_TYPE_TEMPLATE,
-                                &format!("{} {}", cpp_ret_type, conv_ret),
-                            )
-                            .replace(TO_VAR_TEMPLATE, &conv_ret);
+                    let conv_code =
+                        cpp_converter
+                            .converter
+                            .generate_code_with_subst_func(|param_name| match param_name {
+                                TypeConvCodeSubstParam::Name(name) => {
+                                    if name == FROM_VAR_TEMPLATE {
+                                        Some(Cow::Borrowed(&ret_name))
+                                    } else if name == TO_VAR_TYPE_TEMPLATE {
+                                        Some(format!("{} {}", cpp_ret_type, conv_ret).into())
+                                    } else if name == TO_VAR_TEMPLATE {
+                                        Some(Cow::Borrowed(&conv_ret))
+                                    } else {
+                                        None
+                                    }
+                                }
+                                TypeConvCodeSubstParam::Tmp(name_template) => {
+                                    let tmp_name = new_unique_name(&known_names, name_template);
+                                    let tmp_name_ret = tmp_name.to_string().into();
+                                    known_names.insert(tmp_name);
+                                    Some(tmp_name_ret)
+                                }
+                            })?;
+                    if cpp_converter.converter.has_param(TO_VAR_TYPE_TEMPLATE) {
                         (
                             cpp_ret_type,
                             format!("{}\n        return {};", conv_code, conv_ret),

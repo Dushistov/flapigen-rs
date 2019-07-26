@@ -755,14 +755,14 @@ fn expand_ftype_rule(
         };
         let code = match grule.code {
             Some(ref x) => {
-                let code = expand_foreign_code(
-                    x.as_str(),
+                let code = expand_foreign_type_conv_code(
+                    x,
                     param_map,
                     expander,
                     generic_aliases,
                     (src_id, x.span()),
                 )?;
-                Some(TypeConvCode::new(code, (SourceId::none(), x.span())))
+                Some(code)
             }
             None => None,
         };
@@ -1119,6 +1119,27 @@ fn expand_foreign_code(
             Ok(())
         },
     )
+}
+
+fn expand_foreign_type_conv_code(
+    code: &TypeConvCode,
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[CalcGenericAlias],
+    ctx_span: SourceIdSpan,
+) -> Result<TypeConvCode> {
+    let ret_code = expand_foreign_code(
+        code.as_str(),
+        param_map,
+        expander,
+        generic_aliases,
+        ctx_span,
+    )?;
+    Ok(TypeConvCode::with_params(
+        ret_code,
+        code.span,
+        code.params().to_vec(),
+    ))
 }
 
 fn expand_fcode(

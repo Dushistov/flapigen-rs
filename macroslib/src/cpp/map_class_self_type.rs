@@ -1,4 +1,5 @@
 use log::debug;
+use std::rc::Rc;
 use syn::spanned::Spanned;
 
 use super::cpp_code;
@@ -262,7 +263,7 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: void_ptr_rust_ty,
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!(
                         "{class_name}(static_cast<{c_type} *>({var}))",
                         class_name = class.name,
@@ -270,7 +271,7 @@ fn register_main_foreign_types(
                         var = FROM_VAR_TEMPLATE
                     ),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         from_into_rust: Some(ForeignConversationRule {
@@ -278,10 +279,10 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: void_ptr_rust_ty,
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!("{}.release()", FROM_VAR_TEMPLATE),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         name_prefix: None,
@@ -299,14 +300,14 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: const_void_ptr_rust_ty,
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!(
                         "static_cast<const {} *>({})",
                         cpp_code::c_class_type(class),
                         FROM_VAR_TEMPLATE
                     ),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         into_from_rust: None,
@@ -325,7 +326,7 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: const_void_ptr_rust_ty,
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!(
                         "{class}Ref{{ static_cast<const {c_type} *>({var}) }}",
                         class = class.name,
@@ -333,7 +334,7 @@ fn register_main_foreign_types(
                         var = FROM_VAR_TEMPLATE
                     ),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         from_into_rust: None,
@@ -352,14 +353,14 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: void_ptr_rust_ty,
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!(
                         "static_cast<{} *>({})",
                         cpp_code::c_class_type(class),
                         FROM_VAR_TEMPLATE
                     ),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         into_from_rust: None,
@@ -387,14 +388,14 @@ fn register_main_foreign_types(
                     intermediate: Some(ForeignConversationIntermediate {
                         input_to_output: false,
                         intermediate_ty: void_ptr_rust_ty,
-                        conv_code: TypeConvCode::new(
+                        conv_code: Rc::new(TypeConvCode::new(
                             format!(
                                 "static_cast<{} *>({})",
                                 cpp_code::c_class_type(class),
                                 FROM_VAR_TEMPLATE
                             ),
                             invalid_src_id_span(),
-                        ),
+                        )),
                     }),
                 }),
                 into_from_rust: None,
@@ -418,14 +419,14 @@ fn register_main_foreign_types(
                     intermediate: Some(ForeignConversationIntermediate {
                         input_to_output: false,
                         intermediate_ty: const_void_ptr_rust_ty,
-                        conv_code: TypeConvCode::new(
+                        conv_code: Rc::new(TypeConvCode::new(
                             format!(
                                 "static_cast<const {} *>({})",
                                 cpp_code::c_class_type(class),
                                 FROM_VAR_TEMPLATE
                             ),
                             invalid_src_id_span(),
-                        ),
+                        )),
                     }),
                 }),
                 into_from_rust: None,

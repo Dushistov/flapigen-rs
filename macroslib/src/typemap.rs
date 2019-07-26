@@ -5,7 +5,7 @@ pub mod ty;
 mod typemap_macro;
 pub mod utils;
 
-use std::{cell::RefCell, fmt, mem, ops, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, fmt, mem, ops, rc::Rc};
 
 use log::{debug, log_enabled, trace, warn};
 use petgraph::{
@@ -47,6 +47,7 @@ const MAX_TRY_BUILD_PATH_STEPS: usize = 7;
 pub(crate) struct TypeConvCode {
     pub(in crate::typemap) span: SourceIdSpan,
     code: String,
+    params: Vec<SmolStr>,
 }
 
 impl PartialEq for TypeConvCode {
@@ -55,32 +56,71 @@ impl PartialEq for TypeConvCode {
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum TypeConvCodeSubstParam<'a> {
+    Name(&'a str),
+    Tmp(&'a str),
+}
+
 impl TypeConvCode {
     fn invalid() -> Self {
         TypeConvCode {
             span: invalid_src_id_span(),
             code: "invalid code".into(),
+            params: vec![],
         }
     }
+
+    pub(crate) fn with_params<S: Into<String>>(
+        code: S,
+        span: SourceIdSpan,
+        params: Vec<SmolStr>,
+    ) -> TypeConvCode {
+        let code: String = code.into();
+        TypeConvCode { code, span, params }
+    }
+
     /// # Panics
     pub(crate) fn new<S: Into<String>>(code: S, span: SourceIdSpan) -> TypeConvCode {
         let code: String = code.into();
-        assert!(
-            code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE),
-            "code: '{}'",
-            code
-        );
-        TypeConvCode { code, span }
+
+        let mut params = Vec::with_capacity(1);
+
+        if code.contains(TO_VAR_TEMPLATE) {
+            params.push(TO_VAR_TEMPLATE.into());
+        }
+        if code.contains(FROM_VAR_TEMPLATE) {
+            params.push(FROM_VAR_TEMPLATE.into());
+        }
+
+        if params.is_empty() {
+            panic!(
+                "Code: '{}' should contains {} or {}",
+                code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE
+            );
+        }
+
+        TypeConvCode { code, span, params }
     }
     /// # Panics
     pub(crate) fn new2<S: Into<String>>(code: S, span: SourceIdSpan) -> TypeConvCode {
         let code: String = code.into();
-        assert!(
-            code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE),
-            "code: '{}'",
-            code
-        );
-        TypeConvCode { code, span }
+        let mut params = Vec::with_capacity(2);
+        if code.contains(TO_VAR_TEMPLATE) {
+            params.push(TO_VAR_TEMPLATE.into());
+        }
+        if code.contains(FROM_VAR_TEMPLATE) {
+            params.push(FROM_VAR_TEMPLATE.into());
+        }
+
+        if params.len() < 2 {
+            panic!(
+                "Code: '{}' should contains {} and {}",
+                code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE
+            );
+        }
+
+        TypeConvCode { code, span, params }
     }
 
     pub(crate) fn as_str(&self) -> &str {
@@ -94,6 +134,9 @@ impl TypeConvCode {
     }
     pub(crate) fn full_span(&self) -> SourceIdSpan {
         self.span
+    }
+    pub(crate) fn params(&self) -> &[SmolStr] {
+        &self.params
     }
 
     pub(crate) fn generate_code(
@@ -111,6 +154,32 @@ impl TypeConvCode {
             .replace(FROM_VAR_TEMPLATE, from_name)
             .replace(TO_VAR_TYPE_TEMPLATE, to_typename)
             .replace(FUNCTION_RETURN_TYPE_TEMPLATE, func_ret_type)
+    }
+
+    pub(crate) fn generate_code_with_subst_func<'b, F>(&self, mut subst_func: F) -> Result<String>
+    where
+        for<'a> F: FnMut(TypeConvCodeSubstParam<'a>) -> Option<Cow<'b, str>>,
+    {
+        let mut subst = Vec::with_capacity(self.params.len());
+        for p in &self.params {
+            let param_id = if p.starts_with('$') {
+                TypeConvCodeSubstParam::Tmp(&p[1..])
+            } else {
+                TypeConvCodeSubstParam::Name(&p)
+            };
+            let param_val = subst_func(param_id).ok_or_else(|| {
+                DiagnosticError::new2(self.span, format!("Can not substitude parameter {}", p))
+            })?;
+            subst.push(param_val);
+        }
+        let mut ret = self.code.clone();
+        for (id, val) in self.params.iter().zip(subst.iter()) {
+            ret = ret.replace(id.as_str(), val.as_ref());
+        }
+        Ok(ret)
+    }
+    pub(crate) fn has_param(&self, param_name: &str) -> bool {
+        self.params.iter().any(|x| *x == param_name)
     }
 }
 

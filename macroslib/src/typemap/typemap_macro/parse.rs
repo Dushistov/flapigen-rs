@@ -30,6 +30,7 @@ mod kw {
     custom_keyword!(option);
     custom_keyword!(input_to_output);
     custom_keyword!(unique_prefix);
+    custom_keyword!(temporary);
 }
 
 enum RuleType {
@@ -480,6 +481,7 @@ struct FTypeArmParams {
     req_modules: Vec<ModuleName>,
     input_to_output: bool,
     unique_prefix: Option<SpannedSmolStr>,
+    temporary_ids: Vec<Ident>,
 }
 
 fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Result<FTypeArmParams> {
@@ -487,6 +489,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
     let mut ftype_req_modules = Vec::<ModuleName>::new();
     let mut input_to_output = false;
     let mut unique_prefix = None;
+    let mut temporary_ids = Vec::<Ident>::new();
 
     while !params.is_empty() && params.peek(Token![,]) {
         params.parse::<Token![,]>()?;
@@ -530,6 +533,18 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
                 sp: lit_str.span(),
                 value: lit_str.value().into(),
             });
+        } else if la.peek(token::Dollar) {
+            params.parse::<token::Dollar>()?;
+            let var_name = params.parse::<Ident>()?;
+            params.parse::<Token![:]>()?;
+            params.parse::<kw::temporary>()?;
+            if temporary_ids.iter().any(|x| *x == var_name) {
+                return Err(syn::Error::new(
+                    var_name.span(),
+                    format!("temporary already exists with such name: '{}'", var_name),
+                ));
+            }
+            temporary_ids.push(var_name);
         } else {
             return Err(la.error());
         }
@@ -539,6 +554,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
         req_modules: ftype_req_modules,
         input_to_output,
         unique_prefix,
+        temporary_ids,
     })
 }
 
@@ -555,6 +571,7 @@ fn parse_f_type_rule(
         req_modules: ftype_req_modules,
         input_to_output,
         unique_prefix,
+        temporary_ids,
     } = parse_typemap_f_type_arm_param(params)?;
 
     let left_ty: Option<FTypeName> = if input.peek(LitStr) {
@@ -613,17 +630,31 @@ fn parse_f_type_rule(
             )
         })?;
         let var_name = format!("${}", var_name);
-        Some(TypeConvCode::new(
-            replace_first_and_other(
-                code_str
-                    .value()
-                    .replace(&var_name, FROM_VAR_TEMPLATE)
-                    .as_str(),
-                "$out",
-                TO_VAR_TYPE_TEMPLATE,
-                TO_VAR_TEMPLATE,
-            ),
+        let code = replace_first_and_other(
+            code_str
+                .value()
+                .replace(&var_name, FROM_VAR_TEMPLATE)
+                .as_str(),
+            "$out",
+            TO_VAR_TYPE_TEMPLATE,
+            TO_VAR_TEMPLATE,
+        );
+        let mut params = Vec::with_capacity(4);
+        params.push(FROM_VAR_TEMPLATE.into());
+        if code.contains(TO_VAR_TYPE_TEMPLATE) {
+            params.push(TO_VAR_TYPE_TEMPLATE.into());
+        }
+        if code.contains(TO_VAR_TEMPLATE) {
+            params.push(TO_VAR_TEMPLATE.into());
+        }
+        for tmp_id in &temporary_ids {
+            params.push(format!("${}", tmp_id).into());
+        }
+
+        Some(TypeConvCode::with_params(
+            code,
             (SourceId::none(), code_str.span()),
+            params,
         ))
     } else {
         None
