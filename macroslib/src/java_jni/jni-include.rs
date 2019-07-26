@@ -533,11 +533,11 @@ macro_rules! jni_unpack_return {
 
 foreign_typemap!(
     ($p:r_type) bool => jboolean {
-        $out = if $p { 1 as jboolean } else { 0 as jboolean }
+        $out = if $p { 1 as jboolean } else { 0 as jboolean };
     };
     ($p:f_type) => "boolean";
     ($p:r_type) bool <= jboolean {
-        $out = $p != 0
+        $out = $p != 0;
     };
     ($p:f_type) <= "boolean";
 );
@@ -550,7 +550,7 @@ foreign_typemap!(
         $out = <i64 as ::std::convert::TryFrom<u64>>::try_from(
             since_unix_epoch.as_secs() * 1_000 + u64::from(since_unix_epoch.subsec_millis()),
         )
-        .expect("SystemTime: milleseconds u64 to i64 convert error")
+        .expect("SystemTime: milleseconds u64 to i64 convert error");
     };
     ($p:f_type, option = "NoNullAnnotations") => "java.util.Date" "$out = new java.util.Date($p);";
     ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Date" "$out = new java.util.Date($p);";
@@ -558,80 +558,80 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) jbyte => i8 {
-        $out = $p
+        $out = $p;
     };
     ($p:r_type) jbyte <= i8 {
-        $out = $p
+        $out = $p;
     };
 );
 
 foreign_typemap!(
     ($p:r_type) u8 => jshort {
-        $out = jshort::from($p)
+        $out = jshort::from($p);
     };
 );
 foreign_typemap!(
     ($p:r_type) u8 <= jshort {
         $out = <u8 as ::std::convert::TryFrom<jshort>>::try_from($p)
-            .expect("invalid jshort, in jshort => u8 conversation")
+            .expect("invalid jshort, in jshort => u8 conversation");
     };
 );
 
 foreign_typemap!(
     ($p:r_type) i16 => jshort {
-        $out = $p
+        $out = $p;
     };
     ($p:r_type) i16 <= jshort {
-        $out = $p
+        $out = $p;
     };
 );
 
 foreign_typemap!(
     ($p:r_type) u16 => jint {
-        $out = jint::from($p)
+        $out = jint::from($p);
     };
     ($p:r_type) u16 <= jint {
         $out = <u16 as ::std::convert::TryFrom<jint>>::try_from($p)
-            .expect("invalid jint, in jint => u16 conversation")
+            .expect("invalid jint, in jint => u16 conversation");
     };
 );
 
 foreign_typemap!(
     ($p:r_type) jint => i32 {
-        $out = $p
+        $out = $p;
     };
     ($p:r_type) jint <= i32 {
-        $out = $p
+        $out = $p;
     };
 );
 
 foreign_typemap!(
     ($p:r_type) u32 => jlong {
-        $out = jlong::from($p)
+        $out = jlong::from($p);
     };
     ($p:r_type) u32 <= jlong {
         $out = <u32 as ::std::convert::TryFrom<jlong>>::try_from($p)
-            .expect("invalid jlong, in jlong => u32 conversation")
+            .expect("invalid jlong, in jlong => u32 conversation");
     };
 );
 
 foreign_typemap!(
     ($p:r_type) i64 => jlong {
-        $out = $p
+        $out = $p;
     };
     ($p:r_type) i64 <= jlong {
-        $out = $p
+        $out = $p;
     };
 );
 
 foreign_typemap!(
     ($p:r_type) u64 => jlong {
         $out = <jlong as ::std::convert::TryFrom<u64>>::try_from($p)
-            .expect("invalid u64, in u64 => jlong conversation")
+            .expect("invalid u64, in u64 => jlong conversation");
     };
     ($p:r_type) u64 <= jlong {
         $out = <u64 as ::std::convert::TryFrom<jlong>>::try_from($p)
-            .expect("invalid jlong, in jlong => u64 conversation")
+            .expect("invalid jlong, in jlong => u64 conversation");
     };
 );
 
@@ -643,19 +643,19 @@ pub fn u64_to_jlong_checked(x: u64) -> jlong {
 
 foreign_typemap!(
     ($p:r_type) f32 => jfloat {
-        $out = $p
+        $out = $p;
     };
     ($p:r_type) f32 <= jfloat {
-        $out = $p
+        $out = $p;
     };
 );
 
 foreign_typemap!(
     ($p:r_type) f64 => jdouble {
-        $out = $p
+        $out = $p;
     };
     ($p:r_type) f64 <= jdouble {
-        $out = $p
+        $out = $p;
     };
 );
 
@@ -690,7 +690,7 @@ fn from_std_string_jstring(x: String, env: *mut JNIEnv) -> jstring {
 foreign_typemap!(
     ($p:r_type) usize <= jlong {
         $out = <usize as ::std::convert::TryFrom<jlong>>::try_from($p)
-            .expect("invalid jlong, in jlong => usize conversation")
+            .expect("invalid jlong, in jlong => usize conversation");
     };
 );
 
@@ -1187,7 +1187,7 @@ fn from_java_lang_double_to_rust(env: *mut JNIEnv, x: internal_aliases::JDouble)
 
 foreign_typemap!(
     ($p:r_type) Option<f64> <= internal_aliases::JDouble {
-        $out = from_java_lang_double_to_rust(env, $p)
+        $out = from_java_lang_double_to_rust(env, $p);
     };
     (f_type, option = "NoNullAnnotations") <= "Double";
     (f_type, option = "NullAnnotations") <= "@Nullable Double";
@@ -1195,7 +1195,7 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) Option<f64> => internal_aliases::JOptionalDouble {
-        $out = to_java_util_optional_double(env, $p)
+        $out = to_java_util_optional_double(env, $p);
     };
     (f_type, option = "NoNullAnnotations") => "java.util.OptionalDouble";
     (f_type, option = "NullAnnotations") => "@NonNull java.util.OptionalDouble";
@@ -1235,7 +1235,7 @@ fn from_java_lang_float_to_rust(env: *mut JNIEnv, x: internal_aliases::JFloat) -
 
 foreign_typemap!(
     ($p:r_type) Option<f32> <= internal_aliases::JFloat {
-        $out = from_java_lang_float_to_rust(env, $p)
+        $out = from_java_lang_float_to_rust(env, $p);
     };
     (f_type, option = "NoNullAnnotations") <= "Float";
     (f_type, option = "NullAnnotations") <= "@Nullable Float";
@@ -1243,7 +1243,7 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) Option<f32> => internal_aliases::JOptionalDouble {
-        $out = to_java_util_optional_double(env, $p.map(f64::from))
+        $out = to_java_util_optional_double(env, $p.map(f64::from));
     };
 );
 
@@ -1328,7 +1328,7 @@ fn from_java_lang_long_to_rust(env: *mut JNIEnv, x: internal_aliases::JLong) -> 
 
 foreign_typemap!(
     ($p:r_type) Option<i64> <= internal_aliases::JLong {
-        $out = from_java_lang_long_to_rust(env, $p)
+        $out = from_java_lang_long_to_rust(env, $p);
     };
     (f_type, option = "NoNullAnnotations") <= "Long";
     (f_type, option = "NullAnnotations") <= "@Nullable Long";
@@ -1336,7 +1336,7 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) Option<i64> => internal_aliases::JOptionalLong {
-        $out = to_java_util_optional_long(env, $p)
+        $out = to_java_util_optional_long(env, $p);
     };
     (f_type, option = "NoNullAnnotations") => "java.util.OptionalLong";
     (f_type, option = "NullAnnotations") => "@NonNull java.util.OptionalLong";
@@ -1440,7 +1440,7 @@ fn from_java_lang_short_to_rust(env: *mut JNIEnv, x: internal_aliases::JByte) ->
 
 foreign_typemap!(
     ($p:r_type) Option<i32> <= internal_aliases::JInteger {
-        $out = from_java_lang_int_to_rust(env, $p)
+        $out = from_java_lang_int_to_rust(env, $p);
     };
     (f_type, option = "NoNullAnnotations") <= "Integer";
     (f_type, option = "NullAnnotations") <= "@Nullable Integer";
@@ -1495,7 +1495,7 @@ fn to_java_util_optional_int(env: *mut JNIEnv, x: Option<i32>) -> jobject {
 
 foreign_typemap!(
     ($p:r_type) Option<i32> => internal_aliases::JOptionalInt {
-        $out = to_java_util_optional_int(env, $p)
+        $out = to_java_util_optional_int(env, $p);
     };
     (f_type, option = "NoNullAnnotations") => "java.util.OptionalInt";
     (f_type, option = "NullAnnotations") => "@NonNull java.util.OptionalInt";
@@ -1503,7 +1503,7 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) Option<i8> <= internal_aliases::JByte {
-        $out = from_java_lang_byte_to_rust(env, $p)
+        $out = from_java_lang_byte_to_rust(env, $p);
     };
     (f_type, option = "NoNullAnnotations") <= "Byte";
     (f_type, option = "NullAnnotations") <= "@Nullable Byte";
@@ -1511,13 +1511,13 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) Option<i8> => internal_aliases::JOptionalInt {
-        $out = to_java_util_optional_int(env, $p.map(i32::from))
+        $out = to_java_util_optional_int(env, $p.map(i32::from));
     };
 );
 
 foreign_typemap!(
     ($p:r_type) Option<i16> <= internal_aliases::JShort {
-        $out = from_java_lang_short_to_rust(env, $p)
+        $out = from_java_lang_short_to_rust(env, $p);
     };
     (f_type, option = "NoNullAnnotations") <= "Short";
     (f_type, option = "NullAnnotations") <= "@Nullable Short";
@@ -1525,7 +1525,7 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) Option<i16> => internal_aliases::JOptionalInt {
-        $out = to_java_util_optional_int(env, $p.map(i32::from))
+        $out = to_java_util_optional_int(env, $p.map(i32::from));
     };
 );
 
@@ -1538,7 +1538,7 @@ foreign_typemap!(
                 ptr
             }
             None => 0,
-        }
+        };
     };
     ($p:f_type, option = "NoNullAnnotations") => "java.util.Optional<swig_f_type!(T)>" r#"
         $out;
@@ -1565,7 +1565,7 @@ foreign_typemap!(
             Some(o)
         } else {
             None
-        }
+        };
     };
     ($p:f_type, option = "NoNullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/swig_f_type!(T)" r#"
         $out = 0;//TODO: use ptr::null() for corresponding constant
@@ -1592,7 +1592,7 @@ foreign_typemap!(
             Some(o)
         } else {
             None
-        }
+        };
     };
     ($p:f_type, option = "NoNullAnnotations", unique_prefix = "/*opt ref*/") <= "/*opt ref*/swig_f_type!(T)" r#"
         $out = 0;//TODO: use ptr::null() for corresponding constant
@@ -1613,7 +1613,7 @@ foreign_typemap!(
         $out = match $p {
             Some(s) => from_std_string_jstring(s, env),
             None => ::std::ptr::null_mut(),
-        }
+        };
     };
     ($p:f_type, option = "NoNullAnnotations") => "java.util.Optional<String>" r#"
         $out = java.util.Optional.ofNullable($p);
@@ -1637,7 +1637,7 @@ foreign_typemap!(
             Some(tmp.swig_deref())
         } else {
             None
-        }
+        };
     };
 );
 
@@ -1646,7 +1646,7 @@ foreign_typemap!(
         $out = match $p {
             Some(v) => v.as_jint(),
             None => -1,
-        }
+        };
     };
     ($p:f_type, option = "NoNullAnnotations") => "java.util.Optional<swig_f_type!(T)>" r#"
         $out;
@@ -1672,7 +1672,7 @@ foreign_typemap!(
             Some(<swig_subst_type!(T)>::from_jint($p))
         } else {
             None
-        }
+        };
     };
     ($p:f_type, option = "NoNullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/swig_f_type!(T)" r#"
         $out = ($p != null) ? $p.getValue() : -1;

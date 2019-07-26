@@ -28,7 +28,7 @@ foreign_typemap!(
         assert!(!$p.is_null());
         let map_rect: &MapRect = unsafe { &*$p };
         let points_arr: [MapPoint; 4] = map_rect.into();
-        $out = &points_arr
+        $out = &points_arr;
     };
     ($p:f_type, req_modules = ["\"MapRect.h\""]) <= "const MapRect &" "$p";
 );

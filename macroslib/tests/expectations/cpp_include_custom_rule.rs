@@ -1,6 +1,6 @@
 foreign_typemap!(
     ($p:r_type) QString => CRustString {
-        $out = CRustString::from_string($p)
+        $out = CRustString::from_string($p);
     };
     ($p:f_type, req_modules = ["<QString>"]) => "QString" r#"
           $out = QString::fromUtf8($p.data, $p.len);

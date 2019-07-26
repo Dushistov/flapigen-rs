@@ -230,7 +230,7 @@ fn parse_r_type_rule(
         let out_var_no_type: TokenStream = parse_quote!($out_no_type);
         let out_var_no_type = out_var_no_type.to_string();
 
-        let mut code_str = conv_body.to_string();
+        let code_str = conv_body.to_string();
         if !(code_str.contains(&d_var_name)
             && (code_str.contains(&out_var) || code_str.contains(&out_var_no_type)))
         {
@@ -242,7 +242,6 @@ fn parse_r_type_rule(
                 ),
             ));
         }
-        code_str.push(';');
         Some(if code_str.contains(&out_var_no_type) {
             TypeConvCode::new2(
                 code_str
