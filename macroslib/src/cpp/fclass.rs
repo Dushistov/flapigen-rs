@@ -714,7 +714,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
         conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        mc.f_method.output.as_ref(),
+        mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
         &c_ret_type,
     )?;
@@ -780,7 +780,7 @@ fn generate_method(
         conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        mc.f_method.output.as_ref(),
+        mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
         &c_ret_type,
     )?;

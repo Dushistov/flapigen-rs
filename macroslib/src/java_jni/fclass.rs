@@ -785,7 +785,7 @@ fn generate_static_method(ctx: &mut JavaContext, mc: &MethodContext) -> Result<(
         ctx.conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        &mc.f_method.output,
+        mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
         &jni_ret_type,
     )?;
@@ -907,7 +907,7 @@ fn generate_method(
         ctx.conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        &mc.f_method.output,
+        mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
         &jni_ret_type,
     )?;
