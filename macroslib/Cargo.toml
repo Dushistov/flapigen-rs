@@ -37,4 +37,4 @@ quote = "0.6.11"
 
 [badges]
 travis-ci = { repository = "Dushistov/rust_swig" }
-appveyor = { repository = "Dushistov/rust_swig" }
+azure-devops = { project = "Dushistov/rust_swig", pipeline = "Dushistov.rust_swig" }
