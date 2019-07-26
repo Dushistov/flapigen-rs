@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use syn::{
     parse::{Parse, ParseStream},
     parse_quote,
+    spanned::Spanned,
     visit::Visit,
     LitStr, Macro, Token,
 };
@@ -37,6 +38,12 @@ impl JniCacheMacroCalls {
                     static mut #id: jfieldID = ::std::ptr::null_mut();
                 });
             }
+            for sub_id in &find_class.fields {
+                let id = &sub_id.id;
+                ret.push(parse_quote! {
+                    static mut #id: jfieldID = ::std::ptr::null_mut();
+                });
+            }
         }
         ret
     }
@@ -46,9 +53,10 @@ impl JniCacheMacroCalls {
 pub struct JniFindClass {
     pub id: syn::Ident,
     pub path: LitStr,
-    pub methods: Vec<JniGetMethodId>,
-    pub static_methods: Vec<JniGetMethodId>,
-    pub static_fields: Vec<JniGetMethodId>,
+    pub methods: Vec<JniClassItemWithId>,
+    pub static_methods: Vec<JniClassItemWithId>,
+    pub static_fields: Vec<JniClassItemWithId>,
+    pub fields: Vec<JniClassItemWithId>,
 }
 impl Parse for JniFindClass {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -61,18 +69,19 @@ impl Parse for JniFindClass {
             methods: Vec::new(),
             static_methods: Vec::new(),
             static_fields: Vec::new(),
+            fields: Vec::new(),
         })
     }
 }
 
 #[derive(PartialEq, Debug)]
-pub struct JniGetMethodId {
+pub struct JniClassItemWithId {
     pub id: syn::Ident,
     pub class_id: syn::Ident,
     pub name: LitStr,
     pub sig: LitStr,
 }
-impl Parse for JniGetMethodId {
+impl Parse for JniClassItemWithId {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let id = input.parse()?;
         input.parse::<Token![,]>()?;
@@ -95,12 +104,13 @@ impl Parse for JniGetMethodId {
 
 macro_rules! add_jni_method_id {
     ($mac:ident, $calls: ident, $sub_calls: ident, $name: expr) => {
-        let get_method_id: JniGetMethodId = syn::parse2($mac.tts.clone()).unwrap_or_else(|err| {
-            panic!(
-                "Can not parse '{}' call: {}, code: {}",
-                $name, err, $mac.tts
-            )
-        });
+        let get_method_id: JniClassItemWithId =
+            syn::parse2($mac.tts.clone()).unwrap_or_else(|err| {
+                panic!(
+                    "Can not parse '{}' call: {}, code: {}",
+                    $name, err, $mac.tts
+                )
+            });
         let class_id = get_method_id.class_id.to_string();
         let find_class = $calls.get_mut(&class_id).unwrap_or_else(|| {
             panic!(
@@ -125,36 +135,55 @@ macro_rules! add_jni_method_id {
     };
 }
 
-impl<'ast> Visit<'ast> for JniCacheMacroCalls {
+pub struct JniCacheMacroCallsVisitor<'a> {
+    pub inner: &'a mut JniCacheMacroCalls,
+    pub errors: Vec<syn::Error>,
+}
+
+impl<'ast> Visit<'ast> for JniCacheMacroCallsVisitor<'ast> {
     fn visit_macro(&mut self, mac: &'ast Macro) {
         static SWIG_JNI_GET_METHOD_ID: &str = "swig_jni_get_method_id";
         static SWIG_JNI_GET_STATIC_METHOD_ID: &str = "swig_jni_get_static_method_id";
         static SWIG_JNI_GET_STATIC_FIELD_ID: &str = "swig_jni_get_static_field_id";
+        static SWIG_JNI_GET_FIELD_ID: &str = "swig_jni_get_field_id";
 
         if mac.path.is_ident("swig_jni_find_class") {
             let find_class: JniFindClass =
                 syn::parse2(mac.tts.clone()).expect("Can not parse swig_jni_find_class call");
             let id = find_class.id.to_string();
-            if let Some(call) = self.calls.get(&id) {
+            if let Some(call) = self.inner.calls.get(&id) {
                 if *call != find_class {
-                    panic!(
-                        "You use the same id {} for different classes {} vs {}",
+                    println!(
+                        "waring=You use the same id '{}' for different classes '{}' vs '{}'",
                         id,
                         call.path.value(),
                         find_class.path.value()
                     );
+                    self.errors.push(syn::Error::new(
+                        mac.span(),
+                        format!(
+                            "You use the same id '{}' for different classes '{}' vs '{}'",
+                            id,
+                            call.path.value(),
+                            find_class.path.value()
+                        ),
+                    ));
+                    return;
                 }
             }
-            self.calls.insert(id, find_class);
+            self.inner.calls.insert(id, find_class);
         } else if mac.path.is_ident(SWIG_JNI_GET_METHOD_ID) {
-            let calls = &mut self.calls;
+            let calls = &mut self.inner.calls;
             add_jni_method_id!(mac, calls, methods, SWIG_JNI_GET_METHOD_ID);
         } else if mac.path.is_ident(SWIG_JNI_GET_STATIC_METHOD_ID) {
-            let calls = &mut self.calls;
+            let calls = &mut self.inner.calls;
             add_jni_method_id!(mac, calls, static_methods, SWIG_JNI_GET_STATIC_METHOD_ID);
         } else if mac.path.is_ident(SWIG_JNI_GET_STATIC_FIELD_ID) {
-            let calls = &mut self.calls;
+            let calls = &mut self.inner.calls;
             add_jni_method_id!(mac, calls, static_fields, SWIG_JNI_GET_STATIC_FIELD_ID);
+        } else if mac.path.is_ident(SWIG_JNI_GET_FIELD_ID) {
+            let calls = &mut self.inner.calls;
+            add_jni_method_id!(mac, calls, fields, SWIG_JNI_GET_FIELD_ID);
         }
         syn::visit::visit_macro(self, mac)
     }

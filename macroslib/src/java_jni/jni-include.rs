@@ -66,6 +66,15 @@ macro_rules! swig_jni_get_static_method_id {
     };
 }
 #[allow(unused_macros)]
+macro_rules! swig_jni_get_field_id {
+    ($global_id:ident, $class_id:ident, $name:expr, $sig:expr) => {
+        unsafe { $global_id }
+    };
+    ($global_id:ident, $class_id:ident, $name:expr, $sig:expr,) => {
+        unsafe { $global_id }
+    };
+}
+#[allow(unused_macros)]
 macro_rules! swig_jni_get_static_field_id {
     ($global_id:ident, $class_id:ident, $name:expr, $sig:expr) => {
         unsafe { $global_id }
@@ -169,7 +178,8 @@ foreign_typemap!(
 #[allow(dead_code)]
 trait SwigForeignClass {
     type PointedType;
-    fn jni_class_name() -> *const ::std::os::raw::c_char;
+    fn jni_class() -> jclass;
+    fn jni_class_pointer_field() -> jfieldID;
     fn box_object(x: Self) -> jlong;
     fn unbox_object(x: jlong) -> Self;
     fn to_pointer(x: jlong) -> ::std::ptr::NonNull<Self::PointedType>;
@@ -378,17 +388,15 @@ fn jni_throw_exception(env: *mut JNIEnv, message: &str) {
 }
 
 #[allow(dead_code)]
-fn object_to_jobject<T: SwigForeignClass>(obj: T, jcls: jclass, env: *mut JNIEnv) -> jobject {
+fn object_to_jobject<T: SwigForeignClass>(env: *mut JNIEnv, obj: T) -> jobject {
+    let jcls = <T>::jni_class();
     assert!(!jcls.is_null());
+    let field_id = <T>::jni_class_pointer_field();
+    assert!(!field_id.is_null());
+
     let jobj: jobject = unsafe { (**env).AllocObject.unwrap()(env, jcls) };
     assert!(!jobj.is_null(), "object_to_jobject: AllocObject failed");
-    let field_id: jfieldID = unsafe {
-        (**env).GetFieldID.unwrap()(env, jcls, swig_c_str!("mNativeObj"), swig_c_str!("J"))
-    };
-    assert!(
-        !field_id.is_null(),
-        "object_to_jobject: GetFieldID(mNativeObj) failed"
-    );
+
     let ret: jlong = <T>::box_object(obj);
     unsafe {
         (**env).SetLongField.unwrap()(env, jobj, field_id, ret);
@@ -402,25 +410,19 @@ fn object_to_jobject<T: SwigForeignClass>(obj: T, jcls: jclass, env: *mut JNIEnv
 #[swig_to_foreigner_hint = "T []"]
 impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
     fn swig_from(x: Vec<T>, env: *mut JNIEnv) -> Self {
-        vec_of_objects_to_jobject_array(x, <T>::jni_class_name(), env)
+        vec_of_objects_to_jobject_array(env, x)
     }
 }
 
 #[swig_from_foreigner_hint = "T []"]
 impl<T: SwigForeignClass + Clone> SwigInto<Vec<T>> for jobjectArray {
     fn swig_into(self, env: *mut JNIEnv) -> Vec<T> {
-        let class_id = <T>::jni_class_name();
-        let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
-        let field_id = swig_c_str!("mNativeObj");
-        let type_id = swig_c_str!("J");
-        let field_id: jfieldID =
-            unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id, type_id) };
+        let field_id = <T>::jni_class_pointer_field();
         assert!(!field_id.is_null());
-
         let length = unsafe { (**env).GetArrayLength.unwrap()(env, self) };
-
-        let mut result = Vec::with_capacity(length as usize);
-
+        let len = <usize as ::std::convert::TryFrom<jsize>>::try_from(length)
+            .expect("invalid jsize, in jsize => usize conversation");
+        let mut result = Vec::with_capacity(len);
         for i in 0..length {
             let native: &mut T = unsafe {
                 let obj = (**env).GetObjectArrayElement.unwrap()(env, self, i);
@@ -441,21 +443,18 @@ impl<T: SwigForeignClass + Clone> SwigInto<Vec<T>> for jobjectArray {
 
 #[allow(dead_code)]
 fn vec_of_objects_to_jobject_array<T: SwigForeignClass>(
-    mut arr: Vec<T>,
-    class_id: *const ::std::os::raw::c_char,
     env: *mut JNIEnv,
+    mut arr: Vec<T>,
 ) -> jobjectArray {
-    let jcls: jclass = unsafe { (**env).FindClass.unwrap()(env, class_id) };
+    let jcls: jclass = <T>::jni_class();
     assert!(!jcls.is_null());
-    //TODO: check for arr.len() -> jsize overflow
-    let obj_arr: jobjectArray = unsafe {
-        (**env).NewObjectArray.unwrap()(env, arr.len() as jsize, jcls, ::std::ptr::null_mut())
-    };
+    let arr_len = <jsize as ::std::convert::TryFrom<usize>>::try_from(arr.len())
+        .expect("invalid usize, in usize => to jsize conversation");
+    let obj_arr: jobjectArray =
+        unsafe { (**env).NewObjectArray.unwrap()(env, arr_len, jcls, ::std::ptr::null_mut()) };
     assert!(!obj_arr.is_null());
 
-    let field_id = swig_c_str!("mNativeObj");
-    let type_id = swig_c_str!("J");
-    let field_id: jfieldID = unsafe { (**env).GetFieldID.unwrap()(env, jcls, field_id, type_id) };
+    let field_id = <T>::jni_class_pointer_field();
     assert!(!field_id.is_null());
 
     for (i, r_obj) in arr.drain(..).enumerate() {

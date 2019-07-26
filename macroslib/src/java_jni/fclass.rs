@@ -1,6 +1,6 @@
 use log::{debug, trace};
 use petgraph::Direction;
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
@@ -501,12 +501,29 @@ fn generate_rust_code(
             let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
             let this_type_for_method_ty_as_is = &this_type_for_method.ty;
             let class_name = &this_type.ty;
+            let global_var_with_jclass = Ident::new(
+                &format!("FOREIGN_CLASS_{}", class.name.to_string().to_uppercase()),
+                Span::call_site(),
+            );
+            let global_var_with_ptr_field = Ident::new(
+                &format!(
+                    "FOREIGN_CLASS_{}_{}_FIELD",
+                    class.name.to_string().to_uppercase(),
+                    JAVA_RUST_SELF_NAME.to_uppercase(),
+                ),
+                Span::call_site(),
+            );
             let fclass_impl_code = quote! {
                 impl<#(#lifetimes),*> SwigForeignClass for #class_name {
                     type PointedType = #this_type_for_method_ty_as_is;
 
-                    fn jni_class_name() -> *const ::std::os::raw::c_char {
-                        swig_c_str!(#class_name_for_jni)
+                    fn jni_class() -> jclass {
+                        swig_jni_find_class!(#global_var_with_jclass, #class_name_for_jni)
+                    }
+                    fn jni_class_pointer_field() -> jfieldID {
+                        swig_jni_get_field_id!(#global_var_with_ptr_field,
+                                               #global_var_with_jclass,
+                                               #JAVA_RUST_SELF_NAME, "J")
                     }
                     fn box_object(this: Self) -> jlong {
                         #code_box_this

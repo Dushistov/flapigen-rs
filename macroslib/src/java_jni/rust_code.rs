@@ -5,7 +5,9 @@ use std::{io::Write, str};
 use syn::{parse_quote, visit::Visit};
 
 use super::{
-    find_cache::JniCacheMacroCalls, java_class_full_name, java_code::filter_null_annotation,
+    find_cache::{JniCacheMacroCalls, JniCacheMacroCallsVisitor},
+    java_class_full_name,
+    java_code::filter_null_annotation,
     JniForeignMethodSignature,
 };
 use crate::{
@@ -162,7 +164,14 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
     let file = syn::parse_file(code)
         .unwrap_or_else(|err| panic_on_syn_error("generated code", code.into(), err));
     let mut jni_cache_macro_calls = JniCacheMacroCalls::default();
-    jni_cache_macro_calls.visit_file(&file);
+    let mut visitor = JniCacheMacroCallsVisitor {
+        inner: &mut jni_cache_macro_calls,
+        errors: vec![],
+    };
+    visitor.visit_file(&file);
+    if !visitor.errors.is_empty() {
+        panic_on_syn_error("generated code", code.to_string(), visitor.errors.remove(0));
+    }
 
     let mut addon_code = Vec::with_capacity(3);
 
@@ -213,18 +222,37 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
 
         for m in &find_class.static_fields {
             let field_id = &m.id;
-            let method_name = &m.name;
+            let field_name = &m.name;
             let method_sig = &m.sig;
             class_get_method_id_calls.push(quote! {
                 let field_id: jfieldID = (**env).GetStaticFieldID.unwrap()(
                     env,
                     class,
-                    swig_c_str!(#method_name),
+                    swig_c_str!(#field_name),
                     swig_c_str!(#method_sig),
                 );
                 assert!(!field_id.is_null(),
                         concat!("GetStaticFieldID for class ", #class_name,
-                                " method ", #method_name,
+                                " method ", #field_name,
+                                " sig ", #method_sig, " failed"));
+                #field_id = field_id;
+            });
+        }
+
+        for m in &find_class.fields {
+            let field_id = &m.id;
+            let field_name = &m.name;
+            let method_sig = &m.sig;
+            class_get_method_id_calls.push(quote! {
+                let field_id: jfieldID = (**env).GetFieldID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!(#field_name),
+                    swig_c_str!(#method_sig),
+                );
+                assert!(!field_id.is_null(),
+                        concat!("GetStaticFieldID for class ", #class_name,
+                                " method ", #field_name,
                                 " sig ", #method_sig, " failed"));
                 #field_id = field_id;
             });
