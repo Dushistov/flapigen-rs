@@ -18,7 +18,7 @@ foreigner_class!(class RustLogging {
 });
 
 #[derive(Clone)]
-struct Foo {
+pub struct Foo {
     data: i32,
     name: String,
 }
@@ -303,7 +303,7 @@ pub fn Java_com_example_rust_TestInner_getInner(env: *mut JNIEnv, _: jclass) -> 
 }
 
 #[derive(Clone, Copy)]
-struct Xyz {
+pub struct Xyz {
     x: f64,
     y: f64,
     z: f64,

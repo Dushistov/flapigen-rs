@@ -622,7 +622,10 @@ impl TypeMap {
         to: RustTypeIdx,
         build_for_sp: SourceIdSpan,
     ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
-        debug!("find_path: begin {} -> {}", self[from], self[to]);
+        debug!(
+            "find_path: begin {}/{:?} -> {}/{:?}",
+            self[from], from, self[to], to
+        );
         if from == to {
             return Ok(vec![]);
         }
@@ -1340,38 +1343,5 @@ mod tests {
                 .expect("path from &RefCell<Foo> to &Foo NOT exists")
                 .1
         );
-
-        let vec_foo_ty =
-            types_map.find_or_alloc_rust_type(&parse_type! { Vec<Foo> }, SourceId::none());
-
-        let fti = types_map
-            .map_through_conversation_to_foreign(
-                vec_foo_ty.to_idx(),
-                petgraph::Direction::Outgoing,
-                MapToForeignFlag::FullSearch,
-                invalid_src_id_span(),
-                |_, fc| {
-                    fc.self_desc
-                        .as_ref()
-                        .map(|x| x.constructor_ret_type.clone())
-                },
-            )
-            .unwrap();
-        assert_eq!("Foo []", types_map[fti].name.as_str());
-
-        assert!(try_build_path(
-            types_map
-                .find_or_alloc_rust_type(&parse_type! { Vec<i32> }, SourceId::none())
-                .to_idx(),
-            types_map
-                .find_or_alloc_rust_type(&parse_type! { jlong }, SourceId::none())
-                .to_idx(),
-            invalid_src_id_span(),
-            &mut types_map.conv_graph,
-            &mut types_map.rust_names_map,
-            &types_map.generic_edges,
-            MAX_TRY_BUILD_PATH_STEPS,
-        )
-        .is_none());
     }
 }

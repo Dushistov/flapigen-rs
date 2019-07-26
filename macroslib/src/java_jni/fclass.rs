@@ -752,11 +752,23 @@ fn find_suitable_foreign_types_for_methods(
             input.push(fti);
         }
         let output = match method.variant {
-            MethodVariant::Constructor => ForeignTypeInfo {
-                name: empty_symbol.into(),
-                correspoding_rust_type: dummy_rust_ty.clone(),
+            MethodVariant::Constructor => {
+                if let syn::ReturnType::Type(_, ref rt) = method.fn_decl.output {
+                    let ret_rust_ty = ctx.conv_map.find_or_alloc_rust_type(rt, class.src_id);
+                    //cache conversation to typemap
+                    map_type(
+                        ctx,
+                        &ret_rust_ty,
+                        Direction::Outgoing,
+                        (class.src_id, rt.span()),
+                    )?;
+                }
+                ForeignTypeInfo {
+                    name: empty_symbol.into(),
+                    correspoding_rust_type: dummy_rust_ty.clone(),
+                }
+                .into()
             }
-            .into(),
             _ => match method.fn_decl.output {
                 syn::ReturnType::Default => ForeignTypeInfo {
                     name: "void".into(),
@@ -848,16 +860,23 @@ fn generate_constructor(
     let this_type = ctx.conv_map.ty_to_rust_type(&this_type);
     let construct_ret_type = ctx.conv_map.ty_to_rust_type(&construct_ret_type);
 
+    let jlong_type = ctx.conv_map.ty_to_rust_type(&parse_type! { jlong });
+    let return_result = if_result_return_ok_err_types(&construct_ret_type).is_some();
+
     let (mut deps_this, convert_this) = ctx.conv_map.convert_rust_types(
         construct_ret_type.to_idx(),
-        this_type.to_idx(),
+        if return_result {
+            jlong_type.to_idx()
+        } else {
+            this_type.to_idx()
+        },
         "this",
         "this",
         "jlong",
         (mc.class.src_id, mc.method.span()),
     )?;
     ctx.rust_code.append(&mut deps_this);
-
+    let empty_box_this = TokenStream::new();
     let code = format!(
         r#"
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
@@ -874,7 +893,11 @@ pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> 
         convert_this = convert_this,
         decl_func_args = mc.decl_func_args,
         convert_input_code = convert_input_code,
-        box_this = code_box_this,
+        box_this = if return_result {
+            &empty_box_this
+        } else {
+            code_box_this
+        },
         real_output_typename = mc.real_output_typename,
         call = mc.method.generate_code_to_call_rust_func(),
     );

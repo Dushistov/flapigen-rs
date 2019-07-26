@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, trace};
 use petgraph::Direction;
 use std::rc::Rc;
 
@@ -12,6 +12,7 @@ use crate::{
         ast::{if_option_return_some_type, DisplayToTokens, TyParamsSubstList},
         ty::{ForeignType, RustType, TraitNamesSet},
         ExpandedFType, ForeignTypeInfo, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper,
+        FROM_VAR_TEMPLATE,
     },
     TypeMap,
 };
@@ -250,16 +251,37 @@ fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet
 }
 
 impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
-    fn swig_i_type(&mut self, _ty: &syn::Type) -> Result<syn::Type> {
-        unimplemented!();
+    fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type> {
+        let rust_ty = self
+            .ctx
+            .conv_map
+            .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
+        let f_info = map_type(self.ctx, &rust_ty, self.direction, self.arg_ty_span)?;
+        trace!("swig_i_type return {}", f_info.base.correspoding_rust_type);
+        Ok(f_info.base.correspoding_rust_type.ty.clone())
     }
     fn swig_from_rust_to_i_type(
         &mut self,
-        _ty: &syn::Type,
-        _in_var_name: &str,
-        _out_var_name: &str,
+        ty: &syn::Type,
+        in_var_name: &str,
+        out_var_name: &str,
     ) -> Result<String> {
-        unimplemented!();
+        let rust_ty = self
+            .ctx
+            .conv_map
+            .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
+        let f_info = map_type(self.ctx, &rust_ty, Direction::Outgoing, self.arg_ty_span)?;
+
+        let (mut conv_deps, conv_code) = self.ctx.conv_map.convert_rust_types(
+            rust_ty.to_idx(),
+            f_info.base.correspoding_rust_type.to_idx(),
+            in_var_name,
+            out_var_name,
+            "#error",
+            self.arg_ty_span,
+        )?;
+        self.ctx.rust_code.append(&mut conv_deps);
+        Ok(conv_code)
     }
     fn swig_from_i_type_to_rust(
         &mut self,
@@ -269,21 +291,24 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
     ) -> Result<String> {
         unimplemented!();
     }
-    fn swig_f_type(
-        &mut self,
-        ty: &syn::Type,
-        direction: Option<Direction>,
-    ) -> Result<ExpandedFType> {
+    fn swig_f_type(&mut self, ty: &syn::Type, param1: Option<&str>) -> Result<ExpandedFType> {
         let rust_ty = self
             .ctx
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
-        let direction = direction.unwrap_or(self.direction);
-        let f_info = map_type(self.ctx, &rust_ty, direction, self.arg_ty_span)?;
-        let fname = java_code::filter_null_annotation(&f_info.base.name)
-            .trim()
-            .into();
-
+        let f_info = map_type(self.ctx, &rust_ty, self.direction, self.arg_ty_span)?;
+        let fname = match param1 {
+            Some("NoNullAnnotations") => java_code::filter_null_annotation(&f_info.base.name)
+                .trim()
+                .into(),
+            None => f_info.base.name.into(),
+            Some(param) => {
+                return Err(DiagnosticError::new2(
+                    self.arg_ty_span,
+                    format!("Invalid argument '{}' for swig_f_type", param),
+                ))
+            }
+        };
         Ok(ExpandedFType {
             name: fname,
             provides_by_module: vec![],
@@ -292,7 +317,19 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
     fn swig_foreign_to_i_type(&mut self, _ty: &syn::Type, _var_name: &str) -> Result<String> {
         unimplemented!();
     }
-    fn swig_foreign_from_i_type(&mut self, _ty: &syn::Type, _var_name: &str) -> Result<String> {
-        unimplemented!();
+    fn swig_foreign_from_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String> {
+        let rust_ty = self
+            .ctx
+            .conv_map
+            .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
+        let f_info = map_type(self.ctx, &rust_ty, Direction::Outgoing, self.arg_ty_span)?;
+        if let Some(java_conv) = f_info.java_converter {
+            Ok(java_conv
+                .converter
+                .as_str()
+                .replace(FROM_VAR_TEMPLATE, var_name))
+        } else {
+            Ok(String::new())
+        }
     }
 }

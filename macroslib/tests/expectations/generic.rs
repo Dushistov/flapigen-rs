@@ -11,5 +11,6 @@ foreigner_class!(class Boo {
     fn Boo::get_foo_arr(&self) -> Vec<Foo>;
     fn Boo::get_one_foo(&self) -> Result<Foo, String>;
     fn now() -> SystemTime;
+    fn now2() -> Result<SystemTime, String>;
     fn r_test_u8(v: u8) -> Result<u8, &'static str>;
 });

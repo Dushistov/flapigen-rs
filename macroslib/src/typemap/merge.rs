@@ -1,7 +1,7 @@
 use crate::typemap::ty::ForeignConversationRule;
 use std::{mem, rc::Rc};
 
-use log::{debug, info};
+use log::{debug, error, info};
 use petgraph::graph::NodeIndex;
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
@@ -463,6 +463,7 @@ fn validate_rule_rewrite(
             if !prev_rule.conv_code.src_id().is_none()
                 && prev_rule.conv_code.src_id() == new_rule.conv_code.src_id()
             {
+                error!("prev_rule {:?}, new_rule {:?}", prev_rule, new_rule);
                 return Err(DiagnosticError::new(
                     new_rule.conv_code.src_id(),
                     new_rule.conv_code.span(),

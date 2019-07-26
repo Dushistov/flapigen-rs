@@ -233,8 +233,17 @@ impl LanguageGenerator for JavaConfig {
 }
 
 fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -> String {
-    let need_conv = f_method.input.iter().any(|v| v.java_converter.is_some())
-        || f_method.output.java_converter.is_some();
+    let need_conv = f_method.input.iter().any(|v: &JavaForeignTypeInfo| {
+        v.java_converter
+            .as_ref()
+            .map(|x| !x.converter.is_empty())
+            .unwrap_or(false)
+    }) || f_method
+        .output
+        .java_converter
+        .as_ref()
+        .map(|x| !x.converter.is_empty())
+        .unwrap_or(false);
     match method.variant {
         MethodVariant::StaticMethod if !need_conv => method.short_name().as_str().to_string(),
         MethodVariant::Method(_) | MethodVariant::StaticMethod => {

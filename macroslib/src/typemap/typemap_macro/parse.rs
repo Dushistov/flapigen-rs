@@ -595,7 +595,10 @@ fn parse_f_type_rule(
         let to_error = |tname: &FTypeName| {
             Err(syn::Error::new(
                 tname.sp,
-                format!("type name shoulds starts with {}", unique_prefix.value),
+                format!(
+                    "type name '{}' shoulds starts with '{}'",
+                    tname.name, unique_prefix.value
+                ),
             ))
         };
         match (conv_rule_type.as_ref(), left_ty.as_ref()) {

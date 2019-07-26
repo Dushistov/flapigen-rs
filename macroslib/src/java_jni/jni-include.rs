@@ -32,6 +32,12 @@ mod internal_aliases {
     pub type JOptionalDouble = jobject;
     pub type JLong = jobject;
     pub type JOptionalLong = jobject;
+
+    #[repr(transparent)]
+    pub struct JForeignObjectsArray<T: SwigForeignClass> {
+        pub(crate) inner: jobjectArray,
+        pub(crate) _marker: ::std::marker::PhantomData<T>,
+    }
 }
 
 /// Default JNI_VERSION
@@ -176,7 +182,7 @@ foreign_typemap!(
 );
 
 #[allow(dead_code)]
-trait SwigForeignClass {
+pub trait SwigForeignClass {
     type PointedType;
     fn jni_class() -> jclass;
     fn jni_class_pointer_field() -> jfieldID;
@@ -407,45 +413,55 @@ fn object_to_jobject<T: SwigForeignClass>(env: *mut JNIEnv, obj: T) -> jobject {
     jobj
 }
 
-#[swig_to_foreigner_hint = "T []"]
-impl<T: SwigForeignClass> SwigFrom<Vec<T>> for jobjectArray {
-    fn swig_from(x: Vec<T>, env: *mut JNIEnv) -> Self {
-        vec_of_objects_to_jobject_array(env, x)
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignClass> Vec<T> => internal_aliases::JForeignObjectsArray<T> {
+        $out = vec_of_objects_to_jobject_array(env, $p);
+    };
+    ($p:f_type, option = "NoNullAnnotations") => "swig_f_type!(T) []";
+    ($p:f_type, option = "NullAnnotations") => "@NonNull swig_f_type!(T, NoNullAnnotations) []";
+);
+
+#[allow(dead_code)]
+fn jobject_array_to_vec_of_objects<T: SwigForeignClass + Clone>(
+    env: *mut JNIEnv,
+    arr: internal_aliases::JForeignObjectsArray<T>,
+) -> Vec<T> {
+    let field_id = <T>::jni_class_pointer_field();
+    assert!(!field_id.is_null());
+    let length = unsafe { (**env).GetArrayLength.unwrap()(env, arr.inner) };
+    let len = <usize as ::std::convert::TryFrom<jsize>>::try_from(length)
+        .expect("invalid jsize, in jsize => usize conversation");
+    let mut result = Vec::with_capacity(len);
+    for i in 0..length {
+        let native: &mut T = unsafe {
+            let obj = (**env).GetObjectArrayElement.unwrap()(env, arr.inner, i);
+            if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                panic!("Failed to retrieve element {} from this `jobjectArray'", i);
+            }
+            let ptr = (**env).GetLongField.unwrap()(env, obj, field_id);
+            let native = (jlong_to_pointer(ptr) as *mut T).as_mut().unwrap();
+            (**env).DeleteLocalRef.unwrap()(env, obj);
+            native
+        };
+        result.push(native.clone());
     }
+
+    result
 }
 
-#[swig_from_foreigner_hint = "T []"]
-impl<T: SwigForeignClass + Clone> SwigInto<Vec<T>> for jobjectArray {
-    fn swig_into(self, env: *mut JNIEnv) -> Vec<T> {
-        let field_id = <T>::jni_class_pointer_field();
-        assert!(!field_id.is_null());
-        let length = unsafe { (**env).GetArrayLength.unwrap()(env, self) };
-        let len = <usize as ::std::convert::TryFrom<jsize>>::try_from(length)
-            .expect("invalid jsize, in jsize => usize conversation");
-        let mut result = Vec::with_capacity(len);
-        for i in 0..length {
-            let native: &mut T = unsafe {
-                let obj = (**env).GetObjectArrayElement.unwrap()(env, self, i);
-                if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                    panic!("Failed to retrieve element {} from this `jobjectArray'", i);
-                }
-                let ptr = (**env).GetLongField.unwrap()(env, obj, field_id);
-                let native = (jlong_to_pointer(ptr) as *mut T).as_mut().unwrap();
-                (**env).DeleteLocalRef.unwrap()(env, obj);
-                native
-            };
-            result.push(native.clone());
-        }
-
-        result
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignClass + Clone> Vec<T> <= internal_aliases::JForeignObjectsArray<T> {
+        $out = jobject_array_to_vec_of_objects(env, $p);
+    };
+    ($p:f_type, option = "NoNullAnnotations") <= "swig_f_type!(T) []";
+    ($p:f_type, option = "NullAnnotations") <= "@NonNull swig_f_type!(T, NoNullAnnotations) []";
+);
 
 #[allow(dead_code)]
 fn vec_of_objects_to_jobject_array<T: SwigForeignClass>(
     env: *mut JNIEnv,
     mut arr: Vec<T>,
-) -> jobjectArray {
+) -> internal_aliases::JForeignObjectsArray<T> {
     let jcls: jclass = <T>::jni_class();
     assert!(!jcls.is_null());
     let arr_len = <jsize as ::std::convert::TryFrom<usize>>::try_from(arr.len())
@@ -474,61 +490,80 @@ fn vec_of_objects_to_jobject_array<T: SwigForeignClass>(
             (**env).DeleteLocalRef.unwrap()(env, jobj);
         }
     }
-    obj_arr
+    internal_aliases::JForeignObjectsArray {
+        inner: obj_arr,
+        _marker: ::std::marker::PhantomData,
+    }
 }
 
 #[allow(dead_code)]
 trait JniInvalidValue<T> {
-    fn invalid_value() -> T;
+    fn jni_invalid_value() -> T;
 }
 
 impl<T> JniInvalidValue<*const T> for *const T {
-    fn invalid_value() -> *const T {
+    fn jni_invalid_value() -> *const T {
         ::std::ptr::null()
     }
 }
 
 impl<T> JniInvalidValue<*mut T> for *mut T {
-    fn invalid_value() -> *mut T {
+    fn jni_invalid_value() -> *mut T {
         ::std::ptr::null_mut()
     }
 }
 
 impl JniInvalidValue<()> for () {
-    fn invalid_value() {}
+    fn jni_invalid_value() {}
 }
 
-macro_rules! impl_jni_invalid_value {
+macro_rules! impl_jni_jni_invalid_value {
     ($($type:ty)*) => ($(
         impl JniInvalidValue<$type> for $type {
-            fn invalid_value() -> $type {
+            fn jni_invalid_value() -> $type {
                 <$type>::default()
             }
         }
     )*)
 }
 
-impl_jni_invalid_value! {
+impl_jni_jni_invalid_value! {
     jbyte jshort jint jlong jfloat jdouble
 }
 
-#[swig_generic_arg = "T"]
-#[swig_generic_arg = "E"]
-#[swig_from = "Result<T, E>"]
-#[swig_to = "T"]
-#[swig_code = "let mut {to_var}:{to_var_type}=jni_unpack_return!({from_var},{function_ret_type}, env);"]
-macro_rules! jni_unpack_return {
-    ($result_value:expr, $func_ret_type:ty, $env:ident) => {{
-        let ret = match $result_value {
-            Ok(x) => x,
+foreign_typemap!(
+    ($p:r_type) <T> Result<T, &str> => swig_i_type!(T) {
+        $out = match $p {
+            Ok(x) => {
+                swig_from_rust_to_i_type!(T, x, ret)
+                ret
+            }
             Err(msg) => {
-                jni_throw_exception($env, &msg);
-                return <$func_ret_type>::invalid_value();
+                jni_throw_exception(env, msg);
+                return <swig_i_type!(T)>::jni_invalid_value();
             }
         };
-        ret
-    }};
-}
+    };
+    ($p:f_type, unique_prefix="/*Result<swig_subst_type!(T), &str>*/") => "/*Result<swig_subst_type!(T), &str>*/swig_f_type!(T)"
+        "swig_foreign_from_i_type!(T, $p)";
+);
+
+foreign_typemap!(
+    ($p:r_type) <T> Result<T, String> => swig_i_type!(T) {
+        $out = match $p {
+            Ok(x) => {
+                swig_from_rust_to_i_type!(T, x, ret)
+                ret
+            }
+            Err(msg) => {
+                jni_throw_exception(env, &msg);
+                return <swig_i_type!(T)>::jni_invalid_value();
+            }
+        };
+    };
+    ($p:f_type, unique_prefix="/*Result<swig_subst_type!(T), String>*/") => "/*Result<swig_subst_type!(T), String>*/swig_f_type!(T)"
+        "swig_foreign_from_i_type!(T, $p)";
+);
 
 foreign_typemap!(
     ($p:r_type) bool => jboolean {
@@ -1547,10 +1582,10 @@ foreign_typemap!(
             $out = java.util.Optional.empty();
         }
 "#;
-    ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Optional<swig_f_type!(T)>" r#"
+    ($p:f_type, option = "NullAnnotations") => "@NonNull java.util.Optional<swig_f_type!(T, NoNullAnnotations)>" r#"
         $out;
         if ($p != 0) {
-            $out = java.util.Optional.of(new swig_f_type!(T)(InternalPointerMarker.RAW_PTR, $p));
+            $out = java.util.Optional.of(new swig_f_type!(T, NoNullAnnotations)(InternalPointerMarker.RAW_PTR, $p));
         } else {
             $out = java.util.Optional.empty();
         }
@@ -1573,7 +1608,7 @@ foreign_typemap!(
             $p.mNativeObj = 0;
         }
 "#;
-    ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/@Nullable swig_f_type!(T)" r#"
+    ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/@Nullable swig_f_type!(T, NoNullAnnotations)" r#"
         $out = 0;//TODO: use ptr::null() for corresponding constant
         if ($p != null) {
             $out = $p.mNativeObj;
@@ -1599,7 +1634,7 @@ foreign_typemap!(
             $out = $p.mNativeObj;
         }
 "#;
-    ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt ref*/") <= "/*opt ref*/@Nullable swig_f_type!(T)" r#"
+    ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt ref*/") <= "/*opt ref*/@Nullable swig_f_type!(T, NoNullAnnotations)" r#"
         $out = 0;//TODO: use ptr::null() for corresponding constant
         if ($p != null) {
             $out = $p.mNativeObj;

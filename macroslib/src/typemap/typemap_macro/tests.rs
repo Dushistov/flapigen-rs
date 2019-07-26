@@ -560,11 +560,7 @@ impl TypeMapConvRuleInfoExpanderHelper for Dummy {
     ) -> Result<String> {
         self.swig_from_rust_to_i_type(ty, in_var_name, out_var_name)
     }
-    fn swig_f_type(
-        &mut self,
-        ty: &syn::Type,
-        _: Option<petgraph::Direction>,
-    ) -> Result<ExpandedFType> {
+    fn swig_f_type(&mut self, ty: &syn::Type, _: Option<&str>) -> Result<ExpandedFType> {
         Ok(ExpandedFType {
             name: if *ty == parse_type!(i32) {
                 "int32_t"

@@ -50,3 +50,15 @@ public final class Foo {
         return convRet;
     }
     private static native long do_dropPoint(long self);"#;
+
+r#"package org.example;
+import android.support.annotation.NonNull;
+
+public final class BooList {
+
+    private BooList() {}
+
+    public final @NonNull Boo [] getBooList() {
+        return do_getBooList(mNativeObj);
+    }
+    private static native @NonNull Boo [] do_getBooList(long self);"#;

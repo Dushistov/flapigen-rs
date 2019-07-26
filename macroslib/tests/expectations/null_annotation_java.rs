@@ -26,3 +26,11 @@ foreigner_class!(class Foo {
     constructor Foo::new(_: f64, _: f64, _: f64, _: f64, _: f64) -> Foo;
     fn Foo::drop_point(&self) -> Boo; alias dropPoint;
 });
+
+foreigner_class!(
+    class BooList {
+        self_type BooList;
+        private constructor = empty;
+        fn getBooList(&self) -> Vec<Boo>;
+    }
+);

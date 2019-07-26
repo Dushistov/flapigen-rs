@@ -3,10 +3,11 @@ pub extern "C" fn Java_org_example_Boo_do_1get_1foo_1arr(
     env: *mut JNIEnv,
     _: jclass,
     this: jlong,
-) -> jobjectArray {
+) -> internal_aliases::JForeignObjectsArray<Foo> {
     let this: &Boo = unsafe { jlong_to_pointer::<Boo>(this).as_mut().unwrap() };
     let mut ret: Vec<Foo> = Boo::get_foo_arr(this);
-    let mut ret: jobjectArray = <jobjectArray>::swig_from(ret, env);
+    let ret: internal_aliases::JForeignObjectsArray<Foo> =
+        vec_of_objects_to_jobject_array(env, ret);
     ret
 }"##;
 
@@ -18,8 +19,16 @@ pub extern "C" fn Java_org_example_Boo_do_1get_1one_1foo(
 ) -> jlong {
     let this: &Boo = unsafe { jlong_to_pointer::<Boo>(this).as_mut().unwrap() };
     let mut ret: Result<Foo, String> = Boo::get_one_foo(this);
-    let mut ret: Foo = jni_unpack_return!(ret, jlong, env);
-    let ret: jlong = <Foo>::box_object(ret);
+    let ret: jlong = match ret {
+        Ok(x) => {
+            let ret: jlong = <Foo>::box_object(x);
+            ret
+        }
+        Err(msg) => {
+            jni_throw_exception(env, &msg);
+            return <jlong>::jni_invalid_value();
+        }
+    };
     ret
 }"##;
 
@@ -32,8 +41,16 @@ pub extern "C" fn Java_org_example_Boo_r_1test_1u8(
     let v: u8 =
         <u8 as ::std::convert::TryFrom<jshort>>::try_from(v).expect("invalid jshort, in jshort => u8 conversation");
     let mut ret: Result<u8, &str> = r_test_u8(v);
-    let mut ret: u8 = jni_unpack_return!(ret, jshort, env);
-    let ret: jshort = jshort::from(ret);
+    let ret: jshort = match ret {
+        Ok(x) => {
+            let ret: jshort = jshort::from(x);
+            ret
+        }
+        Err(msg) => {
+            jni_throw_exception(env, msg);
+            return <jshort>::jni_invalid_value();
+        }
+    };
     ret
 }"##;
 

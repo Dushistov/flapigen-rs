@@ -201,16 +201,23 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
         self.ctx.rust_code.append(&mut conv_deps);
         Ok(conv_code)
     }
-    fn swig_f_type(
-        &mut self,
-        ty: &syn::Type,
-        direction: Option<Direction>,
-    ) -> Result<ExpandedFType> {
+    fn swig_f_type(&mut self, ty: &syn::Type, param1: Option<&str>) -> Result<ExpandedFType> {
         let rust_ty = self
             .ctx
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
-        let direction = direction.unwrap_or(self.direction);
+
+        let direction = match param1 {
+            Some("output") => Direction::Outgoing,
+            Some("input") => Direction::Incoming,
+            None => self.direction,
+            Some(param) => {
+                return Err(DiagnosticError::new2(
+                    self.arg_ty_span,
+                    format!("Invalid argument '{}' for swig_f_type", param),
+                ))
+            }
+        };
         let f_info = map_type(self.ctx, &rust_ty, direction, self.arg_ty_span)?;
         let fname = if let Some(ref cpp_conv) = f_info.cpp_converter {
             cpp_conv.typename.as_str()
