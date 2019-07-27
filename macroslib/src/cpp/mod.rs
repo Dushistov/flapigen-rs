@@ -502,6 +502,12 @@ fn merge_c_types(
 }
 
 fn init(ctx: &mut CppContext, code: &[SourceCode]) -> Result<()> {
+    if !(ctx.cfg.output_dir.exists() && ctx.cfg.output_dir.is_dir()) {
+        return Err(DiagnosticError::map_any_err_to_our_err(format!(
+            "Path {} not exists or not directory",
+            ctx.cfg.output_dir.display()
+        )));
+    }
     //for enum
     ctx.conv_map
         .find_or_alloc_rust_type_no_src_id(&parse_type! { u32 });
