@@ -60,9 +60,9 @@ class Foo {
     /// @param val - some number
     /// @param name - more information
     constructor Foo::new(val: i32, name: &str) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
-    method Foo::f_double(&self, _: f64, _: f64) -> f64;
-    method Foo::name(&self) -> &str; alias getName;
+    fn Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
+    fn Foo::f_double(&self, _: f64, _: f64) -> f64;
+    fn Foo::name(&self) -> &str; alias getName;
     fn fHypot(a: f64, b: f64) -> f64 {
         a.hypot(b)
     }
@@ -217,14 +217,14 @@ foreigner_class!(class TestPathAndResult {
     self_type TestPathAndResult;
     constructor TestPathAndResult::empty() -> Result<TestPathAndResult, String>;
     constructor TestPathAndResult::new(path: &Path) -> Result<TestPathAndResult, String>;
-    method TestPathAndResult::get_path(&self) -> String; alias getPath;
-    method TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
+    fn TestPathAndResult::get_path(&self) -> String; alias getPath;
+    fn TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
     foreigner_code "    public int javaFunc() { return 17; }\n";
     foreigner_code r#"
     public Boo[] testHandArrayReturn() { return do_testHandArrayReturn(this.mNativeObj); }
     private static native Boo[] do_testHandArrayReturn(long me);
 "#;
-    method TestPathAndResult::get_foo_list(&self) -> Vec<Foo>;
+    fn TestPathAndResult::get_foo_list(&self) -> Vec<Foo>;
 });
 
 #[allow(non_snake_case)]
@@ -445,14 +445,14 @@ foreigner_class!(class TestArraysWithPrimitiveTypes {
     self_type TestArraysWithPrimitiveTypes;
     constructor TestArraysWithPrimitiveTypes::default() -> TestArraysWithPrimitiveTypes;
     constructor TestArraysWithPrimitiveTypes::new(_: i32, _: usize) -> TestArraysWithPrimitiveTypes;
-    method TestArraysWithPrimitiveTypes::get_ref(&self) -> &[i32];
-    method TestArraysWithPrimitiveTypes::clone_vec(&self) -> Vec<i32>;
-    static_method arr_pass_through_float(a: &[f32]) -> &[f32];
-    static_method arr_pass_through_double(a: &[f64]) -> &[f64];
-    static_method arr_pass_through_byte(a: &[i8]) -> &[i8];
-    static_method arr_pass_through_short(a: &[i16]) -> &[i16];
-    static_method arr_pass_thorough(_: &[i32]) -> &[i32];
-    static_method arr_pass_through_long(a: &[i64]) -> &[i64];
+    fn TestArraysWithPrimitiveTypes::get_ref(&self) -> &[i32];
+    fn TestArraysWithPrimitiveTypes::clone_vec(&self) -> Vec<i32>;
+    fn arr_pass_through_float(a: &[f32]) -> &[f32];
+    fn arr_pass_through_double(a: &[f64]) -> &[f64];
+    fn arr_pass_through_byte(a: &[i8]) -> &[i8];
+    fn arr_pass_through_short(a: &[i16]) -> &[i16];
+    fn arr_pass_thorough(_: &[i32]) -> &[i32];
+    fn arr_pass_through_long(a: &[i64]) -> &[i64];
 });
 
 #[derive(Default)]
@@ -522,18 +522,18 @@ foreigner_class!(class TestPassObjectsAsParams {
     constructor TestPassObjectsAsParams::default() -> TestPassObjectsAsParams;
     constructor TestPassObjectsAsParams::new_from_foo(_: Foo) -> TestPassObjectsAsParams;
 
-    method TestPassObjectsAsParams::f1(&mut self, _: &Foo);
-    method TestPassObjectsAsParams::f2(&mut self, _: &mut Foo);
-    method TestPassObjectsAsParams::f3(&mut self, _: Foo);
-    method TestPassObjectsAsParams::f_get_like_me(&mut self, _: TestPassObjectsAsParams);
-    method TestPassObjectsAsParams::get_data(&self) -> i32;
-    method TestPassObjectsAsParams::get_name(&self) -> &str;
+    fn TestPassObjectsAsParams::f1(&mut self, _: &Foo);
+    fn TestPassObjectsAsParams::f2(&mut self, _: &mut Foo);
+    fn TestPassObjectsAsParams::f3(&mut self, _: Foo);
+    fn TestPassObjectsAsParams::f_get_like_me(&mut self, _: TestPassObjectsAsParams);
+    fn TestPassObjectsAsParams::get_data(&self) -> i32;
+    fn TestPassObjectsAsParams::get_name(&self) -> &str;
 
-    static_method TestPassObjectsAsParams::f4(_: &Foo) -> String;
-    static_method TestPassObjectsAsParams::f5(_: i32, _: &str, _: &mut Foo) -> String;
-    static_method TestPassObjectsAsParams::f6(_: Foo) -> String;
+    fn TestPassObjectsAsParams::f4(_: &Foo) -> String;
+    fn TestPassObjectsAsParams::f5(_: i32, _: &str, _: &mut Foo) -> String;
+    fn TestPassObjectsAsParams::f6(_: Foo) -> String;
 
-    static_method TestPassObjectsAsParams::factory_method(_: i32, _: &str)
+    fn TestPassObjectsAsParams::factory_method(_: i32, _: &str)
                                                           -> TestPassObjectsAsParams;
 });
 
@@ -731,7 +731,7 @@ fn foo_with_lifetime_new<'a>() -> Rc<RefCell<FooWithLifetime<'a>>> {
 foreigner_class!(class FooWithLifetime {
     self_type FooWithLifetime<'a>;
     constructor foo_with_lifetime_new() -> Rc<RefCell<FooWithLifetime<'a>>>;
-    method FooWithLifetime::set_data(&self, v: i32);
+    fn FooWithLifetime::set_data(&self, v: i32);
 });
 
 struct TestOptional;
@@ -837,13 +837,13 @@ impl CircularDepsB {
 foreigner_class!(class CircularDepsA {
     self_type CircularDepsA;
     constructor CircularDepsA::java_new(_: &str) -> Arc<Mutex<CircularDepsA>>;
-    method CircularDepsA::a(&self, b: &CircularDepsB) -> String;
+    fn CircularDepsA::a(&self, b: &CircularDepsB) -> String;
 });
 
 foreigner_class!(class CircularDepsB {
     self_type CircularDepsB;
     constructor CircularDepsB::new(_: f64) -> CircularDepsB;
-    method CircularDepsB::b(&self, a: &CircularDepsA) -> String;
+    fn CircularDepsB::b(&self, a: &CircularDepsA) -> String;
 });
 
 struct Gamepad(String);
@@ -909,7 +909,7 @@ foreigner_class!(
     class GamepadId {
         self_type GamepadId;
         private constructor = empty;
-        method GamepadId::value(&self) -> usize;
+        fn GamepadId::value(&self) -> usize;
     }
 );
 
@@ -952,8 +952,8 @@ foreigner_class!(
         self_type Gamepad2;
 
         constructor Gamepad2::new() -> Gamepad2;
-        method Gamepad2::deadzone(&self, axis: Code) -> Option<f64>; alias getID;
-        method Gamepad2::id(&self) -> GamepadId; alias getID;
+        fn Gamepad2::deadzone(&self, axis: Code) -> Option<f64>; alias getID;
+        fn Gamepad2::id(&self) -> GamepadId; alias getID;
     }
 );
 
