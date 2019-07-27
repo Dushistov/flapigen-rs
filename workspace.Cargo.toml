@@ -1,5 +1,6 @@
 [workspace]
-members = ["macroslib", "jni_tests", "c++_tests", "android-example", "debug-util"]
+members = ["macroslib", "jni_tests", "c++_tests", "android-example",
+"debug-util", "cpp-example/rust-part"]
 
 [profile.release]
 debug = true
