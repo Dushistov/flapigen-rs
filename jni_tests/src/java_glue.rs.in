@@ -662,7 +662,17 @@ trait CheckAllTypesInCallbackArgs {
     fn check_all_types2(&self, _: u64, _: i64, _: f32, _: f64, _: usize, _: isize);
     fn check_foo(&self, foo: Foo);
     fn check_str(&self, s: &str);
+    fn check_path(&self, p: &Path);
 }
+
+foreign_typemap!(
+    ($p:r_type) &Path => internal_aliases::JStringPath {
+        let s = $p.to_str().expect("path is not utf-8");
+        let c_str = ::std::ffi::CString::new(s).unwrap();
+        $out = unsafe { (**env).NewStringUTF.unwrap()(env, c_str.as_ptr()) };
+    };
+    ($p:f_type, unique_prefix="/*Path*/") => "/*Path*/String";
+);
 
 foreign_callback!(callback CheckAllTypesInCallbackArgs {
     self_type CheckAllTypesInCallbackArgs;
@@ -675,6 +685,7 @@ foreign_callback!(callback CheckAllTypesInCallbackArgs {
                                                                    _: f64, _: usize, _: isize);
     checkFoo = CheckAllTypesInCallbackArgs::check_foo(&self, foo: Foo);
     checkStr = CheckAllTypesInCallbackArgs::check_str(&self, s: &str);
+    checkPath = CheckAllTypesInCallbackArgs::check_path(&self, s: &Path);
 });
 
 foreigner_class!(
@@ -689,6 +700,7 @@ foreigner_class!(
                                 17, -17);
             cb.check_foo(Foo { data: 17, name: "17".into() });
             cb.check_str("checkStr");
+            cb.check_path(Path::new("/tmp/a.txt"));
         }
     }
 );

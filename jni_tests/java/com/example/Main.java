@@ -557,6 +557,7 @@ class Main {
 	private boolean types2_called;
 	private boolean foo_called;
 	private boolean str_called;
+	private boolean path_called;
 
 	@Override
 	public void checkAllTypes1(short a0, byte a1, int a2, short a3, long a4, int a5, long a6, int a7) {
@@ -603,6 +604,11 @@ class Main {
 	    assert s.equals("checkStr");
 	    str_called = true;
 	}
+	@Override
+	public void checkPath(String p) {
+	    assert p.equals("/tmp/a.txt");
+	    path_called = true;
+	}
     }
 
     private static void testAllTypesInCallbackArgs() {
@@ -612,6 +618,7 @@ class Main {
 	assert cb.types2_called;
 	assert cb.foo_called;
 	assert cb.str_called;
+	assert cb.path_called;
     }
 
     private static void testNumberInputOutput() {
