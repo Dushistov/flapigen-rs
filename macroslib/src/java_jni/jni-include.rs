@@ -32,12 +32,12 @@ mod internal_aliases {
     pub type JOptionalDouble = jobject;
     pub type JLong = jobject;
     pub type JOptionalLong = jobject;
-
     #[repr(transparent)]
     pub struct JForeignObjectsArray<T: SwigForeignClass> {
         pub(crate) inner: jobjectArray,
         pub(crate) _marker: ::std::marker::PhantomData<T>,
     }
+    pub type JStringPath = jstring;
 }
 
 /// Default JNI_VERSION
@@ -728,12 +728,14 @@ foreign_typemap!(
     };
 );
 
-// &str -> &Path
-impl<'a> SwigInto<&'a Path> for &'a str {
-    fn swig_into(self, _: *mut JNIEnv) -> &'a Path {
-        Path::new(self)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &Path <= internal_aliases::JStringPath {
+        let jstr = JavaString::new(env, $p);
+        $out = Path::new(jstr.to_str());
+    };
+    ($p:f_type, option = "NoNullAnnotations", unique_prefix="/*Path*/") <= "/*Path*/String";
+    ($p:f_type, option = "NullAnnotations", unique_prefix="/*Path*/") <= "/*Path*/@NonNull String";
+);
 
 // Vec<String> -> jobjectArray
 #[swig_to_foreigner_hint = "java.lang.String []"]
