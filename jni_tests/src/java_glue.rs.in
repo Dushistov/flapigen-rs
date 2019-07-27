@@ -663,6 +663,7 @@ trait CheckAllTypesInCallbackArgs {
     fn check_foo(&self, foo: Foo);
     fn check_str(&self, s: &str);
     fn check_path(&self, p: &Path);
+    fn check_arr(&self, arr: Vec<Foo>);
 }
 
 foreign_typemap!(
@@ -686,6 +687,7 @@ foreign_callback!(callback CheckAllTypesInCallbackArgs {
     checkFoo = CheckAllTypesInCallbackArgs::check_foo(&self, foo: Foo);
     checkStr = CheckAllTypesInCallbackArgs::check_str(&self, s: &str);
     checkPath = CheckAllTypesInCallbackArgs::check_path(&self, s: &Path);
+    checkArray = CheckAllTypesInCallbackArgs::check_arr(&self, arr: Vec<Foo>);
 });
 
 foreigner_class!(
@@ -701,6 +703,7 @@ foreigner_class!(
             cb.check_foo(Foo { data: 17, name: "17".into() });
             cb.check_str("checkStr");
             cb.check_path(Path::new("/tmp/a.txt"));
+            cb.check_arr(vec![Foo::new(1, "1"), Foo::new(2, "2")]);
         }
     }
 );

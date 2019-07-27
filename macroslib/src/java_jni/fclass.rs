@@ -50,6 +50,25 @@ pub(in crate::java_jni) fn generate(
     debug!("generate: java code done");
     generate_rust_code(ctx, class, &f_methods_sign)?;
 
+    let class_name = class.name.to_string();
+
+    ctx.java_type_to_jni_sig_map.insert(
+        class_name.clone().into(),
+        format!(
+            "L{};",
+            java_class_full_name(&ctx.cfg.package_name, &class_name)
+        )
+        .into(),
+    );
+    ctx.java_type_to_jni_sig_map.insert(
+        format!("{} []", class_name).into(),
+        format!(
+            "[L{};",
+            java_class_full_name(&ctx.cfg.package_name, &class_name)
+        )
+        .into(),
+    );
+
     Ok(())
 }
 
@@ -568,7 +587,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let java_method_name = method_name(method, f_method);
         let method_overloading = gen_fnames[&java_method_name] > 1;
         let jni_func_name = rust_code::generate_jni_func_name(
-            &ctx.cfg.package_name,
+            ctx,
             class,
             &java_method_name,
             method.variant,
@@ -664,7 +683,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let unpack_code = unpack_from_heap_pointer(&this_type, "this", false);
 
         let jni_destructor_name = rust_code::generate_jni_func_name(
-            &ctx.cfg.package_name,
+            ctx,
             class,
             "do_delete",
             MethodVariant::StaticMethod,

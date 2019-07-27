@@ -82,9 +82,17 @@ pub(in crate::java_jni) fn generate_enum(
         name_prefix: None,
     };
     ctx.conv_map.alloc_foreign_type(enum_ftype)?;
-    ctx.conv_map.register_exported_enum(fenum);
 
     add_conversation_from_enum_to_jobject_for_callbacks(ctx, fenum, enum_rty.to_idx());
+    let enum_name = fenum.name.to_string();
+    ctx.java_type_to_jni_sig_map.insert(
+        enum_name.clone().into(),
+        format!(
+            "L{};",
+            java_class_full_name(&ctx.cfg.package_name, &enum_name)
+        )
+        .into(),
+    );
 
     Ok(())
 }

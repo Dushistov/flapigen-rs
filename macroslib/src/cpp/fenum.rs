@@ -77,7 +77,6 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
         name_prefix: None,
     };
     ctx.conv_map.alloc_foreign_type(enum_ftype)?;
-    ctx.conv_map.register_exported_enum(fenum);
     Ok(())
 }
 

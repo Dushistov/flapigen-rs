@@ -9,7 +9,7 @@ mod rust_code;
 
 use log::debug;
 use proc_macro2::TokenStream;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use std::{fmt, io::Write, path::PathBuf};
 use syn::{spanned::Spanned, Type};
@@ -45,6 +45,7 @@ struct JavaContext<'a> {
     pointer_target_width: usize,
     rust_code: &'a mut Vec<TokenStream>,
     generated_foreign_files: &'a mut FxHashSet<PathBuf>,
+    java_type_to_jni_sig_map: FxHashMap<SmolStr, SmolStr>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -186,6 +187,7 @@ impl LanguageGenerator for JavaConfig {
             pointer_target_width,
             rust_code: &mut ret,
             generated_foreign_files: &mut generated_foreign_files,
+            java_type_to_jni_sig_map: rust_code::predefined_java_type_to_jni_sig(),
         };
         init(&mut ctx, code)?;
         for item in &items {

@@ -67,7 +67,6 @@ pub(in crate::typemap) fn parse(
         rust_from_foreign_cache: FxHashMap::default(),
         rust_to_foreign_cache: FxHashMap::default(),
         foreign_classes: Vec::new(),
-        exported_enums: FxHashMap::default(),
         traits_usage_code,
         ftypes_storage: ForeignTypesStorage::default(),
         not_merged_data: vec![],

@@ -182,8 +182,7 @@ impl SwigFrom<jobject> for Box<{trait_name}> {{
         assert!(!method_id.is_null(), "Can not find {method_name} id");
         cb.methods.push(method_id);"#,
             method_name = method.name,
-            method_sig =
-                rust_code::jni_method_signature(f_method, &ctx.cfg.package_name, ctx.conv_map),
+            method_sig = rust_code::jni_method_signature(ctx, f_method),
         )
         .unwrap();
     }

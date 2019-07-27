@@ -30,7 +30,7 @@ use crate::{
             RustTypeS,
         },
     },
-    types::{ForeignEnumInfo, ForeignerClassInfo},
+    types::ForeignerClassInfo,
 };
 
 pub(crate) use typemap_macro::{
@@ -236,7 +236,6 @@ pub(crate) struct TypeMap {
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
     foreign_classes: Vec<ForeignerClassInfo>,
-    exported_enums: FxHashMap<SmolStr, ForeignEnumInfo>,
     /// How to use trait to convert types, Trait Name -> Code
     traits_usage_code: FxHashMap<Ident, String>,
     /// code that parsed, but not yet integrated to TypeMap,
@@ -303,7 +302,6 @@ impl Default for TypeMap {
             rust_from_foreign_cache: FxHashMap::default(),
             rust_to_foreign_cache: FxHashMap::default(),
             foreign_classes: Vec::new(),
-            exported_enums: FxHashMap::default(),
             traits_usage_code: FxHashMap::default(),
             ftypes_storage: ForeignTypesStorage::default(),
             not_merged_data: vec![],
@@ -545,20 +543,6 @@ impl TypeMap {
             self[from], self[to], rule
         );
         self.conv_graph.update_edge(from, to, rule);
-    }
-
-    pub(crate) fn register_exported_enum(&mut self, enum_info: &ForeignEnumInfo) {
-        self.exported_enums
-            .insert(enum_info.name.to_string().into(), enum_info.clone());
-    }
-
-    pub(crate) fn is_generated_foreign_type(&self, foreign_name: &str) -> bool {
-        if self.exported_enums.contains_key(foreign_name) {
-            return true;
-        }
-        self.foreign_classes
-            .iter()
-            .any(|fc| fc.name == foreign_name)
     }
 
     fn find_or_build_path(

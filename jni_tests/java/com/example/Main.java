@@ -558,6 +558,7 @@ class Main {
 	private boolean foo_called;
 	private boolean str_called;
 	private boolean path_called;
+	private boolean arr_called;
 
 	@Override
 	public void checkAllTypes1(short a0, byte a1, int a2, short a3, long a4, int a5, long a6, int a7) {
@@ -609,6 +610,15 @@ class Main {
 	    assert p.equals("/tmp/a.txt");
 	    path_called = true;
 	}
+	@Override
+	public void checkArray(Foo []arr) {
+	    assert arr.length == 2;
+	    assert arr[0].getName().equals("1");
+	    assert arr[0].calcF(0, 0) == 1;
+	    assert arr[1].getName().equals("2");
+	    assert arr[1].calcF(0, 0) == 2;
+	    arr_called = true;
+	}
     }
 
     private static void testAllTypesInCallbackArgs() {
@@ -619,6 +629,7 @@ class Main {
 	assert cb.foo_called;
 	assert cb.str_called;
 	assert cb.path_called;
+	assert cb.arr_called;
     }
 
     private static void testNumberInputOutput() {
