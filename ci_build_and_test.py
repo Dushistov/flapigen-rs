@@ -158,6 +158,7 @@ def run_unit_tests(test_cfg, test_set):
         if CPP_TESTS in test_set:
             cmd_base.append("-p")
             cmd_base.append("rust_swig_test_cpp")
+            cmd_base.append("cpp-example-rust-part")
         if JNI_TESTS in test_set:
             cmd_base.append("-p")
             cmd_base.append("rust_swig_test_jni")
