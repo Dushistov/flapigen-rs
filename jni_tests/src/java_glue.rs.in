@@ -653,14 +653,15 @@ foreign_callback!(callback MyObserver {
 foreigner_class!(class Observable {
     self_type Observable;
     constructor Observable::default() -> Observable;
-    method Observable::subscribe(&mut self, _: Box<OnEvent>);
-    method Observable::change(&self, _: i32, _: &str);
+    fn Observable::subscribe(&mut self, _: Box<OnEvent>);
+    fn Observable::change(&self, _: i32, _: &str);
 });
 
 trait CheckAllTypesInCallbackArgs {
     fn check_all_types1(&self, _: u8, _: i8, _: u16, _: i16, _: u32, _: i32, _: u32, _: i32);
     fn check_all_types2(&self, _: u64, _: i64, _: f32, _: f64, _: usize, _: isize);
     fn check_foo(&self, foo: Foo);
+    fn check_str(&self, s: &str);
 }
 
 foreign_callback!(callback CheckAllTypesInCallbackArgs {
@@ -673,6 +674,7 @@ foreign_callback!(callback CheckAllTypesInCallbackArgs {
     checkAllTypes2 = CheckAllTypesInCallbackArgs::check_all_types2(&self, _: u64, _: i64, _: f32,
                                                                    _: f64, _: usize, _: isize);
     checkFoo = CheckAllTypesInCallbackArgs::check_foo(&self, foo: Foo);
+    checkStr = CheckAllTypesInCallbackArgs::check_str(&self, s: &str);
 });
 
 foreigner_class!(
@@ -686,6 +688,7 @@ foreigner_class!(
                                 ::std::f32::consts::PI, ::std::f64::consts::E,
                                 17, -17);
             cb.check_foo(Foo { data: 17, name: "17".into() });
+            cb.check_str("checkStr");
         }
     }
 );
