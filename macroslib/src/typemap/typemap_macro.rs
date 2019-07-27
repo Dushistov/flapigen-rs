@@ -461,11 +461,8 @@ pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
         in_var_name: &str,
         out_var_name: &str,
     ) -> Result<String>;
-    fn swig_f_type(
-        &mut self,
-        ty: &syn::Type,
-        direction: Option<Direction>,
-    ) -> Result<ExpandedFType>;
+    /// param1 - specific for lang backend parameter
+    fn swig_f_type(&mut self, ty: &syn::Type, param1: Option<&str>) -> Result<ExpandedFType>;
     fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
     fn swig_foreign_from_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String>;
 }
@@ -664,21 +661,28 @@ fn expand_rtype_rule(
     let right_ty: Option<Type> = match grule.right_ty.as_ref() {
         Some(x) => match x {
             Type::Macro(ref type_macro) => {
-                let alias_idx = generic_aliases
-                    .iter()
-                    .position(|a| type_macro.mac.path.is_ident(a.name.clone()))
-                    .ok_or_else(|| {
-                        DiagnosticError::new(
-                            src_id,
-                            x.span(),
-                            format!(
-                                "unknown {} name {}",
-                                GENERIC_ALIAS,
-                                DisplayToTokens(&type_macro.mac.path)
-                            ),
-                        )
-                    })?;
-                Some(generic_aliases[alias_idx].value.clone())
+                let ctx_span = (src_id, x.span());
+                if type_macro.mac.path.is_ident(SWIG_I_TYPE) {
+                    let param = type_macro.mac.tts.to_string();
+                    let ty = find_type_param(param_map, &param, ctx_span)?;
+                    let i_type = expander.swig_i_type(ty.as_ref())?;
+                    Some(i_type)
+                } else {
+                    let alias_idx = generic_aliases
+                        .iter()
+                        .position(|a| type_macro.mac.path.is_ident(a.name.clone()))
+                        .ok_or_else(|| {
+                            DiagnosticError::new2(
+                                ctx_span,
+                                format!(
+                                    "unknown {} name {}",
+                                    GENERIC_ALIAS,
+                                    DisplayToTokens(&type_macro.mac.path)
+                                ),
+                            )
+                        })?;
+                    Some(generic_aliases[alias_idx].value.clone())
+                }
             }
             _ => Some(replace_all_types_with(&x, param_map)),
         },
@@ -755,14 +759,14 @@ fn expand_ftype_rule(
         };
         let code = match grule.code {
             Some(ref x) => {
-                let code = expand_foreign_code(
-                    x.as_str(),
+                let code = expand_foreign_type_conv_code(
+                    x,
                     param_map,
                     expander,
                     generic_aliases,
                     (src_id, x.span()),
                 )?;
-                Some(TypeConvCode::new(code, (SourceId::none(), x.span())))
+                Some(code)
             }
             None => None,
         };
@@ -776,9 +780,27 @@ fn expand_ftype_rule(
         // prerserve order of modules
         let mut mod_uniques = FxHashSet::default();
         provides_by_module.retain(|e| mod_uniques.insert(e.name.clone()));
+        let unique_prefix = if let Some(unique_prefix) = grule.unique_prefix.as_ref() {
+            let ctx_span = (src_id, unique_prefix.sp);
+            let mut provides_by_module = vec![];
+            let new_unique_prefix = expand_str_in_ftype_name_context(
+                ctx_span,
+                unique_prefix.as_str(),
+                param_map,
+                expander,
+                generic_aliases,
+                &mut provides_by_module,
+            )?;
+            Some(SpannedSmolStr {
+                sp: unique_prefix.sp,
+                value: new_unique_prefix.into(),
+            })
+        } else {
+            None
+        };
 
         ret.push(FTypeConvRule {
-            unique_prefix: grule.unique_prefix.clone(),
+            unique_prefix,
             req_modules: provides_by_module,
             cfg_option: grule.cfg_option.clone(),
             left_right_ty,
@@ -797,31 +819,14 @@ fn call_swig_f_type(
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
     generic_aliases: &[CalcGenericAlias],
 ) -> Result<Vec<SmolStr>> {
-    let (type_name, direction) = match params.len() {
-        1 => (&params[0], None),
-        2 => {
-            let direction = match params[1] {
-                "output" => Direction::Outgoing,
-                "input" => Direction::Incoming,
-                _ => {
-                    return Err(DiagnosticError::new2(
-                        ctx_sp,
-                        format!(
-                            "{} parameters in {} instead of 1",
-                            params.len(),
-                            SWIG_F_TYPE
-                        ),
-                    ))
-                }
-            };
-
-            (&params[0], Some(direction))
-        }
+    let (type_name, opt_param) = match params.len() {
+        1 => (params[0], None),
+        2 => (params[0], Some(params[1])),
         _ => {
             return Err(DiagnosticError::new2(
                 ctx_sp,
                 format!(
-                    "{} parameters in {} instead of 1",
+                    "{} parameters in {} instead of 1 or 2",
                     params.len(),
                     SWIG_F_TYPE
                 ),
@@ -841,7 +846,7 @@ fn call_swig_f_type(
         find_type_param(param_map, type_name, ctx_sp)?
     };
 
-    let f_type = expander.swig_f_type(ty.as_ref(), direction)?;
+    let f_type = expander.swig_f_type(ty.as_ref(), opt_param)?;
     out.push_str(&f_type.name);
     Ok(f_type.provides_by_module)
 }
@@ -854,39 +859,68 @@ fn expand_ftype_name(
     generic_aliases: &[CalcGenericAlias],
     provides_by_module: &mut Vec<ModuleName>,
 ) -> Result<FTypeName> {
-    let ctx_sp = (src_id, ftype.sp);
-    let new_fytpe = expand_macroses(
+    let ctx_span = (src_id, ftype.sp);
+
+    let new_fytpe = expand_str_in_ftype_name_context(
+        ctx_span,
         ftype.name.as_str(),
-        |id: &str, params: Vec<&str>, out: &mut String| {
-            if id == SWIG_F_TYPE {
-                let modules: Vec<SmolStr> =
-                    call_swig_f_type(ctx_sp, params, out, param_map, expander, generic_aliases)?;
-                provides_by_module.extend(modules.into_iter().map(|name| ModuleName {
-                    name,
-                    sp: Span::call_site(),
-                }));
-                Ok(())
-            } else if let Some(pos) = generic_aliases.iter().position(|a| a.name == id) {
-                write!(out, "{}", DisplayToTokens(&generic_aliases[pos].value))
-                    .expect(WRITE_TO_MEM_FAILED_MSG);
-                provides_by_module.extend(generic_aliases[pos].req_modules.iter().map(|name| {
-                    ModuleName {
-                        name: name.clone(),
-                        sp: Span::call_site(),
-                    }
-                }));
-                Ok(())
-            } else {
-                Err(DiagnosticError::new2(
-                    ctx_sp,
-                    format!("unknown macros '{}' in this context", id),
-                ))
-            }
-        },
+        param_map,
+        expander,
+        generic_aliases,
+        provides_by_module,
     )?;
+
     Ok(FTypeName {
         name: new_fytpe.into(),
         sp: ftype.sp,
+    })
+}
+
+fn expand_str_in_ftype_name_context(
+    ctx_span: SourceIdSpan,
+    input: &str,
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[CalcGenericAlias],
+    provides_by_module: &mut Vec<ModuleName>,
+) -> Result<String> {
+    expand_macroses(input, |id: &str, params: Vec<&str>, out: &mut String| {
+        if id == SWIG_F_TYPE {
+            let modules: Vec<SmolStr> =
+                call_swig_f_type(ctx_span, params, out, param_map, expander, generic_aliases)?;
+            provides_by_module.extend(modules.into_iter().map(|name| ModuleName {
+                name,
+                sp: Span::call_site(),
+            }));
+            Ok(())
+        } else if id == SWIG_SUBST_TYPE {
+            let type_name = if params.len() == 1 {
+                &params[0]
+            } else {
+                return Err(DiagnosticError::new2(
+                    ctx_span,
+                    format!("{} parameters in {} instead of 1", params.len(), id),
+                ));
+            };
+            let ty = find_type_param(param_map, type_name, ctx_span)?;
+            write!(out, "{}", normalize_ty_lifetimes(ty.as_ref())).expect(WRITE_TO_MEM_FAILED_MSG);
+            Ok(())
+        } else if let Some(pos) = generic_aliases.iter().position(|a| a.name == id) {
+            write!(out, "{}", DisplayToTokens(&generic_aliases[pos].value))
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+            provides_by_module.extend(generic_aliases[pos].req_modules.iter().map(|name| {
+                ModuleName {
+                    name: name.clone(),
+                    sp: Span::call_site(),
+                }
+            }));
+            Ok(())
+        } else {
+            Err(DiagnosticError::new2(
+                ctx_span,
+                format!("unknown macros '{}' in this context", id),
+            ))
+        }
     })
 }
 
@@ -1119,6 +1153,27 @@ fn expand_foreign_code(
             Ok(())
         },
     )
+}
+
+fn expand_foreign_type_conv_code(
+    code: &TypeConvCode,
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[CalcGenericAlias],
+    ctx_span: SourceIdSpan,
+) -> Result<TypeConvCode> {
+    let ret_code = expand_foreign_code(
+        code.as_str(),
+        param_map,
+        expander,
+        generic_aliases,
+        ctx_span,
+    )?;
+    Ok(TypeConvCode::with_params(
+        ret_code,
+        code.span,
+        code.params().to_vec(),
+    ))
 }
 
 fn expand_fcode(

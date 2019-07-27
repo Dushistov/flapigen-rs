@@ -4,6 +4,11 @@ foreigner_class!(class Position {
     fn Position::getLatitude(&self) -> f64;
 });
 
+foreigner_class!(class PosErr {
+    self_type PosErr;
+    constructor PosErr::new() -> PosErr;
+});
+
 foreigner_class!(class LocationService {
     self_type LocationService;
 
@@ -11,6 +16,9 @@ foreigner_class!(class LocationService {
     fn LocationService::f1() -> Result<GnssInfo, String>;
     fn LocationService::f2() -> Result<(), String>;
 
+    fn LocationService::f3(&self) -> Result<GnssInfo, PosErr>;
+    fn LocationService::f4() -> Result<(), PosErr>;
+    fn LocationService::f5() -> Result<Vec<GnssInfo>, PosErr>;
     fn LocationService::create() -> Result<LocationService, String>;
 });
 

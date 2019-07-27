@@ -5,7 +5,7 @@ pub mod ty;
 mod typemap_macro;
 pub mod utils;
 
-use std::{cell::RefCell, fmt, mem, ops, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, fmt, mem, ops, rc::Rc};
 
 use log::{debug, log_enabled, trace, warn};
 use petgraph::{
@@ -30,7 +30,7 @@ use crate::{
             RustTypeS,
         },
     },
-    types::{ForeignEnumInfo, ForeignerClassInfo},
+    types::ForeignerClassInfo,
 };
 
 pub(crate) use typemap_macro::{
@@ -47,6 +47,7 @@ const MAX_TRY_BUILD_PATH_STEPS: usize = 7;
 pub(crate) struct TypeConvCode {
     pub(in crate::typemap) span: SourceIdSpan,
     code: String,
+    params: Vec<SmolStr>,
 }
 
 impl PartialEq for TypeConvCode {
@@ -55,32 +56,71 @@ impl PartialEq for TypeConvCode {
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum TypeConvCodeSubstParam<'a> {
+    Name(&'a str),
+    Tmp(&'a str),
+}
+
 impl TypeConvCode {
     fn invalid() -> Self {
         TypeConvCode {
             span: invalid_src_id_span(),
             code: "invalid code".into(),
+            params: vec![],
         }
     }
+
+    pub(crate) fn with_params<S: Into<String>>(
+        code: S,
+        span: SourceIdSpan,
+        params: Vec<SmolStr>,
+    ) -> TypeConvCode {
+        let code: String = code.into();
+        TypeConvCode { code, span, params }
+    }
+
     /// # Panics
     pub(crate) fn new<S: Into<String>>(code: S, span: SourceIdSpan) -> TypeConvCode {
         let code: String = code.into();
-        assert!(
-            code.contains(TO_VAR_TEMPLATE) || code.contains(FROM_VAR_TEMPLATE),
-            "code: '{}'",
-            code
-        );
-        TypeConvCode { code, span }
+
+        let mut params = Vec::with_capacity(1);
+
+        if code.contains(TO_VAR_TEMPLATE) {
+            params.push(TO_VAR_TEMPLATE.into());
+        }
+        if code.contains(FROM_VAR_TEMPLATE) {
+            params.push(FROM_VAR_TEMPLATE.into());
+        }
+
+        if params.is_empty() {
+            panic!(
+                "Code: '{}' should contains {} or {}",
+                code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE
+            );
+        }
+
+        TypeConvCode { code, span, params }
     }
     /// # Panics
     pub(crate) fn new2<S: Into<String>>(code: S, span: SourceIdSpan) -> TypeConvCode {
         let code: String = code.into();
-        assert!(
-            code.contains(TO_VAR_TEMPLATE) && code.contains(FROM_VAR_TEMPLATE),
-            "code: '{}'",
-            code
-        );
-        TypeConvCode { code, span }
+        let mut params = Vec::with_capacity(2);
+        if code.contains(TO_VAR_TEMPLATE) {
+            params.push(TO_VAR_TEMPLATE.into());
+        }
+        if code.contains(FROM_VAR_TEMPLATE) {
+            params.push(FROM_VAR_TEMPLATE.into());
+        }
+
+        if params.len() < 2 {
+            panic!(
+                "Code: '{}' should contains {} and {}",
+                code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE
+            );
+        }
+
+        TypeConvCode { code, span, params }
     }
 
     pub(crate) fn as_str(&self) -> &str {
@@ -94,6 +134,9 @@ impl TypeConvCode {
     }
     pub(crate) fn full_span(&self) -> SourceIdSpan {
         self.span
+    }
+    pub(crate) fn params(&self) -> &[SmolStr] {
+        &self.params
     }
 
     pub(crate) fn generate_code(
@@ -111,6 +154,32 @@ impl TypeConvCode {
             .replace(FROM_VAR_TEMPLATE, from_name)
             .replace(TO_VAR_TYPE_TEMPLATE, to_typename)
             .replace(FUNCTION_RETURN_TYPE_TEMPLATE, func_ret_type)
+    }
+
+    pub(crate) fn generate_code_with_subst_func<'b, F>(&self, mut subst_func: F) -> Result<String>
+    where
+        for<'a> F: FnMut(TypeConvCodeSubstParam<'a>) -> Option<Cow<'b, str>>,
+    {
+        let mut subst = Vec::with_capacity(self.params.len());
+        for p in &self.params {
+            let param_id = if p.starts_with('$') {
+                TypeConvCodeSubstParam::Tmp(&p[1..])
+            } else {
+                TypeConvCodeSubstParam::Name(&p)
+            };
+            let param_val = subst_func(param_id).ok_or_else(|| {
+                DiagnosticError::new2(self.span, format!("Can not substitude parameter {}", p))
+            })?;
+            subst.push(param_val);
+        }
+        let mut ret = self.code.clone();
+        for (id, val) in self.params.iter().zip(subst.iter()) {
+            ret = ret.replace(id.as_str(), val.as_ref());
+        }
+        Ok(ret)
+    }
+    pub(crate) fn has_param(&self, param_name: &str) -> bool {
+        self.params.iter().any(|x| *x == param_name)
     }
 }
 
@@ -167,7 +236,6 @@ pub(crate) struct TypeMap {
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
     foreign_classes: Vec<ForeignerClassInfo>,
-    exported_enums: FxHashMap<SmolStr, ForeignEnumInfo>,
     /// How to use trait to convert types, Trait Name -> Code
     traits_usage_code: FxHashMap<Ident, String>,
     /// code that parsed, but not yet integrated to TypeMap,
@@ -234,7 +302,6 @@ impl Default for TypeMap {
             rust_from_foreign_cache: FxHashMap::default(),
             rust_to_foreign_cache: FxHashMap::default(),
             foreign_classes: Vec::new(),
-            exported_enums: FxHashMap::default(),
             traits_usage_code: FxHashMap::default(),
             ftypes_storage: ForeignTypesStorage::default(),
             not_merged_data: vec![],
@@ -478,20 +545,6 @@ impl TypeMap {
         self.conv_graph.update_edge(from, to, rule);
     }
 
-    pub(crate) fn register_exported_enum(&mut self, enum_info: &ForeignEnumInfo) {
-        self.exported_enums
-            .insert(enum_info.name.to_string().into(), enum_info.clone());
-    }
-
-    pub(crate) fn is_generated_foreign_type(&self, foreign_name: &str) -> bool {
-        if self.exported_enums.contains_key(foreign_name) {
-            return true;
-        }
-        self.foreign_classes
-            .iter()
-            .any(|fc| fc.name == foreign_name)
-    }
-
     fn find_or_build_path(
         &mut self,
         from: RustTypeIdx,
@@ -553,7 +606,10 @@ impl TypeMap {
         to: RustTypeIdx,
         build_for_sp: SourceIdSpan,
     ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
-        debug!("find_path: begin {} -> {}", self[from], self[to]);
+        debug!(
+            "find_path: begin {}/{:?} -> {}/{:?}",
+            self[from], from, self[to], to
+        );
         if from == to {
             return Ok(vec![]);
         }
@@ -1271,38 +1327,5 @@ mod tests {
                 .expect("path from &RefCell<Foo> to &Foo NOT exists")
                 .1
         );
-
-        let vec_foo_ty =
-            types_map.find_or_alloc_rust_type(&parse_type! { Vec<Foo> }, SourceId::none());
-
-        let fti = types_map
-            .map_through_conversation_to_foreign(
-                vec_foo_ty.to_idx(),
-                petgraph::Direction::Outgoing,
-                MapToForeignFlag::FullSearch,
-                invalid_src_id_span(),
-                |_, fc| {
-                    fc.self_desc
-                        .as_ref()
-                        .map(|x| x.constructor_ret_type.clone())
-                },
-            )
-            .unwrap();
-        assert_eq!("Foo []", types_map[fti].name.as_str());
-
-        assert!(try_build_path(
-            types_map
-                .find_or_alloc_rust_type(&parse_type! { Vec<i32> }, SourceId::none())
-                .to_idx(),
-            types_map
-                .find_or_alloc_rust_type(&parse_type! { jlong }, SourceId::none())
-                .to_idx(),
-            invalid_src_id_span(),
-            &mut types_map.conv_graph,
-            &mut types_map.rust_names_map,
-            &types_map.generic_edges,
-            MAX_TRY_BUILD_PATH_STEPS,
-        )
-        .is_none());
     }
 }

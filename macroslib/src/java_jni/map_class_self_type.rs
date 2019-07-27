@@ -1,12 +1,9 @@
 use log::debug;
 use smol_str::SmolStr;
-use std::fmt::Write;
+use std::{fmt::Write, rc::Rc};
 use syn::spanned::Spanned;
 
-use super::{
-    java_class_full_name, java_class_name_to_jni, JavaContext, INTERNAL_PTR_MARKER,
-    JAVA_RUST_SELF_NAME,
-};
+use super::{JavaContext, INTERNAL_PTR_MARKER, JAVA_RUST_SELF_NAME};
 use crate::{
     error::{invalid_src_id_span, Result},
     source_registry::SourceId,
@@ -51,7 +48,7 @@ pub(in crate::java_jni) fn register_typemap_for_self_type(
     let gen_ty = parse_ty_with_given_span_checked(&code, this_type_inner.ty.span());
     let this_type_mut_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
-    register_rust_ty_conversation_rules(ctx, &this_type, class)?;
+    register_rust_ty_conversation_rules(ctx, &this_type)?;
     let self_type = ctx
         .conv_map
         .find_or_alloc_rust_type(&self_desc.self_type, class.src_id);
@@ -67,11 +64,7 @@ pub(in crate::java_jni) fn register_typemap_for_self_type(
     Ok(())
 }
 
-fn register_rust_ty_conversation_rules(
-    ctx: &mut JavaContext,
-    this_type: &RustType,
-    class: &ForeignerClassInfo,
-) -> Result<()> {
+fn register_rust_ty_conversation_rules(ctx: &mut JavaContext, this_type: &RustType) -> Result<()> {
     let (this_type_for_method, _code_box_this) =
         convert_to_heap_pointer(ctx.conv_map, this_type, "this");
 
@@ -128,9 +121,6 @@ fn register_rust_ty_conversation_rules(
         .into(),
     );
 
-    let class_name_for_user = java_class_full_name(&ctx.cfg.package_name, &class.name.to_string());
-    let class_name_for_jni = java_class_name_to_jni(&class_name_for_user);
-    let class_name_upper = class.name.to_string().to_uppercase();
     let jobject_ty = ctx
         .conv_map
         .find_or_alloc_rust_type_no_src_id(&parse_type! { jobject });
@@ -140,13 +130,10 @@ fn register_rust_ty_conversation_rules(
         TypeConvCode::new2(
             format!(
                 r#"
-        let java_class = swig_jni_find_class!(FOREIGN_CLASS_{class_name_upper}, "{jni_class_name}");
-        let {to_var}: jobject = object_to_jobject({from_var}, java_class, env);
+        let {to_var}: jobject = object_to_jobject(env, {from_var});
 "#,
                 to_var = TO_VAR_TEMPLATE,
                 from_var = FROM_VAR_TEMPLATE,
-                class_name_upper = class_name_upper,
-                jni_class_name = class_name_for_jni,
             ),
             invalid_src_id_span(),
         )
@@ -332,7 +319,7 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: jlong_out_val_rty.to_idx(),
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!(
                         "        {class_name} {out} = new {class_name}({internal_ptr_marker}.RAW_PTR, {var});",
                         class_name = class.name,
@@ -341,7 +328,7 @@ fn register_main_foreign_types(
                         internal_ptr_marker = INTERNAL_PTR_MARKER,
                     ),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         from_into_rust: Some(ForeignConversationRule {
@@ -349,10 +336,10 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: jlong_in_val_rty.to_idx(),
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     java_code_in_val_to_long,
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         name_prefix: None,
@@ -375,7 +362,7 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: jlong_ty.to_idx(),
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!(
                         "        long {out} = {from}.{self_raw_ptr};",
                         from = FROM_VAR_TEMPLATE,
@@ -383,7 +370,7 @@ fn register_main_foreign_types(
                         self_raw_ptr = JAVA_RUST_SELF_NAME,
                     ),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         into_from_rust: None,
@@ -406,7 +393,7 @@ fn register_main_foreign_types(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: jlong_ty.to_idx(),
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!(
                         "        long {out} = {from}.{self_raw_ptr};",
                         from = FROM_VAR_TEMPLATE,
@@ -414,7 +401,7 @@ fn register_main_foreign_types(
                         self_raw_ptr = JAVA_RUST_SELF_NAME,
                     ),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         into_from_rust: None,
@@ -450,7 +437,7 @@ fn register_main_foreign_types(
                     intermediate: Some(ForeignConversationIntermediate {
                         input_to_output: false,
                         intermediate_ty: jlong_ty.to_idx(),
-                        conv_code: TypeConvCode::new(
+                        conv_code: Rc::new(TypeConvCode::new(
                             format!(
                                 "        long {out} = {from}.{self_raw_ptr};",
                                 from = FROM_VAR_TEMPLATE,
@@ -458,7 +445,7 @@ fn register_main_foreign_types(
                                 self_raw_ptr = JAVA_RUST_SELF_NAME,
                             ),
                             invalid_src_id_span(),
-                        ),
+                        )),
                     }),
                 }),
                 into_from_rust: None,
@@ -482,7 +469,7 @@ fn register_main_foreign_types(
                     intermediate: Some(ForeignConversationIntermediate {
                         input_to_output: false,
                         intermediate_ty: jlong_ty.to_idx(),
-                        conv_code: TypeConvCode::new(
+                        conv_code: Rc::new(TypeConvCode::new(
                             format!(
                                 "        long {out} = {from}.{self_raw_ptr};",
                                 from = FROM_VAR_TEMPLATE,
@@ -490,7 +477,7 @@ fn register_main_foreign_types(
                                 self_raw_ptr = JAVA_RUST_SELF_NAME,
                             ),
                             invalid_src_id_span(),
-                        ),
+                        )),
                     }),
                 }),
                 into_from_rust: None,

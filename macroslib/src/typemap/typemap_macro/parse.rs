@@ -30,6 +30,7 @@ mod kw {
     custom_keyword!(option);
     custom_keyword!(input_to_output);
     custom_keyword!(unique_prefix);
+    custom_keyword!(temporary);
 }
 
 enum RuleType {
@@ -230,7 +231,7 @@ fn parse_r_type_rule(
         let out_var_no_type: TokenStream = parse_quote!($out_no_type);
         let out_var_no_type = out_var_no_type.to_string();
 
-        let mut code_str = conv_body.to_string();
+        let code_str = conv_body.to_string();
         if !(code_str.contains(&d_var_name)
             && (code_str.contains(&out_var) || code_str.contains(&out_var_no_type)))
         {
@@ -242,7 +243,6 @@ fn parse_r_type_rule(
                 ),
             ));
         }
-        code_str.push(';');
         Some(if code_str.contains(&out_var_no_type) {
             TypeConvCode::new2(
                 code_str
@@ -481,6 +481,7 @@ struct FTypeArmParams {
     req_modules: Vec<ModuleName>,
     input_to_output: bool,
     unique_prefix: Option<SpannedSmolStr>,
+    temporary_ids: Vec<Ident>,
 }
 
 fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Result<FTypeArmParams> {
@@ -488,6 +489,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
     let mut ftype_req_modules = Vec::<ModuleName>::new();
     let mut input_to_output = false;
     let mut unique_prefix = None;
+    let mut temporary_ids = Vec::<Ident>::new();
 
     while !params.is_empty() && params.peek(Token![,]) {
         params.parse::<Token![,]>()?;
@@ -531,6 +533,18 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
                 sp: lit_str.span(),
                 value: lit_str.value().into(),
             });
+        } else if la.peek(token::Dollar) {
+            params.parse::<token::Dollar>()?;
+            let var_name = params.parse::<Ident>()?;
+            params.parse::<Token![:]>()?;
+            params.parse::<kw::temporary>()?;
+            if temporary_ids.iter().any(|x| *x == var_name) {
+                return Err(syn::Error::new(
+                    var_name.span(),
+                    format!("temporary already exists with such name: '{}'", var_name),
+                ));
+            }
+            temporary_ids.push(var_name);
         } else {
             return Err(la.error());
         }
@@ -540,6 +554,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
         req_modules: ftype_req_modules,
         input_to_output,
         unique_prefix,
+        temporary_ids,
     })
 }
 
@@ -556,6 +571,7 @@ fn parse_f_type_rule(
         req_modules: ftype_req_modules,
         input_to_output,
         unique_prefix,
+        temporary_ids,
     } = parse_typemap_f_type_arm_param(params)?;
 
     let left_ty: Option<FTypeName> = if input.peek(LitStr) {
@@ -579,7 +595,10 @@ fn parse_f_type_rule(
         let to_error = |tname: &FTypeName| {
             Err(syn::Error::new(
                 tname.sp,
-                format!("type name shoulds starts with {}", unique_prefix.value),
+                format!(
+                    "type name '{}' shoulds starts with '{}'",
+                    tname.name, unique_prefix.value
+                ),
             ))
         };
         match (conv_rule_type.as_ref(), left_ty.as_ref()) {
@@ -614,17 +633,31 @@ fn parse_f_type_rule(
             )
         })?;
         let var_name = format!("${}", var_name);
-        Some(TypeConvCode::new(
-            replace_first_and_other(
-                code_str
-                    .value()
-                    .replace(&var_name, FROM_VAR_TEMPLATE)
-                    .as_str(),
-                "$out",
-                TO_VAR_TYPE_TEMPLATE,
-                TO_VAR_TEMPLATE,
-            ),
+        let code = replace_first_and_other(
+            code_str
+                .value()
+                .replace(&var_name, FROM_VAR_TEMPLATE)
+                .as_str(),
+            "$out",
+            TO_VAR_TYPE_TEMPLATE,
+            TO_VAR_TEMPLATE,
+        );
+        let mut params = Vec::with_capacity(4);
+        params.push(FROM_VAR_TEMPLATE.into());
+        if code.contains(TO_VAR_TYPE_TEMPLATE) {
+            params.push(TO_VAR_TYPE_TEMPLATE.into());
+        }
+        if code.contains(TO_VAR_TEMPLATE) {
+            params.push(TO_VAR_TEMPLATE.into());
+        }
+        for tmp_id in &temporary_ids {
+            params.push(format!("${}", tmp_id).into());
+        }
+
+        Some(TypeConvCode::with_params(
+            code,
             (SourceId::none(), code_str.span()),
+            params,
         ))
     } else {
         None

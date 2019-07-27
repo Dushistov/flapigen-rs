@@ -1,4 +1,4 @@
-use std::{fmt::Write, mem};
+use std::{borrow::Cow, fmt::Write, mem};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
@@ -14,8 +14,8 @@ use crate::{
     namegen::new_unique_name,
     source_registry::SourceId,
     typemap::{
-        ast::DisplayToTokens, CItem, CItems, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
-        TO_VAR_TYPE_TEMPLATE,
+        ast::DisplayToTokens, CItem, CItems, TypeConvCodeSubstParam, FROM_VAR_TEMPLATE,
+        TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
     types::{FnArg, ForeignEnumInfo, ForeignerClassInfo},
     WRITE_TO_MEM_FAILED_MSG,
@@ -94,9 +94,9 @@ pub(in crate::cpp) fn cpp_generate_args_with_types<'a, NI: Iterator<Item = &'a s
 
 pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
     f_method: &CppForeignMethodSignature,
-    mut known_names: FxHashSet<SmolStr>,
+    known_names: &mut FxHashSet<SmolStr>,
     arg_name_iter: NI,
-) -> (String, String) {
+) -> Result<(String, String), DiagnosticError> {
     let mut conv_deps = String::new();
     let mut converted_args = String::new();
     for (i, (f_type_info, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
@@ -104,27 +104,55 @@ pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
             converted_args.push_str(", ");
         }
         if let Some(conv) = f_type_info.cpp_converter.as_ref() {
-            let conv_code = conv.converter.as_str().replace(FROM_VAR_TEMPLATE, arg_name);
-            if !conv_code.contains(TO_VAR_TYPE_TEMPLATE) {
-                converted_args.push_str(&conv_code);
-            } else {
+            let var_name = if conv.converter.has_param(TO_VAR_TYPE_TEMPLATE)
+                || conv.converter.has_param(TO_VAR_TEMPLATE)
+            {
                 let templ = format!("a{}", i);
                 let var_name = new_unique_name(&known_names, &templ);
-                converted_args.push_str(&format!("std::move({})", var_name));
-                let conv_code = conv_code
-                    .replace(
-                        TO_VAR_TYPE_TEMPLATE,
-                        &format!("{} {}", f_type_info.as_ref().name, var_name),
-                    )
-                    .replace(TO_VAR_TEMPLATE, &var_name);
+                known_names.insert(var_name.clone());
+                Some(var_name)
+            } else {
+                None
+            };
+            let conv_code =
+                conv.converter
+                    .generate_code_with_subst_func(|param_name| match param_name {
+                        TypeConvCodeSubstParam::Name(name) => {
+                            if name == FROM_VAR_TEMPLATE {
+                                Some(Cow::Borrowed(&arg_name))
+                            } else if name == TO_VAR_TYPE_TEMPLATE {
+                                Some(
+                                    format!(
+                                        "{} {}",
+                                        f_type_info.as_ref().name,
+                                        var_name.as_ref().unwrap()
+                                    )
+                                    .into(),
+                                )
+                            } else if name == TO_VAR_TEMPLATE {
+                                Some(Cow::Borrowed(var_name.as_ref().unwrap()))
+                            } else {
+                                None
+                            }
+                        }
+                        TypeConvCodeSubstParam::Tmp(name_template) => {
+                            let tmp_name = new_unique_name(&known_names, name_template);
+                            let tmp_name_ret = tmp_name.to_string().into();
+                            known_names.insert(tmp_name);
+                            Some(tmp_name_ret)
+                        }
+                    })?;
+            if !conv.converter.has_param(TO_VAR_TYPE_TEMPLATE) {
+                converted_args.push_str(&conv_code);
+            } else {
+                converted_args.push_str(&format!("std::move({})", var_name.as_ref().unwrap()));
                 conv_deps.push_str(&conv_code);
-                known_names.insert(var_name);
             }
         } else {
             converted_args.push_str(arg_name);
         }
     }
-    (conv_deps, converted_args)
+    Ok((conv_deps, converted_args))
 }
 
 pub(in crate::cpp) fn cpp_header_name(class: &ForeignerClassInfo) -> String {

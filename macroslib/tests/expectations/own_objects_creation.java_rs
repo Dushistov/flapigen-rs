@@ -31,20 +31,35 @@ pub extern "C" fn Java_org_example_Boo_init(
     a1: jlong,
 ) -> jlong {
     let a0: i32 = a0;
-    let a1: i64 = a1;
-    let mut a1: usize = a1.swig_into(env);
+    let a1: usize = <usize as ::std::convert::TryFrom<jlong>>::try_from(a1)
+        .expect("invalid jlong, in jlong => usize conversation");
     let this: Result<Boo, String> = Boo::new(a0, a1);
-    let mut this: Boo = jni_unpack_return!(this, jlong, env);
-    let this: Box<Boo> = Box::new(this);
-    let this: *mut Boo = Box::into_raw(this);
+    let this: jlong = match this {
+        Ok(x) => {
+            let ret: jlong = <Boo>::box_object(x);
+            ret
+        }
+        Err(msg) => {
+            jni_throw_exception(env, &msg);
+            return <jlong>::jni_invalid_value();
+        }
+    };
     this as jlong
 }"##;
 
 r##"#[no_mangle]
 pub extern "C" fn Java_org_example_Boo_do_1factory_1method(env: *mut JNIEnv, _: jclass) -> jlong {
     let mut ret: Result<Boo, String> = Boo::factory_method();
-    let mut ret: Boo = jni_unpack_return!(ret, jlong, env);
-    let ret: jlong = <Boo>::box_object(ret);
+    let ret: jlong = match ret {
+        Ok(x) => {
+            let ret: jlong = <Boo>::box_object(x);
+            ret
+        }
+        Err(msg) => {
+            jni_throw_exception(env, &msg);
+            return <jlong>::jni_invalid_value();
+        }
+    };
     ret
 }"##;
 

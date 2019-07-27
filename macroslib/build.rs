@@ -56,7 +56,14 @@ fn main() {
         filter_swig_attrs.visit_file_mut(&mut file);
 
         let mut jni_cache_macro_cache = jni_find_cache::JniCacheMacroCalls::default();
-        jni_cache_macro_cache.visit_file(&file);
+        let mut visitor = jni_find_cache::JniCacheMacroCallsVisitor {
+            inner: &mut jni_cache_macro_cache,
+            errors: vec![],
+        };
+        visitor.visit_file(&file);
+        if !visitor.errors.is_empty() {
+            panic!("jni cache macros visiting failed: {}", visitor.errors[0]);
+        }
         let mut jni_global_vars = jni_cache_macro_cache.global_vars();
         file.items.append(&mut jni_global_vars);
 

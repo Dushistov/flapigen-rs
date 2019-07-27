@@ -4,7 +4,6 @@ mod jni {
     use jni_sys::*;
     use std::{
         cell::{Ref, RefCell, RefMut},
-        path::Path,
         rc::Rc,
         sync::{Arc, Mutex, MutexGuard},
     };

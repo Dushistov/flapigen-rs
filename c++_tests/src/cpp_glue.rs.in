@@ -69,14 +69,14 @@ foreign_callback!(callback SomeObserver {
 foreigner_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32, _: &str) -> Foo;
-    method Foo::f(&self, a: i32, b: i32) -> i32;
-    method Foo::f_double(&self, _: f64, _: f64) -> f64;
-    method Foo::name(&self) -> &str; alias getName;
-    method Foo::set_field(&mut self, v: i32);
-    method Foo::one_and_half(&self) -> f64;
-    static_method Foo::call_me(_: Box<SomeObserver>);
-    static_method f_hypot(_: f64, _: f64) -> f64; alias fHypot;
-    method Foo::ret_string(&self) -> String;
+    fn Foo::f(&self, a: i32, b: i32) -> i32;
+    fn Foo::f_double(&self, _: f64, _: f64) -> f64;
+    fn Foo::name(&self) -> &str; alias getName;
+    fn Foo::set_field(&mut self, v: i32);
+    fn Foo::one_and_half(&self) -> f64;
+    fn Foo::call_me(_: Box<SomeObserver>);
+    fn f_hypot(_: f64, _: f64) -> f64; alias fHypot;
+    fn Foo::ret_string(&self) -> String;
     foreigner_code r#"
 public:
     size_t cpp_func(const std::string &s) const { return s.size(); }
@@ -161,21 +161,21 @@ fn xor(x: bool, y: bool) -> bool {
 foreigner_class!(class CheckPrimitiveTypesClass {
     self_type CheckPrimitiveTypesClass;
     constructor create_boo() -> Rc<RefCell<CheckPrimitiveTypesClass>>;
-    method CheckPrimitiveTypesClass::test(&self, _: bool) -> f32;
-    method CheckPrimitiveTypesClass::set_a(&mut self, _: i32); alias setA;
-    method CheckPrimitiveTypesClass::get_a(&self) -> i32; alias getA;
-    static_method test_u8(v: u8) -> u8;
-    static_method test_i8(v: i8) -> i8;
-    static_method test_u16(v: u16) -> u16;
-    static_method test_i16(v: i16) -> i16;
-    static_method test_i32(v: i32) -> i32;
-    static_method test_u32(v: u32) -> u32;
-    static_method test_u64(v: u64) -> u64;
-    static_method test_i64(v: i64) -> i64;
-    static_method test_f32(v: f32) -> f32;
-    static_method test_f64(v: f64) -> f64;
-    static_method invert(_: bool) -> bool;
-    static_method xor(_: bool, _: bool) -> bool; alias Xor;
+    fn CheckPrimitiveTypesClass::test(&self, _: bool) -> f32;
+    fn CheckPrimitiveTypesClass::set_a(&mut self, _: i32); alias setA;
+    fn CheckPrimitiveTypesClass::get_a(&self) -> i32; alias getA;
+    fn test_u8(v: u8) -> u8;
+    fn test_i8(v: i8) -> i8;
+    fn test_u16(v: u16) -> u16;
+    fn test_i16(v: i16) -> i16;
+    fn test_i32(v: i32) -> i32;
+    fn test_u32(v: u32) -> u32;
+    fn test_u64(v: u64) -> u64;
+    fn test_i64(v: i64) -> i64;
+    fn test_f32(v: f32) -> f32;
+    fn test_f64(v: f64) -> f64;
+    fn invert(_: bool) -> bool;
+    fn xor(_: bool, _: bool) -> bool; alias Xor;
 });
 
 pub struct ClassCooperationTest {
@@ -199,8 +199,8 @@ impl ClassCooperationTest {
 foreigner_class!(class ClassCooperationTest {
     self_type ClassCooperationTest;
     constructor ClassCooperationTest::new() -> ClassCooperationTest;
-    method ClassCooperationTest::get(&self, _: u32) -> Foo;
-    method ClassCooperationTest::set(&mut self, _: u32, _: Foo);
+    fn ClassCooperationTest::get(&self, _: u32) -> Foo;
+    fn ClassCooperationTest::set(&mut self, _: u32, _: Foo);
 });
 
 trait DummySetterGetter {
@@ -238,8 +238,8 @@ fn create_test_obj_with_lifetime<'a>() -> TestObjectLifetime<'a> {
 foreigner_class!(class TestObjectLifetime {
     self_type TestObjectLifetime<'a>;
     constructor create_test_obj_with_lifetime() -> TestObjectLifetime<'a>;
-    method TestObjectLifetime::set_data(&mut self, v1: i8, v2: i16, v3: i32, v4: f64, v5: f32);
-    method TestObjectLifetime::get_data(&self) -> i32;
+    fn TestObjectLifetime::set_data(&mut self, v1: i8, v2: i16, v3: i32, v4: f64, v5: f32);
+    fn TestObjectLifetime::get_data(&self) -> i32;
 });
 
 pub struct TestWorkWithVec {
@@ -346,21 +346,21 @@ impl TestWorkWithVec {
 foreigner_class!(class TestWorkWithVec {
     self_type TestWorkWithVec;
     constructor TestWorkWithVec::new(_: &str) -> TestWorkWithVec;
-    method TestWorkWithVec::get_bytes(&self, n: u32) -> Vec<u8>;
-    method TestWorkWithVec::get_u32_slice(&self) -> &[u32];
-    method TestWorkWithVec::get_vec_u32(&self) -> Vec<u32>;
-    method TestWorkWithVec::get_vec_f32(&self) -> Vec<f32>;
-    method TestWorkWithVec::get_vec_f64(&self) -> Vec<f64>;
-    method TestWorkWithVec::get_vec_foo(&self) -> Vec<Foo>;
-    method TestWorkWithVec::get_slice_foo(&self) -> &[Foo];
-    static_method TestWorkWithVec::create_foo_vec(n: usize) -> Vec<Foo>;
-    static_method TestWorkWithVec::sort_foo_slice(v: &mut [Foo]);
-    method TestWorkWithVec::return_usize_slice(&self) -> &[usize];
-    method TestWorkWithVec::return_usize_vec(&self) -> Vec<usize>;
-    static_method TestWorkWithVec::clone_foo_slice(v: &[Foo]) -> Vec<Foo>;
-    static_method TestWorkWithVec::test_i32_slice(a: &[i32]) -> Vec<i32>;
-    method TestWorkWithVec::set_vec_foo(&mut self, v: Vec<Foo>);
-    static_method TestWorkWithVec::test_lifetime_objs<'a>(n: usize) -> Vec<TestObjectLifetime<'a>>;
+    fn TestWorkWithVec::get_bytes(&self, n: u32) -> Vec<u8>;
+    fn TestWorkWithVec::get_u32_slice(&self) -> &[u32];
+    fn TestWorkWithVec::get_vec_u32(&self) -> Vec<u32>;
+    fn TestWorkWithVec::get_vec_f32(&self) -> Vec<f32>;
+    fn TestWorkWithVec::get_vec_f64(&self) -> Vec<f64>;
+    fn TestWorkWithVec::get_vec_foo(&self) -> Vec<Foo>;
+    fn TestWorkWithVec::get_slice_foo(&self) -> &[Foo];
+    fn TestWorkWithVec::create_foo_vec(n: usize) -> Vec<Foo>;
+    fn TestWorkWithVec::sort_foo_slice(v: &mut [Foo]);
+    fn TestWorkWithVec::return_usize_slice(&self) -> &[usize];
+    fn TestWorkWithVec::return_usize_vec(&self) -> Vec<usize>;
+    fn TestWorkWithVec::clone_foo_slice(v: &[Foo]) -> Vec<Foo>;
+    fn TestWorkWithVec::test_i32_slice(a: &[i32]) -> Vec<i32>;
+    fn TestWorkWithVec::set_vec_foo(&mut self, v: Vec<Foo>);
+    fn TestWorkWithVec::test_lifetime_objs<'a>(n: usize) -> Vec<TestObjectLifetime<'a>>;
     fn sort_i32_slice(arr: &mut [i32]) {
         arr.sort();
     }
@@ -426,8 +426,8 @@ impl TestPassPathAsParam {
 foreigner_class!(class TestPassPathAsParam {
     self_type TestPassPathAsParam;
     constructor TestPassPathAsParam::default() -> TestPassPathAsParam;
-    method TestPassPathAsParam::set_path(&mut self, p: &Path);
-    method TestPassPathAsParam::path(&self) -> &str;
+    fn TestPassPathAsParam::set_path(&mut self, p: &Path);
+    fn TestPassPathAsParam::path(&self) -> &str;
 });
 
 pub struct TestOptional {
@@ -537,20 +537,20 @@ To carry that wonderful nose."#
 foreigner_class!(class TestOptional {
     self_type TestOptional;
     constructor TestOptional::default() -> TestOptional;
-    method TestOptional::f1(&self, _: bool) -> Option<Foo>;
-    method TestOptional::f2(&self, ret_notnull: bool) -> Option<f64>;
-    method TestOptional::f3(&self, ret_notnull: bool) -> Option<u32>;
-    method TestOptional::f4(&self, _: Option<f64>) -> f64;
-    method TestOptional::f5(&self, x: bool) -> Option<&Foo>;
-    method TestOptional::f6(&mut self, a: Option<Foo>);
-    method TestOptional::f7(&self) -> Option<MyEnum>;
-    method TestOptional::f8(&self, x: Option<MyEnum>) -> Option<MyEnum>;
-    method TestOptional::f9(&self, x: Option<&str>) -> String;
-    method TestOptional::f10(&self, is_some: bool) -> Option<&str>;
-    method TestOptional::f11(&self, val: i32, is_some: bool) -> Option<i32>;
-    method TestOptional::f12(&self, val: f32, is_some: bool) -> Option<f32>;
-    method TestOptional::f13(&self, is_some: bool) -> Option<String>;
-    method TestOptional::f14(&self, is_some: bool) -> Option<bool>;
+    fn TestOptional::f1(&self, _: bool) -> Option<Foo>;
+    fn TestOptional::f2(&self, ret_notnull: bool) -> Option<f64>;
+    fn TestOptional::f3(&self, ret_notnull: bool) -> Option<u32>;
+    fn TestOptional::f4(&self, _: Option<f64>) -> f64;
+    fn TestOptional::f5(&self, x: bool) -> Option<&Foo>;
+    fn TestOptional::f6(&mut self, a: Option<Foo>);
+    fn TestOptional::f7(&self) -> Option<MyEnum>;
+    fn TestOptional::f8(&self, x: Option<MyEnum>) -> Option<MyEnum>;
+    fn TestOptional::f9(&self, x: Option<&str>) -> String;
+    fn TestOptional::f10(&self, is_some: bool) -> Option<&str>;
+    fn TestOptional::f11(&self, val: i32, is_some: bool) -> Option<i32>;
+    fn TestOptional::f12(&self, val: f32, is_some: bool) -> Option<f32>;
+    fn TestOptional::f13(&self, is_some: bool) -> Option<String>;
+    fn TestOptional::f14(&self, is_some: bool) -> Option<bool>;
 });
 
 #[derive(Default)]
@@ -644,7 +644,7 @@ impl TestError {
 foreigner_class!(class TestError {
     self_type TestError;
     constructor TestError::default() -> TestError;
-    method TestError::to_string(&self) -> String;
+    fn TestError::to_string(&self) -> String;
 });
 
 pub enum ErrorEnum {
@@ -662,15 +662,15 @@ foreign_enum!(
 foreigner_class!(class TestResult {
     self_type TestResult;
     private constructor TestResult::default() -> TestResult;
-    static_method TestResult::new_with_err() -> Result<TestResult, String>;
-    static_method TestResult::f(_: bool) -> Result<(), String>;
-    static_method TestResult::f_vec(_: bool) -> Result<Vec<Foo>, String>;
-    static_method TestResult::f2(_: bool) -> Result<Foo, TestError>;
-    static_method TestResult::f3(_: bool) -> Result<Vec<Foo>, TestError>;
-    static_method TestResult::f4(is_ok: bool) -> Result<Vec<u8>, TestError>;
-    static_method TestResult::f5(is_ok: bool) -> Result<Foo, ErrorEnum>;
-    static_method TestResult::f6(is_ok: bool, val: i64) -> Result<i64, TestError>;
-    static_method TestResult::f_res_opt(var: u32) -> Result<Option<Foo>, String>;
+    fn TestResult::new_with_err() -> Result<TestResult, String>;
+    fn TestResult::f(_: bool) -> Result<(), String>;
+    fn TestResult::f_vec(_: bool) -> Result<Vec<Foo>, String>;
+    fn TestResult::f2(_: bool) -> Result<Foo, TestError>;
+    fn TestResult::f3(_: bool) -> Result<Vec<Foo>, TestError>;
+    fn TestResult::f4(is_ok: bool) -> Result<Vec<u8>, TestError>;
+    fn TestResult::f5(is_ok: bool) -> Result<Foo, ErrorEnum>;
+    fn TestResult::f6(is_ok: bool, val: i64) -> Result<i64, TestError>;
+    fn TestResult::f_res_opt(var: u32) -> Result<Option<Foo>, String>;
 });
 
 pub struct TestReferences {
@@ -708,11 +708,11 @@ impl TestReferences {
 foreigner_class!(class TestReferences {
     self_type TestReferences;
     constructor TestReferences::new(foo_data: i32, foo_name: &str) -> TestReferences;
-    method TestReferences::get_foo_ref(&self) -> &Foo;
-    method TestReferences::update_foo(&mut self, foo: &Foo);
-    method TestReferences::update_mut_foo(&mut self, foo: &mut Foo);
-    static_method TestReferences::check_rc_pass1(x: &CheckPrimitiveTypesClass) -> i32;
-    static_method TestReferences::check_rc_pass2(x: &mut CheckPrimitiveTypesClass) -> i32;
+    fn TestReferences::get_foo_ref(&self) -> &Foo;
+    fn TestReferences::update_foo(&mut self, foo: &Foo);
+    fn TestReferences::update_mut_foo(&mut self, foo: &mut Foo);
+    fn TestReferences::check_rc_pass1(x: &CheckPrimitiveTypesClass) -> i32;
+    fn TestReferences::check_rc_pass2(x: &mut CheckPrimitiveTypesClass) -> i32;
 });
 
 fn add_func(a: i32, b: i32) -> i32 {
@@ -720,7 +720,7 @@ fn add_func(a: i32, b: i32) -> i32 {
 }
 
 foreigner_class!(class TestOnlyStaticMethods {
-    static_method add_func(_: i32, _: i32) -> i32;
+    fn add_func(_: i32, _: i32) -> i32;
 });
 
 pub struct GnssInfo {
@@ -736,7 +736,7 @@ impl GnssInfo {
 foreigner_class!(class Position {
     self_type GnssInfo;
     private constructor = empty;
-    method GnssInfo::latitude(&self) -> f64;
+    fn GnssInfo::latitude(&self) -> f64;
 });
 
 struct LocationService;
@@ -748,7 +748,7 @@ impl LocationService {
 }
 
 foreigner_class!(class LocationService {
-    static_method LocationService::position() -> Result<GnssInfo, String>;
+    fn LocationService::position() -> Result<GnssInfo, String>;
 });
 
 pub trait Interface {
@@ -775,8 +775,8 @@ fn create_interface() -> Box<Box<Interface>> {
 foreigner_class!(class Interface {
     self_type Interface;
     constructor create_interface() -> Box<Box<Interface>>;
-    method Interface::f(&self, _: i32) -> i32;
-    method Interface::set(&mut self, x: i32);
+    fn Interface::f(&self, _: i32) -> i32;
+    fn Interface::set(&mut self, x: i32);
 });
 
 #[derive(Default)]
@@ -835,8 +835,8 @@ foreigner_class!(class RecursiveStruct {
         child1_name: String,
         child2_name: String,
     ) -> RecursiveStruct;
-    method RecursiveStruct::tag(&self) -> &str;
-    method RecursiveStruct::childs(&self) -> &[RecursiveStruct];
+    fn RecursiveStruct::tag(&self) -> &str;
+    fn RecursiveStruct::childs(&self) -> &[RecursiveStruct];
 });
 
 pub struct Boo {
@@ -876,14 +876,14 @@ impl Boo {
 foreigner_class!(class Boo {
     self_type Boo;
     private constructor = empty;
-    method Boo::f(&self) -> i32;
+    fn Boo::f(&self) -> i32;
 });
 
 foreigner_class!(class TestPair {
-    static_method Boo::return_pair_obj1() -> (Foo, Boo);
-    static_method Boo::return_pair_obj2() -> (Boo, Foo);
-    static_method Boo::return_pair_f32_i32() -> (f32, i32);
-    static_method Boo::swap_foo_boo(foo_boo: (Foo, Boo)) -> (Boo, Foo);
+    fn Boo::return_pair_obj1() -> (Foo, Boo);
+    fn Boo::return_pair_obj2() -> (Boo, Foo);
+    fn Boo::return_pair_f32_i32() -> (f32, i32);
+    fn Boo::swap_foo_boo(foo_boo: (Foo, Boo)) -> (Boo, Foo);
     fn return_tuple3() -> (bool, i32, String) {
         (true, 17, "tuple3".to_string())
     }
@@ -908,8 +908,8 @@ foreigner_class!(
     class TestCopy {
         self_type TestCopy;
         constructor TestCopy::new(s: &str) -> TestCopy;
-        method TestCopy::get(&self) -> &str;
-        method TestCopy::clone(&self) -> TestCopy;
+        fn TestCopy::get(&self) -> &str;
+        fn TestCopy::clone(&self) -> TestCopy;
     });
 
 #[derive(Default)]
@@ -929,8 +929,8 @@ impl GetSetStrTest {
 foreigner_class!(class GetSetStrTest {
     self_type GetSetStrTest;
     constructor GetSetStrTest::default() -> GetSetStrTest;
-    method GetSetStrTest::get_str(&self) -> &str;
-    method GetSetStrTest::set_str(&mut self, _: &str);
+    fn GetSetStrTest::get_str(&self) -> &str;
+    fn GetSetStrTest::set_str(&mut self, _: &str);
 });
 
 #[repr(C)]
@@ -961,7 +961,7 @@ fn inc_vec2(v: Vec2) -> Vec2 {
 }
 
 foreigner_class!(class TestWorkWithReprC {
-    static_method inc_vec2(v: Vec2) -> Vec2;
+    fn inc_vec2(v: Vec2) -> Vec2;
 });
 
 foreigner_class!(class TestFnInline {
@@ -985,15 +985,15 @@ foreign_typemap!(
         $out_no_type = |x| {
             swig_from_rust_to_i_type!(T, x, x)
             ($p.cb)(x, $p.ctx);
-        }
+        };
     };
 
-    ($p:f_type, input_to_output, req_modules = ["\"CFnOnce!().h\"", "<future>"]) <= "std::future<swig_f_type!(T)>"
+    ($p:f_type, $tmp:temporary, input_to_output, req_modules = ["\"CFnOnce!().h\"", "<future>"]) <= "std::future<swig_f_type!(T)>"
         r#"
-        auto tmp = new std::promise<swig_f_type!(T)>;
-        auto $p = tmp->get_future();
+        auto $tmp = new std::promise<swig_f_type!(T)>;
+        auto $p = $tmp->get_future();
         $out;
-        $out.ctx = tmp;
+        $out.ctx = $tmp;
         $out.cb = [](swig_i_type!(T) arg, void *opaque) {
             auto arg_cpp = swig_foreign_from_i_type!(T, arg);
             auto promise = static_cast<std::promise<swig_f_type!(T)> *>(opaque);

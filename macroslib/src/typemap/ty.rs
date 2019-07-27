@@ -187,7 +187,7 @@ pub(crate) struct ForeignConversationRule {
 pub(crate) struct ForeignConversationIntermediate {
     pub(crate) input_to_output: bool,
     pub(crate) intermediate_ty: RustTypeIdx,
-    pub(crate) conv_code: TypeConvCode,
+    pub(crate) conv_code: Rc<TypeConvCode>,
 }
 
 #[derive(Debug, Clone, Copy)]

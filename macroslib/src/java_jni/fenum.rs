@@ -1,7 +1,7 @@
 use log::trace;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use std::io::Write;
+use std::{io::Write, rc::Rc};
 use syn::{Ident, Type};
 
 use super::{
@@ -57,7 +57,7 @@ pub(in crate::java_jni) fn generate_enum(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: jint_rty.to_idx(),
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!(
                         "        {enum_name} {out} = {enum_name}.fromInt({var});",
                         out = TO_VAR_TEMPLATE,
@@ -65,7 +65,7 @@ pub(in crate::java_jni) fn generate_enum(
                         var = FROM_VAR_TEMPLATE
                     ),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         from_into_rust: Some(ForeignConversationRule {
@@ -73,18 +73,26 @@ pub(in crate::java_jni) fn generate_enum(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: jint_rty.to_idx(),
-                conv_code: TypeConvCode::new(
+                conv_code: Rc::new(TypeConvCode::new(
                     format!("        int {out} = {in}.getValue();", out = TO_VAR_TEMPLATE, in = FROM_VAR_TEMPLATE),
                     invalid_src_id_span(),
-                ),
+                )),
             }),
         }),
         name_prefix: None,
     };
     ctx.conv_map.alloc_foreign_type(enum_ftype)?;
-    ctx.conv_map.register_exported_enum(fenum);
 
     add_conversation_from_enum_to_jobject_for_callbacks(ctx, fenum, enum_rty.to_idx());
+    let enum_name = fenum.name.to_string();
+    ctx.java_type_to_jni_sig_map.insert(
+        enum_name.clone().into(),
+        format!(
+            "L{};",
+            java_class_full_name(&ctx.cfg.package_name, &enum_name)
+        )
+        .into(),
+    );
 
     Ok(())
 }

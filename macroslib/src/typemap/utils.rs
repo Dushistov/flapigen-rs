@@ -18,7 +18,7 @@ use crate::{
         },
         ty::{normalized_type, RustType},
         typemap_macro::{FTypeConvRule, TypeMapConvRuleInfo},
-        ForeignTypeInfo, TypeMap,
+        ForeignTypeInfo, RustTypeIdx, TypeMap,
     },
     types::{
         ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
@@ -49,29 +49,21 @@ pub(crate) fn foreign_from_rust_convert_method_output(
     conv_map: &mut TypeMap,
     src_id: SourceId,
     rust_ret_ty: &syn::ReturnType,
-    f_output: &ForeignTypeInfoT,
+    gen_code_output_ty: RustTypeIdx,
     var_name: &str,
     func_ret_type: &str,
 ) -> Result<(Vec<TokenStream>, String)> {
+    let context_span = rust_ret_ty.span();
     let rust_ret_ty: Type = match *rust_ret_ty {
         syn::ReturnType::Default => {
-            if f_output.name() != "void" {
-                return Err(DiagnosticError::new(
-                    src_id,
-                    rust_ret_ty.span(),
-                    format!("Rust type `()` mapped to not void ({})", f_output.name()),
-                ));
-            } else {
-                return Ok((Vec::new(), String::new()));
-            }
+            return Ok((Vec::new(), String::new()));
         }
         syn::ReturnType::Type(_, ref p_ty) => (**p_ty).clone(),
     };
-    let context_span = rust_ret_ty.span();
     let rust_ret_ty = conv_map.find_or_alloc_rust_type(&rust_ret_ty, src_id);
     conv_map.convert_rust_types(
         rust_ret_ty.to_idx(),
-        f_output.correspoding_rust_type().to_idx(),
+        gen_code_output_ty,
         var_name,
         var_name,
         func_ret_type,

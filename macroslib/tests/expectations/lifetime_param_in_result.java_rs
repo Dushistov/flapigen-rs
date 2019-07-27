@@ -1,7 +1,15 @@
 r##"impl<'a> SwigForeignClass for Rc<RefCell<Foo<'a>>> {
     type PointedType = RefCell<Foo<'a>>;
-    fn jni_class_name() -> *const ::std::os::raw::c_char {
-        swig_c_str!("org/example/Foo")
+    fn jni_class() -> jclass {
+        swig_jni_find_class!(FOREIGN_CLASS_FOO, "org/example/Foo")
+    }
+    fn jni_class_pointer_field() -> jfieldID {
+        swig_jni_get_field_id!(
+            FOREIGN_CLASS_FOO_MNATIVEOBJ_FIELD,
+            FOREIGN_CLASS_FOO,
+            "mNativeObj",
+            "J"
+        )
     }
     fn box_object(this: Self) -> jlong {
         let this: *const RefCell<Foo> = Rc::into_raw(this);

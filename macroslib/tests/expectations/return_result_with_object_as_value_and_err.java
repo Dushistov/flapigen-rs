@@ -6,13 +6,6 @@ r#"public static @NonNull Position f1() throws Exception {
     }
     private static native long do_f1() throws Exception;"#;
 "public static native void f2() throws Exception;";
-r#"public final @NonNull Position f3() throws Exception {
-        long ret = do_f3(mNativeObj);
-        Position convRet = new Position(InternalPointerMarker.RAW_PTR, ret);
-
-        return convRet;
-    }
-    private static native long do_f3(long self) throws Exception;"#;
 
 r#"public static @NonNull LocationService create() throws Exception {
         long ret = do_create();

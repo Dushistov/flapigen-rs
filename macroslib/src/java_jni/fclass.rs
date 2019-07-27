@@ -1,6 +1,6 @@
 use log::{debug, trace};
 use petgraph::Direction;
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
@@ -49,6 +49,25 @@ pub(in crate::java_jni) fn generate(
     .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
     debug!("generate: java code done");
     generate_rust_code(ctx, class, &f_methods_sign)?;
+
+    let class_name = class.name.to_string();
+
+    ctx.java_type_to_jni_sig_map.insert(
+        class_name.clone().into(),
+        format!(
+            "L{};",
+            java_class_full_name(&ctx.cfg.package_name, &class_name)
+        )
+        .into(),
+    );
+    ctx.java_type_to_jni_sig_map.insert(
+        format!("{} []", class_name).into(),
+        format!(
+            "[L{};",
+            java_class_full_name(&ctx.cfg.package_name, &class_name)
+        )
+        .into(),
+    );
 
     Ok(())
 }
@@ -501,12 +520,29 @@ fn generate_rust_code(
             let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
             let this_type_for_method_ty_as_is = &this_type_for_method.ty;
             let class_name = &this_type.ty;
+            let global_var_with_jclass = Ident::new(
+                &format!("FOREIGN_CLASS_{}", class.name.to_string().to_uppercase()),
+                Span::call_site(),
+            );
+            let global_var_with_ptr_field = Ident::new(
+                &format!(
+                    "FOREIGN_CLASS_{}_{}_FIELD",
+                    class.name.to_string().to_uppercase(),
+                    JAVA_RUST_SELF_NAME.to_uppercase(),
+                ),
+                Span::call_site(),
+            );
             let fclass_impl_code = quote! {
                 impl<#(#lifetimes),*> SwigForeignClass for #class_name {
                     type PointedType = #this_type_for_method_ty_as_is;
 
-                    fn jni_class_name() -> *const ::std::os::raw::c_char {
-                        swig_c_str!(#class_name_for_jni)
+                    fn jni_class() -> jclass {
+                        swig_jni_find_class!(#global_var_with_jclass, #class_name_for_jni)
+                    }
+                    fn jni_class_pointer_field() -> jfieldID {
+                        swig_jni_get_field_id!(#global_var_with_ptr_field,
+                                               #global_var_with_jclass,
+                                               #JAVA_RUST_SELF_NAME, "J")
                     }
                     fn box_object(this: Self) -> jlong {
                         #code_box_this
@@ -551,7 +587,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let java_method_name = method_name(method, f_method);
         let method_overloading = gen_fnames[&java_method_name] > 1;
         let jni_func_name = rust_code::generate_jni_func_name(
-            &ctx.cfg.package_name,
+            ctx,
             class,
             &java_method_name,
             method.variant,
@@ -647,7 +683,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let unpack_code = unpack_from_heap_pointer(&this_type, "this", false);
 
         let jni_destructor_name = rust_code::generate_jni_func_name(
-            &ctx.cfg.package_name,
+            ctx,
             class,
             "do_delete",
             MethodVariant::StaticMethod,
@@ -735,11 +771,23 @@ fn find_suitable_foreign_types_for_methods(
             input.push(fti);
         }
         let output = match method.variant {
-            MethodVariant::Constructor => ForeignTypeInfo {
-                name: empty_symbol.into(),
-                correspoding_rust_type: dummy_rust_ty.clone(),
+            MethodVariant::Constructor => {
+                if let syn::ReturnType::Type(_, ref rt) = method.fn_decl.output {
+                    let ret_rust_ty = ctx.conv_map.find_or_alloc_rust_type(rt, class.src_id);
+                    //cache conversation to typemap
+                    map_type(
+                        ctx,
+                        &ret_rust_ty,
+                        Direction::Outgoing,
+                        (class.src_id, rt.span()),
+                    )?;
+                }
+                ForeignTypeInfo {
+                    name: empty_symbol.into(),
+                    correspoding_rust_type: dummy_rust_ty.clone(),
+                }
+                .into()
             }
-            .into(),
             _ => match method.fn_decl.output {
                 syn::ReturnType::Default => ForeignTypeInfo {
                     name: "void".into(),
@@ -768,7 +816,7 @@ fn generate_static_method(ctx: &mut JavaContext, mc: &MethodContext) -> Result<(
         ctx.conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        &mc.f_method.output,
+        mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
         &jni_ret_type,
     )?;
@@ -831,16 +879,23 @@ fn generate_constructor(
     let this_type = ctx.conv_map.ty_to_rust_type(&this_type);
     let construct_ret_type = ctx.conv_map.ty_to_rust_type(&construct_ret_type);
 
+    let jlong_type = ctx.conv_map.ty_to_rust_type(&parse_type! { jlong });
+    let return_result = if_result_return_ok_err_types(&construct_ret_type).is_some();
+
     let (mut deps_this, convert_this) = ctx.conv_map.convert_rust_types(
         construct_ret_type.to_idx(),
-        this_type.to_idx(),
+        if return_result {
+            jlong_type.to_idx()
+        } else {
+            this_type.to_idx()
+        },
         "this",
         "this",
         "jlong",
         (mc.class.src_id, mc.method.span()),
     )?;
     ctx.rust_code.append(&mut deps_this);
-
+    let empty_box_this = TokenStream::new();
     let code = format!(
         r#"
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
@@ -857,7 +912,11 @@ pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> 
         convert_this = convert_this,
         decl_func_args = mc.decl_func_args,
         convert_input_code = convert_input_code,
-        box_this = code_box_this,
+        box_this = if return_result {
+            &empty_box_this
+        } else {
+            code_box_this
+        },
         real_output_typename = mc.real_output_typename,
         call = mc.method.generate_code_to_call_rust_func(),
     );
@@ -890,7 +949,7 @@ fn generate_method(
         ctx.conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        &mc.f_method.output,
+        mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
         &jni_ret_type,
     )?;

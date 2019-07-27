@@ -9,7 +9,7 @@ mod rust_code;
 
 use log::debug;
 use proc_macro2::TokenStream;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use std::{fmt, io::Write, path::PathBuf};
 use syn::{spanned::Spanned, Type};
@@ -45,6 +45,7 @@ struct JavaContext<'a> {
     pointer_target_width: usize,
     rust_code: &'a mut Vec<TokenStream>,
     generated_foreign_files: &'a mut FxHashSet<PathBuf>,
+    java_type_to_jni_sig_map: FxHashMap<SmolStr, SmolStr>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -186,6 +187,7 @@ impl LanguageGenerator for JavaConfig {
             pointer_target_width,
             rust_code: &mut ret,
             generated_foreign_files: &mut generated_foreign_files,
+            java_type_to_jni_sig_map: rust_code::predefined_java_type_to_jni_sig(),
         };
         init(&mut ctx, code)?;
         for item in &items {
@@ -233,8 +235,17 @@ impl LanguageGenerator for JavaConfig {
 }
 
 fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -> String {
-    let need_conv = f_method.input.iter().any(|v| v.java_converter.is_some())
-        || f_method.output.java_converter.is_some();
+    let need_conv = f_method.input.iter().any(|v: &JavaForeignTypeInfo| {
+        v.java_converter
+            .as_ref()
+            .map(|x| !x.converter.is_empty())
+            .unwrap_or(false)
+    }) || f_method
+        .output
+        .java_converter
+        .as_ref()
+        .map(|x| !x.converter.is_empty())
+        .unwrap_or(false);
     match method.variant {
         MethodVariant::StaticMethod if !need_conv => method.short_name().as_str().to_string(),
         MethodVariant::Method(_) | MethodVariant::StaticMethod => {

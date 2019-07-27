@@ -7,8 +7,8 @@ use syn::{spanned::Spanned, Type};
 
 use crate::{
     cpp::{
-        cpp_code, fmt_write_err_map, map_type, map_write_err, rust_generate_args_with_types,
-        CppContext, CppForeignMethodSignature, CppForeignTypeInfo,
+        cpp_code, map_type, rust_generate_args_with_types, CppContext, CppForeignMethodSignature,
+        CppForeignTypeInfo,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
@@ -306,7 +306,7 @@ pub(in crate::cpp) fn generate_for_interface(
     interface: &ForeignInterface,
     req_includes: &[SmolStr],
     f_methods: &[CppForeignMethodSignature],
-) -> std::result::Result<(), String> {
+) -> std::result::Result<(), DiagnosticError> {
     use std::fmt::Write;
 
     let c_interface_struct_header = format!("c_{}.h", interface.name);
@@ -328,7 +328,7 @@ struct C_{interface_name} {{
         interface_name = interface.name,
         doc_comments = interface_comments
     )
-    .map_err(&map_write_err)?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
     let mut cpp_virtual_methods = String::new();
     let mut cpp_static_reroute_methods = format!(
@@ -382,7 +382,7 @@ struct C_{interface_name} {{
             ),
             c_ret_type = c_ret_type,
         )
-        .map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
 
         writeln!(
             &mut cpp_virtual_methods,
@@ -397,7 +397,7 @@ struct C_{interface_name} {{
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
         let (conv_args_code, call_input_args) =
-            cpp_code::convert_args(f_method, known_names, method.arg_names_without_self());
+            cpp_code::convert_args(f_method, &mut known_names, method.arg_names_without_self())?;
 
         write!(
             &mut cpp_static_reroute_methods,
@@ -431,7 +431,7 @@ struct C_{interface_name} {{
                 method_name = method.name,
                 input_args = call_input_args,
             )
-            .map_err(&map_write_err)?;
+            .expect(WRITE_TO_MEM_FAILED_MSG);
         } else {
             writeln!(
                 &mut cpp_static_reroute_methods,
@@ -445,14 +445,14 @@ struct C_{interface_name} {{
                 cpp_out_conv = cpp_out_conv,
                 p = interface_ptr,
             )
-            .map_err(&map_write_err)?;
+            .expect(WRITE_TO_MEM_FAILED_MSG);
         }
         writeln!(
             &mut cpp_fill_c_interface_struct,
             "        ret.{method_name} = c_{method_name};",
             method_name = method.name,
         )
-        .map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
     file_c
         .write_all(
@@ -464,7 +464,7 @@ struct C_{interface_name} {{
 
     let mut includes = String::new();
     for inc in req_includes {
-        writeln!(&mut includes, r#"#include {}"#, inc).map_err(fmt_write_err_map)?;
+        writeln!(&mut includes, r#"#include {}"#, inc).expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     writeln!(
@@ -505,12 +505,14 @@ private:
         cpp_fill_c_interface_struct = cpp_fill_c_interface_struct,
         namespace_name = ctx.cfg.namespace_name,
     )
-    .map_err(&map_write_err)?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
-    file_c.update_file_if_necessary().map_err(&map_write_err)?;
+    file_c
+        .update_file_if_necessary()
+        .map_err(DiagnosticError::map_any_err_to_our_err)?;
     file_cpp
         .update_file_if_necessary()
-        .map_err(&map_write_err)?;
+        .map_err(DiagnosticError::map_any_err_to_our_err)?;
 
     Ok(())
 }

@@ -1,57 +1,58 @@
-use lazy_static::lazy_static;
 use quote::quote;
 use rustc_hash::FxHashMap;
+use smol_str::SmolStr;
 use std::{io::Write, str};
 use syn::{parse_quote, visit::Visit};
 
 use super::{
-    find_cache::JniCacheMacroCalls, java_class_full_name, java_code::filter_null_annotation,
-    JniForeignMethodSignature,
+    find_cache::{JniCacheMacroCalls, JniCacheMacroCallsVisitor},
+    java_code::filter_null_annotation,
+    JavaContext, JniForeignMethodSignature,
 };
 use crate::{
     error::{invalid_src_id_span, panic_on_syn_error, DiagnosticError, Result},
     typemap::ast::DisplayToTokens,
     types::{ForeignerClassInfo, MethodVariant},
-    TypeMap, WRITE_TO_MEM_FAILED_MSG,
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
-lazy_static! {
-    static ref JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE: FxHashMap<&'static str, &'static str> = {
-        let mut m = FxHashMap::default();
-        m.insert("String", "Ljava.lang.String;");
-        m.insert("Byte", "Ljava.lang.Byte");
-        m.insert("Short", "Ljava.lang.Short");
-        m.insert("Integer", "Ljava.lang.Integer");
-        m.insert("Long", "Ljava.lang.Long");
-        m.insert("Float", "Ljava.lang.Float");
-        m.insert("Double", "Ljava.lang.Double");
-        m.insert("boolean", "Z");
-        m.insert("byte", "B");
-        m.insert("char", "C");
-        m.insert("double", "D");
-        m.insert("float", "F");
-        m.insert("int", "I");
-        m.insert("long", "J");
-        m.insert("object", "L");
-        m.insert("short", "S");
-        m.insert("void", "V");
-        m
-    };
+pub(in crate::java_jni) fn predefined_java_type_to_jni_sig() -> FxHashMap<SmolStr, SmolStr> {
+    let mut m = FxHashMap::default();
+    m.insert("String".into(), "Ljava.lang.String;".into());
+    m.insert("Byte".into(), "Ljava.lang.Byte".into());
+    m.insert("Short".into(), "Ljava.lang.Short".into());
+    m.insert("Integer".into(), "Ljava.lang.Integer".into());
+    m.insert("Long".into(), "Ljava.lang.Long".into());
+    m.insert("Float".into(), "Ljava.lang.Float".into());
+    m.insert("Double".into(), "Ljava.lang.Double".into());
+    m.insert("boolean".into(), "Z".into());
+    m.insert("byte".into(), "B".into());
+    m.insert("char".into(), "C".into());
+    m.insert("double".into(), "D".into());
+    m.insert("float".into(), "F".into());
+    m.insert("int".into(), "I".into());
+    m.insert("long".into(), "J".into());
+    m.insert("object".into(), "L".into());
+    m.insert("short".into(), "S".into());
+    m.insert("void".into(), "V".into());
+    m
 }
 
-fn java_type_to_jni_signature(java_type: &str) -> Option<&'static str> {
+fn java_type_to_jni_signature<'a>(ctx: &'a JavaContext, java_type: &str) -> Option<&'a str> {
     if java_type.contains("@NonNull") || java_type.contains("@Nullable") {
         let java_type = filter_null_annotation(java_type);
-        JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE
-            .get(&java_type.trim())
-            .cloned()
+        ctx.java_type_to_jni_sig_map
+            .get(java_type.trim())
+            .map(SmolStr::as_str)
     } else {
-        JAVA_TYPE_NAMES_FOR_JNI_SIGNATURE.get(&java_type).cloned()
+        ctx.java_type_to_jni_sig_map
+            .get(java_type)
+            .map(SmolStr::as_str)
     }
 }
 
 pub(in crate::java_jni) fn generate_jni_func_name(
-    package_name: &str,
+    ctx: &JavaContext,
     class: &ForeignerClassInfo,
     java_method_name: &str,
     method_type: MethodVariant,
@@ -71,7 +72,7 @@ pub(in crate::java_jni) fn generate_jni_func_name(
             }
         }
     }
-    escape_underscore(package_name, &mut output);
+    escape_underscore(&ctx.cfg.package_name, &mut output);
     output.push_str("_");
     escape_underscore(&class.name.to_string(), &mut output);
     output.push_str("_");
@@ -89,7 +90,7 @@ pub(in crate::java_jni) fn generate_jni_func_name(
                 .map(|x| x.java_transition_type.as_str())
                 .unwrap_or_else(|| arg.as_ref().name.as_str());
 
-            let type_name = java_type_to_jni_signature(type_name).ok_or_else(|| {
+            let type_name = java_type_to_jni_signature(ctx, type_name).ok_or_else(|| {
                 DiagnosticError::new(
                     class.src_id,
                     class.span(),
@@ -110,41 +111,31 @@ pub(in crate::java_jni) fn generate_jni_func_name(
 }
 
 pub(in crate::java_jni) fn jni_method_signature(
+    ctx: &JavaContext,
     method: &JniForeignMethodSignature,
-    package_name: &str,
-    conv_map: &TypeMap,
 ) -> String {
     let mut ret: String = "(".into();
     for arg in &method.input {
-        let mut gen_sig = String::new();
         let java_type: String = filter_null_annotation(arg.as_ref().name.as_str())
             .trim()
             .into();
-        let sig = java_type_to_jni_signature(&java_type)
-            .or_else(|| {
-                if conv_map.is_generated_foreign_type(&java_type) {
-                    gen_sig = format!("L{};", &java_class_full_name(package_name, &java_type));
-                    Some(&gen_sig)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| {
-                panic!(
-                    "Unknown type `{}`, can not generate jni signature",
-                    java_type
-                )
-            });
+        let sig = java_type_to_jni_signature(ctx, &java_type).unwrap_or_else(|| {
+            panic!(
+                "Unknown type `{}`, can not generate JNI signature",
+                java_type
+            )
+        });
         let sig = sig.replace('.', "/");
         ret.push_str(&sig);
     }
     ret.push(')');
-    let sig = java_type_to_jni_signature(method.output.base.name.as_str()).unwrap_or_else(|| {
-        panic!(
-            "Unknown type `{}`, can not generate jni signature",
-            method.output.base.name
-        )
-    });
+    let sig =
+        java_type_to_jni_signature(ctx, method.output.base.name.as_str()).unwrap_or_else(|| {
+            panic!(
+                "Unknown type `{}`, can not generate JNI signature",
+                method.output.base.name
+            )
+        });
     ret.push_str(sig);
     ret
 }
@@ -162,7 +153,14 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
     let file = syn::parse_file(code)
         .unwrap_or_else(|err| panic_on_syn_error("generated code", code.into(), err));
     let mut jni_cache_macro_calls = JniCacheMacroCalls::default();
-    jni_cache_macro_calls.visit_file(&file);
+    let mut visitor = JniCacheMacroCallsVisitor {
+        inner: &mut jni_cache_macro_calls,
+        errors: vec![],
+    };
+    visitor.visit_file(&file);
+    if !visitor.errors.is_empty() {
+        panic_on_syn_error("generated code", code.to_string(), visitor.errors.remove(0));
+    }
 
     let mut addon_code = Vec::with_capacity(3);
 
@@ -213,18 +211,37 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
 
         for m in &find_class.static_fields {
             let field_id = &m.id;
-            let method_name = &m.name;
+            let field_name = &m.name;
             let method_sig = &m.sig;
             class_get_method_id_calls.push(quote! {
                 let field_id: jfieldID = (**env).GetStaticFieldID.unwrap()(
                     env,
                     class,
-                    swig_c_str!(#method_name),
+                    swig_c_str!(#field_name),
                     swig_c_str!(#method_sig),
                 );
                 assert!(!field_id.is_null(),
                         concat!("GetStaticFieldID for class ", #class_name,
-                                " method ", #method_name,
+                                " method ", #field_name,
+                                " sig ", #method_sig, " failed"));
+                #field_id = field_id;
+            });
+        }
+
+        for m in &find_class.fields {
+            let field_id = &m.id;
+            let field_name = &m.name;
+            let method_sig = &m.sig;
+            class_get_method_id_calls.push(quote! {
+                let field_id: jfieldID = (**env).GetFieldID.unwrap()(
+                    env,
+                    class,
+                    swig_c_str!(#field_name),
+                    swig_c_str!(#method_sig),
+                );
+                assert!(!field_id.is_null(),
+                        concat!("GetStaticFieldID for class ", #class_name,
+                                " method ", #field_name,
                                 " sig ", #method_sig, " failed"));
                 #field_id = field_id;
             });
