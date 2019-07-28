@@ -1,4 +1,4 @@
-use rust_swig::{CppConfig, LanguageConfig};
+use rust_swig::{CppConfig, CppOptional, CppStrView, CppVariant, LanguageConfig};
 use std::{env, path::Path};
 
 fn main() {
@@ -8,7 +8,10 @@ fn main() {
         Path::new("..").join("cpp-part").join("rust-api"),
         // ANCHOR_END: cpp_output
         "rust".into(),
-    );
+    )
+    .cpp_optional(CppOptional::Boost)
+    .cpp_variant(CppVariant::Boost)
+    .cpp_str_view(CppStrView::Boost);
     let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
     swig_gen.expand(
         "c++-api-for-rust",
