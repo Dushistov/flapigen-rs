@@ -3,6 +3,7 @@ mod cpp_glue;
 pub use crate::cpp_glue::*;
 // ANCHOR_END: connect
 
+// ANCHOR: rust_class
 pub struct Foo {
     data: i32,
 }
@@ -20,6 +21,7 @@ impl Foo {
         self.data = v;
     }
 }
+// ANCHOR_END: rust_class
 
 fn f2(a: i32) -> i32 {
     a * 2

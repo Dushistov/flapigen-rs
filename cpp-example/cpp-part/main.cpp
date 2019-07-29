@@ -6,8 +6,10 @@ using namespace rust;
 
 int main()
 {
+    // ANCHOR: call_rust
     Foo foo(5);
     int res = foo.f(1, 2);
+    // ANCHOR_END: call_rust
     if (res == 8) {
         std::cout << "All works fine\n";
     }
