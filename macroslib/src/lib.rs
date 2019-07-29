@@ -576,7 +576,7 @@ pub fn rustfmt_cnt(source: Vec<u8>) -> io::Result<Vec<u8>> {
 
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::null());
 
     let mut child = cmd.spawn()?;
     let mut child_stdin = child.stdin.take().unwrap();
