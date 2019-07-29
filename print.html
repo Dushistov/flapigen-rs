@@ -173,6 +173,7 @@ use std::{env, path::Path};
 
 fn main() {
     let out_dir = env::var(&quot;OUT_DIR&quot;).expect(&quot;no OUT_DIR, but cargo should provide it&quot;);
+    //ANCHOR: cpp_config
     let cpp_cfg = CppConfig::new(
         // ANCHOR: cpp_output
         Path::new(&quot;..&quot;).join(&quot;cpp-part&quot;).join(&quot;rust-api&quot;),
@@ -182,6 +183,7 @@ fn main() {
     .cpp_optional(CppOptional::Boost)
     .cpp_variant(CppVariant::Boost)
     .cpp_str_view(CppStrView::Boost);
+    //ANCHOR_END: cpp_config
     let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
     swig_gen.expand(
         &quot;c++-api-for-rust&quot;,
@@ -234,8 +236,31 @@ include!(concat!(env!(&quot;OUT_DIR&quot;), &quot;/cpp_glue.rs&quot;));
 </code></pre>
 <p>Do not forget add <code>rust_swig</code> as dependency into <code>[build-dependencies]</code> section of crate's <code>Cargo.toml</code> file and you ready to go.</p>
 <h1><a class="header" href="#c" id="c">C++</a></h1>
-<p>To run cpp-example from <a href="https://github.com/Dushistov/rust_swig/tree/master/cpp-example">here</a> you need <a href="https://www.boost.org/">boost</a>, <a href="https://cmake.org/">cmake</a> and C++11 compatible compiler.</p>
-<p>After that you should have no problem to call this Rust code:</p>
+<p>To run cpp-example from <a href="https://github.com/Dushistov/rust_swig/tree/master/cpp-example">here</a> you
+need <a href="https://www.boost.org/">boost</a>, <a href="https://cmake.org/">cmake</a> and C++11 compatible compiler.</p>
+<h2><a class="header" href="#project-structure" id="project-structure">Project Structure</a></h2>
+<p>The projects consists of two parts: <a href="https://github.com/Dushistov/rust_swig/tree/master/cpp-example/cpp-part">cpp-part</a>
+and <a href="https://github.com/Dushistov/rust_swig/tree/master/cpp-example/rust-part">rust-part</a>.
+rust-part is compiled as shared library and linked into executable
+described by <a href="https://github.com/Dushistov/rust_swig/tree/master/cpp-example/cpp-part/CMakeLists.txt">CMakeLists.txt</a>.
+cpp-part is main part so its build system (cmake) invokes <code>cargo</code> to build rust-part.</p>
+<h2><a class="header" href="#building" id="building">Building</a></h2>
+<p>It is normal CMake project, so you can build as ordinary CMake project.
+By default it requires C++11 and boost, but if your compiler is modern enough
+you can use C++17 and then you no need boost at all.</p>
+<p>Just delete all mentions of boost here:</p>
+<pre><code class="language-rust no_run noplaypen">// build.rs
+    let cpp_cfg = CppConfig::new(
+        Path::new(&quot;..&quot;).join(&quot;cpp-part&quot;).join(&quot;rust-api&quot;),
+        &quot;rust&quot;.into(),
+    )
+    .cpp_optional(CppOptional::Boost)
+    .cpp_variant(CppVariant::Boost)
+    .cpp_str_view(CppStrView::Boost);
+</code></pre>
+<h2><a class="header" href="#the-main-functionality" id="the-main-functionality">The main functionality</a></h2>
+<p>Project demonstrate how export Rust in form of class to C++.</p>
+<p>Rust code:</p>
 <pre><code class="language-rust no_run noplaypen">// src/lib.rs
 pub struct Foo {
     data: i32,
@@ -255,7 +280,20 @@ impl Foo {
     }
 }
 </code></pre>
-<p>from C++:</p>
+<p>Described as class:</p>
+<pre><code class="language-rust no_run noplaypen">// src/cpp_glue.rs.in
+use super::{f2, Foo};
+
+foreign_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new(_: i32) -&gt; Foo;
+    fn Foo::set_field(&amp;mut self, _: i32);
+    fn Foo::f(&amp;self, _: i32, _: i32) -&gt; i32;
+    fn f2(_: i32) -&gt; i32;
+});
+
+</code></pre>
+<p>Usage from C++:</p>
 <pre><code class="language-c++ no_run noplaypen">// main.cpp
     Foo foo(5);
     int res = foo.f(1, 2);
@@ -266,7 +304,7 @@ and use it through an automatically generated JNI wrapper.</p>
 <p><a href="https://developer.android.com/studio">Android Studio</a> can be used to work with Rust via <a href="https://intellij-rust.github.io/">Rust plugin</a>.
 So it is not bad idea to integrate invocation of cargo into gradle,
 thus you can build and run android application with Rust inside as ordinary Java/Kotlin application.</p>
-<h2><a class="header" href="#project-structure" id="project-structure">Project Structure</a></h2>
+<h2><a class="header" href="#project-structure-1" id="project-structure-1">Project Structure</a></h2>
 <p>The file <code>build.rs</code> defines how rust_swig generates wrapper code:</p>
 <pre><code class="language-rust no_run noplaypen">// build.rs
     let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(
@@ -381,7 +419,7 @@ archTriplets.each { arch, target -&gt;
     clean.dependsOn &quot;clean-${arch}&quot;
 }
 </code></pre>
-<h2><a class="header" href="#building" id="building">Building</a></h2>
+<h2><a class="header" href="#building-1" id="building-1">Building</a></h2>
 <p>To build the demo, you will need the latest version of Cargo, Android NDK and install proper Rust toolchains:</p>
 <pre><code class="language-shell">rustup target add arm-linux-androideabi
 rustup target add aarch64-linux-android

@@ -160,6 +160,7 @@ use std::{env, path::Path};
 
 fn main() {
     let out_dir = env::var(&quot;OUT_DIR&quot;).expect(&quot;no OUT_DIR, but cargo should provide it&quot;);
+    //ANCHOR: cpp_config
     let cpp_cfg = CppConfig::new(
         // ANCHOR: cpp_output
         Path::new(&quot;..&quot;).join(&quot;cpp-part&quot;).join(&quot;rust-api&quot;),
@@ -169,6 +170,7 @@ fn main() {
     .cpp_optional(CppOptional::Boost)
     .cpp_variant(CppVariant::Boost)
     .cpp_str_view(CppStrView::Boost);
+    //ANCHOR_END: cpp_config
     let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
     swig_gen.expand(
         &quot;c++-api-for-rust&quot;,
