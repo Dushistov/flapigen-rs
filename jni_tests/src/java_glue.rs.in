@@ -46,6 +46,7 @@ impl Foo {
     }
 }
 
+//ANCHOR: doc_comments_usage
 foreign_class!(
 /// Class comment description for Foo.
 #[derive(Clone)]
@@ -60,7 +61,10 @@ class Foo {
     /// @param val - some number
     /// @param name - more information
     constructor Foo::new(val: i32, name: &str) -> Foo;
+    //ANCHOR_END: doc_comments_usage
+    //ANCHOR: alias_usage
     fn Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
+    //ANCHOR_END: alias_usage
     fn Foo::f_double(&self, _: f64, _: f64) -> f64;
     fn Foo::name(&self) -> &str; alias getName;
     fn fHypot(a: f64, b: f64) -> f64 {
@@ -213,19 +217,21 @@ impl TestPathAndResult {
     }
 }
 
+//ANCHOR: foreign_code_usage
 foreign_class!(class TestPathAndResult {
     self_type TestPathAndResult;
     constructor TestPathAndResult::empty() -> Result<TestPathAndResult, String>;
     constructor TestPathAndResult::new(path: &Path) -> Result<TestPathAndResult, String>;
     fn TestPathAndResult::get_path(&self) -> String; alias getPath;
     fn TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
-    foreigner_code "    public int javaFunc() { return 17; }\n";
-    foreigner_code r#"
+    foreign_code "    public int javaFunc() { return 17; }\n";
+    foreign_code r#"
     public Boo[] testHandArrayReturn() { return do_testHandArrayReturn(this.mNativeObj); }
     private static native Boo[] do_testHandArrayReturn(long me);
 "#;
     fn TestPathAndResult::get_foo_list(&self) -> Vec<Foo>;
 });
+//ANCHOR_END: foreign_code_usage
 
 #[allow(non_snake_case)]
 #[no_mangle]
@@ -564,6 +570,7 @@ foreign_class!(class LocationService {
     fn LocationService::position() -> Result<GnssInfo, &'static str>;
 });
 
+//ANCHOR: foreign_enum_usage
 #[derive(Clone, Copy)]
 enum MyEnum {
     Item1,
@@ -578,6 +585,7 @@ foreign_enum!(
         ITEM3 = MyEnum::Item3,
     }
 );
+//ANCHOR_END: foreign_enum_usage
 
 #[derive(Default)]
 struct Moo;
@@ -601,6 +609,7 @@ impl Moo {
     }
 }
 
+//ANCHOR: trait_as_callback
 trait EnumObserver {
     fn on_state_changed(&self, item: MyEnum, is_ok: bool);
 }
@@ -623,6 +632,7 @@ foreign_class!(class TestEnumClass {
         }
     }
 });
+//ANCHOR_END: trait_as_callback
 
 trait OnEvent {
     fn something_change(&self, x: i32, s: &str);
@@ -837,11 +847,13 @@ impl CircularDepsB {
     }
 }
 
+//ANCHOR: arc_mutex_usage
 foreign_class!(class CircularDepsA {
     self_type CircularDepsA;
     constructor CircularDepsA::java_new(_: &str) -> Arc<Mutex<CircularDepsA>>;
     fn CircularDepsA::a(&self, b: &CircularDepsB) -> String;
 });
+//ANCHOR_END: arc_mutex_usage
 
 foreign_class!(class CircularDepsB {
     self_type CircularDepsB;
