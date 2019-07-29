@@ -1,5 +1,5 @@
 [package]
-name = "android"
+name = "android-tests"
 version = "0.0.1"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 build = "build.rs"
@@ -13,8 +13,8 @@ crate-type = ["cdylib"]
 log = "0.4.6"
 log-panics = "2.0"
 android_logger = "0.8"
-jni-sys = "0.3.0"
 
 [build-dependencies]
 rust_swig = { path = "../macroslib" }
-env_logger = "0.6"
+bindgen = "0.49.0"
+walkdir = "2.2.7"

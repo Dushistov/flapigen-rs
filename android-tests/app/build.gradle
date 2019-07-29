@@ -6,7 +6,7 @@ android {
     buildToolsVersion "28.0.3"
     defaultConfig {
         applicationId "net.akaame.myapplication"
-        minSdkVersion 21
+        minSdkVersion 16
         targetSdkVersion 28
         versionCode 1
         versionName "1.0.1"
@@ -40,17 +40,20 @@ dependencies {
     testImplementation 'junit:junit:4.12'
 }
 
-// ANCHOR:cargo
 def rustBasePath = ".."
+//def cargoOutputDir = "${rustBasePath}/target"
 def archTriplets = [
-    'armeabi': 'arm-linux-androideabi',
-    'arm64': 'aarch64-linux-android',
-]
+        'armeabi': 'arm-linux-androideabi',
+        //            'arm64': 'aarch64-linux-android',
+        //            'x86': 'i686-linux-android',
+        //            'x86_64': 'x86_64-linux-android'
+        ]
+
 
 // TODO: only pass --release if buildType is release
 archTriplets.each { arch, target ->
     // execute cargo metadata and get path to target directory
-    tasks.create(name: "cargo-output-dir-${arch}", description: "Get cargo metadata") {
+    tasks.create(name: "cargo-output-dir", description: "Get cargo metadata") {
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 commandLine 'cargo', 'metadata', '--format-version', '1'
@@ -65,7 +68,7 @@ archTriplets.each { arch, target ->
         }
     }
     // Build with cargo
-    tasks.create(name: "cargo-build-${arch}", type: Exec, description: "Building core for ${arch}", dependsOn: "cargo-output-dir-${arch}") {
+    tasks.create(name: "cargo-build-${arch}", type: Exec, description: "Building core for ${arch}", dependsOn: "cargo-output-dir") {
         workingDir rustBasePath
         commandLine 'cargo', 'build', "--target=${target}", '--release'
     }
@@ -89,11 +92,10 @@ archTriplets.each { arch, target ->
     preBuild.dependsOn "rust-deploy-${arch}"
 
     // Hook up clean tasks
-    tasks.create(name: "clean-${arch}", type: Delete, description: "Deleting built libs for ${arch}", dependsOn: "cargo-output-dir-${arch}") {
+    tasks.create(name: "clean-${arch}", type: Delete, description: "Deleting built libs for ${arch}", dependsOn: "cargo-output-dir") {
         delete fileTree("${project.ext.cargo_target_directory}/${target}/release") {
             include '*.so'
         }
     }
     clean.dependsOn "clean-${arch}"
 }
-// ANCHOR_END:cargo
