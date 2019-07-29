@@ -329,6 +329,12 @@ fn merge_rule(ctx: &mut JavaContext, mut rule: TypeMapConvRuleInfo) -> Result<()
 }
 
 fn init(ctx: &mut JavaContext, _code: &[SourceCode]) -> Result<()> {
+    if !(ctx.cfg.output_dir.exists() && ctx.cfg.output_dir.is_dir()) {
+        return Err(DiagnosticError::map_any_err_to_our_err(format!(
+            "Path {} not exists or not directory",
+            ctx.cfg.output_dir.display()
+        )));
+    }
     ctx.conv_map
         .find_or_alloc_rust_type_no_src_id(&parse_type! { jint });
     ctx.conv_map

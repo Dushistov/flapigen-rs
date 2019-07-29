@@ -1,8 +1,11 @@
-use crate::{android_c_headers::*, Session};
+use crate::Session;
+use jni_sys::*;
 
-foreigner_class!(class Session {
+// ANCHOR: api
+foreign_class!(class Session {
     self_type Session;
     constructor Session::new() -> Session;
     fn Session::add_and1(&self, val: i32) -> i32;
     fn Session::greet(to: &str) -> String;
 });
+// ANCHOR_END: api

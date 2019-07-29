@@ -66,7 +66,7 @@ foreign_callback!(callback SomeObserver {
     isOdd = SomeObserver::is_odd(&self, x: i32) -> bool;
 });
 
-foreigner_class!(class Foo {
+foreign_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32, _: &str) -> Foo;
     fn Foo::f(&self, a: i32, b: i32) -> i32;
@@ -158,7 +158,7 @@ fn xor(x: bool, y: bool) -> bool {
     x ^ y
 }
 
-foreigner_class!(class CheckPrimitiveTypesClass {
+foreign_class!(class CheckPrimitiveTypesClass {
     self_type CheckPrimitiveTypesClass;
     constructor create_boo() -> Rc<RefCell<CheckPrimitiveTypesClass>>;
     fn CheckPrimitiveTypesClass::test(&self, _: bool) -> f32;
@@ -196,7 +196,7 @@ impl ClassCooperationTest {
     }
 }
 
-foreigner_class!(class ClassCooperationTest {
+foreign_class!(class ClassCooperationTest {
     self_type ClassCooperationTest;
     constructor ClassCooperationTest::new() -> ClassCooperationTest;
     fn ClassCooperationTest::get(&self, _: u32) -> Foo;
@@ -235,7 +235,7 @@ fn create_test_obj_with_lifetime<'a>() -> TestObjectLifetime<'a> {
     TestObjectLifetime { data: Box::new(5) }
 }
 
-foreigner_class!(class TestObjectLifetime {
+foreign_class!(class TestObjectLifetime {
     self_type TestObjectLifetime<'a>;
     constructor create_test_obj_with_lifetime() -> TestObjectLifetime<'a>;
     fn TestObjectLifetime::set_data(&mut self, v1: i8, v2: i16, v3: i32, v4: f64, v5: f32);
@@ -343,7 +343,7 @@ impl TestWorkWithVec {
     }
 }
 
-foreigner_class!(class TestWorkWithVec {
+foreign_class!(class TestWorkWithVec {
     self_type TestWorkWithVec;
     constructor TestWorkWithVec::new(_: &str) -> TestWorkWithVec;
     fn TestWorkWithVec::get_bytes(&self, n: u32) -> Vec<u8>;
@@ -402,7 +402,7 @@ impl TestEnumClass {
     }
 }
 
-foreigner_class!(class TestEnumClass {
+foreign_class!(class TestEnumClass {
     self_type TestEnumClass;
     constructor TestEnumClass::default() -> TestEnumClass;
     fn TestEnumClass::f1(&mut self, v: MyEnum) -> i32;
@@ -423,7 +423,7 @@ impl TestPassPathAsParam {
     }
 }
 
-foreigner_class!(class TestPassPathAsParam {
+foreign_class!(class TestPassPathAsParam {
     self_type TestPassPathAsParam;
     constructor TestPassPathAsParam::default() -> TestPassPathAsParam;
     fn TestPassPathAsParam::set_path(&mut self, p: &Path);
@@ -534,7 +534,7 @@ To carry that wonderful nose."#
     }
 }
 
-foreigner_class!(class TestOptional {
+foreign_class!(class TestOptional {
     self_type TestOptional;
     constructor TestOptional::default() -> TestOptional;
     fn TestOptional::f1(&self, _: bool) -> Option<Foo>;
@@ -641,7 +641,7 @@ impl TestError {
     }
 }
 
-foreigner_class!(class TestError {
+foreign_class!(class TestError {
     self_type TestError;
     constructor TestError::default() -> TestError;
     fn TestError::to_string(&self) -> String;
@@ -659,7 +659,7 @@ foreign_enum!(
     }
 );
 
-foreigner_class!(class TestResult {
+foreign_class!(class TestResult {
     self_type TestResult;
     private constructor TestResult::default() -> TestResult;
     fn TestResult::new_with_err() -> Result<TestResult, String>;
@@ -705,7 +705,7 @@ impl TestReferences {
     }
 }
 
-foreigner_class!(class TestReferences {
+foreign_class!(class TestReferences {
     self_type TestReferences;
     constructor TestReferences::new(foo_data: i32, foo_name: &str) -> TestReferences;
     fn TestReferences::get_foo_ref(&self) -> &Foo;
@@ -719,7 +719,7 @@ fn add_func(a: i32, b: i32) -> i32 {
     a + b
 }
 
-foreigner_class!(class TestOnlyStaticMethods {
+foreign_class!(class TestOnlyStaticMethods {
     fn add_func(_: i32, _: i32) -> i32;
 });
 
@@ -733,7 +733,7 @@ impl GnssInfo {
     }
 }
 
-foreigner_class!(class Position {
+foreign_class!(class Position {
     self_type GnssInfo;
     private constructor = empty;
     fn GnssInfo::latitude(&self) -> f64;
@@ -747,10 +747,11 @@ impl LocationService {
     }
 }
 
-foreigner_class!(class LocationService {
+foreign_class!(class LocationService {
     fn LocationService::position() -> Result<GnssInfo, String>;
 });
 
+//ANCHOR: boxed_trait
 pub trait Interface {
     fn f(&self, _: i32) -> i32;
     fn set(&mut self, _: i32);
@@ -772,17 +773,18 @@ fn create_interface() -> Box<Box<Interface>> {
     Box::new(Box::new(InterfaceImpl { base: 17 }))
 }
 
-foreigner_class!(class Interface {
+foreign_class!(class Interface {
     self_type Interface;
     constructor create_interface() -> Box<Box<Interface>>;
     fn Interface::f(&self, _: i32) -> i32;
     fn Interface::set(&mut self, x: i32);
 });
+//ANCHOR_END: boxed_trait
 
 #[derive(Default)]
 pub struct TestPassInterface;
 
-foreigner_class!(class TestPassInterface {
+foreign_class!(class TestPassInterface {
     self_type TestPassInterface;
     constructor TestPassInterface::default() -> TestPassInterface;
     fn use_interface(a: Box<Box<Interface>>, b: i32) -> i32 {
@@ -828,7 +830,7 @@ impl RecursiveStruct {
     }
 }
 
-foreigner_class!(class RecursiveStruct {
+foreign_class!(class RecursiveStruct {
     self_type RecursiveStruct;
     constructor RecursiveStruct::create_with_two_childs(
         name: String,
@@ -873,13 +875,13 @@ impl Boo {
     }
 }
 
-foreigner_class!(class Boo {
+foreign_class!(class Boo {
     self_type Boo;
     private constructor = empty;
     fn Boo::f(&self) -> i32;
 });
 
-foreigner_class!(class TestPair {
+foreign_class!(class TestPair {
     fn Boo::return_pair_obj1() -> (Foo, Boo);
     fn Boo::return_pair_obj2() -> (Boo, Foo);
     fn Boo::return_pair_f32_i32() -> (f32, i32);
@@ -903,7 +905,7 @@ impl TestCopy {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     #[derive(Copy)]
     class TestCopy {
         self_type TestCopy;
@@ -926,7 +928,7 @@ impl GetSetStrTest {
     }
 }
 
-foreigner_class!(class GetSetStrTest {
+foreign_class!(class GetSetStrTest {
     self_type GetSetStrTest;
     constructor GetSetStrTest::default() -> GetSetStrTest;
     fn GetSetStrTest::get_str(&self) -> &str;
@@ -960,15 +962,17 @@ fn inc_vec2(v: Vec2) -> Vec2 {
     }
 }
 
-foreigner_class!(class TestWorkWithReprC {
+foreign_class!(class TestWorkWithReprC {
     fn inc_vec2(v: Vec2) -> Vec2;
 });
 
-foreigner_class!(class TestFnInline {
+// ANCHOR: inline_method
+foreign_class!(class TestFnInline {
     fn int_to_str(a: i32) -> String {
         format!("{}", a)
     }
 });
+// ANCHOR_END: inline_method
 
 foreign_typemap!(
     generic_alias!(CFnOnce = swig_concat_idents!(CFnOnce, swig_i_type!(T)));
@@ -1003,8 +1007,26 @@ foreign_typemap!(
 "#;
 );
 
-foreigner_class!(class TestFuture {
+foreign_class!(class TestFuture {
     fn call_fn(f: impl FnOnce(Foo)) {
         f(Foo::new(-1, "from callback"));
     }
 });
+
+//ANCHOR: method_not_method
+pub struct TestMethodNotMethod;
+
+impl TestMethodNotMethod {
+    fn new() -> Self {
+        TestMethodNotMethod
+    }
+}
+
+fn method_not_method(_this: &TestMethodNotMethod) {}
+
+foreign_class!(class TestMethodNotMethod {
+    self_type TestMethodNotMethod;
+    constructor TestMethodNotMethod::new() -> TestMethodNotMethod;
+    fn method_not_method(&self);
+});
+//ANCHOR_END: method_not_method
