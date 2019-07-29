@@ -7,7 +7,7 @@ For example:
 {{#include ../../cpp-example/rust-part/Cargo.toml:cargo_lib_section}}
 ```
 
-Then you should create `build.rs` inside this crate
+Then you should create `build.rs` inside this crate.
 For example:
 
 ```rust,no_run,noplaypen
@@ -31,7 +31,7 @@ directory for C++ files:
 
 You can find detailed description of code generation in [suitable Cargo book's section](https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation).
 
-Then you should create file for "foreign" language API description,
+Then you should create file for "foreign" language API description.
 For example:
 
 ```rust,no_run,noplaypen
