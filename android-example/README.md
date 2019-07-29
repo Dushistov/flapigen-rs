@@ -1,1 +1,1 @@
-See rust_swig manual (TODO: add link)
+See [android-example chapter](https://dushistov.github.io/rust_swig/java-android-example.html )

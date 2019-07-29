@@ -1,6 +1,6 @@
 # C++
 
-To run cpp-example from [here](https://github.com/Dushistov/rust_swig/tree/master/cpp_example) you need [boost](https://www.boost.org/), [cmake](https://cmake.org/) and C++11 compatible compiler.
+To run cpp-example from [here](https://github.com/Dushistov/rust_swig/tree/master/cpp-example) you need [boost](https://www.boost.org/), [cmake](https://cmake.org/) and C++11 compatible compiler.
 
 After that you should have no problem to call this Rust code:
 
