@@ -1,8 +1,0 @@
-r##"# [ no_mangle ] pub extern "C" fn Boo_f2 ( this : * mut Boo , ) -> CRustOption4232mut3232c_void {
- let this : & mut Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
- let mut ret : Option < Box < Box < Foo > > > = Boo :: f2 ( this , ) ;
- let ret : CRustOption4232mut3232c_void = match ret { Some ( x ) => {
- let data : * mut :: std :: os :: raw :: c_void = < Box < Box < Foo > >>:: box_object ( x ) ;
- CRustOption4232mut3232c_void { val : CRustOptionUnion4232mut3232c_void { data } , is_some : 1 , } }
- None => CRustOption4232mut3232c_void { val : CRustOptionUnion4232mut3232c_void { uninit : 0 } , is_some : 0 , } , } ;
- ret }"##;

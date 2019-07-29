@@ -1,9 +1,0 @@
-r#"impl SwigFrom < jobject > for Box < SomeTrait > {
- fn swig_from ( this : jobject , env : * mut JNIEnv ) -> Self {
- let mut cb = JavaCallback :: new ( this , env ) ; cb . methods . reserve ( 1 ) ;
- let class = unsafe { ( * * env ) . GetObjectClass . unwrap ( ) ( env , cb . this ) } ;
- assert ! ( ! class . is_null ( ) , "GetObjectClass return null class for SomeObserver" ) ;
- let method_id : jmethodID = unsafe { ( * * env ) . GetMethodID . unwrap ( ) ( env , class , swig_c_str ! ( "onStateChanged" ) , swig_c_str ! ( "(Ljava/lang/String;)V" ) ) } ;
- assert ! ( ! method_id . is_null ( ) , "Can not find onStateChanged id" ) ;
- cb . methods . push ( method_id ) ;
- Box :: new ( cb ) } }"#;

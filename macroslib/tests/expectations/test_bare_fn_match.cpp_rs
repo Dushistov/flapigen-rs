@@ -1,6 +1,0 @@
-r##"# [ no_mangle ]
- pub extern "C" fn TestFuture_call_fn ( f : CFnOncei32 , ) -> ( ) {
- let f = | x | { ; f . cb ( x , f . ctx ) ; } ;
- let mut ret : ( ) = { f ( 5 ) ; } ;
- ret
- }"##;

@@ -1,6 +1,0 @@
-r#"pub extern "C" fn TestPassInterface_use_interface ( a : * mut :: std :: os :: raw :: c_void , b : i32 , ) -> i32 {
- assert ! ( ! a . is_null ( ) ) ;
- let a : * mut Box < Interface > = a as * mut Box < Interface >;
- let a : Box < Box < Interface > > = unsafe { Box :: from_raw ( a ) } ;
- let mut ret : i32 = use_interface ( a , b ) ;
- ret }"#;

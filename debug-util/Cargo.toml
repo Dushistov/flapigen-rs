@@ -1,9 +1,0 @@
-[package]
-name = "debug-util"
-version = "0.1.0"
-authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
-edition = "2018"
-
-[dependencies]
-env_logger = "0.6"
-rust_swig = { path = "../macroslib" }

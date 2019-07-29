@@ -1,1 +1,0 @@
-"Boo getBoo() const";

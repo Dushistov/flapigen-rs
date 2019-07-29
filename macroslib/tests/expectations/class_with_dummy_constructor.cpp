@@ -1,3 +1,0 @@
-r#"private:
-
-    FooWrapper() noexcept {}"#;
