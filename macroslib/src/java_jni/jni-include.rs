@@ -310,11 +310,6 @@ impl JavaCallback {
         assert!(!self.java_vm.is_null());
         let mut env: *mut JNIEnv = ::std::ptr::null_mut();
 
-        #[cfg(target_os = "android")]
-        type GetJNiEnvPtrPtr = *mut *mut JNIEnv;
-        #[cfg(not(target_os = "android"))]
-        type GetJNiEnvPtrPtr = *mut *mut ::std::os::raw::c_void;
-
         let res = unsafe {
             (**self.java_vm).GetEnv.unwrap()(
                 self.java_vm,
@@ -333,10 +328,29 @@ impl JavaCallback {
             panic!("get_jni_env: GetEnv return error `{}`", res);
         }
 
+        // AttachCurrentThread for Android and other JNI
+        // has different signatures, second argument has type
+        // *mut *mut JNIEnv instead of *mut *mut c_void
+        trait ConvertPtr<T> {
+            fn convert_ptr(self) -> T;
+        }
+
+        impl ConvertPtr<*mut *mut ::std::os::raw::c_void> for *mut *mut JNIEnv {
+            fn convert_ptr(self) -> *mut *mut ::std::os::raw::c_void {
+                self as *mut *mut ::std::os::raw::c_void
+            }
+        }
+
+        impl ConvertPtr<*mut *mut JNIEnv> for *mut *mut JNIEnv {
+            fn convert_ptr(self) -> *mut *mut JNIEnv {
+                self
+            }
+        }
+
         let res = unsafe {
             (**self.java_vm).AttachCurrentThread.unwrap()(
                 self.java_vm,
-                (&mut env) as *mut *mut JNIEnv as GetJNiEnvPtrPtr,
+                (&mut env as *mut *mut JNIEnv).convert_ptr(),
                 ::std::ptr::null_mut(),
             )
         };
