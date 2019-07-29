@@ -1,6 +1,6 @@
 use super::{f2, Foo};
 
-foreigner_class!(class Foo {
+foreign_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
     fn Foo::set_field(&mut self, _: i32);

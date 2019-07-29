@@ -1,6 +1,6 @@
 use crate::{android_c_headers::*, Session};
 
-foreigner_class!(class Session {
+foreign_class!(class Session {
     self_type Session;
     constructor Session::new() -> Session;
     fn Session::add_and1(&self, val: i32) -> i32;

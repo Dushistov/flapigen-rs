@@ -2,7 +2,7 @@ use crate::Session;
 use jni_sys::*;
 
 // ANCHOR: api
-foreigner_class!(class Session {
+foreign_class!(class Session {
     self_type Session;
     constructor Session::new() -> Session;
     fn Session::add_and1(&self, val: i32) -> i32;

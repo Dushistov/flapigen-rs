@@ -11,7 +11,7 @@ use log::debug;
 
 use crate::jni_c_header::*;
 
-foreigner_class!(class RustLogging {
+foreign_class!(class RustLogging {
     fn init() {
         env_logger::init();
     }
@@ -46,7 +46,7 @@ impl Foo {
     }
 }
 
-foreigner_class!(
+foreign_class!(
 /// Class comment description for Foo.
 #[derive(Clone)]
 class Foo {
@@ -108,7 +108,7 @@ fn create_boo() -> Rc<RefCell<Boo>> {
     Rc::new(RefCell::new(Boo::new()))
 }
 
-foreigner_class!(class Boo {
+foreign_class!(class Boo {
     self_type Boo;
     constructor create_boo() -> Rc<RefCell<Boo>>;
     fn Boo::test(&self, _: bool) -> f32;
@@ -213,7 +213,7 @@ impl TestPathAndResult {
     }
 }
 
-foreigner_class!(class TestPathAndResult {
+foreign_class!(class TestPathAndResult {
     self_type TestPathAndResult;
     constructor TestPathAndResult::empty() -> Result<TestPathAndResult, String>;
     constructor TestPathAndResult::new(path: &Path) -> Result<TestPathAndResult, String>;
@@ -264,7 +264,7 @@ pub fn Java_com_example_rust_TestPathAndResult_do_1testHandArrayReturn(
     ret
 }
 
-foreigner_class!(class TestInner {
+foreign_class!(class TestInner {
     foreigner_code r#"
     public static final class Inner {
         public final String name;
@@ -319,7 +319,7 @@ impl Xyz {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     #[derive(Copy)]
     class Xyz {
         self_type Xyz;
@@ -379,7 +379,7 @@ impl TestContainers {
     }
 }
 
-foreigner_class!(class TestContainers {
+foreign_class!(class TestContainers {
     self_type TestContainers;
     constructor TestContainers::default() -> TestContainers;
     fn TestContainers::get_struct_vec(&self) -> Vec<Foo>;
@@ -392,7 +392,7 @@ fn f_hypot(a: f64, b: f64) -> f64 {
     a.hypot(b)
 }
 
-foreigner_class!(class OneStaticFunctionTest {
+foreign_class!(class OneStaticFunctionTest {
     fn f_hypot(_ :f64, _: f64) -> f64;
 });
 
@@ -441,7 +441,7 @@ fn arr_pass_through_long(a: &[i64]) -> &[i64] {
     a
 }
 
-foreigner_class!(class TestArraysWithPrimitiveTypes {
+foreign_class!(class TestArraysWithPrimitiveTypes {
     self_type TestArraysWithPrimitiveTypes;
     constructor TestArraysWithPrimitiveTypes::default() -> TestArraysWithPrimitiveTypes;
     constructor TestArraysWithPrimitiveTypes::new(_: i32, _: usize) -> TestArraysWithPrimitiveTypes;
@@ -517,7 +517,7 @@ impl TestPassObjectsAsParams {
     }
 }
 
-foreigner_class!(class TestPassObjectsAsParams {
+foreign_class!(class TestPassObjectsAsParams {
     self_type TestPassObjectsAsParams;
     constructor TestPassObjectsAsParams::default() -> TestPassObjectsAsParams;
     constructor TestPassObjectsAsParams::new_from_foo(_: Foo) -> TestPassObjectsAsParams;
@@ -541,7 +541,7 @@ pub struct GnssInfo {
     pub x: f64,
 }
 
-foreigner_class!(class Position {
+foreign_class!(class Position {
     self_type GnssInfo;
     private constructor = empty;
     fn Position::timeStamp(&self) -> SystemTime {
@@ -560,7 +560,7 @@ impl LocationService {
     }
 }
 
-foreigner_class!(class LocationService {
+foreign_class!(class LocationService {
     fn LocationService::position() -> Result<GnssInfo, &'static str>;
 });
 
@@ -610,7 +610,7 @@ foreign_callback!(callback EnumObserver {
     onStateUpdate = EnumObserver::on_state_changed(&self, item: MyEnum, is_ok: bool);
 });
 
-foreigner_class!(class TestEnumClass {
+foreign_class!(class TestEnumClass {
     self_type Moo;
     constructor Moo::default() -> Moo;
     fn Moo::f1(&mut self, v: MyEnum) -> i32;
@@ -650,7 +650,7 @@ foreign_callback!(callback MyObserver {
     onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
 });
 
-foreigner_class!(class Observable {
+foreign_class!(class Observable {
     self_type Observable;
     constructor Observable::default() -> Observable;
     fn Observable::subscribe(&mut self, _: Box<OnEvent>);
@@ -690,7 +690,7 @@ foreign_callback!(callback CheckAllTypesInCallbackArgs {
     checkArray = CheckAllTypesInCallbackArgs::check_arr(&self, arr: Vec<Foo>);
 });
 
-foreigner_class!(
+foreign_class!(
     class TestCheckAllTypesInCallbackArgs {
         fn call_cb(cb: Box<CheckAllTypesInCallbackArgs>) {
             cb.check_all_types1(u8::max_value(), i8::min_value(),
@@ -731,7 +731,7 @@ fn foo_with_lifetime_new<'a>() -> Rc<RefCell<FooWithLifetime<'a>>> {
     }))
 }
 
-foreigner_class!(class FooWithLifetime {
+foreign_class!(class FooWithLifetime {
     self_type FooWithLifetime<'a>;
     constructor foo_with_lifetime_new() -> Rc<RefCell<FooWithLifetime<'a>>>;
     fn FooWithLifetime::set_data(&self, v: i32);
@@ -775,7 +775,7 @@ impl TestOptional {
     }
 }
 
-foreigner_class!(class TestOptional {
+foreign_class!(class TestOptional {
     fn TestOptional::f1(x: Option<f64>) -> Option<f64>;
     fn TestOptional::f2(x: Option<i64>) -> Option<i64>;
     fn TestOptional::f3(need_something: bool) -> Option<Foo>;
@@ -837,13 +837,13 @@ impl CircularDepsB {
     }
 }
 
-foreigner_class!(class CircularDepsA {
+foreign_class!(class CircularDepsA {
     self_type CircularDepsA;
     constructor CircularDepsA::java_new(_: &str) -> Arc<Mutex<CircularDepsA>>;
     fn CircularDepsA::a(&self, b: &CircularDepsB) -> String;
 });
 
-foreigner_class!(class CircularDepsB {
+foreign_class!(class CircularDepsB {
     self_type CircularDepsB;
     constructor CircularDepsB::new(_: f64) -> CircularDepsB;
     fn CircularDepsB::b(&self, a: &CircularDepsA) -> String;
@@ -856,7 +856,7 @@ impl Gamepad {
     }
 }
 
-foreigner_class!(class Gamepad {
+foreign_class!(class Gamepad {
     self_type Gamepad;
     constructor Gamepad::new(s: &str) -> Gamepad;
 });
@@ -891,7 +891,7 @@ impl EffectBuilderWrapper {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class EffectBuilder {
         self_type EffectBuilderWrapper;
         constructor EffectBuilderWrapper::new() -> EffectBuilderWrapper;
@@ -908,7 +908,7 @@ impl GamepadId {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class GamepadId {
         self_type GamepadId;
         private constructor = empty;
@@ -924,7 +924,7 @@ impl Code {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class Code {
         self_type Code;
         constructor Code::new(v: i32) -> Code;
@@ -950,7 +950,7 @@ impl Gamepad2 {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class Gamepad2 {
         self_type Gamepad2;
 
@@ -960,7 +960,7 @@ foreigner_class!(
     }
 );
 
-foreigner_class!(class TestFnInline {
+foreign_class!(class TestFnInline {
     fn int_to_str(a: i32) -> String {
         format!("{}", a)
     }
@@ -970,7 +970,7 @@ struct Session {
     name: String,
 }
 
-foreigner_class!(
+foreign_class!(
     #[derive(SmartPtrCopy)]
     class Session {
         self_type Session;
@@ -1004,7 +1004,7 @@ impl NavigationService {
     }
 }
 
-foreigner_class!(class NavigationService {
+foreign_class!(class NavigationService {
     self_type NavigationService;
 
     constructor init() -> Rc<RefCell<NavigationService>> {

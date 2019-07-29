@@ -270,6 +270,7 @@ struct SourceCode {
 }
 
 static FOREIGNER_CLASS: &str = "foreigner_class";
+static FOREIGN_CLASS: &str = "foreign_class";
 static FOREIGN_ENUM: &str = "foreign_enum";
 static FOREIGN_INTERFACE: &str = "foreign_interface";
 static FOREIGN_CALLBACK: &str = "foreign_callback";
@@ -435,6 +436,7 @@ impl Generator {
             if let syn::Item::Macro(mut item_macro) = item {
                 let is_our_macro = [
                     FOREIGNER_CLASS,
+                    FOREIGN_CLASS,
                     FOREIGN_ENUM,
                     FOREIGN_INTERFACE,
                     FOREIGN_CALLBACK,
@@ -460,7 +462,9 @@ impl Generator {
                 }
                 let mut tts = TokenStream::new();
                 mem::swap(&mut tts, &mut item_macro.mac.tts);
-                if item_macro.mac.path.is_ident(FOREIGNER_CLASS) {
+                if item_macro.mac.path.is_ident(FOREIGNER_CLASS)
+                    || item_macro.mac.path.is_ident(FOREIGN_CLASS)
+                {
                     let fclass = code_parse::parse_foreigner_class(src_id, &self.config, tts)?;
                     debug!("expand_foreigner_class: self_desc {:?}", fclass.self_desc);
                     self.conv_map.register_foreigner_class(&fclass);
