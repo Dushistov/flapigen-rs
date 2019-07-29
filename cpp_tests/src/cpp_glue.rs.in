@@ -751,6 +751,7 @@ foreign_class!(class LocationService {
     fn LocationService::position() -> Result<GnssInfo, String>;
 });
 
+//ANCHOR: boxed_trait
 pub trait Interface {
     fn f(&self, _: i32) -> i32;
     fn set(&mut self, _: i32);
@@ -778,6 +779,7 @@ foreign_class!(class Interface {
     fn Interface::f(&self, _: i32) -> i32;
     fn Interface::set(&mut self, x: i32);
 });
+//ANCHOR_END: boxed_trait
 
 #[derive(Default)]
 pub struct TestPassInterface;

@@ -8,7 +8,7 @@ import time
 import shutil
 
 JNI_TESTS = "jni_tests"
-CPP_TESTS = "c++_tests"
+CPP_TESTS = "cpp_tests"
 ANDROID_TESTS = "android-example"
 UNIT_TESTS = "unit_tests"
 DOC_TESTS = "doc_tests"
@@ -255,9 +255,9 @@ def main():
         print("Check cmake version")
         subprocess.check_call(["cmake", "--version"], shell = False)
         build_cpp_example()
-        build_cpp_code_with_cmake(test_cfg, os.path.join("c++_tests", "c++", "build"), [])
-        purge(os.path.join("c++_tests", "c++", "rust_interface"), ".*\.h.*$")
-        build_cpp_code_with_cmake(test_cfg, os.path.join("c++_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
+        build_cpp_code_with_cmake(test_cfg, os.path.join("cpp_tests", "c++", "build"), [])
+        purge(os.path.join("cpp_tests", "c++", "rust_interface"), ".*\.h.*$")
+        build_cpp_code_with_cmake(test_cfg, os.path.join("cpp_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
 
     if ANDROID_TESTS in test_set:
         build_for_android(is_windows)

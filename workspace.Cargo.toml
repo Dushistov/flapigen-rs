@@ -1,5 +1,5 @@
 [workspace]
-members = ["macroslib", "jni_tests", "c++_tests", "android-example", "android-tests",
+members = ["macroslib", "jni_tests", "cpp_tests", "android-example", "android-tests",
 "debug-util", "cpp-example/rust-part"]
 
 [profile.release]
