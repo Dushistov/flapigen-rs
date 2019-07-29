@@ -3,6 +3,7 @@ use std::{env, path::Path};
 
 fn main() {
     let out_dir = env::var("OUT_DIR").expect("no OUT_DIR, but cargo should provide it");
+    //ANCHOR: cpp_config
     let cpp_cfg = CppConfig::new(
         // ANCHOR: cpp_output
         Path::new("..").join("cpp-part").join("rust-api"),
@@ -12,6 +13,7 @@ fn main() {
     .cpp_optional(CppOptional::Boost)
     .cpp_variant(CppVariant::Boost)
     .cpp_str_view(CppStrView::Boost);
+    //ANCHOR_END: cpp_config
     let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
     swig_gen.expand(
         "c++-api-for-rust",
