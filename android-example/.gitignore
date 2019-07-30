@@ -10,4 +10,4 @@ target/
 app/src/main/libs/
 app/src/main/java/net/akaame/myapplication/Session.java
 app/src/main/java/net/akaame/myapplication/InternalPointerMarker.java
-Cargo.lock
+

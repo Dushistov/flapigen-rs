@@ -184,7 +184,11 @@ def build_cargo_docs():
 @show_timing
 def build_for_android(is_windows):
     gradle_cmd = "gradlew.bat" if is_windows else "./gradlew"
-    subprocess.check_call([gradle_cmd, "build"], cwd=os.path.join(os.getcwd(), "android-example"))
+
+    for d in ["android-example", "android-tests"]:
+        subprocess.check_call(["cargo", "test", "--target=arm-linux-androideabi", "--release"], cwd=os.path.join(os.getcwd(), d))
+        subprocess.check_call([gradle_cmd, "build"], cwd=os.path.join(os.getcwd(), d))
+        subprocess.check_call([gradle_cmd, "connectedAndroidTest"], cwd=os.path.join(os.getcwd(), d))
 
 @show_timing
 def run_unit_tests(test_cfg, test_set):
@@ -197,9 +201,6 @@ def run_unit_tests(test_cfg, test_set):
         if JNI_TESTS in test_set:
             cmd_base.append("-p")
             cmd_base.append("rust_swig_test_jni")
-        if ANDROID_TESTS in test_set:
-            cmd_base.append("-p")
-            cmd_base.append("android")
         if cfg == DEBUG:
             pass
         elif cfg == RELEASE:
@@ -224,6 +225,8 @@ def main():
             test_set = set([CPP_TESTS])
         elif arg == "--skip-java-tests":
             test_set.remove(JNI_TESTS)
+        elif arg == "--android-only-tests":
+            test_set = set([ANDROID_TESTS])
         else:
             raise Exception("Fatal Error: unknown option: %s" % arg)
 

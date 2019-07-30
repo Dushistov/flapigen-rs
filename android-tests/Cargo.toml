@@ -1,5 +1,5 @@
 [package]
-name = "android-tests"
+name = "rust_swig-android-tests"
 version = "0.0.1"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 build = "build.rs"
