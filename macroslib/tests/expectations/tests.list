@@ -53,3 +53,4 @@ test_bare_fn_match
 cpp_generic_ptr_rule
 smart_ptr_copy_derived
 null_annotation_java
+callback_with_several_traits

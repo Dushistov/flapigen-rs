@@ -1027,3 +1027,20 @@ foreign_class!(class NavigationService {
     }
     fn NavigationService::call_callbacks(&mut self); alias callCallbacks;
 });
+
+trait OnThreadEvent {
+    fn something_change_in_other_thread(&self, x: i32, s: &str);
+}
+
+foreign_interface!(interface ThreadSafeObserver {
+    self_type OnThreadEvent + Send;
+    onStateChanged = OnThreadEvent::something_change_in_other_thread(&self, x: i32, s: &str);
+});
+
+foreign_class!(class TestMultiThreadCallback {
+    fn f(cb: Box<OnThreadEvent + Send>) {
+        std::thread::spawn(move || {
+            cb.something_change_in_other_thread(42, "15");
+        });
+    }
+});

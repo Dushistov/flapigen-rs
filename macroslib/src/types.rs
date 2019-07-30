@@ -260,7 +260,7 @@ pub(crate) struct ForeignEnumItem {
 pub(crate) struct ForeignInterface {
     pub(crate) src_id: SourceId,
     pub(crate) name: Ident,
-    pub(crate) self_type: syn::Path,
+    pub(crate) self_type: syn::TypeTraitObject,
     pub(crate) doc_comments: Vec<String>,
     pub(crate) items: Vec<ForeignInterfaceMethod>,
 }

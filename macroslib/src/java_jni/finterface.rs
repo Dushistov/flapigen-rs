@@ -274,7 +274,7 @@ impl SwigFrom<jobject> for Box<{trait_name}> {{
         });
     }
 
-    let self_type_name = &interface.self_type;
+    let self_type_name = &interface.self_type.bounds[0];
     let tt: TokenStream = quote! {
         impl #self_type_name for JavaCallback {
             #(#trait_impl_funcs)*

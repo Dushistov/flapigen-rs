@@ -38,6 +38,8 @@ import com.example.rust.NavigationService;
 import com.example.rust.CheckAllTypesInCallbackArgs;
 import com.example.rust.TestCheckAllTypesInCallbackArgs;
 import com.example.rust.RustLogging;
+import com.example.rust.ThreadSafeObserver;
+import com.example.rust.TestMultiThreadCallback;
 
 class Main {
     public static void main(String[] args) {
@@ -124,6 +126,7 @@ class Main {
 	    testCopyDerivedObjects();
 	    testSmartPtrCopyDerivedObjects();
 	    testAllTypesInCallbackArgs();
+	    testMultiThreadCallback();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -647,5 +650,33 @@ class Main {
 	assert Boo.test_i64((long) -1) == (long) 0;
 	assert Math.abs(Boo.test_f32((float) 1.1) - (float) 2.1) < 1e-12;
 	assert Math.abs(Boo.test_f64((double) -1.0)) < 1e-12;
+    }
+
+    private static class MyThreadSafeObserver implements ThreadSafeObserver {
+	private final Object lock = new Object();
+	private boolean called = false;
+	@Override
+	public void onStateChanged(int x, String s) {
+	    assert x == 42;
+	    assert s.equals("15");
+	    synchronized (lock) {
+		called = true;
+	    }
+	}
+
+	public boolean isCalled() {
+	    boolean ret;
+	    synchronized (lock) {
+		ret = called;
+	    }
+	    return ret;
+	}
+    }
+
+    private static void testMultiThreadCallback() throws InterruptedException  {
+	MyThreadSafeObserver obs = new MyThreadSafeObserver();
+	TestMultiThreadCallback.f(obs);
+	Thread.sleep(4000);
+	assert obs.isCalled();
     }
 }
