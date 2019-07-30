@@ -10,6 +10,8 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
+#include <chrono>
+#include <mutex>
 #include <gtest/gtest.h>
 
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
@@ -38,8 +40,9 @@
 #include "rust_interface/GetSetStrTest.hpp"
 #include "rust_interface/TestWorkWithReprC.hpp"
 #include "rust_interface/TestFnInline.hpp"
-#include <future>
 #include "rust_interface/TestFuture.hpp"
+#include "rust_interface/ThreadSafeObserver.hpp"
+#include "rust_interface/TestMultiThreadCallback.hpp"
 
 using namespace rust;
 
@@ -973,6 +976,48 @@ TEST(TestFuture, smokeTest)
     Foo foo = future.get();
     EXPECT_EQ(-1, foo.f(0, 0));
     EXPECT_EQ("from callback", foo.getName());
+}
+
+namespace {
+struct State {
+    std::mutex lock;
+    bool called = false;
+    int32_t x;
+    RustString s;
+    State() = default;
+};
+
+class MyThreadSafeObserver final : public ThreadSafeObserver {
+public:
+    MyThreadSafeObserver(std::shared_ptr<State> state)
+        : state_(std::move(state))
+    {
+        assert(state_ != nullptr);
+        assert(!state_->called);
+    }
+    void onStateChanged(int32_t x, RustString s) noexcept override
+    {
+        std::lock_guard<std::mutex> guard(state_->lock);
+        state_->called = true;
+        state_->x = x;
+        state_->s = std::move(s);
+    }
+
+private:
+    std::shared_ptr<State> state_;
+};
+} // namespace
+
+TEST(TestMultiThreadCallback, smokeTest)
+{
+    auto state = std::make_shared<State>();
+    EXPECT_FALSE(state->called);
+    auto cb = ThreadSafeObserver::to_c_interface(new MyThreadSafeObserver(state));
+    TestMultiThreadCallback::f(&cb);
+    std::this_thread::sleep_for(std::chrono::seconds(4));
+    EXPECT_TRUE(state->called);
+    EXPECT_EQ(42, state->x);
+    EXPECT_EQ("15", state->s.to_std_string());
 }
 
 int main(int argc, char *argv[])

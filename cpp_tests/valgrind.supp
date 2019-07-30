@@ -18,3 +18,10 @@
    fun:call_init
    fun:_dl_init
 }
+{
+   see_chrome_bug_273385
+   Memcheck:Leak
+   fun:calloc
+   fun:_dlerror_run
+   fun:dlsym
+}
