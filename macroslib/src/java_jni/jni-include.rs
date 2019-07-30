@@ -270,6 +270,10 @@ struct JavaCallback {
     methods: Vec<jmethodID>,
 }
 
+/// According to JNI spec it should be safe to
+/// pass pointer to JavaVm and jobject (global) across threads
+unsafe impl Send for JavaCallback {}
+
 #[allow(dead_code)]
 struct JniEnvHolder<'a> {
     env: Option<*mut JNIEnv>,

@@ -1030,3 +1030,20 @@ foreign_class!(class TestMethodNotMethod {
     fn method_not_method(&self);
 });
 //ANCHOR_END: method_not_method
+
+trait OnThreadEvent {
+    fn something_change_in_other_thread(&self, x: i32, s: String);
+}
+
+foreign_interface!(interface ThreadSafeObserver {
+    self_type OnThreadEvent + Send;
+    onStateChanged = OnThreadEvent::something_change_in_other_thread(&self, x: i32, s: String);
+});
+
+foreign_class!(class TestMultiThreadCallback {
+    fn f(cb: Box<OnThreadEvent + Send>) {
+        std::thread::spawn(move || {
+            cb.something_change_in_other_thread(42, "15".into());
+        });
+    }
+});
