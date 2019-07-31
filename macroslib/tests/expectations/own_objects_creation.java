@@ -13,7 +13,11 @@ r#"public final int boo_as_arg(@NonNull Boo a0) {
         long a00 = a0.mNativeObj;
         a0.mNativeObj = 0;
 
-        return do_boo_as_arg(mNativeObj, a00);
+        int ret = do_boo_as_arg(mNativeObj, a00);
+
+        JNIReachabilityFence.reachabilityFence1(a0);
+
+        return ret;
     }
     private static native int do_boo_as_arg(long self, long a0);"#;
 r#"public final @NonNull Foo get_one_foo() {

@@ -78,6 +78,7 @@ pub struct JavaConfig {
     package_name: String,
     null_annotation_package: Option<String>,
     optional_package: String,
+    reachability_fence: JavaReachabilityFence,
 }
 
 impl JavaConfig {
@@ -91,6 +92,7 @@ impl JavaConfig {
             package_name,
             null_annotation_package: None,
             optional_package: "java.util".to_string(),
+            reachability_fence: JavaReachabilityFence::GenerateFence,
         }
     }
     /// Use @NonNull for types where appropriate
@@ -128,6 +130,26 @@ impl JavaConfig {
         self.optional_package = optional_package;
         self
     }
+    /// Choose reachability fence variant, `JavaReachabilityFence::Std` provide
+    /// ability to generate better code, but not available untill Java 9 and
+    /// Android API level 28
+    pub fn use_reachability_fence(
+        mut self,
+        reachability_fence: JavaReachabilityFence,
+    ) -> JavaConfig {
+        self.reachability_fence = reachability_fence;
+        self
+    }
+}
+
+/// What reachability fence to use
+#[derive(Debug, Clone, Copy)]
+pub enum JavaReachabilityFence {
+    /// java.lang.ref.Reference.reachabilityFence​
+    Std,
+    /// If Reference.reachabilityFence​ is not available,
+    /// generate JNI code to emulate it
+    GenerateFence,
 }
 
 /// Configuration for C++ binding generation

@@ -119,7 +119,7 @@ pub(in crate::java_jni) fn map_type(
         java_converter,
         annotation,
     };
-    if fti.annotation.is_none() && !is_primitive_type(&fti.base.name) {
+    if fti.annotation.is_none() && !java_code::is_primitive_type(&fti.base.name) {
         fti.annotation = Some(if if_option_return_some_type(arg_ty).is_none() {
             NullAnnotation::NonNull
         } else {
@@ -223,13 +223,6 @@ fn do_map_type(
                 arg_ty
             ),
         )),
-    }
-}
-
-fn is_primitive_type(type_name: &str) -> bool {
-    match type_name {
-        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => true,
-        _ => false,
     }
 }
 

@@ -142,3 +142,10 @@ pub(in crate::java_jni) fn get_null_annotation_imports(
 pub(in crate::java_jni) fn filter_null_annotation(type_name: &str) -> String {
     type_name.replace("@NonNull", "").replace("@Nullable", "")
 }
+
+pub(in crate::java_jni) fn is_primitive_type(type_name: &str) -> bool {
+    match type_name {
+        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => true,
+        _ => false,
+    }
+}

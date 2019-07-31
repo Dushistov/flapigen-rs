@@ -2,8 +2,11 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{Arc, Mutex, MutexGuard},
-    time::SystemTime,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, MutexGuard,
+    },
+    time::{Duration, SystemTime},
 };
 
 use chrono::{DateTime, Utc};
@@ -1042,5 +1045,40 @@ foreign_class!(class TestMultiThreadCallback {
         std::thread::spawn(move || {
             cb.something_change_in_other_thread(42, "15");
         });
+    }
+});
+
+struct DropCounter {
+    flag: Arc<AtomicBool>,
+}
+
+impl Default for DropCounter {
+    fn default() -> DropCounter {
+        Self {
+            flag: Arc::new(AtomicBool::new(true)),
+        }
+    }
+}
+
+impl Drop for DropCounter {
+    fn drop(&mut self) {
+        println!("DropCounter::Drop");
+        self.flag.store(false, Ordering::Release);
+    }
+}
+
+foreign_class!(class DropCounter {
+    self_type DropCounter;
+    constructor DropCounter::default() -> DropCounter;
+});
+
+foreign_class!(class LongOperation {
+    fn do_it(drop_counter: &DropCounter) {
+        println!("Start");
+        let flag = drop_counter.flag.clone();
+        assert!(flag.load(Ordering::Acquire));
+        std::thread::sleep(Duration::from_secs(5));
+        assert!(flag.load(Ordering::Acquire));
+        println!("End");
     }
 });

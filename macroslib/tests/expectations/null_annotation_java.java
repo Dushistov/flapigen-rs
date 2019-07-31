@@ -14,7 +14,9 @@ public final class TrackInfo {
     private static native long do_start_time(long self);
 
     public final @NonNull java.util.OptionalLong end_time() {
-        return do_end_time(mNativeObj);
+        java.util.OptionalLong ret = do_end_time(mNativeObj);
+
+        return ret;
     }
     private static native @NonNull java.util.OptionalLong do_end_time(long self);"##;
 
@@ -29,7 +31,9 @@ public final class Boo {
     private static native long init();
 
     public final @NonNull String latDirection() {
-        return do_latDirection(mNativeObj);
+        String ret = do_latDirection(mNativeObj);
+
+        return ret;
     }
     private static native @NonNull String do_latDirection(long self);"#;
 
@@ -59,6 +63,8 @@ public final class BooList {
     private BooList() {}
 
     public final @NonNull Boo [] getBooList() {
-        return do_getBooList(mNativeObj);
+        Boo [] ret = do_getBooList(mNativeObj);
+
+        return ret;
     }
     private static native @NonNull Boo [] do_getBooList(long self);"#;

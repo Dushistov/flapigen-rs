@@ -40,6 +40,8 @@ import com.example.rust.TestCheckAllTypesInCallbackArgs;
 import com.example.rust.RustLogging;
 import com.example.rust.ThreadSafeObserver;
 import com.example.rust.TestMultiThreadCallback;
+import com.example.rust.DropCounter;
+import com.example.rust.LongOperation;
 
 class Main {
     public static void main(String[] args) {
@@ -127,6 +129,7 @@ class Main {
 	    testSmartPtrCopyDerivedObjects();
 	    testAllTypesInCallbackArgs();
 	    testMultiThreadCallback();
+	    testPrematureGc();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -673,10 +676,33 @@ class Main {
 	}
     }
 
-    private static void testMultiThreadCallback() throws InterruptedException  {
+    private static void testMultiThreadCallback() throws InterruptedException {
 	MyThreadSafeObserver obs = new MyThreadSafeObserver();
 	TestMultiThreadCallback.f(obs);
 	Thread.sleep(4000);
 	assert obs.isCalled();
+    }
+
+    private static void testPrematureGc() throws InterruptedException {
+	Thread thr = new Thread(){
+		public void run() {
+		    System.out.println("testPrematureGc another thread");
+		    int timemout = 5000;
+		    int count = 10;
+		    try {
+			for (int i = 0; i < count; ++i) {
+			    Thread.sleep(timemout / count);
+			    System.out.println("testPrematureGc call gc");
+			    System.gc();
+			}
+		    } catch (InterruptedException ex) {
+			System.out.println("EXCEPTION: " + ex);
+		    }
+		}
+	    };
+	thr.start();
+	DropCounter dc = new DropCounter();
+	LongOperation.do_it(dc);
+	thr.join();
     }
 }

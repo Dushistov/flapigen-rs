@@ -9,11 +9,12 @@ use syn::{spanned::Spanned, Type};
 
 use super::{
     calc_this_type_for_method, java_class_full_name, java_class_name_to_jni, java_code,
-    map_type::map_type, map_write_err, method_name, rust_code, JavaContext, JavaConverter,
-    JavaForeignTypeInfo, JniForeignMethodSignature, INTERNAL_PTR_MARKER, JAVA_RUST_SELF_NAME,
+    map_type::map_type, method_name, rust_code, JavaContext, JavaConverter, JavaForeignTypeInfo,
+    JniForeignMethodSignature, INTERNAL_PTR_MARKER, JAVA_RUST_SELF_NAME,
+    MAX_REACHABILITY_FENCE_ARGS, REACHABILITY_FENCE_CLASS,
 };
 use crate::{
-    error::{panic_on_syn_error, DiagnosticError, Result},
+    error::{panic_on_syn_error, DiagnosticError, Result, SourceIdSpan},
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
@@ -27,7 +28,7 @@ use crate::{
         ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
     types::{ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, SelfTypeVariant},
-    WRITE_TO_MEM_FAILED_MSG,
+    JavaConfig, JavaReachabilityFence, WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::java_jni) fn generate(
@@ -45,8 +46,7 @@ pub(in crate::java_jni) fn generate(
         class,
         &f_methods_sign,
         ctx.cfg.null_annotation_package.as_ref().map(String::as_str),
-    )
-    .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
+    )?;
     debug!("generate: java code done");
     generate_rust_code(ctx, class, &f_methods_sign)?;
 
@@ -87,7 +87,7 @@ fn generate_java_code(
     class: &ForeignerClassInfo,
     methods_sign: &[JniForeignMethodSignature],
     null_annotation_package: Option<&str>,
-) -> std::result::Result<(), String> {
+) -> Result<()> {
     let path = ctx.cfg.output_dir.join(format!("{}.java", class.name));
     let mut file = FileWriteCache::new(&path, ctx.generated_foreign_files);
 
@@ -149,8 +149,10 @@ public final class {class_name} {{"#,
             method.arg_names_without_self().map(|x| x.into()).collect();
         if let MethodVariant::Method(_) = method.variant {
             if known_names.contains(JAVA_RUST_SELF_NAME) {
-                return Err(format!("In method {} there is argument with name {}, this name reserved for generated code",
-                                   method.short_name(), JAVA_RUST_SELF_NAME));
+                return Err(DiagnosticError::new(class.src_id,
+                                                method.rust_id.span(),
+                                                format!("In method {} there is argument with name {}, this name reserved for generated code",
+                                                        method.short_name(), JAVA_RUST_SELF_NAME)));
             }
             known_names.insert(JAVA_RUST_SELF_NAME.into());
         }
@@ -159,12 +161,15 @@ public final class {class_name} {{"#,
         let conv_ret = new_unique_name(&known_names, "convRet");
         known_names.insert(conv_ret.clone());
 
-        let (convert_code, args_for_call_internal) = convert_code_for_method(
-            f_method,
-            method.arg_names_without_self(),
-            known_names,
-            conv_code_flags,
-        );
+        let (convert_code, args_for_call_internal, reachability_fence_code) =
+            convert_code_for_method(
+                (class.src_id, method.rust_id.span()),
+                ctx.cfg,
+                f_method,
+                method.arg_names_without_self(),
+                known_names,
+                conv_code_flags,
+            )?;
         let func_name = method_name(method, f_method);
 
         let external_args_except_self = java_code::args_with_java_types(
@@ -186,7 +191,16 @@ public final class {class_name} {{"#,
                 .replace(FROM_VAR_TEMPLATE, ret_name)
                 .replace(TO_VAR_TYPE_TEMPLATE, &format!("{} {}", ret_type, conv_ret))
                 .replace(TO_VAR_TEMPLATE, &conv_ret);
-            let conv_code = java_code::filter_null_annotation(&conv_code).trim().into();
+            let mut conv_code: String = java_code::filter_null_annotation(&conv_code).trim().into();
+            if !conv_code.is_empty() {
+                if !conv_code.starts_with("\n") {
+                    let ident = "        ";
+                    if !conv_code.starts_with(ident) {
+                        conv_code.insert_str(0, ident);
+                    }
+                    conv_code.insert(0, '\n');
+                }
+            }
             (ret_type, intermidiate_ret_type, conv_code)
         }
 
@@ -208,6 +222,11 @@ public final class {class_name} {{"#,
                 }
             }
             MethodVariant::Constructor => ("long", "long", String::new()),
+        };
+        let intermidiate_ret_type_code = if ret_conv_code.is_empty() {
+            &ret_type
+        } else {
+            &intermidiate_ret_type
         };
 
         let need_conversation = !convert_code.is_empty() || !ret_conv_code.is_empty();
@@ -242,41 +261,46 @@ public final class {class_name} {{"#,
                         file.write_all(code).expect(WRITE_TO_MEM_FAILED_MSG);
                         file.write_all(b"\n").expect(WRITE_TO_MEM_FAILED_MSG);
                     }
-                    if ret_conv_code.is_empty() {
-                        write!(
-                            file,
-                            r#"        {return_code}{func_name}({args});
-    }}"#,
-                            func_name = func_name,
-                            return_code = if ret_type != "void" { "return " } else { "" },
-                            args = args_for_call_internal,
-                        )
-                        .expect(WRITE_TO_MEM_FAILED_MSG);
-                    } else {
+                    if ret_type != "void" {
                         writeln!(
                             file,
-                            r#"        {intermidiate_ret_type} {ret_name} = {func_name}({args});
-        {ret_conv_code}"#,
+                            r#"        {intermidiate_ret_type} {ret_name} = {func_name}({args});{ret_conv_code}"#,
                             ret_conv_code = ret_conv_code,
                             ret_name = ret_name,
                             intermidiate_ret_type =
-                                java_code::filter_null_annotation(intermidiate_ret_type).trim(),
+                                java_code::filter_null_annotation(intermidiate_ret_type_code)
+                                    .trim(),
                             func_name = func_name,
                             args = args_for_call_internal,
                         )
-                        .expect(WRITE_TO_MEM_FAILED_MSG);
-                        if ret_type != "void" {
-                            writeln!(
-                                file,
-                                r#"
-        return {conv_ret};"#,
-                                conv_ret = conv_ret
-                            )
-                            .expect(WRITE_TO_MEM_FAILED_MSG);
-                        }
-                        file.write_all(b"    }").expect(WRITE_TO_MEM_FAILED_MSG);
+                    } else {
+                        writeln!(
+                            file,
+                            r#"        {func_name}({args});"#,
+                            func_name = func_name,
+                            args = args_for_call_internal,
+                        )
                     }
-
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                    if !reachability_fence_code.is_empty() {
+                        file.write_all(reachability_fence_code.as_bytes())
+                            .expect(WRITE_TO_MEM_FAILED_MSG);
+                        file.write_all(b"\n").expect(WRITE_TO_MEM_FAILED_MSG);
+                    }
+                    if ret_type != "void" {
+                        writeln!(
+                            file,
+                            r#"
+        return {conv_ret};"#,
+                            conv_ret = if ret_conv_code.is_empty() {
+                                ret_name
+                            } else {
+                                conv_ret
+                            },
+                        )
+                        .expect(WRITE_TO_MEM_FAILED_MSG);
+                    }
+                    file.write_all(b"    }").expect(WRITE_TO_MEM_FAILED_MSG);
                     writeln!(
                         file,
                         r#"
@@ -314,43 +338,50 @@ public final class {class_name} {{"#,
                     file.write_all(convert_code.as_bytes())
                         .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
-                if ret_conv_code.is_empty() {
+                if ret_type != "void" {
                     writeln!(
                         file,
                         r#"
-        {return_code}{func_name}({rust_self_name}{args});"#,
+        {intermidiate_ret_type} {ret_name} = {func_name}({rust_self_name}{args});{ret_conv_code}"#,
                         rust_self_name = JAVA_RUST_SELF_NAME,
-                        return_code = if ret_type != "void" { "return " } else { "" },
-                        args = args_for_call_internal,
+                        ret_conv_code = ret_conv_code,
+                        ret_name = ret_name,
+                        intermidiate_ret_type =
+                            java_code::filter_null_annotation(intermidiate_ret_type_code).trim(),
                         func_name = func_name,
+                        args = args_for_call_internal,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
                     writeln!(
                         file,
                         r#"
-        {intermidiate_ret_type} {ret_name} = {func_name}({rust_self_name}{args});
-        {ret_conv_code}"#,
+        {func_name}({rust_self_name}{args});"#,
                         rust_self_name = JAVA_RUST_SELF_NAME,
-                        ret_conv_code = ret_conv_code,
-                        ret_name = ret_name,
-                        intermidiate_ret_type =
-                            java_code::filter_null_annotation(intermidiate_ret_type).trim(),
                         func_name = func_name,
                         args = args_for_call_internal,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
-                    if ret_type != "void" {
-                        writeln!(
-                            file,
-                            r#"
-        return {conv_ret};"#,
-                            conv_ret = conv_ret
-                        )
-                        .expect(WRITE_TO_MEM_FAILED_MSG);
-                    }
                 }
 
+                if !reachability_fence_code.is_empty() {
+                    file.write_all(reachability_fence_code.as_bytes())
+                        .expect(WRITE_TO_MEM_FAILED_MSG);
+                    file.write_all(b"\n").expect(WRITE_TO_MEM_FAILED_MSG);
+                }
+                if ret_type != "void" {
+                    writeln!(
+                        file,
+                        r#"
+        return {conv_ret};"#,
+                        conv_ret = if ret_conv_code.is_empty() {
+                            ret_name
+                        } else {
+                            conv_ret
+                        },
+                    )
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                }
                 file.write_all(b"    }").expect(WRITE_TO_MEM_FAILED_MSG);
 
                 writeln!(
@@ -402,7 +433,7 @@ public final class {class_name} {{"#,
                     }
                     writeln!(
                         file,
-                        r#"        {rust_self_name} = init({args});
+                        r#"        {rust_self_name} = init({args});{reachability_fence_code}
     }}
     private static native long {func_name}({args_with_types}){exception_spec};"#,
                         rust_self_name = JAVA_RUST_SELF_NAME,
@@ -415,6 +446,7 @@ public final class {class_name} {{"#,
                             null_annotation_package.is_some()
                         ),
                         args = args_for_call_internal,
+                        reachability_fence_code = reachability_fence_code,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
@@ -423,10 +455,14 @@ public final class {class_name} {{"#,
     }
 
     if have_methods && !have_constructor {
-        return Err(format!(
-            "package {}, class {}: has methods, but no constructor\n
+        return Err(DiagnosticError::new(
+            class.src_id,
+            class.span(),
+            format!(
+                "package {}, class {}: has methods, but no constructor\n
 May be you need to use `private constructor = empty;` syntax?",
-            ctx.cfg.package_name, class.name
+                ctx.cfg.package_name, class.name
+            ),
         ));
     }
     if have_constructor {
@@ -470,14 +506,15 @@ May be you need to use `private constructor = empty;` syntax?",
     private {class_name}() {{}}"#,
             class_name = class.name
         )
-        .map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     file.write_all(class.foreigner_code.as_bytes())
         .expect(WRITE_TO_MEM_FAILED_MSG);
     write!(file, "}}").expect(WRITE_TO_MEM_FAILED_MSG);
 
-    file.update_file_if_necessary().map_err(&map_write_err)?;
+    file.update_file_if_necessary()
+        .map_err(DiagnosticError::map_any_err_to_our_err)?;
     Ok(())
 }
 
@@ -588,7 +625,8 @@ May be you need to use `private constructor = empty;` syntax?",
         let method_overloading = gen_fnames[&java_method_name] > 1;
         let jni_func_name = rust_code::generate_jni_func_name(
             ctx,
-            class,
+            &class.name.to_string(),
+            (class.src_id, class.span()),
             &java_method_name,
             method.variant,
             f_method,
@@ -684,7 +722,8 @@ May be you need to use `private constructor = empty;` syntax?",
 
         let jni_destructor_name = rust_code::generate_jni_func_name(
             ctx,
-            class,
+            &class.name.to_string(),
+            (class.src_id, class.span()),
             "do_delete",
             MethodVariant::StaticMethod,
             &JniForeignMethodSignature {
@@ -1017,18 +1056,23 @@ pub extern "C"
 }
 
 fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
+    ctx_span: SourceIdSpan,
+    cfg: &JavaConfig,
     f_method: &JniForeignMethodSignature,
     arg_name_iter: NI,
     mut known_names: FxHashSet<SmolStr>,
     flags: java_code::ArgsFormatFlags,
-) -> (String, String) {
+) -> Result<(String, String, String)> {
+    use std::fmt::Write;
+
     let mut conv_code = String::new();
     let mut args_for_call_internal = String::new();
+    let mut reachability_fence_code = String::new();
 
     if flags.contains(java_code::ArgsFormatFlags::COMMA_BEFORE) && !f_method.input.is_empty() {
         args_for_call_internal.push_str(", ");
     }
-
+    let mut protect_args = Vec::new();
     for (i, (arg, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
         let after_conv_arg_name = if let Some(java_conv) = arg.java_converter.as_ref() {
             let templ = format!("a{}", i);
@@ -1049,6 +1093,9 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
             None
         };
         if let Some(after_conv_arg_name) = after_conv_arg_name {
+            if !java_code::is_primitive_type(&arg.base.name) {
+                protect_args.push(arg_name);
+            }
             args_for_call_internal.push_str(&after_conv_arg_name);
         } else {
             args_for_call_internal.push_str(arg_name);
@@ -1057,5 +1104,52 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
             args_for_call_internal.push_str(", ");
         }
     }
-    (conv_code, args_for_call_internal)
+    match cfg.reachability_fence {
+        JavaReachabilityFence::Std => {
+            for arg_name in &protect_args {
+                if !reachability_fence_code.is_empty() {
+                    reachability_fence_code.push('\n');
+                }
+                write!(
+                    &mut reachability_fence_code,
+                    "        java.lang.ref.Reference.reachabilityFence({});",
+                    arg_name
+                )
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+            }
+        }
+        JavaReachabilityFence::GenerateFence => {
+            if protect_args.len() > MAX_REACHABILITY_FENCE_ARGS {
+                return Err(DiagnosticError::new2(
+                    ctx_span,
+                    format!(
+                        "Too many arguments for arguments protection {} > {}, increase {} limit",
+                        protect_args.len(),
+                        MAX_REACHABILITY_FENCE_ARGS,
+                        stringify!(MAX_REACHABILITY_FENCE_ARGS)
+                    ),
+                ));
+            }
+            if !protect_args.is_empty() {
+                write!(
+                    &mut reachability_fence_code,
+                    "\n        {}.reachabilityFence{}(",
+                    REACHABILITY_FENCE_CLASS,
+                    protect_args.len()
+                )
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+                let mut first_arg = true;
+                for arg_name in &protect_args {
+                    if !first_arg {
+                        reachability_fence_code.push_str(", ");
+                    }
+                    reachability_fence_code.push_str(arg_name);
+                    first_arg = false;
+                }
+                reachability_fence_code.push_str(");");
+            }
+        }
+    }
+
+    Ok((conv_code, args_for_call_internal, reachability_fence_code))
 }
