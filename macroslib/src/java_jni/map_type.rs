@@ -301,7 +301,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
             Some("NoNullAnnotations") => java_code::filter_null_annotation(&f_info.base.name)
                 .trim()
                 .into(),
-            None => f_info.base.name.into(),
+            None => f_info.base.name,
             Some(param) => {
                 return Err(DiagnosticError::new2(
                     self.arg_ty_span,
