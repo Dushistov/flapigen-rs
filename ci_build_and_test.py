@@ -47,10 +47,12 @@ def find_dir(dir_name, start_dir):
     raise Exception("Can not find %s" % dir_name)
 
 @show_timing
-def run_jar(target_dir, jar_dir, use_shell):
-    subprocess.check_call(["java", "-Xcheck:jni", "-verbose:jni", "-ea", "-Djava.library.path=" + target_dir,
-                           "-cp", "Test.jar", "com.example.Main"],
-                          cwd=jar_dir, shell=use_shell)
+def run_jar(target_dir, jar_dir, use_shell, extra_args):
+    jvm_args = ["java"]
+    jvm_args.extend(extra_args)
+    jvm_args.extend(["-ea", "-Djava.library.path=" + target_dir,
+                     "-cp", "Test.jar", "com.example.Main"])
+    subprocess.check_call(jvm_args, cwd=jar_dir, shell=use_shell)
 
 @show_timing
 def build_jar(java_dir, java_native_dir, use_shell):
@@ -90,7 +92,10 @@ def run_jni_tests(use_shell, test_cfg):
 
     for cfg in test_cfg:
         target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
-        run_jar(target_dir, jar_dir, use_shell)
+        run_jar(target_dir, jar_dir, use_shell, ["-Xcheck:jni", "-verbose:jni"])
+    if RELEASE in test_cfg:
+        target_dir = os.path.join(find_dir("target", "jni_tests"), RELEASE)
+        run_jar(target_dir, jar_dir, use_shell, ["-Xcomp"])
 
 def calc_cmake_generator():
     if sys.platform == 'win32':

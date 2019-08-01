@@ -20,6 +20,8 @@ r#"public final void f4(@Nullable Boo boo) {
         }
 
         do_f4(mNativeObj, a0);
+
+        JNIReachabilityFence.reachabilityFence1(boo);
     }
     private static native void do_f4(long self, long boo);
 "#;
@@ -39,6 +41,8 @@ r#"public final void f6(@Nullable Boo boo) {
         }
 
         do_f6(mNativeObj, a0);
+
+        JNIReachabilityFence.reachabilityFence1(boo);
     }
     private static native void do_f6(long self, long boo);"#;
 
@@ -48,6 +52,8 @@ r#"public final void f7(@Nullable String a0) {
     private static native void do_f7(long self, @Nullable String a0);"#;
 
 r#"public final @NonNull java.util.OptionalInt f8(@Nullable Integer a0) {
-        return do_f8(mNativeObj, a0);
+        java.util.OptionalInt ret = do_f8(mNativeObj, a0);
+
+        return ret;
     }
     private static native @NonNull java.util.OptionalInt do_f8(long self, @Nullable Integer a0);"#;

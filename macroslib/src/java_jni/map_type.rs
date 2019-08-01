@@ -119,7 +119,7 @@ pub(in crate::java_jni) fn map_type(
         java_converter,
         annotation,
     };
-    if fti.annotation.is_none() && !is_primitive_type(&fti.base.name) {
+    if fti.annotation.is_none() && !java_code::is_primitive_type(&fti.base.name) {
         fti.annotation = Some(if if_option_return_some_type(arg_ty).is_none() {
             NullAnnotation::NonNull
         } else {
@@ -226,13 +226,6 @@ fn do_map_type(
     }
 }
 
-fn is_primitive_type(type_name: &str) -> bool {
-    match type_name {
-        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => true,
-        _ => false,
-    }
-}
-
 fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet) -> bool {
     if let Some(rty) = tmap.ty_to_rust_type_checked(ty) {
         for tname in traits.iter() {
@@ -301,7 +294,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
             Some("NoNullAnnotations") => java_code::filter_null_annotation(&f_info.base.name)
                 .trim()
                 .into(),
-            None => f_info.base.name.into(),
+            None => f_info.base.name,
             Some(param) => {
                 return Err(DiagnosticError::new2(
                     self.arg_ty_span,

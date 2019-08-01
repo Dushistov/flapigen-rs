@@ -10,9 +10,9 @@ use super::{
     JavaContext, JniForeignMethodSignature,
 };
 use crate::{
-    error::{invalid_src_id_span, panic_on_syn_error, DiagnosticError, Result},
+    error::{invalid_src_id_span, panic_on_syn_error, DiagnosticError, Result, SourceIdSpan},
     typemap::ast::DisplayToTokens,
-    types::{ForeignerClassInfo, MethodVariant},
+    types::MethodVariant,
     WRITE_TO_MEM_FAILED_MSG,
 };
 
@@ -53,7 +53,8 @@ fn java_type_to_jni_signature<'a>(ctx: &'a JavaContext, java_type: &str) -> Opti
 
 pub(in crate::java_jni) fn generate_jni_func_name(
     ctx: &JavaContext,
-    class: &ForeignerClassInfo,
+    class_name: &str,
+    class_span: SourceIdSpan,
     java_method_name: &str,
     method_type: MethodVariant,
     f_method: &JniForeignMethodSignature,
@@ -74,7 +75,7 @@ pub(in crate::java_jni) fn generate_jni_func_name(
     }
     escape_underscore(&ctx.cfg.package_name, &mut output);
     output.push_str("_");
-    escape_underscore(&class.name.to_string(), &mut output);
+    escape_underscore(class_name, &mut output);
     output.push_str("_");
     escape_underscore(java_method_name, &mut output);
 
@@ -91,9 +92,8 @@ pub(in crate::java_jni) fn generate_jni_func_name(
                 .unwrap_or_else(|| arg.as_ref().name.as_str());
 
             let type_name = java_type_to_jni_signature(ctx, type_name).ok_or_else(|| {
-                DiagnosticError::new(
-                    class.src_id,
-                    class.span(),
+                DiagnosticError::new2(
+                    class_span,
                     format!(
                         "Can not generate JNI function name for overload method '{}',\
                          unknown java type '{}'",
@@ -269,7 +269,7 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
 
     let jni_load_func: syn::Item = parse_quote! {
         #[no_mangle]
-        pub extern "C" fn JNI_OnLoad(java_vm: *mut JavaVM, _reserved: *mut ::std::os::raw::c_void) -> jint {
+        pub extern "system" fn JNI_OnLoad(java_vm: *mut JavaVM, _reserved: *mut ::std::os::raw::c_void) -> jint {
             println!("JNI_OnLoad begin");
             assert!(!java_vm.is_null());
             let mut env: *mut JNIEnv = ::std::ptr::null_mut();
@@ -292,7 +292,7 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
     addon_code.push(jni_load_func);
     let jni_unload_func: syn::Item = parse_quote! {
         #[no_mangle]
-        pub extern "C" fn JNI_OnUnload(java_vm: *mut JavaVM, _reserved: *mut ::std::os::raw::c_void) {
+        pub extern "system" fn JNI_OnUnload(java_vm: *mut JavaVM, _reserved: *mut ::std::os::raw::c_void) {
             println!("JNI_OnUnLoad begin");
             assert!(!java_vm.is_null());
             let mut env: *mut JNIEnv = ::std::ptr::null_mut();
