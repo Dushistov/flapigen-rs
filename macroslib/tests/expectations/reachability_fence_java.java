@@ -43,7 +43,8 @@ r#"public final class LongOperation {
     }
     private static native int do_f2(long drop_counter);"#;
 
-r#"/*package*/ class JNIReachabilityFence {
+r#"/*package*/ final class JNIReachabilityFence {
+    private JNIReachabilityFence() {}
     /*package*/ static native void reachabilityFence1(Object ref1);
     /*package*/ static native void reachabilityFence2(Object ref1, Object ref2);
     /*package*/ static native void reachabilityFence3(Object ref1, Object ref2, Object ref3);
