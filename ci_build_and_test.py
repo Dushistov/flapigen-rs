@@ -202,6 +202,7 @@ def run_unit_tests(test_cfg, test_set):
         if CPP_TESTS in test_set:
             cmd_base.append("-p")
             cmd_base.append("rust_swig_test_cpp")
+            cmd_base.append("-p")
             cmd_base.append("cpp-example-rust-part")
         if JNI_TESTS in test_set:
             cmd_base.append("-p")
@@ -232,6 +233,8 @@ def main():
             test_set.remove(JNI_TESTS)
         elif arg == "--android-only-tests":
             test_set = set([ANDROID_TESTS])
+        elif arg == "--rust-unit-tests-only":
+            test_set = set([UNIT_TESTS])
         else:
             raise Exception("Fatal Error: unknown option: %s" % arg)
 
@@ -253,7 +256,7 @@ def main():
     if DOC_TESTS in test_set:
         build_cargo_docs()
 
-    print("start tests\n macrolib tests")
+    print("start tests: %s" % test_set)
     if UNIT_TESTS in test_set:
         run_unit_tests(test_cfg, test_set)
     if JNI_TESTS in test_set:
