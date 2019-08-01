@@ -7,8 +7,8 @@ r#"template<bool OWN_DATA>
 
         struct CRustResult4232mut3232c_voidu32 ret = Boo_f(this->self_);
         return ret.is_ok != 0 ?
-            std::variant<Moo, Foo> { Moo(static_cast<MooOpaque *>(ret.data.ok)) } :
-            std::variant<Moo, Foo> { static_cast<Foo>(ret.data.err) };
+              std::variant<Moo, Foo> { Moo(static_cast<MooOpaque *>(ret.data.ok)) } :
+              std::variant<Moo, Foo> { static_cast<Foo>(ret.data.err) };
     }"#;
 
 r#"template<bool OWN_DATA>

@@ -178,12 +178,12 @@ typedef void (*CFnTwoArgsPtr!())(swig_f_type!(T1), swig_f_type!(T2));
 fn test_foreign_typemap_callback_to_future() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
-            generic_alias!(CFnOnce = swig_concat_idents!(CFnOnce, swig_i_type!(T)));
+            generic_alias!(CFnOnce = swig_concat_idents!(CFnOnce, swig_i_type!(T, output)));
             define_c_type!(
                 module = "CFnOnce!().h";
                 #[repr(C)]
                 struct CFnOnce!() {
-                    cb: extern "C" fn(swig_i_type!(T), *mut c_void),
+                    cb: extern "C" fn(swig_i_type!(T, output), *mut c_void),
                     ctx: *mut c_void,
                 });
 
@@ -195,15 +195,15 @@ fn test_foreign_typemap_callback_to_future() {
                 };
             };
 
-            ($p:f_type, $tmp:temporary, input_to_output, req_modules = ["\"CFnOnce!().h\"", "<future>"]) <= "std::future<swig_f_type!(T)>"
+            ($p:f_type, $tmp:temporary, input_to_output, req_modules = ["\"CFnOnce!().h\"", "<future>"]) <= "std::future<swig_f_type!(T, output)>"
                 r#"
-        auto $tmp = new std::promise<swig_f_type!(T)>;
+        auto $tmp = new std::promise<swig_f_type!(T, output)>;
         $out = $tmp->get_future();
         CFnOnce!() $p;
         $p.ctx = $tmp;
         $p.cb = [](swig_i_type!(T) arg, void *opaque) {
             auto arg_cpp = swig_foreign_from_i_type!(T, arg);
-            auto promise = static_cast<std::promise<swig_f_type!(T)> *>(opaque);
+            auto promise = static_cast<std::promise<swig_f_type!(T, output)> *>(opaque);
             promise->set_value(std::move(arg_cpp));
             delete promise;
         };
@@ -541,7 +541,7 @@ fn macro_to_conv_rule(mac: syn::Macro) -> TypeMapConvRuleInfo {
 
 struct Dummy;
 impl TypeMapConvRuleInfoExpanderHelper for Dummy {
-    fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type> {
+    fn swig_i_type(&mut self, ty: &syn::Type, _opt_arg: Option<&str>) -> Result<syn::Type> {
         Ok(ty.clone())
     }
     fn swig_from_rust_to_i_type(

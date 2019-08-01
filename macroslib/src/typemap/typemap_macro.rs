@@ -448,7 +448,7 @@ pub(crate) struct ExpandedFType {
 }
 
 pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
-    fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type>;
+    fn swig_i_type(&mut self, ty: &syn::Type, opt_arg: Option<&str>) -> Result<syn::Type>;
     fn swig_from_rust_to_i_type(
         &mut self,
         ty: &syn::Type,
@@ -529,7 +529,7 @@ fn properly_escape_str_as_type(s: &str) -> String {
 enum GenericAliasItem {
     Concat(Vec<GenericAliasItem>),
     Ident(syn::Ident),
-    SwigIType(syn::Ident),
+    SwigIType((syn::Ident, Option<syn::Ident>)),
     SwigFType(syn::Ident),
 }
 
@@ -547,9 +547,16 @@ fn concat_idents(
                 concat_idents(src_id, it, param_map, expander, req_modules, ident)?;
             }
         }
-        GenericAliasItem::SwigIType(id) => {
+        GenericAliasItem::SwigIType((id, opt_arg)) => {
             let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
-            let i_type: syn::Type = expander.swig_i_type(ty.as_ref())?;
+            let i_type: syn::Type = expander.swig_i_type(
+                ty.as_ref(),
+                opt_arg
+                    .as_ref()
+                    .map(syn::Ident::to_string)
+                    .as_ref()
+                    .map(String::as_str),
+            )?;
             ident.push_str(&DisplayToTokens(&i_type).to_string());
         }
         GenericAliasItem::SwigFType(id) => {
@@ -665,7 +672,7 @@ fn expand_rtype_rule(
                 if type_macro.mac.path.is_ident(SWIG_I_TYPE) {
                     let param = type_macro.mac.tts.to_string();
                     let ty = find_type_param(param_map, &param, ctx_span)?;
-                    let i_type = expander.swig_i_type(ty.as_ref())?;
+                    let i_type = expander.swig_i_type(ty.as_ref(), None)?;
                     Some(i_type)
                 } else {
                     let alias_idx = generic_aliases
@@ -1030,20 +1037,22 @@ fn expand_rust_code(
                     write!(out, "{}", tt).expect(WRITE_TO_MEM_FAILED_MSG);
                 }
                 _ if id == SWIG_I_TYPE => {
-                    let param = if params.len() == 1 {
-                        &params[0]
-                    } else {
-                        return Err(DiagnosticError::new2(
-                            ctx_span,
-                            format!(
-                                "{} parameters in {} instead of 1",
-                                params.len(),
-                                SWIG_I_TYPE
-                            ),
-                        ));
+                    let (param, opt_arg) = match params.len() {
+                        1 => (params[0], None),
+                        2 => (params[0], Some(params[1])),
+                        _ => {
+                            return Err(DiagnosticError::new2(
+                                ctx_span,
+                                format!(
+                                    "{} parameters in {} instead of 1 or 2",
+                                    params.len(),
+                                    SWIG_I_TYPE
+                                ),
+                            ));
+                        }
                     };
                     let ty = find_type_param(param_map, param, ctx_span)?;
-                    let i_type = expander.swig_i_type(ty.as_ref())?;
+                    let i_type = expander.swig_i_type(ty.as_ref(), opt_arg)?;
                     write!(out, "{}", normalize_ty_lifetimes(&i_type))
                         .expect(WRITE_TO_MEM_FAILED_MSG);
                 }
@@ -1101,21 +1110,23 @@ fn expand_foreign_code(
                     call_swig_f_type(ctx_span, params, out, param_map, expander, generic_aliases)?;
                 }
                 _ if id == SWIG_I_TYPE => {
-                    let param = if params.len() == 1 {
-                        &params[0]
-                    } else {
-                        return Err(DiagnosticError::new2(
-                            ctx_span,
-                            format!(
-                                "{} parameters in {} instead of 1",
-                                params.len(),
-                                SWIG_I_TYPE
-                            ),
-                        ));
+                    let (param, opt_arg) = match params.len() {
+                        1 => (params[0], None),
+                        2 => (params[0], Some(params[1])),
+                        _ => {
+                            return Err(DiagnosticError::new2(
+                                ctx_span,
+                                format!(
+                                    "{} parameters in {} instead of 1 or 2",
+                                    params.len(),
+                                    SWIG_I_TYPE
+                                ),
+                            ));
+                        }
                     };
                     let ty = find_type_param(param_map, param, ctx_span)?;
-                    let i_type = expander.swig_i_type(ty.as_ref())?;
-                    let f_type = expander.swig_f_type(&i_type, None)?;
+                    let i_type = expander.swig_i_type(ty.as_ref(), opt_arg)?;
+                    let f_type = expander.swig_f_type(&i_type, opt_arg)?;
                     out.push_str(&f_type.name);
                 }
                 _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {

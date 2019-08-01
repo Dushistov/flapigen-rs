@@ -145,13 +145,30 @@ struct CppContextForArg<'a, 'b> {
     direction: Direction,
 }
 
+impl<'a, 'b> CppContextForArg<'a, 'b> {
+    fn arg_direction(&self, param1: Option<&str>) -> Result<Direction> {
+        match param1 {
+            Some("output") => Ok(Direction::Outgoing),
+            Some("input") => Ok(Direction::Incoming),
+            None => Ok(self.direction),
+            Some(param) => {
+                return Err(DiagnosticError::new2(
+                    self.arg_ty_span,
+                    format!("Invalid argument '{}' for swig_f_type", param),
+                ))
+            }
+        }
+    }
+}
+
 impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
-    fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type> {
+    fn swig_i_type(&mut self, ty: &syn::Type, opt_arg: Option<&str>) -> Result<syn::Type> {
         let rust_ty = self
             .ctx
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
-        let f_info = map_type(self.ctx, &rust_ty, self.direction, self.arg_ty_span)?;
+        let direction = self.arg_direction(opt_arg)?;
+        let f_info = map_type(self.ctx, &rust_ty, direction, self.arg_ty_span)?;
         trace!("swig_i_type return {}", f_info.base.correspoding_rust_type);
         Ok(f_info.base.correspoding_rust_type.ty.clone())
     }
@@ -207,17 +224,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
 
-        let direction = match param1 {
-            Some("output") => Direction::Outgoing,
-            Some("input") => Direction::Incoming,
-            None => self.direction,
-            Some(param) => {
-                return Err(DiagnosticError::new2(
-                    self.arg_ty_span,
-                    format!("Invalid argument '{}' for swig_f_type", param),
-                ))
-            }
-        };
+        let direction = self.arg_direction(param1)?;
         let f_info = map_type(self.ctx, &rust_ty, direction, self.arg_ty_span)?;
         let fname = if let Some(ref cpp_conv) = f_info.cpp_converter {
             cpp_conv.typename.as_str()
