@@ -10,8 +10,7 @@ use syn::{spanned::Spanned, Type};
 use super::{
     calc_this_type_for_method, java_class_full_name, java_class_name_to_jni, java_code,
     map_type::map_type, method_name, rust_code, JavaContext, JavaConverter, JavaForeignTypeInfo,
-    JniForeignMethodSignature, INTERNAL_PTR_MARKER, JAVA_RUST_SELF_NAME,
-    MAX_REACHABILITY_FENCE_ARGS, REACHABILITY_FENCE_CLASS,
+    JniForeignMethodSignature, INTERNAL_PTR_MARKER, JAVA_RUST_SELF_NAME, REACHABILITY_FENCE_CLASS,
 };
 use crate::{
     error::{panic_on_syn_error, DiagnosticError, Result, SourceIdSpan},
@@ -1118,14 +1117,14 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
                 .expect(WRITE_TO_MEM_FAILED_MSG);
             }
         }
-        JavaReachabilityFence::GenerateFence => {
-            if protect_args.len() > MAX_REACHABILITY_FENCE_ARGS {
+        JavaReachabilityFence::GenerateFence(max_args) => {
+            if protect_args.len() > max_args {
                 return Err(DiagnosticError::new2(
                     ctx_span,
                     format!(
                         "Too many arguments for arguments protection {} > {}, increase {} limit",
                         protect_args.len(),
-                        MAX_REACHABILITY_FENCE_ARGS,
+                        max_args,
                         stringify!(MAX_REACHABILITY_FENCE_ARGS)
                     ),
                 ));

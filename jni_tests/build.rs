@@ -22,7 +22,7 @@ fn main() {
     .use_reachability_fence(if have_java_9 {
         JavaReachabilityFence::Std
     } else {
-        JavaReachabilityFence::GenerateFence
+        JavaReachabilityFence::GenerateFence(8)
     });
 
     let in_src = Path::new("src").join("java_glue.rs.in");

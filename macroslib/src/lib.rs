@@ -92,7 +92,7 @@ impl JavaConfig {
             package_name,
             null_annotation_package: None,
             optional_package: "java.util".to_string(),
-            reachability_fence: JavaReachabilityFence::GenerateFence,
+            reachability_fence: JavaReachabilityFence::GenerateFence(8),
         }
     }
     /// Use @NonNull for types where appropriate
@@ -149,7 +149,11 @@ pub enum JavaReachabilityFence {
     Std,
     /// If Reference.reachabilityFence​ is not available,
     /// generate JNI code to emulate it
-    GenerateFence,
+    /// Argument is maximum number of parameters, that you would
+    /// "fence". By default is big enough number, but may be
+    /// you lint tool will be "against" too big number (we generate Java method
+    /// with such number of arguments)
+    GenerateFence(usize),
 }
 
 /// Configuration for C++ binding generation
