@@ -244,7 +244,7 @@ fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet
 }
 
 impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
-    fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type> {
+    fn swig_i_type(&mut self, ty: &syn::Type, _opt_arg: Option<&str>) -> Result<syn::Type> {
         let rust_ty = self
             .ctx
             .conv_map

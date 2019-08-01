@@ -971,11 +971,53 @@ TEST(TestFnInline, smokeTest)
 
 TEST(TestFuture, smokeTest)
 {
-    auto future = TestFuture::call_fn();
-    future.wait();
-    Foo foo = future.get();
-    EXPECT_EQ(-1, foo.f(0, 0));
-    EXPECT_EQ("from callback", foo.getName());
+    {
+        auto future = TestFuture::call_fn();
+        future.wait();
+        Foo foo = future.get();
+        EXPECT_EQ(-1, foo.f(0, 0));
+        EXPECT_EQ("from callback", foo.getName());
+    }
+
+    {
+        auto future = TestFuture::call_fn2(true);
+        future.wait();
+        auto res = future.get();
+#if defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)
+        ASSERT_TRUE(nullptr != std::get_if<RustForeignVecFoo>(&res));
+        auto foo_vec = std::get<RustForeignVecFoo>(std::move(res));
+        ASSERT_EQ(1u, foo_vec.size());
+        auto foo = foo_vec.remove(0);
+
+        EXPECT_EQ(-1, foo.f(0, 0));
+        EXPECT_EQ("from callback", foo.getName());
+#endif
+#ifdef USE_BOOST
+        ASSERT_TRUE(nullptr != boost::get<RustForeignVecFoo>(&res));
+        auto foo_vec = boost::get<RustForeignVecFoo>(std::move(res));
+        ASSERT_EQ(1u, foo_vec.size());
+        auto foo = foo_vec.remove(0);
+
+        EXPECT_EQ(-1, foo.f(0, 0));
+        EXPECT_EQ("from callback", foo.getName());
+#endif
+    }
+
+    {
+        auto future = TestFuture::call_fn2(false);
+        future.wait();
+        auto res = future.get();
+#if defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_VARIANT)
+        ASSERT_TRUE(nullptr != std::get_if<RustString>(&res));
+        auto msg = std::get<RustString>(std::move(res));
+        EXPECT_EQ("Err", msg.to_std_string());
+#endif
+#ifdef USE_BOOST
+        ASSERT_TRUE(nullptr != boost::get<RustString>(&res));
+        auto msg = boost::get<RustString>(std::move(res));
+        EXPECT_EQ("Err", msg.to_std_string());
+#endif
+    }
 }
 
 namespace {

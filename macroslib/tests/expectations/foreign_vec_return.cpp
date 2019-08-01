@@ -17,8 +17,8 @@ r#"template<bool OWN_DATA>
 
         struct CRustResult4232mut3232c_voidCRustString ret = Boo_get_foo_with_err(this->self_);
         return ret.is_ok != 0 ?
-            std::variant<Foo, RustString> { Foo(static_cast<FooOpaque *>(ret.data.ok)) } :
-            std::variant<Foo, RustString> { RustString{ret.data.err} };
+              std::variant<Foo, RustString> { Foo(static_cast<FooOpaque *>(ret.data.ok)) } :
+              std::variant<Foo, RustString> { RustString{ret.data.err} };
     }"#;
 
 
@@ -30,6 +30,6 @@ r#"template<bool OWN_DATA>
 
         struct CRustResultCRustForeignVecCRustString ret = Boo_get_foo_arr_with_err(this->self_);
         return ret.is_ok != 0 ?
-            std::variant<RustForeignVecFoo, RustString> { RustForeignVecFoo{ret.data.ok} } :
-            std::variant<RustForeignVecFoo, RustString> { RustString{ret.data.err} };
+              std::variant<RustForeignVecFoo, RustString> { RustForeignVecFoo{ret.data.ok} } :
+              std::variant<RustForeignVecFoo, RustString> { RustString{ret.data.err} };
     }"#;

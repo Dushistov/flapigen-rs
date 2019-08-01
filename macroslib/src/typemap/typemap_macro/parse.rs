@@ -438,6 +438,14 @@ impl syn::parse::Parse for GenericCItems {
     }
 }
 
+struct MacroArgs(Vec<Ident>);
+impl syn::parse::Parse for MacroArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<MacroArgs> {
+        let ret = syn::punctuated::Punctuated::<Ident, Token![,]>::parse_terminated(input)?;
+        Ok(MacroArgs(ret.into_iter().collect()))
+    }
+}
+
 impl syn::parse::Parse for GenericAliasItem {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         if input.fork().parse::<syn::Macro>().is_ok() {
@@ -446,8 +454,22 @@ impl syn::parse::Parse for GenericAliasItem {
                 let items: GenericAliasItemVecCommaSeparated = syn::parse2(mac.tts)?;
                 Ok(GenericAliasItem::Concat(items.0))
             } else if mac.path.is_ident(SWIG_I_TYPE) {
-                let item: syn::Ident = syn::parse2(mac.tts)?;
-                Ok(GenericAliasItem::SwigIType(item))
+                let mac_span = mac.span();
+                let mut item: MacroArgs = syn::parse2(mac.tts)?;
+                let n = item.0.len();
+                if n == 0 || n > 2 {
+                    return Err(syn::Error::new(
+                        mac_span,
+                        format!("{} arguments for {} expect 1 or 2", n, SWIG_I_TYPE),
+                    ));
+                }
+                let type_id = item.0.remove(0);
+                let opt_arg = if !item.0.is_empty() {
+                    Some(item.0.remove(0))
+                } else {
+                    None
+                };
+                Ok(GenericAliasItem::SwigIType((type_id, opt_arg)))
             } else if mac.path.is_ident(SWIG_F_TYPE) {
                 let item: syn::Ident = syn::parse2(mac.tts)?;
                 Ok(GenericAliasItem::SwigFType(item))
@@ -455,13 +477,14 @@ impl syn::parse::Parse for GenericAliasItem {
                 Err(syn::Error::new(
                     mac.span(),
                     format!(
-                        "uknown macro '{}' in this context",
+                        "unknown macro '{}' in this context",
                         DisplayToTokens(&mac.path)
                     ),
                 ))
             }
         } else {
-            Ok(GenericAliasItem::Ident(input.parse()?))
+            let ident = input.parse()?;
+            Ok(GenericAliasItem::Ident(ident))
         }
     }
 }

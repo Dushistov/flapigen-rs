@@ -44,6 +44,6 @@ r#"template<bool OWN_DATA>
 
         struct CRustResultCRustForeignVec4232mut3232c_void ret = Weather_get_wind_for(pos);
         return ret.is_ok != 0 ?
-            std::variant<RustForeignVecWindVelocity, RemoteApiError> { RustForeignVecWindVelocity{ret.data.ok} } :
-            std::variant<RustForeignVecWindVelocity, RemoteApiError> { RemoteApiError(static_cast<RemoteApiErrorOpaque *>(ret.data.err)) };
+              std::variant<RustForeignVecWindVelocity, RemoteApiError> { RustForeignVecWindVelocity{ret.data.ok} } :
+              std::variant<RustForeignVecWindVelocity, RemoteApiError> { RemoteApiError(static_cast<RemoteApiErrorOpaque *>(ret.data.err)) };
     }"#;
