@@ -1,7 +1,0 @@
-[workspace]
-members = ["macroslib", "jni_tests", "cpp_tests", "android-example", "android-tests",
-"debug-util", "cpp-example/rust-part"]
-
-[profile.release]
-debug = true
-incremental = true

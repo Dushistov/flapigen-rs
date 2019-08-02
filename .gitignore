@@ -1,12 +1,2 @@
 *~
 *.bk
-jni_tests/java/com/example/rust
-*.class
-*.jar
-/cpp_tests/c++/rust_interface
-/cpp_tests/c++/build
-/cpp_tests/c++/build_with_boost
-target/
-/macroslib/target/
-.vscode
-Cargo.lock
