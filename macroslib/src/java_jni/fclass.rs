@@ -191,14 +191,12 @@ public final class {class_name} {{"#,
                 .replace(TO_VAR_TYPE_TEMPLATE, &format!("{} {}", ret_type, conv_ret))
                 .replace(TO_VAR_TEMPLATE, &conv_ret);
             let mut conv_code: String = java_code::filter_null_annotation(&conv_code).trim().into();
-            if !conv_code.is_empty() {
-                if !conv_code.starts_with("\n") {
-                    let ident = "        ";
-                    if !conv_code.starts_with(ident) {
-                        conv_code.insert_str(0, ident);
-                    }
-                    conv_code.insert(0, '\n');
+            if !conv_code.is_empty() && !conv_code.starts_with('\n') {
+                let ident = "        ";
+                if !conv_code.starts_with(ident) {
+                    conv_code.insert_str(0, ident);
                 }
+                conv_code.insert(0, '\n');
             }
             (ret_type, intermidiate_ret_type, conv_code)
         }
