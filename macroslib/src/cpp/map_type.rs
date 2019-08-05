@@ -151,12 +151,10 @@ impl<'a, 'b> CppContextForArg<'a, 'b> {
             Some("output") => Ok(Direction::Outgoing),
             Some("input") => Ok(Direction::Incoming),
             None => Ok(self.direction),
-            Some(param) => {
-                return Err(DiagnosticError::new2(
-                    self.arg_ty_span,
-                    format!("Invalid argument '{}' for swig_f_type", param),
-                ))
-            }
+            Some(param) => Err(DiagnosticError::new2(
+                self.arg_ty_span,
+                format!("Invalid argument '{}' for swig_f_type", param),
+            )),
         }
     }
 }
