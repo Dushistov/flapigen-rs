@@ -1,1 +1,27 @@
-"impl <'a > SwigForeignClass for Rc < RefCell < Foo < 'a > > > {";
+r##"impl<'a> SwigForeignClass for Rc<RefCell<Foo<'a>>> {
+    type PointedType = RefCell<Foo<'a>>;
+    fn jni_class() -> jclass {
+        swig_jni_find_class!(FOREIGN_CLASS_FOO, "org/example/Foo")
+    }
+    fn jni_class_pointer_field() -> jfieldID {
+        swig_jni_get_field_id!(
+            FOREIGN_CLASS_FOO_MNATIVEOBJ_FIELD,
+            FOREIGN_CLASS_FOO,
+            "mNativeObj",
+            "J"
+        )
+    }
+    fn box_object(this: Self) -> jlong {
+        let this: *const RefCell<Foo> = Rc::into_raw(this);
+        this as jlong
+    }
+    fn unbox_object(x: jlong) -> Self {
+        let x: *mut RefCell<Foo> = unsafe { jlong_to_pointer::<RefCell<Foo>>(x).as_mut().unwrap() };
+        let x: Rc<RefCell<Foo>> = unsafe { Rc::from_raw(x) };
+        x
+    }
+    fn to_pointer(x: jlong) -> ::std::ptr::NonNull<Self::PointedType> {
+        let x: *mut RefCell<Foo> = unsafe { jlong_to_pointer::<RefCell<Foo>>(x).as_mut().unwrap() };
+        ::std::ptr::NonNull::<Self::PointedType>::new(x).unwrap()
+    }
+}"##;

@@ -1,16 +1,8 @@
-#[cfg(target_os = "android")]
-extern crate android_logger;
-#[macro_use]
-extern crate log;
-extern crate log_panics;
-
-#[cfg(target_os = "android")]
-mod android_c_headers;
-#[cfg(target_os = "android")]
+use log::info;
 mod java_glue;
-#[cfg(target_os = "android")]
 pub use crate::java_glue::*;
 
+// ANCHOR: rust_code
 struct Session {
     a: i32,
 }
@@ -37,3 +29,4 @@ impl Session {
         format!("Hello {} ✋\nIt's a pleasure to meet you!", to)
     }
 }
+// ANCHOR_END: rust_code

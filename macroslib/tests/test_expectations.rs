@@ -4,7 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
+use log::warn;
+use rust_swig::{rustfmt_cnt, CppConfig, Generator, JavaConfig, LanguageConfig};
 use syn::Token;
 use tempfile::tempdir;
 
@@ -66,6 +67,45 @@ foreigner_class!(class Foo {
             .expect(&name);
         });
         assert!(result.is_err());
+    }
+}
+
+#[test]
+fn test_foreign_typemap_not_direct_intermidiate() {
+    let name = "test_foreign_typemap_not_direct_intermidiate";
+    let _ = env_logger::try_init();
+    for lang in &[ForeignLang::Java, ForeignLang::Cpp] {
+        let ret = panic::catch_unwind(|| {
+            parse_code(
+                name,
+                Source::Str(
+                    r###"
+foreign_typemap!(
+   ($p:r_type) Type2 => Type3 { $out = $p };
+   ($p:f_type) => "Type3";
+);
+
+foreign_typemap!(
+    ($p:r_type) TypeX => Type2 {
+        $out = typex_to_type2($p)
+    };
+    ($p:f_type) => "FType4"
+        r#"
+        $out = f_type2_to_type4($p);
+"#;
+);
+
+foreigner_class!(class Foo {
+    fn f1() -> TypeX;
+});
+
+"###,
+                ),
+                *lang,
+            )
+            .unwrap_or_else(|err| panic!("Test {} failed for lang {:?}: {}", name, lang, err));
+        });
+        assert!(ret.is_err());
     }
 }
 
@@ -137,12 +177,12 @@ foreigner_class!(
 class Boo {
     self_type Boo;
     constructor Boo::default() -> Boo;
-    method Boo::clone(&self) -> Boo;
+    fn Boo::clone(&self) -> Boo;
 });
 foreigner_class!(class FooImpl {
     self_type Foo<'a>;
     constructor Foo::create() -> Foo<'a>;
-    method Foo::set_alternate_boarding(&mut self, p: Vec<Boo>);
+    fn Foo::set_alternate_boarding(&mut self, p: Vec<Boo>);
     alias setAlternateBoarding;
 });
 "#;
@@ -178,16 +218,16 @@ foreign_enum!(enum MyEnum {
 foreigner_class!(class TestEnumClass {
     self_type Moo;
     constructor Moo::default() -> Moo;
-    method Moo::f1(&mut self, v: MyEnum) -> i32;
-    static_method Moo::next_enum(v: MyEnum) -> MyEnum;
+    fn Moo::f1(&mut self, v: MyEnum) -> i32;
+    fn Moo::next_enum(v: MyEnum) -> MyEnum;
 });
 "#;
     for _ in 0..10 {
-        let _cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).unwrap();
         let java_code = parse_code(name, Source::Str(src), ForeignLang::Java).unwrap();
-        println!("{}", java_code.rust_code);
         println!("{}", java_code.foreign_code);
         assert!(java_code.foreign_code.contains("int f1(@NonNull MyEnum"));
+
+        let _cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).unwrap();
     }
 }
 
@@ -212,9 +252,15 @@ foreigner_class!(class LocationService {
         println!("iter {}", i);
         let java_code = parse_code(name, Source::Str(src), ForeignLang::Java).unwrap();
         println!("{}", java_code.foreign_code);
-        assert!(java_code
-            .foreign_code
-            .contains("public static native Position position() throws Exception;"));
+        assert!(java_code.foreign_code.contains(
+            r#"public static @NonNull Position position() throws Exception {
+        long ret = do_position();
+        Position convRet = new Position(InternalPointerMarker.RAW_PTR, ret);
+
+        return convRet;
+    }
+    private static native long do_position() throws Exception;"#
+        ));
         let cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).unwrap();
         println!("c/c++: {}", cpp_code.foreign_code);
         assert!(cpp_code
@@ -283,10 +329,10 @@ foreign_interface!(interface RepoChangedCallback {
         println!("c/c++: {}", cpp_code.foreign_code);
         assert!(cpp_code
             .foreign_code
-            .contains("virtual void on_save(UuidRef uuid) = 0;"));
+            .contains("virtual void on_save(UuidRef uuid) noexcept = 0;"));
         assert!(cpp_code
             .foreign_code
-            .contains("virtual void on_remove(UuidRef uuid) = 0;"));
+            .contains("virtual void on_remove(UuidRef uuid) noexcept = 0;"));
         assert!(cpp_code.foreign_code.contains(
             r#"
     static void c_on_save(const UuidOpaque * uuid, void *opaque)
@@ -369,7 +415,9 @@ impl Drop for PrintTestInfo {
             );
             println!(
                 "{} / {:?}: rust_swig generated such rust_code: {}",
-                self.test_name, self.lang, self.code_pair.rust_code
+                self.test_name,
+                self.lang,
+                rustfmt_without_errors(self.code_pair.rust_code.clone()),
             );
         }
     }
@@ -515,10 +563,14 @@ fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bo
         if rust_cpp_expectation.exists() {
             let pats =
                 parse_code_expectation(&rust_cpp_expectation).expect("parsing of patterns failed");
-            let pats: Vec<String> = pats.into_iter().map(|v| v.replace("\n", "")).collect();
+            let pats: Vec<String> = pats
+                .into_iter()
+                .map(|v| rustfmt_without_errors(v))
+                .collect();
+            let rust_code = rustfmt_without_errors(code_pair.rust_code);
             for pat in pats {
                 print_test_info.rust_pat = pat.clone();
-                assert!(code_pair.rust_code.contains(&pat));
+                assert!(rust_code.contains(&pat));
             }
             print_test_info.rust_pat.clear();
         }
@@ -526,5 +578,16 @@ fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bo
         true
     } else {
         false
+    }
+}
+
+fn rustfmt_without_errors(rust_code: String) -> String {
+    let rust_code2 = rust_code.clone();
+    match rustfmt_cnt(rust_code.into_bytes()) {
+        Ok(code) => String::from_utf8(code).expect("not valid utf-8"),
+        Err(err) => {
+            warn!("rustfmt failed: {}", err);
+            rust_code2
+        }
     }
 }

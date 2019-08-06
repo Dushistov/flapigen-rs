@@ -2,17 +2,26 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{Arc, Mutex, MutexGuard},
-    time::SystemTime,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, MutexGuard,
+    },
+    time::{Duration, SystemTime},
 };
 
 use chrono::{DateTime, Utc};
-use log::{debug, error};
+use log::debug;
 
 use crate::jni_c_header::*;
 
+foreign_class!(class RustLogging {
+    fn init() {
+        env_logger::init();
+    }
+});
+
 #[derive(Clone)]
-struct Foo {
+pub struct Foo {
     data: i32,
     name: String,
 }
@@ -40,19 +49,8 @@ impl Foo {
     }
 }
 
-fn f_hypot(a: f64, b: f64) -> f64 {
-    a.hypot(b)
-}
-
-fn now() -> SystemTime {
-    return SystemTime::now();
-}
-
-fn chrono_now() -> DateTime<Utc> {
-    Utc::now()
-}
-
-foreigner_class!(
+//ANCHOR: doc_comments_usage
+foreign_class!(
 /// Class comment description for Foo.
 #[derive(Clone)]
 class Foo {
@@ -66,12 +64,28 @@ class Foo {
     /// @param val - some number
     /// @param name - more information
     constructor Foo::new(val: i32, name: &str) -> Foo;
-    method Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
-    method Foo::f_double(&self, _: f64, _: f64) -> f64;
-    method Foo::name(&self) -> &str; alias getName;
-    static_method f_hypot(_: f64, _: f64) -> f64; alias fHypot;
-    static_method now() -> SystemTime;
-    static_method chrono_now() -> DateTime<Utc>;
+    //ANCHOR_END: doc_comments_usage
+    //ANCHOR: alias_usage
+    fn Foo::f(&self, _: i32, _: i32) -> i32;  alias calcF;
+    //ANCHOR_END: alias_usage
+    fn Foo::f_double(&self, _: f64, _: f64) -> f64;
+    fn Foo::name(&self) -> &str; alias getName;
+    fn fHypot(a: f64, b: f64) -> f64 {
+        a.hypot(b)
+    }
+    fn now() -> SystemTime {
+        SystemTime::now()
+    }
+    fn chrono_now() -> DateTime<Utc> {
+        Utc::now()
+    }
+    fn chrono_now_opt(flag: bool) -> Option<DateTime<Utc>> {
+        if flag {
+            Some(Utc::now())
+        } else {
+            None
+        }
+    }
 });
 
 struct Boo {
@@ -101,112 +115,74 @@ fn create_boo() -> Rc<RefCell<Boo>> {
     Rc::new(RefCell::new(Boo::new()))
 }
 
-fn test_u8(v: u8) -> u8 {
-    v + 1
-}
-
-fn test_i8(v: i8) -> i8 {
-    v + 1
-}
-
-fn test_u16(v: u16) -> u16 {
-    v + 1
-}
-
-fn test_i16(v: i16) -> i16 {
-    v + 1
-}
-
-fn test_i32(v: i32) -> i32 {
-    v + 1
-}
-
-fn test_u32(v: u32) -> u32 {
-    v + 1
-}
-
-fn test_u64(v: u64) -> u64 {
-    v + 1
-}
-
-fn test_i64(v: i64) -> i64 {
-    v + 1
-}
-
-fn test_f32(v: f32) -> f32 {
-    v + 1.
-}
-fn test_f64(v: f64) -> f64 {
-    v + 1.
-}
-
-fn r_test_u8(v: u8) -> Result<u8, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_i8(v: i8) -> Result<i8, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_u16(v: u16) -> Result<u16, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_i16(v: i16) -> Result<i16, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_i32(v: i32) -> Result<i32, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_u32(v: u32) -> Result<u32, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_u64(v: u64) -> Result<u64, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_i64(v: i64) -> Result<i64, &'static str> {
-    Ok(v + 1)
-}
-
-fn r_test_f32(v: f32) -> Result<f32, &'static str> {
-    Ok(v + 1.)
-}
-fn r_test_f64(v: f64) -> Result<f64, &'static str> {
-    Ok(v + 1.)
-}
-
-foreigner_class!(class Boo {
+foreign_class!(class Boo {
     self_type Boo;
     constructor create_boo() -> Rc<RefCell<Boo>>;
-    method Boo::test(&self, _: bool) -> f32;
-    method Boo::set_a(&mut self, _: i32); alias setA;
-    method Boo::get_a(&self) -> i32; alias getA;
-    static_method test_u8(v: u8) -> u8;
-    static_method test_i8(v: i8) -> i8;
-    static_method test_u16(v: u16) -> u16;
-    static_method test_i16(v: i16) -> i16;
-    static_method test_i32(v: i32) -> i32;
-    static_method test_u32(v: u32) -> u32;
-    static_method test_u64(v: u64) -> u64;
-    static_method test_i64(v: i64) -> i64;
-    static_method test_f32(v: f32) -> f32;
-    static_method test_f64(v: f64) -> f64;
+    fn Boo::test(&self, _: bool) -> f32;
+    fn Boo::set_a(&mut self, _: i32); alias setA;
+    fn Boo::get_a(&self) -> i32; alias getA;
 
+    fn test_u8(v: u8) -> u8 {
+        v + 1
+    }
+    fn test_i8(v: i8) -> i8 {
+        v + 1
+    }
+    fn test_u16(v: u16) -> u16 {
+        v + 1
+    }
+    fn test_i16(v: i16) -> i16 {
+        v + 1
+    }
+    fn test_i32(v: i32) -> i32 {
+        v + 1
+    }
+    fn test_u32(v: u32) -> u32 {
+        v + 1
+    }
+    fn test_u64(v: u64) -> u64 {
+        v + 1
+    }
+    fn test_i64(v: i64) -> i64 {
+        v + 1
+    }
+    fn test_f32(v: f32) -> f32 {
+        v + 1.
+    }
+    fn test_f64(v: f64) -> f64 {
+        v + 1.
+    }
 
-    static_method r_test_u8(v: u8) -> Result<u8, &'static str>;
-    static_method r_test_i8(v: i8) -> Result<i8, &'static str>;
-    static_method r_test_u16(v: u16) -> Result<u16, &'static str>;
-    static_method r_test_i16(v: i16) -> Result<i16, &'static str>;
-    static_method r_test_i32(v: i32) -> Result<i32, &'static str>;
-    static_method r_test_u32(v: u32) -> Result<u32, &'static str>;
-    static_method r_test_u64(v: u64) -> Result<u64, &'static str>;
-    static_method r_test_i64(v: i64) -> Result<i64, &'static str>;
-    static_method r_test_f32(v: f32) -> Result<f32, &'static str>;
-    static_method r_test_f64(v: f64) -> Result<f64, &'static str>;
+    fn r_test_u8(v: u8) -> Result<u8, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_i8(v: i8) -> Result<i8, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_u16(v: u16) -> Result<u16, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_i16(v: i16) -> Result<i16, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_i32(v: i32) -> Result<i32, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_u32(v: u32) -> Result<u32, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_u64(v: u64) -> Result<u64, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_i64(v: i64) -> Result<i64, &'static str> {
+        Ok(v + 1)
+    }
+    fn r_test_f32(v: f32) -> Result<f32, &'static str> {
+        Ok(v + 1.)
+    }
+    fn r_test_f64(v: f64) -> Result<f64, &'static str> {
+        Ok(v + 1.)
+    }
 });
 
 struct TestPathAndResult {
@@ -244,19 +220,21 @@ impl TestPathAndResult {
     }
 }
 
-foreigner_class!(class TestPathAndResult {
+//ANCHOR: foreign_code_usage
+foreign_class!(class TestPathAndResult {
     self_type TestPathAndResult;
     constructor TestPathAndResult::empty() -> Result<TestPathAndResult, String>;
     constructor TestPathAndResult::new(path: &Path) -> Result<TestPathAndResult, String>;
-    method TestPathAndResult::get_path(&self) -> String; alias getPath;
-    method TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
-    foreigner_code "    public int javaFunc() { return 17; }\n";
-    foreigner_code r#"
+    fn TestPathAndResult::get_path(&self) -> String; alias getPath;
+    fn TestPathAndResult::get_boo(&self) -> Rc<RefCell<Boo>>; alias getBoo;
+    foreign_code "    public int javaFunc() { return 17; }\n";
+    foreign_code r#"
     public Boo[] testHandArrayReturn() { return do_testHandArrayReturn(this.mNativeObj); }
     private static native Boo[] do_testHandArrayReturn(long me);
 "#;
-    method TestPathAndResult::get_foo_list(&self) -> Vec<Foo>;
+    fn TestPathAndResult::get_foo_list(&self) -> Vec<Foo>;
 });
+//ANCHOR_END: foreign_code_usage
 
 #[allow(non_snake_case)]
 #[no_mangle]
@@ -295,7 +273,7 @@ pub fn Java_com_example_rust_TestPathAndResult_do_1testHandArrayReturn(
     ret
 }
 
-foreigner_class!(class TestInner {
+foreign_class!(class TestInner {
     foreigner_code r#"
     public static final class Inner {
         public final String name;
@@ -333,23 +311,40 @@ pub fn Java_com_example_rust_TestInner_getInner(env: *mut JNIEnv, _: jclass) -> 
     ret
 }
 
-#[derive(Clone)]
-struct Xyz;
+#[derive(Clone, Copy)]
+pub struct Xyz {
+    x: f64,
+    y: f64,
+    z: f64,
+}
 
 impl Xyz {
     fn zero() -> Xyz {
-        Xyz
-    }
-    fn new(_: f64, _: f64, _: f64) -> Xyz {
-        Xyz
+        Xyz {
+            x: 0.,
+            y: 0.,
+            z: 0.,
+        }
     }
 }
 
-foreigner_class!(class Xyz {
-    self_type Xyz;
-    constructor Xyz::zero() -> Xyz;
-    constructor Xyz::new(_: f64, _: f64, _: f64) -> Xyz;
-});
+foreign_class!(
+    #[derive(Copy)]
+    class Xyz {
+        self_type Xyz;
+        constructor Xyz::zero() -> Xyz;
+        constructor new(x: f64, y: f64, z: f64) -> Xyz {
+            Xyz { x, y, z }
+        }
+        fn x(&self) -> f64 { this.x }
+        fn y(&self) -> f64 { this.y }
+        fn z(&self) -> f64 { this.z }
+        fn Xyz::clone(&self) -> Xyz;
+        fn add(a: Xyz, b: Xyz) -> Xyz {
+            Xyz { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }
+        }
+    }
+);
 
 struct TestContainers {
     empty_struct_vec: Vec<Xyz>,
@@ -393,17 +388,21 @@ impl TestContainers {
     }
 }
 
-foreigner_class!(class TestContainers {
+foreign_class!(class TestContainers {
     self_type TestContainers;
     constructor TestContainers::default() -> TestContainers;
-    method TestContainers::get_struct_vec(&self) -> Vec<Foo>;
-    method TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
-    method TestContainers::get_string_vec(&self) -> Vec<String>;
-    method TestContainers::set_struct_vec(&mut self, _: Vec<Foo>);
+    fn TestContainers::get_struct_vec(&self) -> Vec<Foo>;
+    fn TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
+    fn TestContainers::get_string_vec(&self) -> Vec<String>;
+    fn TestContainers::set_struct_vec(&mut self, _: Vec<Foo>);
 });
 
-foreigner_class!(class OneStaticFunctionTest {
-    static_method f_hypot(_ :f64, _: f64) -> f64;
+fn f_hypot(a: f64, b: f64) -> f64 {
+    a.hypot(b)
+}
+
+foreign_class!(class OneStaticFunctionTest {
+    fn f_hypot(_ :f64, _: f64) -> f64;
 });
 
 #[derive(Default)]
@@ -451,18 +450,18 @@ fn arr_pass_through_long(a: &[i64]) -> &[i64] {
     a
 }
 
-foreigner_class!(class TestArraysWithPrimitiveTypes {
+foreign_class!(class TestArraysWithPrimitiveTypes {
     self_type TestArraysWithPrimitiveTypes;
     constructor TestArraysWithPrimitiveTypes::default() -> TestArraysWithPrimitiveTypes;
     constructor TestArraysWithPrimitiveTypes::new(_: i32, _: usize) -> TestArraysWithPrimitiveTypes;
-    method TestArraysWithPrimitiveTypes::get_ref(&self) -> &[i32];
-    method TestArraysWithPrimitiveTypes::clone_vec(&self) -> Vec<i32>;
-    static_method arr_pass_through_float(a: &[f32]) -> &[f32];
-    static_method arr_pass_through_double(a: &[f64]) -> &[f64];
-    static_method arr_pass_through_byte(a: &[i8]) -> &[i8];
-    static_method arr_pass_through_short(a: &[i16]) -> &[i16];
-    static_method arr_pass_thorough(_: &[i32]) -> &[i32];
-    static_method arr_pass_through_long(a: &[i64]) -> &[i64];
+    fn TestArraysWithPrimitiveTypes::get_ref(&self) -> &[i32];
+    fn TestArraysWithPrimitiveTypes::clone_vec(&self) -> Vec<i32>;
+    fn arr_pass_through_float(a: &[f32]) -> &[f32];
+    fn arr_pass_through_double(a: &[f64]) -> &[f64];
+    fn arr_pass_through_byte(a: &[i8]) -> &[i8];
+    fn arr_pass_through_short(a: &[i16]) -> &[i16];
+    fn arr_pass_thorough(_: &[i32]) -> &[i32];
+    fn arr_pass_through_long(a: &[i64]) -> &[i64];
 });
 
 #[derive(Default)]
@@ -527,23 +526,23 @@ impl TestPassObjectsAsParams {
     }
 }
 
-foreigner_class!(class TestPassObjectsAsParams {
+foreign_class!(class TestPassObjectsAsParams {
     self_type TestPassObjectsAsParams;
     constructor TestPassObjectsAsParams::default() -> TestPassObjectsAsParams;
     constructor TestPassObjectsAsParams::new_from_foo(_: Foo) -> TestPassObjectsAsParams;
 
-    method TestPassObjectsAsParams::f1(&mut self, _: &Foo);
-    method TestPassObjectsAsParams::f2(&mut self, _: &mut Foo);
-    method TestPassObjectsAsParams::f3(&mut self, _: Foo);
-    method TestPassObjectsAsParams::f_get_like_me(&mut self, _: TestPassObjectsAsParams);
-    method TestPassObjectsAsParams::get_data(&self) -> i32;
-    method TestPassObjectsAsParams::get_name(&self) -> &str;
+    fn TestPassObjectsAsParams::f1(&mut self, _: &Foo);
+    fn TestPassObjectsAsParams::f2(&mut self, _: &mut Foo);
+    fn TestPassObjectsAsParams::f3(&mut self, _: Foo);
+    fn TestPassObjectsAsParams::f_get_like_me(&mut self, _: TestPassObjectsAsParams);
+    fn TestPassObjectsAsParams::get_data(&self) -> i32;
+    fn TestPassObjectsAsParams::get_name(&self) -> &str;
 
-    static_method TestPassObjectsAsParams::f4(_: &Foo) -> String;
-    static_method TestPassObjectsAsParams::f5(_: i32, _: &str, _: &mut Foo) -> String;
-    static_method TestPassObjectsAsParams::f6(_: Foo) -> String;
+    fn TestPassObjectsAsParams::f4(_: &Foo) -> String;
+    fn TestPassObjectsAsParams::f5(_: i32, _: &str, _: &mut Foo) -> String;
+    fn TestPassObjectsAsParams::f6(_: Foo) -> String;
 
-    static_method TestPassObjectsAsParams::factory_method(_: i32, _: &str)
+    fn TestPassObjectsAsParams::factory_method(_: i32, _: &str)
                                                           -> TestPassObjectsAsParams;
 });
 
@@ -551,23 +550,15 @@ pub struct GnssInfo {
     pub x: f64,
 }
 
-#[allow(non_snake_case)]
-mod Position {
-    use super::*;
-
-    pub fn timeStamp(_: &GnssInfo) -> SystemTime {
-        SystemTime::now()
-    }
-    pub fn getLatitude(gi: &GnssInfo) -> f64 {
-        gi.x
-    }
-}
-
-foreigner_class!(class Position {
+foreign_class!(class Position {
     self_type GnssInfo;
     private constructor = empty;
-    method Position::timeStamp(&self) -> SystemTime;
-    method Position::getLatitude(&self) -> f64;
+    fn Position::timeStamp(&self) -> SystemTime {
+        SystemTime::now()
+    }
+    fn Position::getLatitude(&self) -> f64 {
+        this.x
+    }
 });
 
 struct LocationService;
@@ -578,10 +569,12 @@ impl LocationService {
     }
 }
 
-foreigner_class!(class LocationService {
-    static_method LocationService::position() -> Result<GnssInfo, &'static str>;
+foreign_class!(class LocationService {
+    fn LocationService::position() -> Result<GnssInfo, &'static str>;
 });
 
+//ANCHOR: foreign_enum_usage
+#[derive(Clone, Copy)]
 enum MyEnum {
     Item1,
     Item2,
@@ -595,6 +588,7 @@ foreign_enum!(
         ITEM3 = MyEnum::Item3,
     }
 );
+//ANCHOR_END: foreign_enum_usage
 
 #[derive(Default)]
 struct Moo;
@@ -618,12 +612,30 @@ impl Moo {
     }
 }
 
-foreigner_class!(class TestEnumClass {
+//ANCHOR: trait_as_callback
+trait EnumObserver {
+    fn on_state_changed(&self, item: MyEnum, is_ok: bool);
+}
+
+foreign_callback!(callback EnumObserver {
+    self_type EnumObserver;
+    onStateUpdate = EnumObserver::on_state_changed(&self, item: MyEnum, is_ok: bool);
+});
+
+foreign_class!(class TestEnumClass {
     self_type Moo;
     constructor Moo::default() -> Moo;
-    method Moo::f1(&mut self, v: MyEnum) -> i32;
-    static_method Moo::next_enum(v: MyEnum) -> MyEnum;
+    fn Moo::f1(&mut self, v: MyEnum) -> i32;
+    fn Moo::next_enum(v: MyEnum) -> MyEnum;
+    fn call_cb(cb: Box<EnumObserver>) {
+        let mut state = false;
+        for e in &[MyEnum::Item1, MyEnum::Item2, MyEnum::Item3] {
+            cb.on_state_changed(*e, state);
+            state = !state;
+        }
+    }
 });
+//ANCHOR_END: trait_as_callback
 
 trait OnEvent {
     fn something_change(&self, x: i32, s: &str);
@@ -651,26 +663,63 @@ foreign_callback!(callback MyObserver {
     onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
 });
 
-foreigner_class!(class Observable {
+foreign_class!(class Observable {
     self_type Observable;
     constructor Observable::default() -> Observable;
-    method Observable::subscribe(&mut self, _: Box<OnEvent>);
-    method Observable::change(&self, _: i32, _: &str);
+    fn Observable::subscribe(&mut self, _: Box<OnEvent>);
+    fn Observable::change(&self, _: i32, _: &str);
 });
 
 trait CheckAllTypesInCallbackArgs {
     fn check_all_types1(&self, _: u8, _: i8, _: u16, _: i16, _: u32, _: i32, _: u32, _: i32);
     fn check_all_types2(&self, _: u64, _: i64, _: f32, _: f64, _: usize, _: isize);
+    fn check_foo(&self, foo: Foo);
+    fn check_str(&self, s: &str);
+    fn check_path(&self, p: &Path);
+    fn check_arr(&self, arr: Vec<Foo>);
 }
+
+foreign_typemap!(
+    ($p:r_type) &Path => internal_aliases::JStringPath {
+        let s = $p.to_str().expect("path is not utf-8");
+        let c_str = ::std::ffi::CString::new(s).unwrap();
+        $out = unsafe { (**env).NewStringUTF.unwrap()(env, c_str.as_ptr()) };
+    };
+    ($p:f_type, unique_prefix="/*Path*/") => "/*Path*/String";
+);
 
 foreign_callback!(callback CheckAllTypesInCallbackArgs {
     self_type CheckAllTypesInCallbackArgs;
-    checkAllTypes1 = CheckAllTypesInCallbackArgs::check_all_types1(&self, _: u8, _: i8, _: u16,
-                                                                   _: i16, _: u32, _: i32,
+    checkAllTypes1 = CheckAllTypesInCallbackArgs::check_all_types1(&self,
+                                                                   _: u8, _: i8,
+                                                                   _: u16, _: i16,
+                                                                   _: u32, _: i32,
                                                                    _: u32, _: i32);
     checkAllTypes2 = CheckAllTypesInCallbackArgs::check_all_types2(&self, _: u64, _: i64, _: f32,
                                                                    _: f64, _: usize, _: isize);
+    checkFoo = CheckAllTypesInCallbackArgs::check_foo(&self, foo: Foo);
+    checkStr = CheckAllTypesInCallbackArgs::check_str(&self, s: &str);
+    checkPath = CheckAllTypesInCallbackArgs::check_path(&self, s: &Path);
+    checkArray = CheckAllTypesInCallbackArgs::check_arr(&self, arr: Vec<Foo>);
 });
+
+foreign_class!(
+    class TestCheckAllTypesInCallbackArgs {
+        fn call_cb(cb: Box<CheckAllTypesInCallbackArgs>) {
+            cb.check_all_types1(u8::max_value(), i8::min_value(),
+                                u16::max_value(), i16::min_value(),
+                                u32::max_value(), i32::min_value(),
+                                u32::min_value(), i32::max_value());
+            cb.check_all_types2(u64::from(u32::max_value()) + 1, i64::max_value(),
+                                ::std::f32::consts::PI, ::std::f64::consts::E,
+                                17, -17);
+            cb.check_foo(Foo { data: 17, name: "17".into() });
+            cb.check_str("checkStr");
+            cb.check_path(Path::new("/tmp/a.txt"));
+            cb.check_arr(vec![Foo::new(1, "1"), Foo::new(2, "2")]);
+        }
+    }
+);
 
 struct FooWithLifetime<'a> {
     data: Box<OnEvent + 'a>,
@@ -695,10 +744,10 @@ fn foo_with_lifetime_new<'a>() -> Rc<RefCell<FooWithLifetime<'a>>> {
     }))
 }
 
-foreigner_class!(class FooWithLifetime {
+foreign_class!(class FooWithLifetime {
     self_type FooWithLifetime<'a>;
     constructor foo_with_lifetime_new() -> Rc<RefCell<FooWithLifetime<'a>>>;
-    method FooWithLifetime::set_data(&self, v: i32);
+    fn FooWithLifetime::set_data(&self, v: i32);
 });
 
 struct TestOptional;
@@ -739,12 +788,33 @@ impl TestOptional {
     }
 }
 
-foreigner_class!(class TestOptional {
-    static_method TestOptional::f1(x: Option<f64>) -> Option<f64>;
-    static_method TestOptional::f2(x: Option<i64>) -> Option<i64>;
-    static_method TestOptional::f3(need_something: bool) -> Option<Foo>;
-    static_method TestOptional::f4(foo: Option<Foo>) -> Option<i64>;
-    static_method TestOptional::f5(need_something: bool) -> Option<String>;
+foreign_class!(class TestOptional {
+    fn TestOptional::f1(x: Option<f64>) -> Option<f64>;
+    fn TestOptional::f2(x: Option<i64>) -> Option<i64>;
+    fn TestOptional::f3(need_something: bool) -> Option<Foo>;
+    fn TestOptional::f4(foo: Option<Foo>) -> Option<i64>;
+    fn TestOptional::f5(need_something: bool) -> Option<String>;
+    fn f6(foo: Option<&Foo>) -> Option<String> {
+        foo.map(|x| x.name.clone())
+    }
+    fn test_opt_str(s: Option<&str>) -> Option<String> {
+        s.map(|x| x.into())
+    }
+    fn test_opt_i8(o: Option<i8>) -> Option<i8> {
+        o.map(|x| x + 1)
+    }
+    fn test_opt_i16(o: Option<i16>) -> Option<i16> {
+        o.map(|x| x + 1)
+    }
+    fn test_opt_i32(o: Option<i32>) -> Option<i32> {
+        o.map(|x| x + 1)
+    }
+    fn test_opt_f32(o: Option<f32>) -> Option<f32> {
+        o.map(|x| x + 1.7)
+    }
+    fn test_enum(o: Option<MyEnum>) -> Option<MyEnum> {
+        o.map(|x| Moo::next_enum(x))
+    }
 });
 
 struct CircularDepsA {
@@ -780,16 +850,18 @@ impl CircularDepsB {
     }
 }
 
-foreigner_class!(class CircularDepsA {
+//ANCHOR: arc_mutex_usage
+foreign_class!(class CircularDepsA {
     self_type CircularDepsA;
     constructor CircularDepsA::java_new(_: &str) -> Arc<Mutex<CircularDepsA>>;
-    method CircularDepsA::a(&self, b: &CircularDepsB) -> String;
+    fn CircularDepsA::a(&self, b: &CircularDepsB) -> String;
 });
+//ANCHOR_END: arc_mutex_usage
 
-foreigner_class!(class CircularDepsB {
+foreign_class!(class CircularDepsB {
     self_type CircularDepsB;
     constructor CircularDepsB::new(_: f64) -> CircularDepsB;
-    method CircularDepsB::b(&self, a: &CircularDepsA) -> String;
+    fn CircularDepsB::b(&self, a: &CircularDepsA) -> String;
 });
 
 struct Gamepad(String);
@@ -799,7 +871,7 @@ impl Gamepad {
     }
 }
 
-foreigner_class!(class Gamepad {
+foreign_class!(class Gamepad {
     self_type Gamepad;
     constructor Gamepad::new(s: &str) -> Gamepad;
 });
@@ -834,12 +906,12 @@ impl EffectBuilderWrapper {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class EffectBuilder {
         self_type EffectBuilderWrapper;
         constructor EffectBuilderWrapper::new() -> EffectBuilderWrapper;
-        method EffectBuilderWrapper::add_gamepad(&self, gamepad: Gamepad) -> EffectBuilderWrapper;
-        method EffectBuilderWrapper::tag(&self) -> Vec<String>;
+        fn EffectBuilderWrapper::add_gamepad(&self, gamepad: Gamepad) -> EffectBuilderWrapper;
+        fn EffectBuilderWrapper::tag(&self) -> Vec<String>;
     }
 );
 
@@ -851,11 +923,11 @@ impl GamepadId {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class GamepadId {
         self_type GamepadId;
         private constructor = empty;
-        method GamepadId::value(&self) -> usize;
+        fn GamepadId::value(&self) -> usize;
     }
 );
 
@@ -867,7 +939,7 @@ impl Code {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class Code {
         self_type Code;
         constructor Code::new(v: i32) -> Code;
@@ -893,18 +965,120 @@ impl Gamepad2 {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class Gamepad2 {
         self_type Gamepad2;
 
         constructor Gamepad2::new() -> Gamepad2;
-        method Gamepad2::deadzone(&self, axis: Code) -> Option<f64>; alias getID;
-        method Gamepad2::id(&self) -> GamepadId; alias getID;
+        fn Gamepad2::deadzone(&self, axis: Code) -> Option<f64>; alias getID;
+        fn Gamepad2::id(&self) -> GamepadId; alias getID;
     }
 );
 
-foreigner_class!(class TestFnInline {
+foreign_class!(class TestFnInline {
     fn int_to_str(a: i32) -> String {
         format!("{}", a)
-    }    
+    }
+});
+
+struct Session {
+    name: String,
+}
+
+foreign_class!(
+    #[derive(SmartPtrCopy)]
+    class Session {
+        self_type Session;
+        constructor session_init() -> Rc<RefCell<Session>> {
+            Rc::new(RefCell::new(Session::default()))
+        }
+        fn name(&self) -> &str {
+            &this.name
+        }
+    }
+);
+
+impl Default for Session {
+    fn default() -> Self {
+        Self {
+            name: "Session".into(),
+        }
+    }
+}
+
+#[derive(Default)]
+struct NavigationService {
+    on_gnss_updates_cb: Vec<Box<FnMut(i32)>>,
+}
+
+impl NavigationService {
+    fn call_callbacks(&mut self) {
+        for cb in &mut self.on_gnss_updates_cb {
+            (*cb)(17);
+        }
+    }
+}
+
+foreign_class!(class NavigationService {
+    self_type NavigationService;
+
+    constructor init() -> Rc<RefCell<NavigationService>> {
+        Rc::new(RefCell::new(NavigationService::default()))
+    }
+    fn subscribeOnUpdates(&mut self, session: Rc<RefCell<Session>>) {
+        this.on_gnss_updates_cb.push(Box::new(move |x| session.borrow_mut().name = format!("{}", x)));
+    }
+    fn NavigationService::call_callbacks(&mut self); alias callCallbacks;
+});
+
+trait OnThreadEvent {
+    fn something_change_in_other_thread(&self, x: i32, s: &str);
+}
+
+foreign_interface!(interface ThreadSafeObserver {
+    self_type OnThreadEvent + Send;
+    onStateChanged = OnThreadEvent::something_change_in_other_thread(&self, x: i32, s: &str);
+});
+
+foreign_class!(class TestMultiThreadCallback {
+    fn f(cb: Box<OnThreadEvent + Send>) {
+        std::thread::spawn(move || {
+            cb.something_change_in_other_thread(42, "15");
+        });
+    }
+});
+
+struct DropCounter {
+    flag: Arc<AtomicBool>,
+}
+
+impl Default for DropCounter {
+    fn default() -> DropCounter {
+        Self {
+            flag: Arc::new(AtomicBool::new(true)),
+        }
+    }
+}
+
+impl Drop for DropCounter {
+    fn drop(&mut self) {
+        println!("DropCounter::Drop");
+        self.flag.store(false, Ordering::Release);
+    }
+}
+
+foreign_class!(class DropCounter {
+    self_type DropCounter;
+    constructor DropCounter::default() -> DropCounter;
+});
+
+foreign_class!(class LongOperation {
+    fn do_it(drop_counter: &DropCounter) {
+        println!("Start");
+        let flag = drop_counter.flag.clone();
+        assert!(flag.load(Ordering::Acquire));
+        std::thread::sleep(Duration::from_secs(5));
+        assert!(flag.load(Ordering::Acquire));
+        println!("End");
+    }
 });

@@ -3,4 +3,4 @@
 
 macroslib/tests/expectations/* text eol=lf
 macroslib/src/cpp/* text eol=lf
-macroslib/src/java/* text eol=lf
+macroslib/src/java_jni/* text eol=lf

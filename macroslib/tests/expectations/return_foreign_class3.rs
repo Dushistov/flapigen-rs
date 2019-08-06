@@ -5,5 +5,5 @@ foreigner_class!(class Foo {
 foreigner_class!(class Boo {
     self_type Boo;
     private constructor Boo::default() -> Boo;
-    method Boo::f(&mut self) -> Result<Box<Box<Foo>>, String>;
+    fn Boo::f(&mut self) -> Result<Box<Box<Foo>>, String>;
 });

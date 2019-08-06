@@ -1,8 +1,9 @@
-use std::io::Write;
+use std::{borrow::Cow, io::Write};
 
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::TokenStream;
+use quote::quote;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use syn::{spanned::Spanned, Type};
@@ -16,20 +17,56 @@ use crate::{
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
-        ast::{list_lifetimes, normalize_ty_lifetimes, DisplayToTokens},
-        ty::RustType,
+        ast::{list_lifetimes, normalize_ty_lifetimes},
+        ty::{normalized_type, RustType},
         utils::{
             convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
             unpack_from_heap_pointer,
         },
-        ForeignTypeInfo, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
+        ForeignTypeInfo, TypeConvCodeSubstParam, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        TO_VAR_TYPE_TEMPLATE,
     },
     types::{ForeignerClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
     WRITE_TO_MEM_FAILED_MSG,
 };
 
-pub(in crate::cpp) fn generate(
+pub(in crate::cpp) fn generate(ctx: &mut CppContext, class: &ForeignerClassInfo) -> Result<()> {
+    debug!(
+        "generate: begin for {}, this_type_for_method {:?}",
+        class.name, class.self_desc
+    );
+    let has_methods = class.methods.iter().any(|m| match m.variant {
+        MethodVariant::Method(_) => true,
+        _ => false,
+    });
+    let has_constructor = class
+        .methods
+        .iter()
+        .any(|m| m.variant == MethodVariant::Constructor);
+
+    if has_methods && !has_constructor {
+        return Err(DiagnosticError::new(
+            class.src_id,
+            class.span(),
+            format!(
+                "namespace {}, class {}: has methods, but no constructor\n
+May be you need to use `private constructor = empty;` syntax?",
+                ctx.cfg.namespace_name, class.name
+            ),
+        ));
+    }
+
+    let mut m_sigs = find_suitable_foreign_types_for_methods(ctx, class)?;
+    let mut req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
+    let my_self_cpp = format!("\"{}\"", cpp_code::cpp_header_name(class));
+    let my_self_c = format!("\"{}\"", cpp_code::c_header_name(class));
+    req_includes.retain(|el| *el != my_self_cpp && *el != my_self_c);
+    do_generate(ctx, class, &req_includes, &m_sigs)?;
+    Ok(())
+}
+
+fn do_generate(
     ctx: &mut CppContext,
     class: &ForeignerClassInfo,
     req_includes: &[SmolStr],
@@ -38,11 +75,11 @@ pub(in crate::cpp) fn generate(
     use std::fmt::Write;
 
     let c_path = ctx.cfg.output_dir.join(cpp_code::c_header_name(class));
-    let mut c_include_f = FileWriteCache::new(&c_path);
+    let mut c_include_f = FileWriteCache::new(&c_path, ctx.generated_foreign_files);
     let cpp_path = ctx.cfg.output_dir.join(cpp_code::cpp_header_name(class));
-    let mut cpp_include_f = FileWriteCache::new(&cpp_path);
+    let mut cpp_include_f = FileWriteCache::new(&cpp_path, ctx.generated_foreign_files);
     let cpp_fwd_path = ctx.cfg.output_dir.join(format!("{}_fwd.hpp", class.name));
-    let mut cpp_fwd_f = FileWriteCache::new(&cpp_fwd_path);
+    let mut cpp_fwd_f = FileWriteCache::new(&cpp_fwd_path, ctx.generated_foreign_files);
 
     macro_rules! map_write_err {
         ($file_path:ident) => {
@@ -89,46 +126,34 @@ pub(in crate::cpp) fn generate(
 
             let (this_type_for_method, code_box_this) =
                 convert_to_heap_pointer(ctx.conv_map, &this_type, "this");
-            let lifetimes = {
-                let mut ret = String::new();
-                let lifetimes = list_lifetimes(&this_type.ty);
-                for (i, l) in lifetimes.iter().enumerate() {
-                    ret.push_str(&*l.as_str());
-                    if i != lifetimes.len() - 1 {
-                        ret.push(',');
+            let lifetimes = list_lifetimes(&this_type.ty);
+            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+            let class_name = &this_type.ty;
+            let unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "p");
+            let unpack_code: TokenStream = syn::parse_str(&unpack_code).unwrap_or_else(|err| {
+                panic_on_syn_error("internal/c++ foreign class unpack code", unpack_code, err)
+            });
+            let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
+            let fclass_impl_code: TokenStream = quote! {
+                impl<#(#lifetimes),*> SwigForeignClass for #class_name {
+                    fn c_class_name() -> *const ::std::os::raw::c_char {
+                        swig_c_str!(stringify!(#class_name))
+                    }
+                    fn box_object(this: Self) -> *mut ::std::os::raw::c_void {
+                        #code_box_this
+                        this as *mut ::std::os::raw::c_void
+                    }
+                    fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self {
+                        let p = p as *mut #this_type_for_method_ty;
+                        #unpack_code
+                        p
                     }
                 }
-                ret
             };
-            let unpack_code = unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
-            let fclass_impl_code = format!(
-                r#"impl<{lifetimes}> SwigForeignClass for {class_name} {{
-    fn c_class_name() -> *const ::std::os::raw::c_char {{
-        swig_c_str!("{class_name}")
-    }}
-    fn box_object(this: Self) -> *mut ::std::os::raw::c_void {{
-{code_box_this}
-        this as *mut ::std::os::raw::c_void
-    }}
-    fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self {{
-        let p = p as *mut {this_type_for_method};
-{unpack_code}
-       p
-    }}
-}}"#,
-                lifetimes = lifetimes,
-                class_name = DisplayToTokens(&this_type.ty),
-                code_box_this = code_box_this,
-                unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "p"),
-                this_type_for_method = this_type_for_method.normalized_name.clone()
-            );
-            ctx.rust_code
-                .push(syn::parse_str(&fclass_impl_code).unwrap_or_else(|err| {
-                    panic_on_syn_error("internal foreign class impl code", fclass_impl_code, err)
-                }));
+            ctx.rust_code.push(fclass_impl_code);
             (this_type_for_method, code_box_this)
         } else {
-            (dummy_rust_ty.clone(), String::new())
+            (dummy_rust_ty.clone(), TokenStream::new())
         };
     let no_this_info = || {
         DiagnosticError::new(
@@ -201,7 +226,7 @@ May be you need to use `private constructor = empty;` syntax?",
             cpp_code::cpp_generate_args_with_types(f_method, method.arg_names_without_self());
 
         let (conv_args_code, cpp_args_for_c) =
-            cpp_code::convert_args(f_method, known_names, method.arg_names_without_self());
+            cpp_code::convert_args(f_method, &mut known_names, method.arg_names_without_self())?;
 
         let real_output_typename = match method.fn_decl.output {
             syn::ReturnType::Default => "()",
@@ -264,16 +289,29 @@ May be you need to use `private constructor = empty;` syntax?",
             Some(cpp_converter) => {
                 let cpp_ret_type = cpp_converter.typename.clone();
                 if input_to_output_arg.is_none() {
-                    let conv_code = cpp_converter
-                        .converter
-                        .replace(FROM_VAR_TEMPLATE, &ret_name);
-                    if conv_code.contains(TO_VAR_TYPE_TEMPLATE) {
-                        let conv_code = conv_code
-                            .replace(
-                                TO_VAR_TYPE_TEMPLATE,
-                                &format!("{} {}", cpp_ret_type, conv_ret),
-                            )
-                            .replace(TO_VAR_TEMPLATE, &conv_ret);
+                    let conv_code =
+                        cpp_converter
+                            .converter
+                            .generate_code_with_subst_func(|param_name| match param_name {
+                                TypeConvCodeSubstParam::Name(name) => {
+                                    if name == FROM_VAR_TEMPLATE {
+                                        Some(Cow::Borrowed(&ret_name))
+                                    } else if name == TO_VAR_TYPE_TEMPLATE {
+                                        Some(format!("{} {}", cpp_ret_type, conv_ret).into())
+                                    } else if name == TO_VAR_TEMPLATE {
+                                        Some(Cow::Borrowed(&conv_ret))
+                                    } else {
+                                        None
+                                    }
+                                }
+                                TypeConvCodeSubstParam::Tmp(name_template) => {
+                                    let tmp_name = new_unique_name(&known_names, name_template);
+                                    let tmp_name_ret = tmp_name.to_string().into();
+                                    known_names.insert(tmp_name);
+                                    Some(tmp_name_ret)
+                                }
+                            })?;
+                    if cpp_converter.converter.has_param(TO_VAR_TYPE_TEMPLATE) {
                         (
                             cpp_ret_type,
                             format!("{}\n        return {};", conv_code, conv_ret),
@@ -306,22 +344,20 @@ May be you need to use `private constructor = empty;` syntax?",
 
         match method.variant {
             MethodVariant::StaticMethod => {
-                write!(
+                writeln!(
                     c_include_f,
                     r#"
-    {ret_type} {c_func_name}({args_with_types});
-"#,
+    {ret_type} {c_func_name}({args_with_types});"#,
                     ret_type = f_method.output.as_ref().name,
                     c_func_name = c_func_name,
                     args_with_types = c_args_with_types,
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                write!(
+                writeln!(
                     cpp_include_f,
                     r#"
-    static {cpp_ret_type} {method_name}({cpp_args_with_types}) noexcept;
-"#,
+    static {cpp_ret_type} {method_name}({cpp_args_with_types}) noexcept;"#,
                     method_name = method_name,
                     cpp_ret_type = cpp_ret_type,
                     cpp_args_with_types = cpp_args_with_types,
@@ -344,13 +380,12 @@ May be you need to use `private constructor = empty;` syntax?",
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
                 if f_method.output.as_ref().name != "void" {
-                    write!(
+                    writeln!(
                         &mut inline_impl,
                         r#"
         {c_ret_type} {ret} = {c_func_name}({cpp_args_for_c});
 {convert_ret_for_cpp}
-    }}
-"#,
+    }}"#,
                         c_ret_type = f_method.output.as_ref().name,
                         convert_ret_for_cpp = convert_ret_for_cpp,
                         cpp_args_for_c = cpp_args_for_c,
@@ -359,12 +394,11 @@ May be you need to use `private constructor = empty;` syntax?",
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
-                    write!(
+                    writeln!(
                         &mut inline_impl,
                         r#"
         {c_func_name}({cpp_args_for_c});{input_to_output}
-    }}
-"#,
+    }}"#,
                         c_func_name = c_func_name,
                         cpp_args_for_c = cpp_args_for_c,
                         input_to_output = input_to_output_ret_code
@@ -380,11 +414,10 @@ May be you need to use `private constructor = empty;` syntax?",
                 } else {
                     ""
                 };
-                write!(
+                writeln!(
                     c_include_f,
                     r#"
-    {ret_type} {func_name}({const_if_readonly}{c_class_type} * const self{args_with_types});
-"#,
+    {ret_type} {func_name}({const_if_readonly}{c_class_type} * const self{args_with_types});"#,
                     ret_type = f_method.output.as_ref().name,
                     c_class_type = c_class_type,
                     func_name = c_func_name,
@@ -393,11 +426,10 @@ May be you need to use `private constructor = empty;` syntax?",
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                write!(
+                writeln!(
                     cpp_include_f,
                     r#"
-    {cpp_ret_type} {method_name}({cpp_args_with_types}) {const_if_readonly}noexcept;
-"#,
+    {cpp_ret_type} {method_name}({cpp_args_with_types}) {const_if_readonly}noexcept;"#,
                     method_name = method_name,
                     cpp_ret_type = cpp_ret_type,
                     cpp_args_with_types = cpp_args_with_types,
@@ -419,13 +451,12 @@ May be you need to use `private constructor = empty;` syntax?",
           ).expect(WRITE_TO_MEM_FAILED_MSG);
 
                 if f_method.output.as_ref().name != "void" {
-                    write!(
+                    writeln!(
                         &mut inline_impl,
                         r#"
         {c_ret_type} {ret} = {c_func_name}(this->self_{cpp_args_for_c});
 {convert_ret_for_cpp}
-    }}
-"#,
+    }}"#,
                         convert_ret_for_cpp = convert_ret_for_cpp,
                         c_ret_type = f_method.output.as_ref().name,
                         c_func_name = c_func_name,
@@ -438,12 +469,11 @@ May be you need to use `private constructor = empty;` syntax?",
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
-                    write!(
+                    writeln!(
                         &mut inline_impl,
                         r#"
         {c_func_name}(this->self_{cpp_args_for_c});{input_to_output}
-    }}
-"#,
+    }}"#,
                         c_func_name = c_func_name,
                         cpp_args_for_c = if !have_args_except_self {
                             String::new()
@@ -466,27 +496,25 @@ May be you need to use `private constructor = empty;` syntax?",
             MethodVariant::Constructor => {
                 need_destructor = true;
                 if method.is_dummy_constructor() {
-                    write!(
+                    writeln!(
                         cpp_include_f,
                         r#"
-    {class_name}() noexcept {{}}
-"#,
+    {class_name}() noexcept {{}}"#,
                         class_name = class_name,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
                 } else {
-                    write!(
+                    writeln!(
                         c_include_f,
                         r#"
-    {c_class_type} *{func_name}({args_with_types});
-"#,
+    {c_class_type} *{func_name}({args_with_types});"#,
                         c_class_type = c_class_type,
                         func_name = c_func_name,
                         args_with_types = c_args_with_types,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                    write!(
+                    writeln!(
                         cpp_include_f,
                         r#"
     {class_name}({cpp_args_with_types}) noexcept
@@ -496,8 +524,7 @@ May be you need to use `private constructor = empty;` syntax?",
         if (this->self_ == nullptr) {{
             std::abort();
         }}
-    }}
-"#,
+    }}"#,
                         c_func_name = c_func_name,
                         cpp_args_with_types = cpp_args_with_types,
                         class_name = class_name,
@@ -555,17 +582,16 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
                 panic_on_syn_error("internal cpp desctructor code", code, err)
             }),
         );
-        write!(
+        writeln!(
             c_include_f,
             r#"
-    void {c_destructor_name}(const {c_class_type} *self);
-"#,
+    void {c_destructor_name}(const {c_class_type} *self);"#,
             c_class_type = c_class_type,
             c_destructor_name = c_destructor_name,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
-        write!(
+        writeln!(
             cpp_include_f,
             r#"
 private:
@@ -580,33 +606,30 @@ public:
     ~{class_name}() noexcept
     {{
         free_mem(this->self_);
-    }}
-"#,
+    }}"#,
             c_destructor_name = c_destructor_name,
             class_name = class_name,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     } else if !static_only {
         // not need_destructor
-        write!(
+        writeln!(
             cpp_include_f,
             r#"
 private:
    static void free_mem(SelfType &) noexcept
    {{
-   }}
-"#,
+   }}"#,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
-    write!(
+    writeln!(
         c_include_f,
         r#"
 #ifdef __cplusplus
 }}
 #endif
-
 "#
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);
@@ -632,26 +655,24 @@ private:
     .expect(WRITE_TO_MEM_FAILED_MSG);
     // Write method implementations.
     if ctx.cfg.separate_impl_headers {
-        write!(
+        writeln!(
             cpp_include_f,
             r#"
 
-}} // namespace {namespace}
-"#,
+}} // namespace {namespace}"#,
             namespace = ctx.cfg.namespace_name
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
         let cpp_impl_path = ctx.cfg.output_dir.join(format!("{}_impl.hpp", class.name));
-        let mut cpp_impl_f = FileWriteCache::new(&cpp_impl_path);
-        write!(
+        let mut cpp_impl_f = FileWriteCache::new(&cpp_impl_path, ctx.generated_foreign_files);
+        writeln!(
             cpp_impl_f,
-            r#"// Automaticaly generated by rust_swig
+            r#"// Automatically generated by rust_swig
 #pragma once
 
 #include "{class_name}.hpp"
 
-namespace {namespace} {{
-"#,
+namespace {namespace} {{"#,
             class_name = class.name,
             namespace = ctx.cfg.namespace_name,
         )
@@ -667,9 +688,9 @@ namespace {namespace} {{
             .map_err(map_write_err!(cpp_path))?;
     }
 
-    write!(
+    writeln!(
         cpp_fwd_f,
-        r#"// Automaticaly generated by rust_swig
+        r#"// Automatically generated by rust_swig
 #pragma once
 
 namespace {namespace} {{
@@ -677,8 +698,7 @@ template<bool>
 class {base_class_name};
 using {class_name} = {base_class_name}<true>;
 using {class_name}Ref = {base_class_name}<false>;
-}} // namespace {namespace}
-"#,
+}} // namespace {namespace}"#,
         namespace = ctx.cfg.namespace_name,
         class_name = class.name,
         base_class_name = class_name
@@ -708,7 +728,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
         conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        mc.f_method.output.as_ref(),
+        mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
         &c_ret_type,
     )?;
@@ -774,7 +794,7 @@ fn generate_method(
         conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        mc.f_method.output.as_ref(),
+        mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
         &c_ret_type,
     )?;
@@ -839,7 +859,7 @@ fn generate_constructor(
     mc: &MethodContext,
     construct_ret_type: Type,
     this_type: Type,
-    code_box_this: &str,
+    code_box_this: &TokenStream,
 ) -> Result<Vec<TokenStream>> {
     let this_type: RustType = conv_map.ty_to_rust_type(&this_type);
     let ret_type_name = this_type.normalized_name.as_str();
@@ -895,18 +915,17 @@ fn write_methods_impls(
     namespace_name: &str,
     inline_impl: &str,
 ) -> std::io::Result<()> {
-    write!(
+    writeln!(
         file,
         r#"
 {inline_impl}
-}} // namespace {namespace}
-"#,
+}} // namespace {namespace}"#,
         namespace = namespace_name,
         inline_impl = inline_impl,
     )
 }
 
-pub(in crate::cpp) fn find_suitable_foreign_types_for_methods(
+fn find_suitable_foreign_types_for_methods(
     ctx: &mut CppContext,
     class: &ForeignerClassInfo,
 ) -> Result<Vec<CppForeignMethodSignature>> {
@@ -971,9 +990,9 @@ fn generte_c_header_preamble(
     c_class_type: &str,
     c_include_f: &mut FileWriteCache,
 ) {
-    write!(
+    writeln!(
         c_include_f,
-        r##"// Automaticaly generated by rust_swig
+        r##"// Automatically generated by rust_swig
 {doc_comments}
 #pragma once
 
@@ -987,7 +1006,6 @@ extern "C" {{
 #endif
 
     typedef struct {c_class_type} {c_class_type};
-
 "##,
         doc_comments = class_doc_comments,
         c_class_type = c_class_type,
@@ -1011,9 +1029,9 @@ fn generate_cpp_header_preamble(
     for inc in req_includes {
         writeln!(&mut includes, "#include {}", inc).unwrap();
     }
-    write!(
+    writeln!(
         cpp_include_f,
-        r#"// Automaticaly generated by rust_swig
+        r#"// Automatically generated by rust_swig
 #pragma once
 
 //for std::abort
@@ -1039,8 +1057,7 @@ class {class_name} {{
 public:
     using value_type = {class_name}<true>;
     friend class {class_name}<true>;
-    friend class {class_name}<false>;
-"#,
+    friend class {class_name}<false>;"#,
         includes = includes,
         class_name = tmp_class_name,
         class_dot_name = class.name,
@@ -1050,7 +1067,7 @@ public:
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
     if !static_only {
-        write!(
+        writeln!(
         cpp_include_f,
 r#"
     using SelfType = typename std::conditional<OWN_DATA, {c_class_type} *, const {c_class_type} *>::type;
@@ -1077,8 +1094,7 @@ r#"
     }}
     explicit operator SelfType() const noexcept {{ return self_; }}
     {class_name}<false> as_rref() const noexcept {{ return {class_name}<false>{{ self_ }}; }}
-    const {class_name}<true> &as_cref() const noexcept {{ return reinterpret_cast<const {class_name}<true> &>(*this); }}
-"#,
+    const {class_name}<true> &as_cref() const noexcept {{ return reinterpret_cast<const {class_name}<true> &>(*this); }}"#,
         c_class_type = c_class_type,
         class_name = tmp_class_name,
     ).expect(WRITE_TO_MEM_FAILED_MSG);
@@ -1086,12 +1102,11 @@ r#"
 
     if !static_only {
         if !class.copy_derived {
-            write!(
+            writeln!(
                 cpp_include_f,
                 r#"
     {class_name}(const {class_name}&) = delete;
-    {class_name} &operator=(const {class_name}&) = delete;
-"#,
+    {class_name} &operator=(const {class_name}&) = delete;"#,
                 class_name = tmp_class_name
             )
             .expect(WRITE_TO_MEM_FAILED_MSG);
@@ -1119,7 +1134,7 @@ r#"
                 })?;
             let c_clone_func = c_func_name(class, &class.methods[pos]);
 
-            write!(
+            writeln!(
                 cpp_include_f,
                 r#"
     {class_name}(const {class_name}& o) noexcept {{
@@ -1142,8 +1157,7 @@ r#"
             }}
         }}
         return *this;
-    }}
-"#,
+    }}"#,
                 c_clone_func = c_clone_func,
                 class_name = tmp_class_name
             )

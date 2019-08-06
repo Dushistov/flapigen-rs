@@ -6,9 +6,9 @@ use syn::{
 };
 
 use super::{
-    CItem, CItems, FTypeConvRule, FTypeLeftRightPair, ForeignCode, GenericAlias, GenericAliasItem,
-    GenericCItems, ModuleName, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE, GENERIC_ALIAS,
-    SWIG_CONCAT_IDENTS, SWIG_F_TYPE, SWIG_I_TYPE,
+    CItem, CItems, FTypeConvRule, FTypeLeftRightPair, FTypeName, ForeignCode, GenericAlias,
+    GenericAliasItem, GenericCItems, ModuleName, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE,
+    GENERIC_ALIAS, SWIG_CONCAT_IDENTS, SWIG_F_TYPE, SWIG_I_TYPE,
 };
 use crate::{
     source_registry::SourceId,
@@ -29,6 +29,8 @@ mod kw {
     custom_keyword!(module);
     custom_keyword!(option);
     custom_keyword!(input_to_output);
+    custom_keyword!(unique_prefix);
+    custom_keyword!(temporary);
 }
 
 enum RuleType {
@@ -229,7 +231,7 @@ fn parse_r_type_rule(
         let out_var_no_type: TokenStream = parse_quote!($out_no_type);
         let out_var_no_type = out_var_no_type.to_string();
 
-        let mut code_str = conv_body.to_string();
+        let code_str = conv_body.to_string();
         if !(code_str.contains(&d_var_name)
             && (code_str.contains(&out_var) || code_str.contains(&out_var_no_type)))
         {
@@ -241,7 +243,6 @@ fn parse_r_type_rule(
                 ),
             ));
         }
-        code_str.push(';');
         Some(if code_str.contains(&out_var_no_type) {
             TypeConvCode::new2(
                 code_str
@@ -437,6 +438,14 @@ impl syn::parse::Parse for GenericCItems {
     }
 }
 
+struct MacroArgs(Vec<Ident>);
+impl syn::parse::Parse for MacroArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<MacroArgs> {
+        let ret = syn::punctuated::Punctuated::<Ident, Token![,]>::parse_terminated(input)?;
+        Ok(MacroArgs(ret.into_iter().collect()))
+    }
+}
+
 impl syn::parse::Parse for GenericAliasItem {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         if input.fork().parse::<syn::Macro>().is_ok() {
@@ -445,22 +454,37 @@ impl syn::parse::Parse for GenericAliasItem {
                 let items: GenericAliasItemVecCommaSeparated = syn::parse2(mac.tts)?;
                 Ok(GenericAliasItem::Concat(items.0))
             } else if mac.path.is_ident(SWIG_I_TYPE) {
-                let item: syn::Ident = syn::parse2(mac.tts)?;
-                Ok(GenericAliasItem::SwigIType(item))
+                let mac_span = mac.span();
+                let mut item: MacroArgs = syn::parse2(mac.tts)?;
+                let n = item.0.len();
+                if n == 0 || n > 2 {
+                    return Err(syn::Error::new(
+                        mac_span,
+                        format!("{} arguments for {} expect 1 or 2", n, SWIG_I_TYPE),
+                    ));
+                }
+                let type_id = item.0.remove(0);
+                let opt_arg = if !item.0.is_empty() {
+                    Some(item.0.remove(0))
+                } else {
+                    None
+                };
+                Ok(GenericAliasItem::SwigIType((type_id, opt_arg)))
             } else if mac.path.is_ident(SWIG_F_TYPE) {
                 let item: syn::Ident = syn::parse2(mac.tts)?;
                 Ok(GenericAliasItem::SwigFType(item))
             } else {
-                return Err(syn::Error::new(
+                Err(syn::Error::new(
                     mac.span(),
                     format!(
-                        "uknown macro '{}' in this context",
+                        "unknown macro '{}' in this context",
                         DisplayToTokens(&mac.path)
                     ),
-                ));
+                ))
             }
         } else {
-            Ok(GenericAliasItem::Ident(input.parse()?))
+            let ident = input.parse()?;
+            Ok(GenericAliasItem::Ident(ident))
         }
     }
 }
@@ -475,12 +499,20 @@ impl syn::parse::Parse for GenericAliasItemVecCommaSeparated {
     }
 }
 
-fn parse_typemap_f_type_arm_param(
-    params: syn::parse::ParseStream,
-) -> syn::Result<(Option<SpannedSmolStr>, Vec<ModuleName>, bool)> {
+struct FTypeArmParams {
+    option: Option<SpannedSmolStr>,
+    req_modules: Vec<ModuleName>,
+    input_to_output: bool,
+    unique_prefix: Option<SpannedSmolStr>,
+    temporary_ids: Vec<Ident>,
+}
+
+fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Result<FTypeArmParams> {
     let mut ftype_cfg: Option<SpannedSmolStr> = None;
     let mut ftype_req_modules = Vec::<ModuleName>::new();
     let mut input_to_output = false;
+    let mut unique_prefix = None;
+    let mut temporary_ids = Vec::<Ident>::new();
 
     while !params.is_empty() && params.peek(Token![,]) {
         params.parse::<Token![,]>()?;
@@ -516,11 +548,37 @@ fn parse_typemap_f_type_arm_param(
         } else if la.peek(kw::input_to_output) {
             params.parse::<kw::input_to_output>()?;
             input_to_output = true;
+        } else if la.peek(kw::unique_prefix) {
+            params.parse::<kw::unique_prefix>()?;
+            params.parse::<Token![=]>()?;
+            let lit_str = params.parse::<LitStr>()?;
+            unique_prefix = Some(SpannedSmolStr {
+                sp: lit_str.span(),
+                value: lit_str.value().into(),
+            });
+        } else if la.peek(token::Dollar) {
+            params.parse::<token::Dollar>()?;
+            let var_name = params.parse::<Ident>()?;
+            params.parse::<Token![:]>()?;
+            params.parse::<kw::temporary>()?;
+            if temporary_ids.iter().any(|x| *x == var_name) {
+                return Err(syn::Error::new(
+                    var_name.span(),
+                    format!("temporary already exists with such name: '{}'", var_name),
+                ));
+            }
+            temporary_ids.push(var_name);
         } else {
             return Err(la.error());
         }
     }
-    Ok((ftype_cfg, ftype_req_modules, input_to_output))
+    Ok(FTypeArmParams {
+        option: ftype_cfg,
+        req_modules: ftype_req_modules,
+        input_to_output,
+        unique_prefix,
+        temporary_ids,
+    })
 }
 
 fn parse_f_type_rule(
@@ -531,13 +589,20 @@ fn parse_f_type_rule(
     ftype_right_to_left: &mut Vec<FTypeConvRule>,
     params: syn::parse::ParseStream,
 ) -> syn::Result<()> {
-    let (ftype_cfg, ftype_req_modules, input_to_output) = parse_typemap_f_type_arm_param(params)?;
-    let left_ty = if input.peek(LitStr) {
+    let FTypeArmParams {
+        option: ftype_cfg,
+        req_modules: ftype_req_modules,
+        input_to_output,
+        unique_prefix,
+        temporary_ids,
+    } = parse_typemap_f_type_arm_param(params)?;
+
+    let left_ty: Option<FTypeName> = if input.peek(LitStr) {
         Some(input.parse::<LitStr>()?.into())
     } else {
         None
     };
-    let mut conv_rule_type = None;
+    let mut conv_rule_type: Option<ConvertRuleType<FTypeName>> = None;
     if input.peek(Token![=>]) {
         input.parse::<Token![=>]>()?;
         conv_rule_type = Some(ConvertRuleType::LeftToRight(
@@ -549,6 +614,39 @@ fn parse_f_type_rule(
             input.parse::<LitStr>()?.into(),
         ));
     }
+    if let Some(unique_prefix) = unique_prefix.as_ref() {
+        let to_error = |tname: &FTypeName| {
+            Err(syn::Error::new(
+                tname.sp,
+                format!(
+                    "type name '{}' shoulds starts with '{}'",
+                    tname.name, unique_prefix.value
+                ),
+            ))
+        };
+        match (conv_rule_type.as_ref(), left_ty.as_ref()) {
+            (Some(ConvertRuleType::LeftToRight(tname)), Some(left_ty))
+            | (Some(ConvertRuleType::RightToLeft(tname)), Some(left_ty)) => {
+                if !tname.name.starts_with(unique_prefix.value.as_str())
+                    && !left_ty.name.starts_with(unique_prefix.value.as_str())
+                {
+                    return to_error(tname);
+                }
+            }
+            (Some(ConvertRuleType::LeftToRight(tname)), None)
+            | (Some(ConvertRuleType::RightToLeft(tname)), None) => {
+                if !tname.name.starts_with(unique_prefix.value.as_str()) {
+                    return to_error(tname);
+                }
+            }
+            (_, Some(left_ty)) => {
+                if !left_ty.name.starts_with(unique_prefix.value.as_str()) {
+                    return to_error(left_ty);
+                }
+            }
+            (None, None) => {}
+        }
+    }
     let code = if conv_rule_type.is_some() && input.peek(LitStr) {
         let code_str = input.parse::<LitStr>()?;
         let var_name = var_name.ok_or_else(|| {
@@ -558,17 +656,31 @@ fn parse_f_type_rule(
             )
         })?;
         let var_name = format!("${}", var_name);
-        Some(TypeConvCode::new(
-            replace_first_and_other(
-                code_str
-                    .value()
-                    .replace(&var_name, FROM_VAR_TEMPLATE)
-                    .as_str(),
-                "$out",
-                TO_VAR_TYPE_TEMPLATE,
-                TO_VAR_TEMPLATE,
-            ),
+        let code = replace_first_and_other(
+            code_str
+                .value()
+                .replace(&var_name, FROM_VAR_TEMPLATE)
+                .as_str(),
+            "$out",
+            TO_VAR_TYPE_TEMPLATE,
+            TO_VAR_TEMPLATE,
+        );
+        let mut params = Vec::with_capacity(4);
+        params.push(FROM_VAR_TEMPLATE.into());
+        if code.contains(TO_VAR_TYPE_TEMPLATE) {
+            params.push(TO_VAR_TYPE_TEMPLATE.into());
+        }
+        if code.contains(TO_VAR_TEMPLATE) {
+            params.push(TO_VAR_TEMPLATE.into());
+        }
+        for tmp_id in &temporary_ids {
+            params.push(format!("${}", tmp_id).into());
+        }
+
+        Some(TypeConvCode::with_params(
+            code,
             (SourceId::none(), code_str.span()),
+            params,
         ))
     } else {
         None
@@ -594,6 +706,7 @@ fn parse_f_type_rule(
                 input_to_output,
                 req_modules: ftype_req_modules,
                 cfg_option: ftype_cfg,
+                unique_prefix,
                 left_right_ty: if let Some(left_ty) = left_ty {
                     FTypeLeftRightPair::Both(left_ty, right_ty)
                 } else {
@@ -616,6 +729,7 @@ fn parse_f_type_rule(
                 input_to_output,
                 cfg_option: ftype_cfg,
                 req_modules: ftype_req_modules,
+                unique_prefix,
                 left_right_ty: if let Some(left_ty) = left_ty {
                     FTypeLeftRightPair::Both(left_ty, right_ty)
                 } else {
@@ -643,6 +757,7 @@ fn parse_f_type_rule(
             ftype_left_to_right.push(FTypeConvRule {
                 input_to_output,
                 req_modules: ftype_req_modules,
+                unique_prefix,
                 cfg_option: ftype_cfg,
                 left_right_ty: FTypeLeftRightPair::OnlyLeft(left_ty),
                 code: None,

@@ -388,10 +388,11 @@ fn test_replace_all_types_with() {
 #[test]
 fn test_list_lifetimes() {
     let my_list_lifetimes = |code| -> Vec<String> {
-        let ret = list_lifetimes(&str_to_ty(code));
-        ret.iter().map(|v| v.as_str().to_string()).collect()
+        let ty = str_to_ty(code);
+        let ret = list_lifetimes(&ty);
+        ret.iter().map(|v| v.ident.to_string()).collect()
     };
-    assert_eq!(vec!["'a"], my_list_lifetimes("Rc<RefCell<Foo<'a>>>"));
+    assert_eq!(vec!["a"], my_list_lifetimes("Rc<RefCell<Foo<'a>>>"));
 }
 
 #[test]

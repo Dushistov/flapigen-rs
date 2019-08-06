@@ -1,0 +1,47 @@
+r##"impl OnEvent for JavaCallback {
+    #[allow(unused_mut)]
+    fn something_change(&self, a0: i32, a1: &str) {
+        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
+        swig_assert_eq_size!(::std::os::raw::c_int, i32);
+        let env = self.get_jni_env();
+        if let Some(env) = env.env {
+            let a0: jint = a0;
+            let mut a1: jstring = <jstring>::swig_from(a1, env);
+            unsafe {
+                (**env).CallVoidMethod.unwrap()(env, self.this, self.methods[0usize], a0, a1);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    log::error!(concat!(
+                        stringify!(something_change),
+                        ": java throw exception"
+                    ));
+                    (**env).ExceptionDescribe.unwrap()(env);
+                    (**env).ExceptionClear.unwrap()(env);
+                }
+            };
+        }
+    }
+}"##;
+
+r##"#[doc = ""]
+impl SwigFrom<jobject> for Box<OnEvent + Send> {
+    fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {
+        let mut cb = JavaCallback::new(this, env);
+        cb.methods.reserve(1);
+        let class = unsafe { (**env).GetObjectClass.unwrap()(env, cb.this) };
+        assert!(
+            !class.is_null(),
+            "GetObjectClass return null class for MyObserver"
+        );
+        let method_id: jmethodID = unsafe {
+            (**env).GetMethodID.unwrap()(
+                env,
+                class,
+                swig_c_str!("onStateChanged"),
+                swig_c_str!("(ILjava/lang/String;)V"),
+            )
+        };
+        assert!(!method_id.is_null(), "Can not find onStateChanged id");
+        cb.methods.push(method_id);
+        Box::new(cb)
+    }
+}"##;

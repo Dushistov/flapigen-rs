@@ -1,4 +1,4 @@
-use std::{fmt::Write, mem};
+use std::{borrow::Cow, fmt::Write, mem};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
@@ -8,17 +8,14 @@ use syn::spanned::Spanned;
 
 use crate::{
     code_parse::parse_fn_args,
-    cpp::{
-        map_any_err_to_our_err, map_type::map_repr_c_type, CppContext, CppForeignMethodSignature,
-        MergeCItemsFlags,
-    },
+    cpp::{map_type::map_repr_c_type, CppContext, CppForeignMethodSignature, MergeCItemsFlags},
     error::{panic_on_syn_error, DiagnosticError},
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     source_registry::SourceId,
     typemap::{
-        ast::DisplayToTokens, CItem, CItems, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
-        TO_VAR_TYPE_TEMPLATE,
+        ast::DisplayToTokens, CItem, CItems, TypeConvCodeSubstParam, FROM_VAR_TEMPLATE,
+        TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
     types::{FnArg, ForeignEnumInfo, ForeignerClassInfo},
     WRITE_TO_MEM_FAILED_MSG,
@@ -97,9 +94,9 @@ pub(in crate::cpp) fn cpp_generate_args_with_types<'a, NI: Iterator<Item = &'a s
 
 pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
     f_method: &CppForeignMethodSignature,
-    mut known_names: FxHashSet<SmolStr>,
+    known_names: &mut FxHashSet<SmolStr>,
     arg_name_iter: NI,
-) -> (String, String) {
+) -> Result<(String, String), DiagnosticError> {
     let mut conv_deps = String::new();
     let mut converted_args = String::new();
     for (i, (f_type_info, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
@@ -107,27 +104,55 @@ pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
             converted_args.push_str(", ");
         }
         if let Some(conv) = f_type_info.cpp_converter.as_ref() {
-            let conv_code = conv.converter.as_str().replace(FROM_VAR_TEMPLATE, arg_name);
-            if !conv_code.contains(TO_VAR_TYPE_TEMPLATE) {
-                converted_args.push_str(&conv_code);
-            } else {
+            let var_name = if conv.converter.has_param(TO_VAR_TYPE_TEMPLATE)
+                || conv.converter.has_param(TO_VAR_TEMPLATE)
+            {
                 let templ = format!("a{}", i);
                 let var_name = new_unique_name(&known_names, &templ);
-                converted_args.push_str(&format!("std::move({})", var_name));
-                let conv_code = conv_code
-                    .replace(
-                        TO_VAR_TYPE_TEMPLATE,
-                        &format!("{} {}", f_type_info.as_ref().name, var_name),
-                    )
-                    .replace(TO_VAR_TEMPLATE, &var_name);
+                known_names.insert(var_name.clone());
+                Some(var_name)
+            } else {
+                None
+            };
+            let conv_code =
+                conv.converter
+                    .generate_code_with_subst_func(|param_name| match param_name {
+                        TypeConvCodeSubstParam::Name(name) => {
+                            if name == FROM_VAR_TEMPLATE {
+                                Some(Cow::Borrowed(&arg_name))
+                            } else if name == TO_VAR_TYPE_TEMPLATE {
+                                Some(
+                                    format!(
+                                        "{} {}",
+                                        f_type_info.as_ref().name,
+                                        var_name.as_ref().unwrap()
+                                    )
+                                    .into(),
+                                )
+                            } else if name == TO_VAR_TEMPLATE {
+                                Some(Cow::Borrowed(var_name.as_ref().unwrap()))
+                            } else {
+                                None
+                            }
+                        }
+                        TypeConvCodeSubstParam::Tmp(name_template) => {
+                            let tmp_name = new_unique_name(&known_names, name_template);
+                            let tmp_name_ret = tmp_name.to_string().into();
+                            known_names.insert(tmp_name);
+                            Some(tmp_name_ret)
+                        }
+                    })?;
+            if !conv.converter.has_param(TO_VAR_TYPE_TEMPLATE) {
+                converted_args.push_str(&conv_code);
+            } else {
+                converted_args.push_str(&format!("std::move({})", var_name.as_ref().unwrap()));
                 conv_deps.push_str(&conv_code);
-                known_names.insert(var_name);
             }
         } else {
             converted_args.push_str(arg_name);
         }
     }
-    (conv_deps, converted_args)
+    Ok((conv_deps, converted_args))
 }
 
 pub(in crate::cpp) fn cpp_header_name(class: &ForeignerClassInfo) -> String {
@@ -264,7 +289,7 @@ fn test_{name}_layout() {{
         name = ctype.name(),
     );
     let mut mem_out = Vec::<u8>::new();
-    writeln!(&mut mem_out, "{} {{", s_id).map_err(map_any_err_to_our_err)?;
+    writeln!(&mut mem_out, "{} {{", s_id).expect(WRITE_TO_MEM_FAILED_MSG);
 
     let mut includes = FxHashSet::<SmolStr>::default();
 
@@ -291,7 +316,7 @@ fn test_{name}_layout() {{
         writeln!(&mut mem_out, "    {} {};", field_fty.base.name, id)
             .expect(WRITE_TO_MEM_FAILED_MSG);
         writeln!(&mut rust_layout_test, "{}: {},", id, DisplayToTokens(&f.ty))
-            .map_err(map_any_err_to_our_err)?;
+            .expect(WRITE_TO_MEM_FAILED_MSG);
 
         writeln!(
                         &mut fields_asserts_code,
@@ -308,9 +333,9 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
                         field_name = id,
                         field_type = DisplayToTokens(&f.ty),
                     )
-                    .map_err(map_any_err_to_our_err)?;
+            .expect(WRITE_TO_MEM_FAILED_MSG);
     }
-    mem_out.write_all(b"};\n").map_err(map_any_err_to_our_err)?;
+    mem_out.write_all(b"};\n").expect(WRITE_TO_MEM_FAILED_MSG);
 
     writeln!(
         &mut rust_layout_test,
@@ -326,7 +351,7 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
         name = ctype.name(),
         fields_asserts = fields_asserts_code,
     )
-    .map_err(map_any_err_to_our_err)?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
     match flags {
         MergeCItemsFlags::DefineOnlyCItem => {
             let tt: TokenStream = syn::parse_str(&rust_layout_test).unwrap_or_else(|err| {
@@ -344,7 +369,7 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
 
     for inc in &includes {
         if self_inc != *inc {
-            writeln!(file_out, "#include {}", inc).map_err(map_any_err_to_our_err)?;
+            writeln!(file_out, "#include {}", inc).expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }
     file_out

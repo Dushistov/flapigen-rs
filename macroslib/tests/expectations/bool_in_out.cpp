@@ -27,7 +27,7 @@ r#"template<bool OWN_DATA>
         return (ret != 0);
     }"#;
 
-"virtual void onStateChanged1(int32_t a0, bool a1) = 0;";
+"virtual void onStateChanged1(int32_t a0, bool a1) noexcept = 0;";
 r#"static void c_onStateChanged1(int32_t a0, char a1, void *opaque)
     {
         assert(opaque != nullptr);

@@ -1,1 +1,1 @@
-"public final Foo f() throws Exception";
+"public final @NonNull Foo f() throws Exception";

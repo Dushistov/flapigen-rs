@@ -48,11 +48,11 @@ fn test_foreign_typemap_cpp_bool() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
             ($pin:r_type) bool => ::std::os::raw::c_char {
-                $out = if $pin  { 1 } else { 0 }
+                $out = if $pin  { 1 } else { 0 };
             };
             ($pin:f_type) => "bool" "$out = ($pin != 0);";
             ($pin:r_type) bool <= ::std::os::raw::c_char {
-                $out = ($pin != 0)
+                $out = ($pin != 0);
             };
             ($pin:f_type) <= "bool" "$out = $pin ? 1 : 0;";
         )
@@ -67,7 +67,7 @@ fn test_foreign_typemap_cpp_bool() {
             left_ty: parse_type!(bool),
             right_ty: Some(parse_type!(::std::os::raw::c_char)),
             code: Some(TypeConvCode::new(
-                "let {to_var}: {to_var_type} = if {from_var} { 1 } else { 0 };",
+                "let {to_var}: {to_var_type} = if {from_var} { 1 } else { 0 } ;",
                 invalid_src_id_span(),
             )),
         },
@@ -79,7 +79,7 @@ fn test_foreign_typemap_cpp_bool() {
             left_ty: parse_type!(bool),
             right_ty: Some(parse_type!(::std::os::raw::c_char)),
             code: Some(TypeConvCode::new(
-                "let {to_var}: {to_var_type} = ( {from_var} != 0 );",
+                "let {to_var}: {to_var_type} = ( {from_var} != 0 ) ;",
                 invalid_src_id_span(),
             )),
         },
@@ -89,6 +89,7 @@ fn test_foreign_typemap_cpp_bool() {
     assert_eq!(
         rule.ftype_left_to_right,
         vec![FTypeConvRule {
+            unique_prefix: None,
             input_to_output: false,
             req_modules: vec![],
             left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
@@ -106,6 +107,7 @@ fn test_foreign_typemap_cpp_bool() {
     assert_eq!(
         rule.ftype_right_to_left,
         vec![FTypeConvRule {
+            unique_prefix: None,
             input_to_output: false,
             req_modules: vec![],
             left_right_ty: FTypeLeftRightPair::OnlyRight(FTypeName {
@@ -126,7 +128,7 @@ fn test_foreign_typemap_qstring() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
             ($rin:r_type) &str => RustStrView {
-                $out = RustStrView::from_str($rin)
+                $out = RustStrView::from_str($rin);
             };
             ($pin:f_type) => "QString" r#"
 $out = QString::fromUtf8($pin.data, $pin.len);
@@ -176,12 +178,12 @@ typedef void (*CFnTwoArgsPtr!())(swig_f_type!(T1), swig_f_type!(T2));
 fn test_foreign_typemap_callback_to_future() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
-            generic_alias!(CFnOnce = swig_concat_idents!(CFnOnce, swig_i_type!(T)));
+            generic_alias!(CFnOnce = swig_concat_idents!(CFnOnce, swig_i_type!(T, output)));
             define_c_type!(
                 module = "CFnOnce!().h";
                 #[repr(C)]
                 struct CFnOnce!() {
-                    cb: extern "C" fn(swig_i_type!(T), *mut c_void),
+                    cb: extern "C" fn(swig_i_type!(T, output), *mut c_void),
                     ctx: *mut c_void,
                 });
 
@@ -190,18 +192,18 @@ fn test_foreign_typemap_callback_to_future() {
                 $out = |x| {
                     swig_from_rust_to_i_type!(T, x, x);
                     $p.cb(x, $p.ctx);
-                }
+                };
             };
 
-            ($p:f_type, input_to_output, req_modules = ["\"CFnOnce!().h\"", "<future>"]) <= "std::future<swig_f_type!(T)>"
+            ($p:f_type, $tmp:temporary, input_to_output, req_modules = ["\"CFnOnce!().h\"", "<future>"]) <= "std::future<swig_f_type!(T, output)>"
                 r#"
-        auto tmp = new std::promise<swig_f_type!(T)>;
-        $out = tmp->get_future();
+        auto $tmp = new std::promise<swig_f_type!(T, output)>;
+        $out = $tmp->get_future();
         CFnOnce!() $p;
-        $p.ctx = tmp;
+        $p.ctx = $tmp;
         $p.cb = [](swig_i_type!(T) arg, void *opaque) {
             auto arg_cpp = swig_foreign_from_i_type!(T, arg);
-            auto promise = static_cast<std::promise<swig_f_type!(T)> *>(opaque);
+            auto promise = static_cast<std::promise<swig_f_type!(T, output)> *>(opaque);
             promise->set_value(std::move(arg_cpp));
             delete promise;
         };
@@ -231,27 +233,33 @@ fn test_foreign_typemap_java_datetime() {
                         + (since_unix_epoch.subsec_nanos() / 1_000_000) as u64)
                     as jlong;
             };
-            ($pin:f_type) => "java.util.Date" "$out = new java.util.Date($pin);";
+            ($pin:f_type, option = "NoNullAnnotation") => "java.util.Date" "$out = new java.util.Date($pin);";
+            ($p:f_type, option = "NullAnnotation") => "@NonNull java.util.Date" "$out = new java.util.Date($p);";
         )
     });
-    assert!(!rule.if_simple_rtype_ftype_map_no_lang_backend().is_some());
-    assert!(!rule.contains_data_for_language_backend());
+    assert!(rule.if_simple_rtype_ftype_map_no_lang_backend().is_none());
+    assert!(rule.contains_data_for_language_backend());
 }
 
-#[ignore]
 #[test]
-fn test_foreign_typemap_jstring() {
+fn test_foreign_typemap_jboolean() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
-            ($pin:r_type, $jstr:variable) &str <= jstring {
-                $jstr = JavaString::new(env, $pin);
-                $out = $jstr.to_str();
+            ($p:r_type) bool => jboolean {
+                $out = if $p { 1 as jboolean } else { 0 as jboolean };
             };
-            ($pin:f_type, non_null) <= "String";
+            ($p:f_type) => "boolean";
+            ($p:r_type) bool <= jboolean {
+                $out = ($p != 0);
+            };
+            ($p:f_type) <= "boolean";
         )
     });
+    assert!(!rule.is_empty());
+    assert!(!rule.is_generic());
+    assert!(!rule.if_simple_rtype_ftype_map().is_some());
     assert!(!rule.if_simple_rtype_ftype_map_no_lang_backend().is_some());
-    assert!(rule.contains_data_for_language_backend());
+    assert!(!rule.contains_data_for_language_backend());
 }
 
 #[test]
@@ -278,6 +286,7 @@ fn test_foreign_typemap_simple_typemap() {
 
     assert_eq!(
         vec![FTypeConvRule {
+            unique_prefix: None,
             input_to_output: false,
             req_modules: vec![],
             left_right_ty: FTypeLeftRightPair::OnlyLeft(FTypeName {
@@ -317,7 +326,7 @@ fn test_foreign_typemap_cpp_ruststring() {
         "#
                             );
             ($pin:r_type) String => CRustString {
-                $out = CRustString::from_string($pin)
+                $out = CRustString::from_string($pin);
             };
             ($pin:f_type, req_modules = ["rust_str.h"]) => "RustString" "RustString{$pin}";
         )
@@ -352,7 +361,7 @@ fn test_foreign_typemap_cpp_str() {
                        }
         );
         ($p:r_type) &str => CRustStrView {
-            $out = CRustStrView::from_str($p)
+            $out = CRustStrView::from_str($p);
         };
         ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_str.h\"", "<boost/utility/string_view.hpp>"]) => "boost::string_view"
             "boost::string_view{ $p.data, $p.len }";
@@ -425,7 +434,7 @@ fn test_foreign_typemap_cpp_pair_syntax() {
                 concat!(
                     "swig_from_rust_to_i_type ! ( T1 , {from_var} . 0 , p0 ) ; ",
                     "swig_from_rust_to_i_type ! ( T2 , {from_var} . 1 , p1 ) ; ",
-                    "let {to_var}: {to_var_type} = CRustPair ! ( ) { first : p0 , second : p1 , };"
+                    "let {to_var}: {to_var_type} = CRustPair ! ( ) { first : p0 , second : p1 , } ;"
                 ),
                 invalid_src_id_span(),
             )),
@@ -441,7 +450,7 @@ fn test_foreign_typemap_cpp_pair_syntax() {
                 concat!(
                     "swig_from_i_type_to_rust ! ( T1 , {from_var} . first , p0 ) ; ",
                     "swig_from_i_type_to_rust ! ( T2 , {from_var} . second , p1 ) ; ",
-                    "let {to_var}: {to_var_type} = ( p0 , p1 );"
+                    "let {to_var}: {to_var_type} = ( p0 , p1 ) ;"
                 ),
                 invalid_src_id_span(),
             )),
@@ -466,6 +475,30 @@ fn test_foreign_typemap_cpp_pair_syntax() {
     );
 }
 
+#[test]
+fn test_foreign_typemap_unique_prefix() {
+    let rule = macro_to_conv_rule(parse_quote! {
+        foreign_typemap!(
+            ($p:r_type) Option<&str> <= jstring {
+                let tmp: JavaString;
+                $out = if !$p.is_null() {
+                    tmp = $p.swig_into(env);
+                    Some(tmp.swig_deref())
+                } else {
+                    None
+                };
+            };
+            ($p:f_type, option = "NoNullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/String";
+            ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/@Nullable String";
+        )
+    });
+    assert!(!rule.is_empty());
+    assert_eq!(None, rule.if_simple_rtype_ftype_map());
+    assert_eq!(None, rule.if_simple_rtype_ftype_map_no_lang_backend());
+    assert!(rule.contains_data_for_language_backend());
+    assert!(!rule.is_generic());
+}
+
 fn cpp_pair_rule() -> TypeMapConvRuleInfo {
     macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
@@ -484,12 +517,12 @@ fn cpp_pair_rule() -> TypeMapConvRuleInfo {
                 $out = CRustPair!() {
                     first: p0,
                     second: p1,
-                }
+                };
             };
             ($p:r_type) <T1, T2> (T1, T2) <= CRustPair!() {
                 swig_from_i_type_to_rust!(T1, $p.first, p0);
                 swig_from_i_type_to_rust!(T2, $p.second, p1);
-                $out = (p0, p1)
+                $out = (p0, p1);
             };
             ($p:f_type, req_modules = ["\"rust_tuple.h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
                 "std::make_pair(swig_foreign_from_i_type!(T1, $p.first), swig_foreign_from_i_type!(T2, $p.second))";
@@ -508,7 +541,7 @@ fn macro_to_conv_rule(mac: syn::Macro) -> TypeMapConvRuleInfo {
 
 struct Dummy;
 impl TypeMapConvRuleInfoExpanderHelper for Dummy {
-    fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type> {
+    fn swig_i_type(&mut self, ty: &syn::Type, _opt_arg: Option<&str>) -> Result<syn::Type> {
         Ok(ty.clone())
     }
     fn swig_from_rust_to_i_type(
@@ -527,11 +560,7 @@ impl TypeMapConvRuleInfoExpanderHelper for Dummy {
     ) -> Result<String> {
         self.swig_from_rust_to_i_type(ty, in_var_name, out_var_name)
     }
-    fn swig_f_type(
-        &mut self,
-        ty: &syn::Type,
-        _: Option<petgraph::Direction>,
-    ) -> Result<ExpandedFType> {
+    fn swig_f_type(&mut self, ty: &syn::Type, _: Option<&str>) -> Result<ExpandedFType> {
         Ok(ExpandedFType {
             name: if *ty == parse_type!(i32) {
                 "int32_t"

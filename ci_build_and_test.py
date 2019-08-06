@@ -8,8 +8,8 @@ import time
 import shutil
 
 JNI_TESTS = "jni_tests"
-CPP_TESTS = "c++_tests"
 PYTHON_TESTS = "python_tests"
+CPP_TESTS = "cpp_tests"
 ANDROID_TESTS = "android-example"
 UNIT_TESTS = "unit_tests"
 DOC_TESTS = "doc_tests"
@@ -48,10 +48,12 @@ def find_dir(dir_name, start_dir):
     raise Exception("Can not find %s" % dir_name)
 
 @show_timing
-def run_jar(target_dir, jar_dir, use_shell):
-    subprocess.check_call(["java", "-Xcheck:jni", "-verbose:jni", "-ea", "-Djava.library.path=" + target_dir,
-                           "-cp", "Test.jar", "com.example.Main"],
-                          cwd=jar_dir, shell=use_shell)
+def run_jar(target_dir, jar_dir, use_shell, extra_args):
+    jvm_args = ["java"]
+    jvm_args.extend(extra_args)
+    jvm_args.extend(["-ea", "-Djava.library.path=" + target_dir,
+                     "-cp", "Test.jar", "com.example.Main"])
+    subprocess.check_call(jvm_args, cwd=jar_dir, shell=use_shell)
 
 @show_timing
 def build_jar(java_dir, java_native_dir, use_shell):
@@ -91,16 +93,54 @@ def run_jni_tests(use_shell, test_cfg):
 
     for cfg in test_cfg:
         target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
-        run_jar(target_dir, jar_dir, use_shell)
+        run_jar(target_dir, jar_dir, use_shell, ["-Xcheck:jni", "-verbose:jni"])
+    if RELEASE in test_cfg:
+        target_dir = os.path.join(find_dir("target", "jni_tests"), RELEASE)
+        run_jar(target_dir, jar_dir, use_shell, ["-Xcomp"])
 
-@show_timing
-def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
+def calc_cmake_generator():
     if sys.platform == 'win32':
         cmake_generator = "Visual Studio 15 2017"
         if os.getenv('platform') == "x64":
             cmake_generator = "Visual Studio 15 2017 Win64"
     else:
         cmake_generator = "Unix Makefiles"
+    return cmake_generator
+
+def find_target_path_in_cmakecache(cmake_build_dir):
+    with open(os.path.join(cmake_build_dir, "CMakeCache.txt")) as search:
+        for line in search:
+            line = line.rstrip()
+            if line.startswith('TARGET_PATH:PATH='):
+                line = line.replace('TARGET_PATH:PATH=', '')
+                return line
+    return None
+
+@show_timing
+def build_cpp_example():
+    cmake_generator = calc_cmake_generator()
+    dir_path = os.path.join("cpp-example", "cpp-part")
+    cmake_build_dir = os.path.join(dir_path, "build")
+    if not os.path.exists(cmake_build_dir):
+        os.makedirs(cmake_build_dir)
+    cmake_args = ["cmake", "-G", cmake_generator, "-DCMAKE_BUILD_TYPE:String=Release"]
+    subprocess.check_call(cmake_args + [".."], cwd = str(cmake_build_dir))
+    if sys.platform == 'win32' or sys.platform == 'win64':
+        subprocess.check_call(["cmake", "--build", ".", "--config", RELEASE], cwd = str(cmake_build_dir))
+        # hack to force dll to work
+        target_path = find_target_path_in_cmakecache(cmake_build_dir)
+        dll_name = "cpp_example_rust_part.dll"
+        shutil.copy(os.path.join(target_path, "release", dll_name),
+                    os.path.join(cmake_build_dir, "Release", dll_name))
+        subprocess.check_call(["app"], cwd = str(os.path.join(cmake_build_dir, "Release")), shell = True)
+    else:
+        subprocess.check_call(["cmake", "--build", "."], cwd = str(cmake_build_dir))
+        subprocess.check_call(["./app"], cwd = str(cmake_build_dir))
+
+
+@show_timing
+def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
+    cmake_generator = calc_cmake_generator()
     cmake_args = ["cmake", "-G", cmake_generator] + addon_params
     if sys.platform == 'win32' or sys.platform == 'win64':
         if os.path.exists(cmake_build_dir):
@@ -148,7 +188,11 @@ def test_python(is_windows, test_cfg):
         cmd = ["cargo", "build", "-v", "--package", "rust_swig_test_python"]
         if cfg == RELEASE:
             cmd.append("--release")
-        subprocess.check_call(cmd, shell = False)
+        env = os.environ.copy()
+        if sys.platform == "darwin":
+            # See https://github.com/dgrunwald/rust-cpython/issues/87
+            env["RUST_FLAGS"] = env["RUST_FLAGS"] + "-C link-arg=-undefined -C link-arg=dynamic_lookup"
+        subprocess.check_call(cmd, shell = False, env = env)
         target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
         if is_windows:
             shutil.copyfile(os.path.join(target_dir, "rust_swig_test_python.dll"), "python_tests/python/rust_swig_test_python.pyd")
@@ -158,7 +202,8 @@ def test_python(is_windows, test_cfg):
                 # If we choose 32, we must also choose specific, minor python version.
                 subprocess.check_call(["py", "-3.7-32", "main.py"], cwd = "python_tests/python")
         else:
-            shutil.copyfile(os.path.join(target_dir, "librust_swig_test_python.so"), "python_tests/python/rust_swig_test_python.so")
+            lib_name = "librust_swig_test_python.dylib" if sys.platform == "darwin" else "librust_swig_test_python.so"
+            shutil.copyfile(os.path.join(target_dir, lib_name), "python_tests/python/rust_swig_test_python.so")
             subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
 
 
@@ -170,7 +215,11 @@ def build_cargo_docs():
 @show_timing
 def build_for_android(is_windows):
     gradle_cmd = "gradlew.bat" if is_windows else "./gradlew"
-    subprocess.check_call([gradle_cmd, "build"], cwd=os.path.join(os.getcwd(), "android-example"))
+
+    for d in ["android-example", "android-tests"]:
+        subprocess.check_call(["cargo", "test", "--target=arm-linux-androideabi", "--release"], cwd=os.path.join(os.getcwd(), d))
+        subprocess.check_call([gradle_cmd, "build"], cwd=os.path.join(os.getcwd(), d))
+        subprocess.check_call([gradle_cmd, "connectedAndroidTest"], cwd=os.path.join(os.getcwd(), d))
 
 @show_timing
 def run_unit_tests(test_cfg, test_set):
@@ -179,12 +228,11 @@ def run_unit_tests(test_cfg, test_set):
         if CPP_TESTS in test_set:
             cmd_base.append("-p")
             cmd_base.append("rust_swig_test_cpp")
+            cmd_base.append("-p")
+            cmd_base.append("cpp-example-rust-part")
         if JNI_TESTS in test_set:
             cmd_base.append("-p")
             cmd_base.append("rust_swig_test_jni")
-        if ANDROID_TESTS in test_set:
-            cmd_base.append("-p")
-            cmd_base.append("android")
         if cfg == DEBUG:
             pass
         elif cfg == RELEASE:
@@ -211,6 +259,10 @@ def main():
             test_set.remove(JNI_TESTS)
         elif arg == "--skip-python-tests":
             test_set.remove(PYTHON_TESTS)
+        elif arg == "--android-only-tests":
+            test_set = set([ANDROID_TESTS])
+        elif arg == "--rust-unit-tests-only":
+            test_set = set([UNIT_TESTS])
         else:
             raise Exception("Fatal Error: unknown option: %s" % arg)
 
@@ -232,7 +284,7 @@ def main():
     if DOC_TESTS in test_set:
         build_cargo_docs()
 
-    print("start tests\n macrolib tests")
+    print("start tests: %s" % test_set)
     if UNIT_TESTS in test_set:
         run_unit_tests(test_cfg, test_set)
     if JNI_TESTS in test_set:
@@ -241,9 +293,10 @@ def main():
     if CPP_TESTS in test_set:
         print("Check cmake version")
         subprocess.check_call(["cmake", "--version"], shell = False)
-        build_cpp_code_with_cmake(test_cfg, os.path.join("c++_tests", "c++", "build"), [])
-        purge(os.path.join("c++_tests", "c++", "rust_interface"), ".*\.h.*$")
-        build_cpp_code_with_cmake(test_cfg, os.path.join("c++_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
+        build_cpp_example()
+        build_cpp_code_with_cmake(test_cfg, os.path.join("cpp_tests", "c++", "build"), [])
+        purge(os.path.join("cpp_tests", "c++", "rust_interface"), ".*\.h.*$")
+        build_cpp_code_with_cmake(test_cfg, os.path.join("cpp_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
 
     if ANDROID_TESTS in test_set:
         build_for_android(is_windows)

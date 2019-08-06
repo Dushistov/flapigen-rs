@@ -1,18 +1,24 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
 use rustc_hash::FxHashSet;
-use syn::{spanned::Spanned, Type};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+use syn::{spanned::Spanned, Ident, Type};
 
 use crate::{
-    error::{DiagnosticError, Result},
+    error::{panic_on_syn_error, DiagnosticError, Result},
+    file_cache::FileOperationsRegistrator,
     source_registry::SourceId,
     typemap::{
         ast::{
             check_if_smart_pointer_return_inner_type, normalize_ty_lifetimes,
             parse_ty_with_given_span_checked, DisplayToTokens,
         },
-        ty::RustType,
+        ty::{normalized_type, RustType},
         typemap_macro::{FTypeConvRule, TypeMapConvRuleInfo},
-        ForeignTypeInfo, TypeMap,
+        ForeignTypeInfo, RustTypeIdx, TypeMap,
     },
     types::{
         ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
@@ -43,29 +49,21 @@ pub(crate) fn foreign_from_rust_convert_method_output(
     conv_map: &mut TypeMap,
     src_id: SourceId,
     rust_ret_ty: &syn::ReturnType,
-    f_output: &ForeignTypeInfoT,
+    gen_code_output_ty: RustTypeIdx,
     var_name: &str,
     func_ret_type: &str,
 ) -> Result<(Vec<TokenStream>, String)> {
+    let context_span = rust_ret_ty.span();
     let rust_ret_ty: Type = match *rust_ret_ty {
         syn::ReturnType::Default => {
-            if f_output.name() != "void" {
-                return Err(DiagnosticError::new(
-                    src_id,
-                    rust_ret_ty.span(),
-                    format!("Rust type `()` mapped to not void ({})", f_output.name()),
-                ));
-            } else {
-                return Ok((Vec::new(), String::new()));
-            }
+            return Ok((Vec::new(), String::new()));
         }
         syn::ReturnType::Type(_, ref p_ty) => (**p_ty).clone(),
     };
-    let context_span = rust_ret_ty.span();
     let rust_ret_ty = conv_map.find_or_alloc_rust_type(&rust_ret_ty, src_id);
     conv_map.convert_rust_types(
         rust_ret_ty.to_idx(),
-        f_output.correspoding_rust_type().to_idx(),
+        gen_code_output_ty,
         var_name,
         var_name,
         func_ret_type,
@@ -258,35 +256,36 @@ pub(crate) fn convert_to_heap_pointer(
     tmap: &mut TypeMap,
     from: &RustType,
     var_name: &str,
-) -> (RustType, String) {
+) -> (RustType, TokenStream) {
+    let var_name = Ident::new(var_name, Span::call_site());
+
     for smart_pointer in &["Box", "Rc", "Arc"] {
         if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, *smart_pointer) {
             let inner_ty: RustType = tmap.find_or_alloc_rust_type(&inner_ty, from.src_id);
-            let code = format!(
-                r#"
-    let {var_name}: *const {inner_ty} = {smart_pointer}::into_raw({var_name});
-"#,
-                var_name = var_name,
-                inner_ty = inner_ty.normalized_name,
-                smart_pointer = *smart_pointer,
-            );
+            let inner_ty_norm: Type = normalized_type(&inner_ty.normalized_name);
+            let smart_pointer_ty: Type = syn::parse_str(&smart_pointer).unwrap_or_else(|err| {
+                panic_on_syn_error(
+                    "typemap::utils internal error, can not parse smart ptr",
+                    (*smart_pointer).into(),
+                    err,
+                )
+            });
+            let code: TokenStream = quote! {
+                let #var_name: *const #inner_ty_norm = #smart_pointer_ty::into_raw(#var_name);
+            };
             return (inner_ty, code);
         }
     }
-
     let inner_ty = from.clone();
     let inner_ty_str = normalize_ty_lifetimes(&inner_ty.ty);
-    (
-        inner_ty,
-        format!(
-            r#"
-    let {var_name}: Box<{inner_ty}> = Box::new({var_name});
-    let {var_name}: *mut {inner_ty} = Box::into_raw({var_name});
-"#,
-            var_name = var_name,
-            inner_ty = inner_ty_str
-        ),
-    )
+    let inner_ty_norm = normalized_type(inner_ty_str);
+
+    let code = quote! {
+        let #var_name: Box<#inner_ty_norm> = Box::new(#var_name);
+        let #var_name: *mut #inner_ty_norm = Box::into_raw(#var_name);
+    };
+
+    (inner_ty, code)
 }
 
 pub(crate) fn unpack_from_heap_pointer(
@@ -326,4 +325,73 @@ pub(crate) fn unpack_from_heap_pointer(
         inside_box_type = from.normalized_name,
         unbox_code = unbox_code
     )
+}
+
+pub(crate) fn configure_ftype_rule(
+    f_type_rules: &mut Vec<FTypeConvRule>,
+    rule_type: &str,
+    rule_src_id: SourceId,
+    options: &FxHashSet<&'static str>,
+) -> Result<()> {
+    f_type_rules.retain(|rule| {
+        rule.cfg_option
+            .as_ref()
+            .map(|opt| options.contains(opt.as_str()))
+            .unwrap_or(true)
+    });
+    if f_type_rules.len() > 1 {
+        let first_rule = f_type_rules.remove(0);
+        let mut err = DiagnosticError::new(
+            rule_src_id,
+            first_rule.left_right_ty.span(),
+            format!(
+                "multiply f_type '{}' rules, that possible to use in this configuration, first",
+                rule_type,
+            ),
+        );
+        for other in f_type_rules.iter() {
+            err.span_note(
+                (rule_src_id, other.left_right_ty.span()),
+                format!("other f_type '{}' rule", rule_type),
+            );
+        }
+        return Err(err);
+    }
+    if f_type_rules.len() == 1 {
+        f_type_rules[0].cfg_option = None;
+    }
+    Ok(())
+}
+
+pub(crate) fn remove_files_if<Filter>(
+    output_dir: &Path,
+    if_remove_filter: Filter,
+) -> std::result::Result<(), String>
+where
+    Filter: Fn(&Path) -> bool,
+{
+    let entries = fs::read_dir(&output_dir)
+        .map_err(|err| format!("read_dir({}) failed: {}", output_dir.display(), err))?;
+
+    for path in entries {
+        let path = path
+            .map_err(|err| {
+                format!(
+                    "Can not get next entry during parsing read_dir output: {}",
+                    err
+                )
+            })?
+            .path();
+        if if_remove_filter(&path) {
+            fs::remove_file(&path)
+                .map_err(|err| format!("error during remove {}: {}", path.display(), err))?;
+        }
+    }
+    Ok(())
+}
+
+impl FileOperationsRegistrator for FxHashSet<PathBuf> {
+    fn register(&mut self, p: &Path) {
+        self.insert(p.into());
+    }
 }
