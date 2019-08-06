@@ -1,5 +1,5 @@
 use crate::{
-    error::DiagnosticError,
+    error::{panic_on_syn_error, DiagnosticError},
     source_registry::SourceId,
     typemap::{ast::TypeName, RustTypeIdx, TypeConvCode},
 };
@@ -85,6 +85,13 @@ impl RustTypeS {
     }
 }
 
+/// # Panics
+pub(crate) fn normalized_type(normalized_name: &str) -> syn::Type {
+    syn::parse_str(normalized_name).unwrap_or_else(|err| {
+        panic_on_syn_error("Can not parse normalized type", normalized_name.into(), err)
+    })
+}
+
 pub(crate) type RustType = Rc<RustTypeS>;
 
 #[derive(Default, Debug, Clone)]
@@ -110,9 +117,6 @@ impl ImplementsSet {
             }
         }
         true
-    }
-    pub(crate) fn contains(&self, trait_name: &str) -> bool {
-        self.inner.iter().any(|it| *it == trait_name)
     }
     pub(crate) fn contains_path(&self, path: &syn::Path) -> bool {
         self.inner
@@ -140,7 +144,7 @@ impl<'a> TraitNamesSet<'a> {
         self.inner.is_empty()
     }
     pub(crate) fn iter(&self) -> impl Iterator<Item = &syn::Path> {
-        self.inner.iter().map(|x| *x)
+        self.inner.iter().copied()
     }
 }
 
@@ -155,7 +159,7 @@ pub(crate) struct ForeignTypeS {
     pub from_into_rust: Option<ForeignConversationRule>,
     /// sometimes you need make unique typename,
     /// but do not show user this "uniqueness"
-    pub name_prefix: Option<&'static str>,
+    pub name_prefix: Option<SmolStr>,
 }
 
 impl ForeignTypeS {
@@ -165,8 +169,8 @@ impl ForeignTypeS {
     pub(crate) fn typename(&self) -> SmolStr {
         match self.name_prefix {
             None => self.name.typename.clone(),
-            Some(prefix) => {
-                debug_assert!(self.name.typename.as_str().starts_with(prefix));
+            Some(ref prefix) => {
+                debug_assert!(self.name.typename.as_str().starts_with(prefix.as_str()));
                 self.name.typename.as_str()[prefix.len()..].into()
             }
         }
@@ -183,7 +187,7 @@ pub(crate) struct ForeignConversationRule {
 pub(crate) struct ForeignConversationIntermediate {
     pub(crate) input_to_output: bool,
     pub(crate) intermediate_ty: RustTypeIdx,
-    pub(crate) conv_code: TypeConvCode,
+    pub(crate) conv_code: Rc<TypeConvCode>,
 }
 
 #[derive(Debug, Clone, Copy)]

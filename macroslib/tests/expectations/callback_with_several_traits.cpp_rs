@@ -1,0 +1,22 @@
+r##"#[no_mangle]
+pub extern "C" fn Test_f(a0: *const C_MyObserver) -> () {
+    let mut a0: Box<OnEvent + Send> = <Box<OnEvent + Send>>::swig_from(a0);
+    let mut ret: () = f(a0);
+    ret
+}"##;
+
+r##"impl SwigFrom<*const C_MyObserver> for Box<OnEvent + Send> {
+    fn swig_from(this: *const C_MyObserver) -> Self {
+        let this: &C_MyObserver = unsafe { this.as_ref().unwrap() };
+        Box::new(this.clone())
+    }
+}"##;
+
+r#"impl OnEvent for C_MyObserver {
+    #[allow(unused_mut)]
+    fn something_change(&self, a0: i32, a1: &str) -> () {
+        let a1: CRustStrView = CRustStrView::from_str(a1);
+        let ret: () = (self.onStateChanged)(a0, a1, self.opaque);
+        ret
+    }
+}"#;

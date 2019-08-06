@@ -22,7 +22,7 @@ use crate::{
         ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
         SelfTypeVariant,
     },
-    LanguageConfig, FOREIGNER_CODE, FOREIGN_CODE,
+    LanguageConfig, FOREIGNER_CODE, FOREIGN_CODE, SMART_PTR_COPY_TRAIT,
 };
 
 pub(crate) fn parse_foreigner_class(
@@ -311,7 +311,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             _ if func_type_name == STATIC_METHOD => MethodVariant::StaticMethod,
             _ if func_type_name == METHOD => MethodVariant::Method(SelfTypeVariant::Default),
             _ if func_type_name == FN => {
-                if args_in.len() >= 1 {
+                if !args_in.is_empty() {
                     use syn::FnArg::*;
                     match args_in[0] {
                         SelfRef(_) | SelfValue(_) => {
@@ -463,6 +463,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
 
     let copy_derived = derive_list.iter().any(|x| x == "Copy");
     let clone_derived = derive_list.iter().any(|x| x == "Clone");
+    let smart_ptr_copy_derived = derive_list.iter().any(|x| x == SMART_PTR_COPY_TRAIT);
     let has_clone = |m: &ForeignerMethod| {
         if let Some(seg) = m.rust_id.segments.last() {
             let seg = seg.into_value();
@@ -507,6 +508,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         doc_comments: class_doc_comments,
         copy_derived,
         clone_derived,
+        smart_ptr_copy_derived,
     })
 }
 
@@ -668,7 +670,28 @@ impl Parse for ForeignInterfaceParser {
             let doc_comments = parse_doc_comments(&item_parser)?;
             let func_name = item_parser.parse::<Ident>()?;
             if func_name == "self_type" {
-                self_type = Some(item_parser.call(syn::Path::parse_mod_style)?);
+                let traits: syn::TypeTraitObject = item_parser.parse()?;
+                if traits.bounds.is_empty() {
+                    return Err(syn::Error::new(
+                        traits.span(),
+                        "Should be at least one trait",
+                    ));
+                }
+                for trait_ in traits.bounds.iter().skip(1) {
+                    use syn::TypeParamBound::*;
+                    match trait_ {
+                        Trait(trait_) => {
+                            if !(trait_.path.is_ident("Sync") || trait_.path.is_ident("Send")) {
+                                return Err(syn::Error::new(
+                                    trait_.span(),
+                                    "Supported only Send or Sync trait at this point",
+                                ));
+                            }
+                        }
+                        Lifetime(_) => {}
+                    }
+                }
+                self_type = Some(traits);
                 debug!("self_type: {:?} for {}", self_type, interface_name);
                 item_parser.parse::<Token![;]>()?;
                 continue;
@@ -707,7 +730,7 @@ impl Parse for ForeignInterfaceParser {
             });
         }
 
-        let self_type: syn::Path = self_type.ok_or_else(|| {
+        let self_type: syn::TypeTraitObject = self_type.ok_or_else(|| {
             syn::Error::new(interface_name.span(), "No `self_type` in foreign_interface")
         })?;
 
@@ -725,6 +748,7 @@ impl Parse for ForeignInterfaceParser {
 mod tests {
     use super::*;
     use crate::error::panic_on_syn_error;
+    use quote::ToTokens;
 
     #[test]
     fn test_do_parse_foreigner_class() {
@@ -798,6 +822,57 @@ mod tests {
         };
         let class: CppClass = test_parse(mac.tts);
         assert!(class.0.copy_derived);
+    }
+
+    #[test]
+    fn test_parse_foreign_callback_simple() {
+        let _ = env_logger::try_init();
+        let mac: syn::Macro = parse_quote! {
+            foreign_interface!(interface MyObserver {
+                self_type OnEvent;
+                onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
+            })
+        };
+        let f_interface: ForeignInterfaceParser = test_parse(mac.tts);
+        assert_eq!("MyObserver", f_interface.0.name.to_string());
+        assert_eq!(
+            "OnEvent",
+            f_interface.0.self_type.into_token_stream().to_string()
+        );
+    }
+
+    #[test]
+    fn test_parse_foreign_callback_path() {
+        let _ = env_logger::try_init();
+        let mac: syn::Macro = parse_quote! {
+            foreign_interface!(interface MyObserver {
+                self_type some_mod::other_mod::OnEvent;
+                onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
+            })
+        };
+        let f_interface: ForeignInterfaceParser = test_parse(mac.tts);
+        assert_eq!("MyObserver", f_interface.0.name.to_string());
+        assert_eq!(
+            "some_mod :: other_mod :: OnEvent",
+            f_interface.0.self_type.into_token_stream().to_string()
+        );
+    }
+
+    #[test]
+    fn test_parse_foreign_callback_multi_traits() {
+        let _ = env_logger::try_init();
+        let mac: syn::Macro = parse_quote! {
+            foreign_interface!(interface MyObserver {
+                self_type some_mod::other_mod::OnEvent + Send;
+                onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
+            })
+        };
+        let f_interface: ForeignInterfaceParser = test_parse(mac.tts);
+        assert_eq!("MyObserver", f_interface.0.name.to_string());
+        assert_eq!(
+            "some_mod :: other_mod :: OnEvent + Send",
+            f_interface.0.self_type.into_token_stream().to_string()
+        );
     }
 
     fn test_parse<T>(tokens: TokenStream) -> T

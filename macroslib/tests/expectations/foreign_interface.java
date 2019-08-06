@@ -6,4 +6,7 @@ r#"public interface SomeObserver {
 
     void onStateChangedWithoutArgs();
 
+
+    void onStateChangedFoo(@NonNull Foo foo);
+
 }"#;

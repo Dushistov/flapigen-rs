@@ -27,7 +27,7 @@ pub(in crate::cpp) fn map_type(
     CppForeignTypeInfo::try_new(ctx, direction, ftype)
 }
 
-pub(in crate::cpp) fn do_map_type(
+fn do_map_type(
     ctx: &mut CppContext,
     arg_ty: &RustType,
     direction: Direction,
@@ -54,7 +54,7 @@ pub(in crate::cpp) fn do_map_type(
         });
     if let Some((grule, subst_list)) = idx_subst_map {
         debug!(
-            "map_type: we found generic rule for {}: {:?}",
+            "do_map_type: we found generic rule for {}: {:?}",
             arg_ty, subst_list
         );
         let subst_map = subst_list.as_slice().into();
@@ -108,17 +108,16 @@ pub(in crate::cpp) fn do_map_type(
         ) {
             return Ok(ftype);
         }
-    } else {
-        if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
-            arg_ty.to_idx(),
-            direction,
-            MapToForeignFlag::FullSearch,
-            arg_ty_span,
-            calc_this_type_for_method,
-        ) {
-            return Ok(ftype);
-        }
+    } else if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
+        arg_ty.to_idx(),
+        direction,
+        MapToForeignFlag::FullSearch,
+        arg_ty_span,
+        calc_this_type_for_method,
+    ) {
+        return Ok(ftype);
     }
+
     match direction {
         Direction::Outgoing => Err(DiagnosticError::new2(
             arg_ty_span,
@@ -146,13 +145,28 @@ struct CppContextForArg<'a, 'b> {
     direction: Direction,
 }
 
+impl<'a, 'b> CppContextForArg<'a, 'b> {
+    fn arg_direction(&self, param1: Option<&str>) -> Result<Direction> {
+        match param1 {
+            Some("output") => Ok(Direction::Outgoing),
+            Some("input") => Ok(Direction::Incoming),
+            None => Ok(self.direction),
+            Some(param) => Err(DiagnosticError::new2(
+                self.arg_ty_span,
+                format!("Invalid argument '{}' for swig_f_type", param),
+            )),
+        }
+    }
+}
+
 impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
-    fn swig_i_type(&mut self, ty: &syn::Type) -> Result<syn::Type> {
+    fn swig_i_type(&mut self, ty: &syn::Type, opt_arg: Option<&str>) -> Result<syn::Type> {
         let rust_ty = self
             .ctx
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
-        let f_info = map_type(self.ctx, &rust_ty, self.direction, self.arg_ty_span)?;
+        let direction = self.arg_direction(opt_arg)?;
+        let f_info = map_type(self.ctx, &rust_ty, direction, self.arg_ty_span)?;
         trace!("swig_i_type return {}", f_info.base.correspoding_rust_type);
         Ok(f_info.base.correspoding_rust_type.ty.clone())
     }
@@ -202,16 +216,13 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
         self.ctx.rust_code.append(&mut conv_deps);
         Ok(conv_code)
     }
-    fn swig_f_type(
-        &mut self,
-        ty: &syn::Type,
-        direction: Option<Direction>,
-    ) -> Result<ExpandedFType> {
+    fn swig_f_type(&mut self, ty: &syn::Type, param1: Option<&str>) -> Result<ExpandedFType> {
         let rust_ty = self
             .ctx
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
-        let direction = direction.unwrap_or(self.direction);
+
+        let direction = self.arg_direction(param1)?;
         let f_info = map_type(self.ctx, &rust_ty, direction, self.arg_ty_span)?;
         let fname = if let Some(ref cpp_conv) = f_info.cpp_converter {
             cpp_conv.typename.as_str()
@@ -230,7 +241,10 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let f_info = map_type(self.ctx, &rust_ty, Direction::Incoming, self.arg_ty_span)?;
         if let Some(cpp_conv) = f_info.cpp_converter {
-            Ok(cpp_conv.converter.replace(FROM_VAR_TEMPLATE, var_name))
+            Ok(cpp_conv
+                .converter
+                .as_str()
+                .replace(FROM_VAR_TEMPLATE, var_name))
         } else {
             Ok(var_name.into())
         }
@@ -242,7 +256,10 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let f_info = map_type(self.ctx, &rust_ty, Direction::Outgoing, self.arg_ty_span)?;
         if let Some(cpp_conv) = f_info.cpp_converter {
-            Ok(cpp_conv.converter.replace(FROM_VAR_TEMPLATE, var_name))
+            Ok(cpp_conv
+                .converter
+                .as_str()
+                .replace(FROM_VAR_TEMPLATE, var_name))
         } else {
             Ok(var_name.into())
         }

@@ -2,7 +2,7 @@ use std::fmt::{Display, Write};
 
 use crate::{
     source_registry::{SourceId, SourceRegistry},
-    SourceCode,
+    SourceCode, WRITE_TO_MEM_FAILED_MSG,
 };
 use proc_macro2::Span;
 
@@ -44,6 +44,9 @@ impl DiagnosticError {
         DiagnosticError {
             data: vec![(SourceId::none(), syn::Error::new(Span::call_site(), err))],
         }
+    }
+    pub(crate) fn map_any_err_to_our_err<E: Display>(err: E) -> Self {
+        DiagnosticError::new_without_src_info(err)
     }
 }
 
@@ -115,8 +118,8 @@ fn eprint_error_location(err: &syn::Error, src: &SourceCode) {
         } else {
             end.column
         };
-        write!(&mut code_problem, "{:^^1$}\n", '^', code_problem_len)
-            .expect("write to String failed");
+        writeln!(&mut code_problem, "{:^^1$}", '^', code_problem_len)
+            .expect(WRITE_TO_MEM_FAILED_MSG);
         if i == end.line {
             break;
         }

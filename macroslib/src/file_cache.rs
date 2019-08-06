@@ -4,7 +4,7 @@ use std::{
     fs::File,
     io,
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 /// Implement write cache in memory, and update file only if necessary
@@ -18,11 +18,25 @@ pub struct FileWriteCache {
     already_defined_items: HashSet<String>,
 }
 
+pub trait FileOperationsRegistrator {
+    fn register(&mut self, p: &Path);
+}
+
+pub struct NoNeedFsOpsRegistration;
+impl FileOperationsRegistrator for NoNeedFsOpsRegistration {
+    fn register(&mut self, _p: &Path) {}
+}
+
 impl FileWriteCache {
-    pub fn new<P: Into<PathBuf>>(p: P) -> FileWriteCache {
+    pub fn new<P: Into<PathBuf>>(
+        p: P,
+        fs_reg: &mut dyn FileOperationsRegistrator,
+    ) -> FileWriteCache {
+        let path = p.into();
+        fs_reg.register(&path);
         FileWriteCache {
             cnt: vec![],
-            path: p.into(),
+            path,
             already_defined_items: HashSet::default(),
         }
     }

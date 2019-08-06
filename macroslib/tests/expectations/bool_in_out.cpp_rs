@@ -18,4 +18,5 @@ r#"# [ no_mangle ]
  let ret : :: std :: os :: raw :: c_char = if ret { 1 } else { 0 } ;
  ret }"#;
 
-r#"onStateChanged1 : extern "C" fn ( a0 : i32 , a1 : :: std :: os :: raw :: c_char , _ : * const :: std :: os :: raw :: c_void ) -> ( ) ,"#;
+r#"onStateChanged1:
+        extern "C" fn(a0: i32, a1: ::std::os::raw::c_char, _: *const ::std::os::raw::c_void) -> (),"#;

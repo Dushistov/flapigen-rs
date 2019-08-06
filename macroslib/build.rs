@@ -6,7 +6,7 @@ use std::{
 };
 
 use quote::ToTokens;
-use syn::{parse_quote, visit_mut::VisitMut};
+use syn::{parse_quote, visit::Visit, visit_mut::VisitMut};
 
 struct FilterSwigAttrs;
 
@@ -25,6 +25,10 @@ impl VisitMut for FilterSwigAttrs {
 
 mod file_cache {
     include!("src/file_cache.rs");
+}
+
+mod jni_find_cache {
+    include!("src/java_jni/find_cache.rs");
 }
 
 fn main() {
@@ -51,8 +55,21 @@ fn main() {
         let mut filter_swig_attrs = FilterSwigAttrs;
         filter_swig_attrs.visit_file_mut(&mut file);
 
+        let mut jni_cache_macro_cache = jni_find_cache::JniCacheMacroCalls::default();
+        let mut visitor = jni_find_cache::JniCacheMacroCallsVisitor {
+            inner: &mut jni_cache_macro_cache,
+            errors: vec![],
+        };
+        visitor.visit_file(&file);
+        if !visitor.errors.is_empty() {
+            panic!("jni cache macros visiting failed: {}", visitor.errors[0]);
+        }
+        let mut jni_global_vars = jni_cache_macro_cache.global_vars();
+        file.items.append(&mut jni_global_vars);
+
         let out_path = Path::new(&out_dir).join(include_path.file_name().expect("No file name"));
-        let mut cache = file_cache::FileWriteCache::new(&out_path);
+        let mut cache =
+            file_cache::FileWriteCache::new(&out_path, &mut file_cache::NoNeedFsOpsRegistration);
         let write_err_msg = format!("Error during write to file {}", out_path.display());
         write!(&mut cache, "{}", file.into_token_stream().to_string()).expect(&write_err_msg);
         cache.update_file_if_necessary().expect(&write_err_msg);
@@ -65,7 +82,8 @@ fn main() {
         .unwrap_or_else(|err| panic!("Can not open {}: {}", exp_tests_list_path.display(), err));
     let expectation_tests = BufReader::new(&expectation_tests);
     let exp_code_path = Path::new(&out_dir).join("test_expectations.rs");
-    let mut exp_code = file_cache::FileWriteCache::new(&exp_code_path);
+    let mut exp_code =
+        file_cache::FileWriteCache::new(&exp_code_path, &mut file_cache::NoNeedFsOpsRegistration);
     for name in expectation_tests.lines() {
         let name = name.unwrap_or_else(|err| {
             panic!("Can not read {}: {}", exp_tests_list_path.display(), err)

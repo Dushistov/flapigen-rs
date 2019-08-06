@@ -1,6 +1,6 @@
 [package]
 name = "rust_swig"
-version = "0.4.0-pre"
+version = "0.5.0-pre"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 description = "Tool for connecting libraries written in Rust with other languages"
 license = "BSD-3-Clause"
@@ -18,7 +18,7 @@ log = "0.4.6"
 petgraph = "0.4.13"
 bitflags = "1.0.4"
 lazy_static = "1.0.2"
-smallvec = "0.6.9"
+smallvec = "0.6.10"
 rustc-hash = "1.0.1"
 smol_str = "0.1.11"
 strum = "0.15.0"
@@ -37,5 +37,4 @@ syn = { version = "0.15.23", features = ["full", "extra-traits", "visit-mut", "v
 quote = "0.6.11"
 
 [badges]
-travis-ci = { repository = "Dushistov/rust_swig" }
-appveyor = { repository = "Dushistov/rust_swig" }
+azure-devops = { project = "Dushistov/rust_swig", pipeline = "Dushistov.rust_swig" }

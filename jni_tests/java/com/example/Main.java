@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.OptionalDouble;
 import java.util.OptionalLong;
 import java.util.Optional;
+import java.util.ArrayList;
 import com.example.rust.Foo;
 import com.example.rust.Boo;
 import com.example.rust.TestPathAndResult;
@@ -29,6 +30,18 @@ import com.example.rust.Gamepad2;
 import com.example.rust.Code;
 import com.example.rust.GamepadId;
 import com.example.rust.TestFnInline;
+import com.example.rust.EnumObserver;
+import com.example.rust.LocationService;
+import com.example.rust.Position;
+import com.example.rust.Session;
+import com.example.rust.NavigationService;
+import com.example.rust.CheckAllTypesInCallbackArgs;
+import com.example.rust.TestCheckAllTypesInCallbackArgs;
+import com.example.rust.RustLogging;
+import com.example.rust.ThreadSafeObserver;
+import com.example.rust.TestMultiThreadCallback;
+import com.example.rust.DropCounter;
+import com.example.rust.LongOperation;
 
 class Main {
     public static void main(String[] args) {
@@ -38,6 +51,7 @@ class Main {
             System.out.println("Can not load library");
             throw e;
         }
+	RustLogging.init();
         try {
             testFoo();
             Boo boo = new Boo();
@@ -94,17 +108,7 @@ class Main {
             TestInner.Inner testInner = TestInner.getInner();
             assert testInner.name.equals("Boo Boo");
 
-            assert Boo.test_u8((short) 1) == (short) 2;
-            assert Boo.test_i8((byte) -1) == (byte) 0;
-            assert Boo.test_u16((int) 1) == (int) 2;
-            assert Boo.test_i16((short) -1) == (short) 0;
-            assert Boo.test_u32((long) 1) == (long) 2;
-            assert Boo.test_i32((int) -1) == (int) 0;
-            assert Boo.test_u64((long) 1) == (long) 2;
-            assert Boo.test_i64((long) -1) == (long) 0;
-            assert Math.abs(Boo.test_f32((float) 1.1) - (float) 2.1) < 1e-12;
-            assert Math.abs(Boo.test_f64((double) -1.0)) < 1e-12;
-
+	    testNumberInputOutput();
             testDoubleOverload();
 	    testContainers();
 	    testNullString();
@@ -120,6 +124,12 @@ class Main {
 	    testBuilderPattern();
 	    testGetIDOverloading();
 	    testFnInline();
+	    testGetObjectWithException();
+	    testCopyDerivedObjects();
+	    testSmartPtrCopyDerivedObjects();
+	    testAllTypesInCallbackArgs();
+	    testMultiThreadCallback();
+	    testPrematureGc();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -188,15 +198,46 @@ class Main {
     }
 
     private static void testDateTime() {
-        final Date now = Foo.now();
-        final Date nowChrono = Foo.chrono_now();
-        final DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
-        System.out.println("now: " + df.format(now));
-        final Date today = Calendar.getInstance().getTime();
-        System.out.println("now: " + now);
-        System.out.println("today: " + today);
-        assert Math.abs(today.getTime() - now.getTime()) < 2000;
-        assert Math.abs(nowChrono.getTime() - today.getTime()) < 2000;
+	{
+	    final Date now = Foo.now();
+	    final Date nowChrono = Foo.chrono_now();
+	    final DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+	    System.out.println("now: " + df.format(now));
+	    final Date today = Calendar.getInstance().getTime();
+	    System.out.println("now: " + now);
+	    System.out.println("today: " + today);
+	    assert Math.abs(today.getTime() - now.getTime()) < 2000;
+	    assert Math.abs(nowChrono.getTime() - today.getTime()) < 2000;
+	}
+
+	{
+	    assert !Foo.chrono_now_opt(false).isPresent();
+	    assert Foo.chrono_now_opt(true).isPresent();
+	    final Date today = Calendar.getInstance().getTime();
+	    final Date nowChrono = Foo.chrono_now_opt(true).get();
+	    assert Math.abs(nowChrono.getTime() - today.getTime()) < 2000;
+	}
+    }
+
+    private static class TestEnumObserver implements EnumObserver {
+	boolean values[] = new boolean[3];
+	boolean is_called;
+
+	@Override
+	public void onStateUpdate(MyEnum item, boolean is_ok) {
+	    switch (item) {
+	    case ITEM1:
+		values[0] = is_ok;
+		break;
+	    case ITEM2:
+		values[1] = is_ok;
+		break;
+	    case ITEM3:
+		values[2] = is_ok;
+		break;
+	    }
+	    is_called = true;
+	}
     }
 
     private static void testTestEnumClass() {
@@ -204,12 +245,20 @@ class Main {
         TestEnumClass o = new TestEnumClass();
         assert o.f1(v1) == -5;
         assert o.f1(MyEnum.ITEM2) == 17;
+	TestEnumObserver obs = new TestEnumObserver();
+	assert !obs.is_called;
+	TestEnumClass.call_cb(obs);
+	assert obs.is_called;
+	assert !obs.values[0];
+	assert obs.values[1];
+	assert !obs.values[2];
     }
 
     private static class TestObserver implements MyObserver {
         int x;
         String s;
 
+	@Override
         public void onStateChanged(int x, String s) {
             //System.out.println(String.format("TestObserver.onStateChange %d", x));
             this.x = x;
@@ -326,34 +375,84 @@ class Main {
     }
 
     private static void testOptional() {
-        OptionalDouble d = TestOptional.f1(null);
-        assert !d.isPresent();
-        d = TestOptional.f1(1.7);
-        assert d.isPresent();
-        assert Math.abs(d.getAsDouble() - 2.7) < 1e-12;
+	{
+	    OptionalDouble d = TestOptional.f1(null);
+	    assert !d.isPresent();
+	    d = TestOptional.f1(1.7);
+	    assert d.isPresent();
+	    assert Math.abs(d.getAsDouble() - 2.7) < 1e-12;
 
-        OptionalLong l = TestOptional.f2(null);
-        assert !l.isPresent();
-        l = TestOptional.f2(17l);
-        assert l.isPresent();
-        assert l.getAsLong() == 18;
+	    OptionalLong l = TestOptional.f2(null);
+	    assert !l.isPresent();
+	    l = TestOptional.f2(17l);
+	    assert l.isPresent();
+	    assert l.getAsLong() == 18;
 
-        Optional<Foo> foo_o = TestOptional.f3(false);
-        assert !foo_o.isPresent();
-        foo_o = TestOptional.f3(true);
-        assert foo_o.isPresent();
-        Foo foo = foo_o.get();
-        assert foo.calcF(0, 0) == 5;
-        assert foo.getName().equals("Some");
+	    Optional<Foo> foo_o = TestOptional.f3(false);
+	    assert !foo_o.isPresent();
+	    foo_o = TestOptional.f3(true);
+	    assert foo_o.isPresent();
+	    Foo foo = foo_o.get();
+	    assert foo.calcF(0, 0) == 5;
+	    assert foo.getName().equals("Some");
 
-        assert !TestOptional.f4(null).isPresent();
-        l = TestOptional.f4(foo);
-        assert l.isPresent();
-        assert l.getAsLong() == 5;
+	    assert !TestOptional.f4(null).isPresent();
+	    l = TestOptional.f4(foo);
+	    assert l.isPresent();
+	    assert l.getAsLong() == 5;
 
-        assert TestOptional.f5(true).isPresent();
-        assert TestOptional.f5(true).get().equals("true");
-        assert !TestOptional.f5(false).isPresent();
+	    assert TestOptional.f5(true).isPresent();
+	    assert TestOptional.f5(true).get().equals("true");
+	    assert !TestOptional.f5(false).isPresent();
+	}
+	{
+	    Foo foo = new Foo(17, "test");
+
+	    assert TestOptional.f6(foo).isPresent();
+	    assert TestOptional.f6(foo).get().equals("test");
+	    assert foo.getName().equals("test");
+
+	    assert TestOptional.f6(foo).isPresent();
+	    assert TestOptional.f6(foo).get().equals("test");
+	    assert foo.getName().equals("test");
+
+	    assert !TestOptional.f6(null).isPresent();
+	}
+
+	assert TestOptional.test_opt_str("test_opt_str1").isPresent();
+	assert TestOptional.test_opt_str("test_opt_str2").get().equals("test_opt_str2");
+	assert !TestOptional.test_opt_str(null).isPresent();
+
+	assert TestOptional.test_opt_i32(Integer.MAX_VALUE - 1).isPresent();
+	assert TestOptional.test_opt_i32(Integer.MAX_VALUE - 1).getAsInt() == Integer.MAX_VALUE;
+	assert !TestOptional.test_opt_i32(null).isPresent();
+	assert TestOptional.test_opt_i32(Integer.MIN_VALUE).isPresent();
+	assert TestOptional.test_opt_i32(Integer.MIN_VALUE).getAsInt() == (Integer.MIN_VALUE + 1);
+
+
+	assert TestOptional.test_opt_i8((byte)(Byte.MAX_VALUE - 1)).isPresent();
+	assert TestOptional.test_opt_i8((byte)(Byte.MAX_VALUE - 1)).getAsInt() == Byte.MAX_VALUE;
+	assert !TestOptional.test_opt_i8(null).isPresent();
+	assert TestOptional.test_opt_i8((byte)Byte.MIN_VALUE).isPresent();
+	assert TestOptional.test_opt_i8((byte)Byte.MIN_VALUE).getAsInt() == (Byte.MIN_VALUE + 1);
+
+
+	assert TestOptional.test_opt_i16((short)(Short.MAX_VALUE - 1)).isPresent();
+	assert TestOptional.test_opt_i16((short)(Short.MAX_VALUE - 1)).getAsInt() == Short.MAX_VALUE;
+	assert !TestOptional.test_opt_i16(null).isPresent();
+	assert TestOptional.test_opt_i16((short)Short.MIN_VALUE).isPresent();
+	assert TestOptional.test_opt_i16((short)Short.MIN_VALUE).getAsInt() == (Short.MIN_VALUE + 1);
+
+
+	assert TestOptional.test_opt_f32(1.3f).isPresent();
+	assert Math.abs(TestOptional.test_opt_f32(1.3f).getAsDouble() - 3.f) < 1e-12;
+	assert !TestOptional.test_opt_f32(null).isPresent();
+
+	assert !TestOptional.test_enum(null).isPresent();
+	assert TestOptional.test_enum(MyEnum.ITEM1).isPresent();
+	assert TestOptional.test_enum(MyEnum.ITEM1).get().equals(MyEnum.ITEM2);
+	assert TestOptional.test_enum(MyEnum.ITEM2).isPresent();
+	assert TestOptional.test_enum(MyEnum.ITEM2).get().equals(MyEnum.ITEM3);
     }
 
     private static void testCircularDeps() {
@@ -429,5 +528,181 @@ class Main {
 	    String s = TestFnInline.int_to_str(i);
 	    assert expected.equals(s);
 	}
+    }
+
+    private static void testGetObjectWithException() {
+	Position pos = null;
+	try {
+	    pos = LocationService.position();
+	} catch (Exception ex) {
+	    System.out.println("Have exception: " + ex);
+	    pos = null;
+	}
+	assert pos != null;
+	assert Math.abs(pos.getLatitude() - 17.17) < 1e-16;
+    }
+
+    private static void testCopyDerivedObjects() {
+	Xyz z = new Xyz();
+	Xyz u = new Xyz(1., 1., 1.);
+	Xyz r1 = Xyz.add(z, u);
+	Xyz r2 = Xyz.add(z, u);
+    }
+
+    private static void testSmartPtrCopyDerivedObjects() {
+	Session session = new Session();
+	assert session.name().equals("Session");
+	NavigationService nav_serv = new NavigationService();
+	nav_serv.subscribeOnUpdates(session);
+	nav_serv.callCallbacks();
+	assert session.name().equals("17");
+    }
+
+    private static class TesterAllTypesInCallbackArgs implements CheckAllTypesInCallbackArgs {
+	private boolean types1_called;
+	private boolean types2_called;
+	private boolean foo_called;
+	private boolean str_called;
+	private boolean path_called;
+	private boolean arr_called;
+
+	@Override
+	public void checkAllTypes1(short a0, byte a1, int a2, short a3, long a4, int a5, long a6, int a7) {
+	    assert a0 == 255;
+	    assert a1 == -128;
+	    assert a2 == ((1 << 16) - 1);
+	    assert a3 == -(1 << 15);
+	    assert a4 == ((1l << 32) - 1);
+	    assert a5 == -(1 << 31);
+	    assert a6 == 0;
+	    assert a7 == ((1 << 31) - 1);
+	    types1_called = true;
+	}
+
+	public void checkAllTypes2(long a0, long a1, float a2, double a3, long a4, long a5) {
+	    assert a0 == (1l << 32);
+	    assert a1 == ((1l << 63) - 1);
+            assert Math.abs((float )Math.PI - a2) < 1e-10;
+	    assert Math.abs(Math.E - a3) < 1e-10;
+	    assert a4 == 17;
+	    assert a5 == -17;
+	    types2_called = true;
+	}
+
+	public void checkAllTypes2(long a0, long a1, float a2, double a3, long a4, int a5) {
+	    assert a0 == (1l << 32);
+	    assert a1 == ((1l << 63) - 1);
+            assert Math.abs((float )Math.PI - a2) < 1e-10;
+	    assert Math.abs(Math.E - a3) < 1e-10;
+	    assert a4 == 17;
+	    assert a5 == -17;
+	    types2_called = true;
+	}
+
+	@Override
+	public void checkFoo(Foo foo) {
+	    assert 17 == foo.calcF(0, 0);
+	    assert foo.getName().equals("17");
+	    foo_called = true;
+	}
+
+	@Override
+	public void checkStr(String s) {
+	    assert s.equals("checkStr");
+	    str_called = true;
+	}
+	@Override
+	public void checkPath(String p) {
+	    assert p.equals("/tmp/a.txt");
+	    path_called = true;
+	}
+	@Override
+	public void checkArray(Foo []arr) {
+	    assert arr.length == 2;
+	    assert arr[0].getName().equals("1");
+	    assert arr[0].calcF(0, 0) == 1;
+	    assert arr[1].getName().equals("2");
+	    assert arr[1].calcF(0, 0) == 2;
+	    arr_called = true;
+	}
+    }
+
+    private static void testAllTypesInCallbackArgs() {
+	TesterAllTypesInCallbackArgs cb = new TesterAllTypesInCallbackArgs();
+	TestCheckAllTypesInCallbackArgs.call_cb(cb);
+	assert cb.types1_called;
+	assert cb.types2_called;
+	assert cb.foo_called;
+	assert cb.str_called;
+	assert cb.path_called;
+	assert cb.arr_called;
+    }
+
+    private static void testNumberInputOutput() {
+	assert Boo.test_u8((short) 1) == (short) 2;
+
+	assert Boo.test_i8((byte) -1) == (byte) 0;
+	assert Boo.test_i8((byte) 126) == 127;
+	assert Boo.test_i8((byte) -128) == -127;
+
+	assert Boo.test_u16((int) 1) == (int) 2;
+	assert Boo.test_i16((short) -1) == (short) 0;
+	assert Boo.test_u32((long) 1) == (long) 2;
+	assert Boo.test_i32((int) -1) == (int) 0;
+	assert Boo.test_u64((long) 1) == (long) 2;
+	assert Boo.test_i64((long) -1) == (long) 0;
+	assert Math.abs(Boo.test_f32((float) 1.1) - (float) 2.1) < 1e-12;
+	assert Math.abs(Boo.test_f64((double) -1.0)) < 1e-12;
+    }
+
+    private static class MyThreadSafeObserver implements ThreadSafeObserver {
+	private final Object lock = new Object();
+	private boolean called = false;
+	@Override
+	public void onStateChanged(int x, String s) {
+	    assert x == 42;
+	    assert s.equals("15");
+	    synchronized (lock) {
+		called = true;
+	    }
+	}
+
+	public boolean isCalled() {
+	    boolean ret;
+	    synchronized (lock) {
+		ret = called;
+	    }
+	    return ret;
+	}
+    }
+
+    private static void testMultiThreadCallback() throws InterruptedException {
+	MyThreadSafeObserver obs = new MyThreadSafeObserver();
+	TestMultiThreadCallback.f(obs);
+	Thread.sleep(4000);
+	assert obs.isCalled();
+    }
+
+    private static void testPrematureGc() throws InterruptedException {
+	Thread thr = new Thread(){
+		public void run() {
+		    System.out.println("testPrematureGc another thread");
+		    int timemout = 5000;
+		    int count = 10;
+		    try {
+			for (int i = 0; i < count; ++i) {
+			    Thread.sleep(timemout / count);
+			    System.out.println("testPrematureGc call gc");
+			    System.gc();
+			}
+		    } catch (InterruptedException ex) {
+			System.out.println("EXCEPTION: " + ex);
+		    }
+		}
+	    };
+	thr.start();
+	DropCounter dc = new DropCounter();
+	LongOperation.do_it(dc);
+	thr.join();
     }
 }

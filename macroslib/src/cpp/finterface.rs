@@ -3,26 +3,54 @@ use std::io::Write;
 use petgraph::Direction;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
-use syn::spanned::Spanned;
+use syn::{spanned::Spanned, Type};
 
 use crate::{
     cpp::{
-        cpp_code, fmt_write_err_map, map_type, map_write_err, rust_generate_args_with_types,
-        CppContext, CppForeignMethodSignature, CppForeignTypeInfo,
+        cpp_code, map_type, rust_generate_args_with_types, CppContext, CppForeignMethodSignature,
+        CppForeignTypeInfo,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     source_registry::SourceId,
     typemap::{
-        ast::DisplayToTokens, ty::RustType, utils::rust_to_foreign_convert_method_inputs,
+        ast::{parse_ty_with_given_span, DisplayToTokens, TypeName},
+        ty::RustType,
+        utils::rust_to_foreign_convert_method_inputs,
         ForeignTypeInfo, FROM_VAR_TEMPLATE,
     },
     types::ForeignInterface,
     WRITE_TO_MEM_FAILED_MSG,
 };
 
-pub(in crate::cpp) fn rust_code_generate_interface(
+pub(in crate::cpp) fn generate_interface(
+    ctx: &mut CppContext,
+    interface: &ForeignInterface,
+) -> Result<()> {
+    let mut f_methods = find_suitable_ftypes_for_interace_methods(ctx, interface)?;
+    let req_includes = cpp_code::cpp_list_required_includes(&mut f_methods);
+    generate_for_interface(ctx, interface, &req_includes, &f_methods)
+        .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;
+    rust_code_generate_interface(ctx, interface, &f_methods)?;
+
+    let c_struct_name = format!("C_{}", interface.name);
+    let rust_struct_pointer = format!("*const {}", c_struct_name);
+    let rust_ty: Type = parse_ty_with_given_span(&rust_struct_pointer, interface.name.span())
+        .map_err(|err| DiagnosticError::from_syn_err(interface.src_id, err))?;
+    let c_struct_pointer = format!("const struct {} * const", c_struct_name);
+
+    let rust_ty = ctx.conv_map.find_or_alloc_rust_type_no_src_id(&rust_ty);
+
+    ctx.conv_map.add_foreign(
+        rust_ty,
+        TypeName::new(c_struct_pointer, interface.src_id_span()),
+    )?;
+
+    Ok(())
+}
+
+fn rust_code_generate_interface(
     ctx: &mut CppContext,
     interface: &ForeignInterface,
     methods_sign: &[CppForeignMethodSignature],
@@ -45,11 +73,10 @@ pub struct {struct_with_funcs} {{
     );
     for (method, f_method) in interface.items.iter().zip(methods_sign) {
         let args = rust_generate_args_with_types(f_method);
-        write!(
+        writeln!(
             &mut code,
             r#"
-{method_name}: extern "C" fn({args}_: *const ::std::os::raw::c_void) -> {ret_type},
-"#,
+{method_name}: extern "C" fn({args}_: *const ::std::os::raw::c_void) -> {ret_type},"#,
             method_name = method.name,
             args = args,
             ret_type = DisplayToTokens(&f_method.output.base.correspoding_rust_type.ty),
@@ -57,13 +84,11 @@ pub struct {struct_with_funcs} {{
         .unwrap();
     }
 
-    write!(
-        &mut code,
+    code.push_str(
         r#"
-}}
-"#
-    )
-    .unwrap();
+}
+"#,
+    );
 
     ctx.rust_code.push(
         syn::parse_str(&code)
@@ -71,7 +96,7 @@ pub struct {struct_with_funcs} {{
     );
 
     code.clear();
-    write!(
+    writeln!(
         &mut code,
         r#"
 impl SwigFrom<*const {struct_with_funcs}> for Box<{trait_name}> {{
@@ -79,8 +104,7 @@ impl SwigFrom<*const {struct_with_funcs}> for Box<{trait_name}> {{
        let this: &{struct_with_funcs} = unsafe {{ this.as_ref().unwrap() }};
        Box::new(this.clone())
     }}
-}}
-"#,
+}}"#,
         struct_with_funcs = struct_with_funcs,
         trait_name = DisplayToTokens(&interface.self_type),
     )
@@ -91,12 +115,14 @@ impl SwigFrom<*const {struct_with_funcs}> for Box<{trait_name}> {{
 
     code.clear();
 
-    write!(
+    writeln!(
         &mut code,
         r#"
-impl {trait_name} for {struct_with_funcs} {{
-"#,
-        trait_name = DisplayToTokens(&interface.self_type),
+/// It totally depends on С++ implementation
+/// let's assume it safe
+unsafe impl Send for {struct_with_funcs} {{}}
+impl {trait_name} for {struct_with_funcs} {{"#,
+        trait_name = DisplayToTokens(&interface.self_type.bounds[0]),
         struct_with_funcs = struct_with_funcs,
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);
@@ -179,7 +205,7 @@ impl {trait_name} for {struct_with_funcs} {{
             "{}",
             DisplayToTokens(&f_method.output.base.correspoding_rust_type.ty)
         );
-        write!(
+        writeln!(
             &mut code,
             r#"
     #[allow(unused_mut)]
@@ -188,8 +214,7 @@ impl {trait_name} for {struct_with_funcs} {{
         let ret: {ret_type} = (self.{method_name})({args}self.opaque);
 {output_conv}
         ret
-    }}
-"#,
+    }}"#,
             func_name = func_name,
             convert_args = convert_args,
             method_name = method.name,
@@ -205,23 +230,20 @@ impl {trait_name} for {struct_with_funcs} {{
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
-    write!(
-        &mut code,
+    code.push_str(
         r#"
-}}
-"#
-    )
-    .unwrap();
+}
+"#,
+    );
 
-    write!(
+    writeln!(
         &mut code,
         r#"
 impl Drop for {struct_with_funcs} {{
     fn drop(&mut self) {{
        (self.{struct_with_funcs}_deref)(self.opaque);
     }}
-}}
-"#,
+}}"#,
         struct_with_funcs = struct_with_funcs
     )
     .unwrap();
@@ -234,7 +256,7 @@ impl Drop for {struct_with_funcs} {{
     Ok(())
 }
 
-pub(in crate::cpp) fn find_suitable_ftypes_for_interace_methods(
+fn find_suitable_ftypes_for_interace_methods(
     ctx: &mut CppContext,
     interace: &ForeignInterface,
 ) -> Result<Vec<CppForeignMethodSignature>> {
@@ -287,30 +309,29 @@ pub(in crate::cpp) fn generate_for_interface(
     interface: &ForeignInterface,
     req_includes: &[SmolStr],
     f_methods: &[CppForeignMethodSignature],
-) -> std::result::Result<(), String> {
+) -> std::result::Result<(), DiagnosticError> {
     use std::fmt::Write;
 
     let c_interface_struct_header = format!("c_{}.h", interface.name);
     let c_path = ctx.cfg.output_dir.join(&c_interface_struct_header);
-    let mut file_c = FileWriteCache::new(&c_path);
+    let mut file_c = FileWriteCache::new(&c_path, ctx.generated_foreign_files);
     let cpp_path = ctx.cfg.output_dir.join(format!("{}.hpp", interface.name));
-    let mut file_cpp = FileWriteCache::new(&cpp_path);
+    let mut file_cpp = FileWriteCache::new(&cpp_path, ctx.generated_foreign_files);
     let interface_comments = cpp_code::doc_comments_to_c_comments(&interface.doc_comments, true);
 
-    write!(
+    writeln!(
         file_c,
-        r#"// Automaticaly generated by rust_swig
+        r#"// Automatically generated by rust_swig
 #pragma once
 {doc_comments}
 struct C_{interface_name} {{
     void *opaque;
     //! call by Rust side when callback not need anymore
-    void (*C_{interface_name}_deref)(void *opaque);
-    "#,
+    void (*C_{interface_name}_deref)(void *opaque);"#,
         interface_name = interface.name,
         doc_comments = interface_comments
     )
-    .map_err(&map_write_err)?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
     let mut cpp_virtual_methods = String::new();
     let mut cpp_static_reroute_methods = format!(
@@ -351,12 +372,10 @@ struct C_{interface_name} {{
             } else {
                 (c_ret_type.clone(), String::new())
             };
-        write!(
+        writeln!(
             file_c,
-            r#"
-{doc_comments}
-    {c_ret_type} (*{method_name})({single_args_with_types}void *opaque);
-"#,
+            r#"{doc_comments}
+    {c_ret_type} (*{method_name})({single_args_with_types}void *opaque);"#,
             method_name = method.name,
             doc_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false),
             single_args_with_types = cpp_code::c_generate_args_with_types(
@@ -366,14 +385,12 @@ struct C_{interface_name} {{
             ),
             c_ret_type = c_ret_type,
         )
-        .map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
 
-        write!(
+        writeln!(
             &mut cpp_virtual_methods,
-            r#"
-{doc_comments}
-    virtual {cpp_ret_type} {method_name}({single_args_with_types}) = 0;
-"#,
+            r#"{doc_comments}
+    virtual {cpp_ret_type} {method_name}({single_args_with_types}) noexcept = 0;"#,
             method_name = method.name,
             doc_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false),
             single_args_with_types =
@@ -383,7 +400,7 @@ struct C_{interface_name} {{
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
         let (conv_args_code, call_input_args) =
-            cpp_code::convert_args(f_method, known_names, method.arg_names_without_self());
+            cpp_code::convert_args(f_method, &mut known_names, method.arg_names_without_self())?;
 
         write!(
             &mut cpp_static_reroute_methods,
@@ -408,56 +425,54 @@ struct C_{interface_name} {{
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
         if c_ret_type == "void" {
-            write!(
+            writeln!(
                 &mut cpp_static_reroute_methods,
                 r#"
         {p}->{method_name}({input_args});
-    }}
-"#,
+    }}"#,
                 p = interface_ptr,
                 method_name = method.name,
                 input_args = call_input_args,
             )
-            .map_err(&map_write_err)?;
+            .expect(WRITE_TO_MEM_FAILED_MSG);
         } else {
-            write!(
+            writeln!(
                 &mut cpp_static_reroute_methods,
                 r#"
         auto {ret} = {p}->{method_name}({input_args});
         return {cpp_out_conv};
-    }}
-"#,
+    }}"#,
                 ret = ret_name,
                 method_name = method.name,
                 input_args = call_input_args,
                 cpp_out_conv = cpp_out_conv,
                 p = interface_ptr,
             )
-            .map_err(&map_write_err)?;
+            .expect(WRITE_TO_MEM_FAILED_MSG);
         }
         writeln!(
             &mut cpp_fill_c_interface_struct,
             "        ret.{method_name} = c_{method_name};",
             method_name = method.name,
         )
-        .map_err(&map_write_err)?;
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
-    write!(
-        file_c,
-        r#"
-}};
-"#
-    )
-    .map_err(map_write_err)?;
+    file_c
+        .write_all(
+            br#"
+};
+"#,
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
 
     let mut includes = String::new();
     for inc in req_includes {
-        writeln!(&mut includes, r#"#include {}"#, inc).map_err(fmt_write_err_map)?;
+        writeln!(&mut includes, r#"#include {}"#, inc).expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
-    write!(
+    writeln!(
         file_cpp,
-        r##"// Automaticaly generated by rust_swig
+        r##"// Automatically generated by rust_swig
 #pragma once
 
 #include <cassert>
@@ -483,8 +498,7 @@ public:
 private:
 {static_reroute_methods}
 }};
-}} // namespace {namespace_name}
-"##,
+}} // namespace {namespace_name}"##,
         interface_name = interface.name,
         includes = includes,
         doc_comments = interface_comments,
@@ -494,12 +508,14 @@ private:
         cpp_fill_c_interface_struct = cpp_fill_c_interface_struct,
         namespace_name = ctx.cfg.namespace_name,
     )
-    .map_err(&map_write_err)?;
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
-    file_c.update_file_if_necessary().map_err(&map_write_err)?;
+    file_c
+        .update_file_if_necessary()
+        .map_err(DiagnosticError::map_any_err_to_our_err)?;
     file_cpp
         .update_file_if_necessary()
-        .map_err(&map_write_err)?;
+        .map_err(DiagnosticError::map_any_err_to_our_err)?;
 
     Ok(())
 }

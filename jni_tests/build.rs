@@ -1,31 +1,43 @@
 use std::{
-    env,
+    env, fs,
     path::{Path, PathBuf},
 };
 
-use rust_swig::{JavaConfig, LanguageConfig};
+use rust_swig::{JavaConfig, JavaReachabilityFence, LanguageConfig};
 
 fn main() {
     env_logger::init();
 
     let out_dir = env::var("OUT_DIR").unwrap();
+    let jni_c_headers_rs = Path::new(&out_dir).join("jni_c_header.rs");
+    gen_jni_bindings(&jni_c_headers_rs);
+    let have_java_9 = fs::read_to_string(&jni_c_headers_rs)
+        .unwrap()
+        .contains("JNI_VERSION_9");
 
-    gen_jni_bindings(&out_dir);
+    let java_cfg = JavaConfig::new(
+        Path::new("java").join("com").join("example").join("rust"),
+        "com.example.rust".into(),
+    )
+    .use_reachability_fence(if have_java_9 {
+        JavaReachabilityFence::Std
+    } else {
+        JavaReachabilityFence::GenerateFence(8)
+    });
 
     let in_src = Path::new("src").join("java_glue.rs.in");
     let out_src = Path::new(&out_dir).join("java_glue.rs");
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(JavaConfig::new(
-        Path::new("java").join("com").join("example").join("rust"),
-        "com.example.rust".into(),
-    )))
-    .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"));
+    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(java_cfg))
+        .rustfmt_bindings(true)
+        .remove_not_generated_files_from_output_directory(true)
+        .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"));
     swig_gen.expand("rust_swig_test_jni", &in_src, &out_src);
 
     println!("cargo:rerun-if-changed={}", in_src.display());
     println!("cargo:rerun-if-changed=src/chrono-include.rs");
 }
 
-fn gen_jni_bindings(out_dir: &str) {
+fn gen_jni_bindings(jni_c_headers_rs: &Path) {
     let java_home = env::var("JAVA_HOME").expect("JAVA_HOME env variable not settted");
 
     let java_include_dir = Path::new(&java_home).join("include");
@@ -46,12 +58,7 @@ fn gen_jni_bindings(out_dir: &str) {
         search_file_in_directory(&include_dirs[..], "jni.h").expect("Can not find jni.h");
     println!("cargo:rerun-if-changed={}", jni_h_path.display());
 
-    gen_binding(
-        &include_dirs[..],
-        &jni_h_path,
-        &Path::new(out_dir).join("jni_c_header.rs"),
-    )
-    .expect("gen_binding failed");
+    gen_binding(&include_dirs[..], &jni_h_path, jni_c_headers_rs).expect("gen_binding failed");
 }
 
 fn search_file_in_directory<P: AsRef<Path>>(dirs: &[P], file: &str) -> Result<PathBuf, ()> {

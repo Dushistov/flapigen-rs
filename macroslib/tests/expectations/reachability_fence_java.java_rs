@@ -1,0 +1,7 @@
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_JNIReachabilityFence_reachabilityFence1(
+    _env: *mut JNIEnv,
+    _: jclass,
+    _: jobject,
+) {
+}"##;
