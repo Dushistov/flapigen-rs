@@ -148,7 +148,11 @@ def test_python(is_windows, test_cfg):
         cmd = ["cargo", "build", "-v", "--package", "rust_swig_test_python"]
         if cfg == RELEASE:
             cmd.append("--release")
-        subprocess.check_call(cmd, shell = False)
+        env = os.environ.copy()
+        if sys.platform == "darwin":
+            # See https://github.com/dgrunwald/rust-cpython/issues/87
+            env["RUST_FLAGS"] = env["RUST_FLAGS"] + "-C link-arg=-undefined -C link-arg=dynamic_lookup"
+        subprocess.check_call(cmd, shell = False, env = env)
         target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
         if is_windows:
             shutil.copyfile(os.path.join(target_dir, "rust_swig_test_python.dll"), "python_tests/python/rust_swig_test_python.pyd")
@@ -158,7 +162,8 @@ def test_python(is_windows, test_cfg):
                 # If we choose 32, we must also choose specific, minor python version.
                 subprocess.check_call(["py", "-3.7-32", "main.py"], cwd = "python_tests/python")
         else:
-            shutil.copyfile(os.path.join(target_dir, "librust_swig_test_python.so"), "python_tests/python/rust_swig_test_python.so")
+            lib_name = "librust_swig_test_python.dylib" if sys.platform == "darwin" else "librust_swig_test_python.so"
+            shutil.copyfile(os.path.join(target_dir, lib_name), "python_tests/python/rust_swig_test_python.so")
             subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
 
 
