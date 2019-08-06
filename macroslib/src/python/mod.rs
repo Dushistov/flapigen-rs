@@ -3,7 +3,11 @@ use crate::typemap::ty::RustType;
 use crate::{
     error::Result,
     source_registry::SourceId,
-    typemap::{ast::GenericTypeConv, TypeConvCode},
+    typemap::{
+        ast::{GenericTypeConv, TypeName},
+        ty::ForeignTypeS,
+        TypeConvCode,
+    },
     types::{
         ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
         MethodVariant, SelfTypeVariant,
@@ -18,6 +22,8 @@ use std::ops::Deref;
 use syn::parse_quote;
 use syn::{Ident, Type};
 
+const ENUM_TRAIT_NAME: &str = "SwigForeignEnum";
+
 impl LanguageGenerator for PythonConfig {
     fn expand_items(
         &self,
@@ -25,6 +31,7 @@ impl LanguageGenerator for PythonConfig {
         _pointer_target_width: usize,
         _code: &[SourceCode],
         items: Vec<ItemToExpand>,
+        _remove_not_generated_files: bool,
     ) -> Result<Vec<TokenStream>> {
         for item in &items {
             if let ItemToExpand::Class(ref fclass) = item {
@@ -133,7 +140,26 @@ impl PythonConfig {
                 }
             }
         };
-        conv_map.register_exported_enum(enum_info);
+        let enum_ti: Type =
+            ast::parse_ty_with_given_span(&enum_name.to_string(), enum_info.name.span())
+                .map_err(|err| DiagnosticError::from_syn_err(enum_info.src_id, err))?;
+        conv_map.find_or_alloc_rust_type_that_implements(
+            &enum_ti,
+            &[ENUM_TRAIT_NAME],
+            enum_info.src_id,
+        );
+        let enum_ftype = ForeignTypeS {
+            name: TypeName::new(
+                enum_info.name.to_string(),
+                (enum_info.src_id, enum_info.name.span()),
+            ),
+            provides_by_module: vec![],
+            into_from_rust: None,
+            from_into_rust: None,
+            name_prefix: None,
+        };
+        conv_map.alloc_foreign_type(enum_ftype)?;
+
         let module_initialization_code = quote! {
             {
                 m.add_class::<#wrapper_mod_name::#enum_name>(py)?;
@@ -396,8 +422,14 @@ fn generate_conversion_for_argument(
         reference_allowed,
     )? {
         Ok((ty, conversion))
-    } else if let Some(enum_info) = conv_map.is_this_exported_enum(&rust_type) {
-        let enum_py_mod: Ident = parse(&py_wrapper_mod_name(&enum_info.name.to_string()), src_id)?;
+    } else if rust_type
+        .implements
+        .contains_path(&parse(ENUM_TRAIT_NAME, src_id)?)
+    {
+        let enum_py_mod: Ident = parse(
+            &py_wrapper_mod_name(&rust_type.normalized_name.to_string()),
+            src_id,
+        )?;
         Ok((
             parse_type!(u32),
             quote! {
@@ -507,7 +539,10 @@ fn generate_conversion_for_return(
         src_id,
     )? {
         Ok((ty, conversion))
-    } else if conv_map.is_this_exported_enum(&rust_type).is_some() {
+    } else if rust_type
+        .implements
+        .contains_path(&parse(ENUM_TRAIT_NAME, src_id)?)
+    {
         Ok((
             parse_type!(u32),
             quote! {
@@ -764,8 +799,9 @@ fn if_exported_class_generate_return_conversion(
         get_reference_info_and_inner_type(rust_type, conv_map, src_id);
     let smart_pointer_info = smart_pointer(&rust_type_unref, conv_map, src_id);
     let class = match conv_map
-        .find_foreigner_class_with_such_self_type(&smart_pointer_info.inner_ty, false)
-    {
+        .find_foreigner_class_with_such_this_type(&smart_pointer_info.inner_ty.ty, |_, ft| {
+            ft.self_desc.as_ref().map(|x| x.self_type.clone())
+        }) {
         Some(fc) => fc.clone(),
         None => return Ok(None),
     };
@@ -778,7 +814,10 @@ fn if_exported_class_generate_return_conversion(
                "Returning a rust object into python by reference is not safe, so the clone of the object needs to be make.\
 However, `Mutex` doesn't implement `Clone`, so it can't be returned by reference."
             ));
-        } else if class.clone_derived || class.copy_derived || smart_pointer_info.pointer_type.is_shared() {
+        } else if class.clone_derived
+            || class.copy_derived
+            || smart_pointer_info.pointer_type.is_shared()
+        {
             quote! {
                 ((#rust_call).clone())
             }
@@ -934,8 +973,9 @@ fn if_exported_class_generate_argument_conversion(
         get_reference_info_and_inner_type(rust_type, conv_map, src_id);
     let smart_pointer_info = smart_pointer(&rust_type_unref, conv_map, src_id);
     let class = match conv_map
-        .find_foreigner_class_with_such_self_type(&smart_pointer_info.inner_ty, false)
-    {
+        .find_foreigner_class_with_such_this_type(&smart_pointer_info.inner_ty.ty, |_, ft| {
+            ft.self_desc.as_ref().map(|x| x.self_type.clone())
+        }) {
         Some(fc) => fc.clone(),
         None => return Ok(None),
     };
