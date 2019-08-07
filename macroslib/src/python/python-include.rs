@@ -27,3 +27,11 @@ mod swig_foreign_types_map {
     #![swig_foreigner_type = "String"]
     #![swig_rust_type = "String"]
 }
+
+fn swig_collect_error_message(error: &dyn std::error::Error) -> String {
+    if let Some(source) = error.source() {
+        format!("{}\nCaused by:\n{}", error, swig_collect_error_message(source))
+    } else {
+        error.to_string()
+    }
+}

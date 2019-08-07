@@ -621,7 +621,10 @@ fn generate_conversion_for_return(
             quote! {
                 match #rust_call {
                     Ok(ok_inner) => #inner_conversion,
-                    Err(err_inner) => return Err(cpython::PyErr::new::<super::py_error::Error, _>(py, err_inner.to_string())),
+                    Err(err_inner) => return Err(cpython::PyErr::new::<super::py_error::Error, _>(
+                        py,
+                        swig_collect_error_message(&err_inner)
+                    )),
                 }
             },
         ))
