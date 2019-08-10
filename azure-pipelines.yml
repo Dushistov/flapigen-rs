@@ -26,6 +26,15 @@ pool:
 
 
 steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.7'
+    condition: not(and(eq( variables['Agent.OS'], 'Windows_NT' ), eq( variables['platform'], 'x86' )))
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.7'
+      architecture: x86
+    condition: and(eq( variables['Agent.OS'], 'Windows_NT' ), eq( variables['platform'], 'x86' ))
   - checkout: self
     submodules: true
   - bash: |

@@ -8,6 +8,7 @@ import time
 import shutil
 
 JNI_TESTS = "jni_tests"
+PYTHON_TESTS = "python_tests"
 CPP_TESTS = "cpp_tests"
 ANDROID_TESTS = "android-example"
 UNIT_TESTS = "unit_tests"
@@ -182,6 +183,31 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
                                        "./c++-rust-swig-test"], cwd = str(cur_cmake_build_dir))
 
 @show_timing
+def test_python(is_windows, test_cfg):
+    for cfg in test_cfg:
+        cmd = ["cargo", "build", "-v", "--package", "rust_swig_test_python"]
+        if cfg == RELEASE:
+            cmd.append("--release")
+        env = os.environ.copy()
+        if sys.platform == "darwin":
+            # See https://github.com/dgrunwald/rust-cpython/issues/87
+            env["RUSTFLAGS"] = "-C link-arg=-undefined -C link-arg=dynamic_lookup"
+        subprocess.check_call(cmd, shell = False, env = env)
+        target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
+        if is_windows:
+            shutil.copyfile(os.path.join(target_dir, "rust_swig_test_python.dll"), "python_tests/python/rust_swig_test_python.pyd")
+            if os.getenv('platform') == "x64":
+                subprocess.check_call(["py", "-3", "main.py"], cwd = "python_tests/python")
+            else:
+                # If we choose 32, we must also choose specific, minor python version.
+                subprocess.check_call(["py", "-3.7-32", "main.py"], cwd = "python_tests/python")
+        else:
+            lib_name = "librust_swig_test_python.dylib" if sys.platform == "darwin" else "librust_swig_test_python.so"
+            shutil.copyfile(os.path.join(target_dir, lib_name), "python_tests/python/rust_swig_test_python.so")
+            subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
+
+
+@show_timing
 def build_cargo_docs():
     print("build docs")
     subprocess.check_call(["cargo", "doc", "-v", "--package", "rust_swig"])
@@ -221,7 +247,7 @@ def main():
     sys.stdout.flush()
 
     test_cfg = set([RELEASE, DEBUG])
-    test_set = set([JNI_TESTS, CPP_TESTS, ANDROID_TESTS, UNIT_TESTS, DOC_TESTS])
+    test_set = set([JNI_TESTS, CPP_TESTS, ANDROID_TESTS, UNIT_TESTS, DOC_TESTS, PYTHON_TESTS])
     for arg in sys.argv[1:]:
         if arg == "--skip-android-tests":
             test_set.remove(ANDROID_TESTS)
@@ -231,6 +257,8 @@ def main():
             test_set = set([CPP_TESTS])
         elif arg == "--skip-java-tests":
             test_set.remove(JNI_TESTS)
+        elif arg == "--skip-python-tests":
+            test_set.remove(PYTHON_TESTS)
         elif arg == "--android-only-tests":
             test_set = set([ANDROID_TESTS])
         elif arg == "--rust-unit-tests-only":
@@ -272,6 +300,9 @@ def main():
 
     if ANDROID_TESTS in test_set:
         build_for_android(is_windows)
+
+    if PYTHON_TESTS in test_set:
+        test_python(is_windows, test_cfg)
 
 if __name__ == "__main__":
     main()

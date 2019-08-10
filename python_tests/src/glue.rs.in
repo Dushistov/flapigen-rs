@@ -1,0 +1,278 @@
+use std::fmt;
+use std::sync::{Arc, Mutex};
+
+pub enum TestEnum {
+    A,
+    B,
+}
+
+foreign_enum!(
+    /// Test enum with A and B.
+    enum TestEnum {
+        A = TestEnum::A,
+        B = TestEnum::B,
+    }
+);
+
+pub struct TestStaticClass {
+}
+
+impl TestStaticClass {
+    pub fn hello() -> String {
+        "Hello from rust".to_owned()
+    }
+
+    pub fn format_number(i: i32) -> String{
+        format!("format_number: {}", i)
+    }
+
+    pub fn format_str(s: &str) -> String {
+        format!("format_str: {}", s)
+    }
+
+    pub fn format_string(s: String) -> String {
+        format!("format_string: {}", s)
+    }
+
+    pub fn reverse_enum(e: TestEnum) -> TestEnum {
+        match e {
+            TestEnum::A => TestEnum::B,
+            TestEnum::B => TestEnum::A,
+        }
+    }
+
+    pub fn call_test_class_format(test_object: &TestClass) -> String {
+        test_object.format()
+    }
+
+    pub fn add(a: f32, b: f32) -> f32 {
+        a + b
+    }
+
+    pub fn increment_vec(v: Vec<f32>) -> Vec<f32> {
+        v.into_iter().map(|i| i + 1.0).collect()
+    }
+
+    pub fn return_slice(v: &[f32]) -> &[f32] {
+        v
+    }
+
+    pub fn count_slice_of_objects(objs: &[TestClass]) -> usize {
+        objs.len()
+    }
+
+    pub fn test_result_ok() -> Result<i32, TestError> {
+        Ok(0)
+    }
+
+    pub fn test_result_err() -> Result<i32, TestError> {
+        Err(TestError::new())
+    }
+
+    pub fn get_tuple() -> (i32, String) {
+        (0, "0".to_owned())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TestError {
+}
+
+impl TestError {
+    pub fn new() -> TestError {
+        TestError {}
+    }
+}
+
+impl fmt::Display for TestError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "TestError struct!")
+    }
+}
+
+impl std::error::Error for TestError {}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TestClass {
+    i: i32,
+}
+
+impl TestClass {
+    pub fn new() -> TestClass {
+        TestClass {
+            i: 0
+        }
+    }
+
+    pub fn increment(&mut self) {
+        self.i += 1;
+    }
+
+    pub fn add(&mut self, i: i32) {
+        self.i += i;
+    }
+
+    pub fn add_ref(&mut self, i: &i32) {
+        self.i += *i;
+    }
+
+    pub fn maybe_add(&mut self, i: Option<i32>) -> Option<i32> {
+        if let Some(i) = i {
+            self.i += i;
+            Some(self.i)
+        } else {
+            None
+        }
+    }
+
+    pub fn format(&self) -> String {
+        format!("TestClass::i: {}", self.i)
+    }
+
+    pub fn get(&self) -> i32 {
+        self.i
+    }
+
+    pub fn get_ref(&self) -> &i32 {
+        &self.i
+    }
+}
+
+foreigner_class!(
+    /// Test class containing static methods only.
+    class TestStaticClass {
+        /// Documentation for `TestStaticClass::hello`()
+        static_method TestStaticClass::hello() -> String;
+        /// Two line documentation for `TestStaticClass::format_number`()
+        /// :param i32 i: number to format
+        static_method TestStaticClass::format_number(i: i32) -> String;
+        static_method TestStaticClass::add(a: f32, b: f32) -> f32;
+        static_method TestStaticClass::format_str(s: &str) -> String;
+        static_method TestStaticClass::format_string(s: String) -> String;
+        static_method TestStaticClass::call_test_class_format(test_object: &TestClass) -> String;
+        static_method TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
+        static_method TestStaticClass::increment_vec(v: Vec<f32>) -> Vec<f32>;
+        static_method TestStaticClass::return_slice(v: &[f32]) -> &[f32];
+        static_method TestStaticClass::count_slice_of_objects(objs: &[TestClass]) -> usize;
+        static_method TestStaticClass::test_result_ok() -> Result<i32, TestError>;
+        static_method TestStaticClass::test_result_err() -> Result<i32, TestError>;
+        static_method TestStaticClass::get_tuple() -> (i32, String);
+    }
+);
+
+foreigner_class!(
+    #[derive(Copy)]
+    /// Test class containing standard methods.
+    class TestClass {
+        self_type TestClass;
+        /// Documentation for constructor
+        constructor TestClass::new() -> TestClass;
+        /// increment method documentation
+        method TestClass::increment(&mut self);
+        method TestClass::format(&self) -> String;
+        method TestClass::add(&mut self, i: i32);
+        method TestClass::add_ref(&mut self, i: &i32);
+        method TestClass::get(&self) -> i32;
+        method TestClass::get_ref(&self) -> &i32;
+        method TestClass::maybe_add(&mut self, i: Option<i32>) -> Option<i32>;
+        method TestClass::clone(&self) -> TestClass;
+        method TestClass::eq(&self, other: &TestClass) -> bool;
+    }
+);
+
+pub struct TestArc {
+    i: i32,
+}
+
+impl TestArc {
+    pub fn new() -> Arc<TestArc> {
+        Arc::new(TestArc{
+            i: 0
+        })
+    }
+
+    pub fn to_string(&self) -> String {
+        self.i.to_string()
+    }
+
+    pub fn to_string_arc(this: Arc<TestArc>) -> String {
+        this.i.to_string()
+    }
+
+    pub fn to_string_ref_arc(this: &Arc<TestArc>) -> String {
+        this.i.to_string()
+    }
+}
+
+foreigner_class!(
+    class TestArc {
+        self_type TestArc;
+        constructor TestArc::new() -> Arc<TestArc>;
+        method TestArc::to_string(&self) -> String;
+        static_method TestArc::to_string_arc(Arc<TestArc>) -> String;
+        static_method TestArc::to_string_ref_arc(&Arc<TestArc>) -> String;
+    }
+);
+
+pub struct TestArcMutex {
+    i: i32,
+}
+
+impl TestArcMutex {
+    pub fn new() -> Arc<Mutex<TestArcMutex>> {
+        Arc::new(Mutex::new(TestArcMutex{
+            i: 0
+        }))
+    }
+
+    pub fn to_string(&self) -> String {
+        self.i.to_string()
+    }
+
+    pub fn inc(&mut self) {
+        self.i += 1;
+    }
+
+    pub fn to_string_arc(this: Arc<Mutex<TestArcMutex>>) -> String {
+        this.lock().unwrap().i.to_string()
+    }
+
+    pub fn to_string_ref_arc(this: &Arc<Mutex<TestArcMutex>>) -> String {
+        this.lock().unwrap().i.to_string()
+    }
+}
+
+foreigner_class!(
+    class TestArcMutex {
+        self_type TestArcMutex;
+        constructor TestArcMutex::new() -> Arc<Mutex<TestArcMutex>>;
+        method TestArcMutex::to_string(&self) -> String;
+        method TestArcMutex::inc(&mut self);
+        static_method TestArcMutex::to_string_arc(Arc<Mutex<TestArcMutex>>) -> String;
+        static_method TestArcMutex::to_string_ref_arc(&Arc<Mutex<TestArcMutex>>) -> String;
+    }
+);
+
+pub struct TestBox {
+    i: i32,
+}
+
+impl TestBox {
+    pub fn new() -> Box<TestBox> {
+        Box::new(TestBox{
+            i: 0
+        })
+    }
+
+    pub fn to_string(&self) -> String {
+        self.i.to_string()
+    }
+}
+
+foreigner_class!(
+    class TestBox {
+        self_type TestBox;
+        constructor TestBox::new() -> Box<TestBox>;
+        method TestBox::to_string(&self) -> String;
+    }
+);

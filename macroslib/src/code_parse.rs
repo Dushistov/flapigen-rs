@@ -43,6 +43,12 @@ pub(crate) fn parse_foreigner_class(
             class.0.src_id = src_id;
             Ok(class.0)
         }
+        LanguageConfig::PythonConfig(_) => {
+            let mut class: PythonClass = 
+                syn::parse2(tokens).map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+            class.0.src_id = src_id;
+            Ok(class.0)
+        }
     }
 }
 
@@ -79,10 +85,19 @@ impl Parse for JavaClass {
     }
 }
 
+struct PythonClass(ForeignerClassInfo);
+
+impl Parse for PythonClass {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(PythonClass(do_parse_foreigner_class(Language::Python, input)?))
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Language {
     Cpp,
     Java,
+    Python,
 }
 
 mod kw {

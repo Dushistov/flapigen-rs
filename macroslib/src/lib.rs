@@ -24,6 +24,7 @@ mod error;
 pub mod file_cache;
 mod java_jni;
 mod namegen;
+mod python;
 mod source_registry;
 mod str_replace;
 mod typemap;
@@ -69,6 +70,7 @@ pub fn target_pointer_width_from_env() -> Option<usize> {
 pub enum LanguageConfig {
     JavaConfig(JavaConfig),
     CppConfig(CppConfig),
+    PythonConfig(PythonConfig),
 }
 
 /// Configuration for Java binding generation
@@ -275,6 +277,21 @@ impl CppConfig {
     }
 }
 
+/// Configuration for Java binding generation
+pub struct PythonConfig {
+    module_name: String,
+}
+
+impl PythonConfig {
+    /// Create `PythonConfig`
+    /// # Arguments
+    pub fn new(module_name: String) -> PythonConfig {
+        PythonConfig {
+            module_name,
+        }
+    }
+}
+
 /// `Generator` is a main point of `rust_swig`.
 /// It expands rust macroses and generates not rust code.
 /// It designed to use inside `build.rs`.
@@ -355,6 +372,12 @@ impl Generator {
                     id_of_code: "rust_slice_tmpl.hpp".into(),
                     code: include_str!("cpp/rust_slice_tmpl.hpp").into(),
                 });
+            }
+            LanguageConfig::PythonConfig(..) => {
+                conv_map_source.push(src_reg.register(SourceCode {
+                    id_of_code: "python-include.rs".into(),
+                    code: include_str!("python/python-include.rs").into(),
+                }));
             }
         }
         Generator {
@@ -573,6 +596,7 @@ impl Generator {
         match cfg {
             LanguageConfig::JavaConfig(ref java_cfg) => java_cfg,
             LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,
+            LanguageConfig::PythonConfig(ref python_cfg) => python_cfg,
         }
     }
 }
