@@ -1,5 +1,6 @@
 apply plugin: 'com.android.application'
 
+def buildType
 
 android {
     compileSdkVersion 28
@@ -21,7 +22,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildType = 'debug'
+        }
+        
         release {
+            buildType = 'release'
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -47,10 +53,9 @@ def archTriplets = [
     'arm64': 'aarch64-linux-android',
 ]
 
-// TODO: only pass --release if buildType is release
 archTriplets.each { arch, target ->
     // execute cargo metadata and get path to target directory
-    tasks.create(name: "cargo-output-dir-${arch}", description: "Get cargo metadata") {
+    tasks.create(name: "cargo-output-dir-${arch}-${buildType}", description: "Get cargo metadata") {
         new ByteArrayOutputStream().withStream { os ->
             exec {
                 commandLine 'cargo', 'metadata', '--format-version', '1'
@@ -65,35 +70,40 @@ archTriplets.each { arch, target ->
         }
     }
     // Build with cargo
-    tasks.create(name: "cargo-build-${arch}", type: Exec, description: "Building core for ${arch}", dependsOn: "cargo-output-dir-${arch}") {
+    tasks.create(name: "cargo-build-${arch}-${buildType}", type: Exec, description: "Building core for ${arch}-${buildType}", dependsOn: "cargo-output-dir-${arch}-${buildType}") {
         workingDir rustBasePath
-        commandLine 'cargo', 'build', "--target=${target}", '--release'
+        
+        if (buildType == 'release') {
+            commandLine 'cargo', 'build', "--target=${target}", '--release'
+        } else {
+            commandLine 'cargo', 'build', "--target=${target}"
+        }
     }
     // Sync shared native dependencies
-    tasks.create(name: "sync-rust-deps-${arch}", type: Sync, dependsOn: "cargo-build-${arch}") {
-        from "${rustBasePath}/src/libs/${arch}"
+    tasks.create(name: "sync-rust-deps-${arch}-${buildType}", type: Sync, dependsOn: "cargo-build-${arch}-${buildType}") {
+        from "${rustBasePath}/src/libs/${arch}-${buildType}"
         include "*.so"
         into "src/main/libs/${arch}"
     }
     // Copy build libs into this app's libs directory
-    tasks.create(name: "rust-deploy-${arch}", type: Copy, dependsOn: "sync-rust-deps-${arch}", description: "Copy rust libs for (${arch}) to jniLibs") {
-        from "${project.ext.cargo_target_directory}/${target}/release"
+    tasks.create(name: "rust-deploy-${arch}-${buildType}", type: Copy, dependsOn: "sync-rust-deps-${arch}-${buildType}", description: "Copy rust libs for (${arch}-${buildType}) to jniLibs") {
+        from "${project.ext.cargo_target_directory}/${target}/${buildType}"
         include "*.so"
         into "src/main/libs/${arch}"
     }
 
     // Hook up tasks to execute before building java
     tasks.withType(JavaCompile) {
-        compileTask -> compileTask.dependsOn "rust-deploy-${arch}"
+        compileTask -> compileTask.dependsOn "rust-deploy-${arch}-${buildType}"
     }
-    preBuild.dependsOn "rust-deploy-${arch}"
+    preBuild.dependsOn "rust-deploy-${arch}-${buildType}"
 
     // Hook up clean tasks
-    tasks.create(name: "clean-${arch}", type: Delete, description: "Deleting built libs for ${arch}", dependsOn: "cargo-output-dir-${arch}") {
-        delete fileTree("${project.ext.cargo_target_directory}/${target}/release") {
+    tasks.create(name: "clean-${arch}-${buildType}", type: Delete, description: "Deleting built libs for ${arch}-${buildType}", dependsOn: "cargo-output-dir-${arch}-${buildType}") {
+        delete fileTree("${project.ext.cargo_target_directory}/${target}/${buildType}") {
             include '*.so'
         }
     }
-    clean.dependsOn "clean-${arch}"
+    clean.dependsOn "clean-${arch}-${buildType}"
 }
 // ANCHOR_END:cargo
