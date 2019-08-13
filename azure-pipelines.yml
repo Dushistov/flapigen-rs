@@ -84,8 +84,8 @@ steps:
     condition: and(eq( variables['Agent.OS'], 'Windows_NT' ), eq( variables['platform'], 'x86' ))
     displayName: Install dependicies on windows 32bit
   - script: |
-      set SCCACHE_VER=0.2.9
-      curl -L https://github.com/mozilla/sccache/releases/download/0.2.9/sccache-0.2.9-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
+      set SCCACHE_VER=0.2.10
+      curl -L https://github.com/mozilla/sccache/releases/download/0.2.10/sccache-0.2.10-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
       7z x sccache.tar.gz
       7z x sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc.tar
       copy /Y sccache-%SCCACHE_VER%-x86_64-pc-windows-msvc\sccache.exe %USERPROFILE%\.cargo\bin\sccache.exe
@@ -100,7 +100,7 @@ steps:
     displayName: Setup sccache on windows
   - bash: |
       set -e
-      export SCCACHE_VER=0.2.9
+      export SCCACHE_VER=0.2.10
       curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl.tar.gz -o sccache.tar.gz
       tar -xzvf sccache.tar.gz
       cp -v sccache-$SCCACHE_VER-x86_64-unknown-linux-musl/sccache $HOME/.cargo/bin/
@@ -120,7 +120,7 @@ steps:
     displayName: Install gcc-8 if required
   - bash: |
       set -e
-      export SCCACHE_VER=0.2.9
+      export SCCACHE_VER=0.2.10
       curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-apple-darwin.tar.gz -o sccache.tar.gz
       tar -xzvf sccache.tar.gz
       cp -v sccache-$SCCACHE_VER-x86_64-apple-darwin/sccache $HOME/.cargo/bin/
