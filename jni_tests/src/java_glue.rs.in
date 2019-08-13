@@ -218,6 +218,18 @@ impl TestPathAndResult {
         }
         ret
     }
+
+    fn get_result_foo_list(generate_err: bool) -> Result<Vec<Foo>, String> {
+        if !generate_err {
+            let mut ret = Vec::new();
+            for i in 0..10 {
+                ret.push(Foo::new(i, &format!("foo arr: {}", i)));
+            }
+            Ok(ret)
+        } else {
+            Err("bad list".into())
+        }
+    }
 }
 
 //ANCHOR: foreign_code_usage
@@ -233,6 +245,7 @@ foreign_class!(class TestPathAndResult {
     private static native Boo[] do_testHandArrayReturn(long me);
 "#;
     fn TestPathAndResult::get_foo_list(&self) -> Vec<Foo>;
+    fn TestPathAndResult::get_result_foo_list(generate_err: bool) -> Result<Vec<Foo>, String>;
 });
 //ANCHOR_END: foreign_code_usage
 
