@@ -108,6 +108,7 @@ class Main {
             TestInner.Inner testInner = TestInner.getInner();
             assert testInner.name.equals("Boo Boo");
 
+	    testResult();
 	    testNumberInputOutput();
             testDoubleOverload();
 	    testContainers();
@@ -704,5 +705,24 @@ class Main {
 	DropCounter dc = new DropCounter();
 	LongOperation.do_it(dc);
 	thr.join();
+    }
+
+    private static void testResult() throws Exception {
+	for (int count = 0; count < 5; ++count) {
+	    Foo []arr = TestPathAndResult.get_result_foo_list(false);
+	    assert arr.length == 10;
+	    for (int i = 0; i < arr.length; ++i) {
+		assert arr[i].calcF(0, 0) == i;
+		assert arr[i].getName().equals(String.format("foo arr: %d", i));
+	    }
+	    boolean have_exception = false;
+	    try {
+		arr = TestPathAndResult.get_result_foo_list(true);
+	    } catch (Exception ex) {
+		System.out.println(ex);
+		have_exception = true;
+	    }
+	    assert have_exception;
+	}
     }
 }
