@@ -286,9 +286,7 @@ impl PythonConfig {
     /// Create `PythonConfig`
     /// # Arguments
     pub fn new(module_name: String) -> PythonConfig {
-        PythonConfig {
-            module_name,
-        }
+        PythonConfig { module_name }
     }
 }
 
@@ -592,7 +590,7 @@ impl Generator {
         Ok(self.conv_map.take_utils_code())
     }
 
-    fn language_generator(cfg: &LanguageConfig) -> &LanguageGenerator {
+    fn language_generator(cfg: &LanguageConfig) -> &dyn LanguageGenerator {
         match cfg {
             LanguageConfig::JavaConfig(ref java_cfg) => java_cfg,
             LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,

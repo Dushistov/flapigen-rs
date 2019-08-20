@@ -29,7 +29,7 @@ impl Foo {
     fn set_field(&mut self, v: i32) {
         self.data = v;
     }
-    fn call_me(cb: Box<SomeObserver>) {
+    fn call_me(cb: Box<dyn SomeObserver>) {
         //println!("call_me begin");
         cb.on_state_changed(2, false);
         cb.on_state_changed_without_args();
@@ -209,7 +209,7 @@ trait DummySetterGetter {
 }
 
 pub struct TestObjectLifetime<'a> {
-    data: Box<DummySetterGetter + 'a>,
+    data: Box<dyn DummySetterGetter + 'a>,
 }
 
 impl DummySetterGetter for i32 {
@@ -769,7 +769,7 @@ impl Interface for InterfaceImpl {
     }
 }
 
-fn create_interface() -> Box<Box<Interface>> {
+fn create_interface() -> Box<Box<dyn Interface>> {
     Box::new(Box::new(InterfaceImpl { base: 17 }))
 }
 

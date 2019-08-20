@@ -209,7 +209,7 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
 
 impl ForeignMethodSignature for CppForeignMethodSignature {
     type FI = CppForeignTypeInfo;
-    fn output(&self) -> &ForeignTypeInfoT {
+    fn output(&self) -> &dyn ForeignTypeInfoT {
         &self.output.base
     }
     fn input(&self) -> &[CppForeignTypeInfo] {

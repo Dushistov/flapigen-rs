@@ -656,11 +656,11 @@ trait OnEvent {
 
 #[derive(Default)]
 struct Observable {
-    observers: Vec<Box<OnEvent>>,
+    observers: Vec<Box<dyn OnEvent>>,
 }
 
 impl Observable {
-    fn subscribe(&mut self, cb: Box<OnEvent>) {
+    fn subscribe(&mut self, cb: Box<dyn OnEvent>) {
         self.observers.push(cb);
     }
     fn change(&self, x: i32, s: &str) {
@@ -735,7 +735,7 @@ foreign_class!(
 );
 
 struct FooWithLifetime<'a> {
-    data: Box<OnEvent + 'a>,
+    data: Box<dyn OnEvent + 'a>,
 }
 
 struct PrintEvent;
@@ -1021,7 +1021,7 @@ impl Default for Session {
 
 #[derive(Default)]
 struct NavigationService {
-    on_gnss_updates_cb: Vec<Box<FnMut(i32)>>,
+    on_gnss_updates_cb: Vec<Box<dyn FnMut(i32)>>,
 }
 
 impl NavigationService {
