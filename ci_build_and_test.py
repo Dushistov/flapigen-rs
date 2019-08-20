@@ -191,7 +191,7 @@ def test_python(is_windows, test_cfg):
         env = os.environ.copy()
         if sys.platform == "darwin":
             # See https://github.com/dgrunwald/rust-cpython/issues/87
-            env["RUST_FLAGS"] = env["RUST_FLAGS"] + "-C link-arg=-undefined -C link-arg=dynamic_lookup"
+            env["RUSTFLAGS"] = "-C link-arg=-undefined -C link-arg=dynamic_lookup"
         subprocess.check_call(cmd, shell = False, env = env)
         target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
         if is_windows:
