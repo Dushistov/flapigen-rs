@@ -3,7 +3,7 @@
 Tool for connecting programs or libraries written in Rust with other languages.
 Currently implemented support for `C++` and `Java`, but you can write support
 for any language of your choice. For an instruction how to integrate rust_swig with your
-project look [here](#integration-of-rust_swig-with-your-project).
+project look [here](https://dushistov.github.io/rust_swig/getting-started.html).
 
 Suppose you have the following Rust code:
 
