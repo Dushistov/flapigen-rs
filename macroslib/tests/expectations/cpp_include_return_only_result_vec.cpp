@@ -1,5 +1,7 @@
 r##"#pragma once
 
+//for assert
+#include <cassert>
 //for std::abort
 #include <cstdlib>
 //for std::move
