@@ -2,16 +2,16 @@ use std::{borrow::Cow, io::Write};
 
 use log::debug;
 use petgraph::Direction;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
-use syn::{spanned::Spanned, Type};
+use syn::{spanned::Spanned, Ident, Type};
 
 use crate::{
     cpp::{
-        c_func_name, cpp_code, map_type::map_type, CppContext, CppForeignMethodSignature,
-        CppForeignTypeInfo, MethodContext,
+        c_func_name, cpp_code, do_c_func_name, map_type::map_type, CppContext,
+        CppForeignMethodSignature, CppForeignTypeInfo, MethodContext,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
@@ -28,7 +28,7 @@ use crate::{
         TO_VAR_TYPE_TEMPLATE,
     },
     types::{ForeignerClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
-    WRITE_TO_MEM_FAILED_MSG,
+    SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::cpp) fn generate(ctx: &mut CppContext, class: &ForeignerClassInfo) -> Result<()> {
@@ -112,6 +112,7 @@ fn do_generate(
         req_includes,
         static_only,
         &c_class_type,
+        &mut c_include_f,
         &mut cpp_include_f,
     )?;
 
@@ -1015,13 +1016,14 @@ extern "C" {{
 }
 
 fn generate_cpp_header_preamble(
-    ctx: &CppContext,
+    ctx: &mut CppContext,
     class: &ForeignerClassInfo,
     tmp_class_name: &str,
     class_doc_comments: &str,
     req_includes: &[SmolStr],
     static_only: bool,
     c_class_type: &str,
+    c_include_f: &mut FileWriteCache,
     cpp_include_f: &mut FileWriteCache,
 ) -> Result<()> {
     use std::fmt::Write;
@@ -1103,42 +1105,53 @@ r#"
     }
 
     if !static_only {
-        if !class.copy_derived {
-            writeln!(
-                cpp_include_f,
-                r#"
-    {class_name}(const {class_name}&) = delete;
-    {class_name} &operator=(const {class_name}&) = delete;"#,
-                class_name = tmp_class_name
-            )
-            .expect(WRITE_TO_MEM_FAILED_MSG);
-        } else {
-            let pos = class
-                .methods
-                .iter()
-                .position(|m| {
-                    if let Some(seg) = m.rust_id.segments.last() {
-                        let seg = seg.into_value();
-                        seg.ident == "clone"
-                    } else {
-                        false
-                    }
-                })
-                .ok_or_else(|| {
-                    DiagnosticError::new(
-                        class.src_id,
-                        class.span(),
-                        format!(
+        genearte_copy_stuff(
+            ctx,
+            class,
+            c_class_type,
+            c_include_f,
+            cpp_include_f,
+            tmp_class_name,
+        )?;
+    }
+    Ok(())
+}
+
+fn genearte_copy_stuff(
+    ctx: &mut CppContext,
+    class: &ForeignerClassInfo,
+    c_class_type: &str,
+    c_include_f: &mut FileWriteCache,
+    cpp_include_f: &mut FileWriteCache,
+    tmp_class_name: &str,
+) -> Result<()> {
+    if class.copy_derived {
+        let pos = class
+            .methods
+            .iter()
+            .position(|m| {
+                if let Some(seg) = m.rust_id.segments.last() {
+                    let seg = seg.into_value();
+                    seg.ident == "clone"
+                } else {
+                    false
+                }
+            })
+            .ok_or_else(|| {
+                DiagnosticError::new(
+                    class.src_id,
+                    class.span(),
+                    format!(
                         "Class {} (namespace {}) has derived Copy attribute, but no clone method",
                         class.name, ctx.cfg.namespace_name,
                     ),
-                    )
-                })?;
-            let c_clone_func = c_func_name(class, &class.methods[pos]);
+                )
+            })?;
+        let c_clone_func = c_func_name(class, &class.methods[pos]);
 
-            writeln!(
-                cpp_include_f,
-                r#"
+        writeln!(
+            cpp_include_f,
+            r#"
     {class_name}(const {class_name}& o) noexcept {{
         static_assert(OWN_DATA, "copy possible only if class own data");
 
@@ -1160,11 +1173,93 @@ r#"
         }}
         return *this;
     }}"#,
-                c_clone_func = c_clone_func,
-                class_name = tmp_class_name
-            )
-            .expect(WRITE_TO_MEM_FAILED_MSG);
-        }
+            c_clone_func = c_clone_func,
+            class_name = tmp_class_name
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+    } else if class.smart_ptr_copy_derived {
+        let this_type = class
+            .self_desc
+            .as_ref()
+            .map(|x| &x.constructor_ret_type)
+            .ok_or_else(|| {
+                DiagnosticError::new(
+                    class.src_id,
+                    class.span(),
+                    format!(
+                        "class marked as {} should have at least one constructor",
+                        SMART_PTR_COPY_TRAIT
+                    ),
+                )
+            })?;
+        let this_type = ctx.conv_map.ty_to_rust_type(this_type);
+        let (this_type_for_method, _) = convert_to_heap_pointer(ctx.conv_map, &this_type, "this");
+
+        let unpack_code = unpack_from_heap_pointer(&this_type, "this", true);
+        let unpack_code: TokenStream = syn::parse_str(&unpack_code).unwrap_or_else(|err| {
+            panic_on_syn_error("clone method for smart_ptr_derived class", unpack_code, err)
+        });
+
+        let clone_fn_name = do_c_func_name(class, MethodAccess::Private, "clone");
+        let clone_fn_name = Ident::new(&clone_fn_name, Span::call_site());
+        let this_type_ty = normalized_type(&this_type.normalized_name);
+        let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
+
+        ctx.rust_code.push(quote! {
+            #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+            #[no_mangle]
+            pub extern "C" fn #clone_fn_name(this: *const #this_type_for_method_ty) -> *mut ::std::os::raw::c_void {
+                #unpack_code
+                let ret: #this_type_ty = this.clone();
+                ::std::mem::forget(this);
+                SwigForeignClass::box_object(ret)
+            }
+        });
+        writeln!(
+            c_include_f,
+            r#"
+    {c_class_type} *{func_name}(const {c_class_type} *);"#,
+            c_class_type = c_class_type,
+            func_name = clone_fn_name,
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+        writeln!(
+            cpp_include_f,
+            r#"
+    {class_name}(const {class_name}& o) noexcept {{
+        static_assert(OWN_DATA, "copy possible only if class own data");
+
+         if (o.self_ != nullptr) {{
+             self_ = {c_clone_func}(o.self_);
+         }} else {{
+             self_ = nullptr;
+         }}
+    }}
+    {class_name} &operator=(const {class_name}& o) noexcept {{
+        static_assert(OWN_DATA, "copy possible only if class own data");
+        if (this != &o) {{
+            free_mem(this->self_);
+            if (o.self_ != nullptr) {{
+                self_ = {c_clone_func}(o.self_);
+            }} else {{
+                self_ = nullptr;
+            }}
+        }}
+        return *this;
+    }}"#,
+            c_clone_func = clone_fn_name,
+            class_name = tmp_class_name
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+    } else {
+        writeln!(
+            cpp_include_f,
+            r#"
+    {class_name}(const {class_name}&) = delete;
+    {class_name} &operator=(const {class_name}&) = delete;"#,
+            class_name = tmp_class_name
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
     Ok(())
 }

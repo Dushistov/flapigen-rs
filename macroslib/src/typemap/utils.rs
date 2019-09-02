@@ -41,7 +41,7 @@ impl ForeignTypeInfoT for ForeignTypeInfo {
 
 pub(crate) trait ForeignMethodSignature {
     type FI: ForeignTypeInfoT;
-    fn output(&self) -> &ForeignTypeInfoT;
+    fn output(&self) -> &dyn ForeignTypeInfoT;
     fn input(&self) -> &[Self::FI];
 }
 
@@ -79,7 +79,7 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
     conv_map: &mut TypeMap,
     src_id: SourceId,
     method: &ForeignerMethod,
-    f_method: &ForeignMethodSignature<FI = FTI>,
+    f_method: &dyn ForeignMethodSignature<FI = FTI>,
     arg_names: GI,
     func_ret_type: &str,
 ) -> Result<(Vec<TokenStream>, String)> {
@@ -165,7 +165,7 @@ pub(crate) fn rust_to_foreign_convert_method_inputs<
     conv_map: &mut TypeMap,
     src_id: SourceId,
     method: &ForeignInterfaceMethod,
-    f_method: &ForeignMethodSignature<FI = FTI>,
+    f_method: &dyn ForeignMethodSignature<FI = FTI>,
     arg_names: GI,
     func_ret_type: &str,
 ) -> Result<(Vec<TokenStream>, String)> {

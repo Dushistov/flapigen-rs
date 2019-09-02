@@ -194,7 +194,7 @@ pub(in crate::cpp) fn generate_c_type(
     use std::io::Write;
 
     for c_type in &c_types.items {
-        let ctype: &CItemDescriptor = match c_type {
+        let ctype: &dyn CItemDescriptor = match c_type {
             CItem::Struct(ref s) => s,
             CItem::Union(ref u) => u,
             CItem::Fn(ref f) => {
@@ -264,7 +264,7 @@ fn do_generate_c_type(
     flags: MergeCItemsFlags,
     src_id: SourceId,
     c_type_header_name: &SmolStr,
-    ctype: &CItemDescriptor,
+    ctype: &dyn CItemDescriptor,
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
 
