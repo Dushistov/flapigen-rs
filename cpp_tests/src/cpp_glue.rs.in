@@ -1059,3 +1059,22 @@ foreign_class!(class TestMultiThreadCallback {
         });
     }
 });
+
+pub struct Session {
+    name: String,
+}
+
+foreign_class!(
+    #[derive(SmartPtrCopy)]
+    class Session {
+        self_type Session;
+        constructor session_init(name: &str) -> Rc<RefCell<Session>> {
+            Rc::new(RefCell::new(Session {
+                name: name.into(),
+            }))
+        }
+        fn name(&self) -> &str {
+            &this.name
+        }
+    }
+);

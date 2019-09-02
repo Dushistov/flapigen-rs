@@ -43,6 +43,7 @@
 #include "rust_interface/TestFuture.hpp"
 #include "rust_interface/ThreadSafeObserver.hpp"
 #include "rust_interface/TestMultiThreadCallback.hpp"
+#include "rust_interface/Session.hpp"
 
 using namespace rust;
 
@@ -1060,6 +1061,30 @@ TEST(TestMultiThreadCallback, smokeTest)
     EXPECT_TRUE(state->called);
     EXPECT_EQ(42, state->x);
     EXPECT_EQ("15", state->s.to_std_string());
+}
+
+TEST(SmartPtrCopy, smokeTest)
+{
+    Session session{ "Session" };
+    EXPECT_EQ("Session", session.name());
+    Session session2{ session };
+    EXPECT_EQ("Session", session.name());
+    EXPECT_EQ("Session", session2.name());
+
+    EXPECT_EQ(static_cast<const SessionOpaque *>(session2),
+              static_cast<const SessionOpaque *>(session));
+    Session session3{ "AAAA" };
+    EXPECT_EQ("Session", session.name());
+    EXPECT_EQ("Session", session2.name());
+    EXPECT_EQ("AAAA", session3.name());
+    session2 = session3;
+    EXPECT_EQ("Session", session.name());
+    EXPECT_EQ("AAAA", session2.name());
+    EXPECT_EQ("AAAA", session3.name());
+    EXPECT_NE(static_cast<const SessionOpaque *>(session2),
+              static_cast<const SessionOpaque *>(session));
+    EXPECT_EQ(static_cast<const SessionOpaque *>(session2),
+              static_cast<const SessionOpaque *>(session3));
 }
 
 int main(int argc, char *argv[])
