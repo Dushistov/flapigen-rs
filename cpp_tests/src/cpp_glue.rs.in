@@ -1076,5 +1076,8 @@ foreign_class!(
         fn name(&self) -> &str {
             &this.name
         }
+        fn test_copy(x: Rc<RefCell<Session>>) -> String {
+            x.borrow().name.clone()
+        }
     }
 );
