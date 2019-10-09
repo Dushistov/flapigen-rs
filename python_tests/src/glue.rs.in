@@ -72,6 +72,14 @@ impl TestStaticClass {
     pub fn get_tuple() -> (i32, String) {
         (0, "0".to_owned())
     }
+
+    pub fn test_panic() {
+        panic!("Testing panic");
+    }
+
+    pub fn test_panic_with_result() -> Result<i32, TestError> {
+        panic!("Testing panic with result");
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -157,6 +165,8 @@ foreigner_class!(
         static_method TestStaticClass::test_result_ok() -> Result<i32, TestError>;
         static_method TestStaticClass::test_result_err() -> Result<i32, TestError>;
         static_method TestStaticClass::get_tuple() -> (i32, String);
+        static_method TestStaticClass::test_panic();
+        static_method TestStaticClass::test_panic_with_result() -> Result<i32, TestError>;
     }
 );
 
