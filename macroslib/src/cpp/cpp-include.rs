@@ -563,7 +563,7 @@ foreign_typemap!(
      );
     ($p:r_type) <T> Option<T> => CRustOpt!() {
         $out = match $p {
-            Some(x) => {
+            Some(mut x) => {
                 swig_from_rust_to_i_type!(T, x, data)
                 CRustOpt!() {
                     val: CRustOptUnion!() { data },

@@ -10,9 +10,9 @@ strategy:
     mac-stable:
       imageName: 'macos-10.14'
       rustup_toolchain: stable
-    linux-beta:
-      imageName: 'ubuntu-16.04'
-      rustup_toolchain: beta
+    # linux-beta:
+    #   imageName: 'ubuntu-16.04'
+    #   rustup_toolchain: beta
     windows-stable-64bit:
       imageName: 'vs2017-win2016'
       rustup_toolchain: stable-x86_64-pc-windows-msvc
