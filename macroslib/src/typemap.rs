@@ -847,7 +847,7 @@ impl TypeMap {
         // ty -> ftype(intermediate_ty), they have the same length,
         // so min_by_key can not find appropriate
         {
-            let mut inter_ty_set = FxHashSet::default();;
+            let mut inter_ty_set = FxHashSet::default();
             for (_, _, _, inter_ty) in &possible_paths {
                 if let Some(inter_ty) = inter_ty {
                     inter_ty_set.insert(*inter_ty);

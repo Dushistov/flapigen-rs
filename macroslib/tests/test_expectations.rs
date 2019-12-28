@@ -186,7 +186,6 @@ foreigner_class!(class FooImpl {
     alias setAlternateBoarding;
 });
 "#;
-    ;
 
     for _ in 0..100 {
         let cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).expect("parse failed");
