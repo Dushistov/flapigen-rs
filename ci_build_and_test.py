@@ -197,7 +197,7 @@ def test_python(is_windows, test_cfg):
         if is_windows:
             shutil.copyfile(os.path.join(target_dir, "rust_swig_test_python.dll"), "python_tests/python/rust_swig_test_python.pyd")
             if os.getenv('platform') == "x64":
-                subprocess.check_call(["py", "-3", "main.py"], cwd = "python_tests/python")
+                subprocess.check_call(["py", "-3.7-64", "main.py"], cwd = "python_tests/python")
             else:
                 # If we choose 32, we must also choose specific, minor python version.
                 subprocess.check_call(["py", "-3.7-32", "main.py"], cwd = "python_tests/python")
