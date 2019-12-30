@@ -8,9 +8,6 @@
 
 #![recursion_limit = "128"]
 
-#[macro_use]
-extern crate strum_macros;
-
 macro_rules! parse_type {
     ($($tt:tt)*) => {{
         let ty: syn::Type = syn::parse_quote! { $($tt)* };
@@ -43,6 +40,7 @@ use std::{
 
 use log::debug;
 use proc_macro2::TokenStream;
+use strum::EnumIter;
 use syn::spanned::Spanned;
 
 use crate::{
