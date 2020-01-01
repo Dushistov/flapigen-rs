@@ -17,4 +17,4 @@ jni-sys = "0.3.0"
 
 [build-dependencies]
 rust_swig = { path = "../macroslib" }
-env_logger = "0.6"
+env_logger = "0.7"

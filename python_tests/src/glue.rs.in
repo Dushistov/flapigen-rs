@@ -14,15 +14,14 @@ foreign_enum!(
     }
 );
 
-pub struct TestStaticClass {
-}
+pub struct TestStaticClass {}
 
 impl TestStaticClass {
     pub fn hello() -> String {
         "Hello from rust".to_owned()
     }
 
-    pub fn format_number(i: i32) -> String{
+    pub fn format_number(i: i32) -> String {
         format!("format_number: {}", i)
     }
 
@@ -75,8 +74,7 @@ impl TestStaticClass {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct TestError {
-}
+pub struct TestError {}
 
 impl TestError {
     pub fn new() -> TestError {
@@ -99,9 +97,7 @@ pub struct TestClass {
 
 impl TestClass {
     pub fn new() -> TestClass {
-        TestClass {
-            i: 0
-        }
+        TestClass { i: 0 }
     }
 
     pub fn increment(&mut self) {
@@ -142,21 +138,21 @@ foreigner_class!(
     /// Test class containing static methods only.
     class TestStaticClass {
         /// Documentation for `TestStaticClass::hello`()
-        static_method TestStaticClass::hello() -> String;
+        fn TestStaticClass::hello() -> String;
         /// Two line documentation for `TestStaticClass::format_number`()
         /// :param i32 i: number to format
-        static_method TestStaticClass::format_number(i: i32) -> String;
-        static_method TestStaticClass::add(a: f32, b: f32) -> f32;
-        static_method TestStaticClass::format_str(s: &str) -> String;
-        static_method TestStaticClass::format_string(s: String) -> String;
-        static_method TestStaticClass::call_test_class_format(test_object: &TestClass) -> String;
-        static_method TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
-        static_method TestStaticClass::increment_vec(v: Vec<f32>) -> Vec<f32>;
-        static_method TestStaticClass::return_slice(v: &[f32]) -> &[f32];
-        static_method TestStaticClass::count_slice_of_objects(objs: &[TestClass]) -> usize;
-        static_method TestStaticClass::test_result_ok() -> Result<i32, TestError>;
-        static_method TestStaticClass::test_result_err() -> Result<i32, TestError>;
-        static_method TestStaticClass::get_tuple() -> (i32, String);
+        fn TestStaticClass::format_number(i: i32) -> String;
+        fn TestStaticClass::add(a: f32, b: f32) -> f32;
+        fn TestStaticClass::format_str(s: &str) -> String;
+        fn TestStaticClass::format_string(s: String) -> String;
+        fn TestStaticClass::call_test_class_format(test_object: &TestClass) -> String;
+        fn TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
+        fn TestStaticClass::increment_vec(v: Vec<f32>) -> Vec<f32>;
+        fn TestStaticClass::return_slice(v: &[f32]) -> &[f32];
+        fn TestStaticClass::count_slice_of_objects(objs: &[TestClass]) -> usize;
+        fn TestStaticClass::test_result_ok() -> Result<i32, TestError>;
+        fn TestStaticClass::test_result_err() -> Result<i32, TestError>;
+        fn TestStaticClass::get_tuple() -> (i32, String);
     }
 );
 
@@ -168,15 +164,15 @@ foreigner_class!(
         /// Documentation for constructor
         constructor TestClass::new() -> TestClass;
         /// increment method documentation
-        method TestClass::increment(&mut self);
-        method TestClass::format(&self) -> String;
-        method TestClass::add(&mut self, i: i32);
-        method TestClass::add_ref(&mut self, i: &i32);
-        method TestClass::get(&self) -> i32;
-        method TestClass::get_ref(&self) -> &i32;
-        method TestClass::maybe_add(&mut self, i: Option<i32>) -> Option<i32>;
-        method TestClass::clone(&self) -> TestClass;
-        method TestClass::eq(&self, other: &TestClass) -> bool;
+        fn TestClass::increment(&mut self);
+        fn TestClass::format(&self) -> String;
+        fn TestClass::add(&mut self, i: i32);
+        fn TestClass::add_ref(&mut self, i: &i32);
+        fn TestClass::get(&self) -> i32;
+        fn TestClass::get_ref(&self) -> &i32;
+        fn TestClass::maybe_add(&mut self, i: Option<i32>) -> Option<i32>;
+        fn TestClass::clone(&self) -> TestClass;
+        fn TestClass::eq(&self, other: &TestClass) -> bool;
     }
 );
 
@@ -186,9 +182,7 @@ pub struct TestArc {
 
 impl TestArc {
     pub fn new() -> Arc<TestArc> {
-        Arc::new(TestArc{
-            i: 0
-        })
+        Arc::new(TestArc { i: 0 })
     }
 
     pub fn to_string(&self) -> String {
@@ -208,9 +202,9 @@ foreigner_class!(
     class TestArc {
         self_type TestArc;
         constructor TestArc::new() -> Arc<TestArc>;
-        method TestArc::to_string(&self) -> String;
-        static_method TestArc::to_string_arc(Arc<TestArc>) -> String;
-        static_method TestArc::to_string_ref_arc(&Arc<TestArc>) -> String;
+        fn TestArc::to_string(&self) -> String;
+        fn TestArc::to_string_arc(_: Arc<TestArc>) -> String;
+        fn TestArc::to_string_ref_arc(_: &Arc<TestArc>) -> String;
     }
 );
 
@@ -220,9 +214,7 @@ pub struct TestArcMutex {
 
 impl TestArcMutex {
     pub fn new() -> Arc<Mutex<TestArcMutex>> {
-        Arc::new(Mutex::new(TestArcMutex{
-            i: 0
-        }))
+        Arc::new(Mutex::new(TestArcMutex { i: 0 }))
     }
 
     pub fn to_string(&self) -> String {
@@ -246,10 +238,10 @@ foreigner_class!(
     class TestArcMutex {
         self_type TestArcMutex;
         constructor TestArcMutex::new() -> Arc<Mutex<TestArcMutex>>;
-        method TestArcMutex::to_string(&self) -> String;
-        method TestArcMutex::inc(&mut self);
-        static_method TestArcMutex::to_string_arc(Arc<Mutex<TestArcMutex>>) -> String;
-        static_method TestArcMutex::to_string_ref_arc(&Arc<Mutex<TestArcMutex>>) -> String;
+        fn TestArcMutex::to_string(&self) -> String;
+        fn TestArcMutex::inc(&mut self);
+        fn TestArcMutex::to_string_arc(_: Arc<Mutex<TestArcMutex>>) -> String;
+        fn TestArcMutex::to_string_ref_arc(_: &Arc<Mutex<TestArcMutex>>) -> String;
     }
 );
 
@@ -259,9 +251,7 @@ pub struct TestBox {
 
 impl TestBox {
     pub fn new() -> Box<TestBox> {
-        Box::new(TestBox{
-            i: 0
-        })
+        Box::new(TestBox { i: 0 })
     }
 
     pub fn to_string(&self) -> String {
@@ -273,6 +263,6 @@ foreigner_class!(
     class TestBox {
         self_type TestBox;
         constructor TestBox::new() -> Box<TestBox>;
-        method TestBox::to_string(&self) -> String;
+        fn TestBox::to_string(&self) -> String;
     }
 );

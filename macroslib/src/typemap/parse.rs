@@ -148,7 +148,7 @@ pub(in crate::typemap) fn parse(
             }
             Item::Macro(mut item_macro) => {
                 if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
-                    let tmap_conv_rule: TypeMapConvRuleInfo = syn::parse2(item_macro.mac.tts)
+                    let tmap_conv_rule: TypeMapConvRuleInfo = syn::parse2(item_macro.mac.tokens)
                         .map_err(|err| DiagnosticError::from_syn_err(name, err))?;
 
                     ret.may_be_merge_conv_rule(name, tmap_conv_rule)?;
@@ -329,7 +329,7 @@ fn is_wrong_cfg_pointer_width(attrs: &[syn::Attribute], target_pointer_width: us
             if let Ok(syn::Meta::List(syn::MetaList { ref nested, .. })) = a.parse_meta() {
                 if nested.len() == 1 {
                     if let syn::NestedMeta::Meta(syn::Meta::NameValue(ref name_val)) = nested[0] {
-                        if name_val.ident == "target_pointer_width" {
+                        if name_val.path.is_ident("target_pointer_width") {
                             let val = name_val.lit.clone().into_token_stream().to_string();
                             let val = if val.starts_with('"') {
                                 &val[1..]
@@ -370,12 +370,12 @@ fn my_syn_attrs_to_hashmap(src_id: SourceId, attrs: &[syn::Attribute]) -> Result
                 .parse_meta()
                 .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
             if let syn::Meta::NameValue(syn::MetaNameValue {
-                ref ident,
+                ref path,
                 lit: syn::Lit::Str(ref value),
                 ..
             }) = meta
             {
-                ret.entry(ident.to_string())
+                ret.entry(path.into_token_stream().to_string())
                     .or_insert_with(Vec::new)
                     .push((value.value(), a.span()));
             } else {
@@ -1102,7 +1102,7 @@ impl SwigInto<bool> for jboolean {
 #[allow(dead_code)]
 #[swig_code = "let {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var}, env);"]
 trait SwigFrom<T> {
-    fn swig_from(T, env: *mut JNIEnv) -> Self;
+    fn swig_from(_: T, env: *mut JNIEnv) -> Self;
 }
 impl SwigFrom<bool> for jboolean {
     fn swig_from(x: bool, _: *mut JNIEnv) -> Self {
@@ -1200,7 +1200,7 @@ impl SwigDeref for String {
 #[allow(dead_code)]
 #[swig_code = "let {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var}, env);"]
 trait SwigFrom<T> {
-    fn swig_from(T, env: *mut JNIEnv) -> Self;
+    fn swig_from(_: T, env: *mut JNIEnv) -> Self;
 }
 
 #[allow(dead_code)]
@@ -1284,7 +1284,7 @@ mod swig_foreign_types_map {
 
 #[swig_code = "let {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var}, env);"]
 trait SwigFrom<T> {
-    fn swig_from(T, env: *mut JNIEnv) -> Self;
+    fn swig_from(_: T, env: *mut JNIEnv) -> Self;
 }
 
 impl SwigFrom<u8> for jshort {

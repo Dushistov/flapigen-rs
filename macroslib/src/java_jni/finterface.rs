@@ -210,7 +210,6 @@ impl SwigFrom<jobject> for Box<{trait_name}> {{
                     "Empty trait function name",
                 )
             })?
-            .value()
             .ident;
 
         let self_arg: TokenStream = method.fn_decl.inputs[0]

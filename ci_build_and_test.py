@@ -263,6 +263,8 @@ def main():
             test_set = set([ANDROID_TESTS])
         elif arg == "--rust-unit-tests-only":
             test_set = set([UNIT_TESTS])
+        elif arg == "--python-only-tests":
+            test_set = set([PYTHON_TESTS])
         else:
             raise Exception("Fatal Error: unknown option: %s" % arg)
 

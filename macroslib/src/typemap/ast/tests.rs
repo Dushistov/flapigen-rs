@@ -404,7 +404,13 @@ Result<T, E>
     )
     .unwrap();
     assert_eq!(LineColumn { line: 2, column: 0 }, ty1.span().start());
-    assert_eq!(LineColumn { line: 2, column: 6 }, ty1.span().end());
+    assert_eq!(
+        LineColumn {
+            line: 2,
+            column: 12
+        },
+        ty1.span().end()
+    );
     let ty2: Type = syn::parse_str(
         r#"
 
@@ -413,7 +419,13 @@ Result<u16, u8>
     )
     .unwrap();
     assert_eq!(LineColumn { line: 3, column: 0 }, ty2.span().start());
-    assert_eq!(LineColumn { line: 3, column: 6 }, ty2.span().end());
+    assert_eq!(
+        LineColumn {
+            line: 3,
+            column: 15
+        },
+        ty2.span().end()
+    );
     let t_id: Ident = parse_quote! { T };
     let e_id: Ident = parse_quote! { E };
     {

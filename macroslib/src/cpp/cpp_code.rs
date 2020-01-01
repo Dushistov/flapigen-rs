@@ -198,7 +198,7 @@ pub(in crate::cpp) fn generate_c_type(
             CItem::Struct(ref s) => s,
             CItem::Union(ref u) => u,
             CItem::Fn(ref f) => {
-                let fn_id = format!("fn {}", f.ident);
+                let fn_id = format!("fn {}", f.sig.ident);
                 let module_name = &c_types.header_name;
                 {
                     let common_files = &mut ctx.common_files;
@@ -418,7 +418,7 @@ extern "C" {
     let mut fn_decl_out = Vec::with_capacity(100);
     let mut includes = FxHashSet::<SmolStr>::default();
 
-    match f.decl.output {
+    match f.sig.output {
         syn::ReturnType::Default => {
             fn_decl_out
                 .write_all(b"void")
@@ -435,9 +435,9 @@ extern "C" {
                 .expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }
-    write!(&mut fn_decl_out, " {}(", f.ident).expect(WRITE_TO_MEM_FAILED_MSG);
+    write!(&mut fn_decl_out, " {}(", f.sig.ident).expect(WRITE_TO_MEM_FAILED_MSG);
 
-    let fn_args = parse_fn_args(f.decl.inputs.clone())
+    let fn_args = parse_fn_args(f.sig.inputs.clone())
         .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?
         .0;
     for (i, arg) in fn_args.iter().enumerate() {

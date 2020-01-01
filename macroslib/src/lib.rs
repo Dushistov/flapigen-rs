@@ -495,7 +495,7 @@ impl Generator {
                     continue;
                 }
                 debug!("Found {}", DisplayToTokens(&item_macro.mac.path));
-                if item_macro.mac.tts.is_empty() {
+                if item_macro.mac.tokens.is_empty() {
                     return Err(DiagnosticError::new(
                         src_id,
                         item_macro.span(),
@@ -506,7 +506,7 @@ impl Generator {
                     ));
                 }
                 let mut tts = TokenStream::new();
-                mem::swap(&mut tts, &mut item_macro.mac.tts);
+                mem::swap(&mut tts, &mut item_macro.mac.tokens);
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS)
                     || item_macro.mac.path.is_ident(FOREIGN_CLASS)
                 {
