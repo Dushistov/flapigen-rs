@@ -8,9 +8,6 @@
 
 #![recursion_limit = "128"]
 
-#[macro_use]
-extern crate strum_macros;
-
 macro_rules! parse_type {
     ($($tt:tt)*) => {{
         let ty: syn::Type = syn::parse_quote! { $($tt)* };
@@ -43,6 +40,7 @@ use std::{
 
 use log::debug;
 use proc_macro2::TokenStream;
+use strum::EnumIter;
 use syn::spanned::Spanned;
 
 use crate::{
@@ -497,7 +495,7 @@ impl Generator {
                     continue;
                 }
                 debug!("Found {}", DisplayToTokens(&item_macro.mac.path));
-                if item_macro.mac.tts.is_empty() {
+                if item_macro.mac.tokens.is_empty() {
                     return Err(DiagnosticError::new(
                         src_id,
                         item_macro.span(),
@@ -508,7 +506,7 @@ impl Generator {
                     ));
                 }
                 let mut tts = TokenStream::new();
-                mem::swap(&mut tts, &mut item_macro.mac.tts);
+                mem::swap(&mut tts, &mut item_macro.mac.tokens);
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS)
                     || item_macro.mac.path.is_ident(FOREIGN_CLASS)
                 {

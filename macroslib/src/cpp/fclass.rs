@@ -1131,7 +1131,6 @@ fn genearte_copy_stuff(
             .iter()
             .position(|m| {
                 if let Some(seg) = m.rust_id.segments.last() {
-                    let seg = seg.into_value();
                     seg.ident == "clone"
                 } else {
                     false

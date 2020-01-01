@@ -105,10 +105,10 @@ impl Parse for JniClassItemWithId {
 macro_rules! add_jni_method_id {
     ($mac:ident, $calls: ident, $sub_calls: ident, $name: expr) => {
         let get_method_id: JniClassItemWithId =
-            syn::parse2($mac.tts.clone()).unwrap_or_else(|err| {
+            syn::parse2($mac.tokens.clone()).unwrap_or_else(|err| {
                 panic!(
                     "Can not parse '{}' call: {}, code: {}",
-                    $name, err, $mac.tts
+                    $name, err, $mac.tokens
                 )
             });
         let class_id = get_method_id.class_id.to_string();
@@ -149,7 +149,7 @@ impl<'ast> Visit<'ast> for JniCacheMacroCallsVisitor<'ast> {
 
         if mac.path.is_ident("swig_jni_find_class") {
             let find_class: JniFindClass =
-                syn::parse2(mac.tts.clone()).expect("Can not parse swig_jni_find_class call");
+                syn::parse2(mac.tokens.clone()).expect("Can not parse swig_jni_find_class call");
             let id = find_class.id.to_string();
             if let Some(call) = self.inner.calls.get(&id) {
                 if *call != find_class {

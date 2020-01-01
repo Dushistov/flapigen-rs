@@ -151,7 +151,6 @@ impl {trait_name} for {struct_with_funcs} {{"#,
                     "Empty trait function name",
                 )
             })?
-            .value()
             .ident
             .to_string();
         let rest_args_with_types: String = method

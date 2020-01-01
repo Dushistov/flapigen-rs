@@ -11,30 +11,29 @@ readme = "../README.md"
 edition = "2018"
 
 [dependencies]
-syn = { version = "0.15.33", features = ["full", "extra-traits", "visit-mut", "visit"] }
-quote = "0.6.12"
-proc-macro2 = { version = "0.4.28", features = ["span-locations"] }
+syn = { version = "1.0.12", features = ["full", "extra-traits", "visit-mut", "visit"] }
+quote = "1.0"
+proc-macro2 = { version = "1.0", features = ["span-locations"] }
 log = "0.4.6"
-petgraph = "0.4.13"
+petgraph = "0.5.0"
 bitflags = "1.0.4"
 lazy_static = "1.0.2"
-smallvec = "0.6.10"
+smallvec = "1.1.0"
 rustc-hash = "1.0.1"
-smol_str = "0.1.11"
-strum = "0.15.0"
-strum_macros = "0.15.0"
+smol_str = "0.1.15"
+strum = { version = "0.17.1", features = ["derive"] }
 heck = "0.3.1"
-which = ">=1.0, <3.0"
+which = { version = "3.0", default-features = false }
 
 [dev-dependencies]
-env_logger = "0.6"
-pulldown-cmark = "0.5.0"
-tempfile="3.0"
+env_logger = "0.7.1"
+pulldown-cmark = "0.6.1"
+tempfile = "3.0"
 jni-sys = "0.3.0"
 
 [build-dependencies]
-syn = { version = "0.15.23", features = ["full", "extra-traits", "visit-mut", "visit"] }
-quote = "0.6.11"
+syn = { version = "1.0", features = ["full", "extra-traits", "visit-mut", "visit"] }
+quote = "1.0"
 
 [badges]
 azure-devops = { project = "Dushistov/rust_swig", pipeline = "Dushistov.rust_swig" }

@@ -559,7 +559,7 @@ trait SwigInto<T> {
 
 #[swig_code = "let mut {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var}, env);"]
 trait SwigFrom<T> {
-    fn swig_from(T, env: *mut JNIEnv) -> Self;
+    fn swig_from(_: T, env: *mut JNIEnv) -> Self;
 }
 
 impl SwigInto<bool> for jboolean {
@@ -648,7 +648,7 @@ fn helper3() {
                 .filter_map(|v| {
                     let item: syn::Item = v.clone();
                     match item {
-                        syn::Item::Fn(ref fun) => Some(fun.ident.to_string()),
+                        syn::Item::Fn(ref fun) => Some(fun.sig.ident.to_string()),
                         syn::Item::Trait(ref trait_) => Some(trait_.ident.to_string()),
                         _ => None,
                     }

@@ -127,16 +127,16 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                             input.error(format!("{} should be used only once", DEFINE_C_TYPE))
                         );
                     }
-                    match syn::parse2::<CItems>(mac.tts.clone()) {
+                    match syn::parse2::<CItems>(mac.tokens.clone()) {
                         Ok(x) => c_types = Some(x),
 
-                        Err(_) => generic_c_types = Some(syn::parse2::<GenericCItems>(mac.tts)?),
+                        Err(_) => generic_c_types = Some(syn::parse2::<GenericCItems>(mac.tokens)?),
                     }
                 } else if mac.path.is_ident(FOREIGN_CODE) || mac.path.is_ident(FOREIGNER_CODE) {
-                    let fc_elem = syn::parse2::<ForeignCode>(mac.tts)?;
+                    let fc_elem = syn::parse2::<ForeignCode>(mac.tokens)?;
                     f_code.push(fc_elem);
                 } else if mac.path.is_ident(GENERIC_ALIAS) {
-                    generic_aliases.push(syn::parse2::<GenericAlias>(mac.tts)?);
+                    generic_aliases.push(syn::parse2::<GenericAlias>(mac.tokens)?);
                 } else {
                     unreachable!();
                 }
@@ -351,7 +351,7 @@ impl syn::parse::Parse for CItemsList {
                         ));
                     }
 
-                    match f.abi {
+                    match f.sig.abi {
                         Some(ref abi) => match abi.name {
                             Some(ref name) if name.value() == "C" => {}
                             _ => {
@@ -451,11 +451,11 @@ impl syn::parse::Parse for GenericAliasItem {
         if input.fork().parse::<syn::Macro>().is_ok() {
             let mac: syn::Macro = input.parse()?;
             if mac.path.is_ident(SWIG_CONCAT_IDENTS) {
-                let items: GenericAliasItemVecCommaSeparated = syn::parse2(mac.tts)?;
+                let items: GenericAliasItemVecCommaSeparated = syn::parse2(mac.tokens)?;
                 Ok(GenericAliasItem::Concat(items.0))
             } else if mac.path.is_ident(SWIG_I_TYPE) {
                 let mac_span = mac.span();
-                let mut item: MacroArgs = syn::parse2(mac.tts)?;
+                let mut item: MacroArgs = syn::parse2(mac.tokens)?;
                 let n = item.0.len();
                 if n == 0 || n > 2 {
                     return Err(syn::Error::new(
@@ -471,7 +471,7 @@ impl syn::parse::Parse for GenericAliasItem {
                 };
                 Ok(GenericAliasItem::SwigIType((type_id, opt_arg)))
             } else if mac.path.is_ident(SWIG_F_TYPE) {
-                let item: syn::Ident = syn::parse2(mac.tts)?;
+                let item: syn::Ident = syn::parse2(mac.tokens)?;
                 Ok(GenericAliasItem::SwigFType(item))
             } else {
                 Err(syn::Error::new(

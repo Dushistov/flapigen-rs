@@ -670,14 +670,14 @@ fn expand_rtype_rule(
             Type::Macro(ref type_macro) => {
                 let ctx_span = (src_id, x.span());
                 if type_macro.mac.path.is_ident(SWIG_I_TYPE) {
-                    let param = type_macro.mac.tts.to_string();
+                    let param = type_macro.mac.tokens.to_string();
                     let ty = find_type_param(param_map, &param, ctx_span)?;
                     let i_type = expander.swig_i_type(ty.as_ref(), None)?;
                     Some(i_type)
                 } else {
                     let alias_idx = generic_aliases
                         .iter()
-                        .position(|a| type_macro.mac.path.is_ident(a.name.clone()))
+                        .position(|a| type_macro.mac.path.is_ident(a.name))
                         .ok_or_else(|| {
                             DiagnosticError::new2(
                                 ctx_span,

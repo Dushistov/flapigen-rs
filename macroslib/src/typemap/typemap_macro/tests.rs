@@ -534,7 +534,7 @@ fn cpp_pair_rule() -> TypeMapConvRuleInfo {
 
 fn macro_to_conv_rule(mac: syn::Macro) -> TypeMapConvRuleInfo {
     let _ = env_logger::try_init();
-    let code = mac.tts.to_string();
+    let code = mac.tokens.to_string();
     syn::parse_str::<TypeMapConvRuleInfo>(&code)
         .unwrap_or_else(|err| panic_on_syn_error("macro_to_conv_rule", code, err))
 }
