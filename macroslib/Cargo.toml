@@ -21,9 +21,9 @@ lazy_static = "1.0.2"
 smallvec = "1.1.0"
 rustc-hash = "1.0.1"
 smol_str = "0.1.15"
-strum = { version = "0.16.0", features = ["derive"] }
+strum = { version = "0.17.1", features = ["derive"] }
 heck = "0.3.1"
-which = ">=1.0, <3.0"
+which = { version = "3.0", default-features = false }
 
 [dev-dependencies]
 env_logger = "0.7.1"
