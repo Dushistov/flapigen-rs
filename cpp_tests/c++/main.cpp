@@ -122,7 +122,7 @@ TEST(Foo, Simple)
     };
     c_simple_cb_counter = 0;
     c_simple_cb_counter_without_args = 0;
-    Foo::call_me(&obs);
+    Foo_call_me(&obs);
     EXPECT_EQ(1u, c_simple_cb_counter.load());
     EXPECT_EQ(1u, c_simple_cb_counter_without_args.load());
 
@@ -173,11 +173,10 @@ size_t MySomeObserver::deleted = 0;
 TEST(Foo, CppSomeObserver)
 {
     Foo foo(17, "CppSomeObserver");
-    auto obs = new MySomeObserver;
+    std::unique_ptr<MySomeObserver> obs{ new MySomeObserver };
     ASSERT_EQ(0u, obs->f1_call);
     ASSERT_EQ(0u, obs->f2_call);
-    auto c_class = SomeObserver::to_c_interface(obs);
-    Foo::call_me(&c_class);
+    Foo::call_me(std::move(obs));
     EXPECT_EQ(1u, MySomeObserver::f1_call);
     EXPECT_EQ(1u, MySomeObserver::f2_call);
     EXPECT_EQ(1u, MySomeObserver::deleted);
@@ -1055,8 +1054,9 @@ TEST(TestMultiThreadCallback, smokeTest)
 {
     auto state = std::make_shared<State>();
     EXPECT_FALSE(state->called);
-    auto cb = ThreadSafeObserver::to_c_interface(new MyThreadSafeObserver(state));
-    TestMultiThreadCallback::f(&cb);
+
+    TestMultiThreadCallback::f(
+        std::unique_ptr<ThreadSafeObserver>{ new MyThreadSafeObserver(state) });
     std::this_thread::sleep_for(std::chrono::seconds(4));
     EXPECT_TRUE(state->called);
     EXPECT_EQ(42, state->x);

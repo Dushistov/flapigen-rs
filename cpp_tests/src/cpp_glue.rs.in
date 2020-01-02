@@ -74,7 +74,7 @@ foreign_class!(class Foo {
     fn Foo::name(&self) -> &str; alias getName;
     fn Foo::set_field(&mut self, v: i32);
     fn Foo::one_and_half(&self) -> f64;
-    fn Foo::call_me(_: Box<SomeObserver>);
+    fn Foo::call_me(_: Box<dyn SomeObserver>);
     fn f_hypot(_: f64, _: f64) -> f64; alias fHypot;
     fn Foo::ret_string(&self) -> String;
     foreigner_code r#"
@@ -1053,7 +1053,7 @@ foreign_interface!(interface ThreadSafeObserver {
 });
 
 foreign_class!(class TestMultiThreadCallback {
-    fn f(cb: Box<OnThreadEvent + Send>) {
+    fn f(cb: Box<dyn OnThreadEvent + Send>) {
         std::thread::spawn(move || {
             cb.something_change_in_other_thread(42, "15".into());
         });

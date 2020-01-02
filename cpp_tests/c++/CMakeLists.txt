@@ -181,6 +181,7 @@ add_executable(c++-rust-swig-test
   ${RUST_SWIG_CPP_HEADERS}
   TestOptional.cpp
   TestWorkWithVec.cpp
+  Foo.cpp
   main.cpp
   )
 

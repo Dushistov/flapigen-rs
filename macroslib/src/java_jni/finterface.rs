@@ -160,7 +160,7 @@ fn generate_rust_code_for_interface(
     let mut new_conv_code = format!(
         r#"
 #[swig_from_foreigner_hint = "{interface_name}"]
-impl SwigFrom<jobject> for Box<{trait_name}> {{
+impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
     fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {{
         let mut cb = JavaCallback::new(this, env);
         cb.methods.reserve({methods_len});

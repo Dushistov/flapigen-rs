@@ -14,11 +14,16 @@ r#"struct C_SomeObserver {
 
 };"#;
 
-"void f1(const struct C_SomeObserver * const cb) noexcept";
+"void f1(std::unique_ptr<SomeObserver> cb) noexcept;";
+
 r#"template<bool OWN_DATA>
-    inline void ClassWithCallbacksWrapper<OWN_DATA>::f1(const struct C_SomeObserver * const cb) noexcept
+    inline void ClassWithCallbacksWrapper<OWN_DATA>::f1(std::unique_ptr<SomeObserver> cb) noexcept
     {
 
-        ClassWithCallbacks_f1(this->self_, cb);
+        C_SomeObserver tmp = SomeObserver::to_c_interface(cb.release());
+        const struct C_SomeObserver * const a0 = &tmp;
+
+        ClassWithCallbacks_f1(this->self_, std::move(a0));
     }"#;
+
 "void ClassWithCallbacks_f1(ClassWithCallbacksOpaque * const self, const struct C_SomeObserver * const cb);";
