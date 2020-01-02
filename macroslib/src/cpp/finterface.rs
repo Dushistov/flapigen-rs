@@ -483,7 +483,7 @@ namespace {namespace_name} {{
 {doc_comments}
 class {interface_name} {{
 public:
-    virtual ~{interface_name}() {{}}
+    virtual ~{interface_name}() noexcept {{}}
 {virtual_methods}
     //! @p should be allocated by new
     static C_{interface_name} to_c_interface({interface_name} *p)
