@@ -1,15 +1,10 @@
 r##"#[no_mangle]
 pub extern "C" fn Test_f(a0: *const C_MyObserver) -> () {
-    let mut a0: Box<OnEvent + Send> = <Box<OnEvent + Send>>::swig_from(a0);
+    assert!(!a0.is_null());
+    let a0: &C_MyObserver = unsafe { a0.as_ref().unwrap() };
+    let a0: Box<dyn OnEvent + Send> = Box::new(a0.clone());
     let mut ret: () = f(a0);
     ret
-}"##;
-
-r##"impl SwigFrom<*const C_MyObserver> for Box<OnEvent + Send> {
-    fn swig_from(this: *const C_MyObserver) -> Self {
-        let this: &C_MyObserver = unsafe { this.as_ref().unwrap() };
-        Box::new(this.clone())
-    }
 }"##;
 
 r#"impl OnEvent for C_MyObserver {

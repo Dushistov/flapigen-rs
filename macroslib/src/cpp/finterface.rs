@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, rc::Rc};
 
 use petgraph::Direction;
 use rustc_hash::FxHashSet;
@@ -10,15 +10,14 @@ use crate::{
         cpp_code, map_type, rust_generate_args_with_types, CppContext, CppForeignMethodSignature,
         CppForeignTypeInfo,
     },
-    error::{panic_on_syn_error, DiagnosticError, Result},
+    error::{invalid_src_id_span, panic_on_syn_error, DiagnosticError, Result},
     file_cache::FileWriteCache,
     namegen::new_unique_name,
-    source_registry::SourceId,
     typemap::{
         ast::{parse_ty_with_given_span, DisplayToTokens, TypeName},
-        ty::RustType,
+        ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
         utils::rust_to_foreign_convert_method_inputs,
-        ForeignTypeInfo, FROM_VAR_TEMPLATE,
+        ForeignTypeInfo, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
     types::ForeignInterface,
     WRITE_TO_MEM_FAILED_MSG,
@@ -41,11 +40,87 @@ pub(in crate::cpp) fn generate_interface(
     let c_struct_pointer = format!("const struct {} * const", c_struct_name);
 
     let rust_ty = ctx.conv_map.find_or_alloc_rust_type_no_src_id(&rust_ty);
+    let c_interface_struct_header: SmolStr =
+        format!("\"{}\"", c_interface_header(interface)).into();
 
-    ctx.conv_map.add_foreign(
-        rust_ty,
-        TypeName::new(c_struct_pointer, interface.src_id_span()),
-    )?;
+    ctx.conv_map.alloc_foreign_type(ForeignTypeS {
+        name: TypeName::new(c_struct_pointer, interface.src_id_span()),
+        provides_by_module: vec![c_interface_struct_header],
+        into_from_rust: Some(ForeignConversationRule {
+            rust_ty: rust_ty.to_idx(),
+            intermediate: None,
+        }),
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: rust_ty.to_idx(),
+            intermediate: None,
+        }),
+        name_prefix: None,
+    })?;
+
+    let cpp_abs_class_header: SmolStr = format!("\"{}\"", cpp_interface_header(interface)).into();
+    let boxed_trait_name = format!("Box<dyn {}>", DisplayToTokens(&interface.self_type));
+    let boxed_trait_rust_ty: Type =
+        parse_ty_with_given_span(&boxed_trait_name, interface.name.span())
+            .map_err(|err| DiagnosticError::from_syn_err(interface.src_id, err))?;
+    let boxed_trait_rust_ty = ctx
+        .conv_map
+        .find_or_alloc_rust_type(&boxed_trait_rust_ty, interface.src_id);
+
+    let mut params = Vec::with_capacity(3);
+    params.push(FROM_VAR_TEMPLATE.into());
+    params.push(TO_VAR_TYPE_TEMPLATE.into());
+    let tmp_name = "$tmp".into();
+    let conv_code = format!(
+        r#"
+        {c_struct} {tmp_name} = {interface}::to_c_interface({var}.release());
+        {to} = &{tmp_name};
+"#,
+        var = FROM_VAR_TEMPLATE,
+        interface = interface.name,
+        to = TO_VAR_TYPE_TEMPLATE,
+        tmp_name = tmp_name,
+        c_struct = c_struct_name,
+    );
+    params.push(tmp_name);
+    let conv_code = TypeConvCode::with_params(conv_code, invalid_src_id_span(), params);
+
+    ctx.conv_map.alloc_foreign_type(ForeignTypeS {
+        name: TypeName::new(
+            format!("std::unique_ptr<{}>", interface.name),
+            interface.src_id_span(),
+        ),
+        provides_by_module: vec![cpp_abs_class_header, "<memory>".into()],
+        into_from_rust: None,
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: boxed_trait_rust_ty.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
+                intermediate_ty: rust_ty.to_idx(),
+                conv_code: Rc::new(conv_code),
+            }),
+        }),
+        name_prefix: None,
+    })?;
+
+    ctx.conv_map.add_conversation_rule(
+        rust_ty.to_idx(),
+        boxed_trait_rust_ty.to_idx(),
+        TypeConvCode::new2(
+            format!(
+                r#"
+            assert!(!{from_var}.is_null());
+            let {to_var}: &{struct_with_funcs} = unsafe {{ {from_var}.as_ref().unwrap() }};
+            let {to_var}: {res_type} = Box::new({to_var}.clone());
+        "#,
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE,
+                struct_with_funcs = c_struct_name,
+                res_type = ctx.conv_map[boxed_trait_rust_ty.to_idx()],
+            ),
+            invalid_src_id_span(),
+        )
+        .into(),
+    );
 
     Ok(())
 }
@@ -94,24 +169,6 @@ pub struct {struct_with_funcs} {{
         syn::parse_str(&code)
             .unwrap_or_else(|err| panic_on_syn_error("cpp internal code", code.clone(), err)),
     );
-
-    code.clear();
-    writeln!(
-        &mut code,
-        r#"
-impl SwigFrom<*const {struct_with_funcs}> for Box<{trait_name}> {{
-    fn swig_from(this: *const {struct_with_funcs}) -> Self {{
-       let this: &{struct_with_funcs} = unsafe {{ this.as_ref().unwrap() }};
-       Box::new(this.clone())
-    }}
-}}"#,
-        struct_with_funcs = struct_with_funcs,
-        trait_name = DisplayToTokens(&interface.self_type),
-    )
-    .unwrap();
-
-    ctx.conv_map
-        .merge(SourceId::none(), &code, ctx.target_pointer_width)?;
 
     code.clear();
 
@@ -303,7 +360,7 @@ fn find_suitable_ftypes_for_interace_methods(
     Ok(f_methods)
 }
 
-pub(in crate::cpp) fn generate_for_interface(
+fn generate_for_interface(
     ctx: &mut CppContext,
     interface: &ForeignInterface,
     req_includes: &[SmolStr],
@@ -311,10 +368,10 @@ pub(in crate::cpp) fn generate_for_interface(
 ) -> std::result::Result<(), DiagnosticError> {
     use std::fmt::Write;
 
-    let c_interface_struct_header = format!("c_{}.h", interface.name);
+    let c_interface_struct_header = c_interface_header(interface);
     let c_path = ctx.cfg.output_dir.join(&c_interface_struct_header);
     let mut file_c = FileWriteCache::new(&c_path, ctx.generated_foreign_files);
-    let cpp_path = ctx.cfg.output_dir.join(format!("{}.hpp", interface.name));
+    let cpp_path = ctx.cfg.output_dir.join(cpp_interface_header(interface));
     let mut file_cpp = FileWriteCache::new(&cpp_path, ctx.generated_foreign_files);
     let interface_comments = cpp_code::doc_comments_to_c_comments(&interface.doc_comments, true);
 
@@ -517,4 +574,12 @@ private:
         .map_err(DiagnosticError::map_any_err_to_our_err)?;
 
     Ok(())
+}
+
+fn c_interface_header(interface: &ForeignInterface) -> String {
+    format!("c_{}.h", interface.name)
+}
+
+fn cpp_interface_header(interface: &ForeignInterface) -> String {
+    format!("{}.hpp", interface.name)
 }

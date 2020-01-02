@@ -4,5 +4,5 @@ foreign_interface!(interface MyObserver {
 });
 
 foreign_class!(class Test {
-    fn f(_: Box<OnEvent + Send>);
+    fn f(_: Box<dyn OnEvent + Send>);
 });

@@ -640,7 +640,7 @@ foreign_class!(class TestEnumClass {
     constructor Moo::default() -> Moo;
     fn Moo::f1(&mut self, v: MyEnum) -> i32;
     fn Moo::next_enum(v: MyEnum) -> MyEnum;
-    fn call_cb(cb: Box<EnumObserver>) {
+    fn call_cb(cb: Box<dyn EnumObserver>) {
         let mut state = false;
         for e in &[MyEnum::Item1, MyEnum::Item2, MyEnum::Item3] {
             cb.on_state_changed(*e, state);
@@ -679,7 +679,7 @@ foreign_callback!(callback MyObserver {
 foreign_class!(class Observable {
     self_type Observable;
     constructor Observable::default() -> Observable;
-    fn Observable::subscribe(&mut self, _: Box<OnEvent>);
+    fn Observable::subscribe(&mut self, _: Box<dyn OnEvent>);
     fn Observable::change(&self, _: i32, _: &str);
 });
 
@@ -718,7 +718,7 @@ foreign_callback!(callback CheckAllTypesInCallbackArgs {
 
 foreign_class!(
     class TestCheckAllTypesInCallbackArgs {
-        fn call_cb(cb: Box<CheckAllTypesInCallbackArgs>) {
+        fn call_cb(cb: Box<dyn CheckAllTypesInCallbackArgs>) {
             cb.check_all_types1(u8::max_value(), i8::min_value(),
                                 u16::max_value(), i16::min_value(),
                                 u32::max_value(), i32::min_value(),
@@ -1054,7 +1054,7 @@ foreign_interface!(interface ThreadSafeObserver {
 });
 
 foreign_class!(class TestMultiThreadCallback {
-    fn f(cb: Box<OnThreadEvent + Send>) {
+    fn f(cb: Box<dyn OnThreadEvent + Send>) {
         std::thread::spawn(move || {
             cb.something_change_in_other_thread(42, "15");
         });

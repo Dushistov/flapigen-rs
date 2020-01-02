@@ -23,7 +23,7 @@ r##"impl OnEvent for JavaCallback {
 }"##;
 
 r##"#[doc = ""]
-impl SwigFrom<jobject> for Box<OnEvent + Send> {
+impl SwigFrom<jobject> for Box<dyn OnEvent + Send> {
     fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {
         let mut cb = JavaCallback::new(this, env);
         cb.methods.reserve(1);
