@@ -13,10 +13,10 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{
-            check_if_smart_pointer_return_inner_type, normalize_ty_lifetimes,
+            check_if_smart_pointer_return_inner_type, normalize_type,
             parse_ty_with_given_span_checked, DisplayToTokens,
         },
-        ty::{normalized_type, RustType},
+        ty::{normalized_name_to_type, RustType},
         typemap_macro::{FTypeConvRule, TypeMapConvRuleInfo},
         ForeignTypeInfo, RustTypeIdx, TypeMap,
     },
@@ -262,7 +262,7 @@ pub(crate) fn convert_to_heap_pointer(
     for smart_pointer in &["Box", "Rc", "Arc"] {
         if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, *smart_pointer) {
             let inner_ty: RustType = tmap.find_or_alloc_rust_type(&inner_ty, from.src_id);
-            let inner_ty_norm: Type = normalized_type(&inner_ty.normalized_name);
+            let inner_ty_norm: Type = normalized_name_to_type(&inner_ty.normalized_name);
             let smart_pointer_ty: Type = syn::parse_str(&smart_pointer).unwrap_or_else(|err| {
                 panic_on_syn_error(
                     "typemap::utils internal error, can not parse smart ptr",
@@ -277,8 +277,8 @@ pub(crate) fn convert_to_heap_pointer(
         }
     }
     let inner_ty = from.clone();
-    let inner_ty_str = normalize_ty_lifetimes(&inner_ty.ty);
-    let inner_ty_norm = normalized_type(inner_ty_str);
+    let inner_ty_str = normalize_type(&inner_ty.ty);
+    let inner_ty_norm = normalized_name_to_type(inner_ty_str);
 
     let code = quote! {
         let #var_name: Box<#inner_ty_norm> = Box::new(#var_name);

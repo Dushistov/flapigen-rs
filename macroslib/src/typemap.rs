@@ -22,9 +22,7 @@ use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result, SourceIdSpan},
     source_registry::SourceId,
     typemap::{
-        ast::{
-            get_trait_bounds, normalize_ty_lifetimes, DisplayToTokens, GenericTypeConv, TypeName,
-        },
+        ast::{get_trait_bounds, normalize_type, DisplayToTokens, GenericTypeConv, TypeName},
         ty::{
             ForeignConversationRule, ForeignType, ForeignTypeS, ForeignTypesStorage, RustType,
             RustTypeS,
@@ -914,10 +912,10 @@ impl TypeMap {
         this_ty: &Type,
         get_this_type: F,
     ) -> Option<&ForeignerClassInfo> {
-        let this_name = normalize_ty_lifetimes(this_ty);
+        let this_name = normalize_type(this_ty);
         for fc in &self.foreign_classes {
             if let Some(this_type_for_method) = get_this_type(self, fc) {
-                let cur_this = normalize_ty_lifetimes(&this_type_for_method);
+                let cur_this = normalize_type(&this_type_for_method);
                 if cur_this == this_name {
                     return Some(fc);
                 }
@@ -947,7 +945,7 @@ impl TypeMap {
     }
 
     pub(crate) fn find_or_alloc_rust_type(&mut self, ty: &Type, src_id: SourceId) -> RustType {
-        let name = normalize_ty_lifetimes(ty);
+        let name = normalize_type(ty);
         let idx = self.add_node(name.into(), || {
             RustTypeS::new_without_graph_idx(ty.clone(), name, src_id)
         });
@@ -955,7 +953,7 @@ impl TypeMap {
     }
 
     pub(crate) fn find_or_alloc_rust_type_no_src_id(&mut self, ty: &Type) -> RustType {
-        let name = normalize_ty_lifetimes(ty);
+        let name = normalize_type(ty);
         let idx = self.add_node(name.into(), || {
             RustTypeS::new_without_graph_idx(ty.clone(), name, SourceId::none())
         });
@@ -968,7 +966,7 @@ impl TypeMap {
         traits_name: &[&str],
         src_id: SourceId,
     ) -> RustType {
-        let name = normalize_ty_lifetimes(ty);
+        let name = normalize_type(ty);
         let idx = self.add_node(name.into(), || {
             let mut ty = RustTypeS::new_without_graph_idx(ty.clone(), name, src_id);
             for tn in traits_name {
@@ -985,8 +983,7 @@ impl TypeMap {
         suffix: &str,
         src_id: SourceId,
     ) -> RustType {
-        let name: SmolStr =
-            RustTypeS::make_unique_typename(normalize_ty_lifetimes(ty), suffix).into();
+        let name: SmolStr = RustTypeS::make_unique_typename(normalize_type(ty), suffix).into();
         let idx = self.add_node(name.clone(), || {
             RustTypeS::new_without_graph_idx(ty.clone(), name, src_id)
         });
@@ -1017,7 +1014,7 @@ impl TypeMap {
     }
 
     pub(crate) fn ty_to_rust_type_checked(&self, ty: &Type) -> Option<RustType> {
-        let name = normalize_ty_lifetimes(ty);
+        let name = normalize_type(ty);
         self.rust_names_map
             .get(name)
             .map(|idx| self.conv_graph[*idx].clone())

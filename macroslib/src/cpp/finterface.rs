@@ -115,7 +115,7 @@ pub(in crate::cpp) fn generate_interface(
                 to_var = TO_VAR_TEMPLATE,
                 from_var = FROM_VAR_TEMPLATE,
                 struct_with_funcs = c_struct_name,
-                res_type = ctx.conv_map[boxed_trait_rust_ty.to_idx()],
+                res_type = DisplayToTokens(&boxed_trait_rust_ty.ty),
             ),
             invalid_src_id_span(),
         )

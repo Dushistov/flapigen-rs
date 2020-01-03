@@ -21,7 +21,7 @@ use syn::{
     visit::{visit_lifetime, Visit},
     visit_mut::{
         visit_angle_bracketed_generic_arguments_mut, visit_parenthesized_generic_arguments_mut,
-        visit_type_mut, visit_type_reference_mut, VisitMut,
+        visit_type_mut, visit_type_reference_mut, visit_type_trait_object_mut, VisitMut,
     },
     Type,
 };
@@ -121,65 +121,76 @@ impl NormalizeTyLifetimesCache {
     }
 }
 
-fn with_normalize_ty_lifetimes_cache<T, F: FnOnce(&mut NormalizeTyLifetimesCache) -> T>(f: F) -> T {
+fn with_normalize_type_cache<T, F: FnOnce(&mut NormalizeTyLifetimesCache) -> T>(f: F) -> T {
     thread_local!(static INTERNER: RefCell<NormalizeTyLifetimesCache> = {
         RefCell::new(NormalizeTyLifetimesCache::new())
     });
     INTERNER.with(|interner| f(&mut *interner.borrow_mut()))
 }
 
-pub(crate) fn normalize_ty_lifetimes(ty: &syn::Type) -> &'static str {
-    if let Some(cached_str) = with_normalize_ty_lifetimes_cache(|cache| cache.get(ty)) {
-        return cached_str;
+pub(crate) struct StripLifetime;
+impl VisitMut for StripLifetime {
+    fn visit_type_reference_mut(&mut self, i: &mut syn::TypeReference) {
+        i.lifetime = None;
+        visit_type_reference_mut(self, i)
     }
-
-    struct StripLifetime;
-    impl VisitMut for StripLifetime {
-        fn visit_type_reference_mut(&mut self, i: &mut syn::TypeReference) {
-            i.lifetime = None;
-            visit_type_reference_mut(self, i)
-        }
-        fn visit_angle_bracketed_generic_arguments_mut(
-            &mut self,
-            i: &mut syn::AngleBracketedGenericArguments,
-        ) {
-            let mut args =
-                syn::punctuated::Punctuated::<syn::GenericArgument, syn::token::Comma>::new();
-            mem::swap(&mut args, &mut i.args);
-            i.args = args
-                .into_iter()
-                .filter(|x| {
-                    if let syn::GenericArgument::Lifetime(_) = x {
-                        false
-                    } else {
-                        true
-                    }
-                })
-                .collect();
-            visit_angle_bracketed_generic_arguments_mut(self, i);
-        }
-        fn visit_path_arguments_mut(&mut self, i: &mut syn::PathArguments) {
-            match *i {
-                syn::PathArguments::None => {}
-                syn::PathArguments::AngleBracketed(ref mut b) => {
-                    self.visit_angle_bracketed_generic_arguments_mut(b);
-                    if b.args.is_empty() {
-                        *i = syn::PathArguments::None;
-                    }
+    fn visit_angle_bracketed_generic_arguments_mut(
+        &mut self,
+        i: &mut syn::AngleBracketedGenericArguments,
+    ) {
+        let mut args =
+            syn::punctuated::Punctuated::<syn::GenericArgument, syn::token::Comma>::new();
+        mem::swap(&mut args, &mut i.args);
+        i.args = args
+            .into_iter()
+            .filter(|x| {
+                if let syn::GenericArgument::Lifetime(_) = x {
+                    false
+                } else {
+                    true
                 }
-                syn::PathArguments::Parenthesized(ref mut b) => {
-                    visit_parenthesized_generic_arguments_mut(self, b);
+            })
+            .collect();
+        visit_angle_bracketed_generic_arguments_mut(self, i);
+    }
+    fn visit_path_arguments_mut(&mut self, i: &mut syn::PathArguments) {
+        match *i {
+            syn::PathArguments::None => {}
+            syn::PathArguments::AngleBracketed(ref mut b) => {
+                self.visit_angle_bracketed_generic_arguments_mut(b);
+                if b.args.is_empty() {
+                    *i = syn::PathArguments::None;
                 }
             }
+            syn::PathArguments::Parenthesized(ref mut b) => {
+                visit_parenthesized_generic_arguments_mut(self, b);
+            }
         }
+    }
+}
+
+pub(crate) fn normalize_type(ty: &syn::Type) -> &'static str {
+    if let Some(cached_str) = with_normalize_type_cache(|cache| cache.get(ty)) {
+        return cached_str;
     }
 
     let mut strip_lifetime = StripLifetime;
     let mut new_ty = ty.clone();
     strip_lifetime.visit_type_mut(&mut new_ty);
+
+    struct StripDynKeyword;
+    impl VisitMut for StripDynKeyword {
+        fn visit_type_trait_object_mut(&mut self, i: &mut syn::TypeTraitObject) {
+            i.dyn_token = None;
+            visit_type_trait_object_mut(self, i);
+        }
+    }
+    let mut strip_dyn = StripDynKeyword;
+    strip_dyn.visit_type_mut(&mut new_ty);
+
     let type_str = new_ty.into_token_stream().to_string();
 
-    with_normalize_ty_lifetimes_cache(|cache| cache.insert(ty, type_str))
+    with_normalize_type_cache(|cache| cache.insert(ty, type_str))
 }
 
 #[derive(Debug)]
@@ -301,10 +312,10 @@ impl GenericTypeConv {
                 ty: Some(ref val),
             }) = subst_map.as_slice().iter().nth(0).as_ref()
             {
-                let val_name = normalize_ty_lifetimes(val);
+                let val_name = normalize_type(val);
                 let foreign_name =
                     (*from_foreigner_hint.as_str()).replace(&key.to_string(), &val_name);
-                let clean_from_ty = normalize_ty_lifetimes(&self.from_ty);
+                let clean_from_ty = normalize_type(&self.from_ty);
                 if ty.normalized_name
                     != RustTypeS::make_unique_typename(&clean_from_ty, &foreign_name)
                 {
@@ -322,7 +333,7 @@ impl GenericTypeConv {
                 ty: Some(ref val),
             }) = subst_map.as_slice().iter().nth(0).as_ref()
             {
-                let val_name = normalize_ty_lifetimes(val);
+                let val_name = normalize_type(val);
                 let foreign_name =
                     (*to_foreigner_hint.as_str()).replace(&key.to_string(), &val_name);
                 Some(foreign_name)
@@ -332,11 +343,9 @@ impl GenericTypeConv {
         } else {
             None
         };
-        let normalized_name = RustTypeS::make_unique_typename_if_need(
-            normalize_ty_lifetimes(&to_ty).to_string(),
-            to_suffix,
-        )
-        .into();
+        let normalized_name =
+            RustTypeS::make_unique_typename_if_need(normalize_type(&to_ty).to_string(), to_suffix)
+                .into();
         Some((to_ty, normalized_name))
     }
 }
@@ -352,7 +361,7 @@ where
 {
     let traits_bound_not_match = |idx: usize| {
         let requires = &trait_bounds[idx].trait_names;
-        let val_name = normalize_ty_lifetimes(val);
+        let val_name = normalize_type(val);
 
         others(val_name).map_or(true, |rt| !rt.implements.contains_subset(requires))
     };
@@ -601,7 +610,7 @@ fn types_equal_inside_path(
     type_p2: &Type,
     subst_map: &mut TyParamsSubstMap,
 ) -> bool {
-    let type_p1_name = normalize_ty_lifetimes(type_p1);
+    let type_p1_name = normalize_type(type_p1);
     let real_type_p1: Type = if let Some(subst) = subst_map.get_mut(&type_p1_name) {
         match *subst {
             Some(ref x) => (*x).clone(),
@@ -654,7 +663,7 @@ pub(in crate::typemap) fn replace_all_types_with(
     }
     impl<'a, 'b> VisitMut for ReplaceTypes<'a, 'b> {
         fn visit_type_mut(&mut self, t: &mut Type) {
-            let ty_name = normalize_ty_lifetimes(t);
+            let ty_name = normalize_type(t);
             if let Some(Some(subst)) = self.subst_map.get(&ty_name) {
                 *t = subst.clone();
             } else {
@@ -739,7 +748,7 @@ pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> GenericTraitBoundVec 
             {
                 let mut ret_elem = GenericTraitBound {
                     ty_param: TyParamRef::Own(Ident::new(
-                        &normalize_ty_lifetimes(bounded_ty),
+                        &normalize_type(bounded_ty),
                         Span::call_site(),
                     )),
                     trait_names: TraitNamesSet::default(),

@@ -17,7 +17,7 @@ use crate::{
     error::{DiagnosticError, Result},
     namegen::new_unique_name,
     source_registry::SourceId,
-    typemap::ast::{normalize_ty_lifetimes, DisplayToTokens},
+    typemap::ast::{normalize_type, DisplayToTokens},
     types::{
         FnArg, ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
         ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
@@ -434,9 +434,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             };
             if let Some(ref constructor_ret_type) = constructor_ret_type {
                 debug!("second constructor, ret type: {:?}", constructor_ret_type);
-                if normalize_ty_lifetimes(constructor_ret_type)
-                    != normalize_ty_lifetimes(&*ret_type)
-                {
+                if normalize_type(constructor_ret_type) != normalize_type(&*ret_type) {
                     return Err(syn::Error::new(
                         constructor_ret_type.span(),
                         format!(

@@ -86,7 +86,7 @@ impl RustTypeS {
 }
 
 /// # Panics
-pub(crate) fn normalized_type(normalized_name: &str) -> syn::Type {
+pub(crate) fn normalized_name_to_type(normalized_name: &str) -> syn::Type {
     syn::parse_str(normalized_name).unwrap_or_else(|err| {
         panic_on_syn_error("Can not parse normalized type", normalized_name.into(), err)
     })
