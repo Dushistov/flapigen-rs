@@ -18,7 +18,7 @@ use crate::{
     namegen::new_unique_name,
     typemap::{
         ast::{list_lifetimes, normalize_type},
-        ty::{normalized_name_to_type, RustType},
+        ty::RustType,
         utils::{
             convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
@@ -134,8 +134,7 @@ fn do_generate(
             let unpack_code: TokenStream = syn::parse_str(&unpack_code).unwrap_or_else(|err| {
                 panic_on_syn_error("internal/c++ foreign class unpack code", unpack_code, err)
             });
-            let this_type_for_method_ty =
-                normalized_name_to_type(&this_type_for_method.normalized_name);
+            let this_type_for_method_ty = this_type_for_method.to_type_without_lifetimes();
             let fclass_impl_code: TokenStream = quote! {
                 impl<#(#lifetimes),*> SwigForeignClass for #class_name {
                     fn c_class_name() -> *const ::std::os::raw::c_char {
@@ -1202,9 +1201,8 @@ fn genearte_copy_stuff(
 
         let clone_fn_name = do_c_func_name(class, MethodAccess::Private, "clone");
         let clone_fn_name = Ident::new(&clone_fn_name, Span::call_site());
-        let this_type_ty = normalized_name_to_type(&this_type.normalized_name);
-        let this_type_for_method_ty =
-            normalized_name_to_type(&this_type_for_method.normalized_name);
+        let this_type_ty = this_type.to_type_without_lifetimes();
+        let this_type_for_method_ty = this_type_for_method.to_type_without_lifetimes();
 
         ctx.rust_code.push(quote! {
             #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]

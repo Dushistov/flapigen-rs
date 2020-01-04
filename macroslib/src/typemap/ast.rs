@@ -128,7 +128,7 @@ fn with_normalize_type_cache<T, F: FnOnce(&mut NormalizeTyLifetimesCache) -> T>(
     INTERNER.with(|interner| f(&mut *interner.borrow_mut()))
 }
 
-pub(crate) struct StripLifetime;
+struct StripLifetime;
 impl VisitMut for StripLifetime {
     fn visit_type_reference_mut(&mut self, i: &mut syn::TypeReference) {
         i.lifetime = None;
@@ -167,6 +167,11 @@ impl VisitMut for StripLifetime {
             }
         }
     }
+}
+
+pub(crate) fn strip_lifetimes(ty: &mut syn::Type) {
+    let mut strip_lifetime = StripLifetime;
+    strip_lifetime.visit_type_mut(ty);
 }
 
 pub(crate) fn normalize_type(ty: &syn::Type) -> &'static str {

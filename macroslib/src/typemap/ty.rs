@@ -1,7 +1,10 @@
 use crate::{
-    error::{panic_on_syn_error, DiagnosticError},
+    error::DiagnosticError,
     source_registry::SourceId,
-    typemap::{ast::TypeName, RustTypeIdx, TypeConvCode},
+    typemap::{
+        ast::{strip_lifetimes, TypeName},
+        RustTypeIdx, TypeConvCode,
+    },
 };
 use proc_macro2::Span;
 use rustc_hash::FxHashMap;
@@ -83,13 +86,12 @@ impl RustTypeS {
             None => name,
         }
     }
-}
 
-/// # Panics
-pub(crate) fn normalized_name_to_type(normalized_name: &str) -> syn::Type {
-    syn::parse_str(normalized_name).unwrap_or_else(|err| {
-        panic_on_syn_error("Can not parse normalized type", normalized_name.into(), err)
-    })
+    pub(crate) fn to_type_without_lifetimes(&self) -> syn::Type {
+        let mut ty = self.ty.clone();
+        strip_lifetimes(&mut ty);
+        ty
+    }
 }
 
 pub(crate) type RustType = Rc<RustTypeS>;

@@ -18,7 +18,7 @@ use crate::{
     namegen::new_unique_name,
     typemap::{
         ast::{if_result_return_ok_err_types, list_lifetimes, normalize_type},
-        ty::{normalized_name_to_type, RustType},
+        ty::RustType,
         utils::{
             convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
@@ -551,8 +551,7 @@ fn generate_rust_code(
             let unpack_code: TokenStream = syn::parse_str(&unpack_code).unwrap_or_else(|err| {
                 panic_on_syn_error("internal/java foreign class unpack code", unpack_code, err)
             });
-            let this_type_for_method_ty =
-                normalized_name_to_type(&this_type_for_method.normalized_name);
+            let this_type_for_method_ty = this_type_for_method.to_type_without_lifetimes();
             let this_type_for_method_ty_as_is = &this_type_for_method.ty;
             let class_name = &this_type.ty;
             let global_var_with_jclass = Ident::new(
