@@ -28,7 +28,7 @@ use syn::{
 
 pub(in crate) use self::subst_map::{TyParamsSubstItem, TyParamsSubstList, TyParamsSubstMap};
 use crate::{
-    error::{panic_on_syn_error, SourceIdSpan},
+    error::SourceIdSpan,
     source_registry::SourceId,
     typemap::{
         ty::{RustType, RustTypeS, TraitNamesSet},
@@ -875,10 +875,4 @@ pub(crate) fn parse_ty_with_given_span(
     span: Span,
 ) -> std::result::Result<Type, syn::Error> {
     syn::LitStr::new(type_str, span).parse::<syn::Type>()
-}
-
-pub(crate) fn parse_ty_with_given_span_checked(type_str: &str, span: Span) -> Type {
-    parse_ty_with_given_span(type_str, span).unwrap_or_else(|err| {
-        panic_on_syn_error("internal parse_ty_with_given_span", type_str.into(), err)
-    })
 }

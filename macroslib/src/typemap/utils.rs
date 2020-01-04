@@ -12,10 +12,7 @@ use crate::{
     file_cache::FileOperationsRegistrator,
     source_registry::SourceId,
     typemap::{
-        ast::{
-            check_if_smart_pointer_return_inner_type, parse_ty_with_given_span_checked,
-            DisplayToTokens,
-        },
+        ast::check_if_smart_pointer_return_inner_type,
         ty::RustType,
         typemap_macro::{FTypeConvRule, TypeMapConvRuleInfo},
         ForeignTypeInfo, RustTypeIdx, TypeMap,
@@ -130,28 +127,19 @@ pub(crate) fn create_suitable_types_for_constructor_and_self(
             unimplemented!();
         }
         SelfTypeVariant::Rptr | SelfTypeVariant::RptrMut => {
+            let c_sp = constructor_real_type.span();
             let self_type = class.self_type_as_ty();
+            let s_sp = self_type.span();
+
             if self_variant == SelfTypeVariant::Rptr {
                 (
-                    parse_ty_with_given_span_checked(
-                        &format!("& {}", DisplayToTokens(constructor_real_type)),
-                        constructor_real_type.span(),
-                    ),
-                    parse_ty_with_given_span_checked(
-                        &format!("& {}", DisplayToTokens(&self_type)),
-                        self_type.span(),
-                    ),
+                    parse_type_spanned_checked!(c_sp, & #constructor_real_type),
+                    parse_type_spanned_checked!(s_sp, & #self_type),
                 )
             } else {
                 (
-                    parse_ty_with_given_span_checked(
-                        &format!("&mut {}", DisplayToTokens(constructor_real_type)),
-                        constructor_real_type.span(),
-                    ),
-                    parse_ty_with_given_span_checked(
-                        &format!("&mut {}", DisplayToTokens(&self_type)),
-                        self_type.span(),
-                    ),
+                    parse_type_spanned_checked!(c_sp, &mut #constructor_real_type),
+                    parse_type_spanned_checked!(s_sp, &mut #self_type),
                 )
             }
         }

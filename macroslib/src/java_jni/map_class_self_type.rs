@@ -8,7 +8,7 @@ use crate::{
     error::{invalid_src_id_span, Result},
     source_registry::SourceId,
     typemap::{
-        ast::{parse_ty_with_given_span_checked, DisplayToTokens, TypeName},
+        ast::TypeName,
         ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
         utils::{boxed_type, convert_to_heap_pointer, unpack_from_heap_pointer},
         RustTypeIdx, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
@@ -40,12 +40,12 @@ pub(in crate::java_jni) fn register_typemap_for_self_type(
 
     let this_type_inner = boxed_type(ctx.conv_map, &this_type);
 
-    let code = format!("& {}", this_type_inner);
-    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_inner.ty.span());
+    let span = this_type_inner.ty.span();
+    let this_type_inner_ty = this_type_inner.to_type_without_lifetimes();
+    let gen_ty = parse_type_spanned_checked!(span, & #this_type_inner_ty);
     let this_type_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
-    let code = format!("&mut {}", this_type_inner);
-    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_inner.ty.span());
+    let gen_ty = parse_type_spanned_checked!(span, &mut #this_type_inner_ty);
     let this_type_mut_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
     register_rust_ty_conversation_rules(ctx, &this_type)?;
@@ -71,9 +71,9 @@ fn register_rust_ty_conversation_rules(ctx: &mut JavaContext, this_type: &RustTy
     let jlong_ti: RustType = ctx
         .conv_map
         .find_or_alloc_rust_type_no_src_id(&parse_type! { jlong });
-    let this_type_for_method_ty = &this_type_for_method.ty;
-    let code = format!("& {}", DisplayToTokens(&this_type_for_method_ty));
-    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method_ty.span());
+    let span = this_type_for_method.ty.span();
+    let this_type_for_method_ty = this_type_for_method.to_type_without_lifetimes();
+    let gen_ty = parse_type_spanned_checked!(span, & #this_type_for_method_ty);
     let this_type_ref = ctx
         .conv_map
         .find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
@@ -96,8 +96,8 @@ fn register_rust_ty_conversation_rules(ctx: &mut JavaContext, this_type: &RustTy
         )
         .into(),
     );
-    let code = format!("&mut {}", DisplayToTokens(&this_type_for_method_ty));
-    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_for_method_ty.span());
+
+    let gen_ty = parse_type_spanned_checked!(span, &mut #this_type_for_method_ty);
     let this_type_mut_ref = ctx
         .conv_map
         .find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
@@ -155,7 +155,8 @@ fn register_main_foreign_types(
         "register_main_foreign_types: ftype for this_type {}",
         ctx.conv_map[this_type]
     );
-    let jlong_ty = parse_ty_with_given_span_checked("jlong", ctx.conv_map[this_type].ty.span());
+    let span = ctx.conv_map[this_type].ty.span();
+    let jlong_ty = parse_type_spanned_checked!(span, jlong);
     let out_val_prefix = format!("{}OutVal", class.name);
     let jlong_out_val_rty =
         ctx.conv_map
@@ -415,11 +416,10 @@ fn register_main_foreign_types(
             ctx.conv_map[self_type], ctx.conv_map[this_type]
         );
         let self_type = ctx.conv_map[self_type].clone();
+        let span = self_type.ty.span();
+        let self_type_ty = self_type.to_type_without_lifetimes();
         {
-            let gen_ty = parse_ty_with_given_span_checked(
-                &format!("&mut {}", self_type),
-                self_type.ty.span(),
-            );
+            let gen_ty = parse_type_spanned_checked!(span, &mut #self_type_ty);
             let self_type_mut_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
             debug!(
@@ -454,8 +454,7 @@ fn register_main_foreign_types(
             ctx.conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
         }
         {
-            let code = format!("& {}", self_type);
-            let gen_ty = parse_ty_with_given_span_checked(&code, self_type.ty.span());
+            let gen_ty = parse_type_spanned_checked!(span, & #self_type_ty);
             let self_type_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
             let class_ftype_ref_in = ForeignTypeS {

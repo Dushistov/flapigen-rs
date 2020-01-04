@@ -15,6 +15,23 @@ macro_rules! parse_type {
     }}
 }
 
+macro_rules! parse_spanned {
+    ($span:ident, $($tt:tt)*) => {{
+	let tt = quote::quote_spanned! { $span=> $($tt)* };
+        syn::parse2(tt)
+    }}
+}
+
+macro_rules! parse_type_spanned_checked {
+    ($span:ident, $($tt:tt)*) => {{
+	let ty: syn::Type = parse_spanned!($span, $($tt)*)
+	    .unwrap_or_else(|err| {
+		panic!("Can not parse type {}: {}", stringify!($($tt)*), err);
+	    });
+	ty
+    }}
+}
+
 mod code_parse;
 mod cpp;
 mod error;

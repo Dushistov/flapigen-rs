@@ -600,6 +600,21 @@ fn test_is_second_subst_of_first_extern_c_fn_ptr() {
     assert_eq!(parse_type! { f32 }, *subst_map.get("U").unwrap().unwrap());
 }
 
+#[test]
+fn test_parse_type_spanned_macro() {
+    let ty = str_to_ty(" Cow<str> ");
+
+    assert_eq!(LineColumn { line: 1, column: 1 }, ty.span().start());
+    assert_eq!(LineColumn { line: 1, column: 9 }, ty.span().end());
+
+    let span = ty.span();
+    let ty2: syn::Type = parse_type_spanned_checked!(span, & #ty);
+    assert_eq!(parse_type! { & Cow<str> }, ty2);
+
+    assert_eq!(LineColumn { line: 1, column: 1 }, ty2.span().start());
+    assert_eq!(LineColumn { line: 1, column: 9 }, ty2.span().end());
+}
+
 fn str_to_ty(code: &str) -> syn::Type {
     syn::parse_str::<syn::Type>(code).unwrap()
 }
