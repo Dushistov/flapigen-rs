@@ -17,8 +17,8 @@ use crate::{
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
-        ast::{list_lifetimes, normalize_ty_lifetimes},
-        ty::{normalized_type, RustType},
+        ast::{list_lifetimes, normalize_type},
+        ty::RustType,
         utils::{
             convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
@@ -134,7 +134,7 @@ fn do_generate(
             let unpack_code: TokenStream = syn::parse_str(&unpack_code).unwrap_or_else(|err| {
                 panic_on_syn_error("internal/c++ foreign class unpack code", unpack_code, err)
             });
-            let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
+            let this_type_for_method_ty = this_type_for_method.to_type_without_lifetimes();
             let fclass_impl_code: TokenStream = quote! {
                 impl<#(#lifetimes),*> SwigForeignClass for #class_name {
                     fn c_class_name() -> *const ::std::os::raw::c_char {
@@ -231,7 +231,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
         let real_output_typename = match method.fn_decl.output {
             syn::ReturnType::Default => "()",
-            syn::ReturnType::Type(_, ref t) => normalize_ty_lifetimes(&*t),
+            syn::ReturnType::Type(_, ref t) => normalize_type(&*t),
         };
 
         let mut rust_args_with_types = String::new();
@@ -575,7 +575,7 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
 "#,
             c_destructor_name = c_destructor_name,
             unpack_code = unpack_code,
-            this_type = this_type_for_method.normalized_name,
+            this_type = this_type_for_method,
         );
         debug!("we generate and parse code: {}", code);
         ctx.rust_code.push(
@@ -836,8 +836,8 @@ pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_re
         decl_func_args = mc.decl_func_args,
         convert_input_code = convert_input_code,
         c_ret_type = c_ret_type,
-        this_type_ref = from_ty.normalized_name,
-        this_type = this_type_for_method.normalized_name,
+        this_type_ref = from_ty,
+        this_type = this_type_for_method,
         convert_this = convert_this,
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
@@ -899,7 +899,7 @@ pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void
         decl_func_args = mc.decl_func_args,
         convert_input_code = convert_input_code,
         box_this = code_box_this,
-        real_output_typename = &construct_ret_type.normalized_name.as_str(),
+        real_output_typename = construct_ret_type,
         call = mc.method.generate_code_to_call_rust_func(),
     );
     let mut gen_code = deps_code_in;
@@ -1201,8 +1201,8 @@ fn genearte_copy_stuff(
 
         let clone_fn_name = do_c_func_name(class, MethodAccess::Private, "clone");
         let clone_fn_name = Ident::new(&clone_fn_name, Span::call_site());
-        let this_type_ty = normalized_type(&this_type.normalized_name);
-        let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
+        let this_type_ty = this_type.to_type_without_lifetimes();
+        let this_type_for_method_ty = this_type_for_method.to_type_without_lifetimes();
 
         ctx.rust_code.push(quote! {
             #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]

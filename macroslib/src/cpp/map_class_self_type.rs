@@ -6,7 +6,7 @@ use super::cpp_code;
 use crate::{
     error::{invalid_src_id_span, Result},
     typemap::{
-        ast::{parse_ty_with_given_span_checked, TypeName},
+        ast::TypeName,
         ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
         utils::{boxed_type, unpack_from_heap_pointer},
         RustTypeIdx, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
@@ -21,16 +21,16 @@ pub(in crate::cpp) fn register_typemap_for_self_type(
     this_type: RustType,
     self_desc: &SelfTypeDesc,
 ) -> Result<()> {
-    let void_ptr_ty =
-        parse_ty_with_given_span_checked("*mut ::std::os::raw::c_void", this_type.ty.span());
+    let span = this_type.ty.span();
+
+    let void_ptr_ty = parse_type_spanned_checked!(span, *mut ::std::os::raw::c_void);
     let void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
         &void_ptr_ty,
         &this_type.normalized_name,
         class.src_id,
     );
 
-    let const_void_ptr_ty =
-        parse_ty_with_given_span_checked("*const ::std::os::raw::c_void", this_type.ty.span());
+    let const_void_ptr_ty = parse_type_spanned_checked!(span, *const ::std::os::raw::c_void);
     let const_void_ptr_rust_ty = conv_map.find_or_alloc_rust_type_with_suffix(
         &const_void_ptr_ty,
         &this_type.normalized_name,
@@ -39,12 +39,12 @@ pub(in crate::cpp) fn register_typemap_for_self_type(
 
     let this_type_inner = boxed_type(conv_map, &this_type);
 
-    let code = format!("& {}", this_type_inner);
-    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_inner.ty.span());
+    let span = this_type_inner.ty.span();
+    let ty = this_type_inner.to_type_without_lifetimes();
+    let gen_ty = parse_type_spanned_checked!(span, & #ty);
     let this_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
-    let code = format!("&mut {}", this_type_inner);
-    let gen_ty = parse_ty_with_given_span_checked(&code, this_type_inner.ty.span());
+    let gen_ty = parse_type_spanned_checked!(span, &mut #ty);
     let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
     register_intermidiate_pointer_types(
@@ -175,8 +175,9 @@ fn register_rust_ty_conversation_rules(
 
     // *const c_void -> "class", two steps to make it more expensive
     // for type graph path search
-    let code = format!("*mut {}", conv_map[this_type_inner]);
-    let gen_ty = parse_ty_with_given_span_checked(&code, conv_map[this_type_inner].ty.span());
+    let ty = conv_map[this_type_inner].to_type_without_lifetimes();
+    let span = ty.span();
+    let gen_ty = parse_type_spanned_checked!(span, *mut #ty);
     let this_type_mut_ptr = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
     conv_map.add_conversation_rule(
@@ -371,10 +372,9 @@ fn register_main_foreign_types(
     if self_type != this_type {
         let self_type = conv_map[self_type].clone();
         {
-            let gen_ty = parse_ty_with_given_span_checked(
-                &format!("&mut {}", self_type),
-                self_type.ty.span(),
-            );
+            let span = self_type.ty.span();
+            let self_type_ty = self_type.to_type_without_lifetimes();
+            let gen_ty = parse_type_spanned_checked!(span, &mut #self_type_ty);
             let self_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
             let class_ftype_mut_ref_in = ForeignTypeS {
@@ -404,8 +404,9 @@ fn register_main_foreign_types(
             conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
         }
         {
-            let code = format!("& {}", self_type);
-            let gen_ty = parse_ty_with_given_span_checked(&code, self_type.ty.span());
+            let self_type_ty = self_type.to_type_without_lifetimes();
+            let span = self_type.ty.span();
+            let gen_ty = parse_type_spanned_checked!(span, & #self_type_ty);
             let self_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
             let class_ftype_ref_in = ForeignTypeS {

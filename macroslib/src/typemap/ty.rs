@@ -1,9 +1,13 @@
 use crate::{
-    error::{panic_on_syn_error, DiagnosticError},
+    error::DiagnosticError,
     source_registry::SourceId,
-    typemap::{ast::TypeName, RustTypeIdx, TypeConvCode},
+    typemap::{
+        ast::{strip_lifetimes, TypeName},
+        RustTypeIdx, TypeConvCode,
+    },
 };
 use proc_macro2::Span;
+use quote::ToTokens;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -17,11 +21,13 @@ pub(crate) struct RustTypeS {
     pub normalized_name: SmolStr,
     pub implements: ImplementsSet,
     pub(in crate::typemap) graph_idx: RustTypeIdx,
+    /// like normalized_name, but _with_ dyn keyword
+    typename_without_lifetimes: SmolStr,
 }
 
 impl fmt::Display for RustTypeS {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
-        write!(f, "{}", self.normalized_name)
+        write!(f, "{}", self.typename_without_lifetimes)
     }
 }
 
@@ -34,12 +40,15 @@ impl RustTypeS {
     where
         S: Into<SmolStr>,
     {
+        let mut ty_lftms = ty.clone();
+        strip_lifetimes(&mut ty_lftms);
         RustTypeS {
             ty,
             normalized_name: norm_name.into(),
             implements: ImplementsSet::default(),
             graph_idx: RustTypeIdx::new(0),
             src_id,
+            typename_without_lifetimes: ty_lftms.into_token_stream().to_string().into(),
         }
     }
     #[cfg(test)]
@@ -50,6 +59,7 @@ impl RustTypeS {
     pub(in crate::typemap) fn merge(&mut self, other: &RustTypeS) {
         self.ty = other.ty.clone();
         self.normalized_name = other.normalized_name.clone();
+        self.typename_without_lifetimes = other.typename_without_lifetimes.clone();
         self.implements.insert_set(&other.implements);
     }
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
@@ -77,19 +87,14 @@ impl RustTypeS {
     }
 
     pub(crate) fn typename(&self) -> &str {
-        let name = self.normalized_name.as_str();
-        match name.find('\0') {
-            Some(pos) => &name[0..pos],
-            None => name,
-        }
+        self.typename_without_lifetimes.as_str()
     }
-}
 
-/// # Panics
-pub(crate) fn normalized_type(normalized_name: &str) -> syn::Type {
-    syn::parse_str(normalized_name).unwrap_or_else(|err| {
-        panic_on_syn_error("Can not parse normalized type", normalized_name.into(), err)
-    })
+    pub(crate) fn to_type_without_lifetimes(&self) -> syn::Type {
+        let mut ty = self.ty.clone();
+        strip_lifetimes(&mut ty);
+        ty
+    }
 }
 
 pub(crate) type RustType = Rc<RustTypeS>;

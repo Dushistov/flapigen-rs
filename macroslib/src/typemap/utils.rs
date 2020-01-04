@@ -12,11 +12,8 @@ use crate::{
     file_cache::FileOperationsRegistrator,
     source_registry::SourceId,
     typemap::{
-        ast::{
-            check_if_smart_pointer_return_inner_type, normalize_ty_lifetimes,
-            parse_ty_with_given_span_checked, DisplayToTokens,
-        },
-        ty::{normalized_type, RustType},
+        ast::check_if_smart_pointer_return_inner_type,
+        ty::RustType,
         typemap_macro::{FTypeConvRule, TypeMapConvRuleInfo},
         ForeignTypeInfo, RustTypeIdx, TypeMap,
     },
@@ -130,28 +127,19 @@ pub(crate) fn create_suitable_types_for_constructor_and_self(
             unimplemented!();
         }
         SelfTypeVariant::Rptr | SelfTypeVariant::RptrMut => {
+            let c_sp = constructor_real_type.span();
             let self_type = class.self_type_as_ty();
+            let s_sp = self_type.span();
+
             if self_variant == SelfTypeVariant::Rptr {
                 (
-                    parse_ty_with_given_span_checked(
-                        &format!("& {}", DisplayToTokens(constructor_real_type)),
-                        constructor_real_type.span(),
-                    ),
-                    parse_ty_with_given_span_checked(
-                        &format!("& {}", DisplayToTokens(&self_type)),
-                        self_type.span(),
-                    ),
+                    parse_type_spanned_checked!(c_sp, & #constructor_real_type),
+                    parse_type_spanned_checked!(s_sp, & #self_type),
                 )
             } else {
                 (
-                    parse_ty_with_given_span_checked(
-                        &format!("&mut {}", DisplayToTokens(constructor_real_type)),
-                        constructor_real_type.span(),
-                    ),
-                    parse_ty_with_given_span_checked(
-                        &format!("&mut {}", DisplayToTokens(&self_type)),
-                        self_type.span(),
-                    ),
+                    parse_type_spanned_checked!(c_sp, &mut #constructor_real_type),
+                    parse_type_spanned_checked!(s_sp, &mut #self_type),
                 )
             }
         }
@@ -262,7 +250,7 @@ pub(crate) fn convert_to_heap_pointer(
     for smart_pointer in &["Box", "Rc", "Arc"] {
         if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, *smart_pointer) {
             let inner_ty: RustType = tmap.find_or_alloc_rust_type(&inner_ty, from.src_id);
-            let inner_ty_norm: Type = normalized_type(&inner_ty.normalized_name);
+            let inner_ty_norm: Type = inner_ty.to_type_without_lifetimes();
             let smart_pointer_ty: Type = syn::parse_str(&smart_pointer).unwrap_or_else(|err| {
                 panic_on_syn_error(
                     "typemap::utils internal error, can not parse smart ptr",
@@ -277,8 +265,7 @@ pub(crate) fn convert_to_heap_pointer(
         }
     }
     let inner_ty = from.clone();
-    let inner_ty_str = normalize_ty_lifetimes(&inner_ty.ty);
-    let inner_ty_norm = normalized_type(inner_ty_str);
+    let inner_ty_norm = inner_ty.to_type_without_lifetimes();
 
     let code = quote! {
         let #var_name: Box<#inner_ty_norm> = Box::new(#var_name);
@@ -300,7 +287,7 @@ pub(crate) fn unpack_from_heap_pointer(
     let {var_name}: {rc_type}  = unsafe {{ {smart_pointer}::from_raw({var_name}) }};
 "#,
                 var_name = var_name,
-                rc_type = from.normalized_name,
+                rc_type = from,
                 smart_pointer = *smart_pointer,
             );
         }
@@ -311,7 +298,7 @@ pub(crate) fn unpack_from_heap_pointer(
     let {var_name}: {inside_box_type} = *{var_name};
 "#,
             var_name = var_name,
-            inside_box_type = from.normalized_name
+            inside_box_type = from
         )
     } else {
         String::new()
@@ -322,7 +309,7 @@ pub(crate) fn unpack_from_heap_pointer(
 {unbox_code}
 "#,
         var_name = var_name,
-        inside_box_type = from.normalized_name,
+        inside_box_type = from,
         unbox_code = unbox_code
     )
 }

@@ -774,8 +774,8 @@ fn create_interface() -> Box<Box<dyn Interface>> {
 }
 
 foreign_class!(class Interface {
-    self_type Interface;
-    constructor create_interface() -> Box<Box<Interface>>;
+    self_type dyn Interface;
+    constructor create_interface() -> Box<Box<dyn Interface>>;
     fn Interface::f(&self, _: i32) -> i32;
     fn Interface::set(&mut self, x: i32);
 });
@@ -787,7 +787,7 @@ pub struct TestPassInterface;
 foreign_class!(class TestPassInterface {
     self_type TestPassInterface;
     constructor TestPassInterface::default() -> TestPassInterface;
-    fn use_interface(a: Box<Box<Interface>>, b: i32) -> i32 {
+    fn use_interface(a: Box<Box<dyn Interface>>, b: i32) -> i32 {
         (**a).f(b)
     }
 });

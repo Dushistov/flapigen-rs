@@ -17,8 +17,7 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{
-            normalize_ty_lifetimes, parse_ty_with_given_span, DisplayToTokens, GenericTypeConv,
-            TypeName,
+            normalize_type, parse_ty_with_given_span, DisplayToTokens, GenericTypeConv, TypeName,
         },
         ty::{ForeignTypesStorage, RustTypeS},
         typemap_macro::TypeMapConvRuleInfo,
@@ -255,7 +254,7 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
 
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)
                     .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
-                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
+                attr_value_tn.typename = normalize_type(&rust_ty).into();
                 names_map.insert(ftype, (attr_value_tn, rust_ty));
             } else {
                 return Err(DiagnosticError::new(
@@ -287,7 +286,7 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
                 let mut attr_value_tn = TypeName::new(attr_value.value(), (src_id, span));
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)
                     .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
-                attr_value_tn.typename = normalize_ty_lifetimes(&rust_ty).into();
+                attr_value_tn.typename = normalize_type(&rust_ty).into();
                 let unique_name =
                     RustTypeS::make_unique_typename(&attr_value_tn.typename, &ftype.typename);
                 names_map.insert(
@@ -529,7 +528,7 @@ fn handle_deref_impl(
         target_ty, item_impl.self_ty
     );
 
-    let deref_target_name = normalize_ty_lifetimes(target_ty);
+    let deref_target_name = normalize_type(target_ty);
     let trait_path = if let Some((_, ref trait_path, _)) = item_impl.trait_ {
         trait_path
     } else {
@@ -585,7 +584,7 @@ fn handle_deref_impl(
             )?,
         });
     } else {
-        let to_typename = normalize_ty_lifetimes(&to_ref_ty);
+        let to_typename = normalize_type(&to_ref_ty);
         let to_ty = if let Some(ty_type_idx) = ret.rust_names_map.get(to_typename) {
             ret.conv_graph[*ty_type_idx].ty.clone()
         } else {
