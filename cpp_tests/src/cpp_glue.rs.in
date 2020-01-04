@@ -774,7 +774,7 @@ fn create_interface() -> Box<Box<dyn Interface>> {
 }
 
 foreign_class!(class Interface {
-    self_type Interface;
+    self_type dyn Interface;
     constructor create_interface() -> Box<Box<dyn Interface>>;
     fn Interface::f(&self, _: i32) -> i32;
     fn Interface::set(&mut self, x: i32);

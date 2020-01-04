@@ -28,7 +28,7 @@ r#"pub extern "C" fn Interface_create_interface() -> *const ::std::os::raw::c_vo
 
 r#"pub extern "C" fn Interface_f(this: *mut Box<dyn Interface>, a0: i32) -> i32 {
     let this: &Box<dyn Interface> = unsafe { this.as_mut().unwrap() };
-    let mut this: &Interface = this.as_ref();
+    let mut this: &dyn Interface = this.as_ref();
     let mut ret: i32 = Interface::f(this, a0);
     ret
 }"#;

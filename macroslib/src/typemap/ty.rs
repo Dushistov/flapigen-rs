@@ -87,11 +87,7 @@ impl RustTypeS {
     }
 
     pub(crate) fn typename(&self) -> &str {
-        let name = self.normalized_name.as_str();
-        match name.find('\0') {
-            Some(pos) => &name[0..pos],
-            None => name,
-        }
+        self.typename_without_lifetimes.as_str()
     }
 
     pub(crate) fn to_type_without_lifetimes(&self) -> syn::Type {
