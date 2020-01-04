@@ -287,7 +287,7 @@ pub(crate) fn unpack_from_heap_pointer(
     let {var_name}: {rc_type}  = unsafe {{ {smart_pointer}::from_raw({var_name}) }};
 "#,
                 var_name = var_name,
-                rc_type = from.normalized_name,
+                rc_type = from,
                 smart_pointer = *smart_pointer,
             );
         }
@@ -298,7 +298,7 @@ pub(crate) fn unpack_from_heap_pointer(
     let {var_name}: {inside_box_type} = *{var_name};
 "#,
             var_name = var_name,
-            inside_box_type = from.normalized_name
+            inside_box_type = from
         )
     } else {
         String::new()
@@ -309,7 +309,7 @@ pub(crate) fn unpack_from_heap_pointer(
 {unbox_code}
 "#,
         var_name = var_name,
-        inside_box_type = from.normalized_name,
+        inside_box_type = from,
         unbox_code = unbox_code
     )
 }

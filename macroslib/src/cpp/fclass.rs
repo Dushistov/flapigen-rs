@@ -575,7 +575,7 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
 "#,
             c_destructor_name = c_destructor_name,
             unpack_code = unpack_code,
-            this_type = this_type_for_method.normalized_name,
+            this_type = this_type_for_method,
         );
         debug!("we generate and parse code: {}", code);
         ctx.rust_code.push(
@@ -836,8 +836,8 @@ pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_re
         decl_func_args = mc.decl_func_args,
         convert_input_code = convert_input_code,
         c_ret_type = c_ret_type,
-        this_type_ref = from_ty.normalized_name,
-        this_type = this_type_for_method.normalized_name,
+        this_type_ref = from_ty,
+        this_type = this_type_for_method,
         convert_this = convert_this,
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,
@@ -899,7 +899,7 @@ pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void
         decl_func_args = mc.decl_func_args,
         convert_input_code = convert_input_code,
         box_this = code_box_this,
-        real_output_typename = &construct_ret_type.normalized_name.as_str(),
+        real_output_typename = construct_ret_type,
         call = mc.method.generate_code_to_call_rust_func(),
     );
     let mut gen_code = deps_code_in;

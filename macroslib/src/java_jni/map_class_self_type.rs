@@ -90,7 +90,7 @@ fn register_rust_ty_conversation_rules(ctx: &mut JavaContext, this_type: &RustTy
     "#,
                 to_var = TO_VAR_TEMPLATE,
                 from_var = FROM_VAR_TEMPLATE,
-                this_type = this_type_for_method.normalized_name,
+                this_type = this_type_for_method,
             ),
             invalid_src_id_span(),
         )
@@ -114,7 +114,7 @@ fn register_rust_ty_conversation_rules(ctx: &mut JavaContext, this_type: &RustTy
     "#,
                 to_var = TO_VAR_TEMPLATE,
                 from_var = FROM_VAR_TEMPLATE,
-                this_type = this_type_for_method.normalized_name,
+                this_type = this_type_for_method,
             ),
             invalid_src_id_span(),
         )

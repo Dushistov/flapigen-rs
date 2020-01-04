@@ -14,7 +14,7 @@ foreigner_class!(class TestWorkWithVec {
 
 foreigner_class!(class Interface {
     self_type Interface;
-    constructor create_interface() -> Box<Box<Interface>>;
+    constructor create_interface() -> Box<Box<dyn Interface>>;
     method Interface::f(&self, _: i32) -> i32;
     method Interface::set(&mut self, x: i32);
 });

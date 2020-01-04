@@ -754,7 +754,7 @@ pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong
 "#,
             jni_destructor_name = jni_destructor_name,
             unpack_code = unpack_code,
-            this_type = this_type_for_method.normalized_name,
+            this_type = this_type_for_method,
         );
         debug!("we generate and parse code: {}", code);
         ctx.rust_code.push(
@@ -1037,7 +1037,7 @@ pub extern "C"
         convert_input_code = convert_input_code,
         jni_ret_type = jni_ret_type,
         this_type_ref = this_type_ref,
-        this_type = this_type_for_method.normalized_name,
+        this_type = this_type_for_method,
         convert_this = convert_this,
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,

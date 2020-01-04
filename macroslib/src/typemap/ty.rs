@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use proc_macro2::Span;
+use quote::ToTokens;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -20,11 +21,13 @@ pub(crate) struct RustTypeS {
     pub normalized_name: SmolStr,
     pub implements: ImplementsSet,
     pub(in crate::typemap) graph_idx: RustTypeIdx,
+    /// like normalized_name, but _with_ dyn keyword
+    typename_without_lifetimes: SmolStr,
 }
 
 impl fmt::Display for RustTypeS {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
-        write!(f, "{}", self.normalized_name)
+        write!(f, "{}", self.typename_without_lifetimes)
     }
 }
 
@@ -37,12 +40,15 @@ impl RustTypeS {
     where
         S: Into<SmolStr>,
     {
+        let mut ty_lftms = ty.clone();
+        strip_lifetimes(&mut ty_lftms);
         RustTypeS {
             ty,
             normalized_name: norm_name.into(),
             implements: ImplementsSet::default(),
             graph_idx: RustTypeIdx::new(0),
             src_id,
+            typename_without_lifetimes: ty_lftms.into_token_stream().to_string().into(),
         }
     }
     #[cfg(test)]
@@ -53,6 +59,7 @@ impl RustTypeS {
     pub(in crate::typemap) fn merge(&mut self, other: &RustTypeS) {
         self.ty = other.ty.clone();
         self.normalized_name = other.normalized_name.clone();
+        self.typename_without_lifetimes = other.typename_without_lifetimes.clone();
         self.implements.insert_set(&other.implements);
     }
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
