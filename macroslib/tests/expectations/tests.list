@@ -55,3 +55,4 @@ smart_ptr_copy_derived
 null_annotation_java
 callback_with_several_traits
 reachability_fence_java
+inline_dyn

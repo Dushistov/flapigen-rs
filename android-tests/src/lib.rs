@@ -1,15 +1,11 @@
 #[cfg(target_os = "android")]
-extern crate android_logger;
-#[macro_use]
-extern crate log;
-extern crate log_panics;
-
-#[cfg(target_os = "android")]
 mod android_c_headers;
 #[cfg(target_os = "android")]
 mod java_glue;
+
 #[cfg(target_os = "android")]
 pub use crate::java_glue::*;
+use log::info;
 
 struct Session {
     a: i32,

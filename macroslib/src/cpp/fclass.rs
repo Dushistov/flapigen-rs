@@ -3,7 +3,7 @@ use std::{borrow::Cow, io::Write};
 use log::debug;
 use petgraph::Direction;
 use proc_macro2::{Span, TokenStream};
-use quote::quote;
+use quote::{quote, ToTokens};
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use syn::{spanned::Spanned, Ident, Type};
@@ -17,7 +17,7 @@ use crate::{
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
-        ast::{list_lifetimes, normalize_type},
+        ast::{list_lifetimes, strip_lifetimes},
         ty::RustType,
         utils::{
             convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
@@ -229,9 +229,13 @@ May be you need to use `private constructor = empty;` syntax?",
         let (conv_args_code, cpp_args_for_c) =
             cpp_code::convert_args(f_method, &mut known_names, method.arg_names_without_self())?;
 
-        let real_output_typename = match method.fn_decl.output {
-            syn::ReturnType::Default => "()",
-            syn::ReturnType::Type(_, ref t) => normalize_type(&*t),
+        let real_output_typename: Cow<str> = match method.fn_decl.output {
+            syn::ReturnType::Default => Cow::Borrowed("()"),
+            syn::ReturnType::Type(_, ref t) => {
+                let mut ty: syn::Type = (**t).clone();
+                strip_lifetimes(&mut ty);
+                ty.into_token_stream().to_string().into()
+            }
         };
 
         let mut rust_args_with_types = String::new();
