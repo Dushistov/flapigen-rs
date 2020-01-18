@@ -180,6 +180,20 @@ impl<'a, T> SwigDeref for &'a Rc<T> {
     }
 }
 
+impl<T> SwigDeref for Arc<T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        self
+    }
+}
+
+impl<'a, T> SwigDeref for &'a Arc<T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        self
+    }
+}
+
 impl<'a, T> SwigFrom<&'a RefCell<T>> for Ref<'a, T> {
     fn swig_from(m: &'a RefCell<T>) -> Ref<'a, T> {
         m.borrow()
