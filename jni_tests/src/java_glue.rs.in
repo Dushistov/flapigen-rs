@@ -218,6 +218,18 @@ impl TestPathAndResult {
         }
         ret
     }
+
+    fn get_result_foo_list(generate_err: bool) -> Result<Vec<Foo>, String> {
+        if !generate_err {
+            let mut ret = Vec::new();
+            for i in 0..10 {
+                ret.push(Foo::new(i, &format!("foo arr: {}", i)));
+            }
+            Ok(ret)
+        } else {
+            Err("bad list".into())
+        }
+    }
 }
 
 //ANCHOR: foreign_code_usage
@@ -233,6 +245,7 @@ foreign_class!(class TestPathAndResult {
     private static native Boo[] do_testHandArrayReturn(long me);
 "#;
     fn TestPathAndResult::get_foo_list(&self) -> Vec<Foo>;
+    fn TestPathAndResult::get_result_foo_list(generate_err: bool) -> Result<Vec<Foo>, String>;
 });
 //ANCHOR_END: foreign_code_usage
 
@@ -627,7 +640,7 @@ foreign_class!(class TestEnumClass {
     constructor Moo::default() -> Moo;
     fn Moo::f1(&mut self, v: MyEnum) -> i32;
     fn Moo::next_enum(v: MyEnum) -> MyEnum;
-    fn call_cb(cb: Box<EnumObserver>) {
+    fn call_cb(cb: Box<dyn EnumObserver>) {
         let mut state = false;
         for e in &[MyEnum::Item1, MyEnum::Item2, MyEnum::Item3] {
             cb.on_state_changed(*e, state);
@@ -643,11 +656,11 @@ trait OnEvent {
 
 #[derive(Default)]
 struct Observable {
-    observers: Vec<Box<OnEvent>>,
+    observers: Vec<Box<dyn OnEvent>>,
 }
 
 impl Observable {
-    fn subscribe(&mut self, cb: Box<OnEvent>) {
+    fn subscribe(&mut self, cb: Box<dyn OnEvent>) {
         self.observers.push(cb);
     }
     fn change(&self, x: i32, s: &str) {
@@ -666,7 +679,7 @@ foreign_callback!(callback MyObserver {
 foreign_class!(class Observable {
     self_type Observable;
     constructor Observable::default() -> Observable;
-    fn Observable::subscribe(&mut self, _: Box<OnEvent>);
+    fn Observable::subscribe(&mut self, _: Box<dyn OnEvent>);
     fn Observable::change(&self, _: i32, _: &str);
 });
 
@@ -705,7 +718,7 @@ foreign_callback!(callback CheckAllTypesInCallbackArgs {
 
 foreign_class!(
     class TestCheckAllTypesInCallbackArgs {
-        fn call_cb(cb: Box<CheckAllTypesInCallbackArgs>) {
+        fn call_cb(cb: Box<dyn CheckAllTypesInCallbackArgs>) {
             cb.check_all_types1(u8::max_value(), i8::min_value(),
                                 u16::max_value(), i16::min_value(),
                                 u32::max_value(), i32::min_value(),
@@ -722,7 +735,7 @@ foreign_class!(
 );
 
 struct FooWithLifetime<'a> {
-    data: Box<OnEvent + 'a>,
+    data: Box<dyn OnEvent + 'a>,
 }
 
 struct PrintEvent;
@@ -1008,7 +1021,7 @@ impl Default for Session {
 
 #[derive(Default)]
 struct NavigationService {
-    on_gnss_updates_cb: Vec<Box<FnMut(i32)>>,
+    on_gnss_updates_cb: Vec<Box<dyn FnMut(i32)>>,
 }
 
 impl NavigationService {
@@ -1041,7 +1054,7 @@ foreign_interface!(interface ThreadSafeObserver {
 });
 
 foreign_class!(class TestMultiThreadCallback {
-    fn f(cb: Box<OnThreadEvent + Send>) {
+    fn f(cb: Box<dyn OnThreadEvent + Send>) {
         std::thread::spawn(move || {
             cb.something_change_in_other_thread(42, "15");
         });

@@ -6,15 +6,16 @@ use syn::spanned::Spanned;
 
 #[test]
 fn test_normalize_ty() {
-    assert_eq!(normalize_ty_lifetimes(&str_to_ty("&str")), "& str");
-    assert_eq!(normalize_ty_lifetimes(&str_to_ty("&'a str")), "& str");
-    assert_eq!(normalize_ty_lifetimes(&str_to_ty("string")), "string");
-    assert_eq!(normalize_ty_lifetimes(&str_to_ty("()")), "( )");
+    assert_eq!(normalize_type(&str_to_ty("&str")), "& str");
+    assert_eq!(normalize_type(&str_to_ty("&'a str")), "& str");
+    assert_eq!(normalize_type(&str_to_ty("string")), "string");
+    assert_eq!(normalize_type(&str_to_ty("()")), "( )");
+    assert_eq!("Foo < T >", normalize_type(&parse_type! { Foo<'a, T> }),);
+    assert_eq!("Foo", normalize_type(&parse_type! { Foo<'a> }));
     assert_eq!(
-        "Foo < T >",
-        normalize_ty_lifetimes(&parse_type! { Foo<'a, T> }),
+        "Box < Trait >",
+        normalize_type(&parse_type! { Box<dyn Trait> })
     );
-    assert_eq!("Foo", normalize_ty_lifetimes(&parse_type! { Foo<'a> }));
 }
 
 macro_rules! get_generic_params_from_code {
@@ -70,10 +71,7 @@ fn generic_type_conv_find() {
         )
         .is_conv_possible(&str_to_rust_ty(ty_check_name), None, map_others)
         .expect("check subst failed");
-        assert_eq!(
-            ret_ty_name,
-            normalize_ty_lifetimes(&str_to_ty(expect_to_ty_name))
-        );
+        assert_eq!(ret_ty_name, normalize_type(&str_to_ty(expect_to_ty_name)));
 
         Rc::new(RustTypeS::new_without_graph_idx(
             ret_ty,
@@ -304,9 +302,7 @@ fn test_get_trait_bounds() {
 fn test_work_with_option() {
     assert_eq!(
         "String",
-        normalize_ty_lifetimes(
-            &if_option_return_some_type(&str_to_rust_ty("Option<String>")).unwrap()
-        )
+        normalize_type(&if_option_return_some_type(&str_to_rust_ty("Option<String>")).unwrap())
     );
 }
 
@@ -314,21 +310,21 @@ fn test_work_with_option() {
 fn test_work_with_result() {
     assert_eq!(
         if_result_return_ok_err_types(&str_to_rust_ty("Result<bool, String>"))
-            .map(|(x, y)| (normalize_ty_lifetimes(&x), normalize_ty_lifetimes(&y)))
+            .map(|(x, y)| (normalize_type(&x), normalize_type(&y)))
             .unwrap(),
         ("bool", "String")
     );
 
     assert_eq!(
         if_ty_result_return_ok_type(&str_to_ty("Result<bool, String>"))
-            .map(|x| normalize_ty_lifetimes(&x))
+            .map(|x| normalize_type(&x))
             .unwrap(),
         "bool"
     );
 
     assert_eq!(
         if_ty_result_return_ok_type(&str_to_ty("Result<Option<i32>, String>"))
-            .map(|x| normalize_ty_lifetimes(&x))
+            .map(|x| normalize_type(&x))
             .unwrap(),
         "Option < i32 >"
     );
@@ -338,7 +334,7 @@ fn test_work_with_result() {
 fn test_work_with_rc() {
     let ty = check_if_smart_pointer_return_inner_type(&str_to_rust_ty("Rc<RefCell<bool>>"), "Rc")
         .unwrap();
-    assert_eq!("RefCell < bool >", normalize_ty_lifetimes(&ty));
+    assert_eq!("RefCell < bool >", normalize_type(&ty));
 
     let generic_params: syn::Generics = parse_quote! { <T> };
     assert_eq!(
@@ -349,7 +345,7 @@ fn test_work_with_rc() {
             generic_params,
             TypeConvCode::invalid(),
         )
-        .is_conv_possible(&str_to_rust_ty(normalize_ty_lifetimes(&ty)), None, |_| None)
+        .is_conv_possible(&str_to_rust_ty(normalize_type(&ty)), None, |_| None)
         .unwrap()
         .1
     );
@@ -404,7 +400,13 @@ Result<T, E>
     )
     .unwrap();
     assert_eq!(LineColumn { line: 2, column: 0 }, ty1.span().start());
-    assert_eq!(LineColumn { line: 2, column: 6 }, ty1.span().end());
+    assert_eq!(
+        LineColumn {
+            line: 2,
+            column: 12
+        },
+        ty1.span().end()
+    );
     let ty2: Type = syn::parse_str(
         r#"
 
@@ -413,7 +415,13 @@ Result<u16, u8>
     )
     .unwrap();
     assert_eq!(LineColumn { line: 3, column: 0 }, ty2.span().start());
-    assert_eq!(LineColumn { line: 3, column: 6 }, ty2.span().end());
+    assert_eq!(
+        LineColumn {
+            line: 3,
+            column: 15
+        },
+        ty2.span().end()
+    );
     let t_id: Ident = parse_quote! { T };
     let e_id: Ident = parse_quote! { E };
     {
@@ -592,12 +600,27 @@ fn test_is_second_subst_of_first_extern_c_fn_ptr() {
     assert_eq!(parse_type! { f32 }, *subst_map.get("U").unwrap().unwrap());
 }
 
+#[test]
+fn test_parse_type_spanned_macro() {
+    let ty = str_to_ty(" Cow<str> ");
+
+    assert_eq!(LineColumn { line: 1, column: 1 }, ty.span().start());
+    assert_eq!(LineColumn { line: 1, column: 9 }, ty.span().end());
+
+    let span = ty.span();
+    let ty2: syn::Type = parse_type_spanned_checked!(span, & #ty);
+    assert_eq!(parse_type! { & Cow<str> }, ty2);
+
+    assert_eq!(LineColumn { line: 1, column: 1 }, ty2.span().start());
+    assert_eq!(LineColumn { line: 1, column: 9 }, ty2.span().end());
+}
+
 fn str_to_ty(code: &str) -> syn::Type {
     syn::parse_str::<syn::Type>(code).unwrap()
 }
 
 fn str_to_rust_ty(code: &str) -> RustType {
     let ty = syn::parse_str::<syn::Type>(code).unwrap();
-    let name = normalize_ty_lifetimes(&ty);
+    let name = normalize_type(&ty);
     Rc::new(RustTypeS::new_without_graph_idx(ty, name, SourceId::none()))
 }

@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.9)
+project(rust_swig_cpp_tests)
 
 include(CheckIncludeFileCXX)
 include(ExternalProject)
@@ -180,6 +181,7 @@ add_executable(c++-rust-swig-test
   ${RUST_SWIG_CPP_HEADERS}
   TestOptional.cpp
   TestWorkWithVec.cpp
+  Foo.cpp
   main.cpp
   )
 

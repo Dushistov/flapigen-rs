@@ -15,9 +15,8 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{
-            get_trait_bounds, is_second_subst_of_first, normalize_ty_lifetimes,
-            parse_ty_with_given_span, replace_all_types_with, DisplayToTokens, SpannedSmolStr,
-            TyParamsSubstMap,
+            get_trait_bounds, is_second_subst_of_first, normalize_type, parse_ty_with_given_span,
+            replace_all_types_with, DisplayToTokens, SpannedSmolStr, TyParamsSubstMap,
         },
         ty::TraitNamesSet,
         TypeConvCode,
@@ -670,14 +669,14 @@ fn expand_rtype_rule(
             Type::Macro(ref type_macro) => {
                 let ctx_span = (src_id, x.span());
                 if type_macro.mac.path.is_ident(SWIG_I_TYPE) {
-                    let param = type_macro.mac.tts.to_string();
+                    let param = type_macro.mac.tokens.to_string();
                     let ty = find_type_param(param_map, &param, ctx_span)?;
                     let i_type = expander.swig_i_type(ty.as_ref(), None)?;
                     Some(i_type)
                 } else {
                     let alias_idx = generic_aliases
                         .iter()
-                        .position(|a| type_macro.mac.path.is_ident(a.name.clone()))
+                        .position(|a| type_macro.mac.path.is_ident(a.name))
                         .ok_or_else(|| {
                             DiagnosticError::new2(
                                 ctx_span,
@@ -910,7 +909,7 @@ fn expand_str_in_ftype_name_context(
                 ));
             };
             let ty = find_type_param(param_map, type_name, ctx_span)?;
-            write!(out, "{}", normalize_ty_lifetimes(ty.as_ref())).expect(WRITE_TO_MEM_FAILED_MSG);
+            write!(out, "{}", normalize_type(ty.as_ref())).expect(WRITE_TO_MEM_FAILED_MSG);
             Ok(())
         } else if let Some(pos) = generic_aliases.iter().position(|a| a.name == id) {
             write!(out, "{}", DisplayToTokens(&generic_aliases[pos].value))
@@ -1053,8 +1052,7 @@ fn expand_rust_code(
                     };
                     let ty = find_type_param(param_map, param, ctx_span)?;
                     let i_type = expander.swig_i_type(ty.as_ref(), opt_arg)?;
-                    write!(out, "{}", normalize_ty_lifetimes(&i_type))
-                        .expect(WRITE_TO_MEM_FAILED_MSG);
+                    write!(out, "{}", normalize_type(&i_type)).expect(WRITE_TO_MEM_FAILED_MSG);
                 }
                 _ if id == SWIG_SUBST_TYPE => {
                     let type_name = if params.len() == 1 {
@@ -1066,17 +1064,12 @@ fn expand_rust_code(
                         ));
                     };
                     let ty = find_type_param(param_map, type_name, ctx_span)?;
-                    write!(out, "{}", normalize_ty_lifetimes(ty.as_ref()))
-                        .expect(WRITE_TO_MEM_FAILED_MSG);
+                    write!(out, "{}", normalize_type(ty.as_ref())).expect(WRITE_TO_MEM_FAILED_MSG);
                 }
                 _ => {
                     if let Some(alias_idx) = generic_aliases.iter().position(|a| a.name == id) {
-                        write!(
-                            out,
-                            "{}",
-                            normalize_ty_lifetimes(&generic_aliases[alias_idx].value)
-                        )
-                        .expect(WRITE_TO_MEM_FAILED_MSG);
+                        write!(out, "{}", normalize_type(&generic_aliases[alias_idx].value))
+                            .expect(WRITE_TO_MEM_FAILED_MSG);
                     } else {
                         write!(out, "{}!(", id).expect(WRITE_TO_MEM_FAILED_MSG);
                         for (i, p) in params.iter().enumerate() {

@@ -43,6 +43,7 @@ use proc_macro2::TokenStream;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use strum::IntoEnumIterator;
+use syn::spanned::Spanned;
 
 use crate::{
     cpp::{map_class_self_type::register_typemap_for_self_type, map_type::map_type},
@@ -50,7 +51,7 @@ use crate::{
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
-        ast::{parse_ty_with_given_span, TypeName},
+        ast::{check_if_smart_pointer_return_inner_type, parse_ty_with_given_span, TypeName},
         ty::{ForeignConversationRule, ForeignType, ForeignTypeS, RustType},
         utils::{
             configure_ftype_rule, remove_files_if, validate_cfg_options, ForeignMethodSignature,
@@ -58,9 +59,9 @@ use crate::{
         },
         CItem, CItems, ForeignTypeInfo, TypeConvCode, TypeMapConvRuleInfo,
     },
-    types::{ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodAccess},
+    types::{ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodAccess, MethodVariant},
     CppConfig, CppOptional, CppStrView, CppVariant, LanguageGenerator, SourceCode, TypeMap,
-    WRITE_TO_MEM_FAILED_MSG,
+    SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
 };
 
 #[derive(Debug)]
@@ -209,7 +210,7 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
 
 impl ForeignMethodSignature for CppForeignMethodSignature {
     type FI = CppForeignTypeInfo;
-    fn output(&self) -> &ForeignTypeInfoT {
+    fn output(&self) -> &dyn ForeignTypeInfoT {
         &self.output.base
     }
     fn input(&self) -> &[CppForeignTypeInfo] {
@@ -247,7 +248,7 @@ impl CppConfig {
             }
 
             if class.smart_ptr_copy_derived {
-                unimplemented!();
+                traits.push(SMART_PTR_COPY_TRAIT);
             }
 
             let this_type = conv_map.find_or_alloc_rust_type_that_implements(
@@ -255,6 +256,44 @@ impl CppConfig {
                 &traits,
                 class.src_id,
             );
+
+            if class.smart_ptr_copy_derived {
+                if class.copy_derived {
+                    println!(
+                        "warning=class {} marked as Copy and {}, ignore Copy",
+                        class.name, SMART_PTR_COPY_TRAIT
+                    );
+                }
+                if check_if_smart_pointer_return_inner_type(&this_type, "Rc").is_none()
+                    && check_if_smart_pointer_return_inner_type(&this_type, "Arc").is_none()
+                {
+                    return Err(DiagnosticError::new(
+                        class.src_id,
+                        this_type.ty.span(),
+                        format!(
+                            "class {} marked as {}, but type '{}' is not Arc<> or Rc<>",
+                            class.name, SMART_PTR_COPY_TRAIT, this_type
+                        ),
+                    ));
+                }
+
+                let has_clone = class.methods.iter().any(|x| match x.variant {
+                    MethodVariant::Method(_) | MethodVariant::StaticMethod => {
+                        x.rust_id.is_ident("clone")
+                    }
+                    MethodVariant::Constructor => false,
+                });
+                if has_clone {
+                    return Err(DiagnosticError::new(
+                        class.src_id,
+                        this_type.ty.span(),
+                        format!(
+                            "class {} marked as {}, but has clone method. Error: can not generate clone method.",
+                            class.name, SMART_PTR_COPY_TRAIT,
+                        ),
+                    ));
+                }
+            }
 
             register_typemap_for_self_type(conv_map, class, this_type, self_desc)?;
         }
@@ -338,15 +377,23 @@ impl LanguageGenerator for CppConfig {
 }
 
 fn c_func_name(class: &ForeignerClassInfo, method: &ForeignerMethod) -> String {
+    do_c_func_name(class, method.access, &method.short_name())
+}
+
+fn do_c_func_name(
+    class: &ForeignerClassInfo,
+    method_access: MethodAccess,
+    method_short_name: &str,
+) -> String {
     format!(
         "{access}{class_name}_{func}",
-        access = match method.access {
+        access = match method_access {
             MethodAccess::Private => "private_",
             MethodAccess::Protected => "protected_",
             MethodAccess::Public => "",
         },
         class_name = class.name,
-        func = method.short_name(),
+        func = method_short_name,
     )
 }
 

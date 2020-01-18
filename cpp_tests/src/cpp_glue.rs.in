@@ -29,7 +29,7 @@ impl Foo {
     fn set_field(&mut self, v: i32) {
         self.data = v;
     }
-    fn call_me(cb: Box<SomeObserver>) {
+    fn call_me(cb: Box<dyn SomeObserver>) {
         //println!("call_me begin");
         cb.on_state_changed(2, false);
         cb.on_state_changed_without_args();
@@ -74,7 +74,7 @@ foreign_class!(class Foo {
     fn Foo::name(&self) -> &str; alias getName;
     fn Foo::set_field(&mut self, v: i32);
     fn Foo::one_and_half(&self) -> f64;
-    fn Foo::call_me(_: Box<SomeObserver>);
+    fn Foo::call_me(_: Box<dyn SomeObserver>);
     fn f_hypot(_: f64, _: f64) -> f64; alias fHypot;
     fn Foo::ret_string(&self) -> String;
     foreigner_code r#"
@@ -209,7 +209,7 @@ trait DummySetterGetter {
 }
 
 pub struct TestObjectLifetime<'a> {
-    data: Box<DummySetterGetter + 'a>,
+    data: Box<dyn DummySetterGetter + 'a>,
 }
 
 impl DummySetterGetter for i32 {
@@ -769,13 +769,13 @@ impl Interface for InterfaceImpl {
     }
 }
 
-fn create_interface() -> Box<Box<Interface>> {
+fn create_interface() -> Box<Box<dyn Interface>> {
     Box::new(Box::new(InterfaceImpl { base: 17 }))
 }
 
 foreign_class!(class Interface {
-    self_type Interface;
-    constructor create_interface() -> Box<Box<Interface>>;
+    self_type dyn Interface;
+    constructor create_interface() -> Box<Box<dyn Interface>>;
     fn Interface::f(&self, _: i32) -> i32;
     fn Interface::set(&mut self, x: i32);
 });
@@ -787,7 +787,7 @@ pub struct TestPassInterface;
 foreign_class!(class TestPassInterface {
     self_type TestPassInterface;
     constructor TestPassInterface::default() -> TestPassInterface;
-    fn use_interface(a: Box<Box<Interface>>, b: i32) -> i32 {
+    fn use_interface(a: Box<Box<dyn Interface>>, b: i32) -> i32 {
         (**a).f(b)
     }
 });
@@ -1053,9 +1053,28 @@ foreign_interface!(interface ThreadSafeObserver {
 });
 
 foreign_class!(class TestMultiThreadCallback {
-    fn f(cb: Box<OnThreadEvent + Send>) {
+    fn f(cb: Box<dyn OnThreadEvent + Send>) {
         std::thread::spawn(move || {
             cb.something_change_in_other_thread(42, "15".into());
         });
     }
 });
+
+pub struct Session {
+    name: String,
+}
+
+foreign_class!(
+    #[derive(SmartPtrCopy)]
+    class Session {
+        self_type Session;
+        constructor session_init(name: &str) -> Rc<RefCell<Session>> {
+            Rc::new(RefCell::new(Session {
+                name: name.into(),
+            }))
+        }
+        fn name(&self) -> &str {
+            &this.name
+        }
+    }
+);

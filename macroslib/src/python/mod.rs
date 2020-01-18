@@ -81,7 +81,11 @@ impl PythonConfig {
             .map(|m| generate_method_code(class, m, conv_map))
             .collect::<Result<Vec<_>>>()?;
         let mut doc_comments = class.doc_comments.clone();
-        if let Some(constructor) = class.methods.iter().find(|m| m.variant == MethodVariant::Constructor) {
+        if let Some(constructor) = class
+            .methods
+            .iter()
+            .find(|m| m.variant == MethodVariant::Constructor)
+        {
             // Python API doesn't allow to add docstring to the special methods (slots),
             // including __new__ and __init__.
             // The convention is, to document the constructor in class's docstring.
@@ -332,10 +336,13 @@ fn generate_method_code(
         },
     )?;
     let docstring = if !method_name.to_string().starts_with("__") {
-        parse::<TokenStream>(&("/// ".to_owned() + &method.doc_comments.as_slice().join("\n/// ")), class.src_id)?
+        parse::<TokenStream>(
+            &("/// ".to_owned() + &method.doc_comments.as_slice().join("\n/// ")),
+            class.src_id,
+        )?
     } else {
         // Python API doesn't support defining docstrings on the special methods (slots)
-        quote!{}
+        quote! {}
     };
     Ok(quote! {
         #docstring #attribute def #method_name(
@@ -360,7 +367,7 @@ fn standard_method_name(method: &ForeignerMethod, src_id: SourceId) -> Result<sy
     Ok(method
         .name_alias
         .as_ref()
-        .or_else(|| method.rust_id.segments.last().map(|p| &p.value().ident))
+        .or_else(|| method.rust_id.segments.last().map(|p| &p.ident))
         .ok_or_else(|| DiagnosticError::new(src_id, method.span(), "Method has no name"))?
         .clone())
 }

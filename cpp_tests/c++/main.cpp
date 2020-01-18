@@ -43,6 +43,7 @@
 #include "rust_interface/TestFuture.hpp"
 #include "rust_interface/ThreadSafeObserver.hpp"
 #include "rust_interface/TestMultiThreadCallback.hpp"
+#include "rust_interface/Session.hpp"
 
 using namespace rust;
 
@@ -121,7 +122,7 @@ TEST(Foo, Simple)
     };
     c_simple_cb_counter = 0;
     c_simple_cb_counter_without_args = 0;
-    Foo::call_me(&obs);
+    Foo_call_me(&obs);
     EXPECT_EQ(1u, c_simple_cb_counter.load());
     EXPECT_EQ(1u, c_simple_cb_counter_without_args.load());
 
@@ -172,11 +173,10 @@ size_t MySomeObserver::deleted = 0;
 TEST(Foo, CppSomeObserver)
 {
     Foo foo(17, "CppSomeObserver");
-    auto obs = new MySomeObserver;
+    std::unique_ptr<MySomeObserver> obs{ new MySomeObserver };
     ASSERT_EQ(0u, obs->f1_call);
     ASSERT_EQ(0u, obs->f2_call);
-    auto c_class = SomeObserver::to_c_interface(obs);
-    Foo::call_me(&c_class);
+    Foo::call_me(std::move(obs));
     EXPECT_EQ(1u, MySomeObserver::f1_call);
     EXPECT_EQ(1u, MySomeObserver::f2_call);
     EXPECT_EQ(1u, MySomeObserver::deleted);
@@ -1054,12 +1054,37 @@ TEST(TestMultiThreadCallback, smokeTest)
 {
     auto state = std::make_shared<State>();
     EXPECT_FALSE(state->called);
-    auto cb = ThreadSafeObserver::to_c_interface(new MyThreadSafeObserver(state));
-    TestMultiThreadCallback::f(&cb);
+
+    TestMultiThreadCallback::f(
+        std::unique_ptr<ThreadSafeObserver>{ new MyThreadSafeObserver(state) });
     std::this_thread::sleep_for(std::chrono::seconds(4));
     EXPECT_TRUE(state->called);
     EXPECT_EQ(42, state->x);
     EXPECT_EQ("15", state->s.to_std_string());
+}
+
+TEST(SmartPtrCopy, smokeTest)
+{
+    Session session{ "Session" };
+    EXPECT_EQ("Session", session.name());
+    Session session2{ session };
+    EXPECT_EQ("Session", session.name());
+    EXPECT_EQ("Session", session2.name());
+
+    EXPECT_EQ(static_cast<const SessionOpaque *>(session2),
+              static_cast<const SessionOpaque *>(session));
+    Session session3{ "AAAA" };
+    EXPECT_EQ("Session", session.name());
+    EXPECT_EQ("Session", session2.name());
+    EXPECT_EQ("AAAA", session3.name());
+    session2 = session3;
+    EXPECT_EQ("Session", session.name());
+    EXPECT_EQ("AAAA", session2.name());
+    EXPECT_EQ("AAAA", session3.name());
+    EXPECT_NE(static_cast<const SessionOpaque *>(session2),
+              static_cast<const SessionOpaque *>(session));
+    EXPECT_EQ(static_cast<const SessionOpaque *>(session2),
+              static_cast<const SessionOpaque *>(session3));
 }
 
 int main(int argc, char *argv[])

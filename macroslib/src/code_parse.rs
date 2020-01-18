@@ -1,5 +1,6 @@
 use log::debug;
 use proc_macro2::{Ident, Span, TokenStream};
+use quote::ToTokens;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use std::convert::{TryFrom, TryInto};
@@ -16,7 +17,7 @@ use crate::{
     error::{DiagnosticError, Result},
     namegen::new_unique_name,
     source_registry::SourceId,
-    typemap::ast::{normalize_ty_lifetimes, DisplayToTokens},
+    typemap::ast::{normalize_type, DisplayToTokens},
     types::{
         FnArg, ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
         ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
@@ -44,7 +45,7 @@ pub(crate) fn parse_foreigner_class(
             Ok(class.0)
         }
         LanguageConfig::PythonConfig(_) => {
-            let mut class: PythonClass = 
+            let mut class: PythonClass =
                 syn::parse2(tokens).map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
             class.0.src_id = src_id;
             Ok(class.0)
@@ -89,7 +90,10 @@ struct PythonClass(ForeignerClassInfo);
 
 impl Parse for PythonClass {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(PythonClass(do_parse_foreigner_class(Language::Python, input)?))
+        Ok(PythonClass(do_parse_foreigner_class(
+            Language::Python,
+            input,
+        )?))
     }
 }
 
@@ -127,20 +131,20 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
             let meta = a.parse_meta()?;
             match meta {
                 syn::Meta::NameValue(syn::MetaNameValue {
-                    ref ident,
+                    ref path,
                     lit: syn::Lit::Str(ref lit_str),
                     ..
-                }) if ident == "doc" => {
+                }) if path.is_ident("doc") => {
                     doc_comments.push(lit_str.value());
                 }
                 syn::Meta::List(syn::MetaList {
-                    ref ident,
+                    ref path,
                     ref nested,
                     ..
-                }) if ident == "derive" && parse_derive_attrs => {
+                }) if path.is_ident("derive") && parse_derive_attrs => {
                     for x in nested {
-                        if let syn::NestedMeta::Meta(syn::Meta::Word(ref word)) = x {
-                            derive_list.push(word.to_string());
+                        if let syn::NestedMeta::Meta(syn::Meta::Path(ref path)) = x {
+                            derive_list.push(path.into_token_stream().to_string());
                         } else {
                             return Err(syn::Error::new(x.span(), "Invalid derive format"));
                         }
@@ -279,7 +283,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 fn constructor() {
                 }
             };
-            let dummy_func = *dummy_func.decl;
+            let dummy_func = dummy_func.sig;
             methods.push(ForeignerMethod {
                 variant: MethodVariant::Constructor,
                 rust_id: dummy_path,
@@ -303,7 +307,6 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         parenthesized!(args_parser in content);
         let args_in: Punctuated<syn::FnArg, Token![,]> =
             args_parser.parse_terminated(syn::FnArg::parse)?;
-
         debug!("func in args {:?}", args_in);
 
         let mut func_type = match func_type_name {
@@ -314,10 +317,8 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 if !args_in.is_empty() {
                     use syn::FnArg::*;
                     match args_in[0] {
-                        SelfRef(_) | SelfValue(_) => {
-                            MethodVariant::Method(SelfTypeVariant::Default)
-                        }
-                        _ => MethodVariant::StaticMethod,
+                        Receiver(_) => MethodVariant::Method(SelfTypeVariant::Default),
+                        Typed(_) => MethodVariant::StaticMethod,
                     }
                 } else {
                     MethodVariant::StaticMethod
@@ -340,8 +341,8 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 let have_self_args = args_in.iter().any(|x| {
                     use syn::FnArg::*;
                     match x {
-                        SelfRef(_) | SelfValue(_) => true,
-                        Captured(_) | Inferred(_) | Ignored(_) => false,
+                        Receiver(_) => true,
+                        Typed(_) => false,
                     }
                 });
                 if have_self_args {
@@ -350,7 +351,11 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 }
             }
             MethodVariant::Method(ref mut self_type) => match args_in.iter().nth(0) {
-                Some(syn::FnArg::SelfRef(syn::ArgSelfRef { ref mutability, .. })) => {
+                Some(syn::FnArg::Receiver(syn::Receiver {
+                    reference: Some(_),
+                    ref mutability,
+                    ..
+                })) => {
                     *self_type = if mutability.is_some() {
                         SelfTypeVariant::RptrMut
                     } else {
@@ -358,7 +363,11 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                     };
                 }
 
-                Some(syn::FnArg::SelfValue(syn::ArgSelf { ref mutability, .. })) => {
+                Some(syn::FnArg::Receiver(syn::Receiver {
+                    reference: None,
+                    ref mutability,
+                    ..
+                })) => {
                     *self_type = if mutability.is_some() {
                         SelfTypeVariant::Mut
                     } else {
@@ -425,9 +434,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             };
             if let Some(ref constructor_ret_type) = constructor_ret_type {
                 debug!("second constructor, ret type: {:?}", constructor_ret_type);
-                if normalize_ty_lifetimes(constructor_ret_type)
-                    != normalize_ty_lifetimes(&*ret_type)
-                {
+                if normalize_type(constructor_ret_type) != normalize_type(&*ret_type) {
                     return Err(syn::Error::new(
                         constructor_ret_type.span(),
                         format!(
@@ -466,7 +473,6 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     let smart_ptr_copy_derived = derive_list.iter().any(|x| x == SMART_PTR_COPY_TRAIT);
     let has_clone = |m: &ForeignerMethod| {
         if let Some(seg) = m.rust_id.segments.last() {
-            let seg = seg.into_value();
             seg.ident == "clone"
         } else {
             false
@@ -512,9 +518,9 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     })
 }
 
-impl TryFrom<syn::FnDecl> for crate::types::FnDecl {
+impl TryFrom<syn::Signature> for crate::types::FnDecl {
     type Error = syn::Error;
-    fn try_from(x: syn::FnDecl) -> std::result::Result<Self, Self::Error> {
+    fn try_from(x: syn::Signature) -> std::result::Result<Self, Self::Error> {
         Ok(crate::types::FnDecl {
             span: x.fn_token.span(),
             inputs: parse_fn_args(x.inputs)?.0,
@@ -538,8 +544,9 @@ pub(crate) fn parse_fn_args(
     for arg in args {
         use syn::FnArg::*;
         let fn_arg = match arg {
-            SelfRef(syn::ArgSelfRef {
+            Receiver(syn::Receiver {
                 self_token,
+                reference: Some(_),
                 ref mutability,
                 ..
             }) => FnArg::SelfArg(
@@ -550,8 +557,9 @@ pub(crate) fn parse_fn_args(
                     SelfTypeVariant::Rptr
                 },
             ),
-            SelfValue(syn::ArgSelf {
+            Receiver(syn::Receiver {
                 self_token,
+                reference: None,
                 ref mutability,
                 ..
             }) => FnArg::SelfArg(
@@ -562,13 +570,13 @@ pub(crate) fn parse_fn_args(
                     SelfTypeVariant::Default
                 },
             ),
-            Captured(syn::ArgCaptured { pat, ty, .. }) => {
-                let (name, span): (SmolStr, Span) = match pat {
-                    syn::Pat::Wild(w) => ("_".into(), w.span()),
-                    syn::Pat::Ident(syn::PatIdent { ident, .. }) => {
-                        (ident.to_string().into(), ident.span())
+            Typed(typed_arg) => {
+                let (name, span): (SmolStr, Span) = match *typed_arg.pat {
+                    syn::Pat::Ident(pat_ident) => {
+                        (pat_ident.ident.to_string().into(), pat_ident.ident.span())
                     }
-                    _ => return invalid_arg(pat.span()),
+                    syn::Pat::Wild(w) => ("_".into(), w.span()),
+                    _ => return invalid_arg(typed_arg.span()),
                 };
                 if name != "_" {
                     if args_names.contains(name.as_str()) {
@@ -579,14 +587,12 @@ pub(crate) fn parse_fn_args(
                     }
                     args_names.insert(name.clone());
                 }
-                FnArg::Default(NamedArg { name, ty, span })
+                FnArg::Default(NamedArg {
+                    name,
+                    ty: *typed_arg.ty,
+                    span,
+                })
             }
-            Ignored(ty) => FnArg::Default(NamedArg {
-                name: "_".into(),
-                span: ty.span(),
-                ty,
-            }),
-            _ => return invalid_arg(arg.span()),
         };
         ret.push(fn_arg);
     }
@@ -705,7 +711,7 @@ impl Parse for ForeignInterfaceParser {
                 args_parser.parse_terminated(syn::FnArg::parse)?;
             debug!("cb func in args {:?}", args_in);
             let have_self_args = match args_in.iter().nth(0) {
-                Some(syn::FnArg::SelfRef(_)) => true,
+                Some(syn::FnArg::Receiver(_)) => true,
                 _ => false,
             };
             if !have_self_args {
@@ -766,7 +772,7 @@ mod tests {
                     constructor Foo::new(_: i32) -> Foo;
                     method Foo::set_field(&mut self, _: i32);
                     method Foo::f(&self, _: i32, a: i32) -> i32;
-                    static_method f2(_: i32, String) -> i32;
+                    static_method f2(_: i32, _: String) -> i32;
                     fn Foo::f3(&self) -> String;
                     fn Boo::f4(&self, a: i32) -> Vec<i32> {
                         let a = a + 1;
@@ -774,7 +780,7 @@ mod tests {
                     }
                 })
         };
-        let java_class = test_parse::<JavaClass>(mac.tts);
+        let java_class = test_parse::<JavaClass>(mac.tokens);
         assert!(!java_class.0.copy_derived);
 
         let mac: syn::Macro = parse_quote! {
@@ -784,7 +790,7 @@ mod tests {
                 method SomeType::f(&self);
             })
         };
-        test_parse::<JavaClass>(mac.tts);
+        test_parse::<JavaClass>(mac.tokens);
         let mac: syn::Macro = parse_quote! {
             foreigner_class!(class Foo {
                 self_type SomeType;
@@ -792,7 +798,7 @@ mod tests {
                 method SomeType::f(&self); alias g;
             })
         };
-        test_parse::<JavaClass>(mac.tts);
+        test_parse::<JavaClass>(mac.tokens);
     }
 
     #[test]
@@ -805,7 +811,7 @@ mod tests {
                 ITEM3 = MyEnum::Item3,
             })
         };
-        let enum_ = parse_foreign_enum(SourceId::none(), mac.tts).unwrap();
+        let enum_ = parse_foreign_enum(SourceId::none(), mac.tokens).unwrap();
         assert_eq!("MyEnum", enum_.name.to_string());
     }
 
@@ -820,7 +826,7 @@ mod tests {
                 method SomeType::clone(&self) -> SomeType;
             })
         };
-        let class: CppClass = test_parse(mac.tts);
+        let class: CppClass = test_parse(mac.tokens);
         assert!(class.0.copy_derived);
     }
 
@@ -833,7 +839,7 @@ mod tests {
                 onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
             })
         };
-        let f_interface: ForeignInterfaceParser = test_parse(mac.tts);
+        let f_interface: ForeignInterfaceParser = test_parse(mac.tokens);
         assert_eq!("MyObserver", f_interface.0.name.to_string());
         assert_eq!(
             "OnEvent",
@@ -850,7 +856,7 @@ mod tests {
                 onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
             })
         };
-        let f_interface: ForeignInterfaceParser = test_parse(mac.tts);
+        let f_interface: ForeignInterfaceParser = test_parse(mac.tokens);
         assert_eq!("MyObserver", f_interface.0.name.to_string());
         assert_eq!(
             "some_mod :: other_mod :: OnEvent",
@@ -867,7 +873,7 @@ mod tests {
                 onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
             })
         };
-        let f_interface: ForeignInterfaceParser = test_parse(mac.tts);
+        let f_interface: ForeignInterfaceParser = test_parse(mac.tokens);
         assert_eq!("MyObserver", f_interface.0.name.to_string());
         assert_eq!(
             "some_mod :: other_mod :: OnEvent + Send",
@@ -881,8 +887,7 @@ mod tests {
     {
         let code = tokens.to_string();
         let class: T =
-            syn::parse2(tokens).unwrap_or_else(|err| panic_on_syn_error("test_parse", code, err));
+            syn::parse_str(&code).unwrap_or_else(|err| panic_on_syn_error("test_parse", code, err));
         class
     }
-
 }

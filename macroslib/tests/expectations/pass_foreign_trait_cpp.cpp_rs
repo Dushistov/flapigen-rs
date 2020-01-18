@@ -1,6 +1,34 @@
 r#"pub extern "C" fn TestPassInterface_use_interface ( a : * mut :: std :: os :: raw :: c_void , b : i32 , ) -> i32 {
  assert ! ( ! a . is_null ( ) ) ;
- let a : * mut Box < Interface > = a as * mut Box < Interface >;
- let a : Box < Box < Interface > > = unsafe { Box :: from_raw ( a ) } ;
+ let a : * mut Box < dyn Interface > = a as * mut Box < dyn Interface >;
+ let a : Box < Box < dyn Interface > > = unsafe { Box :: from_raw ( a ) } ;
  let mut ret : i32 = use_interface ( a , b ) ;
  ret }"#;
+
+r#"impl SwigForeignClass for Box<Box<dyn Interface>> {
+    fn c_class_name() -> *const ::std::os::raw::c_char {
+        swig_c_str!(stringify!(Box<Box<dyn Interface>>))
+    }
+    fn box_object(this: Self) -> *mut ::std::os::raw::c_void {
+        let this: *const Box<dyn Interface> = Box::into_raw(this);
+        this as *mut ::std::os::raw::c_void
+    }
+    fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self {
+        let p = p as *mut Box<dyn Interface>;
+        let p: Box<Box<dyn Interface>> = unsafe { Box::from_raw(p) };
+        p
+    }
+}"#;
+
+r#"pub extern "C" fn Interface_create_interface() -> *const ::std::os::raw::c_void {
+    let this: Box<Box<dyn Interface>> = create_interface();
+    let this: *const Box<dyn Interface> = Box::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}"#;
+
+r#"pub extern "C" fn Interface_f(this: *mut Box<dyn Interface>, a0: i32) -> i32 {
+    let this: &Box<dyn Interface> = unsafe { this.as_mut().unwrap() };
+    let mut this: &dyn Interface = this.as_ref();
+    let mut ret: i32 = Interface::f(this, a0);
+    ret
+}"#;

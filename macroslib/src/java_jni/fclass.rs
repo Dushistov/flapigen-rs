@@ -17,8 +17,8 @@ use crate::{
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
-        ast::{if_result_return_ok_err_types, list_lifetimes, normalize_ty_lifetimes},
-        ty::{normalized_type, RustType},
+        ast::{if_result_return_ok_err_types, list_lifetimes, normalize_type},
+        ty::RustType,
         utils::{
             convert_to_heap_pointer, create_suitable_types_for_constructor_and_self,
             foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
@@ -551,7 +551,7 @@ fn generate_rust_code(
             let unpack_code: TokenStream = syn::parse_str(&unpack_code).unwrap_or_else(|err| {
                 panic_on_syn_error("internal/java foreign class unpack code", unpack_code, err)
             });
-            let this_type_for_method_ty = normalized_type(&this_type_for_method.normalized_name);
+            let this_type_for_method_ty = this_type_for_method.to_type_without_lifetimes();
             let this_type_for_method_ty_as_is = &this_type_for_method.ty;
             let class_name = &this_type.ty;
             let global_var_with_jclass = Ident::new(
@@ -665,7 +665,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
         let real_output_typename = match method.fn_decl.output {
             syn::ReturnType::Default => "()",
-            syn::ReturnType::Type(_, ref ty) => normalize_ty_lifetimes(&*ty),
+            syn::ReturnType::Type(_, ref ty) => normalize_type(&*ty),
         };
 
         let method_ctx = MethodContext {
@@ -754,7 +754,7 @@ pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong
 "#,
             jni_destructor_name = jni_destructor_name,
             unpack_code = unpack_code,
-            this_type = this_type_for_method.normalized_name,
+            this_type = this_type_for_method,
         );
         debug!("we generate and parse code: {}", code);
         ctx.rust_code.push(
@@ -1037,7 +1037,7 @@ pub extern "C"
         convert_input_code = convert_input_code,
         jni_ret_type = jni_ret_type,
         this_type_ref = this_type_ref,
-        this_type = this_type_for_method.normalized_name,
+        this_type = this_type_for_method,
         convert_this = convert_this,
         convert_output_code = convert_output_code,
         real_output_typename = mc.real_output_typename,

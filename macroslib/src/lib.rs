@@ -8,13 +8,27 @@
 
 #![recursion_limit = "128"]
 
-#[macro_use]
-extern crate strum_macros;
-
 macro_rules! parse_type {
     ($($tt:tt)*) => {{
         let ty: syn::Type = syn::parse_quote! { $($tt)* };
         ty
+    }}
+}
+
+macro_rules! parse_spanned {
+    ($span:ident, $($tt:tt)*) => {{
+	let tt = quote::quote_spanned! { $span=> $($tt)* };
+        syn::parse2(tt)
+    }}
+}
+
+macro_rules! parse_type_spanned_checked {
+    ($span:ident, $($tt:tt)*) => {{
+	let ty: syn::Type = parse_spanned!($span, $($tt)*)
+	    .unwrap_or_else(|err| {
+		panic!("Can not parse type {}: {}", stringify!($($tt)*), err);
+	    });
+	ty
     }}
 }
 
@@ -43,6 +57,7 @@ use std::{
 
 use log::debug;
 use proc_macro2::TokenStream;
+use strum::EnumIter;
 use syn::spanned::Spanned;
 
 use crate::{
@@ -286,9 +301,7 @@ impl PythonConfig {
     /// Create `PythonConfig`
     /// # Arguments
     pub fn new(module_name: String) -> PythonConfig {
-        PythonConfig {
-            module_name,
-        }
+        PythonConfig { module_name }
     }
 }
 
@@ -517,7 +530,7 @@ impl Generator {
                     continue;
                 }
                 debug!("Found {}", DisplayToTokens(&item_macro.mac.path));
-                if item_macro.mac.tts.is_empty() {
+                if item_macro.mac.tokens.is_empty() {
                     return Err(DiagnosticError::new(
                         src_id,
                         item_macro.span(),
@@ -528,7 +541,7 @@ impl Generator {
                     ));
                 }
                 let mut tts = TokenStream::new();
-                mem::swap(&mut tts, &mut item_macro.mac.tts);
+                mem::swap(&mut tts, &mut item_macro.mac.tokens);
                 if item_macro.mac.path.is_ident(FOREIGNER_CLASS)
                     || item_macro.mac.path.is_ident(FOREIGN_CLASS)
                 {
@@ -610,7 +623,7 @@ impl Generator {
         Ok(self.conv_map.take_utils_code())
     }
 
-    fn language_generator(cfg: &LanguageConfig) -> &LanguageGenerator {
+    fn language_generator(cfg: &LanguageConfig) -> &dyn LanguageGenerator {
         match cfg {
             LanguageConfig::JavaConfig(ref java_cfg) => java_cfg,
             LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,

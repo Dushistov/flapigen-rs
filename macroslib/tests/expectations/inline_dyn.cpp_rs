@@ -1,0 +1,27 @@
+r##"#[no_mangle]
+pub extern "C" fn MapBitmapGenerator_already_rendered_bitmap(
+    this: *mut Box<dyn MapBitmapGenerator>,
+) -> CRustOption4232mut3232c_void {
+    let this: &Box<dyn MapBitmapGenerator> = unsafe { this.as_mut().unwrap() };
+    let mut this: &dyn MapBitmapGenerator = this.as_ref();
+    let mut ret: Option<Box<Box<dyn Bitmap>>> = {
+        this.already_rendered_bitmap().map(|bmp| {
+            let bmp: Box<dyn Bitmap> = bmp;
+            Box::new(bmp)
+        })
+    };
+    let ret: CRustOption4232mut3232c_void = match ret {
+        Some(mut x) => {
+            let data: *mut ::std::os::raw::c_void = <Box<Box<dyn Bitmap>>>::box_object(x);
+            CRustOption4232mut3232c_void {
+                val: CRustOptionUnion4232mut3232c_void { data },
+                is_some: 1,
+            }
+        }
+        None => CRustOption4232mut3232c_void {
+            val: CRustOptionUnion4232mut3232c_void { uninit: 0 },
+            is_some: 0,
+        },
+    };
+    ret
+}"##;

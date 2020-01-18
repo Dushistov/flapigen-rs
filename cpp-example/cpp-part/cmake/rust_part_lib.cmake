@@ -90,4 +90,6 @@ add_dependencies(rust_part_lib rust_swig_gen_headers)
 set_target_properties(rust_part_lib
     PROPERTIES
     IMPORTED_LOCATION ${RUST_PART_LIB_PATH}
+# becase of https://github.com/rust-lang/cargo/issues/5045
+    IMPORTED_NO_SONAME True
     INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/rust-api")

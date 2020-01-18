@@ -21,5 +21,5 @@ foreign_callback!(callback SomeObserver {
 foreigner_class!(class ClassWithCallbacks {
     self_type Foo;
     constructor Foo::default() -> Foo;
-    fn f1(&mut self, cb: Box<SomeTrait>);
+    fn f1(&mut self, cb: Box<dyn SomeTrait>);
 });

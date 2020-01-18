@@ -104,7 +104,7 @@ struct JniForeignMethodSignature {
 
 impl ForeignMethodSignature for JniForeignMethodSignature {
     type FI = JavaForeignTypeInfo;
-    fn output(&self) -> &ForeignTypeInfoT {
+    fn output(&self) -> &dyn ForeignTypeInfoT {
         &self.output
     }
     fn input(&self) -> &[JavaForeignTypeInfo] {

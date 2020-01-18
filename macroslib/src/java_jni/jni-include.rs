@@ -515,30 +515,39 @@ fn vec_of_objects_to_jobject_array<T: SwigForeignClass>(
 }
 
 #[allow(dead_code)]
-trait JniInvalidValue<T> {
-    fn jni_invalid_value() -> T;
+trait JniInvalidValue {
+    fn jni_invalid_value() -> Self;
 }
 
-impl<T> JniInvalidValue<*const T> for *const T {
-    fn jni_invalid_value() -> *const T {
+impl<T> JniInvalidValue for *const T {
+    fn jni_invalid_value() -> Self {
         ::std::ptr::null()
     }
 }
 
-impl<T> JniInvalidValue<*mut T> for *mut T {
-    fn jni_invalid_value() -> *mut T {
+impl<T> JniInvalidValue for *mut T {
+    fn jni_invalid_value() -> Self {
         ::std::ptr::null_mut()
     }
 }
 
-impl JniInvalidValue<()> for () {
+impl JniInvalidValue for () {
     fn jni_invalid_value() {}
+}
+
+impl<T: SwigForeignClass> JniInvalidValue for internal_aliases::JForeignObjectsArray<T> {
+    fn jni_invalid_value() -> Self {
+        Self {
+            inner: ::std::ptr::null_mut(),
+            _marker: ::std::marker::PhantomData,
+        }
+    }
 }
 
 macro_rules! impl_jni_jni_invalid_value {
     ($($type:ty)*) => ($(
-        impl JniInvalidValue<$type> for $type {
-            fn jni_invalid_value() -> $type {
+        impl JniInvalidValue for $type {
+            fn jni_invalid_value() -> Self {
                 <$type>::default()
             }
         }
