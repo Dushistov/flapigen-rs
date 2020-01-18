@@ -119,29 +119,33 @@ pub(crate) fn create_suitable_types_for_constructor_and_self(
     class: &ForeignerClassInfo,
     constructor_real_type: &Type,
 ) -> (Type, Type) {
+    let c_sp = constructor_real_type.span();
+    let self_type = class.self_type_as_ty();
+    let s_sp = self_type.span();
     match self_variant {
         SelfTypeVariant::Default => {
-            unimplemented!();
+            (
+                parse_type_spanned_checked!(c_sp, &#constructor_real_type),
+                parse_type_spanned_checked!(s_sp, #self_type),
+            )
         }
         SelfTypeVariant::Mut => {
-            unimplemented!();
+            (
+                parse_type_spanned_checked!(c_sp, &#constructor_real_type),
+                parse_type_spanned_checked!(s_sp, #self_type),
+            )
         }
-        SelfTypeVariant::Rptr | SelfTypeVariant::RptrMut => {
-            let c_sp = constructor_real_type.span();
-            let self_type = class.self_type_as_ty();
-            let s_sp = self_type.span();
-
-            if self_variant == SelfTypeVariant::Rptr {
-                (
-                    parse_type_spanned_checked!(c_sp, & #constructor_real_type),
-                    parse_type_spanned_checked!(s_sp, & #self_type),
-                )
-            } else {
-                (
-                    parse_type_spanned_checked!(c_sp, &mut #constructor_real_type),
-                    parse_type_spanned_checked!(s_sp, &mut #self_type),
-                )
-            }
+        SelfTypeVariant::Rptr => {
+            (
+                parse_type_spanned_checked!(c_sp, & #constructor_real_type),
+                parse_type_spanned_checked!(s_sp, & #self_type),
+            )
+        }
+        SelfTypeVariant::RptrMut => {
+            (
+                parse_type_spanned_checked!(c_sp, &mut #constructor_real_type),
+                parse_type_spanned_checked!(s_sp, &mut #self_type),
+            )
         }
     }
 }

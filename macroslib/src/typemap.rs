@@ -291,6 +291,24 @@ impl Default for TypeMap {
                     invalid_src_id_span(),
                 ),
             ),
+            GenericTypeConv::new(
+                parse_type! { &T },
+                parse_type! { T },
+                parse_quote! { <T: Clone> },
+                TypeConvCode::new2(
+                    "let mut {to_var}: {to_var_type} = {from_var}.clone();",
+                    invalid_src_id_span(),
+                ),
+            ),
+            GenericTypeConv::new(
+                parse_type! { &mut T },
+                parse_type! { T },
+                parse_quote! { <T: Clone> },
+                TypeConvCode::new2(
+                    "let mut {to_var}: {to_var_type} = {from_var}.clone();",
+                    invalid_src_id_span(),
+                ),
+            ),
         ];
         TypeMap {
             conv_graph: TypesConvGraph::new(),
