@@ -84,7 +84,11 @@ add_custom_command(OUTPUT ${RUST_PART_LIB_PATH}
   COMMAND ${CARGO_BUILD}
   WORKING_DIRECTORY "${RUST_BUILD_CWD}")
 add_custom_target(rust_part_lib_target DEPENDS ${RUST_PART_LIB_PATH})
-add_library(rust_part_lib UNKNOWN IMPORTED GLOBAL)
+if (MSVC)
+  add_library(rust_part_lib UNKNOWN IMPORTED GLOBAL)
+else ()
+  add_library(rust_part_lib SHARED IMPORTED GLOBAL)
+endif ()
 add_dependencies(rust_part_lib rust_part_lib_target)
 add_dependencies(rust_part_lib rust_swig_gen_headers)
 set_target_properties(rust_part_lib
