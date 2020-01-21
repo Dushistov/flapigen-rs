@@ -180,6 +180,9 @@ pub struct CppConfig {
     cpp_optional: CppOptional,
     cpp_variant: CppVariant,
     cpp_str_view: CppStrView,
+    /// Generate `enum class` in instead of plain old `enum` in C++ code.
+    /// Can be necessary, if variant names between different Rust enums are not unique.
+    use_enum_class: bool,
     /// Create separate *_impl.hpp files with methods implementations.
     /// Can be necessary for the project with circular dependencies between classes.
     separate_impl_headers: bool,
@@ -251,6 +254,7 @@ impl CppConfig {
             cpp_optional: CppOptional::Std17,
             cpp_variant: CppVariant::Std17,
             cpp_str_view: CppStrView::Std17,
+            use_enum_class: false,
             separate_impl_headers: false,
         }
     }
@@ -287,6 +291,14 @@ impl CppConfig {
     pub fn separate_impl_headers(self, separate_impl_headers: bool) -> CppConfig {
         CppConfig {
             separate_impl_headers,
+            ..self
+        }
+    }
+    /// Generate `enum class` in instead of plain old `enum` in C++ code.
+    /// Can be necessary, if variant names between different Rust enums are not unique.
+    pub fn use_enum_class(self, use_enum_class: bool) -> CppConfig {
+        CppConfig {
+            use_enum_class,
             ..self
         }
     }
