@@ -1,7 +1,9 @@
 "virtual void onSessionUpdate(ControlItem item, bool is_ok) noexcept = 0;";
 
 r#"enum ControlItem {
+
 GNSS = 0,
+
 GPS_PROVIDER = 1
 
 };"#;

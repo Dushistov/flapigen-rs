@@ -231,6 +231,25 @@ foreigner_class!(class TestEnumClass {
 }
 
 #[test]
+fn test_cpp_foreign_enum_comment() {
+    let _ = env_logger::try_init();
+
+    let name = "foreign_enum_comment";
+    let src = r#"
+foreign_enum!(enum MyEnum {
+  ///This in Enum comment
+  ITEM1 = MyEnum::Item1,
+  ITEM2 = MyEnum::Item2,
+  ITEM3 = MyEnum::Item3,
+});
+"#;
+    let cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).unwrap();
+    assert!(_cpp_code
+        .foreign_code
+        .contains("//This in Enum comment\nITEM1 = 0,"));
+}
+
+#[test]
 fn test_return_result_type_with_object() {
     let _ = env_logger::try_init();
 
