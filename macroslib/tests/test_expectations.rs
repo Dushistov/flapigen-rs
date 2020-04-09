@@ -244,7 +244,7 @@ foreign_enum!(enum MyEnum {
 });
 "#;
     let cpp_code = parse_code(name, Source::Str(src), ForeignLang::Cpp).unwrap();
-    assert!(_cpp_code
+    assert!(cpp_code
         .foreign_code
         .contains("//This in Enum comment\nITEM1 = 0,"));
 }
