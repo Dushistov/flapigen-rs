@@ -104,13 +104,16 @@ enum {enum_name} {{"#,
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
     for (i, item) in enum_info.items.iter().enumerate() {
+        let mut doc_comments = cpp_code::doc_comments_to_c_comments(&item.doc_comments, false);
+        if !doc_comments.is_empty() && !doc_comments.ends_with('\n') {
+            doc_comments.push('\n');
+        }
         writeln!(
             file,
-            r#"{doc_comments}
-{item_name} = {index}{separator}"#,
+            "{doc_comments}{item_name} = {index}{separator}",
             item_name = item.name,
             index = i,
-            doc_comments = cpp_code::doc_comments_to_c_comments(&item.doc_comments, false),
+            doc_comments = doc_comments,
             separator = if i == enum_info.items.len() - 1 {
                 "\n"
             } else {
