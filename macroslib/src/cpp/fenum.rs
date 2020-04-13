@@ -104,7 +104,8 @@ enum {enum_name} {{"#,
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
     for (i, item) in enum_info.items.iter().enumerate() {
-        let mut doc_comments = cpp_code::doc_comments_to_c_comments(&item.doc_comments, false);
+        //Enums are aligned left, so we pass true to get left aligned comments.
+        let mut doc_comments = cpp_code::doc_comments_to_c_comments(&item.doc_comments, true);
         if !doc_comments.is_empty() && !doc_comments.ends_with('\n') {
             doc_comments.push('\n');
         }
