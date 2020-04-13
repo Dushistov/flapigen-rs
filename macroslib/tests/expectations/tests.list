@@ -56,3 +56,4 @@ null_annotation_java
 callback_with_several_traits
 reachability_fence_java
 inline_dyn
+fenum_with_comments
