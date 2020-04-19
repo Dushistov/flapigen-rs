@@ -55,3 +55,16 @@ r##"# [ no_mangle ] pub extern "C" fn Foo_f3 ( this : * mut Foo , a0 : CRustOpti
  let this : & mut Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : ( ) = Foo :: f3 ( this , a0 ) ;
  ret }"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Foo_f7(x: CRustClassOptBoo) -> () {
+    let x: Option<&Boo> = if !x.p.is_null() {
+        assert!(!x.p.is_null());
+        let obj: &Boo = unsafe { &*(x.p as *const Boo) };
+        Some(obj)
+    } else {
+        None
+    };
+    let mut ret: () = Foo::f7(x);
+    ret
+}"##;

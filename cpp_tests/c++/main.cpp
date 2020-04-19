@@ -592,6 +592,16 @@ To carry that wonderful nose.)");
         auto val2 = y.f14(false);
         EXPECT_TRUE(!val2);
     }
+
+    {
+        Foo foo(17, "17");
+        auto val = TestOptional::f15(&foo);
+        ASSERT_TRUE(!!val);
+        EXPECT_EQ("17", val->to_std_string());
+
+        auto val_none = TestOptional::f15(nullptr);
+        EXPECT_TRUE(!val_none);
+    }
 }
 
 TEST(TestResult, smokeTest)

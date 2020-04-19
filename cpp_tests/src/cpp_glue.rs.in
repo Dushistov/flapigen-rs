@@ -551,6 +551,9 @@ foreign_class!(class TestOptional {
     fn TestOptional::f12(&self, val: f32, is_some: bool) -> Option<f32>;
     fn TestOptional::f13(&self, is_some: bool) -> Option<String>;
     fn TestOptional::f14(&self, is_some: bool) -> Option<bool>;
+    fn f15(foo: Option<&Foo>) -> Option<String> {
+        foo.map(|x| x.name.clone())
+    }
 });
 
 #[derive(Default)]
