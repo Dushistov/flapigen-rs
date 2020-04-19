@@ -6,7 +6,7 @@ r##"impl ControlStateChange for JavaCallback {
         let env = self.get_jni_env();
         if let Some(env) = env.env {
             let mut a0: jobject = <jobject>::swig_from(a0, env);
-            let a1: jboolean = if a1 { 1 as jboolean } else { 0 as jboolean };
+            let mut a1: jboolean = if a1 { 1 as jboolean } else { 0 as jboolean };
             unsafe {
                 (**env).CallVoidMethod.unwrap()(
                     env,

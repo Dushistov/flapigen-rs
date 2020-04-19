@@ -543,9 +543,55 @@ private:
 );
 
 foreign_typemap!(
+    generic_alias!(CRustClassOpt = swig_concat_idents!(CRustClassOpt, swig_f_type!(T)));
+    define_c_type!(
+         module = "rust_option.h";
+         #[repr(C)]
+         #[derive(Clone, Copy)]
+         pub struct CRustClassOpt!() {
+             p: *const ::std::os::raw::c_void,
+         }
+    );
+    ($p:r_type) <T: SwigForeignClass> Option<&T> <= CRustClassOpt!() {
+        $out = if !$p.p.is_null() {
+            swig_from_i_type_to_rust!(&T, $p.p, obj)
+            Some(obj)
+        } else {
+            None
+        };
+    };
+    ($p:f_type, unique_prefix = "/*opt ref*/", req_modules = ["\"rust_option.h\""]) <= "/*opt ref*/const swig_f_type!(T) *" r#"
+        $out = CRustClassOpt!() { ($p != nullptr) ? static_cast<swig_f_type!(T)Opaque *>(* $p) : nullptr };
+"#;
+);
+
+foreign_typemap!(
+    generic_alias!(CRustClassOptMut = swig_concat_idents!(CRustClassOptMut, swig_f_type!(T)));
+    define_c_type!(
+         module = "rust_option.h";
+         #[repr(C)]
+         #[derive(Clone, Copy)]
+         pub struct CRustClassOptMut!() {
+             p: *mut ::std::os::raw::c_void,
+         }
+    );
+    ($p:r_type) <T: SwigForeignClass> Option<&mut T> <= CRustClassOptMut!() {
+        $out = if !$p.p.is_null() {
+            swig_from_i_type_to_rust!(&mut T, $p.p, obj)
+            Some(obj)
+        } else {
+            None
+        };
+    };
+    ($p:f_type, unique_prefix = "/*opt mut ref*/", req_modules = ["\"rust_option.h\""]) <= "/*opt mut ref*/swig_f_type!(T) *" r#"
+        $out = CRustClassOptMut!() { ($p != nullptr) ? static_cast<swig_f_type!(T)Opaque *>(* $p) : nullptr };
+"#;
+);
+
+foreign_typemap!(
     generic_alias!(CRustOpt = swig_concat_idents!(CRustOption, swig_i_type!(T)));
     generic_alias!(CRustOptUnion = swig_concat_idents!(CRustOptionUnion, swig_i_type!(T)));
-     define_c_type!(
+    define_c_type!(
          module = "rust_option.h";
          #[repr(C)]
          #[derive(Clone, Copy)]

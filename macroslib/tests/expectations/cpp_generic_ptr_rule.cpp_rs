@@ -2,6 +2,6 @@ r##"# [ no_mangle ] pub extern "C" fn Foo_f ( a : * const MapRect , ) -> ( ) {
  assert ! ( ! a . is_null ( ) ) ;
  let map_rect : & MapRect = unsafe { &* a } ;
  let points_arr : [ MapPoint ; 4 ] = map_rect . into ( ) ;
- let a : MapRectRef = & points_arr ;
+ let mut a : MapRectRef = & points_arr ;
  let mut ret : ( ) = f ( a ) ;
  ret }"##;

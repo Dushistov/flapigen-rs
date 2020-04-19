@@ -1,21 +1,21 @@
 r##"# [ no_mangle ] pub extern "C" fn Boo_get_foo_arr ( this : * mut Boo , ) -> CRustForeignVec {
  let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : Vec < Foo > = Boo :: get_foo_arr ( this , ) ;
- let ret : CRustForeignVec = CRustForeignVec :: from_vec ( ret ) ;
+ let mut ret : CRustForeignVec = CRustForeignVec :: from_vec ( ret ) ;
  ret }"##;
 
 r##"# [ no_mangle ] pub extern "C" fn Boo_get_foo_with_err ( this : * mut Boo , ) -> CRustResult4232mut3232c_voidCRustString {
  let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : Result < Foo , String > = Boo :: get_foo_with_err ( this , ) ;
- let ret : CRustResult4232mut3232c_voidCRustString = match ret {
+ let mut ret : CRustResult4232mut3232c_voidCRustString = match ret {
  Ok ( mut x ) => { let ok : * mut :: std :: os :: raw :: c_void = < Foo >:: box_object ( x ) ; CRustResult4232mut3232c_voidCRustString { data : CRustResultUnion4232mut3232c_voidCRustString { ok } , is_ok : 1 , } }
- Err ( err ) => { let err : CRustString = CRustString :: from_string ( err ) ; CRustResult4232mut3232c_voidCRustString { data : CRustResultUnion4232mut3232c_voidCRustString { err } , is_ok : 0 , } } } ;
+ Err ( err ) => { let mut err : CRustString = CRustString :: from_string ( err ) ; CRustResult4232mut3232c_voidCRustString { data : CRustResultUnion4232mut3232c_voidCRustString { err } , is_ok : 0 , } } } ;
  ret }"##;
 
 r##"# [ no_mangle ] pub extern "C" fn Boo_get_foo_arr_with_err ( this : * mut Boo , ) -> CRustResultCRustForeignVecCRustString {
  let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : Result < Vec < Foo > , String > = Boo :: get_foo_arr_with_err ( this , ) ;
- let ret : CRustResultCRustForeignVecCRustString = match ret {
- Ok ( mut x ) => { let ok : CRustForeignVec = CRustForeignVec :: from_vec ( x ) ; CRustResultCRustForeignVecCRustString { data : CRustResultUnionCRustForeignVecCRustString { ok } , is_ok : 1 , } }
- Err ( err ) => { let err : CRustString = CRustString :: from_string ( err ) ; CRustResultCRustForeignVecCRustString { data : CRustResultUnionCRustForeignVecCRustString { err } , is_ok : 0 , } } } ;
+ let mut ret : CRustResultCRustForeignVecCRustString = match ret {
+ Ok ( mut x ) => { let mut ok : CRustForeignVec = CRustForeignVec :: from_vec ( x ) ; CRustResultCRustForeignVecCRustString { data : CRustResultUnionCRustForeignVecCRustString { ok } , is_ok : 1 , } }
+ Err ( err ) => { let mut err : CRustString = CRustString :: from_string ( err ) ; CRustResultCRustForeignVecCRustString { data : CRustResultUnionCRustForeignVecCRustString { err } , is_ok : 0 , } } } ;
  ret }"##;
