@@ -499,6 +499,51 @@ fn test_foreign_typemap_unique_prefix() {
     assert!(!rule.is_generic());
 }
 
+#[test]
+fn test_expand_generic_type_with_ptr() {
+    let rule = macro_to_conv_rule(parse_quote! {
+        foreign_typemap!(
+            ($p:r_type) <T> Option<&T> <= *const swig_i_type!(T) {
+                $out = if !$p.is_null() {
+                    Some(o)
+                } else {
+                    None
+                };
+            };
+            ($p:f_type, unique_prefix = "/*opt ref*/") <= "/*opt ref*/const swig_f_type!(T) *" r#"
+                $out = ($p != nullptr) ? static_cast<const swig_i_type!(T) *>(* $p) : nullptr;
+"#;
+        )
+    });
+    println!("rule {:?}", rule);
+    assert!(!rule.is_empty());
+    assert!(rule.is_generic());
+
+    let ty = parse_type! { Option<&u32> };
+    let subst_map = rule
+        .is_ty_subst_of_my_generic_rtype(&ty, petgraph::Direction::Incoming, |_ty, _traits| true)
+        .unwrap();
+    assert_eq!(1, subst_map.len());
+    assert_eq!(parse_type! { u32 }, *subst_map.get("T").unwrap().unwrap());
+
+    let new_rule = rule
+        .subst_generic_params(subst_map, petgraph::Direction::Incoming, &mut Dummy)
+        .unwrap();
+    assert!(!new_rule.is_generic());
+    assert!(!new_rule.is_empty());
+    assert_eq!(
+        RTypeConvRule {
+            left_ty: parse_type!(Option<&u32>),
+            right_ty: Some(parse_type!(*const u32)),
+            code: Some(TypeConvCode::new(
+                "let {to_var}: {to_var_type} = if ! {from_var} . is_null ( ) { Some ( o ) } else { None } ;",
+                invalid_src_id_span(),
+            )),
+        },
+        new_rule.rtype_right_to_left.unwrap()
+    );
+}
+
 fn cpp_pair_rule() -> TypeMapConvRuleInfo {
     macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
@@ -564,6 +609,8 @@ impl TypeMapConvRuleInfoExpanderHelper for Dummy {
         Ok(ExpandedFType {
             name: if *ty == parse_type!(i32) {
                 "int32_t"
+            } else if *ty == parse_type!(u32) {
+                "uint32_t"
             } else if *ty == parse_type!(f32) {
                 "float"
             } else if *ty == parse_type!(CRustPairi32f32) {

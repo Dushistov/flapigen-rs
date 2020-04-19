@@ -8,7 +8,11 @@ use proc_macro2::{Span, TokenStream};
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use std::fmt::Write;
-use syn::{spanned::Spanned, LitStr, Type};
+use syn::{
+    spanned::Spanned,
+    visit_mut::{visit_type_mut, VisitMut},
+    LitStr, Type,
+};
 
 use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result, SourceIdSpan},
@@ -16,7 +20,7 @@ use crate::{
     typemap::{
         ast::{
             get_trait_bounds, is_second_subst_of_first, normalize_type, parse_ty_with_given_span,
-            replace_all_types_with, DisplayToTokens, SpannedSmolStr, TyParamsSubstMap,
+            DisplayToTokens, SpannedSmolStr, TyParamsSubstMap,
         },
         ty::TraitNamesSet,
         TypeConvCode,
@@ -663,35 +667,15 @@ fn expand_rtype_rule(
         Some(x) => x,
         None => return Ok(None),
     };
-    let left_ty = replace_all_types_with(&grule.left_ty, param_map);
+    let left_ty = expand_type(&grule.left_ty, src_id, param_map, expander, generic_aliases)?;
     let right_ty: Option<Type> = match grule.right_ty.as_ref() {
-        Some(x) => match x {
-            Type::Macro(ref type_macro) => {
-                let ctx_span = (src_id, x.span());
-                if type_macro.mac.path.is_ident(SWIG_I_TYPE) {
-                    let param = type_macro.mac.tokens.to_string();
-                    let ty = find_type_param(param_map, &param, ctx_span)?;
-                    let i_type = expander.swig_i_type(ty.as_ref(), None)?;
-                    Some(i_type)
-                } else {
-                    let alias_idx = generic_aliases
-                        .iter()
-                        .position(|a| type_macro.mac.path.is_ident(a.name))
-                        .ok_or_else(|| {
-                            DiagnosticError::new2(
-                                ctx_span,
-                                format!(
-                                    "unknown {} name {}",
-                                    GENERIC_ALIAS,
-                                    DisplayToTokens(&type_macro.mac.path)
-                                ),
-                            )
-                        })?;
-                    Some(generic_aliases[alias_idx].value.clone())
-                }
-            }
-            _ => Some(replace_all_types_with(&x, param_map)),
-        },
+        Some(x) => Some(expand_type(
+            x,
+            src_id,
+            param_map,
+            expander,
+            generic_aliases,
+        )?),
         None => None,
     };
 
@@ -713,6 +697,92 @@ fn expand_rtype_rule(
         right_ty,
         code,
     }))
+}
+
+fn expand_type(
+    in_ty: &Type,
+    src_id: SourceId,
+    subst_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[CalcGenericAlias],
+) -> Result<Type> {
+    struct ReplaceTypes<'a, 'b, 'c> {
+        src_id: SourceId,
+        expander: &'a mut dyn TypeMapConvRuleInfoExpanderHelper,
+        subst_map: &'a TyParamsSubstMap<'b>,
+        generic_aliases: &'a [CalcGenericAlias<'c>],
+        err: Option<DiagnosticError>,
+    }
+    impl<'a, 'b, 'c> VisitMut for ReplaceTypes<'a, 'b, 'c> {
+        fn visit_type_mut(&mut self, t: &mut Type) {
+            if self.err.is_some() {
+                return;
+            }
+
+            let ty_name = normalize_type(t);
+            if let Some(Some(subst)) = self.subst_map.get(&ty_name) {
+                *t = subst.clone();
+            } else {
+                visit_type_mut(self, t);
+            }
+
+            if let Type::Macro(ref type_macro) = t {
+                let ctx_span = (self.src_id, t.span());
+                match expand_macro_in_type(
+                    type_macro,
+                    ctx_span,
+                    self.subst_map,
+                    self.expander,
+                    self.generic_aliases,
+                ) {
+                    Ok(Some(new_ty)) => *t = new_ty,
+                    Ok(None) => {}
+                    Err(err) => self.err = Some(err),
+                }
+            }
+        }
+    }
+
+    let mut rt = ReplaceTypes {
+        subst_map,
+        src_id,
+        expander,
+        generic_aliases,
+        err: None,
+    };
+    let mut new_ty = in_ty.clone();
+    rt.visit_type_mut(&mut new_ty);
+    Ok(new_ty)
+}
+
+fn expand_macro_in_type(
+    type_macro: &syn::TypeMacro,
+    ctx_span: SourceIdSpan,
+    param_map: &TyParamsSubstMap,
+    expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
+    generic_aliases: &[CalcGenericAlias],
+) -> Result<Option<Type>> {
+    if type_macro.mac.path.is_ident(SWIG_I_TYPE) {
+        let param = type_macro.mac.tokens.to_string();
+        let ty = find_type_param(param_map, &param, ctx_span)?;
+        let i_type = expander.swig_i_type(ty.as_ref(), None)?;
+        Ok(Some(i_type))
+    } else {
+        let alias_idx = generic_aliases
+            .iter()
+            .position(|a| type_macro.mac.path.is_ident(a.name))
+            .ok_or_else(|| {
+                DiagnosticError::new2(
+                    ctx_span,
+                    format!(
+                        "unknown {} name {}",
+                        GENERIC_ALIAS,
+                        DisplayToTokens(&type_macro.mac.path)
+                    ),
+                )
+            })?;
+        Ok(Some(generic_aliases[alias_idx].value.clone()))
+    }
 }
 
 fn expand_ftype_rule(
