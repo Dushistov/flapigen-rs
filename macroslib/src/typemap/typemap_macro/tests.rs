@@ -67,7 +67,7 @@ fn test_foreign_typemap_cpp_bool() {
             left_ty: parse_type!(bool),
             right_ty: Some(parse_type!(::std::os::raw::c_char)),
             code: Some(TypeConvCode::new(
-                "let {to_var}: {to_var_type} = if {from_var} { 1 } else { 0 } ;",
+                "let mut {to_var}: {to_var_type} = if {from_var} { 1 } else { 0 } ;",
                 invalid_src_id_span(),
             )),
         },
@@ -79,7 +79,7 @@ fn test_foreign_typemap_cpp_bool() {
             left_ty: parse_type!(bool),
             right_ty: Some(parse_type!(::std::os::raw::c_char)),
             code: Some(TypeConvCode::new(
-                "let {to_var}: {to_var_type} = ( {from_var} != 0 ) ;",
+                "let mut {to_var}: {to_var_type} = ( {from_var} != 0 ) ;",
                 invalid_src_id_span(),
             )),
         },
@@ -434,7 +434,7 @@ fn test_foreign_typemap_cpp_pair_syntax() {
                 concat!(
                     "swig_from_rust_to_i_type ! ( T1 , {from_var} . 0 , p0 ) ; ",
                     "swig_from_rust_to_i_type ! ( T2 , {from_var} . 1 , p1 ) ; ",
-                    "let {to_var}: {to_var_type} = CRustPair ! ( ) { first : p0 , second : p1 , } ;"
+                    "let mut {to_var}: {to_var_type} = CRustPair ! ( ) { first : p0 , second : p1 , } ;"
                 ),
                 invalid_src_id_span(),
             )),
@@ -450,7 +450,7 @@ fn test_foreign_typemap_cpp_pair_syntax() {
                 concat!(
                     "swig_from_i_type_to_rust ! ( T1 , {from_var} . first , p0 ) ; ",
                     "swig_from_i_type_to_rust ! ( T2 , {from_var} . second , p1 ) ; ",
-                    "let {to_var}: {to_var_type} = ( p0 , p1 ) ;"
+                    "let mut {to_var}: {to_var_type} = ( p0 , p1 ) ;"
                 ),
                 invalid_src_id_span(),
             )),
@@ -536,7 +536,7 @@ fn test_expand_generic_type_with_ptr() {
             left_ty: parse_type!(Option<&u32>),
             right_ty: Some(parse_type!(*const u32)),
             code: Some(TypeConvCode::new(
-                "let {to_var}: {to_var_type} = if ! {from_var} . is_null ( ) { Some ( o ) } else { None } ;",
+                "let mut {to_var}: {to_var_type} = if ! {from_var} . is_null ( ) { Some ( o ) } else { None } ;",
                 invalid_src_id_span(),
             )),
         },

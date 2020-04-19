@@ -5,24 +5,24 @@ pub extern "C" fn Java_org_example_Foo_do_1f1(
     this: jlong,
     a0: jboolean,
 ) -> jboolean {
-    let a0: bool = a0 != 0;
+    let mut a0: bool = a0 != 0;
     let this: &mut Foo = unsafe { jlong_to_pointer::<Foo>(this).as_mut().unwrap() };
     let mut ret: bool = f1(this, a0);
-    let ret: jboolean = if ret { 1 as jboolean } else { 0 as jboolean };
+    let mut ret: jboolean = if ret { 1 as jboolean } else { 0 as jboolean };
     ret
 }"##;
 
 r##"#[no_mangle]
 pub extern "C" fn Java_org_example_Foo_f2(env: *mut JNIEnv, _: jclass, a0: jboolean) -> jboolean {
-    let a0: bool = a0 != 0;
+    let mut a0: bool = a0 != 0;
     let mut ret: bool = f2(a0);
-    let ret: jboolean = if ret { 1 as jboolean } else { 0 as jboolean };
+    let mut ret: jboolean = if ret { 1 as jboolean } else { 0 as jboolean };
     ret
 }"##;
 
 
 r##"# [ no_mangle ] pub extern "C" fn Java_org_example_Foo_init ( env : * mut JNIEnv , _ : jclass , a0 : jboolean , ) -> jlong {
- let a0 : bool = a0 != 0;
+ let mut a0 : bool = a0 != 0;
  let this : Foo = Foo :: new ( a0 ) ;
  let this : Box < Foo > = Box :: new ( this ) ;
  let this : * mut Foo = Box :: into_raw ( this ) ;
@@ -36,8 +36,8 @@ r##"impl SomeTrait for JavaCallback {
         swig_assert_eq_size!(::std::os::raw::c_int, i32);
         let env = self.get_jni_env();
         if let Some(env) = env.env {
-            let a0: jint = a0;
-            let a1: jboolean = if a1 { 1 as jboolean } else { 0 as jboolean };
+            let mut a0: jint = a0;
+            let mut a1: jboolean = if a1 { 1 as jboolean } else { 0 as jboolean };
             unsafe {
                 (**env).CallVoidMethod.unwrap()(
                     env,

@@ -6,7 +6,7 @@ pub extern "C" fn Java_org_example_BLAUtils_latitude_1to_1str(
     plus_sym: jstring,
     minus_sym: jstring,
 ) -> jstring {
-    let lat: Option<f64> = from_java_lang_double_to_rust(env, lat);
+    let mut lat: Option<f64> = from_java_lang_double_to_rust(env, lat);
     let mut plus_sym: JavaString = plus_sym.swig_into(env);
     let mut plus_sym: &str = plus_sym.swig_deref();
     let mut minus_sym: JavaString = minus_sym.swig_into(env);
@@ -29,7 +29,7 @@ pub extern "C" fn Java_org_example_BLAUtils_longitude_1to_1str(
     plus_sym: jstring,
     minus_sym: jstring,
 ) -> jstring {
-    let lon: Option<f64> = from_java_lang_double_to_rust(env, lon);
+    let mut lon: Option<f64> = from_java_lang_double_to_rust(env, lon);
     let mut plus_sym: JavaString = plus_sym.swig_into(env);
     let mut plus_sym: &str = plus_sym.swig_deref();
     let mut minus_sym: JavaString = minus_sym.swig_into(env);

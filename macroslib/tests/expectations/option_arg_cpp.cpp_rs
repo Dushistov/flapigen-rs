@@ -1,7 +1,7 @@
 r##"#[no_mangle]
 pub extern "C" fn Foo_f4(this: *mut Foo, x: CRustOptionusize) -> () {
-    let x: Option<usize> = if x.is_some != 0 {
-        let ret = unsafe { x.val.data };
+    let mut x: Option<usize> = if x.is_some != 0 {
+        let mut ret = unsafe { x.val.data };
         Some(ret)
     } else {
         None
@@ -13,14 +13,14 @@ pub extern "C" fn Foo_f4(this: *mut Foo, x: CRustOptionusize) -> () {
 
 r##"#[no_mangle]
 pub extern "C" fn Foo_f5(x: CRustOptionf64, y: CRustOptionusize) -> () {
-    let x: Option<f64> = if x.is_some != 0 {
-        let ret = unsafe { x.val.data };
+    let mut x: Option<f64> = if x.is_some != 0 {
+        let mut ret = unsafe { x.val.data };
         Some(ret)
     } else {
         None
     };
-    let y: Option<usize> = if y.is_some != 0 {
-        let ret = unsafe { y.val.data };
+    let mut y: Option<usize> = if y.is_some != 0 {
+        let mut ret = unsafe { y.val.data };
         Some(ret)
     } else {
         None
@@ -31,8 +31,8 @@ pub extern "C" fn Foo_f5(x: CRustOptionf64, y: CRustOptionusize) -> () {
 
 r##"#[no_mangle]
 pub extern "C" fn Foo_f6(x: CRustOptionCRustStrView) -> () {
-    let x: Option<&str> = if x.is_some != 0 {
-        let ret: &str = unsafe {
+    let mut x: Option<&str> = if x.is_some != 0 {
+        let mut ret: &str = unsafe {
             let slice: &[u8] = ::std::slice::from_raw_parts(
                 unsafe { x.val.data }.data as *const u8,
                 unsafe { x.val.data }.len,
@@ -49,7 +49,7 @@ pub extern "C" fn Foo_f6(x: CRustOptionCRustStrView) -> () {
 
 
 r##"# [ no_mangle ] pub extern "C" fn Foo_f3 ( this : * mut Foo , a0 : CRustOptionu32 , ) -> ( ) {
- let a0 : Option < ControlItem > = if a0 . is_some != 0 {
+ let mut a0 : Option < ControlItem > = if a0 . is_some != 0 {
  let mut ret : ControlItem = < ControlItem >:: swig_from ( unsafe { a0 . val . data } ) ;
  Some ( ret ) } else { None } ;
  let this : & mut Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
@@ -58,7 +58,7 @@ r##"# [ no_mangle ] pub extern "C" fn Foo_f3 ( this : * mut Foo , a0 : CRustOpti
 
 r##"#[no_mangle]
 pub extern "C" fn Foo_f7(x: CRustClassOptBoo) -> () {
-    let x: Option<&Boo> = if !x.p.is_null() {
+    let mut x: Option<&Boo> = if !x.p.is_null() {
         assert!(!x.p.is_null());
         let obj: &Boo = unsafe { &*(x.p as *const Boo) };
         Some(obj)

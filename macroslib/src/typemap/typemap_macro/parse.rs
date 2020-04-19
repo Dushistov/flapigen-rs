@@ -247,14 +247,14 @@ fn parse_r_type_rule(
             TypeConvCode::new2(
                 code_str
                     .replace(&d_var_name, FROM_VAR_TEMPLATE)
-                    .replace(&out_var_no_type, &format!("let {}", TO_VAR_TEMPLATE)),
+                    .replace(&out_var_no_type, &format!("let mut {}", TO_VAR_TEMPLATE)),
                 (SourceId::none(), conv_body.span()),
             )
         } else {
             TypeConvCode::new2(
                 code_str.replace(&d_var_name, FROM_VAR_TEMPLATE).replace(
                     &out_var,
-                    &format!("let {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),
+                    &format!("let mut {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),
                 ),
                 (SourceId::none(), conv_body.span()),
             )

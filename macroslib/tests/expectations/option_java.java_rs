@@ -6,7 +6,7 @@ pub extern "C" fn Java_org_example_Foo_do_1f7(
     a0: internal_aliases::JStringOptStr,
 ) -> () {
     let tmp: JavaString;
-    let a0: Option<&str> = if !a0.is_null() {
+    let mut a0: Option<&str> = if !a0.is_null() {
         tmp = a0.swig_into(env);
         Some(tmp.swig_deref())
     } else {

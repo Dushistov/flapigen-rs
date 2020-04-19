@@ -10,7 +10,7 @@ pub extern "C" fn Test_f(a0: *const C_MyObserver) -> () {
 r#"impl OnEvent for C_MyObserver {
     #[allow(unused_mut)]
     fn something_change(&self, a0: i32, a1: &str) -> () {
-        let a1: CRustStrView = CRustStrView::from_str(a1);
+        let mut a1: CRustStrView = CRustStrView::from_str(a1);
         let ret: () = (self.onStateChanged)(a0, a1, self.opaque);
         ret
     }
