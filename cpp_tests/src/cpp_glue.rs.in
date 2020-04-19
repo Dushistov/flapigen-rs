@@ -554,6 +554,9 @@ foreign_class!(class TestOptional {
     fn f15(foo: Option<&Foo>) -> Option<String> {
         foo.map(|x| x.name.clone())
     }
+    fn f16(mut foo: Option<&mut Foo>, v: i32) {
+        foo.as_mut().map(|x| x.set_field(v));
+    }
 });
 
 #[derive(Default)]

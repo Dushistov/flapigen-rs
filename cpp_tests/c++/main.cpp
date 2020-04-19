@@ -602,6 +602,14 @@ To carry that wonderful nose.)");
         auto val_none = TestOptional::f15(nullptr);
         EXPECT_TRUE(!val_none);
     }
+
+    {
+        Foo foo(17, "17");
+        TestOptional::f16(&foo, 5);
+        EXPECT_EQ(5, foo.f(0, 0));
+
+        TestOptional::f16(nullptr, 17);
+    }
 }
 
 TEST(TestResult, smokeTest)
