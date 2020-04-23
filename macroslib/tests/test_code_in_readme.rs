@@ -5,7 +5,7 @@ use std::{
     path::Path,
 };
 
-use pulldown_cmark::{Event, Parser, Tag};
+use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag};
 use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
 use tempfile::tempdir;
 
@@ -115,8 +115,12 @@ fn parse_readme() -> Vec<Test> {
     tests
 }
 
-fn parse_code_block_info(info: &str) -> CodeBlockInfo {
+fn parse_code_block_info(info: &CodeBlockKind) -> CodeBlockInfo {
     // Same as rustdoc
+    let info: &str = match info {
+        CodeBlockKind::Indented => "",
+        CodeBlockKind::Fenced(x) => x.as_ref(),
+    };
     let tokens = info.split(|c: char| !(c == '_' || c == '-' || c.is_alphanumeric()));
 
     let mut seen_rust_tags = false;
