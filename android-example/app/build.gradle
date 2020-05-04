@@ -43,8 +43,8 @@ dependencies {
 // ANCHOR:cargo
 def rustBasePath = ".."
 def archTriplets = [
-    'armeabi': 'arm-linux-androideabi',
-    'arm64': 'aarch64-linux-android',
+    'armeabi-v7a': 'armv7-linux-androideabi',
+    'arm64-v8a': 'aarch64-linux-android',
 ]
 
 // TODO: only pass --release if buildType is release
