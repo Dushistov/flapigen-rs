@@ -44,7 +44,7 @@ fn gen_for_android() {
         get_gcc_system_include_dirs(&target).expect("Can't get NDK's system include dirs");
 
     let include_headers: Vec<_> = INCLUDE_SYS_H
-        .into_iter()
+        .iter()
         .map(|h| {
             search_file_in_directory(&include_dirs, h)
                 .expect(format!("Could not find header {}", h).as_ref())

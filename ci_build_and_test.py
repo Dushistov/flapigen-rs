@@ -217,7 +217,8 @@ def build_for_android(is_windows):
     gradle_cmd = "gradlew.bat" if is_windows else "./gradlew"
 
     for d in ["android-example", "android-tests"]:
-        subprocess.check_call(["cargo", "test", "--target=arm-linux-androideabi", "--release"], cwd=os.path.join(os.getcwd(), d))
+        target = "armv7-linux-androideabi" if d == "android-example" else "arm-linux-androideabi"
+        subprocess.check_call(["cargo", "test", "--target=" + target, "--release"], cwd=os.path.join(os.getcwd(), d))
         subprocess.check_call([gradle_cmd, "build"], cwd=os.path.join(os.getcwd(), d))
         subprocess.check_call([gradle_cmd, "connectedAndroidTest"], cwd=os.path.join(os.getcwd(), d))
 

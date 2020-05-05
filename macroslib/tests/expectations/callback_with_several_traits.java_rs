@@ -5,7 +5,7 @@ r##"impl OnEvent for JavaCallback {
         swig_assert_eq_size!(::std::os::raw::c_int, i32);
         let env = self.get_jni_env();
         if let Some(env) = env.env {
-            let a0: jint = a0;
+            let mut a0: jint = a0;
             let mut a1: jstring = <jstring>::swig_from(a1, env);
             unsafe {
                 (**env).CallVoidMethod.unwrap()(env, self.this, self.methods[0usize], a0, a1);

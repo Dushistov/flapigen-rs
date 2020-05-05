@@ -57,7 +57,7 @@ r##"pub extern "C" fn Java_org_example_Foo_init(
     a0: jint,
     a1: jstring,
 ) -> jlong {
-    let a0: i32 = a0;
+    let mut a0: i32 = a0;
     let mut a1: JavaString = a1.swig_into(env);
     let mut a1: &str = a1.swig_deref();
     let this: Rc<RefCell<Foo>> = Foo::new(a0, a1);

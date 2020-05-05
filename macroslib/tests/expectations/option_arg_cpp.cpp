@@ -33,3 +33,15 @@ r#"template<bool OWN_DATA>
     }"#;
 
 "void Foo_f3(FooOpaque * const self, struct CRustOptionu32 a0);";
+
+"static void f7(const Boo * x) noexcept;";
+r#"template<bool OWN_DATA>
+    inline void FooWrapper<OWN_DATA>::f7(const Boo * x) noexcept
+    {
+
+        struct CRustClassOptBoo a0 = CRustClassOptBoo { (x != nullptr) ? static_cast<BooOpaque *>(* x) : nullptr };
+
+        Foo_f7(std::move(a0));
+    }"#;
+
+"void Foo_f7(struct CRustClassOptBoo x);";

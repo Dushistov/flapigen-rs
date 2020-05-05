@@ -594,7 +594,7 @@ impl TypeMap {
         if path.is_empty() && in_var_name != out_var_name {
             return Ok((
                 code_deps,
-                format!("let {} = {};", out_var_name, in_var_name),
+                format!("let mut {} = {};", out_var_name, in_var_name),
             ));
         }
 

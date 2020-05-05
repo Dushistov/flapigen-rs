@@ -16,10 +16,12 @@ strategy:
     windows-stable-64bit:
       imageName: 'vs2017-win2016'
       rustup_toolchain: stable-x86_64-pc-windows-msvc
+      host_triple: x86_64-pc-windows-msvc
       platform: x64
     windows-stable-32bit:
       imageName: 'vs2017-win2016'
       rustup_toolchain: stable-i686-pc-windows-msvc
+      host_triple: x86_64-pc-windows-msvc
       platform: x86
 pool:
   vmImage: $(imageName)
@@ -53,7 +55,7 @@ steps:
       echo ##vso[task.setvariable variable=RUSTUP_HOME]%USERPROFILE%\.rustup
       echo ##vso[task.setvariable variable=CARGO_HOME]%USERPROFILE%\.cargo
       curl -sSf -o rustup-init.exe https://win.rustup.rs
-      rustup-init.exe -y --profile=minimal --default-toolchain %RUSTUP_TOOLCHAIN%
+      rustup-init.exe -y --profile=minimal --default-toolchain %RUSTUP_TOOLCHAIN% --default-host %HOST_TRIPLE%
       echo ##vso[task.setvariable variable=PATH]%PATH%;%USERPROFILE%\.cargo\bin
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: Install Rust on windows
@@ -66,14 +68,14 @@ steps:
       rustfmt --version
     displayName: "Rust post-install"
   - script: |
-      curl http://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
+      curl https://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
       7z x llvm-installer.exe -oc:\llvm-binary
       echo ##vso[task.setvariable variable=LIBCLANG_PATH]C:\llvm-binary\bin
       echo ##vso[task.setvariable variable=PATH]%PATH%;C:\llvm-binary\bin
     condition: and(eq( variables['Agent.OS'], 'Windows_NT' ), eq( variables['platform'], 'x64' ))
     displayName: Install llvm on windows 64bit
   - script: |
-      curl http://releases.llvm.org/5.0.2/LLVM-5.0.2-win32.exe -o llvm-installer.exe
+      curl https://releases.llvm.org/5.0.2/LLVM-5.0.2-win32.exe -o llvm-installer.exe
       7z x llvm-installer.exe -oc:\llvm-binary
       echo ##vso[task.setvariable variable=LIBCLANG_PATH]C:\llvm-binary\bin
       set JAVA_PKG=zulu8.40.0.25-ca-jdk8.0.222-win_i686
@@ -129,13 +131,22 @@ steps:
       sccache --version
     condition: eq( variables['Agent.OS'], 'Darwin' )
     displayName: Setup sccache on mac os
-  - script: |
+  - bash: |
+      set -e
       export TAR="boost_1_66_0.tar.gz"
       curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.66.0/source/$TAR
-      tar -xzf $TAR
+      tar -xzvf $TAR
       echo "##vso[task.setvariable variable=BOOST_ROOT]$PWD/boost_1_66_0"
-    condition: eq( variables['Agent.OS'], 'Darwin' )
-    displayName: Install boost on mac os
+    condition: ne( variables['Agent.OS'], 'Windows_NT' )
+    displayName: Install boost linux or macos
+  - bash: |
+      set -e
+      export TAR="boost_1_66_0.7z"
+      curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.66.0/source/$TAR
+      7z x $TAR
+      echo "##vso[task.setvariable variable=BOOST_ROOT]$PWD/boost_1_66_0"
+    condition: eq( variables['Agent.OS'], 'Windows_NT' )
+    displayName: Install boost Windows
   - bash: |
       set -e
       clang --version
