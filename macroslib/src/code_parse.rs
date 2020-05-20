@@ -50,6 +50,12 @@ pub(crate) fn parse_foreigner_class(
             class.0.src_id = src_id;
             Ok(class.0)
         }
+        LanguageConfig::DotNetConfig(_) => {
+            let mut class: DotNetClass =
+                syn::parse2(tokens).map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+            class.0.src_id = src_id;
+            Ok(class.0)
+        }
     }
 }
 
@@ -97,11 +103,23 @@ impl Parse for PythonClass {
     }
 }
 
+struct DotNetClass(ForeignerClassInfo);
+
+impl Parse for DotNetClass {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(DotNetClass(do_parse_foreigner_class(
+            Language::DotNet,
+            input,
+        )?))
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Language {
     Cpp,
     Java,
     Python,
+    DotNet,
 }
 
 mod kw {

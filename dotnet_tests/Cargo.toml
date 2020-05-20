@@ -1,0 +1,15 @@
+[package]
+name = "rust_swig_test_dotnet_native"
+version = "0.1.0"
+authors = ["Adam Rzepka <adam@intelicar.co>"]
+build = "build.rs"
+edition = "2018"
+
+[lib]
+name = "rust_swig_test_dotnet_native"
+crate-type = ["cdylib"]
+
+[build-dependencies]
+rust_swig = { path = "../macroslib" }
+env_logger = "0.7"
+log = "0.4"

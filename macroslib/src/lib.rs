@@ -34,6 +34,7 @@ macro_rules! parse_type_spanned_checked {
 
 mod code_parse;
 mod cpp;
+mod dotnet;
 mod error;
 pub mod file_cache;
 mod java_jni;
@@ -86,6 +87,7 @@ pub enum LanguageConfig {
     JavaConfig(JavaConfig),
     CppConfig(CppConfig),
     PythonConfig(PythonConfig),
+    DotNetConfig(DotNetConfig),
 }
 
 /// Configuration for Java binding generation
@@ -292,7 +294,7 @@ impl CppConfig {
     }
 }
 
-/// Configuration for Java binding generation
+/// Configuration for Python binding generation
 pub struct PythonConfig {
     module_name: String,
 }
@@ -302,6 +304,32 @@ impl PythonConfig {
     /// # Arguments
     pub fn new(module_name: String) -> PythonConfig {
         PythonConfig { module_name }
+    }
+}
+
+/// Configuration for .NET binding generation
+pub struct DotNetConfig {
+    native_lib_name: String,
+    managed_lib_name: String,
+}
+
+impl DotNetConfig {
+    /// Create `DotNetConfig`
+    pub fn new(managed_lib_name: String) -> DotNetConfig {
+        DotNetConfig {
+            native_lib_name: managed_lib_name.clone() + "_native",
+            managed_lib_name: managed_lib_name,
+        }
+    }
+
+    pub fn managed_lib_name(mut self, managed_lib_name: String) -> DotNetConfig {
+        self.managed_lib_name = managed_lib_name;
+        self
+    }
+
+    pub fn native_lib_name(mut self, native_lib_name: String) -> DotNetConfig {
+        self.native_lib_name = native_lib_name;
+        self
     }
 }
 
@@ -390,6 +418,12 @@ impl Generator {
                 conv_map_source.push(src_reg.register(SourceCode {
                     id_of_code: "python-include.rs".into(),
                     code: include_str!("python/python-include.rs").into(),
+                }));
+            }
+            LanguageConfig::DotNetConfig(..) => {
+                conv_map_source.push(src_reg.register(SourceCode {
+                    id_of_code: "dotnet-include.rs".into(),
+                    code: include_str!("dotnet/dotnet-include.rs").into(),
                 }));
             }
         }
@@ -610,6 +644,7 @@ impl Generator {
             LanguageConfig::JavaConfig(ref java_cfg) => java_cfg,
             LanguageConfig::CppConfig(ref cpp_cfg) => cpp_cfg,
             LanguageConfig::PythonConfig(ref python_cfg) => python_cfg,
+            LanguageConfig::DotNetConfig(ref dot_net_config) => dot_net_config,
         }
     }
 }

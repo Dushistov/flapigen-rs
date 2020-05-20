@@ -1,0 +1,15 @@
+pub struct TestStaticClass {}
+
+impl TestStaticClass {
+    pub fn hello() {
+        println!("Hello from Rust");
+    }
+}
+
+foreigner_class!(
+    /// Test class containing static methods only.
+    class TestStaticClass {
+        /// Documentation for `TestStaticClass::hello`()
+        fn TestStaticClass::hello();
+    }
+);

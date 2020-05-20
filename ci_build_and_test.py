@@ -9,6 +9,7 @@ import shutil
 
 JNI_TESTS = "jni_tests"
 PYTHON_TESTS = "python_tests"
+DOTNET_TESTS = "dotnet_tests"
 CPP_TESTS = "cpp_tests"
 ANDROID_TESTS = "android-example"
 UNIT_TESTS = "unit_tests"
@@ -193,7 +194,7 @@ def test_python(is_windows, test_cfg):
             # See https://github.com/dgrunwald/rust-cpython/issues/87
             env["RUSTFLAGS"] = "-C link-arg=-undefined -C link-arg=dynamic_lookup"
         subprocess.check_call(cmd, shell = False, env = env)
-        target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
+        target_dir = os.path.join("target", cfg)
         if is_windows:
             shutil.copyfile(os.path.join(target_dir, "rust_swig_test_python.dll"), "python_tests/python/rust_swig_test_python.pyd")
             if os.getenv('platform') == "x64":
@@ -205,6 +206,31 @@ def test_python(is_windows, test_cfg):
             lib_name = "librust_swig_test_python.dylib" if sys.platform == "darwin" else "librust_swig_test_python.so"
             shutil.copyfile(os.path.join(target_dir, lib_name), "python_tests/python/rust_swig_test_python.so")
             subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
+
+@show_timing
+def test_dotnet(test_cfg):
+    for cfg in test_cfg:
+        cmd = ["cargo", "build", "-v", "--package", "rust_swig_test_dotnet_native"]
+        if cfg == RELEASE:
+            cmd.append("--release")
+        env = os.environ.copy()
+        subprocess.check_call(cmd, shell = False, env = env)
+
+        target_dir = os.path.join("target", cfg)
+        native_lib_name = "librust_swig_test_dotnet_native.so"
+        if sys.platform == "darwin":
+            extension = "librust_swig_test_dotnet_native.dylib"
+        elif sys.platform.startswith("win"):
+            extension = "rust_swig_test_dotnet_native.dll"
+
+        shutil.copyfile(os.path.join(target_dir, native_lib_name), os.path.join("dotnet_tests/dotnet/bin/Debug/netcoreapp3.1", native_lib_name))
+        
+        # Build managed wrapper dll.
+        subprocess.check_call(["dotnet", "build"], cwd = "dotnet_tests/rust_swig_test_dotnet")
+        shutil.copyfile("dotnet_tests/rust_swig_test_dotnet/bin/Debug/netstandard2.0/rust_swig_test_dotnet.dll", "dotnet_tests/dotnet/rust_swig_test_dotnet.dll")
+
+        # Run test
+        subprocess.check_call(["dotnet", "test"], cwd = "dotnet_tests/dotnet")
 
 
 @show_timing
@@ -248,7 +274,7 @@ def main():
     sys.stdout.flush()
 
     test_cfg = set([RELEASE, DEBUG])
-    test_set = set([JNI_TESTS, CPP_TESTS, ANDROID_TESTS, UNIT_TESTS, DOC_TESTS, PYTHON_TESTS])
+    test_set = set([JNI_TESTS, CPP_TESTS, ANDROID_TESTS, UNIT_TESTS, DOC_TESTS, PYTHON_TESTS, DOTNET_TESTS])
     for arg in sys.argv[1:]:
         if arg == "--skip-android-tests":
             test_set.remove(ANDROID_TESTS)
@@ -260,12 +286,16 @@ def main():
             test_set.remove(JNI_TESTS)
         elif arg == "--skip-python-tests":
             test_set.remove(PYTHON_TESTS)
+        elif arg == "--skip-dotnet-tests":
+            test_set.remove(DOTNET_TESTS)
         elif arg == "--android-only-tests":
             test_set = set([ANDROID_TESTS])
         elif arg == "--rust-unit-tests-only":
             test_set = set([UNIT_TESTS])
         elif arg == "--python-only-tests":
             test_set = set([PYTHON_TESTS])
+        elif arg == "--dotnet-only-tests":
+            test_set = set([DOTNET_TESTS])
         else:
             raise Exception("Fatal Error: unknown option: %s" % arg)
 
@@ -306,6 +336,9 @@ def main():
 
     if PYTHON_TESTS in test_set:
         test_python(is_windows, test_cfg)
+
+    if DOTNET_TESTS in test_set:
+        test_dotnet(test_cfg)
 
 if __name__ == "__main__":
     main()
