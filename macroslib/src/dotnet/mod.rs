@@ -7,7 +7,7 @@ use rustc_hash::FxHashSet;
 use std::fs::{self, File};
 use syn::Type;
 use typemap::{
-    utils::{foreign_to_rust_convert_method_inputs, ForeignMethodSignature, ForeignTypeInfoT},
+    utils::{foreign_to_rust_convert_method_inputs, ForeignMethodSignature, ForeignTypeInfoT, foreign_from_rust_convert_method_output},
     ForeignTypeInfo, MapToForeignFlag,
 };
 use types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant};
@@ -134,18 +134,29 @@ fn generate_method(
 ) -> Result<()> {
     if method.variant == MethodVariant::StaticMethod {
         let method_name = method.short_name();
+        let ret_name = "ret_generated_0";
         let foreign_method_signature = make_foreign_method_signature(conv_map, fclass, method)?;
+        let rust_return_type = foreign_method_signature
+            .output
+            .correspoding_rust_type
+            .typename();
         let (_deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
             conv_map,
             fclass.src_id,
             method,
             &foreign_method_signature,
             method.arg_names_without_self(),
-            foreign_method_signature
-                .output
-                .correspoding_rust_type()
-                .typename(),
+            rust_return_type
         )?;
+        let (_deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
+            conv_map,
+            fclass.src_id,
+            &method.fn_decl.output,
+            foreign_method_signature.output.correspoding_rust_type.to_idx(),
+            ret_name,
+            &rust_return_type,
+        )?;
+
         let rust_func_args_str = method.arg_names_without_self().zip(foreign_method_signature.input.iter()).map(|(name, foreign_type)|{
             format!("{}: {}", name, foreign_type.correspoding_rust_type().typename())
         }).join(", ");
@@ -154,14 +165,19 @@ fn generate_method(
             r#"
     #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
     #[no_mangle]
-    pub extern "C" fn {func_name}({func_args}) {{
+    pub extern "C" fn {func_name}({func_args}) -> {return_type} {{
         {convert_input_code}
-        {call};
+        let mut {ret_name} = {call};
+        {convert_output_code}
+        {ret_name}
     }}
     "#,
             func_name = method_name,
             func_args = rust_func_args_str,
+            return_type = rust_return_type,
             convert_input_code = convert_input_code,
+            ret_name = ret_name,
+            convert_output_code = convert_output_code,
             call = method.generate_code_to_call_rust_func(),
         );
         out_rust_code.push(
@@ -173,16 +189,19 @@ fn generate_method(
             format!("{} {}", foreign_type.name, name)
         }).join(", ");
 
+        let pinvoke_return_type = foreign_method_signature.output.name();
+
         write!(
             out_pinvoke_file,
             r#"
 
         //[SuppressUnmanagedCodeSecurity]
         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void {method_name}({args});
+        public static extern {return_type} {method_name}({args});
 
 "#,
             native_lib_name = config.native_lib_name,
+            return_type = pinvoke_return_type,
             method_name = method_name,
             args = pinvoke_args_str,
         )

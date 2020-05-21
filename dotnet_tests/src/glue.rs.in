@@ -8,6 +8,10 @@ impl TestStaticClass {
     pub fn print_number(n: i32) {
         println!("print_number: {}", n);
     }
+
+    pub fn add(a: i32, b: i32) -> i32 {
+        a + b
+    }
 }
 
 foreigner_class!(
@@ -16,5 +20,6 @@ foreigner_class!(
         /// Documentation for `TestStaticClass::hello`()
         fn TestStaticClass::hello();
         fn TestStaticClass::print_number(n: i32);
+        fn TestStaticClass::add(a: i32, b: i32) -> i32;
     }
 );
