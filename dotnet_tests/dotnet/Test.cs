@@ -9,8 +9,8 @@ namespace dotnet
         [Fact]
         public void Test1()
         {
-            Console.Out.WriteLine("Hello from C#");
             TestStaticClass.hello();
+            TestStaticClass.print_number(123);
         }
     }
 }
