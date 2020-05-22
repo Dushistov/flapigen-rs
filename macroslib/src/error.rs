@@ -59,6 +59,42 @@ impl Display for DiagnosticError {
     }
 }
 
+impl std::error::Error for DiagnosticError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.data.first()?.1)
+    }
+}
+
+impl From<std::io::Error> for DiagnosticError {
+    fn from(err: std::io::Error) -> Self {
+        DiagnosticError::new_without_src_info(err)
+    }
+}
+
+pub(crate) trait ResultDiagnostic<T> {
+    fn with_span(self, sp: SourceIdSpan) -> std::result::Result<T, DiagnosticError>;
+    fn with_span_note<D: Display>(self, sp: SourceIdSpan, d: D) -> std::result::Result<T, DiagnosticError>;
+    //fn without_span(self) -> Result<T, DiagnosticError>;
+    fn with_note<D: Display>(self, d: D) -> std::result::Result<T, DiagnosticError>;
+}
+
+impl<T, E: Display> ResultDiagnostic<T> for std::result::Result<T, E> {    
+    fn with_span(self, sp: SourceIdSpan) -> std::result::Result<T, DiagnosticError> {
+        self.map_err(|err| DiagnosticError::new2(sp, err))
+    }
+
+    fn with_span_note<D: Display>(self, sp: SourceIdSpan, d: D) -> std::result::Result<T, DiagnosticError> {
+        self.map_err(|err| DiagnosticError::new2(sp, err).add_span_note(sp, d))
+    }
+
+    // fn without_span(self) -> std::result::Result<T, DiagnosticError> {
+    //     self.map_err(|err| DiagnosticError::new_without_src_info(err))
+    // }
+    fn with_note<D: Display>(self, d: D) -> std::result::Result<T, DiagnosticError> {
+        self.map_err(|err| DiagnosticError::new_without_src_info(err).add_span_note(invalid_src_id_span(), d))
+    }
+}
+
 pub(crate) type Result<T> = std::result::Result<T, DiagnosticError>;
 
 pub(crate) fn panic_on_syn_error(id_of_code: &str, code: String, err: syn::Error) -> ! {
