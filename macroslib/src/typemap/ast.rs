@@ -36,7 +36,7 @@ use crate::{
     },
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct TypeName {
     pub(crate) typename: SmolStr,
     pub(crate) span: SourceIdSpan,

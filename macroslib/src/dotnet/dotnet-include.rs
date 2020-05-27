@@ -67,3 +67,9 @@ foreign_typemap!(
     (f_type) "IntPtr";
 );
 
+#[allow(dead_code)]
+pub trait SwigForeignClass {
+    // fn c_class_name() -> *const ::std::os::raw::c_char;
+    fn box_object(x: Self) -> *mut ::std::os::raw::c_void;
+    fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self;
+}

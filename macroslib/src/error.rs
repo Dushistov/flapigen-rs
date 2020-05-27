@@ -74,24 +74,31 @@ impl From<std::io::Error> for DiagnosticError {
 pub(crate) trait ResultDiagnostic<T> {
     fn with_span(self, sp: SourceIdSpan) -> std::result::Result<T, DiagnosticError>;
     fn with_span_note<D: Display>(self, sp: SourceIdSpan, d: D) -> std::result::Result<T, DiagnosticError>;
-    //fn without_span(self) -> Result<T, DiagnosticError>;
     fn with_note<D: Display>(self, d: D) -> std::result::Result<T, DiagnosticError>;
 }
 
-impl<T, E: Display> ResultDiagnostic<T> for std::result::Result<T, E> {    
+impl<T, E: Display> ResultDiagnostic<T> for std::result::Result<T, E> {
     fn with_span(self, sp: SourceIdSpan) -> std::result::Result<T, DiagnosticError> {
         self.map_err(|err| DiagnosticError::new2(sp, err))
     }
-
+    
     fn with_span_note<D: Display>(self, sp: SourceIdSpan, d: D) -> std::result::Result<T, DiagnosticError> {
         self.map_err(|err| DiagnosticError::new2(sp, err).add_span_note(sp, d))
     }
-
-    // fn without_span(self) -> std::result::Result<T, DiagnosticError> {
-    //     self.map_err(|err| DiagnosticError::new_without_src_info(err))
-    // }
+    
     fn with_note<D: Display>(self, d: D) -> std::result::Result<T, DiagnosticError> {
         self.map_err(|err| DiagnosticError::new_without_src_info(err).add_span_note(invalid_src_id_span(), d))
+    }
+    
+}
+
+pub(crate) trait ResultSynDiagnostic<T>: ResultDiagnostic<T> {
+    fn with_syn_src_id(self, src_id: SourceId) -> std::result::Result<T, DiagnosticError>;
+}
+
+impl <T> ResultSynDiagnostic<T> for std::result::Result<T, syn::Error> {
+    fn with_syn_src_id(self, src_id: SourceId) -> std::result::Result<T, DiagnosticError> {
+        self.map_err(|err| DiagnosticError::from_syn_err(src_id, err))
     }
 }
 

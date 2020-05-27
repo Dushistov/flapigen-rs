@@ -1,29 +1,81 @@
 use super::*;
 // use cpp::{fclass, CppContext};
-use error::{SourceIdSpan, ResultDiagnostic};
+use error::{ResultDiagnostic, ResultSynDiagnostic, SourceIdSpan};
 use file_cache::FileWriteCache;
+use itertools::Itertools;
 use petgraph::Direction;
+use quote::quote;
 use rustc_hash::FxHashSet;
+use smol_str::SmolStr;
 use std::fs::{self, File};
 use syn::Type;
 use typemap::{
-    utils::{foreign_to_rust_convert_method_inputs, ForeignMethodSignature, ForeignTypeInfoT, foreign_from_rust_convert_method_output},
-    ForeignTypeInfo, MapToForeignFlag,
+    ast,
+    ty::RustType,
+    utils::{
+        self, foreign_from_rust_convert_method_output, foreign_to_rust_convert_method_inputs,
+        ForeignMethodSignature, ForeignTypeInfoT,
+    },
+    ForeignTypeInfo, MapToForeignFlag, TO_VAR_TEMPLATE,
 };
-use types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant};
-use itertools::Itertools;
+use types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
+
+enum ArgName {
+    SelfArg,
+    Named(SmolStr),
+    Return,
+}
+
+impl ArgName {
+    fn rust_variable_name(&self) -> &str {
+        match self {
+            ArgName::SelfArg => "this",
+            ArgName::Return => "ret",
+            ArgName::Named(name) => name,
+        }
+    }
+
+    fn dotnet_variable_name(&self) -> &str {
+        match self {
+            ArgName::SelfArg => "__this",
+            ArgName::Return => "__ret",
+            ArgName::Named(name) => name,
+        }
+    }
+}
+
+struct DotNetArgInfo {
+    foreign_type: ForeignTypeInfo,
+    rust_intermediate_type: RustType,
+    dotnet_intermediate_type: String,
+    rust_conversion_code: String,
+    name: ArgName,
+}
+
+// impl DotNetArgInfo {
+//     fn 
+// }
+
+impl ForeignTypeInfoT for DotNetArgInfo {
+    fn name(&self) -> &str {
+        self.foreign_type.name.as_str()
+    }
+    fn correspoding_rust_type(&self) -> &RustType {
+        &self.foreign_type.correspoding_rust_type
+    }
+}
 
 struct DotNetForeignMethodSignature {
-    output: ForeignTypeInfo,
-    input: Vec<ForeignTypeInfo>,
+    output: DotNetArgInfo,
+    input: Vec<DotNetArgInfo>,
 }
 
 impl ForeignMethodSignature for DotNetForeignMethodSignature {
-    type FI = ForeignTypeInfo;
+    type FI = DotNetArgInfo;
     fn output(&self) -> &dyn ForeignTypeInfoT {
         &self.output
     }
-    fn input(&self) -> &[ForeignTypeInfo] {
+    fn input(&self) -> &[DotNetArgInfo] {
         &self.input[..]
     }
 }
@@ -34,7 +86,6 @@ fn calc_this_type_for_method(_: &TypeMap, class: &ForeignerClassInfo) -> Option<
         .as_ref()
         .map(|x| x.constructor_ret_type.clone())
 }
-
 
 pub struct DotNetGenerator<'a> {
     config: &'a DotNetConfig,
@@ -74,12 +125,15 @@ impl<'a> DotNetGenerator<'a> {
         Ok(self.rust_code)
     }
 
-    fn create_cs_project(config: &'a DotNetConfig, generated_files_registry: &mut FxHashSet<PathBuf>) -> Result<FileWriteCache> {
+    fn create_cs_project(
+        config: &'a DotNetConfig,
+        generated_files_registry: &mut FxHashSet<PathBuf>,
+    ) -> Result<FileWriteCache> {
         fs::create_dir_all(&config.managed_lib_name).expect("Can't create managed lib directory");
 
         let mut csproj = File::create(format!("{0}/{0}.csproj", config.managed_lib_name))
             .with_note("Can't create csproj file")?;
-        
+
         write!(
             csproj,
             r#"
@@ -91,8 +145,8 @@ impl<'a> DotNetGenerator<'a> {
 
 </Project>
 "#,
-        ).with_note("Can't write to csproj file")?;
-        
+        )
+        .with_note("Can't write to csproj file")?;
 
         let cs_file_name = config.managed_lib_name.clone() + ".cs";
         let mut cs_file = FileWriteCache::new(
@@ -111,28 +165,29 @@ using System.Runtime.InteropServices;
 namespace {managed_lib_name}
 {{
 "#,
-        managed_lib_name = config.managed_lib_name,
-        ).with_note("Write to memory failed")?;
+            managed_lib_name = config.managed_lib_name,
+        )
+        .with_note("Write to memory failed")?;
 
         Ok(cs_file)
     }
 
-    fn generate_class(&mut self, fclass: &ForeignerClassInfo) -> Result<()> {
-        self.conv_map.register_foreigner_class(fclass);
+    fn generate_class(&mut self, class: &ForeignerClassInfo) -> Result<()> {
+        //self.conv_map.register_foreigner_class(fclass);
+        super::cpp::register_class(self.conv_map, class)?;
+        self.generate_swig_trait_for_class(class)?;
 
-        let class_name = fclass.name.to_string();
+        let class_name = class.name.to_string();
 
         writeln!(
             self.cs_file,
             "public class {class_name} {{",
             class_name = class_name,
-        ).with_note("Write to memory failed")?;
+        )
+        .with_note("Write to memory failed")?;
 
-        for method in &fclass.methods {
-            self.generate_method(
-                &fclass,
-                method,
-            )?;
+        for method in &class.methods {
+            self.generate_method(&class, method)?;
         }
 
         writeln!(self.cs_file, "}} // class").with_note("Write to memory failed")?;
@@ -140,42 +195,145 @@ namespace {managed_lib_name}
         Ok(())
     }
 
+    fn class_storage_type(&self, class: &ForeignerClassInfo) -> Option<RustType> {
+        Some(
+            self.conv_map
+                .ty_to_rust_type(&class.self_desc.as_ref()?.constructor_ret_type),
+        )
+    }
+
+    fn generate_swig_trait_for_class(&mut self, class: &ForeignerClassInfo) -> Result<()> {
+        if let Some(this_type) = self.class_storage_type(class) {
+            let (_, code_box_this) =
+                utils::convert_to_heap_pointer(self.conv_map, &this_type, "this");
+            let lifetimes = ast::list_lifetimes(&this_type.ty);
+            let unpack_code = utils::unpack_from_heap_pointer(&this_type, TO_VAR_TEMPLATE, true);
+            let class_name = &this_type.ty;
+            let unpack_code = unpack_code.replace(TO_VAR_TEMPLATE, "p");
+            let unpack_code: TokenStream = syn::parse_str(&unpack_code).unwrap_or_else(|err| {
+                error::panic_on_syn_error(
+                    "internal/c++ foreign class unpack code",
+                    unpack_code,
+                    err,
+                )
+            });
+            let this_type_ty = this_type.to_type_without_lifetimes();
+            let fclass_impl_code: TokenStream = quote! {
+                impl<#(#lifetimes),*> SwigForeignClass for #class_name {
+                    // fn c_class_name() -> *const ::std::os::raw::c_char {
+                    //     swig_c_str!(stringify!(#class_name))
+                    // }
+                    fn box_object(this: Self) -> *mut ::std::os::raw::c_void {
+                        #code_box_this
+                        this as *mut ::std::os::raw::c_void
+                    }
+                    fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self {
+                        let p = p as *mut #this_type_ty;
+                        #unpack_code
+                        p
+                    }
+                }
+            };
+            self.rust_code.push(fclass_impl_code);
+        }
+        Ok(())
+    }
+
     fn generate_method(
         &mut self,
-        fclass: &ForeignerClassInfo,
+        class: &ForeignerClassInfo,
         method: &ForeignerMethod,
     ) -> Result<()> {
-        if method.variant == MethodVariant::StaticMethod {
-            let method_name = method.short_name();
-            let ret_name = "ret_generated_0";
-            let foreign_method_signature = self.make_foreign_method_signature(fclass, method)?;
-            let rust_return_type = foreign_method_signature
-                .output
-                .correspoding_rust_type
-                .typename();
-            let (_deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
-                self.conv_map,
-                fclass.src_id,
-                method,
-                &foreign_method_signature,
-                method.arg_names_without_self(),
-                rust_return_type
-            )?;
-            let (_deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
-                self.conv_map,
-                fclass.src_id,
-                &method.fn_decl.output,
-                foreign_method_signature.output.correspoding_rust_type.to_idx(),
-                ret_name,
-                &rust_return_type,
-            )?;
+        let foreign_method_signature = self.make_foreign_method_signature(class, method)?;
+        let rust_return_type = foreign_method_signature
+            .output
+            .foreign_type
+            .correspoding_rust_type
+            .typename();
 
-            let rust_func_args_str = method.arg_names_without_self().zip(foreign_method_signature.input.iter()).map(|(name, foreign_type)|{
-                format!("{}: {}", name, foreign_type.correspoding_rust_type().typename())
-            }).join(", ");
+        // let self_type_info = match method.variant {
+        //     MethodVariant::Method(self_variant) => {
+        //         let self_storage_type = self.class_storage_type(class).ok_or_else(|| {
+        //             DiagnosticError::new(
+        //                 class.src_id,
+        //                 method.span(),
+        //                 "Non static method declared for class without constructor. It must have at least private empty constructor.",
+        //             )
+        //         })?;
+        //         let (self_storage_ty_full, self_method_ty_full): (Type, Type) =
+        //             utils::create_suitable_types_for_constructor_and_self(
+        //                 self_variant,
+        //                 class,
+        //                 &self_storage_type.ty,
+        //             );
 
-            let rust_code_str = format!(
-                r#"
+        //         let self_storage_type_full = self
+        //             .conv_map
+        //             .find_or_alloc_rust_type(&self_storage_ty_full, class.src_id);
+        //         let self_method_type_full = self
+        //             .conv_map
+        //             .find_or_alloc_rust_type(&self_method_ty_full, class.src_id);
+
+        //         let (mut deps_this, convert_this) = self.conv_map.convert_rust_types(
+        //             self_storage_type_full.to_idx(),
+        //             self_method_type_full.to_idx(),
+        //             "this",
+        //             "this",
+        //             &rust_return_type,
+        //             (class.src_id, method.span()),
+        //         )?;
+        //         ObjectTypeInfo::new(self_method_type_full, self_storage_type_full, convert_this)
+        //     }
+        //     MethodVariant::StaticMethod => ObjectTypeInfo::new_empty(),
+        //     MethodVariant::Constructor => todo!(),
+        // };
+
+        let method_name = method.short_name();
+        let full_method_name = format!("{}_{}", class.name, method_name);
+        //let ret_name = "ret";
+
+        // let (_deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
+        //     self.conv_map,
+        //     class.src_id,
+        //     method,
+        //     &foreign_method_signature,
+        //     method.arg_names_without_self(),
+        //     rust_return_type,
+        // )?;
+
+        let convert_input_code = foreign_method_signature
+            .input
+            .iter()
+            .map(|arg| &arg.rust_conversion_code)
+            .join("");
+        // let (_deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
+        //     self.conv_map,
+        //     class.src_id,
+        //     &method.fn_decl.output,
+        //     foreign_method_signature
+        //         .output
+        //         .foreign_type
+        //         .correspoding_rust_type
+        //         .to_idx(),
+        //     ret_name,
+        //     &rust_return_type,
+        // )?;
+
+        let rust_func_args_str = foreign_method_signature
+            .input
+            .iter()
+            //.zip(foreign_method_signature.input.iter())
+            .map(|arg_info| {
+                format!(
+                    "{}: {}",
+                    arg_info.name.rust_variable_name(),
+                    arg_info.rust_intermediate_type.typename()
+                )
+            })
+            .join(", ");
+
+        let rust_code_str = format!(
+            r#"
         #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
         #[no_mangle]
         pub extern "C" fn {func_name}({func_args}) -> {return_type} {{
@@ -185,40 +343,44 @@ namespace {managed_lib_name}
             {ret_name}
         }}
 "#,
-                func_name = method_name,
-                func_args = rust_func_args_str,
-                return_type = rust_return_type,
-                convert_input_code = convert_input_code,
-                ret_name = ret_name,
-                convert_output_code = convert_output_code,
-                call = method.generate_code_to_call_rust_func(),
-            );
-            self.rust_code.push(
-                syn::parse_str(&rust_code_str)
-                    .map_err(|err| DiagnosticError::from_syn_err(fclass.src_id, err))?,
-            );
+            func_name = full_method_name,
+            func_args = rust_func_args_str,
+            return_type = foreign_method_signature.output.rust_intermediate_type,
+            convert_input_code = convert_input_code,
+            ret_name = foreign_method_signature.output.name.rust_variable_name(),
+            convert_output_code = foreign_method_signature.output.rust_conversion_code,
+            call = method.generate_code_to_call_rust_func(),
+        );
+        self.rust_code
+            .push(syn::parse_str(&rust_code_str).with_syn_src_id(class.src_id)?);
 
-            let pinvoke_args_str = method.arg_names_without_self().zip(foreign_method_signature.input.iter()).map(|(name, foreign_type)|{
-                format!("{} {}", foreign_type.name, name)
-            }).join(", ");
+        // let pinvoke_args_str = method
+        //     .arg_names_without_self()
+        //     .zip(foreign_method_signature.input.iter())
+        //     .map(|(name, dotnet_arg)| format!("{} {}", dotnet_arg.foreign_type.name, name))
+        //     .join(", ");
+        let pinvoke_args_str = foreign_method_signature
+            .input
+            .iter()
+            .map(|a| format!("{} {}", a.dotnet_intermediate_type, a.name.dotnet_variable_name()))
+            .join(", ");
 
-            let pinvoke_return_type = foreign_method_signature.output.name();
+        // let pinvoke_return_type = foreign_method_signature.output.name();
 
-            write!(
-                self.cs_file,
-                r#"
+        write!(
+            self.cs_file,
+            r#"
         //[SuppressUnmanagedCodeSecurity]
         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
         public static extern {return_type} {method_name}({args});
 "#,
-                native_lib_name = self.config.native_lib_name,
-                return_type = pinvoke_return_type,
-                method_name = method_name,
-                args = pinvoke_args_str,
-            ).with_note("Write to memory failed")?;
-        } else {
-            unimplemented!()
-        }
+            native_lib_name = self.config.native_lib_name,
+            return_type = foreign_method_signature.output.dotnet_intermediate_type,
+            method_name = full_method_name,
+            args = pinvoke_args_str,
+        )
+        .with_note("Write to memory failed")?;
+
         Ok(())
     }
 
@@ -238,37 +400,112 @@ namespace {managed_lib_name}
                 FnArg::Default(named_arg) => self.map_type(
                     &named_arg.ty,
                     Direction::Incoming,
+                    ArgName::Named(named_arg.name.clone()),
                     (class.src_id, named_arg.span),
                 ),
-                FnArg::SelfArg(_, _) => {
-                    unimplemented!("Methods not supported yet");
-                }
+                FnArg::SelfArg(span_ref, self_variant) => {
+                    let span = *span_ref;
+                    // let self_ty = self.class_storage_type(class).ok_or_else(|| {
+                    //     DiagnosticError::new(class.src_id, *span, "Non-static methods can only be defined for a class that have a constructor (at least private empty one)")
+                    // })?.ty;
+                    let self_ty = class.self_desc.as_ref().ok_or_else(|| {
+                        DiagnosticError::new(class.src_id, span, "Non-static methods can only be defined for a class that have a constructor (at least private empty one)")
+                    })?.self_type.clone();
+                    let self_ty_full = match self_variant {
+                        SelfTypeVariant::Rptr => parse_type_spanned_checked!(span, & #self_ty),
+                        SelfTypeVariant::RptrMut => parse_type_spanned_checked!(span, &mut #self_ty),
+                        _ => unimplemented!("Passing self by value not implemented yet"),
+                    };
+                    // let (self_storage_ty_full, self_method_ty_full): (Type, Type) =
+                    // utils::create_suitable_types_for_constructor_and_self(
+                    //     self_variant,
+                    //     class,
+                    //     &self_storage_type.ty,
+                    // );
+                    self.map_type(
+                        &self_ty_full,
+                        Direction::Incoming,
+                        ArgName::SelfArg,
+                        (class.src_id, span),
+                    )
+            }
             })
             .collect::<Result<Vec<_>>>()?;
 
         let output = match method.fn_decl.output {
-            syn::ReturnType::Default => ForeignTypeInfo {
-                name: "void".into(),
-                correspoding_rust_type: dummy_rust_ty.clone(),
+            syn::ReturnType::Default => DotNetArgInfo {
+                foreign_type: ForeignTypeInfo {
+                    name: "void".into(),
+                    correspoding_rust_type: dummy_rust_ty.clone(),
+                },
+                rust_intermediate_type: dummy_rust_ty.clone(),
+                name: ArgName::Return,
+                rust_conversion_code: String::new(),
+                dotnet_intermediate_type: "void".to_owned(),
             },
             syn::ReturnType::Type(_, ref ty) => self.map_type(
                 ty,
                 Direction::Outgoing,
+                ArgName::Return,
                 (class.src_id, class.span()),
             )?,
         };
         Ok(DotNetForeignMethodSignature { input, output })
     }
 
+    // fn foreign_to_rust_convert_method_inputs(
+    //     &mut self,
+    //     class: &ForeignerClassInfo,
+    //     method: &Foreigner Method,
+    //     f_method: &DotNetForeignMethodSignature,
+    //     arg_names: &[String],
+    //     func_ret_type: &str,
+    // ) -> Result<(Vec<TokenStream>, String)> {
+    //     let mut code_deps = Vec::new();
+    //     let mut ret_code = String::new();
+
+    //     //skip self
+    //     let skip_n = match method.variant {
+    //         MethodVariant::Method(_) => 1,
+    //         _ => 0,
+    //     };
+    //     for ((to_type, f_from), arg_name) in method
+    //         .fn_decl
+    //         .inputs
+    //         .iter()
+    //         .skip(skip_n)
+    //         .zip(f_method.input().iter())
+    //         .zip(arg_names)
+    //     {
+    //         let to_named_arg = to_type
+    //             .as_named_arg()
+    //             .map_err(|err| DiagnosticError::from_syn_err(class.src_id, err))?;
+    //         let to: RustType = self.conv_map.find_or_alloc_rust_type(&to_named_arg.ty, class.src_id);
+    //         let (mut cur_deps, cur_code) = self.conv_map.convert_rust_types(
+    //             f_from.correspoding_rust_type().to_idx(),
+    //             to.to_idx(),
+    //             arg_name.as_ref(),
+    //             arg_name.as_ref(),
+    //             func_ret_type,
+    //             (class.src_id, to_named_arg.ty.span()),
+    //         )?;
+    //         code_deps.append(&mut cur_deps);
+    //         ret_code.push_str(&cur_code);
+    //     }
+    //     Ok((code_deps, ret_code))
+    // }
+
     fn map_type(
         &mut self,
         ty: &Type,
         direction: Direction,
+        arg_name: ArgName,
         span: SourceIdSpan,
-    ) -> Result<ForeignTypeInfo> {
+    ) -> Result<DotNetArgInfo> {
         let rust_ty = self.conv_map.find_or_alloc_rust_type(ty, span.0);
 
-        let foreign_type_idx = self.conv_map
+        let foreign_type_idx = self
+            .conv_map
             .map_through_conversation_to_foreign(
                 rust_ty.to_idx(),
                 direction,
@@ -285,7 +522,7 @@ namespace {managed_lib_name}
                     ),
                 )
             })?;
-        let foreign_type = &self.conv_map[foreign_type_idx];
+        let foreign_type = &self.conv_map[foreign_type_idx].clone();
         let rule = match direction {
             Direction::Outgoing => foreign_type.into_from_rust.as_ref(),
             Direction::Incoming => foreign_type.from_into_rust.as_ref(),
@@ -299,23 +536,51 @@ namespace {managed_lib_name}
                 ),
             )
         })?;
-        if let Some(_intermediate) = rule.intermediate.as_ref() {
-            unimplemented!("Intemediate type not supported yet");
-        }
 
-        Ok(ForeignTypeInfo {
-            name: foreign_type.typename(),
-            correspoding_rust_type: self.conv_map[rule.rust_ty].clone(),
+        let correspoding_rust_type = self.conv_map[rule.rust_ty].clone();
+
+        let (rust_intermediate_type, rust_conversion_code, dotnet_intermediate_type) = if let Some(intermediate) = rule.intermediate.as_ref() {
+            // panic!("{:#?}", foreign_type);
+            //            println!("{:#?}", intermediate);
+            let intermediate_type = self.conv_map[intermediate.intermediate_ty].clone();
+
+            let (from, to) = match direction {
+                Direction::Incoming => (
+                    intermediate_type.to_idx(),
+                    correspoding_rust_type.to_idx(),
+                ),
+                Direction::Outgoing => (
+                    correspoding_rust_type.to_idx(),
+                    intermediate_type.to_idx(),
+                ),
+            };
+            let (_cur_deps, conversion_code) = self.conv_map.convert_rust_types(
+                from,
+                to,
+                arg_name.rust_variable_name(),
+                arg_name.rust_variable_name(),
+                "()", // todo
+                span,
+            )?;
+            (intermediate_type, conversion_code, "IntPtr".to_owned())
+        } else {
+            (correspoding_rust_type.clone(), String::new(), foreign_type.name.to_string())
+        };
+
+        Ok(DotNetArgInfo {
+            foreign_type: ForeignTypeInfo {
+                name: foreign_type.typename(),
+                correspoding_rust_type,
+            },
+            name: arg_name,
+            rust_intermediate_type,
+            rust_conversion_code,
+            dotnet_intermediate_type,
         })
     }
 
     fn finish(&mut self) -> Result<()> {
-        write!(
-            self.cs_file,
-            r#"
-}} // namespace
-"#,
-        )?;
+        writeln!(self.cs_file, "}} // namespace",)?;
         Ok(())
     }
 }
@@ -332,3 +597,38 @@ impl LanguageGenerator for DotNetConfig {
         DotNetGenerator::new(&self, conv_map)?.generate(items)
     }
 }
+
+// struct ObjectTypeInfo {
+//     self_type: Option<RustType>,
+//     // `self_type` may be wrapped in some smart pointers when stored in memory. That's `storage_type`.
+//     // Also referred to as "constructor type". May be the same as `self_type`.
+//     storage_type: Option<RustType>,
+//     // Conversion from raw C pointer to the storage_type.
+//     conversion_code: String,
+// }
+
+// impl ObjectTypeInfo {
+//     fn new_empty() -> Self {
+//         Self {
+//             self_type: None,
+//             storage_type: None,
+//             conversion_code: String::new(),
+//         }
+//     }
+
+//     fn new(self_type: RustType, storage_type: RustType, conversion_code: String) -> Self {
+//         Self {
+//             self_type: Some(self_type),
+//             storage_type: Some(self_type),
+//             conversion_code,
+//         }
+//     }
+
+//     fn self_type_str(&self) -> String {
+//         self.self_type.map(|t| t.to_string()).unwrap_or_default()
+//     }
+
+//     fn storage_type_str(&self) -> String {
+//         self.storage_type.map(|t| t.to_string()).unwrap_or_default()
+//     }
+// }

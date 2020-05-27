@@ -228,78 +228,76 @@ struct MethodContext<'a> {
     ret_name: &'a str,
 }
 
-impl CppConfig {
-    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
-        class
-            .validate_class()
-            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
-        if let Some(self_desc) = class.self_desc.as_ref() {
-            let constructor_ret_type = &self_desc.constructor_ret_type;
-            let this_type_for_method = constructor_ret_type;
-            let mut traits = vec!["SwigForeignClass"];
-            if class.clone_derived {
+pub(crate) fn register_class(conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
+    class
+        .validate_class()
+        .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
+    if let Some(self_desc) = class.self_desc.as_ref() {
+        let constructor_ret_type = &self_desc.constructor_ret_type;
+        let this_type_for_method = constructor_ret_type;
+        let mut traits = vec!["SwigForeignClass"];
+        if class.clone_derived {
+            traits.push("Clone");
+        }
+        if class.copy_derived {
+            if !class.clone_derived {
                 traits.push("Clone");
             }
-            if class.copy_derived {
-                if !class.clone_derived {
-                    traits.push("Clone");
-                }
-                traits.push("Copy");
-            }
-
-            if class.smart_ptr_copy_derived {
-                traits.push(SMART_PTR_COPY_TRAIT);
-            }
-
-            let this_type = conv_map.find_or_alloc_rust_type_that_implements(
-                this_type_for_method,
-                &traits,
-                class.src_id,
-            );
-
-            if class.smart_ptr_copy_derived {
-                if class.copy_derived {
-                    println!(
-                        "warning=class {} marked as Copy and {}, ignore Copy",
-                        class.name, SMART_PTR_COPY_TRAIT
-                    );
-                }
-                if check_if_smart_pointer_return_inner_type(&this_type, "Rc").is_none()
-                    && check_if_smart_pointer_return_inner_type(&this_type, "Arc").is_none()
-                {
-                    return Err(DiagnosticError::new(
-                        class.src_id,
-                        this_type.ty.span(),
-                        format!(
-                            "class {} marked as {}, but type '{}' is not Arc<> or Rc<>",
-                            class.name, SMART_PTR_COPY_TRAIT, this_type
-                        ),
-                    ));
-                }
-
-                let has_clone = class.methods.iter().any(|x| match x.variant {
-                    MethodVariant::Method(_) | MethodVariant::StaticMethod => {
-                        x.rust_id.is_ident("clone")
-                    }
-                    MethodVariant::Constructor => false,
-                });
-                if has_clone {
-                    return Err(DiagnosticError::new(
-                        class.src_id,
-                        this_type.ty.span(),
-                        format!(
-                            "class {} marked as {}, but has clone method. Error: can not generate clone method.",
-                            class.name, SMART_PTR_COPY_TRAIT,
-                        ),
-                    ));
-                }
-            }
-
-            register_typemap_for_self_type(conv_map, class, this_type, self_desc)?;
+            traits.push("Copy");
         }
-        conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
-        Ok(())
+
+        if class.smart_ptr_copy_derived {
+            traits.push(SMART_PTR_COPY_TRAIT);
+        }
+
+        let this_type = conv_map.find_or_alloc_rust_type_that_implements(
+            this_type_for_method,
+            &traits,
+            class.src_id,
+        );
+
+        if class.smart_ptr_copy_derived {
+            if class.copy_derived {
+                println!(
+                    "warning=class {} marked as Copy and {}, ignore Copy",
+                    class.name, SMART_PTR_COPY_TRAIT
+                );
+            }
+            if check_if_smart_pointer_return_inner_type(&this_type, "Rc").is_none()
+                && check_if_smart_pointer_return_inner_type(&this_type, "Arc").is_none()
+            {
+                return Err(DiagnosticError::new(
+                    class.src_id,
+                    this_type.ty.span(),
+                    format!(
+                        "class {} marked as {}, but type '{}' is not Arc<> or Rc<>",
+                        class.name, SMART_PTR_COPY_TRAIT, this_type
+                    ),
+                ));
+            }
+
+            let has_clone = class.methods.iter().any(|x| match x.variant {
+                MethodVariant::Method(_) | MethodVariant::StaticMethod => {
+                    x.rust_id.is_ident("clone")
+                }
+                MethodVariant::Constructor => false,
+            });
+            if has_clone {
+                return Err(DiagnosticError::new(
+                    class.src_id,
+                    this_type.ty.span(),
+                    format!(
+                        "class {} marked as {}, but has clone method. Error: can not generate clone method.",
+                        class.name, SMART_PTR_COPY_TRAIT,
+                    ),
+                ));
+            }
+        }
+
+        register_typemap_for_self_type(conv_map, class, this_type, self_desc)?;
     }
+    conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
+    Ok(())
 }
 
 struct CppContext<'a> {
@@ -335,7 +333,7 @@ impl LanguageGenerator for CppConfig {
             init(&mut ctx, code)?;
             for item in &items {
                 if let ItemToExpand::Class(ref fclass) = item {
-                    self.register_class(ctx.conv_map, fclass)?;
+                    register_class(ctx.conv_map, fclass)?;
                 }
             }
             for item in items {

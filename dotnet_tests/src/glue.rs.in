@@ -23,3 +23,64 @@ foreigner_class!(
         fn TestStaticClass::add(a: i32, b: i32) -> i32;
     }
 );
+
+
+pub struct TestClass {
+    i: i32,
+}
+
+impl TestClass {
+    pub fn new() -> TestClass {
+        TestClass { i: 0 }
+    }
+
+    pub fn increment(&mut self) {
+        self.i += 1;
+    }
+
+    pub fn add(&mut self, i: i32) {
+        self.i += i;
+    }
+
+    pub fn add_ref(&mut self, i: &i32) {
+        self.i += *i;
+    }
+
+    pub fn maybe_add(&mut self, i: Option<i32>) -> Option<i32> {
+        if let Some(i) = i {
+            self.i += i;
+            Some(self.i)
+        } else {
+            None
+        }
+    }
+
+    pub fn print(&self) {
+        println!("TestClass::i: {}", self.i)
+    }
+
+    pub fn format(&self) -> String {
+        format!("TestClass::i: {}", self.i)
+    }
+
+    pub fn get(&self) -> i32 {
+        self.i
+    }
+
+    pub fn get_ref(&self) -> &i32 {
+        &self.i
+    }
+}
+
+foreigner_class!(
+    /// Test class containing standard methods.
+    class TestClass {
+        self_type TestClass;
+        /// Documentation for constructor
+        constructor TestClass::new() -> TestClass;
+        /// increment method documentation
+        fn TestClass::increment(&mut self);
+        fn TestClass::print(&self);
+        fn TestClass::add(&mut self, i: i32);
+    }
+);
