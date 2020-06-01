@@ -49,11 +49,12 @@ struct DotNetArgInfo {
     rust_intermediate_type: RustType,
     dotnet_intermediate_type: String,
     rust_conversion_code: String,
+    dotnet_conversion_code: String,
     name: ArgName,
 }
 
 // impl DotNetArgInfo {
-//     fn 
+//     fn
 // }
 
 impl ForeignTypeInfoT for DotNetArgInfo {
@@ -179,9 +180,16 @@ namespace {managed_lib_name}
 
         let class_name = class.name.to_string();
 
-        writeln!(
+        write!(
             self.cs_file,
-            "public class {class_name} {{",
+            r#"public class {class_name} {{
+        internal IntPtr nativePtr;
+
+        internal {class_name}(IntPtr nativePtr) {{
+            this.nativePtr = nativePtr;
+        }}
+
+"#,
             class_name = class_name,
         )
         .with_note("Write to memory failed")?;
@@ -245,84 +253,37 @@ namespace {managed_lib_name}
         method: &ForeignerMethod,
     ) -> Result<()> {
         let foreign_method_signature = self.make_foreign_method_signature(class, method)?;
-        let rust_return_type = foreign_method_signature
-            .output
-            .foreign_type
-            .correspoding_rust_type
-            .typename();
+        // let rust_return_type = foreign_method_signature
+        //     .output
+        //     .foreign_type
+        //     .correspoding_rust_type
+        //     .typename();
 
-        // let self_type_info = match method.variant {
-        //     MethodVariant::Method(self_variant) => {
-        //         let self_storage_type = self.class_storage_type(class).ok_or_else(|| {
-        //             DiagnosticError::new(
-        //                 class.src_id,
-        //                 method.span(),
-        //                 "Non static method declared for class without constructor. It must have at least private empty constructor.",
-        //             )
-        //         })?;
-        //         let (self_storage_ty_full, self_method_ty_full): (Type, Type) =
-        //             utils::create_suitable_types_for_constructor_and_self(
-        //                 self_variant,
-        //                 class,
-        //                 &self_storage_type.ty,
-        //             );
+        self.write_rust_glue_code(class, method, &foreign_method_signature)?;
+        self.write_pinvoke_function_signature(class, method, &foreign_method_signature)?;
+        self.write_dotnet_wrapper_function(class, method, &foreign_method_signature)?;
 
-        //         let self_storage_type_full = self
-        //             .conv_map
-        //             .find_or_alloc_rust_type(&self_storage_ty_full, class.src_id);
-        //         let self_method_type_full = self
-        //             .conv_map
-        //             .find_or_alloc_rust_type(&self_method_ty_full, class.src_id);
+        Ok(())
+    }
 
-        //         let (mut deps_this, convert_this) = self.conv_map.convert_rust_types(
-        //             self_storage_type_full.to_idx(),
-        //             self_method_type_full.to_idx(),
-        //             "this",
-        //             "this",
-        //             &rust_return_type,
-        //             (class.src_id, method.span()),
-        //         )?;
-        //         ObjectTypeInfo::new(self_method_type_full, self_storage_type_full, convert_this)
-        //     }
-        //     MethodVariant::StaticMethod => ObjectTypeInfo::new_empty(),
-        //     MethodVariant::Constructor => todo!(),
-        // };
-
+    fn write_rust_glue_code(
+        &mut self,
+        class: &ForeignerClassInfo,
+        method: &ForeignerMethod,
+        foreign_method_signature: &DotNetForeignMethodSignature,
+    ) -> Result<()> {
         let method_name = method.short_name();
         let full_method_name = format!("{}_{}", class.name, method_name);
-        //let ret_name = "ret";
-
-        // let (_deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
-        //     self.conv_map,
-        //     class.src_id,
-        //     method,
-        //     &foreign_method_signature,
-        //     method.arg_names_without_self(),
-        //     rust_return_type,
-        // )?;
 
         let convert_input_code = foreign_method_signature
             .input
             .iter()
             .map(|arg| &arg.rust_conversion_code)
             .join("");
-        // let (_deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
-        //     self.conv_map,
-        //     class.src_id,
-        //     &method.fn_decl.output,
-        //     foreign_method_signature
-        //         .output
-        //         .foreign_type
-        //         .correspoding_rust_type
-        //         .to_idx(),
-        //     ret_name,
-        //     &rust_return_type,
-        // )?;
 
         let rust_func_args_str = foreign_method_signature
             .input
             .iter()
-            //.zip(foreign_method_signature.input.iter())
             .map(|arg_info| {
                 format!(
                     "{}: {}",
@@ -334,14 +295,14 @@ namespace {managed_lib_name}
 
         let rust_code_str = format!(
             r#"
-        #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
-        #[no_mangle]
-        pub extern "C" fn {func_name}({func_args}) -> {return_type} {{
-            {convert_input_code}
-            let mut {ret_name} = {call};
-            {convert_output_code}
-            {ret_name}
-        }}
+    #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+    #[no_mangle]
+    pub extern "C" fn {func_name}({func_args}) -> {return_type} {{
+        {convert_input_code}
+        let mut {ret_name} = {call};
+        {convert_output_code}
+        {ret_name}
+    }}
 "#,
             func_name = full_method_name,
             func_args = rust_func_args_str,
@@ -353,31 +314,139 @@ namespace {managed_lib_name}
         );
         self.rust_code
             .push(syn::parse_str(&rust_code_str).with_syn_src_id(class.src_id)?);
+        Ok(())
+    }
 
-        // let pinvoke_args_str = method
-        //     .arg_names_without_self()
-        //     .zip(foreign_method_signature.input.iter())
-        //     .map(|(name, dotnet_arg)| format!("{} {}", dotnet_arg.foreign_type.name, name))
-        //     .join(", ");
+    fn write_pinvoke_function_signature(
+        &mut self,
+        class: &ForeignerClassInfo,
+        method: &ForeignerMethod,
+        foreign_method_signature: &DotNetForeignMethodSignature,
+    ) -> Result<()> {
+        let method_name = method.short_name();
+        let full_method_name = format!("{}_{}", class.name, method_name);
         let pinvoke_args_str = foreign_method_signature
             .input
             .iter()
-            .map(|a| format!("{} {}", a.dotnet_intermediate_type, a.name.dotnet_variable_name()))
+            .map(|a| {
+                format!(
+                    "{} {}",
+                    a.dotnet_intermediate_type,
+                    a.name.dotnet_variable_name()
+                )
+            })
             .join(", ");
-
-        // let pinvoke_return_type = foreign_method_signature.output.name();
-
         write!(
             self.cs_file,
             r#"
         //[SuppressUnmanagedCodeSecurity]
         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-        public static extern {return_type} {method_name}({args});
+        internal static extern {return_type} {method_name}({args});
 "#,
             native_lib_name = self.config.native_lib_name,
             return_type = foreign_method_signature.output.dotnet_intermediate_type,
             method_name = full_method_name,
             args = pinvoke_args_str,
+        )
+        .with_note("Write to memory failed")?;
+
+        Ok(())
+    }
+
+    fn write_dotnet_wrapper_function(
+        &mut self,
+        class: &ForeignerClassInfo,
+        method: &ForeignerMethod,
+        foreign_method_signature: &DotNetForeignMethodSignature,
+    ) -> Result<()> {
+        let maybe_static_str = if method.variant == MethodVariant::StaticMethod {
+            "static"
+        } else {
+            ""
+        };
+        let is_constructor = method.variant == MethodVariant::Constructor;
+        let full_method_name = format!("{}_{}", class.name, method.short_name());
+        let method_name = if is_constructor {
+            String::new()
+        } else {
+            method.short_name()
+        };
+        let args_to_skip = if let MethodVariant::Method(_) = method.variant {
+            1
+        } else {
+            0
+        };
+        let dotnet_args_str = foreign_method_signature
+            .input
+            .iter()
+            .skip(args_to_skip)
+            .map(|arg| {
+                format!(
+                    "{} {}",
+                    arg.foreign_type.name,
+                    arg.name.dotnet_variable_name()
+                )
+            })
+            .join(", ");
+
+        let this_input_conversion = if let MethodVariant::Method(_) = method.variant {
+            "var __this = this.nativePtr;"
+        } else {
+            ""
+        };
+
+        let dotnet_input_conversion = this_input_conversion.to_owned()
+            + &foreign_method_signature
+                .input
+                .iter()
+                .skip(args_to_skip)
+                .map(|arg| &arg.dotnet_conversion_code)
+                .join("\n");
+
+        let returns_something = foreign_method_signature.output.foreign_type.name != "void" && !is_constructor;
+        let maybe_return_bind = if returns_something {
+            "var __ret = "
+        } else if is_constructor {
+            "this.nativePtr = "
+        } else {
+            ""
+        };
+        let maybe_dotnet_output_conversion = if returns_something {
+            &foreign_method_signature.output.dotnet_conversion_code
+        } else {
+            ""
+        };
+        let maybe_return = if returns_something {
+            "return __ret;"
+        } else {
+            ""
+        };
+
+        let pinvoke_call_args = foreign_method_signature
+            .input
+            .iter()
+            .map(|arg| arg.name.dotnet_variable_name())
+            .join(", ");
+        write!(
+            self.cs_file,
+            r#"
+        public {maybe_static} {dotnet_return_type} {method_name}({dotnet_args}) {{
+            {dotnet_input_conversion}
+            {maybe_return_bind} {full_method_name}({pinvoke_call_args});
+            {maybe_dotnet_output_conversion}
+            {maybe_return}
+        }}
+"#,
+            maybe_static = maybe_static_str,
+            dotnet_return_type = foreign_method_signature.output.foreign_type.name,
+            method_name = method_name,
+            dotnet_args = dotnet_args_str,
+            dotnet_input_conversion = dotnet_input_conversion,
+            maybe_return_bind = maybe_return_bind,
+            full_method_name = full_method_name,
+            pinvoke_call_args = pinvoke_call_args,
+            maybe_dotnet_output_conversion = maybe_dotnet_output_conversion,
+            maybe_return = maybe_return,
         )
         .with_note("Write to memory failed")?;
 
@@ -441,6 +510,7 @@ namespace {managed_lib_name}
                 rust_intermediate_type: dummy_rust_ty.clone(),
                 name: ArgName::Return,
                 rust_conversion_code: String::new(),
+                dotnet_conversion_code: String::new(),
                 dotnet_intermediate_type: "void".to_owned(),
             },
             syn::ReturnType::Type(_, ref ty) => self.map_type(
@@ -539,22 +609,33 @@ namespace {managed_lib_name}
 
         let correspoding_rust_type = self.conv_map[rule.rust_ty].clone();
 
-        let (rust_intermediate_type, rust_conversion_code, dotnet_intermediate_type) = if let Some(intermediate) = rule.intermediate.as_ref() {
-            // panic!("{:#?}", foreign_type);
+        let (
+            rust_intermediate_type,
+            rust_conversion_code,
+            dotnet_intermediate_type,
+            dotnet_conversion_code,
+        ) = if let Some(intermediate) = rule.intermediate.as_ref() {
+            //            panic!("{:#?}", foreign_type);
             //            println!("{:#?}", intermediate);
             let intermediate_type = self.conv_map[intermediate.intermediate_ty].clone();
 
-            let (from, to) = match direction {
+            let (from, to, dotnet_conversion_code) = match direction {
                 Direction::Incoming => (
                     intermediate_type.to_idx(),
                     correspoding_rust_type.to_idx(),
+                    format!("var {0} = {0}.nativePtr;", arg_name.dotnet_variable_name()),
                 ),
                 Direction::Outgoing => (
                     correspoding_rust_type.to_idx(),
                     intermediate_type.to_idx(),
+                    format!(
+                        "var {0} = {1}({0});",
+                        arg_name.dotnet_variable_name(),
+                        foreign_type.name
+                    ),
                 ),
             };
-            let (_cur_deps, conversion_code) = self.conv_map.convert_rust_types(
+            let (_cur_deps, rust_conversion_code) = self.conv_map.convert_rust_types(
                 from,
                 to,
                 arg_name.rust_variable_name(),
@@ -562,9 +643,19 @@ namespace {managed_lib_name}
                 "()", // todo
                 span,
             )?;
-            (intermediate_type, conversion_code, "IntPtr".to_owned())
+            (
+                intermediate_type,
+                rust_conversion_code,
+                "IntPtr".to_owned(),
+                dotnet_conversion_code,
+            )
         } else {
-            (correspoding_rust_type.clone(), String::new(), foreign_type.name.to_string())
+            (
+                correspoding_rust_type.clone(),
+                String::new(),
+                foreign_type.name.to_string(),
+                String::new(),
+            )
         };
 
         Ok(DotNetArgInfo {
@@ -576,6 +667,7 @@ namespace {managed_lib_name}
             rust_intermediate_type,
             rust_conversion_code,
             dotnet_intermediate_type,
+            dotnet_conversion_code,
         })
     }
 

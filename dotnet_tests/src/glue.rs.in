@@ -82,5 +82,6 @@ foreigner_class!(
         fn TestClass::increment(&mut self);
         fn TestClass::print(&self);
         fn TestClass::add(&mut self, i: i32);
+        fn TestClass::get(&self) -> i32;
     }
 );
