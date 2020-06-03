@@ -24,7 +24,7 @@ foreigner_class!(
     }
 );
 
-
+#[derive(Clone, PartialEq, Eq)]
 pub struct TestClass {
     i: i32,
 }
@@ -73,6 +73,7 @@ impl TestClass {
 }
 
 foreigner_class!(
+    #[derive(Clone)]
     /// Test class containing standard methods.
     class TestClass {
         self_type TestClass;
@@ -83,5 +84,7 @@ foreigner_class!(
         fn TestClass::print(&self);
         fn TestClass::add(&mut self, i: i32);
         fn TestClass::get(&self) -> i32;
+        fn TestClass::clone(&self) -> TestClass;
+        fn TestClass::eq(&self, other: &TestClass) -> bool;
     }
 );

@@ -71,6 +71,12 @@ impl From<std::io::Error> for DiagnosticError {
     }
 }
 
+impl From<syn::Error> for DiagnosticError {
+    fn from(err: syn::Error) -> Self {
+        DiagnosticError::new_without_src_info(err)
+    }
+}
+
 pub(crate) trait ResultDiagnostic<T> {
     fn with_span(self, sp: SourceIdSpan) -> std::result::Result<T, DiagnosticError>;
     fn with_span_note<D: Display>(self, sp: SourceIdSpan, d: D) -> std::result::Result<T, DiagnosticError>;

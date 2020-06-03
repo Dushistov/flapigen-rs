@@ -62,9 +62,26 @@ foreign_typemap!(
     (f_type) "UIntPtr";
 );
 
+// foreign_typemap!(
+//     (r_type) isize;
+//     (f_type) "IntPtr";
+// );
+
+// foreign_typemap!(
+//     (r_type) *mut std::os::raw::c_void;
+//     (f_type) "IntPtr";
+// );
+
+// In .NET P/Invoke, bool is by default mapped to WIN32 BOOL, which is an alias for int.
 foreign_typemap!(
-    (r_type) isize;
-    (f_type) "IntPtr";
+    ($p:r_type) bool => u8 {
+        $out = if $p  { 1 } else { 0 };
+    };
+    ($p:f_type) => "bool" "($p != 0)";
+    ($p:r_type) bool <= u8 {
+        $out = $p != 0;
+    };
+    ($p:f_type) <= "bool" "$p ? 1 : 0";
 );
 
 #[allow(dead_code)]
