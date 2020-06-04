@@ -101,6 +101,7 @@ fn test_foreign_typemap_cpp_bool() {
                 invalid_src_id_span(),
             )),
             cfg_option: None,
+            finalizer_code: None,
         }],
     );
 
@@ -119,6 +120,7 @@ fn test_foreign_typemap_cpp_bool() {
                 invalid_src_id_span(),
             )),
             cfg_option: None,
+            finalizer_code: None,
         }],
     );
 }
@@ -295,6 +297,7 @@ fn test_foreign_typemap_simple_typemap() {
             }),
             code: None,
             cfg_option: None,
+            finalizer_code: None,
         }],
         rule.ftype_left_to_right
     );

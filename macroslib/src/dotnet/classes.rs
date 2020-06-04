@@ -10,69 +10,66 @@ use crate::{
         utils::{boxed_type, unpack_from_heap_pointer},
         RustTypeIdx, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    types::{ForeignerClassInfo, SelfTypeDesc, MethodVariant},
+    types::{ForeignerClassInfo, MethodVariant, SelfTypeDesc},
     TypeMap, SMART_PTR_COPY_TRAIT,
 };
 
-pub(crate) fn register_class(
-    conv_map: &mut TypeMap,
-    class: &ForeignerClassInfo,
-) -> Result<()> {
+pub(crate) fn register_class(conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
     class
-            .validate_class()
-            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
-        if let Some(self_desc) = class.self_desc.as_ref() {
-            let constructor_ret_type = &self_desc.constructor_ret_type;
-            let this_type_for_method = constructor_ret_type;
-            let mut traits = vec!["SwigForeignClass"];
-            if class.clone_derived {
+        .validate_class()
+        .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
+    if let Some(self_desc) = class.self_desc.as_ref() {
+        let constructor_ret_type = &self_desc.constructor_ret_type;
+        let this_type_for_method = constructor_ret_type;
+        let mut traits = vec!["SwigForeignClass"];
+        if class.clone_derived {
+            traits.push("Clone");
+        }
+        if class.copy_derived {
+            if !class.clone_derived {
                 traits.push("Clone");
             }
+            traits.push("Copy");
+        }
+
+        if class.smart_ptr_copy_derived {
+            traits.push(SMART_PTR_COPY_TRAIT);
+        }
+
+        let this_type = conv_map.find_or_alloc_rust_type_that_implements(
+            this_type_for_method,
+            &traits,
+            class.src_id,
+        );
+
+        if class.smart_ptr_copy_derived {
             if class.copy_derived {
-                if !class.clone_derived {
-                    traits.push("Clone");
-                }
-                traits.push("Copy");
+                println!(
+                    "warning=class {} marked as Copy and {}, ignore Copy",
+                    class.name, SMART_PTR_COPY_TRAIT
+                );
+            }
+            if ast::check_if_smart_pointer_return_inner_type(&this_type, "Rc").is_none()
+                && ast::check_if_smart_pointer_return_inner_type(&this_type, "Arc").is_none()
+            {
+                return Err(DiagnosticError::new(
+                    class.src_id,
+                    this_type.ty.span(),
+                    format!(
+                        "class {} marked as {}, but type '{}' is not Arc<> or Rc<>",
+                        class.name, SMART_PTR_COPY_TRAIT, this_type
+                    ),
+                ));
             }
 
-            if class.smart_ptr_copy_derived {
-                traits.push(SMART_PTR_COPY_TRAIT);
-            }
-
-            let this_type = conv_map.find_or_alloc_rust_type_that_implements(
-                this_type_for_method,
-                &traits,
-                class.src_id,
-            );
-
-            if class.smart_ptr_copy_derived {
-                if class.copy_derived {
-                    println!(
-                        "warning=class {} marked as Copy and {}, ignore Copy",
-                        class.name, SMART_PTR_COPY_TRAIT
-                    );
+            let has_clone = class.methods.iter().any(|x| match x.variant {
+                MethodVariant::Method(_) | MethodVariant::StaticMethod => {
+                    x.rust_id.is_ident("clone")
                 }
-                if ast::check_if_smart_pointer_return_inner_type(&this_type, "Rc").is_none()
-                    && ast::check_if_smart_pointer_return_inner_type(&this_type, "Arc").is_none()
-                {
-                    return Err(DiagnosticError::new(
-                        class.src_id,
-                        this_type.ty.span(),
-                        format!(
-                            "class {} marked as {}, but type '{}' is not Arc<> or Rc<>",
-                            class.name, SMART_PTR_COPY_TRAIT, this_type
-                        ),
-                    ));
-                }
-
-                let has_clone = class.methods.iter().any(|x| match x.variant {
-                    MethodVariant::Method(_) | MethodVariant::StaticMethod => {
-                        x.rust_id.is_ident("clone")
-                    }
-                    MethodVariant::Constructor => false,
-                });
-                if has_clone {
-                    return Err(DiagnosticError::new(
+                MethodVariant::Constructor => false,
+            });
+            if has_clone {
+                return Err(DiagnosticError::new(
                     class.src_id,
                     this_type.ty.span(),
                     format!(
@@ -80,13 +77,13 @@ pub(crate) fn register_class(
                         class.name, SMART_PTR_COPY_TRAIT,
                     ),
                 ));
-                }
             }
-
-            register_typemap_for_self_type(conv_map, class, this_type, self_desc)?;
         }
-        conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
-        Ok(())
+
+        register_typemap_for_self_type(conv_map, class, this_type, self_desc)?;
+    }
+    conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
+    Ok(())
 }
 
 fn register_typemap_for_self_type(
@@ -208,7 +205,7 @@ fn register_rust_ty_conversation_rules(
     this_type_mut_ref: RustTypeIdx,
 ) -> Result<()> {
     // *const c_void -> &"class"
-    //let 
+    //let
     conv_map.add_conversation_rule(
         const_void_ptr_rust_ty,
         this_type_ref,
@@ -341,12 +338,13 @@ fn register_main_foreign_types(
                 intermediate_ty: void_ptr_rust_ty,
                 conv_code: Rc::new(TypeConvCode::new(
                     format!(
-                        "new {class_name}({var})",
+                        "new {class_name}({from})",
                         class_name = class.name,
-                        var = FROM_VAR_TEMPLATE
+                        from = FROM_VAR_TEMPLATE,
                     ),
                     invalid_src_id_span(),
                 )),
+                finalizer_code: None,
             }),
         }),
         from_into_rust: Some(ForeignConversationRule {
@@ -355,9 +353,13 @@ fn register_main_foreign_types(
                 input_to_output: false,
                 intermediate_ty: void_ptr_rust_ty,
                 conv_code: Rc::new(TypeConvCode::new(
-                    format!("{}.nativePtr", FROM_VAR_TEMPLATE),
+                    format!(
+                        "{from}.nativePtr",
+                        from = FROM_VAR_TEMPLATE
+                    ),
                     invalid_src_id_span(),
                 )),
+                finalizer_code: None,
             }),
         }),
         name_prefix: None,
@@ -377,11 +379,12 @@ fn register_main_foreign_types(
                 intermediate_ty: const_void_ptr_rust_ty,
                 conv_code: Rc::new(TypeConvCode::new(
                     format!(
-                        "{}.nativePtr",
-                        FROM_VAR_TEMPLATE
+                        "{from}.nativePtr",
+                        from = FROM_VAR_TEMPLATE
                     ),
                     invalid_src_id_span(),
                 )),
+                finalizer_code: None,
             }),
         }),
         into_from_rust: None,
@@ -428,11 +431,12 @@ fn register_main_foreign_types(
                 intermediate_ty: void_ptr_rust_ty,
                 conv_code: Rc::new(TypeConvCode::new(
                     format!(
-                        "{}.nativePtr",
-                        FROM_VAR_TEMPLATE
+                        "{from}.nativePtr",
+                        from = FROM_VAR_TEMPLATE
                     ),
                     invalid_src_id_span(),
                 )),
+                finalizer_code: None,
             }),
         }),
         into_from_rust: None,

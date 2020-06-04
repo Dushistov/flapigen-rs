@@ -12,6 +12,7 @@ namespace dotnet
             TestStaticClass.hello();
             TestStaticClass.print_number(123);
             Console.Out.WriteLine(TestStaticClass.add(1, 2));
+            Console.Out.WriteLine(TestStaticClass.concat("Concatenated ", "String"));
 
             var obj = new TestClass();
             obj.print();

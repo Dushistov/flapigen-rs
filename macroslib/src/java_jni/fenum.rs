@@ -66,6 +66,7 @@ pub(in crate::java_jni) fn generate_enum(
                     ),
                     invalid_src_id_span(),
                 )),
+                finalizer_code: None,
             }),
         }),
         from_into_rust: Some(ForeignConversationRule {
@@ -77,6 +78,7 @@ pub(in crate::java_jni) fn generate_enum(
                     format!("        int {out} = {in}.getValue();", out = TO_VAR_TEMPLATE, in = FROM_VAR_TEMPLATE),
                     invalid_src_id_span(),
                 )),
+                finalizer_code: None,
             }),
         }),
         name_prefix: None,

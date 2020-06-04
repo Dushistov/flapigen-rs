@@ -9,13 +9,16 @@ use petgraph::Direction;
 use quote::quote;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
-use std::{collections::HashMap, fs::{self, File}};
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+};
 use syn::{parse_str, Ident, Type};
 use typemap::{
     ast,
     ty::RustType,
     utils::{self, ForeignMethodSignature, ForeignTypeInfoT},
-    ForeignTypeInfo, MapToForeignFlag, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE,
+    ForeignTypeInfo, MapToForeignFlag, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
 };
 use types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
 
@@ -49,6 +52,7 @@ struct DotNetArgInfo {
     dotnet_intermediate_type: String,
     rust_conversion_code: String,
     dotnet_conversion_code: String,
+    finalizer: String,
     name: ArgName,
 }
 
@@ -77,7 +81,7 @@ impl NameGenerator {
         *i += 1;
         format!("{}_{}", name_base, i)
     }
-    
+
     fn last_variant(&mut self, name_base: &str) -> String {
         let i = self.map.entry(name_base.to_owned()).or_insert(0);
         format!("{}_{}", name_base, i)
@@ -194,8 +198,14 @@ using System.Runtime.InteropServices;
 
 namespace {managed_lib_name}
 {{
+
+    internal static class RustInterop {{
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void String_delete(IntPtr c_char_ptr);
+    }}
 "#,
             managed_lib_name = config.managed_lib_name,
+            native_lib_name = config.native_lib_name,
         )
         .with_note("Write to memory failed")?;
 
@@ -338,7 +348,8 @@ namespace {managed_lib_name}
         method: &ForeignerMethod,
     ) -> Result<()> {
         let mut name_generator = NameGenerator::new();
-        let foreign_method_signature = self.make_foreign_method_signature(class, method, &mut name_generator)?;
+        let foreign_method_signature =
+            self.make_foreign_method_signature(class, method, &mut name_generator)?;
 
         self.write_rust_glue_code(class, &foreign_method_signature)?;
         self.write_pinvoke_function_signature(class, &foreign_method_signature)?;
@@ -482,7 +493,7 @@ namespace {managed_lib_name}
                 .iter()
                 .skip(args_to_skip)
                 .map(|arg| &arg.dotnet_conversion_code)
-                .join("\n");
+                .join("\n            ");
 
         let returns_something =
             foreign_method_signature.output.foreign_type.name != "void" && !is_constructor;
@@ -504,6 +515,13 @@ namespace {managed_lib_name}
             String::new()
         };
 
+        let finalizers = foreign_method_signature
+            .input
+            .iter()
+            .filter(|arg| !arg.finalizer.is_empty())
+            .map(|arg| &arg.finalizer)
+            .join("\n            ");
+
         let pinvoke_call_args = foreign_method_signature
             .input
             .iter()
@@ -516,6 +534,7 @@ namespace {managed_lib_name}
             {dotnet_input_conversion}
             {maybe_return_bind}{full_method_name}({pinvoke_call_args});
             {maybe_dotnet_output_conversion}
+            {finalizers}
             {maybe_return}
         }}
 "#,
@@ -528,6 +547,7 @@ namespace {managed_lib_name}
             full_method_name = full_method_name,
             pinvoke_call_args = pinvoke_call_args,
             maybe_dotnet_output_conversion = maybe_dotnet_output_conversion,
+            finalizers = finalizers,
             maybe_return = maybe_return,
         )
         .with_note("Write to memory failed")?;
@@ -597,6 +617,7 @@ namespace {managed_lib_name}
                 rust_conversion_code: String::new(),
                 dotnet_conversion_code: String::new(),
                 dotnet_intermediate_type: "void".to_owned(),
+                finalizer: String::new(),
             },
             syn::ReturnType::Type(_, ref ty) => self.map_type(
                 ty,
@@ -702,12 +723,7 @@ namespace {managed_lib_name}
 
         let correspoding_rust_type = self.conv_map[rule.rust_ty].clone();
 
-        let (
-            rust_intermediate_type,
-            rust_conversion_code,
-            dotnet_intermediate_type,
-            dotnet_conversion_code,
-        ) = if let Some(intermediate) = rule.intermediate.as_ref() {
+        if let Some(intermediate) = rule.intermediate.as_ref() {
             // if correspoding_rust_type.typename() == "bool" {
             //     panic!("{:#?}", foreign_type);
             // }
@@ -730,11 +746,10 @@ namespace {managed_lib_name}
                 })?;
             let intermediate_foreign_type = self.conv_map[intermediate_foreign_type_idx].clone();
 
-            let (from, to, dotnet_conversion_code) = match direction {
+            let (from, to) = match direction {
                 Direction::Incoming => (
                     intermediate_rust_type.to_idx(),
                     correspoding_rust_type.to_idx(),
-                    intermediate.conv_code.to_string(),
                 ),
                 Direction::Outgoing => (
                     correspoding_rust_type.to_idx(),
@@ -744,7 +759,6 @@ namespace {managed_lib_name}
                     //     arg_name.dotnet_variable_name(),
                     //     foreign_type.name
                     // ),
-                    intermediate.conv_code.to_string(),
                 ),
             };
             let (_cur_deps, rust_conversion_code) = self.conv_map.convert_rust_types(
@@ -755,34 +769,55 @@ namespace {managed_lib_name}
                 "()", // todo
                 span,
             )?;
+
             let dotnet_arg_name = name_generator.last_variant(arg_name.dotnet_variable_name());
             let new_dotnet_arg_name = name_generator.new_variant(arg_name.dotnet_variable_name());
-            (
-                intermediate_rust_type,
-                rust_conversion_code,
-                intermediate_foreign_type.name.to_string(),
-                format!("var {} = {};", new_dotnet_arg_name, dotnet_conversion_code.replace(FROM_VAR_TEMPLATE, &dotnet_arg_name)),
-            )
-        } else {
-            (
-                correspoding_rust_type.clone(),
-                String::new(),
-                foreign_type.name.to_string(),
-                String::new(),
-            )
-        };
 
-        Ok(DotNetArgInfo {
-            foreign_type: ForeignTypeInfo {
-                name: foreign_type.typename(),
-                correspoding_rust_type,
-            },
-            name: arg_name,
-            rust_intermediate_type,
-            rust_conversion_code,
-            dotnet_intermediate_type,
-            dotnet_conversion_code,
-        })
+            let dotnet_conversion_code = format!(
+                "var {} = {};",
+                new_dotnet_arg_name,
+                intermediate
+                    .conv_code
+                    .to_string()
+                    .replace(FROM_VAR_TEMPLATE, &dotnet_arg_name)
+            );
+
+            let finalizer = intermediate
+                .finalizer_code
+                .as_ref()
+                .map(|str| {
+                    str.as_str()
+                        .to_owned()
+                        .replace(TO_VAR_TEMPLATE, &new_dotnet_arg_name)
+                })
+                .unwrap_or_default();
+
+            Ok(DotNetArgInfo {
+                foreign_type: ForeignTypeInfo {
+                    name: foreign_type.typename(),
+                    correspoding_rust_type,
+                },
+                name: arg_name,
+                rust_intermediate_type: intermediate_rust_type,
+                rust_conversion_code,
+                dotnet_intermediate_type: intermediate_foreign_type.name.to_string(),
+                dotnet_conversion_code,
+                finalizer,
+            })
+        } else {
+            Ok(DotNetArgInfo {
+                foreign_type: ForeignTypeInfo {
+                    name: foreign_type.typename(),
+                    correspoding_rust_type: correspoding_rust_type.clone(),
+                },
+                name: arg_name,
+                rust_intermediate_type: correspoding_rust_type.clone(),
+                rust_conversion_code: String::new(),
+                dotnet_intermediate_type: foreign_type.typename().to_string(),
+                dotnet_conversion_code: String::new(),
+                finalizer: String::new(),
+            })
+        }
     }
 
     fn finish(&mut self) -> Result<()> {

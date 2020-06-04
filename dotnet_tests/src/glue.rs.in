@@ -12,6 +12,10 @@ impl TestStaticClass {
     pub fn add(a: i32, b: i32) -> i32 {
         a + b
     }
+
+    pub fn concat(a: String, b: String) -> String {
+        a + &b
+    }
 }
 
 foreigner_class!(
@@ -21,6 +25,7 @@ foreigner_class!(
         fn TestStaticClass::hello();
         fn TestStaticClass::print_number(n: i32);
         fn TestStaticClass::add(a: i32, b: i32) -> i32;
+        fn TestStaticClass::concat(a: String, b: String) -> String;
     }
 );
 

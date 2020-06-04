@@ -31,6 +31,7 @@ mod kw {
     custom_keyword!(input_to_output);
     custom_keyword!(unique_prefix);
     custom_keyword!(temporary);
+    custom_keyword!(finalizer);
 }
 
 enum RuleType {
@@ -505,6 +506,7 @@ struct FTypeArmParams {
     input_to_output: bool,
     unique_prefix: Option<SpannedSmolStr>,
     temporary_ids: Vec<Ident>,
+    finalizer_code: Option<SpannedSmolStr>,
 }
 
 fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Result<FTypeArmParams> {
@@ -513,6 +515,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
     let mut input_to_output = false;
     let mut unique_prefix = None;
     let mut temporary_ids = Vec::<Ident>::new();
+    let mut finalizer_code: Option<SpannedSmolStr> = None;
 
     while !params.is_empty() && params.peek(Token![,]) {
         params.parse::<Token![,]>()?;
@@ -556,6 +559,14 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
                 sp: lit_str.span(),
                 value: lit_str.value().into(),
             });
+        } else if la.peek(kw::finalizer) {
+            params.parse::<kw::finalizer>()?;
+            params.parse::<Token![=]>()?;
+            let lit_str = params.parse::<LitStr>()?;
+            finalizer_code = Some(SpannedSmolStr {
+                sp: lit_str.span(),
+                value: lit_str.value().into(),
+            });
         } else if la.peek(token::Dollar) {
             params.parse::<token::Dollar>()?;
             let var_name = params.parse::<Ident>()?;
@@ -578,6 +589,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
         input_to_output,
         unique_prefix,
         temporary_ids,
+        finalizer_code,
     })
 }
 
@@ -595,6 +607,7 @@ fn parse_f_type_rule(
         input_to_output,
         unique_prefix,
         temporary_ids,
+        finalizer_code
     } = parse_typemap_f_type_arm_param(params)?;
 
     let left_ty: Option<FTypeName> = if input.peek(LitStr) {
@@ -713,6 +726,7 @@ fn parse_f_type_rule(
                     FTypeLeftRightPair::OnlyRight(right_ty)
                 },
                 code,
+                finalizer_code,
             });
         }
         Some(ConvertRuleType::RightToLeft(right_ty)) => {
@@ -736,6 +750,7 @@ fn parse_f_type_rule(
                     FTypeLeftRightPair::OnlyRight(right_ty)
                 },
                 code,
+                finalizer_code,
             });
         }
         None => {
@@ -761,6 +776,7 @@ fn parse_f_type_rule(
                 cfg_option: ftype_cfg,
                 left_right_ty: FTypeLeftRightPair::OnlyLeft(left_ty),
                 code: None,
+                finalizer_code,
             });
         }
     }

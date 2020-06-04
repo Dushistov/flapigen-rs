@@ -61,6 +61,7 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
                     ),
                     invalid_src_id_span(),
                 )),
+                finalizer_code: None,
             }),
         }),
         from_into_rust: Some(ForeignConversationRule {
@@ -72,6 +73,7 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
                     format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
                     invalid_src_id_span(),
                 )),
+                finalizer_code: None,
             }),
         }),
         name_prefix: None,

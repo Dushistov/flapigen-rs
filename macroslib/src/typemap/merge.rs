@@ -194,6 +194,7 @@ impl TypeMap {
                                 input_to_output: rule.input_to_output,
                                 intermediate_ty: rty_right,
                                 conv_code: Rc::new(conv_code),
+                                finalizer_code: rule.finalizer_code.clone(),
                             }),
                         },
                     ));
@@ -270,6 +271,7 @@ impl TypeMap {
                                 input_to_output: rule.input_to_output,
                                 intermediate_ty: rty_right,
                                 conv_code: Rc::new(conv_code),
+                                finalizer_code: rule.finalizer_code,
                             }),
                         },
                     ));
