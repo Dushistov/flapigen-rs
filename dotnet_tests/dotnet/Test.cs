@@ -22,6 +22,18 @@ namespace dotnet
             obj.print();
 
             Console.Out.WriteLine(obj.get());
+
+            var vec = new RustVecint();
+            vec.Add(1);
+            vec.Add(2);
+            vec.Insert(0, 3);
+
+            var new_vec = TestStaticClass.test_vec(vec);
+            for (int i = 0; i < new_vec.Count; ++i)
+            {
+                Console.Out.WriteLine(++new_vec[i]);
+            }
+            new_vec.Dispose();
         }
     }
 }

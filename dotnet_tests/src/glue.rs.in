@@ -13,8 +13,19 @@ impl TestStaticClass {
         a + b
     }
 
+    pub fn add_ref(a: &i32, b: &i32) -> i32 {
+        a + b
+    }
+
     pub fn concat(a: String, b: String) -> String {
         a + &b
+    }
+
+    pub fn test_vec(mut vec: Vec<i32>) -> Vec<i32> {
+        for i in vec.iter_mut() {
+            *i += 1;
+        }
+        vec
     }
 }
 
@@ -25,7 +36,9 @@ foreigner_class!(
         fn TestStaticClass::hello();
         fn TestStaticClass::print_number(n: i32);
         fn TestStaticClass::add(a: i32, b: i32) -> i32;
+        //fn TestStaticClass::add_ref(a: &i32, b: &i32) -> i32;
         fn TestStaticClass::concat(a: String, b: String) -> String;
+        fn TestStaticClass::test_vec(vec: Vec<i32>) -> Vec<i32>;
     }
 );
 
@@ -93,3 +106,4 @@ foreigner_class!(
         fn TestClass::eq(&self, other: &TestClass) -> bool;
     }
 );
+
