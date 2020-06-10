@@ -136,6 +136,9 @@ unsafe fn c_str_u16_len(mut c_str_u16_ptr: *const u16) -> usize {
 }
 
 unsafe fn c_str_u16_to_string(c_str_u16_ptr: *const u16) -> String {
+    if c_str_u16_ptr.is_null() {
+        return String::new();
+    }
     let len = c_str_u16_len(c_str_u16_ptr);
     let slice = std::slice::from_raw_parts(c_str_u16_ptr, len);
     String::from_utf16_lossy(slice)
@@ -161,6 +164,8 @@ unsafe extern "C" fn String_delete(c_str_u16: *mut u16) {
     std::mem::drop(boxed_slice);
 }
 
+
+
 foreign_typemap!(
     ($p:r_type) bool => u8 {
         $out = if $p  { 1 } else { 0 };
@@ -183,6 +188,7 @@ foreign_typemap!(
     ($p:f_type, finalizer="Marshal.FreeHGlobal({to_var});") <= "string" "Marshal.StringToHGlobalUni($p)";
 );
 
+
 #[allow(dead_code)]
 pub trait SwigForeignClass {
     // fn c_class_name() -> *const ::std::os::raw::c_char;
@@ -190,34 +196,175 @@ pub trait SwigForeignClass {
     fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self;
 }
 
-// #[repr(C)]
-// struct RustVecData {
-//     data: *mut ::std::os::raw::c_void,
-//     len: usize,
-//     capacity: usize,
-// }
+foreign_typemap!(
+    ($p:r_type) /* Option */ *mut ::std::os::raw::c_void;
+    ($p:f_type) "/* Option */ IntPtr";
+);
 
-// impl RustVecData {
-//     fn from_vec<T>(vec: Vec<T>) -> RustVec {
-//         unimplemented!()
-//     }
 
-//     // fn index<T>(&self, i: usize) -> T {
-//     //     unimplemented!()
-//     // }
+foreign_typemap!(
+    generic_alias!(RustOptionT = swig_concat_idents!(RustOption, swig_f_type!(T)));
+    generic_alias!(RustOptionT_new_none = swig_concat_idents!(RustOption, swig_f_type!(T), _new_none));
+    generic_alias!(RustOptionT_new_some = swig_concat_idents!(RustOption, swig_f_type!(T), _new_some));
+    generic_alias!(RustOptionT_is_some = swig_concat_idents!(RustOption, swig_f_type!(T), _is_some));
+    generic_alias!(RustOptionT_take = swig_concat_idents!(RustOption, swig_f_type!(T), _take));
+    // generic_alias!(RustOptionT_delete = swig_concat_idents!(RustOption, swig_f_type!(T), _delete));
 
-//     fn drop(self) {
-//         unimplemented!()
-//     }
+    define_c_type!(
+        module = "RustOptionT!()";
 
-//     // fn into_vec<T>(self) -> RustVec {
-//     //     unimplemented!()
-//     // }
-// }
+        // #[allow(non_snake_case)]
+        // #[no_mangle]
+        // unsafe extern "C" fn RustOptionT_delete!()(opt: *mut Option<swig_subst_type!(T)>) {
+        //     ::std::mem::drop(Box::from_raw(opt))
+        // }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustOptionT_new_none!()() -> *mut Option<swig_subst_type!(T)> {
+            Box::into_raw(Box::new(None))
+        }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustOptionT_new_some!()(value_0: swig_i_type!(T)) -> *mut Option<swig_subst_type!(T)> {
+            swig_from_i_type_to_rust!(T, value_0, value_1);
+            Box::into_raw(Box::new(Some(value_1)))
+        }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustOptionT_is_some!()(opt: *mut Option<swig_subst_type!(T)>) -> u8 {
+            if (*opt).is_some() { 1 } else { 0 }
+        }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustOptionT_take!()(opt: *mut Option<swig_subst_type!(T)>) -> swig_i_type!(T) {
+            let ret_0 = Box::from_raw(opt).expect("RustOptionT_take!(): trying to take the value from Option::None");
+            swig_from_rust_to_i_type!(T, ret_0, ret_1);
+            ret_1
+        }
+    );
+
+    foreigner_code!(
+        module = "Option<T>";
+        r#"
+
+        public class Option<T> {
+        
+            [System.Serializable]
+            public class OptionNoneException : System.Exception
+            {
+                public OptionNoneException() :
+                    base("Trying to get the value of an `Option` that is `None`") 
+                {
+                }
+            }
+        
+            private T value;
+            private bool isSome;
+        
+            public bool IsSome
+            {
+                get
+                {
+                    return isSome;
+                }
+            }
+        
+            public T Value
+            {
+                get {
+                    if (!isSome) {
+                        throw new OptionNoneException();
+                    }
+                    return value;
+                }
+            }
+        
+            public Option()
+            {
+                value = default(T);
+                isSome = false;
+            }
+        
+            public Option(T value)
+            {
+                if (value == null) 
+                {
+                    this.value = value;
+                    this.isSome = false;
+                }
+                else
+                {
+                    this.value = value;
+                    this.isSome = true;
+                }
+            }
+        }        
+        "#
+    );
+
+    foreigner_code!(
+        module = "RustOptionT!()";
+        r#"
+    internal static class RustOptionT!() {
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RustOptionT_new_none!()();
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern IntPtr RustOptionT_new_some!()(swig_i_type!(T) value);
+        
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern swig_i_type!(T) RustOptionT_take!()(IntPtr optPtr);
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern byte RustOptionT_is_some!()(IntPtr optPtr);
+
+        internal static Option<swig_f_type!(T)> rust_to_dotnet(IntPtr optPtr)
+        {
+            if (RustOptionT_is_some!()(optPtr) != 0)
+            {
+                var value_0 = RustOptionT_take!()(optPtr);
+                var value_1 = swig_foreign_from_i_type!(T, value_0);
+                return new Option<swig_f_type!(T)>(value_1);
+            }
+            else
+            {
+                return new Option<swig_f_type!(T)>();
+            }
+        }
+
+        internal static IntPtr dotnet_to_rust(Option<swig_f_type!(T)> opt)
+        {
+            if (opt.IsSome)
+            {
+                var value_0 = swig_foreign_to_i_type!(T, opt.Value);
+                return RustOptionT_new_some!()(value_0);                
+            }
+            else
+            {
+                return RustOptionT_new_none!()();
+            }
+        }
+    }
+    "#);
+
+    ($p:r_type) <T> Option<T> => /* Option */ *mut ::std::os::raw::c_void {
+        $out = Box::into_raw(Box::new($p)) as *mut ::std::os::raw::c_void;
+    };
+    ($p:f_type) => "Option<swig_f_type!(T)>" "RustOptionT!().rust_to_dotnet($p)";
+    ($p:r_type) <T> Option<T> <= /* Option */ *mut ::std::os::raw::c_void {
+        $out = unsafe { (*($p as *mut Option<swig_subst_type!(T)>)).clone() };
+    };
+    ($p:f_type) <= "Option<swig_f_type!(T)>" "RustOptionT!().dotnet_to_rust($p)";
+
+);
 
 foreign_typemap!(
     ($p:r_type) /* Vec */ *mut ::std::os::raw::c_void;
-    ($p:f_type) "IntPtr";
+    ($p:f_type) "/* RustVec */ IntPtr";
 );
 
 foreign_typemap!(
@@ -290,6 +437,13 @@ foreign_typemap!(
             swig_from_i_type_to_rust!(T, element_0, element_1);
             (*vec).insert(index, element_1);
         }
+
+        // #[allow(non_snake_case)]
+        // #[no_mangle]
+        // unsafe extern "C" fn IterT_next!()(vec: *mut std::slice::Iter<swig_subst_type!(T)>) -> swig_i_type!(T) {
+        //     swig_from_i_type_to_rust!(T, element_0, element_1);
+        //     (*vec).insert(index, element_1);
+        // }
     );
 
     foreigner_code!(

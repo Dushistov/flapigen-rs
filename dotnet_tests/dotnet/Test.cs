@@ -34,6 +34,9 @@ namespace dotnet
                 Console.Out.WriteLine(++new_vec[i]);
             }
             new_vec.Dispose();
+
+            TestStaticClass.maybe_return_class(new Option<string>("asdf")).Value.print();
+            Console.Out.WriteLine(TestStaticClass.maybe_add_one(new Option<int>()).IsSome);
         }
     }
 }

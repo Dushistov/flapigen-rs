@@ -1,46 +1,3 @@
-pub struct TestStaticClass {}
-
-impl TestStaticClass {
-    pub fn hello() {
-        println!("Hello from Rust");
-    }
-
-    pub fn print_number(n: i32) {
-        println!("print_number: {}", n);
-    }
-
-    pub fn add(a: i32, b: i32) -> i32 {
-        a + b
-    }
-
-    pub fn add_ref(a: &i32, b: &i32) -> i32 {
-        a + b
-    }
-
-    pub fn concat(a: String, b: String) -> String {
-        a + &b
-    }
-
-    pub fn test_vec(mut vec: Vec<i32>) -> Vec<i32> {
-        for i in vec.iter_mut() {
-            *i += 1;
-        }
-        vec
-    }
-}
-
-foreigner_class!(
-    /// Test class containing static methods only.
-    class TestStaticClass {
-        /// Documentation for `TestStaticClass::hello`()
-        fn TestStaticClass::hello();
-        fn TestStaticClass::print_number(n: i32);
-        fn TestStaticClass::add(a: i32, b: i32) -> i32;
-        //fn TestStaticClass::add_ref(a: &i32, b: &i32) -> i32;
-        fn TestStaticClass::concat(a: String, b: String) -> String;
-        fn TestStaticClass::test_vec(vec: Vec<i32>) -> Vec<i32>;
-    }
-);
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct TestClass {
@@ -106,4 +63,59 @@ foreigner_class!(
         fn TestClass::eq(&self, other: &TestClass) -> bool;
     }
 );
+
+pub struct TestStaticClass {}
+
+impl TestStaticClass {
+    pub fn hello() {
+        println!("Hello from Rust");
+    }
+
+    pub fn print_number(n: i32) {
+        println!("print_number: {}", n);
+    }
+
+    pub fn add(a: i32, b: i32) -> i32 {
+        a + b
+    }
+
+    pub fn add_ref(a: &i32, b: &i32) -> i32 {
+        a + b
+    }
+
+    pub fn concat(a: String, b: String) -> String {
+        a + &b
+    }
+
+    pub fn test_vec(mut vec: Vec<i32>) -> Vec<i32> {
+        for i in vec.iter_mut() {
+            *i += 1;
+        }
+        vec
+    }
+
+    pub fn maybe_return_class(str: Option<String>) -> Option<TestClass> {
+        str.map(|_| TestClass::new())
+    }
+
+    pub fn maybe_add_one(i: Option<i32>) -> Option<i32> {
+        i.map(|i| i + 1)
+    }
+}
+
+foreigner_class!(
+    /// Test class containing static methods only.
+    class TestStaticClass {
+        /// Documentation for `TestStaticClass::hello`()
+        fn TestStaticClass::hello();
+        fn TestStaticClass::print_number(n: i32);
+        fn TestStaticClass::add(a: i32, b: i32) -> i32;
+        //fn TestStaticClass::add_ref(a: &i32, b: &i32) -> i32;
+        fn TestStaticClass::concat(a: String, b: String) -> String;
+        fn TestStaticClass::test_vec(vec: Vec<i32>) -> Vec<i32>;
+        fn TestStaticClass::maybe_return_class(str: Option<String>) -> Option<TestClass>;
+        fn TestStaticClass::maybe_add_one(i: Option<i32>) -> Option<i32>;
+    }
+);
+
 

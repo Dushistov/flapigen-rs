@@ -627,8 +627,8 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
         //     Direction::Incoming => f_info.from_into_rust
         // }
         let type_info = map_type(self.generator, &rust_ty.ty, direction, self.arg_ty_span)?;
-        trace!("swig_i_type return {}", type_info.rust_type);
-        Ok(type_info.rust_type.ty.clone())
+        trace!("swig_i_type return {}", type_info.rust_intermediate_type);
+        Ok(type_info.rust_intermediate_type.ty.clone())
     }
     fn swig_from_rust_to_i_type(
         &mut self,
@@ -643,8 +643,8 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
         let type_info = map_type(self.generator, &rust_ty.ty, Direction::Outgoing, self.arg_ty_span)?;
 
         let (_conv_deps, conv_code) = self.generator.conv_map.convert_rust_types(
-            rust_ty.to_idx(),
             type_info.rust_type.to_idx(),
+            type_info.rust_intermediate_type.to_idx(),
             in_var_name,
             out_var_name,
             "#error",
@@ -666,8 +666,8 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
         let type_info = map_type(self.generator, &rust_ty.ty, Direction::Incoming, self.arg_ty_span)?;
 
         let ( _conv_deps, conv_code) = self.generator.conv_map.convert_rust_types(
+            type_info.rust_intermediate_type.to_idx(),
             type_info.rust_type.to_idx(),
-            rust_ty.to_idx(),
             in_var_name,
             out_var_name,
             "#error",
@@ -690,7 +690,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
         //     f_info.base.name.as_str()
         // };
         Ok(ExpandedFType {
-            name: type_info.dotnet_intermediate_type,
+            name: type_info.dotnet_type,
             provides_by_module: vec![],
         })
     }
