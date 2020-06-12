@@ -178,22 +178,44 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
-    ($p:r_type) String => *const u16 {
+    ($p:r_type) String => /* String */ *const u16 {
         $out = alloc_c_str_u16(&$p);
     };
     ($p:f_type) => "string" "Marshal.PtrToStringUni($p); RustInterop.String_delete($p)";
-    ($p:r_type) String <= *const u16 {
+    ($p:r_type) String <= /* String */ *const u16 {
         $out = unsafe { c_str_u16_to_string($p) };
     };
     ($p:f_type, finalizer="Marshal.FreeHGlobal({to_var});") <= "string" "Marshal.StringToHGlobalUni($p)";
 );
 
+foreign_typemap!(
+    ($p:r_type) &str => /* &str */ *const u16 {
+        $out = alloc_c_str_u16(&$p);
+    };
+    ($p:f_type) => "/* &str */ string" "Marshal.PtrToStringUni($p); RustInterop.String_delete($p)";
+    ($p:r_type) &str <= /* &str */ *const u16 {
+        $out = unsafe { &c_str_u16_to_string($p) };
+    };
+    ($p:f_type, finalizer="Marshal.FreeHGlobal({to_var});") <= "/* &str */ string" "Marshal.StringToHGlobalUni($p)";
+);
 
 #[allow(dead_code)]
-pub trait SwigForeignClass {
+pub trait SwigForeignClass: Sized {
+    type StorageType: SwigForeignClassStorage<BaseType=Self>;
     // fn c_class_name() -> *const ::std::os::raw::c_char;
-    fn box_object(x: Self) -> *mut ::std::os::raw::c_void;
-    fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self;
+    // fn box_object(x: Self) -> *mut ::std::os::raw::c_void;
+    // fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self;
+    fn swig_into_storage_type(self) -> Self::StorageType;
+}
+
+pub trait SwigForeignClassStorage: Sized {
+    type BaseType: SwigForeignClass;
+
+    fn swig_as_ref(&self) -> &Self::BaseType;
+    fn swig_as_mut(&mut self) -> &mut Self::BaseType;
+    fn swig_cloned(&self) -> Self::BaseType;
+    fn swig_leak_into_raw(self) -> *mut Self;
+    fn swig_drop_raw(raw_ptr: *mut Self);
 }
 
 foreign_typemap!(
@@ -377,6 +399,7 @@ foreign_typemap!(
     generic_alias!(RustVecT_remove = swig_concat_idents!(RustVec, swig_f_type!(T), _remove));
     generic_alias!(RustVecT_insert = swig_concat_idents!(RustVec, swig_f_type!(T), _insert));
     generic_alias!(RustVecT_to_list = swig_concat_idents!(RustVec, swig_f_type!(T), _to_list));
+    // generic_alias!(RustVecT_push = swig_concat_idents!(RustVec, swig_f_type!(T), _new));
 
     ($p:r_type) <T> Vec<T> => /* Vec */ *mut ::std::os::raw::c_void {
         $out = Box::into_raw(Box::new($p)) as *mut ::std::os::raw::c_void;

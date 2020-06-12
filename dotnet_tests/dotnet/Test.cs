@@ -13,6 +13,8 @@ namespace dotnet
             TestStaticClass.print_number(123);
             Console.Out.WriteLine(TestStaticClass.add(1, 2));
             Console.Out.WriteLine(TestStaticClass.concat("Concatenated ", "String"));
+            Console.Out.WriteLine(TestStaticClass.concat_str("Concatenated ", "str"));
+
 
             var obj = new TestClass();
             obj.print();
@@ -20,8 +22,9 @@ namespace dotnet
             obj.print();
             obj.add(3);
             obj.print();
-
             Console.Out.WriteLine(obj.get());
+            
+            TestStaticClass.test_obj_by_value(obj);
 
             var vec = new RustVecint();
             vec.Add(1);

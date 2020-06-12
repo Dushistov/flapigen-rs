@@ -47,6 +47,12 @@ impl TestClass {
     }
 }
 
+impl std::ops::Drop for TestClass {
+    fn drop(&mut self) {
+        println!("Dropping!");
+    }
+}
+
 foreigner_class!(
     #[derive(Clone)]
     /// Test class containing standard methods.
@@ -87,6 +93,10 @@ impl TestStaticClass {
         a + &b
     }
 
+    pub fn concat_str(a: &str, b: &str) -> String {
+        a.to_owned() + b
+    }
+
     pub fn test_vec(mut vec: Vec<i32>) -> Vec<i32> {
         for i in vec.iter_mut() {
             *i += 1;
@@ -101,6 +111,10 @@ impl TestStaticClass {
     pub fn maybe_add_one(i: Option<i32>) -> Option<i32> {
         i.map(|i| i + 1)
     }
+
+    pub fn test_obj_by_value(obj: TestClass) {
+        obj.print();
+    }
 }
 
 foreigner_class!(
@@ -110,12 +124,11 @@ foreigner_class!(
         fn TestStaticClass::hello();
         fn TestStaticClass::print_number(n: i32);
         fn TestStaticClass::add(a: i32, b: i32) -> i32;
-        //fn TestStaticClass::add_ref(a: &i32, b: &i32) -> i32;
         fn TestStaticClass::concat(a: String, b: String) -> String;
+        fn TestStaticClass::concat_str(a: &str, b: &str) -> String;
         fn TestStaticClass::test_vec(vec: Vec<i32>) -> Vec<i32>;
         fn TestStaticClass::maybe_return_class(str: Option<String>) -> Option<TestClass>;
         fn TestStaticClass::maybe_add_one(i: Option<i32>) -> Option<i32>;
+        fn TestStaticClass::test_obj_by_value(obj: TestClass);
     }
 );
-
-

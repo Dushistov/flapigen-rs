@@ -306,13 +306,16 @@ fn map_type(
             ),
         )
     })?;
-
+    
     let correspoding_rust_type = generator.conv_map[rule.rust_ty].clone();
-
+    
+    // if direction == Direction::Incoming {        
+    //     panic!("{:#?},\n{:#?}", foreign_type, correspoding_rust_type);
+    // }
     if let Some(intermediate) = rule.intermediate.as_ref() {
         let intermediate_rust_type = generator.conv_map[intermediate.intermediate_ty].clone();
         let intermediate_foreign_type =
-            find_foreign_type(generator, &intermediate_rust_type, direction, span)?;
+        find_foreign_type(generator, &intermediate_rust_type, direction, span)?;
 
         // let (from, to) = match direction {
         //     Direction::Incoming => (
@@ -362,7 +365,7 @@ fn map_type(
 
         Ok(DotNetTypeInfo {
             dotnet_type: foreign_type.typename(),
-            rust_type: correspoding_rust_type.clone(),
+            rust_type: rust_ty.clone(),
             dotnet_intermediate_type: intermediate_foreign_type.name.typename,
             rust_intermediate_type: intermediate_rust_type,
             dotnet_conversion_code: intermediate.conv_code.to_string(),
@@ -371,7 +374,7 @@ fn map_type(
     } else {
         Ok(DotNetTypeInfo {
             dotnet_type: foreign_type.typename(),
-            rust_type: correspoding_rust_type.clone(),
+            rust_type: rust_ty.clone(),
             rust_intermediate_type: correspoding_rust_type.clone(),
             dotnet_intermediate_type: foreign_type.typename(),
             dotnet_conversion_code: FROM_VAR_TEMPLATE.to_owned(),
