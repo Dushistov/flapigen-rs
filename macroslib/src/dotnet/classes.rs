@@ -364,8 +364,6 @@ fn register_rust_ty_conversation_rules(
             format!(
                 "let {to_var} = {from_var}.swig_into_storage_type().swig_leak_into_raw();",
                 to_var = TO_VAR_TEMPLATE,
-                // ptr_type = conv_map[void_ptr_rust_ty].typename(),
-                // this_type = this_type,
                 from_var = FROM_VAR_TEMPLATE
             ),
             invalid_src_id_span(),
@@ -373,22 +371,20 @@ fn register_rust_ty_conversation_rules(
         .into(),
     );
 
-    // //&"class" -> *const void
-    // conv_map.add_conversation_rule(
-    //     this_type_ref,
-    //     const_void_ptr_rust_ty,
-    //     TypeConvCode::new(
-    //         format!(
-    //             "let {to_var}: {ptr_type} = <{this_type}>::box_object({from_var}.clone()) as {ptr_type};",
-    //             to_var = TO_VAR_TEMPLATE,
-    //             ptr_type = conv_map[const_void_ptr_rust_ty].typename(),
-    //             this_type = conv_map[this_type_inner],
-    //             from_var = FROM_VAR_TEMPLATE,
-    //         ),
-    //         invalid_src_id_span(),
-    //     )
-    //     .into(),
-    // );
+    //&"class" -> *mut "storage_type"
+    conv_map.add_conversation_rule(
+        self_type_ref,
+        storage_ptr_type,
+        TypeConvCode::new(
+            format!(
+                "let {to_var} = {from_var}.clone().swig_into_storage_type().swig_leak_into_raw();",
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE
+            ),
+            invalid_src_id_span(),
+        )
+        .into(),
+    );
 
     Ok(())
 }

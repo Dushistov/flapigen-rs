@@ -47,6 +47,28 @@ impl TestClass {
     }
 }
 
+#[derive(Clone)]
+pub struct TestClass2 {
+    t: TestClass,
+}
+
+impl TestClass2 {
+    pub fn new(t: TestClass) -> TestClass2 {
+        Self {
+            t
+        }
+    }
+    pub fn set_option_ref(&mut self, t: Option<&TestClass>) {
+        if let Some(t) = t {
+            self.t = t.clone();
+        }
+    }
+
+    pub fn option_ref(&self) -> Option<&TestClass> {
+        Some(&self.t)
+    }
+}
+
 impl std::ops::Drop for TestClass {
     fn drop(&mut self) {
         println!("Dropping!");
@@ -69,6 +91,19 @@ foreigner_class!(
         fn TestClass::eq(&self, other: &TestClass) -> bool;
     }
 );
+
+foreigner_class!(
+    #[derive(Clone)]
+    class TestClass2 {
+        self_type TestClass2;
+        /// Documentation for constructor
+        constructor TestClass2::new(t: TestClass) -> TestClass2;
+        fn TestClass2::set_option_ref(&mut self, t: Option<&TestClass>);
+        fn TestClass2::option_ref(&self) -> Option<&TestClass>;
+        fn TestClass2::clone(&self) -> TestClass2;
+    }
+);
+
 
 pub struct TestStaticClass {}
 
@@ -104,9 +139,17 @@ impl TestStaticClass {
         vec
     }
 
+    pub fn return_class_ref(obj: &TestClass) ->&TestClass {
+        obj
+    }
+
     pub fn maybe_return_class(str: Option<String>) -> Option<TestClass> {
         str.map(|_| TestClass::new())
     }
+
+    //pub fn maybe_return_class_ref<'a>(obj: Option<&TestClass>) -> Option<&TestClass> {
+    //    obj
+    //}
 
     pub fn maybe_add_one(i: Option<i32>) -> Option<i32> {
         i.map(|i| i + 1)
@@ -128,6 +171,8 @@ foreigner_class!(
         fn TestStaticClass::concat_str(a: &str, b: &str) -> String;
         fn TestStaticClass::test_vec(vec: Vec<i32>) -> Vec<i32>;
         fn TestStaticClass::maybe_return_class(str: Option<String>) -> Option<TestClass>;
+        //fn TestStaticClass::maybe_return_class_ref(obj: Option<&TestClass>) -> Option<&TestClass>;
+        fn TestStaticClass::return_class_ref(obj: &TestClass) -> &TestClass;
         fn TestStaticClass::maybe_add_one(i: Option<i32>) -> Option<i32>;
         fn TestStaticClass::test_obj_by_value(obj: TestClass);
     }

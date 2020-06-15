@@ -243,29 +243,29 @@ foreign_typemap!(
 
         #[allow(non_snake_case)]
         #[no_mangle]
-        unsafe extern "C" fn RustOptionT_new_none!()() -> *mut Option<swig_subst_type!(T)> {
+        unsafe extern "C" fn RustOptionT_new_none!()() -> *mut Option<swig_i_type!(T)> {
             Box::into_raw(Box::new(None))
         }
 
         #[allow(non_snake_case)]
         #[no_mangle]
-        unsafe extern "C" fn RustOptionT_new_some!()(value_0: swig_i_type!(T)) -> *mut Option<swig_subst_type!(T)> {
-            swig_from_i_type_to_rust!(T, value_0, value_1);
-            Box::into_raw(Box::new(Some(value_1)))
+        unsafe extern "C" fn RustOptionT_new_some!()(value_0: swig_i_type!(T)) -> *mut Option<swig_i_type!(T)> {
+            //swig_from_i_type_to_rust!(T, value_0, value_1);
+            Box::into_raw(Box::new(Some(value_0)))
         }
 
         #[allow(non_snake_case)]
         #[no_mangle]
-        unsafe extern "C" fn RustOptionT_is_some!()(opt: *mut Option<swig_subst_type!(T)>) -> u8 {
+        unsafe extern "C" fn RustOptionT_is_some!()(opt: *mut Option<swig_i_type!(T)>) -> u8 {
             if (*opt).is_some() { 1 } else { 0 }
         }
 
         #[allow(non_snake_case)]
         #[no_mangle]
-        unsafe extern "C" fn RustOptionT_take!()(opt: *mut Option<swig_subst_type!(T)>) -> swig_i_type!(T) {
+        unsafe extern "C" fn RustOptionT_take!()(opt: *mut Option<swig_i_type!(T)>) -> swig_i_type!(T) {
             let ret_0 = Box::from_raw(opt).expect("RustOptionT_take!(): trying to take the value from Option::None");
-            swig_from_rust_to_i_type!(T, ret_0, ret_1);
-            ret_1
+            // swig_from_rust_to_i_type!(T, ret_0, ret_1);
+            ret_0
         }
     );
 
@@ -374,11 +374,19 @@ foreign_typemap!(
     "#);
 
     ($p:r_type) <T> Option<T> => /* Option */ *mut ::std::os::raw::c_void {
+        let $p = $p.map(|value_0| {
+            swig_from_rust_to_i_type!(T, value_0, value_1);
+            value_1
+        });
         $out = Box::into_raw(Box::new($p)) as *mut ::std::os::raw::c_void;
     };
     ($p:f_type) => "Option<swig_f_type!(T)>" "RustOptionT!().rust_to_dotnet($p)";
     ($p:r_type) <T> Option<T> <= /* Option */ *mut ::std::os::raw::c_void {
-        $out = unsafe { (*($p as *mut Option<swig_subst_type!(T)>)).clone() };
+        let $p = unsafe { Box::from_raw($p as *mut Option<swig_i_type!(T)>) };
+        $out = $p.map(|value_0| {
+            swig_from_i_type_to_rust!(T, value_0, value_1);
+            value_1
+        });
     };
     ($p:f_type) <= "Option<swig_f_type!(T)>" "RustOptionT!().dotnet_to_rust($p)";
 
