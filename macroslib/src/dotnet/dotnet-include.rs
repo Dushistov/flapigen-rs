@@ -415,27 +415,36 @@ foreign_typemap!(
     generic_alias!(RustVecT_push = swig_concat_idents!(RustVec, swig_f_type!(T), _push));
     //generic_alias!(RustVecT_into_iter = swig_concat_idents!(RustVec, swig_f_type!(T), _into_iter));
     generic_alias!(RustVecT_iter_next = swig_concat_idents!(RustVec, swig_f_type!(T), _iter_next));
+    generic_alias!(RustVecT_iter_delete = swig_concat_idents!(RustVec, swig_f_type!(T), _iter_delete));
     generic_alias!(RustOptionT = swig_concat_idents!(RustOption, swig_f_type!(T)));
 
     ($p:r_type) <T> Vec<T> => /* Iter */ *mut ::std::os::raw::c_void {
-        let $p = $p.into_iter().map(|e_0| {
+        let $p: Vec<swig_i_type!(T)> = $p.into_iter().map(|e_0| {
             swig_from_rust_to_i_type!(T, e_0, e_1);
-        }).collect::<Vec<_>>();
-        $out = Box::into_raw(Box::new($p.into_iter())) as *mut ::std::os::raw::c_void;
+            e_1
+        }).collect();
+        let $p: std::vec::IntoIter<swig_i_type!(T)> = $p.into_iter();
+        $out = Box::into_raw(Box::new($p)) as *mut ::std::os::raw::c_void;
     };
     ($p:f_type) => "System.Collections.Generic.List<swig_f_type!(T)>" r#"new System.Collections.Generic.List<swig_f_type!(T)>();
             while (true)
             {
-                var next_opt = RustOptionT!().rust_to_dotnet(RustVecT!().RustVecT_iter_next!()($p));
+                var next_rust_opt = RustVecT!().RustVecT_iter_next!()($p);
+                var next_opt = RustOptionT!().rust_to_dotnet(next_rust_opt);
                 if (!next_opt.IsSome)
                 {
                     break;
                 }
                 $out.Add(next_opt.Value);
             }
+            RustVecT!().RustVecT_iter_delete!()($p);
     "#;
     ($p:r_type) <T> Vec<T> <= /* Vec */ *mut ::std::os::raw::c_void {
-        $out = unsafe { *Box::from_raw($p as *mut Vec<swig_i_type!(T)>) };
+        let $p: Vec<swig_subst_type!(T)> = unsafe { *Box::from_raw($p as *mut Vec<swig_i_type!(T)>) };
+        $out = $p.into_iter().map(|e_0| {
+            swig_from_i_type_to_rust!(T, e_0, e_1);
+            e_1
+        }).collect();
     };
     ($p:f_type) <= "System.Collections.Generic.List<swig_f_type!(T)>" r#"RustVecT!().RustVecT_new!()();
             foreach (var element in $p)
@@ -457,22 +466,23 @@ foreign_typemap!(
         #[allow(non_snake_case)]
         #[no_mangle]
         unsafe extern "C" fn RustVecT_push!()(vec: *mut Vec<swig_i_type!(T)>, element: swig_i_type!(T)) {
-            //swig_from_i_type_to_rust!(T, element_0, element_1);
+            assert!(!vec.is_null());
             (*vec).push(element);
         }
-
-        // #[allow(non_snake_case)]
-        // #[no_mangle]
-        // unsafe extern "C" fn RustVecT_into_iter!()(vec: *mut Vec<swig_i_type!(T)>) -> *mut std::vec::IntoIter<swig_i_type!(T)> {
-        //     let vec = Box::from_raw(vec);
-        //     Box::into_raw(Box::new(vec.into_iter()))
-        // }
 
         #[allow(non_snake_case)]
         #[no_mangle]
         unsafe extern "C" fn RustVecT_iter_next!()(iter: *mut std::vec::IntoIter<swig_i_type!(T)>) -> *mut Option<swig_i_type!(T)> {
-            let mut iter = Box::from_raw(iter);
+            assert!(!iter.is_null());
+            let mut iter = &mut *iter;
             Box::into_raw(Box::new(iter.next()))
+        }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustVecT_iter_delete!()(iter: *mut std::vec::IntoIter<swig_i_type!(T)>) {
+            assert!(!iter.is_null());
+            ::std::mem::drop(Box::from_raw(iter));
         }
     );
 
@@ -488,6 +498,8 @@ foreign_typemap!(
 
         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
         internal static extern /* Option<i_type> */ IntPtr RustVecT_iter_next!()(IntPtr iterPtr);
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RustVecT_iter_delete!()(IntPtr iterPtr);
     }
         "#
     );
