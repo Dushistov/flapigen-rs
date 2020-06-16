@@ -4,7 +4,7 @@ use crate::{
         ast::{DisplayToTokens, TyParamsSubstList},
         ty::{ForeignTypeS, RustType, TraitNamesSet},
         utils::{ForeignMethodSignature, ForeignTypeInfoT, self},
-        ForeignTypeInfo, MapToForeignFlag, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TypeMapConvRuleInfoExpanderHelper, ExpandedFType, TypeMapConvRuleInfo, CItem,
+        ForeignTypeInfo, MapToForeignFlag, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE, TypeMapConvRuleInfoExpanderHelper, ExpandedFType, TypeMapConvRuleInfo, CItem,
     },
     types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant},
 };
@@ -124,6 +124,7 @@ impl DotNetArgInfo {
             self.type_info.dotnet_conversion_code
                 .to_string()
                 .replace(FROM_VAR_TEMPLATE, &dotnet_arg_name)
+                .replace(TO_VAR_TYPE_TEMPLATE, &new_dotnet_arg_name)
         )
     }
 

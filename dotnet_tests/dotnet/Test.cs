@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Xunit;
 using rust_swig_test_dotnet;
 
@@ -26,17 +27,16 @@ namespace dotnet
             
             TestStaticClass.test_obj_by_value(obj);
 
-            var vec = new RustVecint();
+            var vec = new List<int>();
             vec.Add(1);
             vec.Add(2);
-            vec.Insert(0, 3);
 
-            var new_vec = TestStaticClass.test_vec(vec);
-            for (int i = 0; i < new_vec.Count; ++i)
+            TestStaticClass.print_vec_len(vec);
+            var new_vec = TestStaticClass.get_vec();
+            foreach (var e in new_vec)
             {
-                Console.Out.WriteLine(++new_vec[i]);
+                Console.Out.WriteLine(e);
             }
-            new_vec.Dispose();
 
             TestStaticClass.maybe_return_class(new Option<string>("asdf")).Value.print();
             Console.Out.WriteLine(TestStaticClass.maybe_add_one(new Option<int>()).IsSome);

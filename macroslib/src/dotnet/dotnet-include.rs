@@ -398,170 +398,96 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
+    ($p:r_type) /* Iter */ *mut ::std::os::raw::c_void;
+    ($p:f_type) "/* Iter */ IntPtr";
+);
+
+foreign_typemap!(
     generic_alias!(RustVecT = swig_concat_idents!(RustVec, swig_f_type!(T)));
     generic_alias!(RustVecT_new = swig_concat_idents!(RustVec, swig_f_type!(T), _new));
-    generic_alias!(RustVecT_delete = swig_concat_idents!(RustVec, swig_f_type!(T), _delete));
-    generic_alias!(RustVecT_index = swig_concat_idents!(RustVec, swig_f_type!(T), _index));
-    generic_alias!(RustVecT_index_set = swig_concat_idents!(RustVec, swig_f_type!(T), _index_set));
-    generic_alias!(RustVecT_len = swig_concat_idents!(RustVec, swig_f_type!(T), _len));
-    generic_alias!(RustVecT_remove = swig_concat_idents!(RustVec, swig_f_type!(T), _remove));
-    generic_alias!(RustVecT_insert = swig_concat_idents!(RustVec, swig_f_type!(T), _insert));
-    generic_alias!(RustVecT_to_list = swig_concat_idents!(RustVec, swig_f_type!(T), _to_list));
-    // generic_alias!(RustVecT_push = swig_concat_idents!(RustVec, swig_f_type!(T), _new));
+    // generic_alias!(RustVecT_delete = swig_concat_idents!(RustVec, swig_f_type!(T), _delete));
+    // generic_alias!(RustVecT_index = swig_concat_idents!(RustVec, swig_f_type!(T), _index));
+    // generic_alias!(RustVecT_index_set = swig_concat_idents!(RustVec, swig_f_type!(T), _index_set));
+    // generic_alias!(RustVecT_len = swig_concat_idents!(RustVec, swig_f_type!(T), _len));
+    // generic_alias!(RustVecT_remove = swig_concat_idents!(RustVec, swig_f_type!(T), _remove));
+    // generic_alias!(RustVecT_insert = swig_concat_idents!(RustVec, swig_f_type!(T), _insert));
+    // generic_alias!(RustVecT_to_list = swig_concat_idents!(RustVec, swig_f_type!(T), _to_list));
+    generic_alias!(RustVecT_push = swig_concat_idents!(RustVec, swig_f_type!(T), _push));
+    //generic_alias!(RustVecT_into_iter = swig_concat_idents!(RustVec, swig_f_type!(T), _into_iter));
+    generic_alias!(RustVecT_iter_next = swig_concat_idents!(RustVec, swig_f_type!(T), _iter_next));
+    generic_alias!(RustOptionT = swig_concat_idents!(RustOption, swig_f_type!(T)));
 
-    ($p:r_type) <T> Vec<T> => /* Vec */ *mut ::std::os::raw::c_void {
-        $out = Box::into_raw(Box::new($p)) as *mut ::std::os::raw::c_void;
+    ($p:r_type) <T> Vec<T> => /* Iter */ *mut ::std::os::raw::c_void {
+        let $p = $p.into_iter().map(|e_0| {
+            swig_from_rust_to_i_type!(T, e_0, e_1);
+        }).collect::<Vec<_>>();
+        $out = Box::into_raw(Box::new($p.into_iter())) as *mut ::std::os::raw::c_void;
     };
-    ($p:f_type) => "RustVecT!()" "new RustVecT!()($p)";
+    ($p:f_type) => "System.Collections.Generic.List<swig_f_type!(T)>" r#"new System.Collections.Generic.List<swig_f_type!(T)>();
+            while (true)
+            {
+                var next_opt = RustOptionT!().rust_to_dotnet(RustVecT!().RustVecT_iter_next!()($p));
+                if (!next_opt.IsSome)
+                {
+                    break;
+                }
+                $out.Add(next_opt.Value);
+            }
+    "#;
     ($p:r_type) <T> Vec<T> <= /* Vec */ *mut ::std::os::raw::c_void {
-        $out = unsafe { &*($p as *mut Vec<swig_subst_type!(T)>) }.clone();
+        $out = unsafe { *Box::from_raw($p as *mut Vec<swig_i_type!(T)>) };
     };
-    ($p:f_type) <= "RustVecT!()" "$p.nativePtr";
+    ($p:f_type) <= "System.Collections.Generic.List<swig_f_type!(T)>" r#"RustVecT!().RustVecT_new!()();
+            foreach (var element in $p)
+            {
+                var i_element = swig_foreign_to_i_type!(T, element);
+                RustVecT!().RustVecT_push!()($out, i_element);
+            }
+    "#;
 
     define_c_type!(
         module = "RustVecT!()";
 
         #[allow(non_snake_case)]
         #[no_mangle]
-        unsafe extern "C" fn RustVecT_new!()() -> *mut Vec<swig_subst_type!(T)> {
+        unsafe extern "C" fn RustVecT_new!()() -> *mut Vec<swig_i_type!(T)> {
             Box::into_raw(Box::new(Vec::new()))
         }
 
         #[allow(non_snake_case)]
         #[no_mangle]
-        unsafe extern "C" fn RustVecT_delete!()(vec: *mut Vec<swig_subst_type!(T)>) {
-            ::std::mem::drop(Box::from_raw(vec))
-        }
-
-        #[allow(non_snake_case)]
-        #[no_mangle]
-        unsafe extern "C" fn RustVecT_index!()(vec: *mut Vec<swig_subst_type!(T)>, index: usize) -> swig_i_type!(T) {
-            let ret_0 = (*vec)[index];
-            swig_from_rust_to_i_type!(T, ret_0, ret_1);
-            ret_1
-        }
-
-        #[allow(non_snake_case)]
-        #[no_mangle]
-        unsafe extern "C" fn RustVecT_index_set!()(vec: *mut Vec<swig_subst_type!(T)>, index: usize, element_0: swig_i_type!(T)) {
-            swig_from_i_type_to_rust!(T, element_0, element_1);
-            (*vec)[index] = element_1;
-        }
-
-        #[allow(non_snake_case)]
-        #[no_mangle]
-        unsafe extern "C" fn RustVecT_len!()(vec: *mut Vec<swig_subst_type!(T)>) -> usize {
-            (*vec).len()
-        }
-
-        #[allow(non_snake_case)]
-        #[no_mangle]
-        unsafe extern "C" fn RustVecT_remove!()(vec: *mut Vec<swig_subst_type!(T)>, index: usize) -> swig_i_type!(T) {
-            let ret_0 = (*vec).remove(index);
-            swig_from_rust_to_i_type!(T, ret_0, ret_1);
-            ret_1
-        }
-
-        #[allow(non_snake_case)]
-        #[no_mangle]
-        unsafe extern "C" fn RustVecT_insert!()(vec: *mut Vec<swig_subst_type!(T)>, index: usize, element_0: swig_i_type!(T)) {
-            swig_from_i_type_to_rust!(T, element_0, element_1);
-            (*vec).insert(index, element_1);
+        unsafe extern "C" fn RustVecT_push!()(vec: *mut Vec<swig_i_type!(T)>, element: swig_i_type!(T)) {
+            //swig_from_i_type_to_rust!(T, element_0, element_1);
+            (*vec).push(element);
         }
 
         // #[allow(non_snake_case)]
         // #[no_mangle]
-        // unsafe extern "C" fn IterT_next!()(vec: *mut std::slice::Iter<swig_subst_type!(T)>) -> swig_i_type!(T) {
-        //     swig_from_i_type_to_rust!(T, element_0, element_1);
-        //     (*vec).insert(index, element_1);
+        // unsafe extern "C" fn RustVecT_into_iter!()(vec: *mut Vec<swig_i_type!(T)>) -> *mut std::vec::IntoIter<swig_i_type!(T)> {
+        //     let vec = Box::from_raw(vec);
+        //     Box::into_raw(Box::new(vec.into_iter()))
         // }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustVecT_iter_next!()(iter: *mut std::vec::IntoIter<swig_i_type!(T)>) -> *mut Option<swig_i_type!(T)> {
+            let mut iter = Box::from_raw(iter);
+            Box::into_raw(Box::new(iter.next()))
+        }
     );
 
     foreigner_code!(
         module = "RustVecT!()";
         r#"
-    public class RustVecT!(): IDisposable {
+    public static class RustVecT!() {
         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr RustVecT_new!()();
         
         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-        internal static extern void RustVecT_delete!()(IntPtr vecPtr);
+        internal static extern void RustVecT_push!()(IntPtr vecPtr, swig_i_type!(T) element);
 
         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-        internal static extern swig_i_type!(T) RustVecT_index!()(IntPtr vecPtr, UIntPtr index);
-
-        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-        internal static extern void RustVecT_index_set!()(IntPtr vecPtr, UIntPtr index, swig_i_type!(T) element);
-
-        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-        internal static extern UIntPtr RustVecT_len!()(IntPtr vecPtr);
-
-        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-        internal static extern swig_i_type!(T) RustVecT_remove!()(IntPtr vecPtr, UIntPtr index);
-
-        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-        internal static extern void RustVecT_insert!()(IntPtr vecPtr, UIntPtr index, swig_i_type!(T) element);
-
-        internal IntPtr nativePtr;
-
-        internal RustVecT!()(IntPtr nativePtr) {
-            this.nativePtr = nativePtr;
-        }
-
-        public RustVecT!()() {
-            nativePtr = RustVecT!().RustVecT_new!()();
-        }
-
-        public swig_f_type!(T) this[int index] {
-            get {
-                var ret = RustVecT!().RustVecT_index!()(nativePtr, (UIntPtr)index);
-                return swig_foreign_from_i_type!(T, ret);
-            }
-            set {
-                var value_1 = swig_foreign_to_i_type!(T, value);
-                RustVecT_index_set!()(nativePtr, (UIntPtr)index, value_1);
-            }
-        }
-
-        public swig_f_type!(T) Remove(int index)
-        {
-            var ret = RustVecT!().RustVecT_remove!()(nativePtr, (UIntPtr)index);
-            return swig_foreign_from_i_type!(T, ret);
-        }
-
-        public void Insert(int index, swig_f_type!(T) element)
-        {
-            var element_1 = swig_foreign_to_i_type!(T, element);
-            RustVecT!().RustVecT_insert!()(nativePtr, (UIntPtr)index, element_1);
-        }
-
-        public void Add(swig_f_type!(T) element)
-        {
-            Insert(Count, element);
-        }
-
-        public int Count {
-            get {
-                return (int)RustVecT!().RustVecT_len!()(nativePtr);
-            }
-        }
-
-        public void Dispose() {
-            DoDispose();
-            GC.SuppressFinalize(this);
-        }
-
-        private void DoDispose() {
-            if (nativePtr != IntPtr.Zero) {{
-                RustVecT_delete!()(nativePtr);
-                nativePtr = IntPtr.Zero;
-            }}
-        }
-
-        ~RustVecT!()() {
-            DoDispose();
-        }
-
+        internal static extern /* Option<i_type> */ IntPtr RustVecT_iter_next!()(IntPtr iterPtr);
     }
         "#
     );

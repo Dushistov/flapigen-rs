@@ -131,12 +131,20 @@ impl TestStaticClass {
     pub fn concat_str(a: &str, b: &str) -> String {
         a.to_owned() + b
     }
-
+/*
     pub fn test_vec(mut vec: Vec<i32>) -> Vec<i32> {
         for i in vec.iter_mut() {
             *i += 1;
         }
         vec
+    }
+*/
+    pub fn print_vec_len(mut vec: Vec<i32>) {
+        println!("{}", vec.len());
+    }
+
+    pub fn get_vec() -> Vec<i32> {
+        vec![0, 1, 2]
     }
 
     pub fn return_class_ref(obj: &TestClass) ->&TestClass {
@@ -169,7 +177,9 @@ foreigner_class!(
         fn TestStaticClass::add(a: i32, b: i32) -> i32;
         fn TestStaticClass::concat(a: String, b: String) -> String;
         fn TestStaticClass::concat_str(a: &str, b: &str) -> String;
-        fn TestStaticClass::test_vec(vec: Vec<i32>) -> Vec<i32>;
+        //fn TestStaticClass::test_vec(vec: Vec<i32>) -> Vec<i32>;
+        fn TestStaticClass::print_vec_len(vec: Vec<i32>);
+        fn TestStaticClass::get_vec() -> Vec<i32>;
         fn TestStaticClass::maybe_return_class(str: Option<String>) -> Option<TestClass>;
         //fn TestStaticClass::maybe_return_class_ref(obj: Option<&TestClass>) -> Option<&TestClass>;
         fn TestStaticClass::return_class_ref(obj: &TestClass) -> &TestClass;
