@@ -10,6 +10,7 @@ use crate::{
 };
 use log::{debug, trace, warn};
 use petgraph::Direction;
+use proc_macro2::TokenStream;
 use smol_str::SmolStr;
 use std::{collections::HashMap, rc::Rc, io::Write};
 use syn::Type;
@@ -88,7 +89,7 @@ impl DotNetArgInfo {
         }
     }
 
-    pub(crate) fn rust_conversion_code(&self, conv_map: &mut TypeMap) -> Result<String> {
+    pub(crate) fn rust_conversion_code(&self, conv_map: &mut TypeMap) -> Result<(Vec<TokenStream>, String)> {
         let direction = self.direction();
         let (from, to) = match direction {
             Direction::Incoming => (
@@ -100,15 +101,14 @@ impl DotNetArgInfo {
                 self.type_info.rust_intermediate_type.to_idx(),
             ),
         };
-        let (_cur_deps, rust_conversion_code) = conv_map.convert_rust_types(
+        conv_map.convert_rust_types(
             from,
             to,
             self.arg_name.rust_variable_name(),
             self.arg_name.rust_variable_name(),
             "()", // todo
             self.span,
-        )?;
-        Ok(rust_conversion_code)
+        )
     }
 
     pub fn dotnet_conversion_code(&self, name_generator: &mut NameGenerator) -> String {
@@ -646,7 +646,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let type_info = map_type(self.generator, &rust_ty.ty, Direction::Outgoing, self.arg_ty_span)?;
 
-        let (_conv_deps, conv_code) = self.generator.conv_map.convert_rust_types(
+        let (mut conv_deps, conv_code) = self.generator.conv_map.convert_rust_types(
             type_info.rust_type.to_idx(),
             type_info.rust_intermediate_type.to_idx(),
             in_var_name,
@@ -654,7 +654,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
             "#error",
             self.arg_ty_span,
         )?;
-        //self.ctx.rust_code.append(&mut conv_deps);
+        self.generator.rust_code.append(&mut conv_deps);
         Ok(conv_code)
     }
     fn swig_from_i_type_to_rust(
@@ -669,7 +669,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let type_info = map_type(self.generator, &rust_ty.ty, Direction::Incoming, self.arg_ty_span)?;
 
-        let ( _conv_deps, conv_code) = self.generator.conv_map.convert_rust_types(
+        let (mut conv_deps, conv_code) = self.generator.conv_map.convert_rust_types(
             type_info.rust_intermediate_type.to_idx(),
             type_info.rust_type.to_idx(),
             in_var_name,
@@ -677,7 +677,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
             "#error",
             self.arg_ty_span,
         )?;
-        // self.ctx.rust_code.append(&mut conv_deps);
+        self.generator.rust_code.append(&mut conv_deps);
         Ok(conv_code)
     }
     fn swig_f_type(&mut self, ty: &syn::Type, param1: Option<&str>) -> Result<ExpandedFType> {

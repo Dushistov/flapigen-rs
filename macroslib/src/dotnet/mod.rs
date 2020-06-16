@@ -322,7 +322,11 @@ namespace {managed_lib_name}
             foreign_method_signature
                 .input
                 .iter()
-                .map(|arg| arg.rust_conversion_code(self.conv_map)),
+                .map(|arg| -> Result<String> { 
+                    let (mut deps, conversion) = arg.rust_conversion_code(self.conv_map)?;
+                    self.rust_code.append(&mut deps);
+                    Ok(conversion)
+                }),
             |mut iter| iter.join(""),
         )?;
 
@@ -337,6 +341,11 @@ namespace {managed_lib_name}
                 )
             })
             .join(", ");
+
+        let (mut deps, convert_output_code) = foreign_method_signature
+            .output
+            .rust_conversion_code(self.conv_map)?;
+        self.rust_code.append(&mut deps);
 
         let rust_code_str = format!(
             r#"
@@ -360,9 +369,7 @@ namespace {managed_lib_name}
                 .output
                 .arg_name
                 .rust_variable_name(),
-            convert_output_code = foreign_method_signature
-                .output
-                .rust_conversion_code(self.conv_map)?,
+            convert_output_code = convert_output_code,
             call = foreign_method_signature.rust_function_call,
         );
         self.rust_code

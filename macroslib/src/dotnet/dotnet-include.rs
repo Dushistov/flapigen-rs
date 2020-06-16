@@ -109,19 +109,19 @@ trait SwigDerefMut {
     fn swig_deref_mut(&mut self) -> &mut Self::Target;
 }
 
-impl<T: SwigForeignClass> SwigDeref for T {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
+// impl<T: SwigForeignClass> SwigDeref for T {
+//     type Target = T;
+//     fn swig_deref(&self) -> &T {
+//         self
+//     }
+// }
 
-impl<T: SwigForeignClass> SwigDerefMut for T {
-    type Target = T;
-    fn swig_deref_mut(&mut self) -> &mut T {
-        self
-    }
-}
+// impl<T: SwigForeignClass> SwigDerefMut for T {
+//     type Target = T;
+//     fn swig_deref_mut(&mut self) -> &mut T {
+//         self
+//     }
+// }
 
 // .NET prefers UTF16, but Rust doesn't provide CString/OSString equivalent that supports UTF16 on Linux.
 // We need to go a bit lower.
@@ -165,7 +165,6 @@ unsafe extern "C" fn String_delete(c_str_u16: *mut u16) {
 }
 
 
-
 foreign_typemap!(
     ($p:r_type) bool => u8 {
         $out = if $p  { 1 } else { 0 };
@@ -188,16 +187,32 @@ foreign_typemap!(
     ($p:f_type, finalizer="Marshal.FreeHGlobal({to_var});") <= "string" "Marshal.StringToHGlobalUni($p)";
 );
 
-foreign_typemap!(
-    ($p:r_type) &str => /* &str */ *const u16 {
-        $out = alloc_c_str_u16(&$p);
-    };
-    ($p:f_type) => "/* &str */ string" "Marshal.PtrToStringUni($p); RustInterop.String_delete($p)";
-    ($p:r_type) &str <= /* &str */ *const u16 {
-        $out = unsafe { &c_str_u16_to_string($p) };
-    };
-    ($p:f_type, finalizer="Marshal.FreeHGlobal({to_var});") <= "/* &str */ string" "Marshal.StringToHGlobalUni($p)";
-);
+
+impl SwigDeref for String {
+    type Target = str;
+    fn swig_deref(&self) -> &str {
+        &self
+    }
+}
+
+impl<T> SwigDeref for Vec<T> {
+    type Target = &[T];
+    fn swig_deref(&self) -> &[T] {
+        &self
+    }
+}
+
+impl SwigInto<String> for &str {
+    fn swig_into(self) -> String {
+        self.to_owned()
+    }
+}
+
+impl<T> SwigInto<Vec<T>> for &[T] {
+    fn swig_into(self) -> Vec<T> {
+        self.to_owned()
+    }
+}
 
 #[allow(dead_code)]
 pub trait SwigForeignClass: Sized {
@@ -405,15 +420,7 @@ foreign_typemap!(
 foreign_typemap!(
     generic_alias!(RustVecT = swig_concat_idents!(RustVec, swig_f_type!(T)));
     generic_alias!(RustVecT_new = swig_concat_idents!(RustVec, swig_f_type!(T), _new));
-    // generic_alias!(RustVecT_delete = swig_concat_idents!(RustVec, swig_f_type!(T), _delete));
-    // generic_alias!(RustVecT_index = swig_concat_idents!(RustVec, swig_f_type!(T), _index));
-    // generic_alias!(RustVecT_index_set = swig_concat_idents!(RustVec, swig_f_type!(T), _index_set));
-    // generic_alias!(RustVecT_len = swig_concat_idents!(RustVec, swig_f_type!(T), _len));
-    // generic_alias!(RustVecT_remove = swig_concat_idents!(RustVec, swig_f_type!(T), _remove));
-    // generic_alias!(RustVecT_insert = swig_concat_idents!(RustVec, swig_f_type!(T), _insert));
-    // generic_alias!(RustVecT_to_list = swig_concat_idents!(RustVec, swig_f_type!(T), _to_list));
     generic_alias!(RustVecT_push = swig_concat_idents!(RustVec, swig_f_type!(T), _push));
-    //generic_alias!(RustVecT_into_iter = swig_concat_idents!(RustVec, swig_f_type!(T), _into_iter));
     generic_alias!(RustVecT_iter_next = swig_concat_idents!(RustVec, swig_f_type!(T), _iter_next));
     generic_alias!(RustVecT_iter_delete = swig_concat_idents!(RustVec, swig_f_type!(T), _iter_delete));
     generic_alias!(RustOptionT = swig_concat_idents!(RustOption, swig_f_type!(T)));
@@ -504,3 +511,75 @@ foreign_typemap!(
         "#
     );
 );
+
+// foreign_typemap!(
+//     generic_alias!(RustVecT = swig_concat_idents!(RustVec, swig_f_type!(T)));
+//     generic_alias!(RustVecT_new = swig_concat_idents!(RustVec, swig_f_type!(T), _new));
+//     generic_alias!(RustVecT_push = swig_concat_idents!(RustVec, swig_f_type!(T), _push));
+//     generic_alias!(RustOptionT = swig_concat_idents!(RustOption, swig_f_type!(T)));
+
+//     ($p:r_type) <T> &[T] <= /* Slice */ *mut ::std::os::raw::c_void {
+//         let $p: Vec<swig_subst_type!(T)> = unsafe { *Box::from_raw($p as *mut Vec<swig_i_type!(T)>) };
+//         $out = $p.into_iter().map(|e_0| {
+//             swig_from_i_type_to_rust!(T, e_0, e_1);
+//             e_1
+//         }).collect();
+//     };
+//     ($p:f_type) <= "System.Collections.Generic.List<swig_f_type!(T)>" r#"RustVecT!().RustVecT_new!()();
+//             foreach (var element in $p)
+//             {
+//                 var i_element = swig_foreign_to_i_type!(T, element);
+//                 RustVecT!().RustVecT_push!()($out, i_element);
+//             }
+//     "#;
+
+//     define_c_type!(
+//         module = "RustVecT!()";
+
+//         #[allow(non_snake_case)]
+//         #[no_mangle]
+//         unsafe extern "C" fn RustVecT_new!()() -> *mut Vec<swig_i_type!(T)> {
+//             Box::into_raw(Box::new(Vec::new()))
+//         }
+
+//         #[allow(non_snake_case)]
+//         #[no_mangle]
+//         unsafe extern "C" fn RustVecT_push!()(vec: *mut Vec<swig_i_type!(T)>, element: swig_i_type!(T)) {
+//             assert!(!vec.is_null());
+//             (*vec).push(element);
+//         }
+
+//         #[allow(non_snake_case)]
+//         #[no_mangle]
+//         unsafe extern "C" fn RustVecT_iter_next!()(iter: *mut std::vec::IntoIter<swig_i_type!(T)>) -> *mut Option<swig_i_type!(T)> {
+//             assert!(!iter.is_null());
+//             let mut iter = &mut *iter;
+//             Box::into_raw(Box::new(iter.next()))
+//         }
+
+//         #[allow(non_snake_case)]
+//         #[no_mangle]
+//         unsafe extern "C" fn RustVecT_iter_delete!()(iter: *mut std::vec::IntoIter<swig_i_type!(T)>) {
+//             assert!(!iter.is_null());
+//             ::std::mem::drop(Box::from_raw(iter));
+//         }
+//     );
+
+//     foreigner_code!(
+//         module = "RustVecT!()";
+//         r#"
+//     public static class RustVecT!() {
+//         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+//         internal static extern IntPtr RustVecT_new!()();
+        
+//         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+//         internal static extern void RustVecT_push!()(IntPtr vecPtr, swig_i_type!(T) element);
+
+//         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+//         internal static extern /* Option<i_type> */ IntPtr RustVecT_iter_next!()(IntPtr iterPtr);
+//         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+//         internal static extern void RustVecT_iter_delete!()(IntPtr iterPtr);
+//     }
+//         "#
+//     );
+// );
