@@ -40,6 +40,15 @@ namespace dotnet
 
             TestStaticClass.maybe_return_class(new Option<string>("asdf")).Value.print();
             Console.Out.WriteLine(TestStaticClass.maybe_add_one(new Option<int>()).IsSome);
+
+            TestStaticClass.try_create_object_ok().print();
+            try {
+                TestStaticClass.try_create_object_err();
+            } catch (Error err)
+            {
+                Console.Out.WriteLine(err);
+            }
         }
     }
 }
+

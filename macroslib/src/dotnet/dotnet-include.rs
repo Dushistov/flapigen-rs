@@ -238,7 +238,6 @@ foreign_typemap!(
     ($p:f_type) "/* Option */ IntPtr";
 );
 
-
 foreign_typemap!(
     generic_alias!(RustOptionT = swig_concat_idents!(RustOption, swig_f_type!(T)));
     generic_alias!(RustOptionT_new_none = swig_concat_idents!(RustOption, swig_f_type!(T), _new_none));
@@ -512,74 +511,91 @@ foreign_typemap!(
     );
 );
 
-// foreign_typemap!(
-//     generic_alias!(RustVecT = swig_concat_idents!(RustVec, swig_f_type!(T)));
-//     generic_alias!(RustVecT_new = swig_concat_idents!(RustVec, swig_f_type!(T), _new));
-//     generic_alias!(RustVecT_push = swig_concat_idents!(RustVec, swig_f_type!(T), _push));
-//     generic_alias!(RustOptionT = swig_concat_idents!(RustOption, swig_f_type!(T)));
+foreign_typemap!(
+    ($p:r_type) /* Result */ *mut ::std::os::raw::c_void;
+    ($p:f_type) "/* Result */ IntPtr";
+);
 
-//     ($p:r_type) <T> &[T] <= /* Slice */ *mut ::std::os::raw::c_void {
-//         let $p: Vec<swig_subst_type!(T)> = unsafe { *Box::from_raw($p as *mut Vec<swig_i_type!(T)>) };
-//         $out = $p.into_iter().map(|e_0| {
-//             swig_from_i_type_to_rust!(T, e_0, e_1);
-//             e_1
-//         }).collect();
-//     };
-//     ($p:f_type) <= "System.Collections.Generic.List<swig_f_type!(T)>" r#"RustVecT!().RustVecT_new!()();
-//             foreach (var element in $p)
-//             {
-//                 var i_element = swig_foreign_to_i_type!(T, element);
-//                 RustVecT!().RustVecT_push!()($out, i_element);
-//             }
-//     "#;
+foreign_typemap!(
+    generic_alias!(RustResultT = swig_concat_idents!(RustResult, swig_f_type!(T1)));
+    generic_alias!(RustResultT_is_ok = swig_concat_idents!(RustResult, swig_f_type!(T1), _is_ok));
+    generic_alias!(RustResultT_take_ok = swig_concat_idents!(RustResult, swig_f_type!(T1), _take_ok));
+    generic_alias!(RustResultT_take_err = swig_concat_idents!(RustResult, swig_f_type!(T1), _take_error));
 
-//     define_c_type!(
-//         module = "RustVecT!()";
+    define_c_type!(
+        module = "RustResultT!()";
 
-//         #[allow(non_snake_case)]
-//         #[no_mangle]
-//         unsafe extern "C" fn RustVecT_new!()() -> *mut Vec<swig_i_type!(T)> {
-//             Box::into_raw(Box::new(Vec::new()))
-//         }
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustResultT_is_ok!()(opt: *mut Result<swig_i_type!(T1), String>) -> u8 {
+            if (*opt).is_ok() { 1 } else { 0 }
+        }
 
-//         #[allow(non_snake_case)]
-//         #[no_mangle]
-//         unsafe extern "C" fn RustVecT_push!()(vec: *mut Vec<swig_i_type!(T)>, element: swig_i_type!(T)) {
-//             assert!(!vec.is_null());
-//             (*vec).push(element);
-//         }
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustResultT_take_ok!()(result: *mut Result<swig_i_type!(T1), String>) -> swig_i_type!(T1) {
+            let ret_0 = Box::from_raw(result).expect("RustResultT_take_ok!(): trying to take the value from Result::Err");
+            ret_0
+        }
 
-//         #[allow(non_snake_case)]
-//         #[no_mangle]
-//         unsafe extern "C" fn RustVecT_iter_next!()(iter: *mut std::vec::IntoIter<swig_i_type!(T)>) -> *mut Option<swig_i_type!(T)> {
-//             assert!(!iter.is_null());
-//             let mut iter = &mut *iter;
-//             Box::into_raw(Box::new(iter.next()))
-//         }
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustResultT_take_err!()(result: *mut Result<swig_i_type!(T1), String>) -> /* String */ *const u16 {
+            let ret_0 = Box::from_raw(result).expect_err("RustResultT_take_err!(): trying to take the error from Result::Ok");
+            alloc_c_str_u16(&ret_0)
+        }
+    );
 
-//         #[allow(non_snake_case)]
-//         #[no_mangle]
-//         unsafe extern "C" fn RustVecT_iter_delete!()(iter: *mut std::vec::IntoIter<swig_i_type!(T)>) {
-//             assert!(!iter.is_null());
-//             ::std::mem::drop(Box::from_raw(iter));
-//         }
-//     );
+    foreigner_code!(
+        module = "RustResultT!()";
+        r#"
+    internal static class RustResultT!() {
 
-//     foreigner_code!(
-//         module = "RustVecT!()";
-//         r#"
-//     public static class RustVecT!() {
-//         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-//         internal static extern IntPtr RustVecT_new!()();
-        
-//         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-//         internal static extern void RustVecT_push!()(IntPtr vecPtr, swig_i_type!(T) element);
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern byte RustResultT_is_ok!()(IntPtr resultPtr);
 
-//         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-//         internal static extern /* Option<i_type> */ IntPtr RustVecT_iter_next!()(IntPtr iterPtr);
-//         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-//         internal static extern void RustVecT_iter_delete!()(IntPtr iterPtr);
-//     }
-//         "#
-//     );
-// );
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern swig_i_type!(T1) RustResultT_take_ok!()(IntPtr resultPtr);
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern /* mut c_str_u16 */ IntPtr RustResultT_take_err!()(IntPtr resultPtr);
+
+        internal static swig_f_type!(T1) unwrap(IntPtr resultPtr)
+        {
+            if (RustResultT_is_ok!()(resultPtr) != 0)
+            {
+                var value_0 = RustResultT_take_ok!()(resultPtr);
+                var value_1 = swig_foreign_from_i_type!(T1, value_0);
+                return value_1;
+            }
+            else
+            {
+                var messagePtr = RustResultT_take_err!()(resultPtr);
+                var message = Marshal.PtrToStringUni(messagePtr);
+                RustInterop.String_delete(messagePtr);
+                throw new Error(message);
+            }
+        }
+    }
+    "#);
+
+    ($p:r_type) <T1, T2> Result<T1, T2> => /* Result */ *mut ::std::os::raw::c_void {
+        let $p: Result<swig_i_type!(T1), String> = $p.map(|ok_0| {
+            swig_from_rust_to_i_type!(T1, ok_0, ok_1);
+            ok_1
+        }).map_err(|err| {
+            swig_collect_error_message(&err)
+        });
+        $out = Box::into_raw(Box::new($p)) as *mut ::std::os::raw::c_void;
+    };
+    ($p:f_type) => "swig_f_type!(T1)" "RustResultT!().unwrap($p)";
+
+);
+
+fn swig_collect_error_message(error: &dyn std::error::Error) -> String {
+    if let Some(source) = error.source() {
+        format!("{}\nCaused by:\n{}", error, swig_collect_error_message(source))
+    } else {
+        error.to_string()
+    }
+}

@@ -116,6 +116,12 @@ namespace {managed_lib_name}
         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
         internal static extern void String_delete(IntPtr c_char_ptr);
     }}
+
+    [System.Serializable]
+    public class Error : System.Exception
+    {{
+        public Error(string message) : base(message) {{ }}
+    }}
 "#,
             managed_lib_name = config.managed_lib_name,
             native_lib_name = config.native_lib_name,
