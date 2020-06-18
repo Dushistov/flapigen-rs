@@ -69,6 +69,7 @@ impl<'a> DotNetGenerator<'a> {
 
         self.finish()?;
         self.cs_file.update_file_if_necessary()?;
+        //panic!("");
         Ok(self.rust_code)
     }
 
@@ -158,33 +159,33 @@ namespace {managed_lib_name}
         if let Some(self_description) = class.self_desc.as_ref() {
             let class_ty = &self_description.self_type;
             let fclass_impl_code: TokenStream = quote! {
-                impl SwigForeignClassStorage for Box<#class_ty> {
-                    type BaseType = #class_ty;
+                // impl SwigForeignClassStorage for Box<#class_ty> {
+                //     type BaseType = #class_ty;
 
-                    fn swig_as_ref(&self) -> &Self::BaseType {
-                        self.as_ref()
-                    }
-                    fn swig_as_mut(&mut self) -> &mut Self::BaseType {
-                        self.as_mut()
-                    }
-                    fn swig_cloned(&self) -> Self::BaseType {
-                        self.as_ref().clone()
-                    }
-                    fn swig_leak_into_raw(mut self) -> *mut Self {
-                        // Yes. We need to wrap it into one more Box, for the returning pointer to remain valid.
-                        Box::into_raw(Box::new(self))
-                    }
-                    fn swig_drop_raw(raw_ptr: *mut Self) {
-                        unsafe { ::std::mem::drop(Box::from_raw(raw_ptr)) };
-                    }
-                }
+                //     fn swig_as_ref(&self) -> &Self::BaseType {
+                //         self.as_ref()
+                //     }
+                //     fn swig_as_mut(&mut self) -> &mut Self::BaseType {
+                //         self.as_mut()
+                //     }
+                //     fn swig_cloned(&self) -> Self::BaseType {
+                //         self.as_ref().clone()
+                //     }
+                //     fn swig_leak_into_raw(mut self) -> *mut Self {
+                //         // Yes. We need to wrap it into one more Box, for the returning pointer to remain valid.
+                //         Box::into_raw(Box::new(self))
+                //     }
+                //     fn swig_drop_raw(raw_ptr: *mut Self) {
+                //         unsafe { ::std::mem::drop(Box::from_raw(raw_ptr)) };
+                //     }
+                // }
 
                 impl SwigForeignClass for #class_ty {
-                    type StorageType = Box<#class_ty>;
+                    // type StorageType = Box<#class_ty>;
 
-                    fn swig_into_storage_type(self) -> Self::StorageType {
-                        Self::StorageType::new(self)
-                    }
+                    // fn swig_into_storage_type(self) -> Self::StorageType {
+                    //     Self::StorageType::new(self)
+                    // }
                 }
             };
             self.rust_code.push(fclass_impl_code);
@@ -230,16 +231,17 @@ namespace {managed_lib_name}
         // Do not generate destructor for static classes.
         if let Some(self_desc) = class.self_desc.as_ref() {
             let class_name = &class.name;
-            let self_ty = &self_desc.self_type;
-            //let storage_ty = &self_desc.constructor_ret_type;
-            // let storage_ty = 
+            let storage_ty = &self_desc.constructor_ret_type;
+            let storage_type = self.conv_map.find_or_alloc_rust_type(storage_ty, class.src_id);
+            let smart_ptr_type = classes::SmartPointerType::new(&storage_type, self.conv_map, class.src_id);
+            let intermediate_ptr_type = smart_ptr_type.intermediate_ptr_ty(storage_ty);
             let destructor_name = parse_str::<Ident>(&format!("{}_delete", class_name)).unwrap();
 
             let destructor_code = quote! {
                 #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
                 #[no_mangle]
-                pub extern "C" fn #destructor_name(this: *mut <#self_ty as SwigForeignClass>::StorageType) {
-                    <#self_ty as SwigForeignClass>::StorageType::swig_drop_raw(this);
+                unsafe extern "C" fn #destructor_name(this: #intermediate_ptr_type) {
+                    ::std::mem::drop(Box::from_raw(this))
                 }
             };
             self.rust_code.push(destructor_code);
@@ -303,6 +305,9 @@ namespace {managed_lib_name}
         class: &ForeignerClassInfo,
         method: &ForeignerMethod,
     ) -> Result<()> {
+        if method.is_dummy_constructor() {
+            return Ok(());
+        }
         let foreign_method_signature = map_type::make_foreign_method_signature(
             self,
             class,

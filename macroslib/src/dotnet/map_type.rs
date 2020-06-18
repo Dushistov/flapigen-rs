@@ -8,7 +8,7 @@ use crate::{
     },
     types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant},
 };
-use log::{debug, trace, warn};
+use log::{debug, trace, warn, info};
 use petgraph::Direction;
 use proc_macro2::TokenStream;
 use smol_str::SmolStr;
@@ -409,8 +409,8 @@ fn find_foreign_type(
                 .map(|sm| (grule.clone(), sm.into()))
         });
     if let Some((grule, subst_list)) = idx_subst_map {
-        debug!(
-            "do_map_type: we found generic rule for {}: {:?}",
+        info!(
+            "find_foreign_type: we found generic rule for {}: {:?}",
             rust_ty, subst_list
         );
         let subst_map = subst_list.as_slice().into();
@@ -594,6 +594,8 @@ fn merge_rule(generator: &mut DotNetGenerator, mut rule: TypeMapConvRuleInfo) ->
     utils::configure_ftype_rule(&mut rule.ftype_left_to_right, "=>", rule.src_id, &options)?;
     utils::configure_ftype_rule(&mut rule.ftype_right_to_left, "<=", rule.src_id, &options)?;
 
+    info!("merge_conv_rule {:#?}", rule);
+
     generator.conv_map.merge_conv_rule(rule.src_id, rule)?;
     Ok(())
 }
@@ -631,7 +633,9 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
         //     Direction::Incoming => f_info.from_into_rust
         // }
         let type_info = map_type(self.generator, &rust_ty.ty, direction, self.arg_ty_span)?;
-        trace!("swig_i_type return {}", type_info.rust_intermediate_type);
+        info!("swig_i_type: ty: {:?}, rust_ty: {:?} intermediate: {:?}, direction: {:?}.", ty, rust_ty, type_info.rust_intermediate_type, direction);
+
+        // trace!("swig_i_type return {}", type_info.rust_intermediate_type);
         Ok(type_info.rust_intermediate_type.ty.clone())
     }
     fn swig_from_rust_to_i_type(
@@ -685,9 +689,10 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
             .generator
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
-
+            
         let direction = self.arg_direction(param1)?;
         let type_info = map_type(self.generator, &rust_ty.ty, direction, self.arg_ty_span)?;
+        info!("swig_f_type: ty: {:?}, rust_ty: {:?} foreign: {:?}, direction: {:?}.", ty, rust_ty, type_info.dotnet_type, direction);
         // let fname = if let Some(ref cpp_conv) = type_info.cpp_converter {
         //     cpp_conv.typename.as_str()
         // } else {

@@ -215,23 +215,23 @@ impl<T> SwigInto<Vec<T>> for &[T] {
 }
 
 #[allow(dead_code)]
-pub trait SwigForeignClass: Sized {
-    type StorageType: SwigForeignClassStorage<BaseType=Self>;
+pub trait SwigForeignClass {
+    //type StorageType: SwigForeignClassStorage<BaseType=Self>;
     // fn c_class_name() -> *const ::std::os::raw::c_char;
     // fn box_object(x: Self) -> *mut ::std::os::raw::c_void;
     // fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self;
-    fn swig_into_storage_type(self) -> Self::StorageType;
+    // fn swig_into_storage_type(self) -> Self::StorageType;
 }
 
-pub trait SwigForeignClassStorage: Sized {
-    type BaseType: SwigForeignClass;
+// pub trait SwigForeignClassStorage: Sized {
+//     type BaseType: SwigForeignClass;
 
-    fn swig_as_ref(&self) -> &Self::BaseType;
-    fn swig_as_mut(&mut self) -> &mut Self::BaseType;
-    fn swig_cloned(&self) -> Self::BaseType;
-    fn swig_leak_into_raw(self) -> *mut Self;
-    fn swig_drop_raw(raw_ptr: *mut Self);
-}
+//     fn swig_as_ref(&self) -> &Self::BaseType;
+//     fn swig_as_mut(&mut self) -> &mut Self::BaseType;
+//     fn swig_cloned(&self) -> Self::BaseType;
+//     fn swig_leak_into_raw(self) -> *mut Self;
+//     fn swig_drop_raw(raw_ptr: *mut Self);
+// }
 
 foreign_typemap!(
     ($p:r_type) /* Option */ *mut ::std::os::raw::c_void;
@@ -388,7 +388,7 @@ foreign_typemap!(
     "#);
 
     ($p:r_type) <T> Option<T> => /* Option */ *mut ::std::os::raw::c_void {
-        let $p = $p.map(|value_0| {
+        let $p: Option<swig_i_type!(T)> = $p.map(|value_0| {
             swig_from_rust_to_i_type!(T, value_0, value_1);
             value_1
         });
@@ -396,7 +396,7 @@ foreign_typemap!(
     };
     ($p:f_type) => "Option<swig_f_type!(T)>" "RustOptionT!().rust_to_dotnet($p)";
     ($p:r_type) <T> Option<T> <= /* Option */ *mut ::std::os::raw::c_void {
-        let $p = unsafe { Box::from_raw($p as *mut Option<swig_i_type!(T)>) };
+        let $p: Box<Option<swig_i_type!(T)>> = unsafe { Box::from_raw($p as *mut Option<swig_i_type!(T)>) };
         $out = $p.map(|value_0| {
             swig_from_i_type_to_rust!(T, value_0, value_1);
             value_1

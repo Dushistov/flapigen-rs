@@ -42,7 +42,8 @@ namespace dotnet
             Console.Out.WriteLine(TestStaticClass.maybe_add_one(new Option<int>()).IsSome);
 
             TestStaticClass.try_create_object_ok().print();
-            try {
+            try 
+            {
                 TestStaticClass.try_create_object_err();
             } catch (Error err)
             {
