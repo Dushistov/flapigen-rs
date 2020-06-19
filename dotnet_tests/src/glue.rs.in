@@ -213,3 +213,90 @@ foreigner_class!(
         fn TestStaticClass::try_create_object_err() -> Result<TestClass, TestError>;
     }
 );
+
+
+pub struct TestArc {
+    i: i32,
+}
+
+impl TestArc {
+    pub fn new() -> Arc<TestArc> {
+        Arc::new(TestArc { i: 0 })
+    }
+
+    pub fn to_string(&self) -> String {
+        self.i.to_string()
+    }
+
+    pub fn to_string_arc(this: Arc<TestArc>) -> String {
+        this.i.to_string()
+    }
+
+    pub fn to_string_ref_arc(this: &Arc<TestArc>) -> String {
+        this.i.to_string()
+    }
+}
+
+foreigner_class!(
+    class TestArc {
+        self_type TestArc;
+        constructor TestArc::new() -> Arc<TestArc>;
+        fn TestArc::to_string(&self) -> String;
+        fn TestArc::to_string_arc(_: Arc<TestArc>) -> String;
+        fn TestArc::to_string_ref_arc(_: &Arc<TestArc>) -> String;
+    }
+);
+
+pub struct TestArcMutex {
+    i: i32,
+}
+
+impl TestArcMutex {
+    pub fn new() -> Arc<Mutex<TestArcMutex>> {
+        Arc::new(Mutex::new(TestArcMutex { i: 0 }))
+    }
+
+    pub fn to_string(&self) -> String {
+        self.i.to_string()
+    }
+
+    pub fn inc(&mut self) {
+        self.i += 1;
+    }
+
+    pub fn to_string_arc(this: Arc<Mutex<TestArcMutex>>) -> String {
+        this.lock().unwrap().i.to_string()
+    }
+}
+
+foreigner_class!(
+    class TestArcMutex {
+        self_type TestArcMutex;
+        constructor TestArcMutex::new() -> Arc<Mutex<TestArcMutex>>;
+        fn TestArcMutex::to_string(&self) -> String;
+        fn TestArcMutex::inc(&mut self);
+        fn TestArcMutex::to_string_arc(_: Arc<Mutex<TestArcMutex>>) -> String;
+    }
+);
+
+pub struct TestBox {
+    i: i32,
+}
+
+impl TestBox {
+    pub fn new() -> Box<TestBox> {
+        Box::new(TestBox { i: 0 })
+    }
+
+    pub fn to_string(&self) -> String {
+        self.i.to_string()
+    }
+}
+
+foreigner_class!(
+    class TestBox {
+        self_type TestBox;
+        constructor TestBox::new() -> Box<TestBox>;
+        fn TestBox::to_string(&self) -> String;
+    }
+);

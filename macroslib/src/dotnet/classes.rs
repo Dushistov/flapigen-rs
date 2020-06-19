@@ -124,11 +124,12 @@ impl SmartPointerType {
 
     pub(crate) fn intermediate_ptr_ty(&self, storage_ty: &Type) -> Type {
         let span = invalid_src_id_span().1;
-        match self {
-            Self::None | Self::Box => parse_type_spanned_checked!(span, *mut #storage_ty),
-            SmartPointerType::Rc | SmartPointerType::Arc |
-            SmartPointerType::Mutex | SmartPointerType::ArcMutex => parse_type_spanned_checked!(span, *const #storage_ty),
-        }
+        parse_type_spanned_checked!(span, *mut #storage_ty)
+        // match self {
+        //     Self::None | Self::Box => parse_type_spanned_checked!(span, *mut #storage_ty),
+        //     SmartPointerType::Rc | SmartPointerType::Arc |
+        //     SmartPointerType::Mutex | SmartPointerType::ArcMutex => parse_type_spanned_checked!(span, *const #storage_ty),
+        // }
     }
 
 
@@ -150,8 +151,8 @@ impl SmartPointerType {
         let convert_code = match self {
             SmartPointerType::None | SmartPointerType::Box  => "let {to_var} = unsafe { (&*{from_var}) };",
             SmartPointerType::Rc | SmartPointerType::Arc => "let {to_var} = unsafe { (*{from_var}).as_ref() };",
-            SmartPointerType::Mutex => "let {to_var} = unsafe { (*{from_var}).lock().unwrap() };",
-            SmartPointerType::ArcMutex => "let {to_var} = unsafe { (*{from_var}).lock().unwrap() };",
+            SmartPointerType::Mutex => "let {to_var}_lock = unsafe { (*{from_var}).lock().unwrap() }; let {to_var} = &*{to_var}_lock;",
+            SmartPointerType::ArcMutex => "let {to_var}_lock = unsafe { (*{from_var}).lock().unwrap() }; let {to_var} = &*{to_var}_lock;",
         };
         "assert!(!{from_var}.is_null());".to_owned() + convert_code
     }
@@ -160,8 +161,8 @@ impl SmartPointerType {
         let convert_code = match self {
             SmartPointerType::None | SmartPointerType::Box  => "let {to_var} = unsafe { (&mut *{from_var}) };",
             SmartPointerType::Rc | SmartPointerType::Arc => panic!("You can't deref_mut on `Arc` or `Rc` types."),
-            SmartPointerType::Mutex => "let {to_var} = unsafe { (*{from_var}).lock().unwrap() };",
-            SmartPointerType::ArcMutex => "let {to_var} = unsafe { (*{from_var}).lock().unwrap() };",
+            SmartPointerType::Mutex => "let mut {to_var}_lock = unsafe { (*{from_var}).lock().unwrap() }; let {to_var} = &mut *{to_var}_lock;",
+            SmartPointerType::ArcMutex => "let mut {to_var}_lock = unsafe { (*{from_var}).lock().unwrap() }; let {to_var} = & mut *{to_var}_lock;",
         };
         "assert!(!{from_var}.is_null());".to_owned() + convert_code
     }
@@ -466,7 +467,7 @@ fn register_main_foreign_types(
         name: TypeName::new(class.name.to_string(), (class.src_id, class.name.span())),
         provides_by_module: vec![],
         into_from_rust: Some(ForeignConversationRule {
-            rust_ty: types_info.self_type.to_idx(),
+            rust_ty: types_info.storage_type.to_idx(),
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: types_info.intermediate_ptr_type.to_idx(),
@@ -482,7 +483,7 @@ fn register_main_foreign_types(
             }),
         }),
         from_into_rust: Some(ForeignConversationRule {
-            rust_ty: types_info.self_type.to_idx(),
+            rust_ty: types_info.storage_type.to_idx(),
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: types_info.intermediate_ptr_type.to_idx(),

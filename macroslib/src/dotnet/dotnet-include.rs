@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+use std::sync::Arc;
 
 // It is currently unused.
 mod swig_foreign_types_map {}

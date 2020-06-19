@@ -49,6 +49,11 @@ namespace dotnet
             {
                 Console.Out.WriteLine(err);
             }
+
+            var arc_mutex = new TestArcMutex();
+            arc_mutex.inc();
+            Console.Out.WriteLine(arc_mutex.to_string());
+            Console.Out.WriteLine(TestArcMutex.to_string_arc(arc_mutex));
         }
     }
 }
