@@ -54,6 +54,9 @@ namespace dotnet
             arc_mutex.inc();
             Console.Out.WriteLine(arc_mutex.to_string());
             Console.Out.WriteLine(TestArcMutex.to_string_arc(arc_mutex));
+            var tuple = TestStaticClass.get_tuple();
+            Console.Out.WriteLine(tuple.Item1);
+            Console.Out.WriteLine(tuple.Item2);
         }
     }
 }

@@ -174,6 +174,10 @@ impl TestStaticClass {
     pub fn try_create_object_err() -> Result<TestClass, TestError> {
         Err(TestError{})
     }
+
+    pub fn get_tuple() -> (i32, String) {
+        (0, "0".to_owned())
+    }
 }
 
 #[derive(Debug)]
@@ -211,6 +215,8 @@ foreigner_class!(
 
         fn TestStaticClass::try_create_object_ok() -> Result<TestClass, TestError>;
         fn TestStaticClass::try_create_object_err() -> Result<TestClass, TestError>;
+
+        fn TestStaticClass::get_tuple() -> (i32, String);
     }
 );
 

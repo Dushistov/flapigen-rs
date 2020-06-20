@@ -601,3 +601,103 @@ fn swig_collect_error_message(error: &dyn std::error::Error) -> String {
         error.to_string()
     }
 }
+
+foreign_typemap!(
+    (r_type) /* Tuple */ *mut ::std::os::raw::c_void;
+    (f_type) "/* Tuple */ IntPtr";
+);
+
+foreign_typemap!(
+    generic_alias!(RustTuple2T = swig_concat_idents!(RustTuple2T, swig_f_type!(T1), swig_f_type!(T2)));
+    generic_alias!(RustTuple2T_new = swig_concat_idents!(RustTuple2T, swig_f_type!(T1), swig_f_type!(T2), _new));
+    generic_alias!(RustTuple2T_delete = swig_concat_idents!(RustTuple2T, swig_f_type!(T1), swig_f_type!(T2), _delete));
+    generic_alias!(RustTuple2T_take_1 = swig_concat_idents!(RustTuple2T, swig_f_type!(T1), swig_f_type!(T2), _take_1));
+    generic_alias!(RustTuple2T_take_2 = swig_concat_idents!(RustTuple2T, swig_f_type!(T1), swig_f_type!(T2), _take_2));
+
+    define_c_type!(
+        module = "RustTuple2T!()";
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustTuple2T_new!()(t_1: swig_i_type!(T1), t_2: swig_i_type!(T2)) -> *mut (swig_i_type!(T1), swig_i_type!(T2)) {
+            Box::into_raw(Box::new((t_1, t_2)))
+        }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustTuple2T_take_1!()(tuple: *mut (swig_i_type!(T1), swig_i_type!(T2))) -> swig_i_type!(T1) {
+            (*tuple).0
+        }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustTuple2T_take_2!()(tuple: *mut (swig_i_type!(T1), swig_i_type!(T2))) -> swig_i_type!(T2) {
+            (*tuple).1
+        }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustTuple2T_delete!()(tuple: *mut (swig_i_type!(T1), swig_i_type!(T2))) {
+            // We assume that members of tuple were already "taken", so there's no need to drop them.
+            ::std::mem::drop(Box::from_raw(tuple));
+        }
+    );
+
+    foreigner_code!(
+        module = "RustTuple2T!()";
+        r#"
+    internal static class RustTuple2T!() {
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern /* Tuple */ IntPtr RustTuple2T_new!()(swig_i_type!(T1) t_1, swig_i_type!(T2) t_2);
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern swig_i_type!(T1) RustTuple2T_take_1!()(IntPtr tuple);
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern swig_i_type!(T2) RustTuple2T_take_2!()(IntPtr tuple);
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern void RustTuple2T_delete!()(IntPtr tuple);
+
+        internal static Tuple<swig_f_type!(T1), swig_f_type!(T2)> rust_to_dotnet(IntPtr rustTuple)
+        {
+            var t_1_rust = RustTuple2T_take_1!()(rustTuple);
+            var t_1 = swig_foreign_from_i_type!(T1, t_1_rust);
+            var t_2_rust = RustTuple2T_take_2!()(rustTuple);
+            var t_2 = swig_foreign_from_i_type!(T2, t_2_rust);
+            var ret = Tuple.Create(t_1, t_2);
+            RustTuple2T_delete!()(rustTuple);
+            return ret;
+        }
+        internal static /* Tuple */ IntPtr dotnet_to_rust(Tuple<swig_f_type!(T1), swig_f_type!(T2)> tuple)
+        {
+            var t_1 = tuple.Item1;
+            var t_1_rust = swig_foreign_to_i_type!(T1, t_1);
+            var t_2 = tuple.Item2;
+            var t_2_rust = swig_foreign_to_i_type!(T2, t_2);
+            // We don't call delete in `Input` scenario. Rust-side conversion code will take care of it.
+            return RustTuple2T_new!()(t_1_rust, t_2_rust);            
+        }
+    }
+    "#);
+
+    ($p:r_type) <T1, T2> (T1, T2) => /* Tuple */ *mut ::std::os::raw::c_void {
+        let (t_1, t_2) = $p;
+        swig_from_rust_to_i_type!(T1, t_1, t_1_i);
+        swig_from_rust_to_i_type!(T2, t_2, t_2_i);
+        $out = Box::into_raw(Box::new((t_1, t_2))) as *mut ::std::os::raw::c_void;
+    };
+    ($p:f_type) => "Tuple<swig_f_type!(T1), swig_f_type!(T2)>" "RustTuple2T!().rust_to_dotnet($p)";
+    ($p:r_type) <T1, T2> (T1, T2) <= /* Tuple */ *mut ::std::os::raw::c_void {
+        assert!(!$p.is_null());
+        let tuple_i_ptr = $p as *mut (swig_subst_type!(T1), swig_subst_type!(T2));
+        let tuple_i = unsafe { Box::from_raw(tuple_i_ptr) };
+        let (t_1_i, t_2_i) = tuple_i;
+        swig_from_i_type_to_rust!(T1, t_1_i, t_1);
+        swig_from_i_type_to_rust!(T2, t_2_i, t_2);
+        $out = (t_1, t_2);
+    };
+    ($p:f_type) <= "Tuple<swig_f_type!(T1), swig_f_type!(T2)>" "RustTuple2T!().dotnet_to_rust($p)";
+
+);

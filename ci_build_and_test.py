@@ -219,9 +219,9 @@ def test_dotnet(test_cfg):
         target_dir = os.path.join("target", cfg)
         native_lib_name = "librust_swig_test_dotnet_native.so"
         if sys.platform == "darwin":
-            extension = "librust_swig_test_dotnet_native.dylib"
+            native_lib_name = "librust_swig_test_dotnet_native.dylib"
         elif sys.platform.startswith("win"):
-            extension = "rust_swig_test_dotnet_native.dll"
+            native_lib_name = "rust_swig_test_dotnet_native.dll"
 
         shutil.copyfile(os.path.join(target_dir, native_lib_name), os.path.join("dotnet_tests/dotnet/bin/Debug/netcoreapp3.1", native_lib_name))
         
