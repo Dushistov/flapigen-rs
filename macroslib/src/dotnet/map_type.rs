@@ -4,7 +4,7 @@ use crate::{
         ast::{DisplayToTokens, TyParamsSubstList},
         ty::{ForeignTypeS, RustType, TraitNamesSet},
         utils::{ForeignMethodSignature, ForeignTypeInfoT, self},
-        MapToForeignFlag, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE, TypeMapConvRuleInfoExpanderHelper, ExpandedFType, TypeMapConvRuleInfo, CItem,
+        MapToForeignFlag, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE, TypeMapConvRuleInfoExpanderHelper, ExpandedFType, TypeMapConvRuleInfo, CItem,
     },
     types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant},
 };
@@ -124,21 +124,6 @@ impl DotNetArgInfo {
         )
     }
 
-    pub fn dotnet_finalizer(&self, name_generator: &mut NameGenerator) -> String {
-        if self.type_info.finalizer.is_empty() {
-            return String::new();
-        }
-
-        self.type_info
-            .finalizer
-            .clone()
-            .replace(TO_VAR_TEMPLATE, &name_generator.last_variant(self.arg_name.dotnet_variable_name()))
-    }
-
-    pub fn has_finalizer(&self) -> bool {
-        !self.type_info.finalizer.is_empty()
-    }
-
     pub fn direction(&self) -> Direction {
         if self.arg_name == ArgName::Return {
             Direction::Outgoing
@@ -163,7 +148,6 @@ pub(crate) struct DotNetTypeInfo {
     pub(crate) dotnet_intermediate_type: SmolStr,
     pub(crate) rust_intermediate_type: RustType,
     pub(crate) dotnet_conversion_code: String,
-    pub(crate) finalizer: String,
 }
 
 impl DotNetTypeInfo {
@@ -174,7 +158,6 @@ impl DotNetTypeInfo {
             dotnet_type,
             rust_type,
             dotnet_conversion_code: String::new(),
-            finalizer: String::new(),
         }
     }
 }
@@ -319,7 +302,6 @@ fn map_type(
             dotnet_intermediate_type: intermediate_foreign_type.name.typename,
             rust_intermediate_type: intermediate_rust_type,
             dotnet_conversion_code: intermediate.conv_code.to_string(),
-            finalizer: intermediate.finalizer_code.as_ref().map(|str| str.as_str().to_owned()).unwrap_or_default(),
         })
     } else {
         Ok(DotNetTypeInfo {
@@ -328,7 +310,6 @@ fn map_type(
             rust_intermediate_type: correspoding_rust_type.clone(),
             dotnet_intermediate_type: foreign_type.typename(),
             dotnet_conversion_code: FROM_VAR_TEMPLATE.to_owned(),
-            finalizer: String::new(),
         })
     }
 }

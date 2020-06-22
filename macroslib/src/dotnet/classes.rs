@@ -373,7 +373,6 @@ fn register_main_foreign_types(
                     ),
                     invalid_src_id_span(),
                 )),
-                finalizer_code: None,
             }),
         }),
         from_into_rust: Some(ForeignConversationRule {
@@ -385,7 +384,6 @@ fn register_main_foreign_types(
                     format!("{from}.nativePtr", from = FROM_VAR_TEMPLATE),
                     invalid_src_id_span(),
                 )),
-                finalizer_code: None,
             }),
         }),
         name_prefix: None,

@@ -97,7 +97,6 @@ pub(in crate::cpp) fn generate_interface(
                 input_to_output: false,
                 intermediate_ty: rust_ty.to_idx(),
                 conv_code: Rc::new(conv_code),
-                finalizer_code: None,
             }),
         }),
         name_prefix: None,

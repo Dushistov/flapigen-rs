@@ -13,7 +13,6 @@ use smallvec::SmallVec;
 use smol_str::SmolStr;
 use std::{fmt, ops, rc::Rc};
 use syn::spanned::Spanned;
-use super::ast::SpannedSmolStr;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RustTypeS {
@@ -197,7 +196,6 @@ pub(crate) struct ForeignConversationIntermediate {
     pub(crate) intermediate_ty: RustTypeIdx,
     // Conversion code in a target language
     pub(crate) conv_code: Rc<TypeConvCode>, 
-    pub(crate) finalizer_code: Option<SpannedSmolStr>,
 }
 
 #[derive(Debug, Clone, Copy)]

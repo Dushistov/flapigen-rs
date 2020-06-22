@@ -404,7 +404,6 @@ pub(crate) struct FTypeConvRule {
     pub input_to_output: bool,
     pub unique_prefix: Option<SpannedSmolStr>,
     pub code: Option<TypeConvCode>,
-    pub finalizer_code: Option<SpannedSmolStr>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -876,10 +875,6 @@ fn expand_ftype_rule(
             None
         };
 
-        if let Some(finalizer) = &grule.finalizer_code {
-            return Err(DiagnosticError::new(src_id, finalizer.sp, "Finalizer code for generic types not supported yet"));
-        }
-
         ret.push(FTypeConvRule {
             unique_prefix,
             req_modules: provides_by_module,
@@ -887,7 +882,6 @@ fn expand_ftype_rule(
             left_right_ty,
             input_to_output: grule.input_to_output,
             code,
-            finalizer_code: None,
         });
     }
     Ok(ret)

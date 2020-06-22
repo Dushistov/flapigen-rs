@@ -202,7 +202,6 @@ namespace {managed_lib_name}
                         ),
                         invalid_src_id_span(),
                     )),
-                    finalizer_code: None,
                 }),
             }),
             from_into_rust: Some(ForeignConversationRule {
@@ -214,7 +213,6 @@ namespace {managed_lib_name}
                         format!("(uint){from}", from = FROM_VAR_TEMPLATE),
                         invalid_src_id_span(),
                     )),
-                    finalizer_code: None,
                 }),
             }),
             name_prefix: None,
@@ -575,13 +573,6 @@ namespace {managed_lib_name}
             String::new()
         };
 
-        let finalizers = foreign_method_signature
-            .input
-            .iter()
-            .filter(|arg| arg.has_finalizer())
-            .map(|arg| arg.dotnet_finalizer(&mut name_generator))
-            .join("\n            ");
-
         let pinvoke_call_args = foreign_method_signature
             .input
             .iter()
@@ -595,7 +586,6 @@ namespace {managed_lib_name}
             {dotnet_input_conversion}
             {maybe_return_bind}{full_method_name}({pinvoke_call_args});
             {maybe_dotnet_output_conversion}
-            {finalizers}
             {maybe_return}
         }}
 "#,
@@ -609,7 +599,6 @@ namespace {managed_lib_name}
             full_method_name = full_method_name,
             pinvoke_call_args = pinvoke_call_args,
             maybe_dotnet_output_conversion = maybe_dotnet_output_conversion,
-            finalizers = finalizers,
             maybe_return = maybe_return,
         )
         .with_note("Write to memory failed")?;
