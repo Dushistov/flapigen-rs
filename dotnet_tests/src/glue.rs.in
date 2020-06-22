@@ -1,4 +1,17 @@
 
+pub enum TestEnum {
+    A,
+    B,
+}
+
+foreign_enum!(
+    /// Test enum with A and B.
+    enum TestEnum {
+        A = TestEnum::A,
+        B = TestEnum::B,
+    }
+);
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct TestClass {
     i: i32,
@@ -174,6 +187,13 @@ impl TestStaticClass {
     pub fn try_create_object_err() -> Result<TestClass, TestError> {
         Err(TestError{})
     }
+
+    pub fn reverse_enum(e: TestEnum) -> TestEnum {
+        match e {
+            TestEnum::A => TestEnum::B,
+            TestEnum::B => TestEnum::A,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -211,6 +231,7 @@ foreigner_class!(
 
         fn TestStaticClass::try_create_object_ok() -> Result<TestClass, TestError>;
         fn TestStaticClass::try_create_object_err() -> Result<TestClass, TestError>;
+        fn TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
     }
 );
 

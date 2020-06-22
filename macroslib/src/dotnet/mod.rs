@@ -3,8 +3,8 @@ mod map_type;
 
 use super::*;
 // use cpp::{fclass, CppContext};
-use ast::TyParamsSubstList;
-use error::{ResultDiagnostic, ResultSynDiagnostic, SourceIdSpan};
+use ast::{TyParamsSubstList, TypeName};
+use error::{ResultDiagnostic, ResultSynDiagnostic, SourceIdSpan, invalid_src_id_span};
 use file_cache::FileWriteCache;
 use itertools::Itertools;
 use map_type::{DotNetForeignMethodSignature, NameGenerator};
@@ -13,18 +13,20 @@ use quote::quote;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use std::{
-    collections::{HashSet, HashMap},
+    collections::{HashMap, HashSet},
     fs::{self, File},
     rc::Rc,
 };
 use syn::{parse_str, Ident, Type};
 use typemap::{
     ast,
-    ty::{ForeignTypeS, RustType},
+    ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
     utils::{self, ForeignMethodSignature, ForeignTypeInfoT},
-    ForeignTypeInfo, MapToForeignFlag, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+    ForeignTypeInfo, MapToForeignFlag, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
 };
-use types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant};
+use types::{
+    FnArg, ForeignEnumInfo, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
+};
 
 pub struct DotNetGenerator<'a> {
     config: &'a DotNetConfig,
@@ -46,20 +48,17 @@ impl<'a> DotNetGenerator<'a> {
             rust_code: Vec::new(),
             cs_file,
             additional_cs_code_for_types: HashMap::new(),
-            known_c_items_modules: HashSet::new()
+            known_c_items_modules: HashSet::new(),
         })
     }
 
     fn generate(mut self, items: Vec<ItemToExpand>) -> Result<Vec<TokenStream>> {
-        // let void_type = self.conv_map.find_or_alloc_rust_type_no_src_id(&parse_type!(*mut std::os::raw::c_void));
-        // self.conv_map.add_foreign_rust_ty_idx(foreign_name, correspoding_rty)
-        // self.conv_map.add_foreign(, foreign_name);
-
         for item in items {
             match item {
                 ItemToExpand::Class(fclass) => {
                     self.generate_class(&fclass)?;
                 }
+                ItemToExpand::Enum(fenum) => self.generate_enum(&fenum)?,
                 _ => unimplemented!(), // ItemToExpand::Enum(fenum) => fenum::generate_enum(&mut ctx, &fenum)?,
                                        // ItemToExpand::Interface(finterface) => {
                                        //     finterface::generate_interface(&mut ctx, &finterface)?
@@ -130,6 +129,133 @@ namespace {managed_lib_name}
         .with_note("Write to memory failed")?;
 
         Ok(cs_file)
+    }
+
+    fn generate_enum(&mut self, fenum: &ForeignEnumInfo) -> Result<()> {
+        let enum_name = &fenum.name;
+        let enum_variants = fenum
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, enum_item)| format!("{} = {}", enum_item.name, i))
+            .join(",");
+        write!(
+            self.cs_file,
+            r#"public enum {enum_name} {{
+        {enum_variants}
+    }}"#,
+            enum_name = enum_name,
+            enum_variants = enum_variants,
+        )
+        .with_note("Write to memory failed")?;
+
+        let span = fenum.span();
+
+        let enum_type = self.conv_map.find_or_alloc_rust_type(
+            &parse_type_spanned_checked!(span, #enum_name),
+            fenum.src_id,
+        );
+        let intermediate_type = self.conv_map.find_or_alloc_rust_type(
+            &parse_type_spanned_checked!(span, /* #enum_name */ u32),
+            fenum.src_id,
+        );
+
+        self.conv_map.alloc_foreign_type(ForeignTypeS {
+            name: TypeName::new(enum_name.to_string(), (fenum.src_id, fenum.name.span())),
+            provides_by_module: vec![],
+            into_from_rust: Some(ForeignConversationRule {
+                rust_ty: enum_type.to_idx(),
+                intermediate: Some(ForeignConversationIntermediate {
+                    input_to_output: false,
+                    intermediate_ty: intermediate_type.to_idx(),
+                    conv_code: Rc::new(TypeConvCode::new(
+                        format!(
+                            "({enum_name}){from}",
+                            enum_name = enum_name,
+                            from = FROM_VAR_TEMPLATE,
+                        ),
+                        invalid_src_id_span(),
+                    )),
+                    finalizer_code: None,
+                }),
+            }),
+            from_into_rust: Some(ForeignConversationRule {
+                rust_ty: enum_type.to_idx(),
+                intermediate: Some(ForeignConversationIntermediate {
+                    input_to_output: false,
+                    intermediate_ty: intermediate_type.to_idx(),
+                    conv_code: Rc::new(TypeConvCode::new(
+                        format!("(uint){from}", from = FROM_VAR_TEMPLATE),
+                        invalid_src_id_span(),
+                    )),
+                    finalizer_code: None,
+                }),
+            }),
+            name_prefix: None,
+        })?;
+
+        self.conv_map.alloc_foreign_type(ForeignTypeS {
+            name: TypeName::new(
+                format!("/* {} */ uint", enum_name),
+                (fenum.src_id, fenum.name.span()),
+            ),
+            provides_by_module: vec![],
+            into_from_rust: Some(ForeignConversationRule {
+                rust_ty: intermediate_type.to_idx(),
+                intermediate: None,
+            }),
+            from_into_rust: Some(ForeignConversationRule {
+                rust_ty: intermediate_type.to_idx(),
+                intermediate: None,
+            }),
+            name_prefix: None,
+        })?;
+
+        let (arms_to_u32, arms_from_u32): (Vec<_>, Vec<_>) = fenum.items.iter().enumerate().map(|(i, item)| {
+            let item_name = &item.rust_name;
+            let idx = i as u32;
+            (quote! { #item_name => #idx }, quote! { #idx => #item_name })
+        }).unzip();
+
+        let rust_enum_name = &fenum.name;
+        self.rust_code.push(quote! {
+            impl SwigForeignEnum for #rust_enum_name {
+                fn as_u32(&self) -> u32 {
+                    match *self {
+                        #(#arms_to_u32),*
+                    }
+                }
+                fn from_u32(x: u32) -> Self {
+                    match x {
+                        #(#arms_from_u32),*
+                        ,
+                        _ => panic!(concat!("{} not expected for ", stringify!(#rust_enum_name)), x),
+                    }
+                }
+            }
+        });
+
+        self.conv_map.add_conversation_rule(
+            intermediate_type.to_idx(),
+            enum_type.to_idx(),
+            TypeConvCode::new2(
+                format!("let {} = {}::from_u32({});", TO_VAR_TEMPLATE, enum_name, FROM_VAR_TEMPLATE),
+                invalid_src_id_span(),
+            )
+            .into(),
+        );
+
+        self.conv_map.add_conversation_rule(
+            enum_type.to_idx(),
+            intermediate_type.to_idx(),
+            TypeConvCode::new2(
+                format!("let {} = {}.as_u32();", TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE),
+                invalid_src_id_span(),
+            )
+            .into(),
+        );
+
+        Ok(())
     }
 
     fn generate_class(&mut self, class: &ForeignerClassInfo) -> Result<()> {
@@ -232,8 +358,11 @@ namespace {managed_lib_name}
         if let Some(self_desc) = class.self_desc.as_ref() {
             let class_name = &class.name;
             let storage_ty = &self_desc.constructor_ret_type;
-            let storage_type = self.conv_map.find_or_alloc_rust_type(storage_ty, class.src_id);
-            let smart_ptr_type = classes::SmartPointerType::new(&storage_type, self.conv_map, class.src_id);
+            let storage_type = self
+                .conv_map
+                .find_or_alloc_rust_type(storage_ty, class.src_id);
+            let smart_ptr_type =
+                classes::SmartPointerType::new(&storage_type, self.conv_map, class.src_id);
             let intermediate_ptr_type = smart_ptr_type.intermediate_ptr_ty(storage_ty);
             let destructor_name = parse_str::<Ident>(&format!("{}_delete", class_name)).unwrap();
 
@@ -308,11 +437,8 @@ namespace {managed_lib_name}
         if method.is_dummy_constructor() {
             return Ok(());
         }
-        let foreign_method_signature = map_type::make_foreign_method_signature(
-            self,
-            class,
-            method,
-        )?;
+        let foreign_method_signature =
+            map_type::make_foreign_method_signature(self, class, method)?;
 
         self.write_rust_glue_code(class, &foreign_method_signature)?;
         self.write_pinvoke_function_signature(class, &foreign_method_signature)?;
@@ -333,7 +459,7 @@ namespace {managed_lib_name}
             foreign_method_signature
                 .input
                 .iter()
-                .map(|arg| -> Result<String> { 
+                .map(|arg| -> Result<String> {
                     let (mut deps, conversion) = arg.rust_conversion_code(self.conv_map)?;
                     self.rust_code.append(&mut deps);
                     Ok(conversion)

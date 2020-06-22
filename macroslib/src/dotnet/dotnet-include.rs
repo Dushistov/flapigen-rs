@@ -225,6 +225,13 @@ pub trait SwigForeignClass {
     // fn swig_into_storage_type(self) -> Self::StorageType;
 }
 
+#[allow(dead_code)]
+pub trait SwigForeignEnum: Sized {
+    fn from_u32(x: u32) -> Self;
+    fn as_u32(&self) -> u32;
+}
+
+
 // pub trait SwigForeignClassStorage: Sized {
 //     type BaseType: SwigForeignClass;
 
@@ -601,3 +608,85 @@ fn swig_collect_error_message(error: &dyn std::error::Error) -> String {
         error.to_string()
     }
 }
+
+
+foreign_typemap!(
+    ($p:r_type) /* Tuple2 */ *mut ::std::os::raw::c_void;
+    ($p:f_type) "/* Tuple2 */ IntPtr";
+);
+
+foreign_typemap!(
+    generic_alias!(RustTuple2T = swig_concat_idents!(RustResult, swig_f_type!(T1)));
+    generic_alias!(RustTuple2T_take_0 = swig_concat_idents!(RustResult, swig_f_type!(T1), _take_0));
+    generic_alias!(RustTuple2T_take_1 = swig_concat_idents!(RustResult, swig_f_type!(T1), _take_1));
+    generic_alias!(RustTuple2T_set_0 = swig_concat_idents!(RustResult, swig_f_type!(T1), _set_0));
+
+    define_c_type!(
+        module = "RustResultT!()";
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustResultT_is_ok!()(opt: *mut Result<swig_i_type!(T1), String>) -> u8 {
+            if (*opt).is_ok() { 1 } else { 0 }
+        }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustResultT_take_ok!()(result: *mut Result<swig_i_type!(T1), String>) -> swig_i_type!(T1) {
+            let ret_0 = Box::from_raw(result).expect("RustResultT_take_ok!(): trying to take the value from Result::Err");
+            ret_0
+        }
+
+        #[allow(non_snake_case)]
+        #[no_mangle]
+        unsafe extern "C" fn RustResultT_take_err!()(result: *mut Result<swig_i_type!(T1), String>) -> /* String */ *const u16 {
+            let ret_0 = Box::from_raw(result).expect_err("RustResultT_take_err!(): trying to take the error from Result::Ok");
+            alloc_c_str_u16(&ret_0)
+        }
+    );
+
+    foreigner_code!(
+        module = "RustResultT!()";
+        r#"
+    internal static class RustResultT!() {
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern byte RustResultT_is_ok!()(IntPtr resultPtr);
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern swig_i_type!(T1) RustResultT_take_ok!()(IntPtr resultPtr);
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern /* mut c_str_u16 */ IntPtr RustResultT_take_err!()(IntPtr resultPtr);
+
+        internal static swig_f_type!(T1) unwrap(IntPtr resultPtr)
+        {
+            if (RustResultT_is_ok!()(resultPtr) != 0)
+            {
+                var value_0 = RustResultT_take_ok!()(resultPtr);
+                var value_1 = swig_foreign_from_i_type!(T1, value_0);
+                return value_1;
+            }
+            else
+            {
+                var messagePtr = RustResultT_take_err!()(resultPtr);
+                var message = Marshal.PtrToStringUni(messagePtr);
+                RustInterop.String_delete(messagePtr);
+                throw new Error(message);
+            }
+        }
+    }
+    "#);
+
+    ($p:r_type) <T1, T2> Result<T1, T2> => /* Result */ *mut ::std::os::raw::c_void {
+        let $p: Result<swig_i_type!(T1), String> = $p.map(|ok_0| {
+            swig_from_rust_to_i_type!(T1, ok_0, ok_1);
+            ok_1
+        }).map_err(|err| {
+            swig_collect_error_message(&err)
+        });
+        $out = Box::into_raw(Box::new($p)) as *mut ::std::os::raw::c_void;
+    };
+    ($p:f_type) => "swig_f_type!(T1)" "RustResultT!().unwrap($p)";
+
+);
