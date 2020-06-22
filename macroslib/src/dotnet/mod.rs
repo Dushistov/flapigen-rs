@@ -53,16 +53,22 @@ impl<'a> DotNetGenerator<'a> {
     }
 
     fn generate(mut self, items: Vec<ItemToExpand>) -> Result<Vec<TokenStream>> {
+        for item in &items {
+            match item {
+                ItemToExpand::Class(class) => {
+                    classes::register_class(self.conv_map, class)?;
+                }
+                ItemToExpand::Enum(fenum) => self.generate_enum(fenum)?,
+                _ => unimplemented!("Interfaces not supported yet for .NET"),
+            }
+        }
         for item in items {
             match item {
                 ItemToExpand::Class(fclass) => {
-                    self.generate_class(&fclass)?;
+                    self.generate_class_methods(&fclass)?;
                 }
-                ItemToExpand::Enum(fenum) => self.generate_enum(&fenum)?,
-                _ => unimplemented!(), // ItemToExpand::Enum(fenum) => fenum::generate_enum(&mut ctx, &fenum)?,
-                                       // ItemToExpand::Interface(finterface) => {
-                                       //     finterface::generate_interface(&mut ctx, &finterface)?
-                                       // }
+                ItemToExpand::Enum(_) => (),
+                _ => unimplemented!("Interfaces not supported yet for .NET"),
             }
         }
 
@@ -258,9 +264,7 @@ namespace {managed_lib_name}
         Ok(())
     }
 
-    fn generate_class(&mut self, class: &ForeignerClassInfo) -> Result<()> {
-        //self.conv_map.register_foreigner_class(fclass);
-        classes::register_class(self.conv_map, class)?;
+    fn generate_class_methods(&mut self, class: &ForeignerClassInfo) -> Result<()> {
         self.generate_swig_trait_for_class(class)?;
         self.generate_rust_destructor(class)?;
         self.generate_dotnet_class_code(class)?;
@@ -272,13 +276,6 @@ namespace {managed_lib_name}
         writeln!(self.cs_file, "}} // class").with_note("Write to memory failed")?;
 
         Ok(())
-    }
-
-    fn class_storage_type(&self, class: &ForeignerClassInfo) -> Option<RustType> {
-        Some(
-            self.conv_map
-                .ty_to_rust_type(&class.self_desc.as_ref()?.constructor_ret_type),
-        )
     }
 
     fn generate_swig_trait_for_class(&mut self, class: &ForeignerClassInfo) -> Result<()> {
