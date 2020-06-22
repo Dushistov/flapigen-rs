@@ -693,7 +693,7 @@ foreign_typemap!(
         let (t_1, t_2) = $p;
         swig_from_rust_to_i_type!(T1, t_1, t_1_i);
         swig_from_rust_to_i_type!(T2, t_2, t_2_i);
-        $out = Box::into_raw(Box::new((t_1, t_2))) as *mut ::std::os::raw::c_void;
+        $out = Box::into_raw(Box::new((t_1_i, t_2_i))) as *mut ::std::os::raw::c_void;
     };
     ($p:f_type) => "Tuple<swig_f_type!(T1), swig_f_type!(T2)>" "RustTuple2T!().rust_to_dotnet($p)";
     ($p:r_type) <T1, T2> (T1, T2) <= /* Tuple */ *mut ::std::os::raw::c_void {
