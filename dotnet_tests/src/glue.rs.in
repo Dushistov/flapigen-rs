@@ -194,6 +194,10 @@ impl TestStaticClass {
             TestEnum::B => TestEnum::A,
         }
     }
+    
+    pub fn get_tuple() -> (i32, String) {
+        (0, "0".to_owned())
+    }
 }
 
 #[derive(Debug)]
@@ -232,6 +236,7 @@ foreigner_class!(
         fn TestStaticClass::try_create_object_ok() -> Result<TestClass, TestError>;
         fn TestStaticClass::try_create_object_err() -> Result<TestClass, TestError>;
         fn TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
+        fn TestStaticClass::get_tuple() -> (i32, String);
     }
 );
 

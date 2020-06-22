@@ -56,6 +56,10 @@ namespace dotnet
             Console.Out.WriteLine(TestArcMutex.to_string_arc(arc_mutex));
 
             Console.Out.WriteLine(TestStaticClass.reverse_enum(TestEnum.B));
+            
+            var tuple = TestStaticClass.get_tuple();
+            Console.Out.WriteLine(tuple.Item1);
+            Console.Out.WriteLine(tuple.Item2);
         }
     }
 }
