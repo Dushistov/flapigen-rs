@@ -6,6 +6,7 @@ use super::*;
 use ast::{TyParamsSubstList, TypeName};
 use error::{ResultDiagnostic, ResultSynDiagnostic, SourceIdSpan, invalid_src_id_span};
 use file_cache::FileWriteCache;
+use heck::CamelCase;
 use itertools::Itertools;
 use map_type::{DotNetForeignMethodSignature, NameGenerator};
 use petgraph::Direction;
@@ -143,7 +144,7 @@ namespace {managed_lib_name}
             .items
             .iter()
             .enumerate()
-            .map(|(i, enum_item)| format!("{} = {}", enum_item.name, i))
+            .map(|(i, enum_item)| format!("{} = {}", enum_item.name.to_string().to_camel_case(), i))
             .join(",");
         write!(
             self.cs_file,
@@ -564,9 +565,9 @@ namespace {managed_lib_name}
         let is_constructor = foreign_method_signature.variant == MethodVariant::Constructor;
         let full_method_name = format!("{}_{}", class.name, foreign_method_signature.name);
         let method_name = if is_constructor {
-            ""
+            "".to_owned()
         } else {
-            &foreign_method_signature.name
+            foreign_method_signature.name.to_camel_case()
         };
         let args_to_skip = if let MethodVariant::Method(_) = foreign_method_signature.variant {
             1

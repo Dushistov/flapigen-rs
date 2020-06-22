@@ -10,54 +10,54 @@ namespace dotnet
         [Fact]
         public void Test1()
         {
-            TestStaticClass.hello();
-            TestStaticClass.print_number(123);
-            Console.Out.WriteLine(TestStaticClass.add(1, 2));
-            Console.Out.WriteLine(TestStaticClass.concat("Concatenated ", "String"));
-            Console.Out.WriteLine(TestStaticClass.concat_str("Concatenated ", "str"));
+            TestStaticClass.Hello();
+            TestStaticClass.PrintNumber(123);
+            Console.Out.WriteLine(TestStaticClass.Add(1, 2));
+            Console.Out.WriteLine(TestStaticClass.Concat("Concatenated ", "String"));
+            Console.Out.WriteLine(TestStaticClass.ConcatStr("Concatenated ", "str"));
 
 
             var obj = new TestClass();
-            obj.print();
-            obj.increment();
-            obj.print();
-            obj.add(3);
-            obj.print();
-            Console.Out.WriteLine(obj.get());
+            obj.Print();
+            obj.Increment();
+            obj.Print();
+            obj.Add(3);
+            obj.Print();
+            Console.Out.WriteLine(obj.Get());
             
-            TestStaticClass.test_obj_by_value(obj);
+            TestStaticClass.TestObjByValue(obj);
 
             var vec = new List<int>();
             vec.Add(1);
             vec.Add(2);
 
-            TestStaticClass.print_vec_len(vec);
-            var new_vec = TestStaticClass.get_vec();
+            TestStaticClass.PrintVecLen(vec);
+            var new_vec = TestStaticClass.GetVec();
             foreach (var e in new_vec)
             {
                 Console.Out.WriteLine(e);
             }
 
-            TestStaticClass.maybe_return_class(new Option<string>("asdf")).Value.print();
-            Console.Out.WriteLine(TestStaticClass.maybe_add_one(new Option<int>()).IsSome);
+            TestStaticClass.MaybeReturnClass(new Option<string>("asdf")).Value.Print();
+            Console.Out.WriteLine(TestStaticClass.MaybeAddOne(new Option<int>()).IsSome);
 
-            TestStaticClass.try_create_object_ok().print();
+            TestStaticClass.TryCreateObjectOk().Print();
             try 
             {
-                TestStaticClass.try_create_object_err();
+                TestStaticClass.TryCreateObjectErr();
             } catch (Error err)
             {
                 Console.Out.WriteLine(err);
             }
 
             var arc_mutex = new TestArcMutex();
-            arc_mutex.inc();
-            Console.Out.WriteLine(arc_mutex.to_string());
-            Console.Out.WriteLine(TestArcMutex.to_string_arc(arc_mutex));
+            arc_mutex.Inc();
+            Console.Out.WriteLine(arc_mutex.ToString());
+            Console.Out.WriteLine(TestArcMutex.ToStringArc(arc_mutex));
 
-            Console.Out.WriteLine(TestStaticClass.reverse_enum(TestEnum.B));
-            
-            var tuple = TestStaticClass.get_tuple();
+            Console.Out.WriteLine(TestStaticClass.ReverseEnum(TestEnum.B));
+
+            var tuple = TestStaticClass.GetTuple();
             Console.Out.WriteLine(tuple.Item1);
             Console.Out.WriteLine(tuple.Item2);
         }
