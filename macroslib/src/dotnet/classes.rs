@@ -1,16 +1,15 @@
 use log::debug;
 use std::rc::Rc;
-use syn::{Type, spanned::Spanned};
+use syn::{Type};
 
 use crate::{
     error::*,
     typemap::{
         ast::{self, TypeName},
         ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
-        utils::{boxed_type, unpack_from_heap_pointer},
-        RustTypeIdx, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        TypeConvCode, FROM_VAR_TEMPLATE,
     },
-    types::{ForeignerClassInfo, MethodVariant, SelfTypeDesc},
+    types::{ForeignerClassInfo, SelfTypeDesc},
     TypeMap, SMART_PTR_COPY_TRAIT, source_registry::SourceId,
 };
 
@@ -19,8 +18,6 @@ pub(crate) fn register_class(conv_map: &mut TypeMap, class: &ForeignerClassInfo)
         .validate_class()
         .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
     if let Some(self_desc) = class.self_desc.as_ref() {
-        // let constructor_ret_type = &self_desc.constructor_ret_type;
-        // let this_type_for_method = constructor_ret_type;
         let self_ty = &self_desc.self_type;
         let mut traits = vec!["SwigForeignClass"];
         if class.clone_derived {
@@ -42,44 +39,6 @@ pub(crate) fn register_class(conv_map: &mut TypeMap, class: &ForeignerClassInfo)
             &traits,
             class.src_id,
         );
-
-        // if class.smart_ptr_copy_derived {
-        //     if class.copy_derived {
-        //         println!(
-        //             "warning=class {} marked as Copy and {}, ignore Copy",
-        //             class.name, SMART_PTR_COPY_TRAIT
-        //         );
-        //     }
-        //     if ast::check_if_smart_pointer_return_inner_type(&this_type, "Rc").is_none()
-        //         && ast::check_if_smart_pointer_return_inner_type(&this_type, "Arc").is_none()
-        //     {
-        //         return Err(DiagnosticError::new(
-        //             class.src_id,
-        //             this_type.ty.span(),
-        //             format!(
-        //                 "class {} marked as {}, but type '{}' is not Arc<> or Rc<>",
-        //                 class.name, SMART_PTR_COPY_TRAIT, this_type
-        //             ),
-        //         ));
-        //     }
-
-            // let has_clone = class.methods.iter().any(|x| match x.variant {
-            //     MethodVariant::Method(_) | MethodVariant::StaticMethod => {
-            //         x.rust_id.is_ident("clone")
-            //     }
-            //     MethodVariant::Constructor => false,
-            // });
-            // if has_clone {
-            //     return Err(DiagnosticError::new(
-            //         class.src_id,
-            //         this_type.ty.span(),
-            //         format!(
-            //             "class {} marked as {}, but has clone method. Error: can not generate clone method.",
-            //             class.name, SMART_PTR_COPY_TRAIT,
-            //         ),
-            //     ));
-            // }
-        // }
 
         register_typemap_for_self_type(conv_map, class, self_type, self_desc)?;
     }
@@ -125,11 +84,6 @@ impl SmartPointerType {
     pub(crate) fn intermediate_ptr_ty(&self, storage_ty: &Type) -> Type {
         let span = invalid_src_id_span().1;
         parse_type_spanned_checked!(span, *mut #storage_ty)
-        // match self {
-        //     Self::None | Self::Box => parse_type_spanned_checked!(span, *mut #storage_ty),
-        //     SmartPointerType::Rc | SmartPointerType::Arc |
-        //     SmartPointerType::Mutex | SmartPointerType::ArcMutex => parse_type_spanned_checked!(span, *const #storage_ty),
-        // }
     }
 
 
@@ -166,10 +120,6 @@ impl SmartPointerType {
         };
         "assert!(!{from_var}.is_null());".to_owned() + convert_code
     }
-
-    // pub fn destructor_code(&self) -> &'static str {
-        
-    // }
 }
 
 struct ClassTypesInfo {
@@ -182,7 +132,6 @@ struct ClassTypesInfo {
     storage_type_ref: RustType,
     storage_type_mut_ref: RustType,
     intermediate_ptr_type: RustType,
-    source_span: SourceIdSpan,
 }
 
 impl ClassTypesInfo {
@@ -220,14 +169,8 @@ impl ClassTypesInfo {
             storage_type_ref,
             storage_type_mut_ref,
             intermediate_ptr_type,
-            source_span,
         }
     }
-
-    // fn storage_implements_as_mut(&self) -> bool {
-    //     unimplemented!()
-    // }
-
 
     fn storage_has_clone(&self) -> bool {
         match self.smart_pointer_type {
@@ -236,11 +179,6 @@ impl ClassTypesInfo {
             SmartPointerType::Mutex => false
         }
     }
-
-
-    // fn conversion_code_from_storage_to_intermediate(&self) -> &'static str {
-    //     "let {from_var} = Box::into_raw(Box::new({to_var}));"
-    // }
 }
 
 
@@ -250,44 +188,22 @@ fn register_typemap_for_self_type(
     self_type: RustType,
     self_desc: &SelfTypeDesc,
 ) -> Result<()> {
-    //let span = self_type.ty.span();
     let types_info = ClassTypesInfo::new(conv_map, class, self_type, self_desc, (class.src_id, class.span()));
-
-    // let self_ty = &self_type.ty;
-    // let storage_ty = parse_type_spanned_checked!(span, Box<#self_ty>);
-    // let storage_type = conv_map.find_or_alloc_rust_type(&storage_ty, class.src_id);
-    // let storage_ptr_ty = parse_type_spanned_checked!(span, *mut #storage_ty);
-    // let storage_ptr_type = conv_map.find_or_alloc_rust_type(&storage_ptr_ty, class.src_id);
-
-    // let gen_ty = parse_type_spanned_checked!(span, & #self_ty);
-    // let self_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
-
-    // let gen_ty = parse_type_spanned_checked!(span, &mut #self_ty);
-    // let self_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
     register_intermediate_pointer_types(
         conv_map,
         class,
         &types_info,
-        // void_ptr_rust_ty.to_idx(),
-        // const_void_ptr_rust_ty.to_idx(),
     )?;
     register_rust_ty_conversation_rules(
         conv_map,
-        // class,
         &types_info,
     )?;
-
-    // let this_type = conv_map.find_or_alloc_rust_type(&self_desc.self_type, class.src_id);
 
     register_main_foreign_types(
         conv_map,
         class,
         &types_info,
-        // void_ptr_rust_ty.to_idx(),
-        // const_void_ptr_rust_ty.to_idx(),
-        // self_type_ref.to_idx(),
-        // self_type_mut_ref.to_idx(),
     )?;
     Ok(())
 }
@@ -315,29 +231,11 @@ fn register_intermediate_pointer_types(
     };
     conv_map.alloc_foreign_type(c_ftype)?;
 
-    // let c_const_ftype = ForeignTypeS {
-    //     name: TypeName::new(
-    //         format!("/* &{} */ IntPtr", class.name),
-    //         (class.src_id, class.name.span()),
-    //     ),
-    //     provides_by_module: vec![],
-    //     into_from_rust: Some(ForeignConversationRule {
-    //         rust_ty: const_void_ptr_rust_ty,
-    //         intermediate: None,
-    //     }),
-    //     from_into_rust: Some(ForeignConversationRule {
-    //         rust_ty: const_void_ptr_rust_ty,
-    //         intermediate: None,
-    //     }),
-    //     name_prefix: None,
-    // };
-    // conv_map.alloc_foreign_type(c_const_ftype)?;
     Ok(())
 }
 
 fn register_rust_ty_conversation_rules(
     conv_map: &mut TypeMap,
-    //class: &ForeignerClassInfo,
     types_info: &ClassTypesInfo,
 ) -> Result<()> {
     // intermediate_ptr_type -> &self_type
@@ -454,10 +352,6 @@ fn register_main_foreign_types(
     conv_map: &mut TypeMap,
     class: &ForeignerClassInfo,
     types_info: &ClassTypesInfo,
-    // void_ptr_rust_ty: RustTypeIdx,
-    // const_void_ptr_rust_ty: RustTypeIdx,
-    // this_type_ref: RustTypeIdx,
-    // this_type_mut_ref: RustTypeIdx,
 ) -> Result<()> {
     debug!(
         "register_main_foreign_types: self {}, storage {}",
@@ -497,169 +391,5 @@ fn register_main_foreign_types(
         name_prefix: None,
     };
     conv_map.alloc_foreign_type(class_ftype)?;
-
-    // let class_ftype_ref_in = ForeignTypeS {
-    //     name: TypeName::new(
-    //         format!("/* const ref */{}", class.name),
-    //         (class.src_id, class.name.span()),
-    //     ),
-    //     provides_by_module: vec![],
-    //     from_into_rust: Some(ForeignConversationRule {
-    //         rust_ty: types_info.self_type_ref.to_idx(),
-    //         intermediate: Some(ForeignConversationIntermediate {
-    //             input_to_output: false,
-    //             intermediate_ty: types_info.intermediate_ptr_type.to_idx(),
-    //             conv_code: Rc::new(TypeConvCode::new(
-    //                 format!("{from}.nativePtr", from = FROM_VAR_TEMPLATE),
-    //                 invalid_src_id_span(),
-    //             )),
-    //             finalizer_code: None,
-    //         }),
-    //     }),
-    //     into_from_rust: None,
-    //     name_prefix: None,
-    // };
-    // conv_map.alloc_foreign_type(class_ftype_ref_in)?;
-
-    // let class_ftype_ref_in = ForeignTypeS {
-    //     name: TypeName::new(
-    //         format!("/* mut ref */{}", class.name),
-    //         (class.src_id, class.name.span()),
-    //     ),
-    //     provides_by_module: vec![],
-    //     from_into_rust: Some(ForeignConversationRule {
-    //         rust_ty: types_info.self_type_mut_ref.to_idx(),
-    //         intermediate: Some(ForeignConversationIntermediate {
-    //             input_to_output: false,
-    //             intermediate_ty: types_info.intermediate_ptr_type.to_idx(),
-    //             conv_code: Rc::new(TypeConvCode::new(
-    //                 format!("{from}.nativePtr", from = FROM_VAR_TEMPLATE),
-    //                 invalid_src_id_span(),
-    //             )),
-    //             finalizer_code: None,
-    //         }),
-    //     }),
-    //     into_from_rust: None,
-    //     name_prefix: None,
-    // };
-    // conv_map.alloc_foreign_type(class_ftype_ref_in)?;
-
-    // let class_ftype_ref_out = ForeignTypeS {
-    //     name: TypeName::new(
-    //         format!("/* mut ref */{}", class.name),
-    //         (class.src_id, class.name.span()),
-    //     ),
-    //     provides_by_module: vec![],
-    //     into_from_rust: Some(ForeignConversationRule {
-    //         rust_ty: this_type_ref,
-    //         intermediate: Some(ForeignConversationIntermediate {
-    //             input_to_output: false,
-    //             intermediate_ty: const_void_ptr_rust_ty,
-    //             conv_code: Rc::new(TypeConvCode::new(
-    //                 format!(
-    //                     "new {class}({var})",
-    //                     class = class.name,
-    //                     var = FROM_VAR_TEMPLATE
-    //                 ),
-    //                 invalid_src_id_span(),
-    //             )),
-    //         }),
-    //     }),
-    //     from_into_rust: None,
-    //     name_prefix: None,
-    // };
-    // conv_map.alloc_foreign_type(class_ftype_ref_out)?;
-
-    // let class_ftype_mut_ref_in = ForeignTypeS {
-    //     name: TypeName::new(
-    //         format!("/* mut ref */{}", class.name),
-    //         (class.src_id, class.name.span()),
-    //     ),
-    //     provides_by_module: vec![],
-    //     from_into_rust: Some(ForeignConversationRule {
-    //         rust_ty: this_type_mut_ref,
-    //         intermediate: Some(ForeignConversationIntermediate {
-    //             input_to_output: false,
-    //             intermediate_ty: storage_ptr_type,
-    //             conv_code: Rc::new(TypeConvCode::new(
-    //                 format!("{from}.nativePtr", from = FROM_VAR_TEMPLATE),
-    //                 invalid_src_id_span(),
-    //             )),
-    //             finalizer_code: None,
-    //         }),
-    //     }),
-    //     into_from_rust: None,
-    //     name_prefix: None,
-    // };
-    // conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
-
-    // if self_type != this_type {
-    //     let self_type = conv_map[self_type].clone();
-    //     {
-    //         let span = self_type.ty.span();
-    //         let self_type_ty = self_type.to_type_without_lifetimes();
-    //         let gen_ty = parse_type_spanned_checked!(span, &mut #self_type_ty);
-    //         let self_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
-
-    //         let class_ftype_mut_ref_in = ForeignTypeS {
-    //             name: TypeName::new(
-    //                 format!("/**/{} &", class.name),
-    //                 (class.src_id, class.name.span()),
-    //             ),
-    //             provides_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
-    //             from_into_rust: Some(ForeignConversationRule {
-    //                 rust_ty: self_type_mut_ref.to_idx(),
-    //                 intermediate: Some(ForeignConversationIntermediate {
-    //                     input_to_output: false,
-    //                     intermediate_ty: void_ptr_rust_ty,
-    //                     conv_code: Rc::new(TypeConvCode::new(
-    //                         format!(
-    //                             "static_cast<{} *>({})",
-    //                             cpp_code::c_class_type(class),
-    //                             FROM_VAR_TEMPLATE
-    //                         ),
-    //                         invalid_src_id_span(),
-    //                     )),
-    //                 }),
-    //             }),
-    //             into_from_rust: None,
-    //             name_prefix: Some("/**/".into()),
-    //         };
-    //         conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
-    //     }
-    //     {
-    //         let self_type_ty = self_type.to_type_without_lifetimes();
-    //         let span = self_type.ty.span();
-    //         let gen_ty = parse_type_spanned_checked!(span, & #self_type_ty);
-    //         let self_type_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
-
-    //         let class_ftype_ref_in = ForeignTypeS {
-    //             name: TypeName::new(
-    //                 format!("/**/const {} &", class.name),
-    //                 (class.src_id, class.name.span()),
-    //             ),
-    //             provides_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
-    //             from_into_rust: Some(ForeignConversationRule {
-    //                 rust_ty: self_type_ref.to_idx(),
-    //                 intermediate: Some(ForeignConversationIntermediate {
-    //                     input_to_output: false,
-    //                     intermediate_ty: const_void_ptr_rust_ty,
-    //                     conv_code: Rc::new(TypeConvCode::new(
-    //                         format!(
-    //                             "static_cast<const {} *>({})",
-    //                             cpp_code::c_class_type(class),
-    //                             FROM_VAR_TEMPLATE
-    //                         ),
-    //                         invalid_src_id_span(),
-    //                     )),
-    //                 }),
-    //             }),
-    //             into_from_rust: None,
-    //             name_prefix: Some("/**/".into()),
-    //         };
-    //         conv_map.alloc_foreign_type(class_ftype_ref_in)?;
-    //     }
-    // }
-
     Ok(())
 }

@@ -4,16 +4,16 @@ use crate::{
         ast::{DisplayToTokens, TyParamsSubstList},
         ty::{ForeignTypeS, RustType, TraitNamesSet},
         utils::{ForeignMethodSignature, ForeignTypeInfoT, self},
-        ForeignTypeInfo, MapToForeignFlag, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE, TypeMapConvRuleInfoExpanderHelper, ExpandedFType, TypeMapConvRuleInfo, CItem,
+        MapToForeignFlag, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE, TypeMapConvRuleInfoExpanderHelper, ExpandedFType, TypeMapConvRuleInfo, CItem,
     },
     types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant},
 };
 use itertools::Itertools;
-use log::{debug, trace, warn, info};
+use log::{debug, info};
 use petgraph::Direction;
 use proc_macro2::TokenStream;
 use smol_str::SmolStr;
-use std::{collections::HashMap, rc::Rc, io::Write};
+use std::{collections::HashMap, rc::Rc};
 use syn::Type;
 use rustc_hash::FxHashSet;
 use super::DotNetGenerator;
@@ -71,12 +71,6 @@ impl ArgName {
 }
 
 pub(crate) struct DotNetArgInfo {
-    // pub foreign_type: ForeignTypeInfo,
-    // pub rust_intermediate_type: RustType,
-    // pub dotnet_intermediate_type: String,
-    // pub rust_conversion_code: String,
-    // pub dotnet_conversion_code: String,
-    // pub finalizer: String,
     pub(crate) type_info: DotNetTypeInfo,
     pub(crate) arg_name: ArgName,
     pub(crate) span: SourceIdSpan,
@@ -168,7 +162,6 @@ pub(crate) struct DotNetTypeInfo {
     pub(crate) rust_type: RustType,
     pub(crate) dotnet_intermediate_type: SmolStr,
     pub(crate) rust_intermediate_type: RustType,
-    // pub rust_conversion_code: String,
     pub(crate) dotnet_conversion_code: String,
     pub(crate) finalizer: String,
 }
@@ -180,7 +173,6 @@ impl DotNetTypeInfo {
             rust_intermediate_type: rust_type.clone(),
             dotnet_type,
             rust_type,
-            // rust_conversion_code: String::new(),
             dotnet_conversion_code: String::new(),
             finalizer: String::new(),
         }
@@ -316,59 +308,10 @@ fn map_type(
     
     let correspoding_rust_type = generator.conv_map[rule.rust_ty].clone();
     
-    // if direction == Direction::Incoming {        
-    //     panic!("{:#?},\n{:#?}", foreign_type, correspoding_rust_type);
-    // }
     if let Some(intermediate) = rule.intermediate.as_ref() {
         let intermediate_rust_type = generator.conv_map[intermediate.intermediate_ty].clone();
         let intermediate_foreign_type =
         find_foreign_type(generator, &intermediate_rust_type, direction, span)?;
-
-        // let (from, to) = match direction {
-        //     Direction::Incoming => (
-        //         intermediate_rust_type.to_idx(),
-        //         correspoding_rust_type.to_idx(),
-        //     ),
-        //     Direction::Outgoing => (
-        //         correspoding_rust_type.to_idx(),
-        //         intermediate_rust_type.to_idx(),
-        //         // format!(
-        //         //     "var {0} = {1}({0});",
-        //         //     arg_name.dotnet_variable_name(),
-        //         //     foreign_type.name
-        //         // ),
-        //     ),
-        // };
-        // let (_cur_deps, rust_conversion_code) = conv_map.convert_rust_types(
-        //     from,
-        //     to,
-        //     arg_name.rust_variable_name(),
-        //     arg_name.rust_variable_name(),
-        //     "()", // todo
-        //     span,
-        // )?;
-
-        // let dotnet_arg_name = name_generator.last_variant(arg_name.dotnet_variable_name());
-        // let new_dotnet_arg_name = name_generator.new_variant(arg_name.dotnet_variable_name());
-
-        // let dotnet_conversion_code = format!(
-        //     "var {} = {};",
-        //     new_dotnet_arg_name,
-        //     intermediate
-        //         .conv_code
-        //         .to_string()
-        //         .replace(FROM_VAR_TEMPLATE, &dotnet_arg_name)
-        // );
-
-        // let finalizer = intermediate
-        //     .finalizer_code
-        //     .as_ref()
-        //     .map(|str| {
-        //         str.as_str()
-        //             .to_owned()
-        //             .replace(TO_VAR_TEMPLATE, &new_dotnet_arg_name)
-        //     })
-        //     .unwrap_or_default();
 
         Ok(DotNetTypeInfo {
             dotnet_type: foreign_type.typename(),
@@ -420,7 +363,6 @@ fn find_foreign_type(
             rust_ty, subst_list
         );
         let subst_map = subst_list.as_slice().into();
-        // panic!("{:#?}", subst_map);
         let c_types = grule
             .subst_generic_params_to_c_items(
                 &subst_map,
@@ -447,14 +389,6 @@ fn find_foreign_type(
                 }
             }
         }
-        // if let Some(c_types) = c_types {
-        //     merge_c_types(
-        //         ctx,
-        //         c_types,
-        //         MergeCItemsFlags::DefineAlsoRustType,
-        //         grule.src_id,
-        //     )?;
-        // }
         let new_rule = grule
             .subst_generic_params(
                 subst_map,
@@ -536,66 +470,15 @@ fn merge_rule(generator: &mut DotNetGenerator, mut rule: TypeMapConvRuleInfo) ->
             format!("rule {:?} is empty", rule),
         ));
     }
-    // let all_options = {
-    //     let mut opts = FxHashSet::<&'static str>::default();
-    //     opts.extend(CppOptional::iter().map(|x| -> &'static str { x.into() }));
-    //     opts.extend(CppVariant::iter().map(|x| -> &'static str { x.into() }));
-    //     opts.extend(CppStrView::iter().map(|x| -> &'static str { x.into() }));
-    //     opts
-    // };
-
-    // validate_cfg_options(&rule, &all_options)?;
-    // let options = {
-    //     let mut opts = FxHashSet::<&'static str>::default();
-    //     opts.insert(ctx.cfg.cpp_variant.into());
-    //     opts.insert(ctx.cfg.cpp_optional.into());
-    //     opts.insert(ctx.cfg.cpp_str_view.into());
-    //     opts
-    // };
-
-    // if let Some(c_types) = rule.c_types.take() {
-    //     merge_c_types(ctx, c_types, MergeCItemsFlags::DefineOnlyCItem, rule.src_id)?;
-    // }
-
-    // let f_codes = mem::replace(&mut rule.f_code, vec![]);
-    // panic!("{:#?}\n{:?}", rule.c_types, rule.f_code);
-
 
     for cs_code in rule.f_code.drain(..) {
         let native_lib_name = &generator.config.native_lib_name;
         generator.additional_cs_code_for_types.entry(cs_code.module_name.clone()).or_insert_with(||
             cs_code.code.replace("{native_lib_name}", native_lib_name)
         );
-        // if !generator.additional_cs_code_for_types.contains_key(cs_code.module_name) {
-        //     generator.additional_cs_code_for_types[cs_code.module_name]
-        // }
-        // generator.additional_cs_code += &cs_code.code.replace("{native_lib_name}", &generator.config.native_lib_name);
     }
-    // for fcode in f_codes {
-    //     let module_name = &fcode.module_name;
-    //     let common_files = &mut ctx.common_files;
-    //     let c_header_f = file_for_module!(ctx, common_files, module_name);
-    //     let use_fcode = fcode
-    //         .cfg_option
-    //         .as_ref()
-    //         .map(|opt| options.contains(opt.as_str()))
-    //         .unwrap_or(true);
-
-    //     if use_fcode {
-    //         c_header_f
-    //             .write_all(
-    //                 fcode
-    //                     .code
-    //                     .replace("$RUST_SWIG_USER_NAMESPACE", &ctx.cfg.namespace_name)
-    //                     .as_bytes(),
-    //             )
-    //             .map_err(DiagnosticError::map_any_err_to_our_err)?;
-    //     }
-    // }
 
     let options = FxHashSet::default();
-    // rule.c_types = None;
-    // rule.f_code.clear();
 
     utils::configure_ftype_rule(&mut rule.ftype_left_to_right, "=>", rule.src_id, &options)?;
     utils::configure_ftype_rule(&mut rule.ftype_right_to_left, "<=", rule.src_id, &options)?;
@@ -633,15 +516,9 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let direction = self.arg_direction(opt_arg)?;
-        // let f_info = find_foreign_type(self.conv_map, &rust_ty, direction, self.arg_ty_span)?;
-//        let f_info = map_type(self.conv_map, &rust_ty, direction, self.arg_ty_span)?;
-        // let intermediate_rust_type = match direction {
-        //     Direction::Incoming => f_info.from_into_rust
-        // }
         let type_info = map_type(self.generator, &rust_ty.ty, direction, self.arg_ty_span)?;
         info!("swig_i_type: ty: {:?}, rust_ty: {:?} intermediate: {:?}, direction: {:?}.", ty, rust_ty, type_info.rust_intermediate_type, direction);
 
-        // trace!("swig_i_type return {}", type_info.rust_intermediate_type);
         Ok(type_info.rust_intermediate_type.ty.clone())
     }
     fn swig_from_rust_to_i_type(
@@ -699,11 +576,6 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
         let direction = self.arg_direction(param1)?;
         let type_info = map_type(self.generator, &rust_ty.ty, direction, self.arg_ty_span)?;
         info!("swig_f_type: ty: {:?}, rust_ty: {:?} foreign: {:?}, direction: {:?}.", ty, rust_ty, type_info.dotnet_type, direction);
-        // let fname = if let Some(ref cpp_conv) = type_info.cpp_converter {
-        //     cpp_conv.typename.as_str()
-        // } else {
-        //     f_info.base.name.as_str()
-        // };
         Ok(ExpandedFType {
             name: type_info.dotnet_type,
             provides_by_module: vec![],
@@ -716,14 +588,6 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let type_info = map_type(self.generator, &rust_ty.ty, Direction::Incoming, self.arg_ty_span)?;
         Ok(type_info.dotnet_conversion_code.replace(FROM_VAR_TEMPLATE, var_name))
-        // if let Some(cpp_conv) = type_info.cpp_converter {
-        //     Ok(cpp_conv
-        //         .converter
-        //         .as_str()
-        //         .replace(FROM_VAR_TEMPLATE, var_name))
-        // } else {
-        //     Ok(var_name.into())
-        // }
     }
     fn swig_foreign_from_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String> {
         let rust_ty = self
@@ -732,13 +596,5 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for DotNetGenericParamExpander<'a
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let type_info = map_type(self.generator, &rust_ty.ty, Direction::Outgoing, self.arg_ty_span)?;
         Ok(type_info.dotnet_conversion_code.replace(FROM_VAR_TEMPLATE, var_name))
-        // if let Some(cpp_conv) = f_info.cpp_converter {
-        //     Ok(cpp_conv
-        //         .converter
-        //         .as_str()
-        //         .replace(FROM_VAR_TEMPLATE, var_name))
-        // } else {
-        //     Ok(var_name.into())
-        // }
     }
 }

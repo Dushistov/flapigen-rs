@@ -64,16 +64,6 @@ foreign_typemap!(
     (f_type) "UIntPtr";
 );
 
-// foreign_typemap!(
-//     (r_type) isize;
-//     (f_type) "IntPtr";
-// );
-
-// foreign_typemap!(
-//     (r_type) *mut std::os::raw::c_void;
-//     (f_type) "IntPtr";
-// );
-
 foreign_typemap!(
     (r_type) /* c_str_u16 */ *mut u16;
     (f_type) "/* mut c_str_u16 */ IntPtr";
@@ -110,20 +100,6 @@ trait SwigDerefMut {
     type Target: ?Sized;
     fn swig_deref_mut(&mut self) -> &mut Self::Target;
 }
-
-// impl<T: SwigForeignClass> SwigDeref for T {
-//     type Target = T;
-//     fn swig_deref(&self) -> &T {
-//         self
-//     }
-// }
-
-// impl<T: SwigForeignClass> SwigDerefMut for T {
-//     type Target = T;
-//     fn swig_deref_mut(&mut self) -> &mut T {
-//         self
-//     }
-// }
 
 // .NET prefers UTF16, but Rust doesn't provide CString/OSString equivalent that supports UTF16 on Linux.
 // We need to go a bit lower.
@@ -217,30 +193,10 @@ impl<T> SwigInto<Vec<T>> for &[T] {
 }
 
 #[allow(dead_code)]
-pub trait SwigForeignClass {
-    //type StorageType: SwigForeignClassStorage<BaseType=Self>;
-    // fn c_class_name() -> *const ::std::os::raw::c_char;
-    // fn box_object(x: Self) -> *mut ::std::os::raw::c_void;
-    // fn unbox_object(p: *mut ::std::os::raw::c_void) -> Self;
-    // fn swig_into_storage_type(self) -> Self::StorageType;
-}
-
-#[allow(dead_code)]
 pub trait SwigForeignEnum: Sized {
     fn from_u32(x: u32) -> Self;
     fn as_u32(&self) -> u32;
 }
-
-
-// pub trait SwigForeignClassStorage: Sized {
-//     type BaseType: SwigForeignClass;
-
-//     fn swig_as_ref(&self) -> &Self::BaseType;
-//     fn swig_as_mut(&mut self) -> &mut Self::BaseType;
-//     fn swig_cloned(&self) -> Self::BaseType;
-//     fn swig_leak_into_raw(self) -> *mut Self;
-//     fn swig_drop_raw(raw_ptr: *mut Self);
-// }
 
 foreign_typemap!(
     ($p:r_type) /* Option */ *mut ::std::os::raw::c_void;
@@ -253,16 +209,9 @@ foreign_typemap!(
     generic_alias!(RustOptionT_new_some = swig_concat_idents!(RustOption, swig_f_type!(T), _new_some));
     generic_alias!(RustOptionT_is_some = swig_concat_idents!(RustOption, swig_f_type!(T), _is_some));
     generic_alias!(RustOptionT_take = swig_concat_idents!(RustOption, swig_f_type!(T), _take));
-    // generic_alias!(RustOptionT_delete = swig_concat_idents!(RustOption, swig_f_type!(T), _delete));
 
     define_c_type!(
         module = "RustOptionT!()";
-
-        // #[allow(non_snake_case)]
-        // #[no_mangle]
-        // unsafe extern "C" fn RustOptionT_delete!()(opt: *mut Option<swig_subst_type!(T)>) {
-        //     ::std::mem::drop(Box::from_raw(opt))
-        // }
 
         #[allow(non_snake_case)]
         #[no_mangle]
@@ -273,7 +222,6 @@ foreign_typemap!(
         #[allow(non_snake_case)]
         #[no_mangle]
         unsafe extern "C" fn RustOptionT_new_some!()(value_0: swig_i_type!(T)) -> *mut Option<swig_i_type!(T)> {
-            //swig_from_i_type_to_rust!(T, value_0, value_1);
             Box::into_raw(Box::new(Some(value_0)))
         }
 
@@ -287,7 +235,6 @@ foreign_typemap!(
         #[no_mangle]
         unsafe extern "C" fn RustOptionT_take!()(opt: *mut Option<swig_i_type!(T)>) -> swig_i_type!(T) {
             let ret_0 = Box::from_raw(opt).expect("RustOptionT_take!(): trying to take the value from Option::None");
-            // swig_from_rust_to_i_type!(T, ret_0, ret_1);
             ret_0
         }
     );
