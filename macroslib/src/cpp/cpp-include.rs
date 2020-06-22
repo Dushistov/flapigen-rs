@@ -180,6 +180,20 @@ impl<'a, T> SwigDeref for &'a Rc<T> {
     }
 }
 
+impl<T> SwigDeref for Arc<T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        self
+    }
+}
+
+impl<'a, T> SwigDeref for &'a Arc<T> {
+    type Target = T;
+    fn swig_deref(&self) -> &T {
+        self
+    }
+}
+
 impl<'a, T> SwigFrom<&'a RefCell<T>> for Ref<'a, T> {
     fn swig_from(m: &'a RefCell<T>) -> Ref<'a, T> {
         m.borrow()
@@ -880,7 +894,7 @@ pub struct CRustForeignVec {
 
 #[allow(dead_code)]
 impl CRustForeignVec {
-    pub fn from_vec<T: SwigForeignClass>(mut v: Vec<T>) -> CRustForeignVec {
+    pub fn from_vec<T>(mut v: Vec<T>) -> CRustForeignVec {
         let data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
         let len = v.len();
         let capacity = v.capacity();
@@ -932,7 +946,7 @@ fn remove_foreign_class_from_vec<T: SwigForeignClass>(
 
 #[allow(dead_code)]
 #[inline]
-fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec) {
+fn drop_foreign_class_vec<T>(v: CRustForeignVec) {
     assert_eq!(::std::mem::size_of::<T>(), v.step);
     let v = unsafe { Vec::from_raw_parts(v.data as *mut T, v.len, v.capacity) };
     drop(v);
@@ -1002,6 +1016,26 @@ using CForeignVecModule!() = RustForeignVec<swig_f_type!(&T, output), CRustForei
         "CForeignVecModule!(){$p}";
     ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) <= "CForeignVecModule!()"
         "$p.release()";
+);
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignClass> Vec<&T> => CRustForeignVec {
+        let cloned = $p.into_iter().cloned().collect::<Vec<_>>();
+        $out = CRustForeignVec::from_vec(cloned);
+    };
+    ($p:r_type) <T: SwigForeignClass> Vec<&T> <= CRustForeignVec {
+        let as_ref = $p.iter().collect::<Vec<_>>();
+        $out = unsafe { Vec::from_raw_parts(as_ref.data as *mut swig_subst_type!(T), as_ref.len, as_ref.capacity) };
+    };
+);
+
+foreign_typemap!(
+    ($p:r_type) <T1, T2> Vec<(T1,T2)> => CRustForeignVec {
+        $out = CRustForeignVec::from_vec($p);
+    };
+    ($p:r_type) <T1, T2> Vec<(T1,T2)> <= CRustForeignVec {
+        $out = unsafe { Vec::from_raw_parts($p.data as *mut swig_subst_type!(T), $p.len, $p.capacity) };
+    };
 );
 
 // order is important!!!
