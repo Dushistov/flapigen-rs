@@ -8,6 +8,7 @@ use crate::{
     },
     types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant},
 };
+use itertools::Itertools;
 use log::{debug, trace, warn, info};
 use petgraph::Direction;
 use proc_macro2::TokenStream;
@@ -24,6 +25,7 @@ pub(crate) struct DotNetForeignMethodSignature {
     pub(crate) name: String,
     pub(crate) variant: MethodVariant,
     pub(crate) rust_function_call: String,
+    pub(crate) docstring: String,
 }
 
 impl ForeignMethodSignature for DotNetForeignMethodSignature {
@@ -276,12 +278,16 @@ pub(crate) fn make_foreign_method_signature(
             (class.src_id, class.span())
         )
     };
+    let docstring = method.doc_comments.iter().map(|doc_line| {
+        "/// ".to_owned() + doc_line
+    }).join("\n");
     Ok(DotNetForeignMethodSignature {
         input,
         output,
         name: method.short_name(),
         variant: method.variant.clone(),
         rust_function_call: method.generate_code_to_call_rust_func(),
+        docstring,
     })
 }
 

@@ -146,11 +146,17 @@ namespace {managed_lib_name}
             .enumerate()
             .map(|(i, enum_item)| format!("{} = {}", enum_item.name.to_string().to_camel_case(), i))
             .join(",");
+        let docstring = fenum.doc_comments.iter().map(|doc_line| {
+            "/// ".to_owned() + doc_line
+        }).join("\n");
         write!(
-            self.cs_file,
-            r#"public enum {enum_name} {{
+            self.cs_file,            
+            r#"
+    {docstring}
+    public enum {enum_name} {{
         {enum_variants}
     }}"#,
+            docstring = docstring,
             enum_name = enum_name,
             enum_variants = enum_variants,
         )
@@ -378,13 +384,18 @@ namespace {managed_lib_name}
 
     fn generate_dotnet_class_code(&mut self, class: &ForeignerClassInfo) -> Result<()> {
         let class_name = class.name.to_string();
+        let docstring = class.doc_comments.iter().map(|doc_line| {
+            "/// ".to_owned() + doc_line
+        }).join("\n");
 
         if let Some(_) = class.self_desc {
             let rust_destructor_name = class_name.clone() + "_delete";
 
             write!(
                 self.cs_file,
-                r#"public class {class_name}: IDisposable {{
+                r#"
+    {docstring}
+    public class {class_name}: IDisposable {{
         internal IntPtr nativePtr;
 
         internal {class_name}(IntPtr nativePtr) {{
@@ -410,6 +421,7 @@ namespace {managed_lib_name}
             DoDispose();
         }}
 "#,
+                docstring = docstring,
                 class_name = class_name,
                 rust_destructor_name = rust_destructor_name,
                 native_lib_name = self.config.native_lib_name,
@@ -418,7 +430,8 @@ namespace {managed_lib_name}
         } else {
             writeln!(
                 self.cs_file,
-                "public static class {class_name} {{",
+                "{docstring}\npublic static class {class_name} {{",
+                docstring = docstring,
                 class_name = class_name,
             )
             .with_note("Write to memory failed")?;
@@ -533,7 +546,6 @@ namespace {managed_lib_name}
         write!(
             self.cs_file,
             r#"
-        //[SuppressUnmanagedCodeSecurity]
         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
         internal static extern {return_type} {method_name}({args});
 "#,
@@ -553,7 +565,6 @@ namespace {managed_lib_name}
     fn write_dotnet_wrapper_function(
         &mut self,
         class: &ForeignerClassInfo,
-        // method: &ForeignerMethod,
         foreign_method_signature: &DotNetForeignMethodSignature,
     ) -> Result<()> {
         let mut name_generator = NameGenerator::new();
@@ -639,6 +650,7 @@ namespace {managed_lib_name}
         write!(
             self.cs_file,
             r#"
+        {docstring}
         public {maybe_static} {dotnet_return_type} {method_name}({dotnet_args}) {{
             {dotnet_input_conversion}
             {maybe_return_bind}{full_method_name}({pinvoke_call_args});
@@ -647,6 +659,7 @@ namespace {managed_lib_name}
             {maybe_return}
         }}
 "#,
+            docstring = foreign_method_signature.docstring,
             maybe_static = maybe_static_str,
             dotnet_return_type = foreign_method_signature.output.type_info.dotnet_type,
             method_name = method_name,
