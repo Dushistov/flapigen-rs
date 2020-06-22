@@ -101,6 +101,17 @@ trait SwigDerefMut {
     fn swig_deref_mut(&mut self) -> &mut Self::Target;
 }
 
+foreign_typemap!(
+    ($p:r_type) bool => u8 {
+        $out = if $p  { 1 } else { 0 };
+    };
+    ($p:f_type) => "bool" "($p != 0)";
+    ($p:r_type) bool <= u8 {
+        $out = $p != 0;
+    };
+    ($p:f_type) <= "bool" "$p ? 1 : 0";
+);
+
 // .NET prefers UTF16, but Rust doesn't provide CString/OSString equivalent that supports UTF16 on Linux.
 // We need to go a bit lower.
 
@@ -111,15 +122,6 @@ unsafe fn c_str_u16_len(mut c_str_u16_ptr: *const u16) -> usize {
         c_str_u16_ptr = c_str_u16_ptr.offset(1);
     }
     len
-}
-
-unsafe fn c_str_u16_to_string(c_str_u16_ptr: *const u16) -> String {
-    if c_str_u16_ptr.is_null() {
-        return String::new();
-    }
-    let len = c_str_u16_len(c_str_u16_ptr);
-    let slice = std::slice::from_raw_parts(c_str_u16_ptr, len);
-    String::from_utf16_lossy(slice)
 }
 
 fn alloc_c_str_u16(string: &str) -> *const u16 {
@@ -135,34 +137,38 @@ fn alloc_c_str_u16(string: &str) -> *const u16 {
 
 #[allow(non_snake_case)]
 #[no_mangle]
-unsafe extern "C" fn String_delete(c_str_u16: *mut u16) {
-    let size = c_str_u16_len(c_str_u16) + 1; // Add NULL character size.
-    let slice_ptr = std::ptr::slice_from_raw_parts_mut(c_str_u16, size);
-    let boxed_slice: Box<[u16]> = Box::from_raw(slice_ptr);
-    std::mem::drop(boxed_slice);
+unsafe extern "C" fn c_str_u16_to_string(c_str_u16_ptr: *const u16) -> *mut String {
+    if c_str_u16_ptr.is_null() {
+        return ::std::ptr::null_mut();
+    }
+    let len = c_str_u16_len(c_str_u16_ptr);
+    let slice = ::std::slice::from_raw_parts(c_str_u16_ptr, len);
+    Box::into_raw(Box::new(String::from_utf16_lossy(slice)))
 }
 
+#[allow(non_snake_case)]
+#[no_mangle]
+unsafe extern "C" fn c_string_delete(c_str_u16: *mut u16) {
+    let size = c_str_u16_len(c_str_u16) + 1; // Add NULL character size.
+    let slice_ptr = ::std::ptr::slice_from_raw_parts_mut(c_str_u16, size);
+    let boxed_slice: Box<[u16]> = Box::from_raw(slice_ptr);
+    ::std::mem::drop(boxed_slice);
+}
 
 foreign_typemap!(
-    ($p:r_type) bool => u8 {
-        $out = if $p  { 1 } else { 0 };
-    };
-    ($p:f_type) => "bool" "($p != 0)";
-    ($p:r_type) bool <= u8 {
-        $out = $p != 0;
-    };
-    ($p:f_type) <= "bool" "$p ? 1 : 0";
+    (r_type) *mut String;
+    (f_type) "/* RustString */ IntPtr";
 );
 
 foreign_typemap!(
-    ($p:r_type) String => /* String */ *const u16 {
+    ($p:r_type) String => /* c_str_u16 */ *const u16 {
         $out = alloc_c_str_u16(&$p);
     };
-    ($p:f_type) => "string" "Marshal.PtrToStringUni($p); RustInterop.String_delete($p)";
-    ($p:r_type) String <= /* String */ *const u16 {
-        $out = unsafe { c_str_u16_to_string($p) };
+    ($p:f_type) => "string" "RustString.rust_to_dotnet($p)";
+    ($p:r_type) String <= *mut String {
+        $out = unsafe { *Box::from_raw($p) };
     };
-    ($p:f_type, finalizer="Marshal.FreeHGlobal({to_var});") <= "string" "Marshal.StringToHGlobalUni($p)";
+    ($p:f_type) <= "string" "RustString.dotnet_to_rust($p)";
 );
 
 
@@ -496,7 +502,7 @@ foreign_typemap!(
 
         #[allow(non_snake_case)]
         #[no_mangle]
-        unsafe extern "C" fn RustResultT_take_err!()(result: *mut Result<swig_i_type!(T1), String>) -> /* String */ *const u16 {
+        unsafe extern "C" fn RustResultT_take_err!()(result: *mut Result<swig_i_type!(T1), String>) -> /* c_str_u16 */ *const u16 {
             let ret_0 = Box::from_raw(result).expect_err("RustResultT_take_err!(): trying to take the error from Result::Ok");
             alloc_c_str_u16(&ret_0)
         }
@@ -527,8 +533,7 @@ foreign_typemap!(
             else
             {
                 var messagePtr = RustResultT_take_err!()(resultPtr);
-                var message = Marshal.PtrToStringUni(messagePtr);
-                RustInterop.String_delete(messagePtr);
+                var message = RustString.rust_to_dotnet(messagePtr);
                 throw new Error(message);
             }
         }

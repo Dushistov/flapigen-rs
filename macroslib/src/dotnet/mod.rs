@@ -114,10 +114,27 @@ using System.Runtime.InteropServices;
 
 namespace {managed_lib_name}
 {{
-
-    internal static class RustInterop {{
+    internal static class RustString {{
         [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
-        internal static extern void String_delete(IntPtr c_char_ptr);
+        internal static extern void c_string_delete(IntPtr c_char_ptr);
+
+        [DllImport("{native_lib_name}", CallingConvention = CallingConvention.Cdecl)]
+        internal static extern /* *mut RustString */ IntPtr c_str_u16_to_string(/* *const u16 */ IntPtr c_string_ptr);
+
+        internal static string rust_to_dotnet(/* *const u16 */ IntPtr c_string_ptr)
+        {{
+            var dotnet_str = Marshal.PtrToStringUni(c_string_ptr);
+            RustString.c_string_delete(c_string_ptr);
+            return dotnet_str;
+        }}
+
+        internal static /* *mut RustString */ IntPtr dotnet_to_rust(string dotnet_str)
+        {{
+            var c_string_ptr = Marshal.StringToHGlobalUni(dotnet_str);
+            var rust_string_ptr = c_str_u16_to_string(c_string_ptr);
+            Marshal.FreeHGlobal(c_string_ptr);
+            return rust_string_ptr;
+        }}
     }}
 
     [System.Serializable]
