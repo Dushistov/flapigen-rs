@@ -15,6 +15,7 @@ use proc_macro2::TokenStream;
 use smol_str::SmolStr;
 use std::{collections::HashMap, rc::Rc};
 use syn::Type;
+use syn::spanned::Spanned;
 use rustc_hash::FxHashSet;
 use super::DotNetGenerator;
 use quote::ToTokens;
@@ -240,17 +241,17 @@ pub(crate) fn make_foreign_method_signature(
         syn::ReturnType::Default => DotNetArgInfo::new(
             DotNetTypeInfo::new_primitive("void".into(), dummy_rust_ty.clone()),
             ArgName::Return,
-            (class.src_id, class.span())
+            (class.src_id, method.fn_decl.output.span())
         ),
         syn::ReturnType::Type(_, ref ty) => DotNetArgInfo::new(
             map_type(
                 generator,
                 ty,
                 Direction::Outgoing,
-                (class.src_id, class.span()),
+                (class.src_id, method.fn_decl.output.span()),
             )?,
             ArgName::Return,
-            (class.src_id, class.span())
+            (class.src_id, method.fn_decl.output.span())
         )
     };
     let docstring = method.doc_comments.iter().map(|doc_line| {

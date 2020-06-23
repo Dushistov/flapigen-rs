@@ -539,7 +539,6 @@ foreign_typemap!(
         }
     }
     "#);
-
     ($p:r_type) <T1, T2> Result<T1, T2> => /* Result */ *mut ::std::os::raw::c_void {
         let $p: Result<swig_i_type!(T1), String> = $p.map(|ok_0| {
             swig_from_rust_to_i_type!(T1, ok_0, ok_1);
@@ -549,8 +548,7 @@ foreign_typemap!(
         });
         $out = Box::into_raw(Box::new($p)) as *mut ::std::os::raw::c_void;
     };
-    ($p:f_type) => "swig_f_type!(T1)" "RustResultT!().unwrap($p)";
-
+    ($p:f_type) => "/* throws */ swig_f_type!(T1)" "RustResultT!().unwrap($p)";
 );
 
 fn swig_collect_error_message(error: &dyn std::error::Error) -> String {

@@ -71,6 +71,21 @@ impl TestClass2 {
             t
         }
     }
+    pub fn try_new(t: TestClass) -> Result<TestClass2, TestError> {
+        Ok(Self {
+            t
+        })
+    }
+    pub fn opt_new(t: TestClass) -> Option<TestClass2> {
+        Some(Self {
+            t
+        })
+    }
+    pub fn tuple_new(t: TestClass) -> (TestClass2, i32) {
+        (Self {
+            t
+        }, 1)
+    }
     pub fn set_option_ref(&mut self, t: Option<&TestClass>) {
         if let Some(t) = t {
             self.t = t.clone();
@@ -113,10 +128,32 @@ foreigner_class!(
         constructor TestClass2::new(t: TestClass) -> TestClass2;
         fn TestClass2::set_option_ref(&mut self, t: Option<&TestClass>);
         fn TestClass2::option_ref(&self) -> Option<&TestClass>;
+        static_method TestClass2::opt_new(t: TestClass) -> Option<TestClass2>;
+        static_method TestClass2::tuple_new(t: TestClass) -> (TestClass2, i32);
+        static_method TestClass2::try_new(t: TestClass) -> Result<TestClass2, TestError>;
         fn TestClass2::clone(&self) -> TestClass2;
     }
 );
 
+pub struct Template<T> {
+    t: T
+}
+
+impl<T> Template<T> {
+    fn new(t: T) -> Result<Self, TestError> {
+        Ok(Self {
+            t
+        })
+    }
+}
+
+foreigner_class!{
+    class TemplateI32 {
+        self_type Template<i32>;
+        private constructor = empty;
+        // static_method Template::new(t: i32) -> Result<Template<i32>, TestError>;
+    }
+}
 
 pub struct TestStaticClass {}
 
@@ -168,6 +205,12 @@ impl TestStaticClass {
         str.map(|_| TestClass::new())
     }
 
+    pub fn maybe_return_template() -> Option<Template<i32>> {
+        Some(Template {
+            t: 1
+        })
+    }
+
     //pub fn maybe_return_class_ref<'a>(obj: Option<&TestClass>) -> Option<&TestClass> {
     //    obj
     //}
@@ -178,6 +221,10 @@ impl TestStaticClass {
 
     pub fn test_obj_by_value(obj: TestClass) {
         obj.print();
+    }
+
+    pub fn try_create_object_template() -> Result<Template<i32>, TestError> {
+        Ok(Template{t:1})
     }
 
     pub fn try_create_object_ok() -> Result<TestClass, TestError> {
@@ -231,8 +278,10 @@ foreigner_class!(
         //fn TestStaticClass::maybe_return_class_ref(obj: Option<&TestClass>) -> Option<&TestClass>;
         fn TestStaticClass::return_class_ref(obj: &TestClass) -> &TestClass;
         fn TestStaticClass::maybe_add_one(i: Option<i32>) -> Option<i32>;
+        fn TestStaticClass::maybe_return_template() -> Option<Template<i32>>;
         fn TestStaticClass::test_obj_by_value(obj: TestClass);
 
+        fn TestStaticClass::try_create_object_template() -> Result<Template<i32>, TestError>;
         fn TestStaticClass::try_create_object_ok() -> Result<TestClass, TestError>;
         fn TestStaticClass::try_create_object_err() -> Result<TestClass, TestError>;
         fn TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;
