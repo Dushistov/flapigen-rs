@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use std::sync::Mutex;
 
 pub enum TestEnum {
     A,
@@ -126,12 +128,13 @@ foreigner_class!(
         self_type TestClass2;
         /// Documentation for constructor
         constructor TestClass2::new(t: TestClass) -> TestClass2;
-        fn TestClass2::set_option_ref(&mut self, t: Option<&TestClass>);
-        fn TestClass2::option_ref(&self) -> Option<&TestClass>;
-        static_method TestClass2::opt_new(t: TestClass) -> Option<TestClass2>;
-        static_method TestClass2::tuple_new(t: TestClass) -> (TestClass2, i32);
-        static_method TestClass2::try_new(t: TestClass) -> Result<TestClass2, TestError>;
-        fn TestClass2::clone(&self) -> TestClass2;
+        //private constructor = empty;
+        // fn TestClass2::set_option_ref(&mut self, t: Option<&TestClass>);
+        // fn TestClass2::option_ref(&self) -> Option<&TestClass>;
+        // static_method TestClass2::opt_new(t: TestClass) -> Option<TestClass2>;
+        // static_method TestClass2::tuple_new(t: TestClass) -> (TestClass2, i32);
+        // static_method TestClass2::try_new(t: TestClass) -> Result<TestClass2, TestError>;
+        // fn TestClass2::clone(&self) -> TestClass2;
     }
 );
 
@@ -193,6 +196,10 @@ impl TestStaticClass {
         println!("{}", vec.len());
     }
 
+    pub fn print_slice_len(mut vec: &[i32]) {
+        println!("{}", vec.len());
+    }
+
     pub fn get_vec() -> Vec<i32> {
         vec![5, 6, 7]
     }
@@ -225,6 +232,10 @@ impl TestStaticClass {
 
     pub fn try_create_object_template() -> Result<Template<i32>, TestError> {
         Ok(Template{t:1})
+    }
+
+    pub fn try_empty_result() -> Result<(), TestError> {
+        Ok(())
     }
 
     pub fn try_create_object_ok() -> Result<TestClass, TestError> {
@@ -273,6 +284,7 @@ foreigner_class!(
         fn TestStaticClass::concat_str(a: &str, b: &str) -> String;
         //fn TestStaticClass::test_vec(vec: Vec<i32>) -> Vec<i32>;
         fn TestStaticClass::print_vec_len(vec: Vec<i32>);
+        fn TestStaticClass::print_slice_len(mut vec: &[i32]);
         fn TestStaticClass::get_vec() -> Vec<i32>;
         fn TestStaticClass::maybe_return_class(str: Option<String>) -> Option<TestClass>;
         //fn TestStaticClass::maybe_return_class_ref(obj: Option<&TestClass>) -> Option<&TestClass>;
@@ -281,7 +293,10 @@ foreigner_class!(
         fn TestStaticClass::maybe_return_template() -> Option<Template<i32>>;
         fn TestStaticClass::test_obj_by_value(obj: TestClass);
 
+        //fn TestStaticClass::return_test_2_ref() -> &TestClass2;
+
         fn TestStaticClass::try_create_object_template() -> Result<Template<i32>, TestError>;
+        fn TestStaticClass::try_empty_result() -> Result<(), TestError>;
         fn TestStaticClass::try_create_object_ok() -> Result<TestClass, TestError>;
         fn TestStaticClass::try_create_object_err() -> Result<TestClass, TestError>;
         fn TestStaticClass::reverse_enum(e: TestEnum) -> TestEnum;

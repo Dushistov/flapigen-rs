@@ -221,7 +221,7 @@ pub(crate) fn make_foreign_method_signature(
                 let self_ty_full = match self_variant {
                     SelfTypeVariant::Rptr => parse_type_spanned_checked!(span, & #self_ty),
                     SelfTypeVariant::RptrMut => parse_type_spanned_checked!(span, &mut #self_ty),
-                    _ => unimplemented!("Passing self by value not implemented yet"),
+                    SelfTypeVariant::Default | SelfTypeVariant::Mut => parse_type_spanned_checked!(span, #self_ty),
                 };
                 Ok(DotNetArgInfo::new(
                     map_type(
@@ -295,10 +295,15 @@ fn map_type(
     if let Some(intermediate) = rule.intermediate.as_ref() {
         let intermediate_rust_type = generator.conv_map[intermediate.intermediate_ty].clone();
         let intermediate_foreign_type =
-        find_foreign_type(generator, &intermediate_rust_type, direction, span)?;
+            find_foreign_type(generator, &intermediate_rust_type, direction, span)?;
+        let dotnet_type = if foreign_type.typename().contains("ResultVoid") {
+            "void".into()
+        } else {
+            foreign_type.typename().clone()
+        };
 
         Ok(DotNetTypeInfo {
-            dotnet_type: foreign_type.typename(),
+            dotnet_type,
             rust_type: rust_ty.clone(),
             dotnet_intermediate_type: intermediate_foreign_type.name.typename,
             rust_intermediate_type: intermediate_rust_type,

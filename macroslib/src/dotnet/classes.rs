@@ -161,7 +161,7 @@ impl ClassTypesInfo {
 
         Self {
             smart_pointer_type,
-            self_has_clone: class.clone_derived,
+            self_has_clone: class.clone_derived || class.copy_derived,
             self_type,
             self_type_ref,
             self_type_mut_ref,
@@ -389,5 +389,38 @@ fn register_main_foreign_types(
         name_prefix: None,
     };
     conv_map.alloc_foreign_type(class_ftype)?;
+
+    let class_ftype_ref = ForeignTypeS {
+        name: TypeName::new(format!("/* ref */ {}", class.name.to_string()), (class.src_id, class.name.span())),
+        provides_by_module: vec![],
+        into_from_rust: Some(ForeignConversationRule {
+            rust_ty: types_info.storage_type_ref.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
+                intermediate_ty: types_info.intermediate_ptr_type.to_idx(),
+                conv_code: Rc::new(TypeConvCode::new(
+                    format!(
+                        "new {class_name}({from})",
+                        class_name = class.name,
+                        from = FROM_VAR_TEMPLATE,
+                    ),
+                    invalid_src_id_span(),
+                )),
+            }),
+        }),
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: types_info.storage_type_ref.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
+                intermediate_ty: types_info.intermediate_ptr_type.to_idx(),
+                conv_code: Rc::new(TypeConvCode::new(
+                    format!("{from}.nativePtr", from = FROM_VAR_TEMPLATE),
+                    invalid_src_id_span(),
+                )),
+            }),
+        }),
+        name_prefix: None,
+    };
+    conv_map.alloc_foreign_type(class_ftype_ref)?;
     Ok(())
 }
