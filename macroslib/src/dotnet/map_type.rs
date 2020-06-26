@@ -114,15 +114,25 @@ impl DotNetArgInfo {
         }
         let dotnet_arg_name = name_generator.last_variant(self.arg_name.dotnet_variable_name());
         let new_dotnet_arg_name = name_generator.new_variant(self.arg_name.dotnet_variable_name());
-
-        format!(
-            "var {} = {};",
-            new_dotnet_arg_name,
-            self.type_info.dotnet_conversion_code
-                .to_string()
-                .replace(FROM_VAR_TEMPLATE, &dotnet_arg_name)
-                .replace(TO_VAR_TYPE_TEMPLATE, &new_dotnet_arg_name)
-        )
+        let is_result_void = self.type_info.dotnet_type.contains("ResultVoid");
+        if is_result_void {
+            format!(
+                "{};",
+                self.type_info.dotnet_conversion_code
+                    .to_string()
+                    .replace(FROM_VAR_TEMPLATE, &dotnet_arg_name)
+                    .replace(TO_VAR_TYPE_TEMPLATE, &new_dotnet_arg_name)
+            )
+        } else {
+            format!(
+                "var {} = {};",
+                new_dotnet_arg_name,
+                self.type_info.dotnet_conversion_code
+                    .to_string()
+                    .replace(FROM_VAR_TEMPLATE, &dotnet_arg_name)
+                    .replace(TO_VAR_TYPE_TEMPLATE, &new_dotnet_arg_name)
+            )
+        }
     }
 
     pub fn direction(&self) -> Direction {
@@ -296,11 +306,12 @@ fn map_type(
         let intermediate_rust_type = generator.conv_map[intermediate.intermediate_ty].clone();
         let intermediate_foreign_type =
             find_foreign_type(generator, &intermediate_rust_type, direction, span)?;
-        let dotnet_type = if foreign_type.typename().contains("ResultVoid") {
-            "void".into()
-        } else {
-            foreign_type.typename().clone()
-        };
+        let dotnet_type = 
+        // if foreign_type.typename().contains("ResultVoid") {
+        //     "void".into()
+        // } else {
+            foreign_type.typename().clone();
+        // };
 
         Ok(DotNetTypeInfo {
             dotnet_type,

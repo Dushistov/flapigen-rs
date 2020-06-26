@@ -560,14 +560,17 @@ namespace {managed_lib_name}
         } else {
             ""
         };
+        
         let maybe_dotnet_output_conversion = if returns_something {
             foreign_method_signature
-                .output
-                .dotnet_conversion_code(&mut name_generator)
+            .output
+            .dotnet_conversion_code(&mut name_generator)
         } else {
             String::new()
         };
-        let maybe_return = if returns_something {
+        
+        let is_result_void = foreign_method_signature.output.type_info.dotnet_type.contains("ResultVoid");
+        let maybe_return = if returns_something && !is_result_void {
             format!("return {};", name_generator.last_variant("__ret"))
         } else {
             String::new()
