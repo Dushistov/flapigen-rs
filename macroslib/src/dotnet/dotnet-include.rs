@@ -676,7 +676,7 @@ foreign_typemap!(
 
         #[allow(non_snake_case)]
         #[no_mangle]
-        unsafe extern "C" fn RustResultT_take_err(result: *mut Result<(), String>) -> /* c_str_u16 */ *const u16 {
+        unsafe extern "C" fn RustResultVoid_take_err(result: *mut Result<(), String>) -> /* c_str_u16 */ *const u16 {
             let ret_0 = Box::from_raw(result).expect_err("RustResultVoid_take_err: trying to take the error from Result::Ok");
             alloc_c_str_u16(&ret_0)
         }
