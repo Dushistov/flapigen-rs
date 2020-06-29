@@ -5,10 +5,10 @@ and use it through an automatically generated JNI wrapper.
 
 ## Project Structure
 
-The file `build.rs` defines how rust_swig generates wrapper code. It
+The file `build.rs` defines how flapigen generates wrapper code. It
 automatically finds a suitable `jni.h` and generates a rust source file against
 it. Then, the script recursively looks for files ending in `.rs.in` in the
-source directory and uses rust_swig to generate a JNI wrapper both in Rust and
+source directory and uses flapigen to generate a JNI wrapper both in Rust and
 in Java.
 
 This build script is intended to be launched from gradle through e.g. `./gradlew

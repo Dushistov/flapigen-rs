@@ -1,5 +1,5 @@
 [package]
-name = "rust_swig-android-tests"
+name = "flapigen-android-tests"
 version = "0.0.1"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 build = "build.rs"
@@ -15,6 +15,6 @@ log-panics = "2.0"
 android_logger = "0.8"
 
 [build-dependencies]
-rust_swig = { path = "../macroslib" }
+flapigen = { path = "../macroslib" }
 bindgen = "0.53.2"
 walkdir = "2.2.7"

@@ -6,7 +6,7 @@ use std::{
 };
 
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag};
-use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
+use flapigen::{CppConfig, Generator, JavaConfig, LanguageConfig};
 use tempfile::tempdir;
 
 #[test]
@@ -35,7 +35,7 @@ fn test_code_in_readme() {
                     "com.example".into(),
                 )))
                 .with_pointer_target_width(64);
-                swig_gen.expand("rust_swig_test_jni", &rust_path_src, &rust_path_dst);
+                swig_gen.expand("flapigen_test_jni", &rust_path_src, &rust_path_dst);
             }
 
             {
@@ -47,7 +47,7 @@ fn test_code_in_readme() {
                     "com_example".into(),
                 )))
                 .with_pointer_target_width(64);
-                swig_gen.expand("rust_swig_test_c++", &rust_path_src, &rust_path_dst);
+                swig_gen.expand("flapigen_test_c++", &rust_path_src, &rust_path_dst);
             }
         }
     }

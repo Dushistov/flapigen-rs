@@ -1,6 +1,6 @@
 use std::{env, path::Path};
 
-use rust_swig::{CppConfig, CppOptional, CppStrView, CppVariant, LanguageConfig};
+use flapigen::{CppConfig, CppOptional, CppStrView, CppVariant, LanguageConfig};
 
 fn main() {
     env_logger::init();
@@ -27,11 +27,11 @@ fn main() {
         cfg
     };
 
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg))
+    let swig_gen = flapigen::Generator::new(LanguageConfig::CppConfig(cpp_cfg))
         .rustfmt_bindings(true)
         .remove_not_generated_files_from_output_directory(true);
     swig_gen.expand(
-        "rust_swig_test_c++",
+        "flapigen_test_c++",
         Path::new("src/cpp_glue.rs.in"),
         &Path::new(&out_dir).join("cpp_glue.rs"),
     );

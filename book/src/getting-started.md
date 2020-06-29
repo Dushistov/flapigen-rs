@@ -14,7 +14,7 @@ For example:
 //build.rs
 {{#include ../../cpp-example/rust-part/build.rs}}
 ```
-Here you instruct `rust_swig` to generate C++/Rust code from "src/cpp_glue.rs.in" as **intput**:
+Here you instruct `flapigen` to generate C++/Rust code from "src/cpp_glue.rs.in" as **intput**:
 ```rust,no_run,noplaypen
 {{#include ../../cpp-example/rust-part/build.rs:rust_input}}
 ```
@@ -50,4 +50,4 @@ And connect generated code with your crate exactly how described in [Cargo book]
 {{#include ../../cpp-example/rust-part/src/cpp_glue.rs:connect}}
 ```
 
-Do not forget add `rust_swig` as dependency into `[build-dependencies]` section of crate's `Cargo.toml` file and you ready to go.
+Do not forget add `flapigen` as dependency into `[build-dependencies]` section of crate's `Cargo.toml` file and you ready to go.

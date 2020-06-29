@@ -6,7 +6,7 @@ Also you can use `trait` to describe callback from Rust to Java/C++:
 {{#include ../../jni_tests/src/java_glue.rs.in:trait_as_callback}}
 ```
 
-As result of `rust_swig` processing `foreign_callback!` it generates **interface** for Java and
+As result of `flapigen` processing `foreign_callback!` it generates **interface** for Java and
 abstract **class** for C++, so you can implements methods in Java/C++ and pass pointer/reference to Rust,
 and for Rust it would be represented as **trait** implementation.
 

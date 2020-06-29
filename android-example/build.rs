@@ -1,4 +1,4 @@
-use rust_swig::{JavaConfig, LanguageConfig};
+use flapigen::{JavaConfig, LanguageConfig};
 use std::{env, path::Path};
 
 fn main() {
@@ -7,7 +7,7 @@ fn main() {
     let in_src = Path::new("src").join("java_glue.rs.in");
     let out_src = Path::new(&out_dir).join("java_glue.rs");
     //ANCHOR: config
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(
+    let swig_gen = flapigen::Generator::new(LanguageConfig::JavaConfig(
         JavaConfig::new(
             Path::new("app")
                 .join("src")

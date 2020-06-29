@@ -22,12 +22,12 @@ of "foreign language" is not allow it, then you can write:
 {{#include ../../jni_tests/src/java_glue.rs.in:arc_mutex_usage}}
 ```
 
-And `rust_swig` will be instructed to generate code to call each method listed above 
+And `flapigen` will be instructed to generate code to call each method listed above 
 with `lock().unwrap().method` syntax.
 
 
 Also may be you want export `trait` implementation as `foregin_class`.
-The `rust_swig` can not work with `Box<Trait>`, because of it requires unstable/unsafe API to
+The `flapigen` can not work with `Box<Trait>`, because of it requires unstable/unsafe API to
 convert boxed trait to something that can be transferred via FFI border,
 but it can work with `Box<Box<Trait>>`, so via **self_type** you can represent boxed trait as class:
 
@@ -35,7 +35,7 @@ but it can work with `Box<Box<Trait>>`, so via **self_type** you can represent b
 {{#include ../../cpp_tests/src/cpp_glue.rs.in:boxed_trait}}
 ```
 
-Also that should be noted that `rust_swig` generates code that uses "Universal Function Call Syntax",
+Also that should be noted that `flapigen` generates code that uses "Universal Function Call Syntax",
 so method can be not real methods and declared outside of **impl** blocks:
 
 ```rust,no_run,noplaypen
@@ -68,14 +68,14 @@ while want in Rust use snake case style.
 
 ## foreigner_code
 
-Also rust_swig support bypassing of code generation:
+Also flapigen support bypassing of code generation:
 
 ```rust,no_run,noplaypen
 {{#include ../../jni_tests/src/java_glue.rs.in:foreign_code_usage}}
 ```
 
 after that you can implement Java_com_example_TestPathAndResult_do_1testHandArrayReturn
-function by your self, usefull when rust_swig can not handle something automaticaly,
+function by your self, usefull when flapigen can not handle something automaticaly,
 or you want something special.
 
 ## Doc comments

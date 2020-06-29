@@ -1,5 +1,5 @@
 [package]
-name = "rust_swig-android-example"
+name = "flapigen-android-example"
 version = "0.0.1"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 build = "build.rs"
@@ -16,5 +16,5 @@ android_logger = "0.8"
 jni-sys = "0.3.0"
 
 [build-dependencies]
-rust_swig = { path = "../macroslib" }
+flapigen = { path = "../macroslib" }
 env_logger = "0.7"

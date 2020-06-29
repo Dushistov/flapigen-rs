@@ -5,7 +5,7 @@ use std::{
 };
 
 use log::warn;
-use rust_swig::{rustfmt_cnt, CppConfig, Generator, JavaConfig, LanguageConfig};
+use flapigen::{rustfmt_cnt, CppConfig, Generator, JavaConfig, LanguageConfig};
 use syn::Token;
 use tempfile::tempdir;
 
@@ -409,11 +409,11 @@ impl Drop for PrintTestInfo {
             }
 
             println!(
-                "{} / {:?}: rust_swig generated such foreign_code: {}",
+                "{} / {:?}: flapigen generated such foreign_code: {}",
                 self.test_name, self.lang, self.code_pair.foreign_code
             );
             println!(
-                "{} / {:?}: rust_swig generated such rust_code: {}",
+                "{} / {:?}: flapigen generated such rust_code: {}",
                 self.test_name,
                 self.lang,
                 rustfmt_without_errors(self.code_pair.rust_code.clone()),

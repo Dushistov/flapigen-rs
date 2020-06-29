@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rust_swig::{JavaConfig, JavaReachabilityFence, LanguageConfig};
+use flapigen::{JavaConfig, JavaReachabilityFence, LanguageConfig};
 
 fn main() {
     env_logger::init();
@@ -27,11 +27,11 @@ fn main() {
 
     let in_src = Path::new("src").join("java_glue.rs.in");
     let out_src = Path::new(&out_dir).join("java_glue.rs");
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(java_cfg))
+    let swig_gen = flapigen::Generator::new(LanguageConfig::JavaConfig(java_cfg))
         .rustfmt_bindings(true)
         .remove_not_generated_files_from_output_directory(true)
         .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"));
-    swig_gen.expand("rust_swig_test_jni", &in_src, &out_src);
+    swig_gen.expand("flapigen_test_jni", &in_src, &out_src);
 
     println!("cargo:rerun-if-changed={}", in_src.display());
     println!("cargo:rerun-if-changed=src/chrono-include.rs");

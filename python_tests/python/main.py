@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from rust_swig_test_python import TestStaticClass, TestEnum, TestClass, TestArc, TestArcMutex, TestBox, Error as TestError
+from flapigen_test_python import TestStaticClass, TestEnum, TestClass, TestArc, TestArcMutex, TestBox, Error as TestError
 
 def test_static_methods():
     assert TestStaticClass.hello() == "Hello from rust"

@@ -1,12 +1,12 @@
 [package]
-name = "rust_swig_test_jni"
+name = "flapigen_test_jni"
 version = "0.1.0"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 build = "build.rs"
 edition = "2018"
 
 [lib]
-name = "rust_swig_test_jni"
+name = "flapigen_test_jni"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -17,5 +17,5 @@ env_logger = "0.7"
 [build-dependencies]
 env_logger = "0.7"
 log = "0.4.6"
-rust_swig = { path = "../macroslib" }
+flapigen = { path = "../macroslib" }
 bindgen = "0.53.2"

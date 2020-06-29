@@ -46,7 +46,7 @@ import com.example.rust.LongOperation;
 class Main {
     public static void main(String[] args) {
         try {
-            System.loadLibrary("rust_swig_test_jni");
+            System.loadLibrary("flapigen_test_jni");
         } catch (UnsatisfiedLinkError e) {
             System.out.println("Can not load library");
             throw e;

@@ -76,9 +76,9 @@ def run_jni_tests(use_shell, test_cfg):
     sys.stdout.flush()
     for cfg in test_cfg:
         if cfg == DEBUG:
-            subprocess.check_call(["cargo", "build", "-v", "--package", "rust_swig_test_jni"], shell=False)
+            subprocess.check_call(["cargo", "build", "-v", "--package", "flapigen_test_jni"], shell=False)
         elif cfg == RELEASE:
-            subprocess.check_call(["cargo", "build", "-v", "--release", "--package", "rust_swig_test_jni"], shell=False)
+            subprocess.check_call(["cargo", "build", "-v", "--release", "--package", "flapigen_test_jni"], shell=False)
         else:
             raise Exception("Fatal Error: Unknown cfg %s" % cfg)
 
@@ -180,12 +180,12 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
                 subprocess.check_call(["valgrind", "--error-exitcode=1", "--leak-check=full",
                                        "--show-leak-kinds=all", "--errors-for-leak-kinds=all",
                                        "--suppressions=../../valgrind.supp",
-                                       "./c++-rust-swig-test"], cwd = str(cur_cmake_build_dir))
+                                       "./c++-flapigen-test"], cwd = str(cur_cmake_build_dir))
 
 @show_timing
 def test_python(is_windows, test_cfg):
     for cfg in test_cfg:
-        cmd = ["cargo", "build", "-v", "--package", "rust_swig_test_python"]
+        cmd = ["cargo", "build", "-v", "--package", "flapigen_test_python"]
         if cfg == RELEASE:
             cmd.append("--release")
         env = os.environ.copy()
@@ -195,22 +195,22 @@ def test_python(is_windows, test_cfg):
         subprocess.check_call(cmd, shell = False, env = env)
         target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
         if is_windows:
-            shutil.copyfile(os.path.join(target_dir, "rust_swig_test_python.dll"), "python_tests/python/rust_swig_test_python.pyd")
+            shutil.copyfile(os.path.join(target_dir, "flapigen_test_python.dll"), "python_tests/python/flapigen_test_python.pyd")
             if os.getenv('platform') == "x64":
                 subprocess.check_call(["py", "-3.7-64", "main.py"], cwd = "python_tests/python")
             else:
                 # If we choose 32, we must also choose specific, minor python version.
                 subprocess.check_call(["py", "-3.7-32", "main.py"], cwd = "python_tests/python")
         else:
-            lib_name = "librust_swig_test_python.dylib" if sys.platform == "darwin" else "librust_swig_test_python.so"
-            shutil.copyfile(os.path.join(target_dir, lib_name), "python_tests/python/rust_swig_test_python.so")
+            lib_name = "libflapigen_test_python.dylib" if sys.platform == "darwin" else "libflapigen_test_python.so"
+            shutil.copyfile(os.path.join(target_dir, lib_name), "python_tests/python/flapigen_test_python.so")
             subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
 
 
 @show_timing
 def build_cargo_docs():
     print("build docs")
-    subprocess.check_call(["cargo", "doc", "-v", "--package", "rust_swig"])
+    subprocess.check_call(["cargo", "doc", "-v", "--package", "flapigen"])
 
 @show_timing
 def build_for_android(is_windows):
@@ -225,15 +225,15 @@ def build_for_android(is_windows):
 @show_timing
 def run_unit_tests(test_cfg, test_set):
     for cfg in test_cfg:
-        cmd_base = ["cargo", "test", "-v", "-p", "rust_swig"]
+        cmd_base = ["cargo", "test", "-v", "-p", "flapigen"]
         if CPP_TESTS in test_set:
             cmd_base.append("-p")
-            cmd_base.append("rust_swig_test_cpp")
+            cmd_base.append("flapigen_test_cpp")
             cmd_base.append("-p")
             cmd_base.append("cpp-example-rust-part")
         if JNI_TESTS in test_set:
             cmd_base.append("-p")
-            cmd_base.append("rust_swig_test_jni")
+            cmd_base.append("flapigen_test_jni")
         if cfg == DEBUG:
             pass
         elif cfg == RELEASE:

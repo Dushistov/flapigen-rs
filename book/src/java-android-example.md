@@ -1,6 +1,6 @@
 # Java/Android
 
-[This example](https://github.com/Dushistov/rust_swig/tree/master/android-example) shows off how to use rust to build a native library from android
+[This example](https://github.com/Dushistov/flapigen/tree/master/android-example) shows off how to use rust to build a native library from android
 and use it through an automatically generated JNI wrapper.
 
 [Android Studio](https://developer.android.com/studio) can be used to work with Rust via [Rust plugin](https://intellij-rust.github.io/).
@@ -9,7 +9,7 @@ thus you can build and run android application with Rust inside as ordinary Java
 
 ## Project Structure
 
-The file `build.rs` defines how rust_swig generates wrapper code:
+The file `build.rs` defines how flapigen generates wrapper code:
 
 ```rust,no_run,noplaypen
 // build.rs
@@ -22,7 +22,7 @@ The file `src/lib.rs` contains real code that will be invoked from Java:
 {{#include ../../android-example/src/lib.rs:rust_code}}
 ```
 
-And the file `src/java_glue.rs.in` contains description for rust_swig how export this API to Java:
+And the file `src/java_glue.rs.in` contains description for flapigen how export this API to Java:
 
 ```rust,no_run,noplaypen
 // src/java_glue.rs.in

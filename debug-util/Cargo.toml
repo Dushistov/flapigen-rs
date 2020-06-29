@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 env_logger = "0.7"
-rust_swig = { path = "../macroslib" }
+flapigen = { path = "../macroslib" }
