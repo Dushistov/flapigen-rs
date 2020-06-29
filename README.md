@@ -1,6 +1,8 @@
 # flapigen [![Build Status](https://dev.azure.com/dushistov/rust_swig/_apis/build/status/Dushistov.rust_swig?branchName=master)](https://dev.azure.com/dushistov/rust_swig/_build/latest?definitionId=2&branchName=master) [![License](https://img.shields.io/badge/license-BSD-green.svg)](https://github.com/Dushistov/flapigen/blob/master/LICENSE) [![Rust Documentation](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/flapigen)
 
 Tool for connecting programs or libraries written in Rust with other languages.
+Foreign language api generator - flapigen. Former name rust_swig was changed to not confuse
+with [swig](https://github.com/swig/swig).
 Currently implemented support for `C++` and `Java`, but you can write support
 for any language of your choice. For an instruction how to integrate flapigen with your
 project look [here](https://dushistov.github.io/flapigen/getting-started.html).
