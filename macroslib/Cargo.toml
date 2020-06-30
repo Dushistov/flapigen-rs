@@ -1,6 +1,6 @@
 [package]
 name = "flapigen"
-version = "0.6.0-pre1"
+version = "0.6.0-pre2"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 description = "Tool for connecting libraries written in Rust with other languages"
 license = "BSD-3-Clause"
@@ -34,6 +34,3 @@ jni-sys = "0.3.0"
 [build-dependencies]
 syn = { version = "1.0", features = ["full", "extra-traits", "visit-mut", "visit"] }
 quote = "1.0"
-
-[badges]
-azure-devops = { project = "Dushistov/flapigen", pipeline = "Dushistov.flapigen" }
