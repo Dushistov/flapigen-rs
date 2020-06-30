@@ -144,7 +144,7 @@ impl JavaConfig {
             if class.smart_ptr_copy_derived {
                 if class.copy_derived {
                     println!(
-                        "warning=class {} marked as Copy and {}, ignore Copy",
+                        "cargo:warning=class {} marked as Copy and {}, ignore Copy",
                         class.name, SMART_PTR_COPY_TRAIT
                     );
                 }

@@ -325,12 +325,12 @@ struct SourceCode {
     code: String,
 }
 
-static FOREIGNER_CLASS: &str = "foreigner_class";
+static FOREIGNER_CLASS_DEPRECATED: &str = "foreigner_class";
 static FOREIGN_CLASS: &str = "foreign_class";
 static FOREIGN_ENUM: &str = "foreign_enum";
-static FOREIGN_INTERFACE: &str = "foreign_interface";
+static FOREIGN_INTERFACE_DEPRECATED: &str = "foreign_interface";
 static FOREIGN_CALLBACK: &str = "foreign_callback";
-static FOREIGNER_CODE: &str = "foreigner_code";
+static FOREIGNER_CODE_DEPRECATED: &str = "foreigner_code";
 static FOREIGN_CODE: &str = "foreign_code";
 static FOREIGN_TYPEMAP: &str = "foreign_typemap";
 
@@ -497,10 +497,10 @@ impl Generator {
         for item in syn_file.items {
             if let syn::Item::Macro(mut item_macro) = item {
                 let is_our_macro = [
-                    FOREIGNER_CLASS,
+                    FOREIGNER_CLASS_DEPRECATED,
                     FOREIGN_CLASS,
                     FOREIGN_ENUM,
-                    FOREIGN_INTERFACE,
+                    FOREIGN_INTERFACE_DEPRECATED,
                     FOREIGN_CALLBACK,
                     FOREIGN_TYPEMAP,
                 ]
@@ -524,9 +524,15 @@ impl Generator {
                 }
                 let mut tts = TokenStream::new();
                 mem::swap(&mut tts, &mut item_macro.mac.tokens);
-                if item_macro.mac.path.is_ident(FOREIGNER_CLASS)
+                if item_macro.mac.path.is_ident(FOREIGNER_CLASS_DEPRECATED)
                     || item_macro.mac.path.is_ident(FOREIGN_CLASS)
                 {
+                    if item_macro.mac.path.is_ident(FOREIGNER_CLASS_DEPRECATED) {
+                        println!(
+                            "cargo:warning={} is deprecated, use {} instead",
+                            FOREIGNER_CLASS_DEPRECATED, FOREIGN_CLASS
+                        );
+                    }
                     let fclass = code_parse::parse_foreigner_class(src_id, &self.config, tts)?;
                     debug!("expand_foreigner_class: self_desc {:?}", fclass.self_desc);
                     self.conv_map.register_foreigner_class(&fclass);
@@ -534,9 +540,15 @@ impl Generator {
                 } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
                     let fenum = code_parse::parse_foreign_enum(src_id, tts)?;
                     items_to_expand.push(ItemToExpand::Enum(fenum));
-                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE)
+                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE_DEPRECATED)
                     || item_macro.mac.path.is_ident(FOREIGN_CALLBACK)
                 {
+                    if item_macro.mac.path.is_ident(FOREIGN_INTERFACE_DEPRECATED) {
+                        println!(
+                            "cargo:warning={} is deprecated, use {} instead",
+                            FOREIGN_INTERFACE_DEPRECATED, FOREIGN_CALLBACK
+                        );
+                    }
                     let finterface = code_parse::parse_foreign_interface(src_id, tts)?;
                     items_to_expand.push(ItemToExpand::Interface(finterface));
                 } else if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
@@ -674,11 +686,11 @@ pub fn rustfmt_cnt(source: Vec<u8>) -> io::Result<Vec<u8>> {
             "Rustfmt parsing errors.".to_string(),
         )),
         Some(3) => {
-            println!("warning=Rustfmt could not format some lines.");
+            println!("cargo:warning=Rustfmt could not format some lines.");
             Ok(src)
         }
         _ => {
-            println!("warning=Internal rustfmt error");
+            println!("cargo:warning=Internal rustfmt error");
             Ok(src)
         }
     }

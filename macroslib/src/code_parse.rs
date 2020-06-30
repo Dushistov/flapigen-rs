@@ -23,7 +23,7 @@ use crate::{
         ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
         SelfTypeVariant,
     },
-    LanguageConfig, FOREIGNER_CODE, FOREIGN_CODE, SMART_PTR_COPY_TRAIT,
+    LanguageConfig, FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE, SMART_PTR_COPY_TRAIT,
 };
 
 pub(crate) fn parse_foreigner_class(
@@ -229,7 +229,13 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             continue;
         }
 
-        if func_type_name == FOREIGNER_CODE || func_type_name == FOREIGN_CODE {
+        if func_type_name == FOREIGNER_CODE_DEPRECATED || func_type_name == FOREIGN_CODE {
+            if func_type_name == FOREIGNER_CODE_DEPRECATED {
+                println!(
+                    "cargo:warning={} is deprecated, use {} instead",
+                    FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE
+                );
+            }
             let lit: syn::LitStr = content.parse()?;
             debug!("foreigner_code {:?}", lit);
             foreigner_code.push_str(&lit.value());

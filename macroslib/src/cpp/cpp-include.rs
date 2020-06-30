@@ -302,76 +302,76 @@ typedef void (*CFnTwoArgsPtr!())(swig_f_type!(T1), swig_f_type!(T2));
 );
 
 foreign_typemap!(
-    generic_alias!(CRustPair = swig_concat_idents!(CRustPair, swig_i_type!(T1), swig_i_type!(T2)));
-    generic_alias!(CRustPairModule = swig_concat_idents!(rust_tuple, swig_i_type!(T1), swig_i_type!(T2)));
-    define_c_type!(
-         module = "CRustPairModule!().h";
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub struct CRustPair!() {
-            first: swig_i_type!(T1),
-            second: swig_i_type!(T2),
-        }
-    );
-    ($p:r_type) <T1, T2> (T1, T2) => CRustPair!() {
-        swig_from_rust_to_i_type!(T1, $p.0, p0)
-        swig_from_rust_to_i_type!(T2, $p.1, p1)
-        $out = CRustPair!() {
-            first: p0,
-            second: p1,
-        };
-    };
-    ($p:r_type) <T1, T2> (T1, T2) <= CRustPair!() {
-        swig_from_i_type_to_rust!(T1, $p.first, p0)
-        swig_from_i_type_to_rust!(T2, $p.second, p1)
-        $out = (p0, p1);
-    };
-    ($p:f_type, req_modules = ["\"CRustPairModule!().h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
-            "std::make_pair(swig_foreign_from_i_type!(T1, $p.first), swig_foreign_from_i_type!(T2, $p.second))";
-    ($p:f_type, req_modules = ["\"CRustPairModule!().h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
-        "swig_f_type!(CRustPair!()) { swig_foreign_to_i_type!(T1, $p.first), swig_foreign_to_i_type!(T2, $p.second) }";
- );
+   generic_alias!(CRustPair = swig_concat_idents!(CRustPair, swig_i_type!(T1), swig_i_type!(T2)));
+   generic_alias!(CRustPairModule = swig_concat_idents!(rust_tuple, swig_i_type!(T1), swig_i_type!(T2)));
+   define_c_type!(
+        module = "CRustPairModule!().h";
+       #[repr(C)]
+       #[derive(Clone, Copy)]
+       pub struct CRustPair!() {
+           first: swig_i_type!(T1),
+           second: swig_i_type!(T2),
+       }
+   );
+   ($p:r_type) <T1, T2> (T1, T2) => CRustPair!() {
+       swig_from_rust_to_i_type!(T1, $p.0, p0)
+       swig_from_rust_to_i_type!(T2, $p.1, p1)
+       $out = CRustPair!() {
+           first: p0,
+           second: p1,
+       };
+   };
+   ($p:r_type) <T1, T2> (T1, T2) <= CRustPair!() {
+       swig_from_i_type_to_rust!(T1, $p.first, p0)
+       swig_from_i_type_to_rust!(T2, $p.second, p1)
+       $out = (p0, p1);
+   };
+   ($p:f_type, req_modules = ["\"CRustPairModule!().h\"", "<utility>"]) => "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+           "std::make_pair(swig_foreign_from_i_type!(T1, $p.first), swig_foreign_from_i_type!(T2, $p.second))";
+   ($p:f_type, req_modules = ["\"CRustPairModule!().h\"", "<utility>"]) <= "std::pair<swig_f_type!(T1), swig_f_type!(T2)>"
+       "swig_f_type!(CRustPair!()) { swig_foreign_to_i_type!(T1, $p.first), swig_foreign_to_i_type!(T2, $p.second) }";
+);
 
 foreign_typemap!(
-    generic_alias!(CRustTuple3 = swig_concat_idents!(CRustTuple3, swig_i_type!(T1), swig_i_type!(T2), swig_i_type!(T3)));
-    generic_alias!(CRustTuple3Module = swig_concat_idents!(rust_tuple, swig_i_type!(T1), swig_i_type!(T2), swig_i_type!(T3)));
-    define_c_type!(
-         module = "CRustTuple3Module!().h";
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub struct CRustTuple3!() {
-            first: swig_i_type!(T1),
-            second: swig_i_type!(T2),
-            third: swig_i_type!(T3),
-        }
-    );
-    ($p:r_type) <T1, T2, T3> (T1, T2, T3) => CRustTuple3!() {
-        swig_from_rust_to_i_type!(T1, $p.0, p0)
-        swig_from_rust_to_i_type!(T2, $p.1, p1)
-        swig_from_rust_to_i_type!(T3, $p.2, p2)
-        $out = CRustTuple3!() {
-            first: p0,
-            second: p1,
-            third: p2,
-        };
-    };
-    ($p:r_type) <T1, T2, T3> (T1, T2, T3) <= CRustTuple3!() {
-        swig_from_i_type_to_rust!(T1, $p.first, p0)
-        swig_from_i_type_to_rust!(T2, $p.second, p1)
-        swig_from_i_type_to_rust!(T3, $p.third, p2)
-        $out = (p0, p1, p2);
-    };
-    ($p:f_type, req_modules = ["\"CRustTuple3Module!().h\"", "<tuple>"]) => "std::tuple<swig_f_type!(T1), swig_f_type!(T2), swig_f_type!(T3)>"
-        r#"std::make_tuple(swig_foreign_from_i_type!(T1, $p.first),
+   generic_alias!(CRustTuple3 = swig_concat_idents!(CRustTuple3, swig_i_type!(T1), swig_i_type!(T2), swig_i_type!(T3)));
+   generic_alias!(CRustTuple3Module = swig_concat_idents!(rust_tuple, swig_i_type!(T1), swig_i_type!(T2), swig_i_type!(T3)));
+   define_c_type!(
+        module = "CRustTuple3Module!().h";
+       #[repr(C)]
+       #[derive(Clone, Copy)]
+       pub struct CRustTuple3!() {
+           first: swig_i_type!(T1),
+           second: swig_i_type!(T2),
+           third: swig_i_type!(T3),
+       }
+   );
+   ($p:r_type) <T1, T2, T3> (T1, T2, T3) => CRustTuple3!() {
+       swig_from_rust_to_i_type!(T1, $p.0, p0)
+       swig_from_rust_to_i_type!(T2, $p.1, p1)
+       swig_from_rust_to_i_type!(T3, $p.2, p2)
+       $out = CRustTuple3!() {
+           first: p0,
+           second: p1,
+           third: p2,
+       };
+   };
+   ($p:r_type) <T1, T2, T3> (T1, T2, T3) <= CRustTuple3!() {
+       swig_from_i_type_to_rust!(T1, $p.first, p0)
+       swig_from_i_type_to_rust!(T2, $p.second, p1)
+       swig_from_i_type_to_rust!(T3, $p.third, p2)
+       $out = (p0, p1, p2);
+   };
+   ($p:f_type, req_modules = ["\"CRustTuple3Module!().h\"", "<tuple>"]) => "std::tuple<swig_f_type!(T1), swig_f_type!(T2), swig_f_type!(T3)>"
+       r#"std::make_tuple(swig_foreign_from_i_type!(T1, $p.first),
                            swig_foreign_from_i_type!(T2, $p.second),
                            swig_foreign_from_i_type!(T3, $p.third))"#;
-    ($p:f_type, req_modules = ["\"CRustTuple3Module!().h\"", "<tuple>"]) <= "std::tuple<swig_f_type!(T1), swig_f_type!(T2), swig_f_type!(T3)>"
-        r#"swig_f_type!(CRustTuple3!()) {
+   ($p:f_type, req_modules = ["\"CRustTuple3Module!().h\"", "<tuple>"]) <= "std::tuple<swig_f_type!(T1), swig_f_type!(T2), swig_f_type!(T3)>"
+       r#"swig_f_type!(CRustTuple3!()) {
                swig_foreign_to_i_type!(T1, $p.first),
                swig_foreign_to_i_type!(T2, $p.second),
                swig_foreign_to_i_type!(T3, $p.third),
         }"#;
- );
+);
 
 foreign_typemap!(
     ($pin:r_type) bool => ::std::os::raw::c_char {
@@ -438,24 +438,24 @@ foreign_typemap!(
             ret
         }
     );
-    foreigner_code!(module = "rust_str.h";
+    foreign_code!(module = "rust_str.h";
                     r##"
 #ifdef __cplusplus
 
 #include <string>
 "##
     );
-    foreigner_code!(module = "rust_str.h";
+    foreign_code!(module = "rust_str.h";
                     option = "CppStrView::Std17";
                     r##"
 #include <string_view>
 "##);
-    foreigner_code!(module = "rust_str.h";
+    foreign_code!(module = "rust_str.h";
                     option = "CppStrView::Boost";
                     r##"
 #include <boost/utility/string_view.hpp>
 "##);
-    foreigner_code!(module = "rust_str.h";
+    foreign_code!(module = "rust_str.h";
                     r##"
 namespace $RUST_SWIG_USER_NAMESPACE {
 class RustString final : private CRustString {
@@ -505,17 +505,17 @@ public:
     size_t size() const noexcept { return this->len; }
     bool empty() const noexcept { return this->len == 0; }
 "##);
-    foreigner_code!(module = "rust_str.h";
+    foreign_code!(module = "rust_str.h";
                     option = "CppStrView::Std17";
                     r##"
     std::string_view to_string_view() const { return std::string_view(data, len); }
 "##);
-    foreigner_code!(module = "rust_str.h";
+    foreign_code!(module = "rust_str.h";
                     option = "CppStrView::Boost";
                     r#"
     boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
 "#);
-    foreigner_code!(module = "rust_str.h";
+    foreign_code!(module = "rust_str.h";
                     r##"
 private:
     void free_mem() noexcept
@@ -672,7 +672,7 @@ foreign_typemap!(
             len: usize,
             step: usize,
         });
-    foreigner_code!(module = "rust_slice.h";
+    foreign_code!(module = "rust_slice.h";
                     r##"
 #ifdef __cplusplus
 #include "rust_foreign_slice_impl.hpp"
@@ -705,7 +705,7 @@ foreign_typemap!(
             len: usize,
             step: usize,
         });
-    foreigner_code!(module = "rust_slice_mut.h";
+    foreign_code!(module = "rust_slice_mut.h";
                     r##"
 #ifdef __cplusplus
 #include "rust_foreign_slice_impl.hpp"
@@ -765,7 +765,7 @@ foreign_typemap!(
             len: usize,
         }
     );
-    foreigner_code!(module = "CRustSlice!().h";
+    foreign_code!(module = "CRustSlice!().h";
                     r##"
 #ifdef __cplusplus
 #include "rust_slice_tmpl.hpp"
@@ -798,7 +798,7 @@ foreign_typemap!(
             len: usize,
         }
     );
-    foreigner_code!(module = "CRustSliceMut!().h";
+    foreign_code!(module = "CRustSliceMut!().h";
                     r##"
 #ifdef __cplusplus
 #include "rust_slice_tmpl.hpp"
@@ -841,7 +841,7 @@ foreign_typemap!(
             drop(v);
         }
     );
-    foreigner_code!(module = "CRustVecModule!().h";
+    foreign_code!(module = "CRustVecModule!().h";
                     r##"
 #ifdef __cplusplus
 
@@ -980,7 +980,7 @@ foreign_typemap!(
         }
     );
 
-    foreigner_code!(module = "CForeignVecModule!().h";
+    foreign_code!(module = "CForeignVecModule!().h";
                     r##"
 #ifdef __cplusplus
 
@@ -1007,119 +1007,119 @@ using CForeignVecModule!() = RustForeignVec<swig_f_type!(&T, output), CRustForei
 // order is important!!!
 // we map () to void, but C++ can not handle std::variant<void,..>
 foreign_typemap!(
-    generic_alias!(CRustRes = swig_concat_idents!(CRustVoidOkResult, swig_i_type!(T)));
-    generic_alias!(CRustResUnion = swig_concat_idents!(CRustVoidOkResultUnion, swig_i_type!(T)));
-    generic_alias!(CRustResModule = swig_concat_idents!(rust_void_ok_result, swig_i_type!(T)));
-    define_c_type!(
-        module = "CRustResModule!().h";
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub union CRustResUnion!() {
-            ok: u8,
-            err: swig_i_type!(T),
-        }
+   generic_alias!(CRustRes = swig_concat_idents!(CRustVoidOkResult, swig_i_type!(T)));
+   generic_alias!(CRustResUnion = swig_concat_idents!(CRustVoidOkResultUnion, swig_i_type!(T)));
+   generic_alias!(CRustResModule = swig_concat_idents!(rust_void_ok_result, swig_i_type!(T)));
+   define_c_type!(
+       module = "CRustResModule!().h";
+       #[repr(C)]
+       #[derive(Clone, Copy)]
+       pub union CRustResUnion!() {
+           ok: u8,
+           err: swig_i_type!(T),
+       }
 
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub struct CRustRes!() {
-            data: CRustResUnion!(),
-            is_ok: u8,
-        }
-    );
-    ($p:r_type) <T> Result<(), T> => CRustRes!() {
-        $out = match $p {
-            Ok(()) => {
-                CRustRes!() {
-                    data: CRustResUnion!() { ok: 0 },
-                    is_ok: 1,
-                }
-            }
-            Err(err) => {
-                swig_from_rust_to_i_type!(T, err, err)
-                CRustRes!() {
-                    data: CRustResUnion!() { err },
-                    is_ok: 0,
-                }
-            }
-        };
-    };
+       #[repr(C)]
+       #[derive(Clone, Copy)]
+       pub struct CRustRes!() {
+           data: CRustResUnion!(),
+           is_ok: u8,
+       }
+   );
+   ($p:r_type) <T> Result<(), T> => CRustRes!() {
+       $out = match $p {
+           Ok(()) => {
+               CRustRes!() {
+                   data: CRustResUnion!() { ok: 0 },
+                   is_ok: 1,
+               }
+           }
+           Err(err) => {
+               swig_from_rust_to_i_type!(T, err, err)
+               CRustRes!() {
+                   data: CRustResUnion!() { err },
+                   is_ok: 0,
+               }
+           }
+       };
+   };
 
-    ($p:f_type, option = "CppVariant::Boost", req_modules = ["\"CRustResModule!().h\"", "<boost/variant.hpp>"]) => "boost::variant<void *, swig_f_type!(T)>"
-        r#"$p.is_ok != 0 ?
+   ($p:f_type, option = "CppVariant::Boost", req_modules = ["\"CRustResModule!().h\"", "<boost/variant.hpp>"]) => "boost::variant<void *, swig_f_type!(T)>"
+       r#"$p.is_ok != 0 ?
             boost::variant<void *, swig_f_type!(T)> { nullptr } :
             boost::variant<void *, swig_f_type!(T)> { swig_foreign_from_i_type!(T, $p.data.err) }"#;
 
-    ($p:f_type, option = "CppVariant::Std17", req_modules = ["\"CRustResModule!().h\"", "<variant>"]) => "std::variant<void *, swig_f_type!(T)>"
-        r#"$p.is_ok != 0 ?
+   ($p:f_type, option = "CppVariant::Std17", req_modules = ["\"CRustResModule!().h\"", "<variant>"]) => "std::variant<void *, swig_f_type!(T)>"
+       r#"$p.is_ok != 0 ?
             std::variant<void *, swig_f_type!(T)> { nullptr } :
             std::variant<void *, swig_f_type!(T)> { swig_foreign_from_i_type!(T, $p.data.err) }"#;
- );
+);
 
 foreign_typemap!(
-    generic_alias!(CRustRes = swig_concat_idents!(CRustResult, swig_i_type!(T1), swig_i_type!(T2)));
-    generic_alias!(CRustResUnion = swig_concat_idents!(CRustResultUnion, swig_i_type!(T1), swig_i_type!(T2)));
-    generic_alias!(CRustResModule = swig_concat_idents!(rust_result, swig_i_type!(T1), swig_i_type!(T2)));
-    define_c_type!(
-         module = "CRustResModule!().h";
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub union CRustResUnion!() {
-            ok: swig_i_type!(T1),
-            err: swig_i_type!(T2),
-        }
+   generic_alias!(CRustRes = swig_concat_idents!(CRustResult, swig_i_type!(T1), swig_i_type!(T2)));
+   generic_alias!(CRustResUnion = swig_concat_idents!(CRustResultUnion, swig_i_type!(T1), swig_i_type!(T2)));
+   generic_alias!(CRustResModule = swig_concat_idents!(rust_result, swig_i_type!(T1), swig_i_type!(T2)));
+   define_c_type!(
+        module = "CRustResModule!().h";
+       #[repr(C)]
+       #[derive(Clone, Copy)]
+       pub union CRustResUnion!() {
+           ok: swig_i_type!(T1),
+           err: swig_i_type!(T2),
+       }
 
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub struct CRustRes!() {
-            data: CRustResUnion!(),
-            is_ok: u8,
-        }
-    );
-    ($p:r_type) <T1, T2> Result<T1, T2> => CRustRes!() {
-        $out = match $p {
-            Ok(mut x) => {
-                swig_from_rust_to_i_type!(T1, x, ok)
-                CRustRes!() {
-                    data: CRustResUnion!() { ok },
-                    is_ok: 1,
-                }
-            }
-            Err(err) => {
-                swig_from_rust_to_i_type!(T2, err, err)
-                CRustRes!() {
-                    data: CRustResUnion!() { err },
-                    is_ok: 0,
-                }
-            }
-        };
-    };
+       #[repr(C)]
+       #[derive(Clone, Copy)]
+       pub struct CRustRes!() {
+           data: CRustResUnion!(),
+           is_ok: u8,
+       }
+   );
+   ($p:r_type) <T1, T2> Result<T1, T2> => CRustRes!() {
+       $out = match $p {
+           Ok(mut x) => {
+               swig_from_rust_to_i_type!(T1, x, ok)
+               CRustRes!() {
+                   data: CRustResUnion!() { ok },
+                   is_ok: 1,
+               }
+           }
+           Err(err) => {
+               swig_from_rust_to_i_type!(T2, err, err)
+               CRustRes!() {
+                   data: CRustResUnion!() { err },
+                   is_ok: 0,
+               }
+           }
+       };
+   };
 
-    ($p:f_type, option = "CppVariant::Boost", req_modules = ["\"CRustResModule!().h\"", "<boost/variant.hpp>"]) => "boost::variant<swig_f_type!(T1), swig_f_type!(T2)>"
-        r#"$p.is_ok != 0 ?
+   ($p:f_type, option = "CppVariant::Boost", req_modules = ["\"CRustResModule!().h\"", "<boost/variant.hpp>"]) => "boost::variant<swig_f_type!(T1), swig_f_type!(T2)>"
+       r#"$p.is_ok != 0 ?
               boost::variant<swig_f_type!(T1), swig_f_type!(T2)> { swig_foreign_from_i_type!(T1, $p.data.ok) } :
               boost::variant<swig_f_type!(T1), swig_f_type!(T2)> { swig_foreign_from_i_type!(T2, $p.data.err) }"#;
 
-    ($p:f_type, option = "CppVariant::Std17", req_modules = ["\"CRustResModule!().h\"", "<variant>"]) => "std::variant<swig_f_type!(T1), swig_f_type!(T2)>"
-        r#"$p.is_ok != 0 ?
+   ($p:f_type, option = "CppVariant::Std17", req_modules = ["\"CRustResModule!().h\"", "<variant>"]) => "std::variant<swig_f_type!(T1), swig_f_type!(T2)>"
+       r#"$p.is_ok != 0 ?
               std::variant<swig_f_type!(T1), swig_f_type!(T2)> { swig_foreign_from_i_type!(T1, $p.data.ok) } :
               std::variant<swig_f_type!(T1), swig_f_type!(T2)> { swig_foreign_from_i_type!(T2, $p.data.err) }"#;
 
-    ($p:r_type) <T1, T2> Result<T1, T2> <= CRustRes!() {
-        $out = unsafe {
-            if $p.is_ok != 0 {
-                swig_from_i_type_to_rust!(T1, $p.data.ok, x)
-                Ok(x)
-            } else {
-                swig_from_i_type_to_rust!(T1, $p.data.err, x)
-                Err(x)
-            }
-        };
-    };
+   ($p:r_type) <T1, T2> Result<T1, T2> <= CRustRes!() {
+       $out = unsafe {
+           if $p.is_ok != 0 {
+               swig_from_i_type_to_rust!(T1, $p.data.ok, x)
+               Ok(x)
+           } else {
+               swig_from_i_type_to_rust!(T1, $p.data.err, x)
+               Err(x)
+           }
+       };
+   };
 
-    ($p:f_type, option = "CppVariant::Boost", $tmp:temporary,
-     req_modules = ["\"CRustResModule!().h\"", "<boost/variant.hpp>", "<cassert>"])
-        <= "boost::variant<swig_f_type!(T1), swig_f_type!(T2)>"
-        r#"
+   ($p:f_type, option = "CppVariant::Boost", $tmp:temporary,
+    req_modules = ["\"CRustResModule!().h\"", "<boost/variant.hpp>", "<cassert>"])
+       <= "boost::variant<swig_f_type!(T1), swig_f_type!(T2)>"
+       r#"
             $out;
             if (boost::get<swig_f_type!(T1)>(&$p) != nullptr) {
                 swig_f_type!(T1) $tmp = boost::get<swig_f_type!(T1)>(std::move($p));
@@ -1132,10 +1132,10 @@ foreign_typemap!(
                 $out.is_ok = 0;
             }"#;
 
-    ($p:f_type, option = "CppVariant::Std17", $tmp:temporary,
-     req_modules = ["\"CRustResModule!().h\"", "<variant>"])
-        <= "std::variant<swig_f_type!(T1), swig_f_type!(T2)>"
-        r#"
+   ($p:f_type, option = "CppVariant::Std17", $tmp:temporary,
+    req_modules = ["\"CRustResModule!().h\"", "<variant>"])
+       <= "std::variant<swig_f_type!(T1), swig_f_type!(T2)>"
+       r#"
             $out;
             if (std::get_if<swig_f_type!(T1)>(&$p) != nullptr) {
                 swig_f_type!(T1) $tmp = std::get<swig_f_type!(T1)>(std::move($p));
@@ -1147,4 +1147,4 @@ foreign_typemap!(
                 $out.data.err = swig_foreign_to_i_type!(T2, $tmp);
                 $out.is_ok = 0;
             }"#;
- );
+);

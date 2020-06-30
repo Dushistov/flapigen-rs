@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use petgraph::Direction;
 use syn::Type;
 
@@ -292,8 +292,8 @@ fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet
         }
         true
     } else {
-        println!(
-            "warning=mapping types: type {} unknown",
+        warn!(
+            "is_ty_implement_traits: type {} unknown",
             DisplayToTokens(ty)
         );
         false

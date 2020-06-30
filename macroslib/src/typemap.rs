@@ -763,7 +763,7 @@ impl TypeMap {
                                 ));
                             } else {
                                 println!(
-                                    "warning=No foreign_class for type '{}'",
+                                    "cargo:warning=No foreign_class for type '{}'",
                                     rust_ty.normalized_name
                                 );
                             }
@@ -870,7 +870,7 @@ impl TypeMap {
                         Ok(addon_path) => addon_path.len(),
                         Err(_err) => {
                             println!(
-                                "warning=can not build path between foreign type
+                                "cargo:warning=can not build path between foreign type
  '{}' / '{}' and it's intermidiate '{}'",
                                 self[*ftype_idx].name, self[*other], self[*inter_ty]
                             );
