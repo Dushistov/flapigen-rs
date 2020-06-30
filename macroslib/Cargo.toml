@@ -1,13 +1,13 @@
 [package]
 name = "rust_swig"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 description = "Tool for connecting libraries written in Rust with other languages"
 license = "BSD-3-Clause"
 keywords = ["swig", "java", "jni", "ffi", "cxx"]
 repository = "https://github.com/Dushistov/rust_swig"
 documentation = "https://docs.rs/rust_swig"
-readme = "../README.md"
+readme = "README.md"
 edition = "2018"
 
 [dependencies]
