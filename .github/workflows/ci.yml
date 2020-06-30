@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    - cron: '00 01 */4 * *'
+
+env:
+  RUST_BACKTRACE: 1
+  RUSTUP_MAX_RETRIES: 10
+  CARGO_NET_RETRY: 10
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust: [stable, beta]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+
+      # We need to disable the existing toolchain to avoid updating rust-docs
+      # which takes a long time. The fastest way to do this is to rename the
+      # existing folder, as deleting it takes about as much time as not doing
+      # anything and just updating rust-docs.
+      - name: Rename existing rust toolchain (Windows)
+        if: matrix.os == 'windows-latest'
+        run: Rename-Item C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc.old
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          profile: minimal
+          override: true
+          components: rustfmt
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7.8'
+      - uses: jwlawson/actions-setup-cmake@v1.0
+        if: matrix.os != 'windows-latest'
+        with:
+          cmake-version: '3.9.6'
+          github-api-token: ${{ secrets.GITHUB_TOKEN }}
+      # visual studio 16 2019 not supported until cmake 3.14
+      - uses: jwlawson/actions-setup-cmake@v1.0
+        if: matrix.os == 'windows-latest'
+        with:
+          cmake-version: '3.14.7'
+          github-api-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install boost
+        if: matrix.os != 'ubuntu-latest'
+        run: |
+          set -e
+          export TAR="boost_1_66_0.tar.gz"
+          curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.66.0/source/$TAR
+          tar -xzvf $TAR
+          echo "::set-env name=BOOST_ROOT::$PWD/boost_1_66_0"
+        shell: bash
+      - name: Install boost
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -e
+          export TAR="boost_1_73_0.tar.gz"
+          curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.73.0/source/$TAR
+          tar -xzvf $TAR
+          echo "::set-env name=BOOST_ROOT::$PWD/boost_1_73_0"
+        shell: bash
+      - name: Install valgrind for linux
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get install valgrind
+      - name: Install llvm tools on Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          set -e
+          curl https://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
+          7z x llvm-installer.exe -oc:\\llvm-binary
+          echo "::set-env name=LIBCLANG_PATH::C:\\llvm-binary\\bin"
+          echo "::add-path::c:\\llvm-binary\\bin"
+        shell: bash
+      - name: Check versions
+        run: |
+          set -e
+          clang --version
+          rustc --version
+          cargo --version
+          cmake --version
+          javac -version
+          python --version
+          echo "end of versions checking"
+        shell: bash
+      - name: Setup platform variable (for windows build)
+        run: |
+          echo '::set-env name=platform::x64'
+        shell: bash
+      - name: Run tests
+        run: |
+          set -e
+          cd $GITHUB_WORKSPACE
+          cp workspace.Cargo.toml Cargo.toml
+          python -c "fin = open('Cargo.toml', 'r'); res = fin.read().replace('debug = true', '').replace('incremental = true', ''); fin.close(); fout = open('Cargo.toml', 'w'); fout.write(res + '\n'); fout.close();"
+          python ci_build_and_test.py --skip-android-tests
+        shell: bash
