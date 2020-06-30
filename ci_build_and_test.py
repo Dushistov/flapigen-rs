@@ -99,12 +99,10 @@ def run_jni_tests(use_shell, test_cfg):
         run_jar(target_dir, jar_dir, use_shell, ["-Xcomp"])
 
 def calc_cmake_generator():
-    if sys.platform == 'win32':
-        cmake_generator = "Visual Studio 15 2017"
-        if os.getenv('platform') == "x64":
-            cmake_generator = "Visual Studio 15 2017 Win64"
+    if sys.platform == 'win32' or sys.platform == 'win64':
+        cmake_generator = ["-G", "Visual Studio 16 2019", "-A", "x64"]
     else:
-        cmake_generator = "Unix Makefiles"
+        cmake_generator = ["-G", "Unix Makefiles"]
     return cmake_generator
 
 def find_target_path_in_cmakecache(cmake_build_dir):
@@ -118,12 +116,13 @@ def find_target_path_in_cmakecache(cmake_build_dir):
 
 @show_timing
 def build_cpp_example():
-    cmake_generator = calc_cmake_generator()
     dir_path = os.path.join("cpp-example", "cpp-part")
     cmake_build_dir = os.path.join(dir_path, "build")
     if not os.path.exists(cmake_build_dir):
         os.makedirs(cmake_build_dir)
-    cmake_args = ["cmake", "-G", cmake_generator, "-DCMAKE_BUILD_TYPE:String=Release"]
+    cmake_args = ["cmake"]
+    cmake_args.extend(calc_cmake_generator())
+    cmake_args.append("-DCMAKE_BUILD_TYPE:String=Release")
     subprocess.check_call(cmake_args + [".."], cwd = str(cmake_build_dir))
     if sys.platform == 'win32' or sys.platform == 'win64':
         subprocess.check_call(["cmake", "--build", ".", "--config", RELEASE], cwd = str(cmake_build_dir))
@@ -140,8 +139,9 @@ def build_cpp_example():
 
 @show_timing
 def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
-    cmake_generator = calc_cmake_generator()
-    cmake_args = ["cmake", "-G", cmake_generator] + addon_params
+    cmake_args = ["cmake"]
+    cmake_args.extend(calc_cmake_generator())
+    cmake_args.extend(addon_params)
     if sys.platform == 'win32' or sys.platform == 'win64':
         if os.path.exists(cmake_build_dir):
             #at there is problem with multiply build directories for one source tree
