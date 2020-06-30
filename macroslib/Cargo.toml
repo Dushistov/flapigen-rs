@@ -35,5 +35,3 @@ jni-sys = "0.3.0"
 syn = { version = "1.0", features = ["full", "extra-traits", "visit-mut", "visit"] }
 quote = "1.0"
 
-[badges]
-azure-devops = { project = "Dushistov/rust_swig", pipeline = "Dushistov.rust_swig" }
