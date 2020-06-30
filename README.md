@@ -5,7 +5,7 @@ Foreign language api generator - flapigen. Former name rust_swig was changed to 
 with [swig](https://github.com/swig/swig).
 Currently implemented support for `C++` and `Java`, but you can write support
 for any language of your choice. For an instruction how to integrate flapigen with your
-project look [here](https://dushistov.github.io/flapigen/getting-started.html).
+project look [here](https://dushistov.github.io/flapigen-rs/getting-started.html).
 
 Suppose you have the following Rust code:
 
@@ -68,5 +68,5 @@ C++ code to call these C functions.
 
 ## Users Guide
 
-[📚 Read the `flapigen` users guide here! 📚](https://dushistov.github.io/flapigen/)
+[📚 Read the `flapigen` users guide here! 📚](https://dushistov.github.io/flapigen-rs/)
 
