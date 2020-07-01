@@ -95,6 +95,7 @@ pub(crate) struct ForeignMethod {
     pub(crate) access: MethodAccess,
     pub(crate) doc_comments: Vec<String>,
     pub(crate) inline_block: Option<syn::Block>,
+    pub(crate) unknown_attrs: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -198,14 +199,14 @@ pub(crate) enum MethodAccess {
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
-pub(crate) enum MethodVariant {
+pub enum MethodVariant {
     Constructor,
     Method(SelfTypeVariant),
     StaticMethod,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
-pub(crate) enum SelfTypeVariant {
+pub enum SelfTypeVariant {
     RptrMut,
     Rptr,
     Mut,

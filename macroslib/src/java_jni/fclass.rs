@@ -14,6 +14,7 @@ use super::{
 };
 use crate::{
     error::{panic_on_syn_error, DiagnosticError, Result, SourceIdSpan},
+    extension::extend_foreign_class,
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
@@ -506,6 +507,15 @@ May be you need to use `private constructor = empty;` syntax?",
     file.write_all(class.foreign_code.as_bytes())
         .expect(WRITE_TO_MEM_FAILED_MSG);
     write!(file, "}}").expect(WRITE_TO_MEM_FAILED_MSG);
+
+    let mut cnt = file.take_content();
+    extend_foreign_class(
+        class,
+        &mut cnt,
+        ctx.class_ext_handlers,
+        ctx.method_ext_handlers,
+    )?;
+    file.replace_content(cnt);
 
     file.update_file_if_necessary()
         .map_err(DiagnosticError::map_any_err_to_our_err)?;

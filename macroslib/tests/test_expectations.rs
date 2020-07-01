@@ -354,6 +354,99 @@ foreign_interface!(interface RepoChangedCallback {
     }
 }
 
+#[test]
+fn test_derive_extension_usage() {
+    let _ = env_logger::try_init();
+    let rust_src = r#"
+foreign_class!(
+#[derive(QObject)]
+class MyObj {
+    self_type MyObj;
+    private constructor MyObj::new() -> MyObj;
+    #[Q_INVOKABLE]
+    fn MyObj::f();
+});
+"#;
+    let tmp_dir = tempdir().expect("Can not create tmp directory");
+    let swig_gen = Generator::new(LanguageConfig::CppConfig(CppConfig::new(
+        tmp_dir.path().into(),
+        "org_examples".into(),
+    )))
+    .with_pointer_target_width(64)
+    .register_class_attribute_callback("QObject", |code, class_name| {
+        println!("class attribute callback class_name {}", class_name);
+        let include = b"#include";
+        let mut last_pos = 0;
+        let mut search_shift = 0;
+        while let Some(pos) = find_subsequence(&code[(last_pos + search_shift)..], include) {
+            last_pos += pos + search_shift;
+            search_shift = 1;
+        }
+        let last_include_pos = last_pos;
+        let new_line = &code[last_include_pos..].iter().position(|x| *x == b'\n');
+        let new_line_pos = last_include_pos + new_line.unwrap();
+        let addon = br##"
+#include <QObject>
+"##;
+        code.splice(new_line_pos..new_line_pos, addon.iter().copied());
+
+        let needle = format!("class {}Wrapper {{", class_name);
+        let class_pos = find_subsequence(&code, needle.as_bytes()).unwrap();
+        let end_pos = class_pos + needle.as_bytes().len();
+        let new_code = format!(
+            r#"class {}Wrapper : public QObject {{
+    Q_OBJECT"#,
+            class_name
+        );
+        code.splice(class_pos..end_pos, new_code.as_bytes().iter().copied());
+    })
+    .register_method_attribute_callback("Q_INVOKABLE", |code, ctx| {
+        println!(
+            "method attribute callback class {}, method {}",
+            ctx.class_name, ctx.method_name
+        );
+        let needle = match ctx.variant {
+            flapigen::MethodVariant::Constructor => {
+                panic!("unsupported");
+            }
+            flapigen::MethodVariant::Method(_) => format!("void {}(", ctx.method_name),
+            flapigen::MethodVariant::StaticMethod => format!("static void {}(", ctx.method_name),
+        };
+        let pos = find_subsequence(&code, needle.as_bytes()).unwrap();
+        code.splice(pos..pos, b"Q_INVOKABLE ".iter().copied());
+    });
+    let rust_code_path = tmp_dir.path().join("test.rs");
+
+    let rust_src_path = tmp_dir.path().join("src.rs");
+    fs::write(&rust_src_path, rust_src).unwrap();
+    swig_gen.expand("derive_extension_usage", rust_src_path, &rust_code_path);
+
+    let _rust_code = fs::read_to_string(rust_code_path).unwrap();
+    let foreign_code = collect_code_in_dir(tmp_dir.path(), &[".h", ".hpp"]).unwrap();
+    println!("foreign_code: {}", foreign_code);
+    assert!(foreign_code.contains(
+        r##"#include <QObject>
+"##
+    ));
+    assert!(foreign_code.contains(
+        r#"
+class MyObjWrapper : public QObject {
+    Q_OBJECT
+"#
+    ));
+    assert!(foreign_code.contains("Q_INVOKABLE static void f()"));
+    tmp_dir.close().unwrap();
+}
+
+fn find_subsequence<T>(haystack: &[T], needle: &[T]) -> Option<usize>
+where
+    for<'a> &'a [T]: PartialEq,
+{
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 enum ForeignLang {
     Java,

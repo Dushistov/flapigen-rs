@@ -14,6 +14,7 @@ use crate::{
         CppForeignMethodSignature, CppForeignTypeInfo, MethodContext,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
+    extension::extend_foreign_class,
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
@@ -716,6 +717,16 @@ using {class_name}Ref = {base_class_name}<false>;
     c_include_f
         .update_file_if_necessary()
         .map_err(map_write_err!(c_path))?;
+
+    let mut cnt = cpp_include_f.take_content();
+    extend_foreign_class(
+        class,
+        &mut cnt,
+        ctx.class_ext_handlers,
+        ctx.method_ext_handlers,
+    )?;
+    cpp_include_f.replace_content(cnt);
+
     cpp_include_f
         .update_file_if_necessary()
         .map_err(map_write_err!(cpp_path))?;

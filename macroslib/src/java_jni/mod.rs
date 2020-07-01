@@ -17,6 +17,7 @@ use syn::{spanned::Spanned, Type};
 
 use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result},
+    extension::{ClassExtHandlers, MethodExtHandlers},
     file_cache::FileWriteCache,
     typemap::{
         ast::{
@@ -40,7 +41,6 @@ const INTERNAL_PTR_MARKER: &str = "InternalPointerMarker";
 const JAVA_RUST_SELF_NAME: &str = "mNativeObj";
 const REACHABILITY_FENCE_CLASS: &str = "JNIReachabilityFence";
 
-#[derive(Debug)]
 struct JavaContext<'a> {
     cfg: &'a JavaConfig,
     conv_map: &'a mut TypeMap,
@@ -48,6 +48,8 @@ struct JavaContext<'a> {
     rust_code: &'a mut Vec<TokenStream>,
     generated_foreign_files: &'a mut FxHashSet<PathBuf>,
     java_type_to_jni_sig_map: FxHashMap<SmolStr, SmolStr>,
+    class_ext_handlers: &'a ClassExtHandlers,
+    method_ext_handlers: &'a MethodExtHandlers,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -180,6 +182,8 @@ impl LanguageGenerator for JavaConfig {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
         remove_not_generated_files: bool,
+        class_ext_handlers: &ClassExtHandlers,
+        method_ext_handlers: &MethodExtHandlers,
     ) -> Result<Vec<TokenStream>> {
         let mut ret = Vec::with_capacity(items.len());
         let mut generated_foreign_files = FxHashSet::default();
@@ -190,6 +194,8 @@ impl LanguageGenerator for JavaConfig {
             rust_code: &mut ret,
             generated_foreign_files: &mut generated_foreign_files,
             java_type_to_jni_sig_map: rust_code::predefined_java_type_to_jni_sig(),
+            class_ext_handlers,
+            method_ext_handlers,
         };
         init(&mut ctx, code)?;
         for item in &items {

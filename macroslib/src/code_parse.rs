@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use log::debug;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
@@ -119,11 +120,21 @@ mod kw {
 struct Attrs {
     doc_comments: Vec<String>,
     derive_list: Vec<String>,
+    unknown_attrs: Vec<String>,
 }
 
-fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attrs> {
+bitflags! {
+    struct ParseAttrsFlags: u8 {
+        const DOC = 1;
+        const DERIVE = 2;
+        const UNKNOWN = 4;
+    }
+}
+
+fn parse_attrs(input: ParseStream, flags: ParseAttrsFlags) -> syn::Result<Attrs> {
     let mut doc_comments = vec![];
     let mut derive_list = vec![];
+    let mut unknown_attrs = vec![];
 
     if input.fork().call(syn::Attribute::parse_outer).is_ok() {
         let attr: Vec<syn::Attribute> = input.call(syn::Attribute::parse_outer)?;
@@ -141,7 +152,7 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
                     ref path,
                     ref nested,
                     ..
-                }) if path.is_ident("derive") && parse_derive_attrs => {
+                }) if path.is_ident("derive") && flags.contains(ParseAttrsFlags::DERIVE) => {
                     for x in nested {
                         if let syn::NestedMeta::Meta(syn::Meta::Path(ref path)) = x {
                             derive_list.push(path.into_token_stream().to_string());
@@ -150,11 +161,14 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
                         }
                     }
                 }
+                _ if flags.contains(ParseAttrsFlags::UNKNOWN) => {
+                    unknown_attrs.push(DisplayToTokens(&meta).to_string());
+                }
                 _ => {
                     return Err(syn::Error::new(
                         a.span(),
                         format!(
-                            "Expect doc attribute or doc comment or derive here, got {}",
+                            "Expect doc attribute or doc comment or derive here, got '{}'",
                             DisplayToTokens(&meta)
                         ),
                     ));
@@ -165,11 +179,12 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
     Ok(Attrs {
         doc_comments,
         derive_list,
+        unknown_attrs,
     })
 }
 
 fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
-    let Attrs { doc_comments, .. } = parse_attrs(input, false)?;
+    let Attrs { doc_comments, .. } = parse_attrs(input, ParseAttrsFlags::DOC)?;
     Ok(doc_comments)
 }
 
@@ -177,7 +192,10 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     let Attrs {
         doc_comments: class_doc_comments,
         derive_list,
-    } = parse_attrs(&input, true)?;
+        unknown_attrs,
+    } = parse_attrs(&input, ParseAttrsFlags::DERIVE)?;
+    assert!(unknown_attrs.is_empty());
+
     debug!(
         "parse_foreigner_class: class comment {:?}",
         class_doc_comments
@@ -201,7 +219,12 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     static FN: &str = "fn";
 
     while !content.is_empty() {
-        let doc_comments = parse_doc_comments(&&content)?;
+        let Attrs {
+            doc_comments: method_doc_comments,
+            derive_list: method_derive_list,
+            unknown_attrs: method_unknown_attrs,
+        } = parse_attrs(&&content, ParseAttrsFlags::UNKNOWN | ParseAttrsFlags::DOC)?;
+        assert!(method_derive_list.is_empty());
         let mut access = if content.peek(kw::private) {
             content.parse::<kw::private>()?;
             MethodAccess::Private
@@ -297,7 +320,8 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 name_alias: None,
                 inline_block: None,
                 access,
-                doc_comments,
+                doc_comments: method_doc_comments,
+                unknown_attrs: method_unknown_attrs,
             });
             has_dummy_constructor = true;
             continue;
@@ -481,8 +505,9 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             },
             name_alias: func_name_alias,
             access,
-            doc_comments,
+            doc_comments: method_doc_comments,
             inline_block,
+            unknown_attrs: method_unknown_attrs,
         });
     }
 

@@ -35,6 +35,7 @@ macro_rules! parse_type_spanned_checked {
 mod code_parse;
 mod cpp;
 mod error;
+mod extension;
 pub mod file_cache;
 mod java_jni;
 mod namegen;
@@ -69,6 +70,12 @@ use crate::{
 
 pub(crate) static WRITE_TO_MEM_FAILED_MSG: &str = "Write to memory buffer failed, no free mem?";
 pub(crate) static SMART_PTR_COPY_TRAIT: &str = "SmartPtrCopy";
+pub(crate) static KNOWN_CLASS_DERIVES: [&str; 3] = ["Copy", "Clone", SMART_PTR_COPY_TRAIT];
+
+pub use extension::MethodInfo;
+use extension::{ClassExtHandlers, MethodExtHandlers};
+use rustc_hash::FxHashMap;
+pub use types::MethodVariant;
 
 /// Calculate target pointer width from environment variable
 /// that `cargo` inserts
@@ -318,6 +325,8 @@ pub struct Generator {
     src_reg: SourceRegistry,
     rustfmt_bindings: bool,
     remove_not_generated_files: bool,
+    class_ext_handlers: ClassExtHandlers,
+    method_ext_handlers: MethodExtHandlers,
 }
 
 struct SourceCode {
@@ -403,6 +412,8 @@ impl Generator {
             src_reg,
             rustfmt_bindings: false,
             remove_not_generated_files: false,
+            class_ext_handlers: FxHashMap::default(),
+            method_ext_handlers: FxHashMap::default(),
         }
     }
 
@@ -428,11 +439,47 @@ impl Generator {
     }
 
     /// Add new foreign langauge type <-> Rust mapping
-    pub fn merge_type_map(mut self, id_of_code: &str, code: &str) -> Generator {
+    pub fn merge_type_map(mut self, id_of_code: &str, code: &str) -> Self {
         self.conv_map_source.push(self.src_reg.register(SourceCode {
             id_of_code: id_of_code.into(),
             code: code.into(),
         }));
+        self
+    }
+
+    /// Register callback to extend/modify class, if `foreign_class` has #[derive(attr_name)]
+    /// then after foreign code generation `cb` would be called, with full code of module,
+    /// plus class name
+    pub fn register_class_attribute_callback<F>(mut self, attr_name: &str, cb: F) -> Self
+    where
+        F: Fn(&mut Vec<u8>, &str) + 'static,
+    {
+        if self.class_ext_handlers.contains_key(attr_name) {
+            panic!(
+                "class attribute callback for name '{}' already registered",
+                attr_name
+            );
+        }
+        self.class_ext_handlers
+            .insert(attr_name.into(), Box::new(cb));
+        self
+    }
+
+    /// Register callback to extend/modify method of class, if `fn` inside `foreign_class`
+    /// has attribute, then after foreign code generation `cb` would be called with full code
+    /// of moulde, plus class name, plus method name
+    pub fn register_method_attribute_callback<F>(mut self, attr_name: &str, cb: F) -> Self
+    where
+        F: Fn(&mut Vec<u8>, MethodInfo) + 'static,
+    {
+        if self.method_ext_handlers.contains_key(attr_name) {
+            panic!(
+                "method attribute callback for name '{}' already registered",
+                attr_name
+            );
+        }
+        self.method_ext_handlers
+            .insert(attr_name.into(), Box::new(cb));
         self
     }
 
@@ -567,6 +614,8 @@ impl Generator {
             &self.foreign_lang_helpers,
             items_to_expand,
             self.remove_not_generated_files,
+            &self.class_ext_handlers,
+            &self.method_ext_handlers,
         )?;
         for elem in code {
             writeln!(&mut file, "{}", elem).expect(WRITE_TO_MEM_FAILED_MSG);
@@ -634,6 +683,8 @@ trait LanguageGenerator {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
         remove_not_generated_files: bool,
+        class_ext_handler: &ClassExtHandlers,
+        method_ext_handlers: &MethodExtHandlers,
     ) -> Result<Vec<TokenStream>>;
 
     fn post_proccess_code(

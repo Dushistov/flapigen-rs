@@ -2,6 +2,7 @@ use crate::typemap::ast;
 use crate::typemap::ty::RustType;
 use crate::{
     error::Result,
+    extension::{ClassExtHandlers, MethodExtHandlers},
     source_registry::SourceId,
     typemap::{
         ast::{GenericTypeConv, TypeName},
@@ -32,6 +33,8 @@ impl LanguageGenerator for PythonConfig {
         _code: &[SourceCode],
         items: Vec<ItemToExpand>,
         _remove_not_generated_files: bool,
+        class_ext_handler: &ClassExtHandlers,
+        method_ext_handlers: &MethodExtHandlers,
     ) -> Result<Vec<TokenStream>> {
         for item in &items {
             if let ItemToExpand::Class(ref fclass) = item {
@@ -42,7 +45,9 @@ impl LanguageGenerator for PythonConfig {
         let mut module_initialization = Vec::with_capacity(items.len());
         for item in items {
             let (class_code, initialization) = match item {
-                ItemToExpand::Class(fclass) => self.generate_class(conv_map, &fclass)?,
+                ItemToExpand::Class(fclass) => {
+                    self.generate_class(conv_map, &fclass, class_ext_handler, method_ext_handlers)?
+                }
                 ItemToExpand::Enum(fenum) => self.generate_enum(conv_map, &fenum)?,
                 ItemToExpand::Interface(finterface) => {
                     self.generate_interface(conv_map, &finterface)?
@@ -69,7 +74,20 @@ impl PythonConfig {
         &self,
         conv_map: &mut TypeMap,
         class: &ForeignClassInfo,
+        class_ext_handlers: &ClassExtHandlers,
+        method_ext_handlers: &MethodExtHandlers,
     ) -> Result<(TokenStream, TokenStream)> {
+        if !class_ext_handlers.is_empty() || !method_ext_handlers.is_empty() {
+            return Err(DiagnosticError::new(
+                class.src_id,
+                class.span(),
+                format!(
+                    "class {}: has attributes, this is not supported for python",
+                    class.name
+                ),
+            ));
+        }
+
         let class_name = &class.name;
         let wrapper_mod_name =
             parse::<Ident>(&py_wrapper_mod_name(&class_name.to_string()), class.src_id)?;
