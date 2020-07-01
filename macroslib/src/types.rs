@@ -8,20 +8,18 @@ use crate::{
     error::{DiagnosticError, Result, SourceIdSpan},
     source_registry::SourceId,
     typemap::ast::DisplayToTokens,
+    SMART_PTR_COPY_TRAIT,
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct ForeignerClassInfo {
+pub(crate) struct ForeignClassInfo {
     pub src_id: SourceId,
     pub name: Ident,
-    pub methods: Vec<ForeignerMethod>,
+    pub methods: Vec<ForeignMethod>,
     pub self_desc: Option<SelfTypeDesc>,
-    pub foreigner_code: String,
+    pub foreign_code: String,
     pub doc_comments: Vec<String>,
-    pub copy_derived: bool,
-    /// constructor type implements Clone trait
-    pub clone_derived: bool,
-    pub smart_ptr_copy_derived: bool,
+    pub derive_list: Vec<String>,
 }
 
 /// Two types instead of one, to simplify live to developer
@@ -34,7 +32,7 @@ pub(crate) struct SelfTypeDesc {
     pub constructor_ret_type: Type,
 }
 
-impl ForeignerClassInfo {
+impl ForeignClassInfo {
     pub(crate) fn span(&self) -> Span {
         self.name.span()
     }
@@ -76,10 +74,20 @@ impl ForeignerClassInfo {
             Ok(())
         }
     }
+    pub fn copy_derived(&self) -> bool {
+        self.derive_list.iter().any(|x| x == "Copy")
+    }
+    pub fn smart_ptr_copy_derived(&self) -> bool {
+        self.derive_list.iter().any(|x| x == SMART_PTR_COPY_TRAIT)
+    }
+    /// constructor type implements Clone trait
+    pub fn clone_derived(&self) -> bool {
+        self.derive_list.iter().any(|x| x == "Clone")
+    }
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ForeignerMethod {
+pub(crate) struct ForeignMethod {
     pub(crate) variant: MethodVariant,
     pub(crate) rust_id: syn::Path,
     pub(crate) fn_decl: FnDecl,
@@ -87,6 +95,7 @@ pub(crate) struct ForeignerMethod {
     pub(crate) access: MethodAccess,
     pub(crate) doc_comments: Vec<String>,
     pub(crate) inline_block: Option<syn::Block>,
+    pub(crate) unknown_attrs: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -128,7 +137,7 @@ pub(crate) struct FnDecl {
     pub(crate) output: syn::ReturnType,
 }
 
-impl ForeignerMethod {
+impl ForeignMethod {
     pub(crate) fn short_name(&self) -> String {
         if let Some(ref name) = self.name_alias {
             name.to_string()
@@ -190,14 +199,14 @@ pub(crate) enum MethodAccess {
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
-pub(crate) enum MethodVariant {
+pub enum MethodVariant {
     Constructor,
     Method(SelfTypeVariant),
     StaticMethod,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
-pub(crate) enum SelfTypeVariant {
+pub enum SelfTypeVariant {
     RptrMut,
     Rptr,
     Mut,
@@ -292,7 +301,7 @@ impl ForeignInterfaceMethod {
 }
 
 pub(crate) enum ItemToExpand {
-    Class(Box<ForeignerClassInfo>),
+    Class(Box<ForeignClassInfo>),
     Interface(ForeignInterface),
     Enum(ForeignEnumInfo),
 }

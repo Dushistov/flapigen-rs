@@ -4,6 +4,7 @@ use std::{
     fs::File,
     io,
     io::{Read, Write},
+    mem,
     path::{Path, PathBuf},
 };
 
@@ -56,7 +57,7 @@ impl FileWriteCache {
 
     #[allow(dead_code)]
     pub fn take_content(&mut self) -> Vec<u8> {
-        ::std::mem::replace(&mut self.cnt, vec![])
+        mem::replace(&mut self.cnt, vec![])
     }
 
     #[allow(dead_code)]

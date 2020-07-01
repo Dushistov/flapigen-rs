@@ -229,7 +229,7 @@ impl TypeMapConvRuleInfo {
                 }
             } else {
                 println!(
-                    "warning=invalid generic bounds({}) refer unknown parameter, subst. map {:?}",
+                    "cargo:warning=invalid generic bounds({}) refer unknown parameter, subst. map {:?}",
                     b.ty_param.as_ref(),
                     subst_map
                 );

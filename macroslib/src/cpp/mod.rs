@@ -48,6 +48,7 @@ use syn::spanned::Spanned;
 use crate::{
     cpp::{map_class_self_type::register_typemap_for_self_type, map_type::map_type},
     error::{invalid_src_id_span, DiagnosticError, Result},
+    extension::{ClassExtHandlers, MethodExtHandlers},
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
@@ -59,7 +60,7 @@ use crate::{
         },
         CItem, CItems, ForeignTypeInfo, TypeConvCode, TypeMapConvRuleInfo,
     },
-    types::{ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodAccess, MethodVariant},
+    types::{ForeignClassInfo, ForeignMethod, ItemToExpand, MethodAccess, MethodVariant},
     CppConfig, CppOptional, CppStrView, CppVariant, LanguageGenerator, SourceCode, TypeMap,
     SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
 };
@@ -219,8 +220,8 @@ impl ForeignMethodSignature for CppForeignMethodSignature {
 }
 
 struct MethodContext<'a> {
-    class: &'a ForeignerClassInfo,
-    method: &'a ForeignerMethod,
+    class: &'a ForeignClassInfo,
+    method: &'a ForeignMethod,
     f_method: &'a CppForeignMethodSignature,
     c_func_name: &'a str,
     decl_func_args: &'a str,
@@ -229,7 +230,7 @@ struct MethodContext<'a> {
 }
 
 impl CppConfig {
-    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
+    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignClassInfo) -> Result<()> {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
@@ -237,17 +238,17 @@ impl CppConfig {
             let constructor_ret_type = &self_desc.constructor_ret_type;
             let this_type_for_method = constructor_ret_type;
             let mut traits = vec!["SwigForeignClass"];
-            if class.clone_derived {
+            if class.clone_derived() {
                 traits.push("Clone");
             }
-            if class.copy_derived {
-                if !class.clone_derived {
+            if class.copy_derived() {
+                if !class.clone_derived() {
                     traits.push("Clone");
                 }
                 traits.push("Copy");
             }
 
-            if class.smart_ptr_copy_derived {
+            if class.smart_ptr_copy_derived() {
                 traits.push(SMART_PTR_COPY_TRAIT);
             }
 
@@ -257,10 +258,10 @@ impl CppConfig {
                 class.src_id,
             );
 
-            if class.smart_ptr_copy_derived {
-                if class.copy_derived {
+            if class.smart_ptr_copy_derived() {
+                if class.copy_derived() {
                     println!(
-                        "warning=class {} marked as Copy and {}, ignore Copy",
+                        "cargo:warning=class {} marked as Copy and {}, ignore Copy",
                         class.name, SMART_PTR_COPY_TRAIT
                     );
                 }
@@ -309,6 +310,8 @@ struct CppContext<'a> {
     rust_code: &'a mut Vec<TokenStream>,
     common_files: &'a mut FxHashMap<SmolStr, FileWriteCache>,
     generated_foreign_files: &'a mut FxHashSet<PathBuf>,
+    class_ext_handlers: &'a ClassExtHandlers,
+    method_ext_handlers: &'a MethodExtHandlers,
 }
 
 impl LanguageGenerator for CppConfig {
@@ -319,6 +322,8 @@ impl LanguageGenerator for CppConfig {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
         remove_not_generated_files: bool,
+        class_ext_handlers: &ClassExtHandlers,
+        method_ext_handlers: &MethodExtHandlers,
     ) -> Result<Vec<TokenStream>> {
         let mut ret = Vec::with_capacity(items.len());
         let mut files = FxHashMap::<SmolStr, FileWriteCache>::default();
@@ -331,6 +336,8 @@ impl LanguageGenerator for CppConfig {
                 rust_code: &mut ret,
                 common_files: &mut files,
                 generated_foreign_files: &mut generated_foreign_files,
+                class_ext_handlers,
+                method_ext_handlers,
             };
             init(&mut ctx, code)?;
             for item in &items {
@@ -376,12 +383,12 @@ impl LanguageGenerator for CppConfig {
     }
 }
 
-fn c_func_name(class: &ForeignerClassInfo, method: &ForeignerMethod) -> String {
+fn c_func_name(class: &ForeignClassInfo, method: &ForeignMethod) -> String {
     do_c_func_name(class, method.access, &method.short_name())
 }
 
 fn do_c_func_name(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     method_access: MethodAccess,
     method_short_name: &str,
 ) -> String {

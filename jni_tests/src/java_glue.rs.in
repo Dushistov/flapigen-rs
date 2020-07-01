@@ -88,6 +88,7 @@ class Foo {
     }
 });
 
+#[derive(PartialEq)]
 struct Boo {
     a: i32,
 }
@@ -115,13 +116,16 @@ fn create_boo() -> Rc<RefCell<Boo>> {
     Rc::new(RefCell::new(Boo::new()))
 }
 
-foreign_class!(class Boo {
+foreign_class!(
+#[derive(PartialEq)]
+    class Boo {
     self_type Boo;
     constructor create_boo() -> Rc<RefCell<Boo>>;
     fn Boo::test(&self, _: bool) -> f32;
     fn Boo::set_a(&mut self, _: i32); alias setA;
     fn Boo::get_a(&self) -> i32; alias getA;
 
+    private fn Boo::eq(&self, o: &Boo) -> bool; alias rustEq;
     fn test_u8(v: u8) -> u8 {
         v + 1
     }
@@ -287,7 +291,7 @@ pub fn Java_com_example_rust_TestPathAndResult_do_1testHandArrayReturn(
 }
 
 foreign_class!(class TestInner {
-    foreigner_code r#"
+    foreign_code r#"
     public static final class Inner {
         public final String name;
 
@@ -953,10 +957,10 @@ impl Code {
 }
 
 foreign_class!(
-    class Code {
-        self_type Code;
-        constructor Code::new(v: i32) -> Code;
-    });
+class Code {
+    self_type Code;
+    constructor Code::new(v: i32) -> Code;
+});
 
 struct Gamepad2 {
     id: GamepadId,
@@ -1048,7 +1052,7 @@ trait OnThreadEvent {
     fn something_change_in_other_thread(&self, x: i32, s: &str);
 }
 
-foreign_interface!(interface ThreadSafeObserver {
+foreign_callback!(interface ThreadSafeObserver {
     self_type OnThreadEvent + Send;
     onStateChanged = OnThreadEvent::something_change_in_other_thread(&self, x: i32, s: &str);
 });

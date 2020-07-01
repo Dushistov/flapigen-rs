@@ -35,6 +35,7 @@ macro_rules! parse_type_spanned_checked {
 mod code_parse;
 mod cpp;
 mod error;
+mod extension;
 pub mod file_cache;
 mod java_jni;
 mod namegen;
@@ -69,6 +70,12 @@ use crate::{
 
 pub(crate) static WRITE_TO_MEM_FAILED_MSG: &str = "Write to memory buffer failed, no free mem?";
 pub(crate) static SMART_PTR_COPY_TRAIT: &str = "SmartPtrCopy";
+pub(crate) static KNOWN_CLASS_DERIVES: [&str; 3] = ["Copy", "Clone", SMART_PTR_COPY_TRAIT];
+
+pub use extension::MethodInfo;
+use extension::{ClassExtHandlers, MethodExtHandlers};
+use rustc_hash::FxHashMap;
+pub use types::MethodVariant;
 
 /// Calculate target pointer width from environment variable
 /// that `cargo` inserts
@@ -318,6 +325,8 @@ pub struct Generator {
     src_reg: SourceRegistry,
     rustfmt_bindings: bool,
     remove_not_generated_files: bool,
+    class_ext_handlers: ClassExtHandlers,
+    method_ext_handlers: MethodExtHandlers,
 }
 
 struct SourceCode {
@@ -325,12 +334,12 @@ struct SourceCode {
     code: String,
 }
 
-static FOREIGNER_CLASS: &str = "foreigner_class";
+static FOREIGNER_CLASS_DEPRECATED: &str = "foreigner_class";
 static FOREIGN_CLASS: &str = "foreign_class";
 static FOREIGN_ENUM: &str = "foreign_enum";
-static FOREIGN_INTERFACE: &str = "foreign_interface";
+static FOREIGN_INTERFACE_DEPRECATED: &str = "foreign_interface";
 static FOREIGN_CALLBACK: &str = "foreign_callback";
-static FOREIGNER_CODE: &str = "foreigner_code";
+static FOREIGNER_CODE_DEPRECATED: &str = "foreigner_code";
 static FOREIGN_CODE: &str = "foreign_code";
 static FOREIGN_TYPEMAP: &str = "foreign_typemap";
 
@@ -403,6 +412,8 @@ impl Generator {
             src_reg,
             rustfmt_bindings: false,
             remove_not_generated_files: false,
+            class_ext_handlers: FxHashMap::default(),
+            method_ext_handlers: FxHashMap::default(),
         }
     }
 
@@ -428,11 +439,47 @@ impl Generator {
     }
 
     /// Add new foreign langauge type <-> Rust mapping
-    pub fn merge_type_map(mut self, id_of_code: &str, code: &str) -> Generator {
+    pub fn merge_type_map(mut self, id_of_code: &str, code: &str) -> Self {
         self.conv_map_source.push(self.src_reg.register(SourceCode {
             id_of_code: id_of_code.into(),
             code: code.into(),
         }));
+        self
+    }
+
+    /// Register callback to extend/modify class, if `foreign_class` has #[derive(attr_name)]
+    /// then after foreign code generation `cb` would be called, with full code of module,
+    /// plus class name
+    pub fn register_class_attribute_callback<F>(mut self, attr_name: &str, cb: F) -> Self
+    where
+        F: Fn(&mut Vec<u8>, &str) + 'static,
+    {
+        if self.class_ext_handlers.contains_key(attr_name) {
+            panic!(
+                "class attribute callback for name '{}' already registered",
+                attr_name
+            );
+        }
+        self.class_ext_handlers
+            .insert(attr_name.into(), Box::new(cb));
+        self
+    }
+
+    /// Register callback to extend/modify method of class, if `fn` inside `foreign_class`
+    /// has attribute, then after foreign code generation `cb` would be called with full code
+    /// of moulde, plus class name, plus method name
+    pub fn register_method_attribute_callback<F>(mut self, attr_name: &str, cb: F) -> Self
+    where
+        F: Fn(&mut Vec<u8>, MethodInfo) + 'static,
+    {
+        if self.method_ext_handlers.contains_key(attr_name) {
+            panic!(
+                "method attribute callback for name '{}' already registered",
+                attr_name
+            );
+        }
+        self.method_ext_handlers
+            .insert(attr_name.into(), Box::new(cb));
         self
     }
 
@@ -497,10 +544,10 @@ impl Generator {
         for item in syn_file.items {
             if let syn::Item::Macro(mut item_macro) = item {
                 let is_our_macro = [
-                    FOREIGNER_CLASS,
+                    FOREIGNER_CLASS_DEPRECATED,
                     FOREIGN_CLASS,
                     FOREIGN_ENUM,
-                    FOREIGN_INTERFACE,
+                    FOREIGN_INTERFACE_DEPRECATED,
                     FOREIGN_CALLBACK,
                     FOREIGN_TYPEMAP,
                 ]
@@ -524,9 +571,15 @@ impl Generator {
                 }
                 let mut tts = TokenStream::new();
                 mem::swap(&mut tts, &mut item_macro.mac.tokens);
-                if item_macro.mac.path.is_ident(FOREIGNER_CLASS)
+                if item_macro.mac.path.is_ident(FOREIGNER_CLASS_DEPRECATED)
                     || item_macro.mac.path.is_ident(FOREIGN_CLASS)
                 {
+                    if item_macro.mac.path.is_ident(FOREIGNER_CLASS_DEPRECATED) {
+                        println!(
+                            "cargo:warning={} is deprecated, use {} instead",
+                            FOREIGNER_CLASS_DEPRECATED, FOREIGN_CLASS
+                        );
+                    }
                     let fclass = code_parse::parse_foreigner_class(src_id, &self.config, tts)?;
                     debug!("expand_foreigner_class: self_desc {:?}", fclass.self_desc);
                     self.conv_map.register_foreigner_class(&fclass);
@@ -534,9 +587,15 @@ impl Generator {
                 } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
                     let fenum = code_parse::parse_foreign_enum(src_id, tts)?;
                     items_to_expand.push(ItemToExpand::Enum(fenum));
-                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE)
+                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE_DEPRECATED)
                     || item_macro.mac.path.is_ident(FOREIGN_CALLBACK)
                 {
+                    if item_macro.mac.path.is_ident(FOREIGN_INTERFACE_DEPRECATED) {
+                        println!(
+                            "cargo:warning={} is deprecated, use {} instead",
+                            FOREIGN_INTERFACE_DEPRECATED, FOREIGN_CALLBACK
+                        );
+                    }
                     let finterface = code_parse::parse_foreign_interface(src_id, tts)?;
                     items_to_expand.push(ItemToExpand::Interface(finterface));
                 } else if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
@@ -555,6 +614,8 @@ impl Generator {
             &self.foreign_lang_helpers,
             items_to_expand,
             self.remove_not_generated_files,
+            &self.class_ext_handlers,
+            &self.method_ext_handlers,
         )?;
         for elem in code {
             writeln!(&mut file, "{}", elem).expect(WRITE_TO_MEM_FAILED_MSG);
@@ -622,6 +683,8 @@ trait LanguageGenerator {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
         remove_not_generated_files: bool,
+        class_ext_handler: &ClassExtHandlers,
+        method_ext_handlers: &MethodExtHandlers,
     ) -> Result<Vec<TokenStream>>;
 
     fn post_proccess_code(
@@ -674,11 +737,11 @@ pub fn rustfmt_cnt(source: Vec<u8>) -> io::Result<Vec<u8>> {
             "Rustfmt parsing errors.".to_string(),
         )),
         Some(3) => {
-            println!("warning=Rustfmt could not format some lines.");
+            println!("cargo:warning=Rustfmt could not format some lines.");
             Ok(src)
         }
         _ => {
-            println!("warning=Internal rustfmt error");
+            println!("cargo:warning=Internal rustfmt error");
             Ok(src)
         }
     }

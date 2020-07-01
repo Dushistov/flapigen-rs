@@ -236,7 +236,7 @@ fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet
         true
     } else {
         println!(
-            "warning=mapping types: type {} unknown",
+            "cargo:warning=mapping types: type {} unknown",
             DisplayToTokens(ty)
         );
         false

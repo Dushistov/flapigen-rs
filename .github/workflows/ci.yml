@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
   schedule:
     - cron: '00 01 */4 * *'
 
@@ -12,6 +12,7 @@ env:
   RUST_BACKTRACE: 1
   RUSTUP_MAX_RETRIES: 10
   CARGO_NET_RETRY: 10
+  SCCACHE_VER: "0.2.13"
 
 jobs:
   test:
@@ -55,23 +56,27 @@ jobs:
         with:
           cmake-version: '3.14.7'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install boost
+      - name: Choose boost version (not ubuntu)
         if: matrix.os != 'ubuntu-latest'
         run: |
-          set -e
-          export TAR="boost_1_66_0.tar.gz"
-          curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.66.0/source/$TAR
-          tar -xzvf $TAR
-          echo "::set-env name=BOOST_ROOT::$PWD/boost_1_66_0"
+          echo '::set-env name=BOOST_VER::1.66.0'
         shell: bash
-      - name: Install boost
+      # gcc (ubuntu) + boost has problem with may be uninitialized field in optional
+      # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
+      # use the lastest boost to work around this bug
+      - name: Choose boost version (ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
+          echo '::set-env name=BOOST_VER::1.73.0'
+        shell: bash
+      - name: Install boost
+        run: |
           set -e
-          export TAR="boost_1_73_0.tar.gz"
-          curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.73.0/source/$TAR
-          tar -xzvf $TAR
-          echo "::set-env name=BOOST_ROOT::$PWD/boost_1_73_0"
+          export BOOST_VER_NAME=`echo $BOOST_VER | sed 's/\./_/g'`
+          export TAR="boost_$BOOST_VER_NAME.tar.gz"
+          curl -L -o $TAR https://dl.bintray.com/boostorg/release/$BOOST_VER/source/$TAR
+          tar --exclude more --exclude tools --exclude doc --exclude html --exclude test -xzvf $TAR
+          echo "::set-env name=BOOST_ROOT::$PWD/boost_$BOOST_VER_NAME"
         shell: bash
       - name: Install valgrind for linux
         if: matrix.os == 'ubuntu-latest'
@@ -85,6 +90,34 @@ jobs:
           echo "::set-env name=LIBCLANG_PATH::C:\\llvm-binary\\bin"
           echo "::add-path::c:\\llvm-binary\\bin"
         shell: bash
+      - name: install sccache (macos)
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -e
+          brew install sccache
+          echo "::set-env name=SCCACHE_BUCKET::flapigenamd64macos"
+        shell: bash
+      # there are no prebuild windows binary for 0.2.13
+      - name: install sccache (windows 64bit)
+        if: matrix.os == 'windows-latest'
+        run: |
+          set -e
+          export SCCACHE_VER="0.2.12"
+          curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
+          7z x sccache.tar.gz
+          7z x sccache-$SCCACHE_VER-x86_64-pc-windows-msvc.tar
+          echo "::add-path::`pwd`/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc"
+          echo "::set-env name=SCCACHE_BUCKET::flapigenamd64win"
+        shell: bash
+      - name: install sccache (linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -e
+          curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl.tar.gz -o sccache.tar.gz
+          tar -xzvf sccache.tar.gz
+          echo "::add-path::`pwd`/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl"
+          echo "::set-env name=SCCACHE_BUCKET::flapigenamd64ubuntu"
+        shell: bash
       - name: Check versions
         run: |
           set -e
@@ -94,6 +127,7 @@ jobs:
           cmake --version
           javac -version
           python --version
+          sccache --version
           echo "end of versions checking"
         shell: bash
       - name: Setup platform variable (for windows build)
@@ -106,5 +140,13 @@ jobs:
           cd $GITHUB_WORKSPACE
           cp workspace.Cargo.toml Cargo.toml
           python -c "fin = open('Cargo.toml', 'r'); res = fin.read().replace('debug = true', '').replace('incremental = true', ''); fin.close(); fout = open('Cargo.toml', 'w'); fout.write(res + '\n'); fout.close();"
+          export RUSTC_WRAPPER=`which sccache`
+          echo "SCCACHE_BUCKET: $SCCACHE_BUCKET"
+          sccache --start-server
           python ci_build_and_test.py --skip-android-tests
+          sccache -s
         shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S_AWS_SECRET_ACCESS_KEY }}
+          SCCACHE_ENDPOINT: ${{ secrets.S_SCCACHE_ENDPOINT }}

@@ -2,6 +2,7 @@ use crate::typemap::ast;
 use crate::typemap::ty::RustType;
 use crate::{
     error::Result,
+    extension::{ClassExtHandlers, MethodExtHandlers},
     source_registry::SourceId,
     typemap::{
         ast::{GenericTypeConv, TypeName},
@@ -9,7 +10,7 @@ use crate::{
         TypeConvCode,
     },
     types::{
-        ForeignEnumInfo, ForeignInterface, ForeignerClassInfo, ForeignerMethod, ItemToExpand,
+        ForeignClassInfo, ForeignEnumInfo, ForeignInterface, ForeignMethod, ItemToExpand,
         MethodVariant, SelfTypeVariant,
     },
     DiagnosticError, LanguageGenerator, PythonConfig, SourceCode, TypeMap,
@@ -32,6 +33,8 @@ impl LanguageGenerator for PythonConfig {
         _code: &[SourceCode],
         items: Vec<ItemToExpand>,
         _remove_not_generated_files: bool,
+        class_ext_handler: &ClassExtHandlers,
+        method_ext_handlers: &MethodExtHandlers,
     ) -> Result<Vec<TokenStream>> {
         for item in &items {
             if let ItemToExpand::Class(ref fclass) = item {
@@ -42,7 +45,9 @@ impl LanguageGenerator for PythonConfig {
         let mut module_initialization = Vec::with_capacity(items.len());
         for item in items {
             let (class_code, initialization) = match item {
-                ItemToExpand::Class(fclass) => self.generate_class(conv_map, &fclass)?,
+                ItemToExpand::Class(fclass) => {
+                    self.generate_class(conv_map, &fclass, class_ext_handler, method_ext_handlers)?
+                }
                 ItemToExpand::Enum(fenum) => self.generate_enum(conv_map, &fenum)?,
                 ItemToExpand::Interface(finterface) => {
                     self.generate_interface(conv_map, &finterface)?
@@ -57,7 +62,7 @@ impl LanguageGenerator for PythonConfig {
 }
 
 impl PythonConfig {
-    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
+    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignClassInfo) -> Result<()> {
         if let Some(ref self_desc) = class.self_desc {
             conv_map.find_or_alloc_rust_type(&self_desc.self_type, class.src_id);
         }
@@ -68,8 +73,21 @@ impl PythonConfig {
     fn generate_class(
         &self,
         conv_map: &mut TypeMap,
-        class: &ForeignerClassInfo,
+        class: &ForeignClassInfo,
+        class_ext_handlers: &ClassExtHandlers,
+        method_ext_handlers: &MethodExtHandlers,
     ) -> Result<(TokenStream, TokenStream)> {
+        if !class_ext_handlers.is_empty() || !method_ext_handlers.is_empty() {
+            return Err(DiagnosticError::new(
+                class.src_id,
+                class.span(),
+                format!(
+                    "class {}: has attributes, this is not supported for python",
+                    class.name
+                ),
+            ));
+        }
+
         let class_name = &class.name;
         let wrapper_mod_name =
             parse::<Ident>(&py_wrapper_mod_name(&class_name.to_string()), class.src_id)?;
@@ -213,7 +231,7 @@ impl PythonConfig {
 }
 
 fn generate_rust_instance_field_and_methods(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     conv_map: &mut TypeMap,
 ) -> Result<(TokenStream, TokenStream)> {
     if let Some(ref self_desc) = class.self_desc {
@@ -265,8 +283,8 @@ fn generate_rust_instance_field_and_methods(
 }
 
 fn generate_method_code(
-    class: &ForeignerClassInfo,
-    method: &ForeignerMethod,
+    class: &ForeignClassInfo,
+    method: &ForeignMethod,
     conv_map: &mut TypeMap,
 ) -> Result<TokenStream> {
     if method.is_dummy_constructor() {
@@ -353,7 +371,7 @@ fn generate_method_code(
     })
 }
 
-fn standard_method_name(method: &ForeignerMethod, src_id: SourceId) -> Result<syn::Ident> {
+fn standard_method_name(method: &ForeignMethod, src_id: SourceId) -> Result<syn::Ident> {
     Ok(method
         .name_alias
         .as_ref()
@@ -362,7 +380,7 @@ fn standard_method_name(method: &ForeignerMethod, src_id: SourceId) -> Result<sy
         .clone())
 }
 
-fn method_name(method: &ForeignerMethod, src_id: SourceId) -> Result<syn::Ident> {
+fn method_name(method: &ForeignMethod, src_id: SourceId) -> Result<syn::Ident> {
     if method.variant == MethodVariant::Constructor {
         parse("__new__", src_id)
     } else {
@@ -376,8 +394,8 @@ fn method_name(method: &ForeignerMethod, src_id: SourceId) -> Result<syn::Ident>
 }
 
 fn self_type_conversion(
-    class: &ForeignerClassInfo,
-    method: &ForeignerMethod,
+    class: &ForeignClassInfo,
+    method: &ForeignMethod,
     conv_map: &mut TypeMap,
 ) -> Result<Option<TokenStream>> {
     if let MethodVariant::Method(self_variant) = method.variant {
@@ -413,7 +431,7 @@ fn self_type_conversion(
     }
 }
 
-fn has_any_methods(class: &ForeignerClassInfo) -> bool {
+fn has_any_methods(class: &ForeignClassInfo) -> bool {
     class.methods.iter().any(|m| {
         if let MethodVariant::Method(_) = m.variant {
             true
@@ -838,8 +856,8 @@ fn if_exported_class_generate_return_conversion(
                "Returning a rust object into python by reference is not safe, so the clone of the object needs to be make.\
 However, `Mutex` doesn't implement `Clone`, so it can't be returned by reference."
             ));
-        } else if class.clone_derived
-            || class.copy_derived
+        } else if class.clone_derived()
+            || class.copy_derived()
             || smart_pointer_info.pointer_type.is_shared()
         {
             quote! {
@@ -896,7 +914,7 @@ Thus, the returned type must marked with `#[derive(Clone)]` or `#[derive(Copy)]`
 }
 
 fn generate_wrapper_constructor_for_mutex(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     returned_smart_pointer: &SmartPointerInfo,
     rust_call: TokenStream,
     method_span: Span,
@@ -918,7 +936,7 @@ Foreigner class {} is stored as `Mutex` and can be returned eiter as `Mutex` or 
 }
 
 fn generate_wrapper_constructor_for_arc_mutex(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     returned_smart_pointer: &SmartPointerInfo,
     rust_call: TokenStream,
     method_span: Span,
@@ -941,7 +959,7 @@ Thus, it must always be returned from Rust literally by `Arc<Mutex<T>>` \
 }
 
 fn generate_wrapper_constructor_for_arc(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     returned_smart_pointer: &SmartPointerInfo,
     rust_call: TokenStream,
     method_span: Span,
@@ -964,7 +982,7 @@ Thus, it must always be returned Rust literally by `Arc<T>` \
 }
 
 fn generate_wrapper_constructor_for_box(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     returned_smart_pointer: &SmartPointerInfo,
     rust_call: TokenStream,
     method_span: Span,
@@ -1062,7 +1080,7 @@ fn if_exported_class_generate_argument_conversion(
 }
 
 fn generate_deref_for_mutex(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     arg_smart_pointer: PointerType,
     arg_reference: Reference,
     rust_instance_code: TokenStream,
@@ -1096,7 +1114,7 @@ Foreigner class {} is stored as `Mutex` and can be passed to function either as 
 }
 
 fn generate_deref_for_arc_mutex(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     arg_smart_pointer: PointerType,
     arg_reference: Reference,
     rust_instance_code: TokenStream,
@@ -1131,7 +1149,7 @@ Foreigner class {} is stored as `Arc<Mutex<T>>` and can be passed to function ei
 }
 
 fn generate_deref_for_arc(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     arg_smart_pointer: PointerType,
     arg_reference: Reference,
     rust_instance_code: TokenStream,
@@ -1170,7 +1188,7 @@ Foreigner class {} is stored as `Arc` and can be passed to function either as `A
 }
 
 fn generate_deref_for_box(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     arg_smart_pointer: PointerType,
     arg_reference: Reference,
     rust_instance_code: TokenStream,
@@ -1200,11 +1218,11 @@ Foreigner class {} is stored as `Box` and can be passed to function anly as a ba
 }
 
 fn append_clone_if_supported(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     rust_instance_code: TokenStream,
     method_span: Span,
 ) -> Result<TokenStream> {
-    if class.clone_derived || class.copy_derived {
+    if class.clone_derived() || class.copy_derived() {
         Ok(quote!((#rust_instance_code).clone()))
     } else {
         Err(DiagnosticError::new(
@@ -1217,7 +1235,7 @@ inside its `foreigner_class` macro."
 }
 
 fn storage_smart_pointer_for_class(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     conv_map: &mut TypeMap,
 ) -> Result<SmartPointerInfo> {
     if let Some(ref self_desc) = class.self_desc {

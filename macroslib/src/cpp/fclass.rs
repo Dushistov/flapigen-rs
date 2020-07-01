@@ -14,6 +14,7 @@ use crate::{
         CppForeignMethodSignature, CppForeignTypeInfo, MethodContext,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
+    extension::extend_foreign_class,
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
@@ -27,11 +28,11 @@ use crate::{
         ForeignTypeInfo, TypeConvCodeSubstParam, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
         TO_VAR_TYPE_TEMPLATE,
     },
-    types::{ForeignerClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
+    types::{ForeignClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
     SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
 };
 
-pub(in crate::cpp) fn generate(ctx: &mut CppContext, class: &ForeignerClassInfo) -> Result<()> {
+pub(in crate::cpp) fn generate(ctx: &mut CppContext, class: &ForeignClassInfo) -> Result<()> {
     debug!(
         "generate: begin for {}, this_type_for_method {:?}",
         class.name, class.self_desc
@@ -68,7 +69,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
 fn do_generate(
     ctx: &mut CppContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     req_includes: &[SmolStr],
     methods_sign: &[CppForeignMethodSignature],
 ) -> Result<()> {
@@ -639,8 +640,8 @@ private:
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
-    if !class.foreigner_code.is_empty() {
-        writeln!(cpp_include_f, "\n{}", class.foreigner_code).expect(WRITE_TO_MEM_FAILED_MSG);
+    if !class.foreign_code.is_empty() {
+        writeln!(cpp_include_f, "\n{}", class.foreign_code).expect(WRITE_TO_MEM_FAILED_MSG);
     }
     if !static_only {
         cpp_include_f.write_all(
@@ -716,6 +717,16 @@ using {class_name}Ref = {base_class_name}<false>;
     c_include_f
         .update_file_if_necessary()
         .map_err(map_write_err!(c_path))?;
+
+    let mut cnt = cpp_include_f.take_content();
+    extend_foreign_class(
+        class,
+        &mut cnt,
+        ctx.class_ext_handlers,
+        ctx.method_ext_handlers,
+    )?;
+    cpp_include_f.replace_content(cnt);
+
     cpp_include_f
         .update_file_if_necessary()
         .map_err(map_write_err!(cpp_path))?;
@@ -777,7 +788,7 @@ pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
 fn generate_method(
     conv_map: &mut TypeMap,
     mc: &MethodContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     self_variant: SelfTypeVariant,
     this_type_for_method: &RustType,
 ) -> Result<Vec<TokenStream>> {
@@ -932,7 +943,7 @@ fn write_methods_impls(
 
 fn find_suitable_foreign_types_for_methods(
     ctx: &mut CppContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
 ) -> Result<Vec<CppForeignMethodSignature>> {
     let mut ret = Vec::<CppForeignMethodSignature>::with_capacity(class.methods.len());
     let dummy_ty = parse_type! { () };
@@ -1021,7 +1032,7 @@ extern "C" {{
 
 fn generate_cpp_header_preamble(
     ctx: &mut CppContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     tmp_class_name: &str,
     class_doc_comments: &str,
     req_includes: &[SmolStr],
@@ -1123,13 +1134,13 @@ r#"
 
 fn genearte_copy_stuff(
     ctx: &mut CppContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     c_class_type: &str,
     c_include_f: &mut FileWriteCache,
     cpp_include_f: &mut FileWriteCache,
     tmp_class_name: &str,
 ) -> Result<()> {
-    if class.copy_derived {
+    if class.copy_derived() {
         let pos = class
             .methods
             .iter()
@@ -1180,7 +1191,7 @@ fn genearte_copy_stuff(
             class_name = tmp_class_name
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
-    } else if class.smart_ptr_copy_derived {
+    } else if class.smart_ptr_copy_derived() {
         let this_type = class
             .self_desc
             .as_ref()

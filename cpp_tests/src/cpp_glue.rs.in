@@ -77,7 +77,7 @@ foreign_class!(class Foo {
     fn Foo::call_me(_: Box<dyn SomeObserver>);
     fn f_hypot(_: f64, _: f64) -> f64; alias fHypot;
     fn Foo::ret_string(&self) -> String;
-    foreigner_code r#"
+    foreign_code r#"
 public:
     size_t cpp_func(const std::string &s) const { return s.size(); }
     FooWrapper() noexcept: FooWrapper(nullptr) {}
@@ -912,13 +912,13 @@ impl TestCopy {
 }
 
 foreign_class!(
-    #[derive(Copy)]
-    class TestCopy {
-        self_type TestCopy;
-        constructor TestCopy::new(s: &str) -> TestCopy;
-        fn TestCopy::get(&self) -> &str;
-        fn TestCopy::clone(&self) -> TestCopy;
-    });
+#[derive(Copy)]
+class TestCopy {
+    self_type TestCopy;
+    constructor TestCopy::new(s: &str) -> TestCopy;
+    fn TestCopy::get(&self) -> &str;
+    fn TestCopy::clone(&self) -> TestCopy;
+});
 
 #[derive(Default)]
 pub struct GetSetStrTest {
@@ -1053,7 +1053,7 @@ trait OnThreadEvent {
     fn something_change_in_other_thread(&self, x: i32, s: String);
 }
 
-foreign_interface!(interface ThreadSafeObserver {
+foreign_callback!(interface ThreadSafeObserver {
     self_type OnThreadEvent + Send;
     onStateChanged = OnThreadEvent::something_change_in_other_thread(&self, x: i32, s: String);
 });
