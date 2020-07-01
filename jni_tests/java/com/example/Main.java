@@ -131,6 +131,7 @@ class Main {
 	    testAllTypesInCallbackArgs();
 	    testMultiThreadCallback();
 	    testPrematureGc();
+            testPartialEq();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -724,5 +725,14 @@ class Main {
 	    }
 	    assert have_exception;
 	}
+    }
+
+    private static void testPartialEq() throws Exception {
+        Boo a = new Boo();
+        Boo b = new Boo();
+        assert a != b;
+        assert a.equals(b);
+        a.setA(-1);
+        assert !a.equals(b);
     }
 }

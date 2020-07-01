@@ -88,6 +88,7 @@ class Foo {
     }
 });
 
+#[derive(PartialEq)]
 struct Boo {
     a: i32,
 }
@@ -115,13 +116,16 @@ fn create_boo() -> Rc<RefCell<Boo>> {
     Rc::new(RefCell::new(Boo::new()))
 }
 
-foreign_class!(class Boo {
+foreign_class!(
+#[derive(PartialEq)]
+    class Boo {
     self_type Boo;
     constructor create_boo() -> Rc<RefCell<Boo>>;
     fn Boo::test(&self, _: bool) -> f32;
     fn Boo::set_a(&mut self, _: i32); alias setA;
     fn Boo::get_a(&self) -> i32; alias getA;
 
+    private fn Boo::eq(&self, o: &Boo) -> bool; alias rustEq;
     fn test_u8(v: u8) -> u8 {
         v + 1
     }
