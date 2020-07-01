@@ -123,16 +123,16 @@ impl JavaConfig {
                 .unwrap_or_else(|| constructor_ret_type.clone());
 
             let mut traits = vec!["SwigForeignClass"];
-            if class.clone_derived {
+            if class.clone_derived() {
                 traits.push("Clone");
             }
-            if class.copy_derived {
-                if !class.clone_derived {
+            if class.copy_derived() {
+                if !class.clone_derived() {
                     traits.push("Clone");
                 }
                 traits.push("Copy");
             }
-            if class.smart_ptr_copy_derived {
+            if class.smart_ptr_copy_derived() {
                 traits.push(SMART_PTR_COPY_TRAIT);
             }
 
@@ -141,8 +141,8 @@ impl JavaConfig {
                 &traits,
                 class.src_id,
             );
-            if class.smart_ptr_copy_derived {
-                if class.copy_derived {
+            if class.smart_ptr_copy_derived() {
+                if class.copy_derived() {
                     println!(
                         "cargo:warning=class {} marked as Copy and {}, ignore Copy",
                         class.name, SMART_PTR_COPY_TRAIT

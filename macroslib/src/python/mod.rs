@@ -838,8 +838,8 @@ fn if_exported_class_generate_return_conversion(
                "Returning a rust object into python by reference is not safe, so the clone of the object needs to be make.\
 However, `Mutex` doesn't implement `Clone`, so it can't be returned by reference."
             ));
-        } else if class.clone_derived
-            || class.copy_derived
+        } else if class.clone_derived()
+            || class.copy_derived()
             || smart_pointer_info.pointer_type.is_shared()
         {
             quote! {
@@ -1204,7 +1204,7 @@ fn append_clone_if_supported(
     rust_instance_code: TokenStream,
     method_span: Span,
 ) -> Result<TokenStream> {
-    if class.clone_derived || class.copy_derived {
+    if class.clone_derived() || class.copy_derived() {
         Ok(quote!((#rust_instance_code).clone()))
     } else {
         Err(DiagnosticError::new(

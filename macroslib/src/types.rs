@@ -8,6 +8,7 @@ use crate::{
     error::{DiagnosticError, Result, SourceIdSpan},
     source_registry::SourceId,
     typemap::ast::DisplayToTokens,
+    SMART_PTR_COPY_TRAIT,
 };
 
 #[derive(Debug, Clone)]
@@ -18,10 +19,7 @@ pub(crate) struct ForeignClassInfo {
     pub self_desc: Option<SelfTypeDesc>,
     pub foreign_code: String,
     pub doc_comments: Vec<String>,
-    pub copy_derived: bool,
-    /// constructor type implements Clone trait
-    pub clone_derived: bool,
-    pub smart_ptr_copy_derived: bool,
+    pub derive_list: Vec<String>,
 }
 
 /// Two types instead of one, to simplify live to developer
@@ -75,6 +73,16 @@ impl ForeignClassInfo {
         } else {
             Ok(())
         }
+    }
+    pub fn copy_derived(&self) -> bool {
+        self.derive_list.iter().any(|x| x == "Copy")
+    }
+    pub fn smart_ptr_copy_derived(&self) -> bool {
+        self.derive_list.iter().any(|x| x == SMART_PTR_COPY_TRAIT)
+    }
+    /// constructor type implements Clone trait
+    pub fn clone_derived(&self) -> bool {
+        self.derive_list.iter().any(|x| x == "Clone")
     }
 }
 

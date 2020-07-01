@@ -1129,7 +1129,7 @@ fn genearte_copy_stuff(
     cpp_include_f: &mut FileWriteCache,
     tmp_class_name: &str,
 ) -> Result<()> {
-    if class.copy_derived {
+    if class.copy_derived() {
         let pos = class
             .methods
             .iter()
@@ -1180,7 +1180,7 @@ fn genearte_copy_stuff(
             class_name = tmp_class_name
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
-    } else if class.smart_ptr_copy_derived {
+    } else if class.smart_ptr_copy_derived() {
         let this_type = class
             .self_desc
             .as_ref()

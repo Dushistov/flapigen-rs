@@ -202,7 +202,7 @@ fn register_main_foreign_types(
         let (this_type_for_method, _code_box_this) =
             convert_to_heap_pointer(ctx.conv_map, &this_type2, "this");
 
-        if class.smart_ptr_copy_derived {
+        if class.smart_ptr_copy_derived() {
             let unpack_code = unpack_from_heap_pointer(&this_type2, TO_VAR_TEMPLATE, true);
             ctx.conv_map.add_conversation_rule(
                 jlong_in_val_rty.to_idx(),
@@ -228,7 +228,7 @@ fn register_main_foreign_types(
                 )
                 .into(),
             );
-        } else if class.copy_derived {
+        } else if class.copy_derived() {
             ctx.conv_map.add_conversation_rule(
                 jlong_in_val_rty.to_idx(),
                 this_type,
@@ -296,7 +296,7 @@ fn register_main_foreign_types(
         from_var = FROM_VAR_TEMPLATE,
         class_raw_ptr = JAVA_RUST_SELF_NAME,
     );
-    if !class.copy_derived && !class.smart_ptr_copy_derived {
+    if !class.copy_derived() && !class.smart_ptr_copy_derived() {
         writeln!(
             &mut java_code_in_val_to_long,
             "        {from_var}.{class_raw_ptr} = 0;",

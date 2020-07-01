@@ -237,17 +237,17 @@ impl CppConfig {
             let constructor_ret_type = &self_desc.constructor_ret_type;
             let this_type_for_method = constructor_ret_type;
             let mut traits = vec!["SwigForeignClass"];
-            if class.clone_derived {
+            if class.clone_derived() {
                 traits.push("Clone");
             }
-            if class.copy_derived {
-                if !class.clone_derived {
+            if class.copy_derived() {
+                if !class.clone_derived() {
                     traits.push("Clone");
                 }
                 traits.push("Copy");
             }
 
-            if class.smart_ptr_copy_derived {
+            if class.smart_ptr_copy_derived() {
                 traits.push(SMART_PTR_COPY_TRAIT);
             }
 
@@ -257,8 +257,8 @@ impl CppConfig {
                 class.src_id,
             );
 
-            if class.smart_ptr_copy_derived {
-                if class.copy_derived {
+            if class.smart_ptr_copy_derived() {
+                if class.copy_derived() {
                     println!(
                         "cargo:warning=class {} marked as Copy and {}, ignore Copy",
                         class.name, SMART_PTR_COPY_TRAIT

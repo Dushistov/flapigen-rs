@@ -23,7 +23,7 @@ use crate::{
         ForeignInterfaceMethod, ForeignMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
         SelfTypeVariant,
     },
-    LanguageConfig, FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE, SMART_PTR_COPY_TRAIT,
+    LanguageConfig, FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE,
 };
 
 pub(crate) fn parse_foreigner_class(
@@ -475,8 +475,6 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     }
 
     let copy_derived = derive_list.iter().any(|x| x == "Copy");
-    let clone_derived = derive_list.iter().any(|x| x == "Clone");
-    let smart_ptr_copy_derived = derive_list.iter().any(|x| x == SMART_PTR_COPY_TRAIT);
     let has_clone = |m: &ForeignMethod| {
         if let Some(seg) = m.rust_id.segments.last() {
             seg.ident == "clone"
@@ -518,9 +516,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         self_desc,
         foreign_code: foreigner_code,
         doc_comments: class_doc_comments,
-        copy_derived,
-        clone_derived,
-        smart_ptr_copy_derived,
+        derive_list,
     })
 }
 
@@ -787,7 +783,7 @@ mod tests {
                 })
         };
         let java_class = test_parse::<JavaClass>(mac.tokens);
-        assert!(!java_class.0.copy_derived);
+        assert!(!java_class.0.copy_derived());
 
         let mac: syn::Macro = parse_quote! {
             foreigner_class!(class Foo {
@@ -833,7 +829,7 @@ mod tests {
             })
         };
         let class: CppClass = test_parse(mac.tokens);
-        assert!(class.0.copy_derived);
+        assert!(class.0.copy_derived());
     }
 
     #[test]
