@@ -196,8 +196,8 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     let mut methods = Vec::with_capacity(10);
 
     static CONSTRUCTOR: &str = "constructor";
-    static METHOD: &str = "method";
-    static STATIC_METHOD: &str = "static_method";
+    static METHOD_DEPRECATED: &str = "method";
+    static STATIC_METHOD_DEPRECATED: &str = "static_method";
     static FN: &str = "fn";
 
     while !content.is_empty() {
@@ -317,8 +317,20 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
 
         let mut func_type = match func_type_name {
             _ if func_type_name == CONSTRUCTOR => MethodVariant::Constructor,
-            _ if func_type_name == STATIC_METHOD => MethodVariant::StaticMethod,
-            _ if func_type_name == METHOD => MethodVariant::Method(SelfTypeVariant::Default),
+            _ if func_type_name == STATIC_METHOD_DEPRECATED => {
+                println!(
+                    "cargo:warning={} deprecated, use \"fn\" instead",
+                    STATIC_METHOD_DEPRECATED
+                );
+                MethodVariant::StaticMethod
+            }
+            _ if func_type_name == METHOD_DEPRECATED => {
+                println!(
+                    "cargo:warning={} deprecated, use \"fn\" instead",
+                    METHOD_DEPRECATED
+                );
+                MethodVariant::Method(SelfTypeVariant::Default)
+            }
             _ if func_type_name == FN => {
                 if !args_in.is_empty() {
                     use syn::FnArg::*;
