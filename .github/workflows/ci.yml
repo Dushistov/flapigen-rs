@@ -56,26 +56,27 @@ jobs:
         with:
           cmake-version: '3.14.7'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install boost
+      - name: Choose boost version (not ubuntu)
         if: matrix.os != 'ubuntu-latest'
         run: |
-          set -e
-          export TAR="boost_1_66_0.tar.gz"
-          curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.66.0/source/$TAR
-          tar -xzvf $TAR
-          echo "::set-env name=BOOST_ROOT::$PWD/boost_1_66_0"
+          echo '::set-env name=BOOST_VER::1.66.0'
         shell: bash
       # gcc (ubuntu) + boost has problem with may be uninitialized field in optional
       # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
       # use the lastest boost to work around this bug
-      - name: Install boost (linux)
+      - name: Choose boost version (ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
+          echo '::set-env name=BOOST_VER::1.73.0'
+        shell: bash
+      - name: Install boost
+        run: |
           set -e
-          export TAR="boost_1_73_0.tar.gz"
-          curl -L -o $TAR https://dl.bintray.com/boostorg/release/1.73.0/source/$TAR
-          tar -xzvf $TAR
-          echo "::set-env name=BOOST_ROOT::$PWD/boost_1_73_0"
+          export BOOST_VER_NAME=`echo $BOOST_VER | sed 's/\./_/g'`
+          export TAR="boost_$BOOST_VER_NAME.tar.gz"
+          curl -L -o $TAR https://dl.bintray.com/boostorg/release/$BOOST_VER/source/$TAR
+          tar --exclude more --exclude tools --exclude doc --exclude html --exclude test -xzvf $TAR
+          echo "::set-env name=BOOST_ROOT::$PWD/boost_$BOOST_VER_NAME"
         shell: bash
       - name: Install valgrind for linux
         if: matrix.os == 'ubuntu-latest'
