@@ -11,13 +11,13 @@ use crate::{
         utils::{boxed_type, unpack_from_heap_pointer},
         RustTypeIdx, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    types::{ForeignerClassInfo, SelfTypeDesc},
+    types::{ForeignClassInfo, SelfTypeDesc},
     TypeMap,
 };
 
 pub(in crate::cpp) fn register_typemap_for_self_type(
     conv_map: &mut TypeMap,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     this_type: RustType,
     self_desc: &SelfTypeDesc,
 ) -> Result<()> {
@@ -81,7 +81,7 @@ pub(in crate::cpp) fn register_typemap_for_self_type(
 
 fn register_intermidiate_pointer_types(
     conv_map: &mut TypeMap,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     void_ptr_rust_ty: RustTypeIdx,
     const_void_ptr_rust_ty: RustTypeIdx,
 ) -> Result<()> {
@@ -125,7 +125,7 @@ fn register_intermidiate_pointer_types(
 
 fn register_rust_ty_conversation_rules(
     conv_map: &mut TypeMap,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     this_type: RustType,
     this_type_inner: RustTypeIdx,
     void_ptr_rust_ty: RustTypeIdx,
@@ -244,7 +244,7 @@ fn register_rust_ty_conversation_rules(
 
 fn register_main_foreign_types(
     conv_map: &mut TypeMap,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     this_type: RustTypeIdx,
     self_type: RustTypeIdx,
     void_ptr_rust_ty: RustTypeIdx,

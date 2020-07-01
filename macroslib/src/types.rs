@@ -11,12 +11,12 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct ForeignerClassInfo {
+pub(crate) struct ForeignClassInfo {
     pub src_id: SourceId,
     pub name: Ident,
-    pub methods: Vec<ForeignerMethod>,
+    pub methods: Vec<ForeignMethod>,
     pub self_desc: Option<SelfTypeDesc>,
-    pub foreigner_code: String,
+    pub foreign_code: String,
     pub doc_comments: Vec<String>,
     pub copy_derived: bool,
     /// constructor type implements Clone trait
@@ -34,7 +34,7 @@ pub(crate) struct SelfTypeDesc {
     pub constructor_ret_type: Type,
 }
 
-impl ForeignerClassInfo {
+impl ForeignClassInfo {
     pub(crate) fn span(&self) -> Span {
         self.name.span()
     }
@@ -79,7 +79,7 @@ impl ForeignerClassInfo {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ForeignerMethod {
+pub(crate) struct ForeignMethod {
     pub(crate) variant: MethodVariant,
     pub(crate) rust_id: syn::Path,
     pub(crate) fn_decl: FnDecl,
@@ -128,7 +128,7 @@ pub(crate) struct FnDecl {
     pub(crate) output: syn::ReturnType,
 }
 
-impl ForeignerMethod {
+impl ForeignMethod {
     pub(crate) fn short_name(&self) -> String {
         if let Some(ref name) = self.name_alias {
             name.to_string()
@@ -292,7 +292,7 @@ impl ForeignInterfaceMethod {
 }
 
 pub(crate) enum ItemToExpand {
-    Class(Box<ForeignerClassInfo>),
+    Class(Box<ForeignClassInfo>),
     Interface(ForeignInterface),
     Enum(ForeignEnumInfo),
 }

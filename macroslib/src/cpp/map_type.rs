@@ -12,7 +12,7 @@ use crate::{
         ty::{ForeignType, RustType, TraitNamesSet},
         ExpandedFType, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
     },
-    types::ForeignerClassInfo,
+    types::ForeignClassInfo,
     TypeMap,
 };
 
@@ -268,7 +268,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
 
 pub(in crate::cpp) fn calc_this_type_for_method(
     _: &TypeMap,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
 ) -> Option<Type> {
     class
         .self_desc

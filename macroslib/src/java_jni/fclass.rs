@@ -26,14 +26,11 @@ use crate::{
         },
         ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
-    types::{ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, SelfTypeVariant},
+    types::{ForeignClassInfo, ForeignMethod, MethodAccess, MethodVariant, SelfTypeVariant},
     JavaConfig, JavaReachabilityFence, WRITE_TO_MEM_FAILED_MSG,
 };
 
-pub(in crate::java_jni) fn generate(
-    ctx: &mut JavaContext,
-    class: &ForeignerClassInfo,
-) -> Result<()> {
+pub(in crate::java_jni) fn generate(ctx: &mut JavaContext, class: &ForeignClassInfo) -> Result<()> {
     debug!(
         "generate: begin for {}, this_type_for_method {:?}",
         class.name, class.self_desc
@@ -72,8 +69,8 @@ pub(in crate::java_jni) fn generate(
 }
 
 struct MethodContext<'a> {
-    class: &'a ForeignerClassInfo,
-    method: &'a ForeignerMethod,
+    class: &'a ForeignClassInfo,
+    method: &'a ForeignMethod,
     f_method: &'a JniForeignMethodSignature,
     jni_func_name: &'a str,
     decl_func_args: &'a str,
@@ -83,7 +80,7 @@ struct MethodContext<'a> {
 
 fn generate_java_code(
     ctx: &mut JavaContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     methods_sign: &[JniForeignMethodSignature],
     null_annotation_package: Option<&str>,
 ) -> Result<()> {
@@ -506,7 +503,7 @@ May be you need to use `private constructor = empty;` syntax?",
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
-    file.write_all(class.foreigner_code.as_bytes())
+    file.write_all(class.foreign_code.as_bytes())
         .expect(WRITE_TO_MEM_FAILED_MSG);
     write!(file, "}}").expect(WRITE_TO_MEM_FAILED_MSG);
 
@@ -517,7 +514,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
 fn generate_rust_code(
     ctx: &mut JavaContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     f_methods_sign: &[JniForeignMethodSignature],
 ) -> Result<()> {
     //to handle java method overload
@@ -769,7 +766,7 @@ pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong
 
 fn find_suitable_foreign_types_for_methods(
     ctx: &mut JavaContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
 ) -> Result<Vec<JniForeignMethodSignature>> {
     let mut ret = Vec::<JniForeignMethodSignature>::with_capacity(class.methods.len());
     let empty_symbol = "";

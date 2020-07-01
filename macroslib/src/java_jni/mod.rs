@@ -30,7 +30,7 @@ use crate::{
         },
         ForeignTypeInfo, TypeMapConvRuleInfo,
     },
-    types::{ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodVariant},
+    types::{ForeignClassInfo, ForeignMethod, ItemToExpand, MethodVariant},
     JavaConfig, JavaReachabilityFence, LanguageGenerator, SourceCode, TypeMap,
     SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
 };
@@ -113,7 +113,7 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 }
 
 impl JavaConfig {
-    fn register_class(&self, ctx: &mut JavaContext, class: &ForeignerClassInfo) -> Result<()> {
+    fn register_class(&self, ctx: &mut JavaContext, class: &ForeignClassInfo) -> Result<()> {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
@@ -236,7 +236,7 @@ impl LanguageGenerator for JavaConfig {
     }
 }
 
-fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -> String {
+fn method_name(method: &ForeignMethod, f_method: &JniForeignMethodSignature) -> String {
     let need_conv = f_method.input.iter().any(|v: &JavaForeignTypeInfo| {
         v.java_converter
             .as_ref()
@@ -268,7 +268,7 @@ fn java_class_name_to_jni(full_name: &str) -> String {
     full_name.replace(".", "/")
 }
 
-fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignerClassInfo) -> Option<Type> {
+fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignClassInfo) -> Option<Type> {
     if let Some(constructor_ret_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
         Some(
             if_result_return_ok_err_types(

@@ -19,8 +19,8 @@ use crate::{
     source_registry::SourceId,
     typemap::ast::{normalize_type, DisplayToTokens},
     types::{
-        FnArg, ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
-        ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
+        FnArg, ForeignClassInfo, ForeignEnumInfo, ForeignEnumItem, ForeignInterface,
+        ForeignInterfaceMethod, ForeignMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
         SelfTypeVariant,
     },
     LanguageConfig, FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE, SMART_PTR_COPY_TRAIT,
@@ -30,7 +30,7 @@ pub(crate) fn parse_foreigner_class(
     src_id: SourceId,
     config: &LanguageConfig,
     tokens: TokenStream,
-) -> Result<ForeignerClassInfo> {
+) -> Result<ForeignClassInfo> {
     match config {
         LanguageConfig::CppConfig(_) => {
             let mut class: CppClass =
@@ -70,7 +70,7 @@ pub(crate) fn parse_foreign_interface(
     Ok(f_interface.0)
 }
 
-struct CppClass(ForeignerClassInfo);
+struct CppClass(ForeignClassInfo);
 
 impl Parse for CppClass {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -78,7 +78,7 @@ impl Parse for CppClass {
     }
 }
 
-struct JavaClass(ForeignerClassInfo);
+struct JavaClass(ForeignClassInfo);
 
 impl Parse for JavaClass {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -86,7 +86,7 @@ impl Parse for JavaClass {
     }
 }
 
-struct PythonClass(ForeignerClassInfo);
+struct PythonClass(ForeignClassInfo);
 
 impl Parse for PythonClass {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -173,7 +173,7 @@ fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
     Ok(doc_comments)
 }
 
-fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<ForeignerClassInfo> {
+fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<ForeignClassInfo> {
     let Attrs {
         doc_comments: class_doc_comments,
         derive_list,
@@ -290,7 +290,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 }
             };
             let dummy_func = dummy_func.sig;
-            methods.push(ForeignerMethod {
+            methods.push(ForeignMethod {
                 variant: MethodVariant::Constructor,
                 rust_id: dummy_path,
                 fn_decl: dummy_func.try_into()?,
@@ -459,7 +459,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             }
         }
         let span = func_name.span();
-        methods.push(ForeignerMethod {
+        methods.push(ForeignMethod {
             variant: func_type,
             rust_id: func_name,
             fn_decl: crate::types::FnDecl {
@@ -477,7 +477,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     let copy_derived = derive_list.iter().any(|x| x == "Copy");
     let clone_derived = derive_list.iter().any(|x| x == "Clone");
     let smart_ptr_copy_derived = derive_list.iter().any(|x| x == SMART_PTR_COPY_TRAIT);
-    let has_clone = |m: &ForeignerMethod| {
+    let has_clone = |m: &ForeignMethod| {
         if let Some(seg) = m.rust_id.segments.last() {
             seg.ident == "clone"
         } else {
@@ -511,12 +511,12 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         }
     };
 
-    Ok(ForeignerClassInfo {
+    Ok(ForeignClassInfo {
         src_id: SourceId::none(),
         name: class_name,
         methods,
         self_desc,
-        foreigner_code,
+        foreign_code: foreigner_code,
         doc_comments: class_doc_comments,
         copy_derived,
         clone_derived,

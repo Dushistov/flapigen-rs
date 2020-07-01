@@ -13,13 +13,13 @@ use crate::{
         utils::{boxed_type, convert_to_heap_pointer, unpack_from_heap_pointer},
         RustTypeIdx, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
-    types::{ForeignerClassInfo, SelfTypeDesc},
+    types::{ForeignClassInfo, SelfTypeDesc},
     WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::java_jni) fn register_typemap_for_self_type(
     ctx: &mut JavaContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     this_type: RustType,
     self_desc: &SelfTypeDesc,
 ) -> Result<()> {
@@ -145,7 +145,7 @@ fn register_rust_ty_conversation_rules(ctx: &mut JavaContext, this_type: &RustTy
 
 fn register_main_foreign_types(
     ctx: &mut JavaContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     this_type: RustTypeIdx,
     self_type: RustTypeIdx,
     this_type_ref: RustTypeIdx,

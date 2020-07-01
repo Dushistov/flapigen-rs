@@ -4,8 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use log::warn;
 use flapigen::{rustfmt_cnt, CppConfig, Generator, JavaConfig, LanguageConfig};
+use log::warn;
 use syn::Token;
 use tempfile::tempdir;
 
@@ -22,7 +22,7 @@ fn test_expectations_class_with_methods_without_constructor() {
             &name,
             Source::Str(
                 r#"
-foreigner_class!(class Foo {
+foreign_class!(class Foo {
 });
 "#,
             ),
@@ -37,7 +37,7 @@ foreigner_class!(class Foo {
                 &name,
                 Source::Str(
                     r#"
-    foreigner_class!(class Foo {
+    foreign_class!(class Foo {
        self_type SomeType;
     });
     "#,
@@ -56,7 +56,7 @@ foreigner_class!(class Foo {
                 &name,
                 Source::Str(
                     r#"
-    foreigner_class!(class Foo {
+    foreign_class!(class Foo {
        self_type SomeType;
        method SomeType::f(&self) -> i32;
     });
@@ -95,7 +95,7 @@ foreign_typemap!(
 "#;
 );
 
-foreigner_class!(class Foo {
+foreign_class!(class Foo {
     fn f1() -> TypeX;
 });
 
@@ -146,13 +146,13 @@ fn test_expectations_parse_without_self_type_err() {
                 &name,
                 Source::Str(
                     r#"
-foreigner_class!(class DownloadItem {
+foreign_class!(class DownloadItem {
     self_type DownloadItem;
     private constructor = empty;
     method DownloadItem::total_size(&self) -> u64;
 });
 
-foreigner_class!(class Document {
+foreign_class!(class Document {
     constructor Document::new(remote: DownloadItem) -> Document;
     method Document::remote(&self) -> bool;
 });
@@ -172,14 +172,14 @@ fn test_expectations_foreign_vec_as_arg() {
 
     let name = "foreign_vec_as_arg";
     let src = r#"
-foreigner_class!(
+foreign_class!(
 #[derive(Clone)]
 class Boo {
     self_type Boo;
     constructor Boo::default() -> Boo;
     fn Boo::clone(&self) -> Boo;
 });
-foreigner_class!(class FooImpl {
+foreign_class!(class FooImpl {
     self_type Foo<'a>;
     constructor Foo::create() -> Foo<'a>;
     fn Foo::set_alternate_boarding(&mut self, p: Vec<Boo>);
@@ -214,7 +214,7 @@ foreign_enum!(enum MyEnum {
   ITEM3 = MyEnum::Item3,
 });
 
-foreigner_class!(class TestEnumClass {
+foreign_class!(class TestEnumClass {
     self_type Moo;
     constructor Moo::default() -> Moo;
     fn Moo::f1(&mut self, v: MyEnum) -> i32;
@@ -236,13 +236,13 @@ fn test_return_result_type_with_object() {
 
     let name = "return_result_type_with_object";
     let src = r#"
-foreigner_class!(class Position {
+foreign_class!(class Position {
     self_type GnssInfo;
     private constructor create_position() -> GnssInfo;
     method Position::getLatitude(&self) -> f64;
 });
 
-foreigner_class!(class LocationService {
+foreign_class!(class LocationService {
     static_method LocationService::position() -> Result<GnssInfo, String>;
     static_method LocationService::do_something() -> Result<(), String>;
 });
@@ -277,13 +277,13 @@ fn test_return_foreign_class_ref() {
             "return_foreign_class_ref",
             Source::Str(
                 r#"
-foreigner_class!(class Boo {
+foreign_class!(class Boo {
     self_type Boo;
     constructor create_boo() -> Boo;
     method Boo::test(&self, _: bool) -> f32;
     method Boo::set_a(&mut self, _: i32);
 });
-foreigner_class!(class Moo {
+foreign_class!(class Moo {
     self_type Moo;
     constructor TestPathAndResult::default() -> Moo;
     method TestPathAndResult::get_boo(&self) -> &Boo;
@@ -311,7 +311,7 @@ fn test_foreign_interface_cpp() {
 
     let name = "foreign_interface_cpp";
     let src = r#"
-foreigner_class!(class Uuid {
+foreign_class!(class Uuid {
     self_type Uuid;
     private constructor uuid_private_constructor() -> Uuid;
     static_method Uuid::new_v4() -> Uuid;

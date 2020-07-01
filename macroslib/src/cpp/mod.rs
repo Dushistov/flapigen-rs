@@ -59,7 +59,7 @@ use crate::{
         },
         CItem, CItems, ForeignTypeInfo, TypeConvCode, TypeMapConvRuleInfo,
     },
-    types::{ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodAccess, MethodVariant},
+    types::{ForeignClassInfo, ForeignMethod, ItemToExpand, MethodAccess, MethodVariant},
     CppConfig, CppOptional, CppStrView, CppVariant, LanguageGenerator, SourceCode, TypeMap,
     SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
 };
@@ -219,8 +219,8 @@ impl ForeignMethodSignature for CppForeignMethodSignature {
 }
 
 struct MethodContext<'a> {
-    class: &'a ForeignerClassInfo,
-    method: &'a ForeignerMethod,
+    class: &'a ForeignClassInfo,
+    method: &'a ForeignMethod,
     f_method: &'a CppForeignMethodSignature,
     c_func_name: &'a str,
     decl_func_args: &'a str,
@@ -229,7 +229,7 @@ struct MethodContext<'a> {
 }
 
 impl CppConfig {
-    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
+    fn register_class(&self, conv_map: &mut TypeMap, class: &ForeignClassInfo) -> Result<()> {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
@@ -376,12 +376,12 @@ impl LanguageGenerator for CppConfig {
     }
 }
 
-fn c_func_name(class: &ForeignerClassInfo, method: &ForeignerMethod) -> String {
+fn c_func_name(class: &ForeignClassInfo, method: &ForeignMethod) -> String {
     do_c_func_name(class, method.access, &method.short_name())
 }
 
 fn do_c_func_name(
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     method_access: MethodAccess,
     method_short_name: &str,
 ) -> String {

@@ -28,7 +28,7 @@ use crate::{
             RustTypeS,
         },
     },
-    types::ForeignerClassInfo,
+    types::ForeignClassInfo,
 };
 
 pub(crate) use typemap_macro::{
@@ -233,7 +233,7 @@ pub(crate) struct TypeMap {
     rust_names_map: RustTypeNameToGraphIdx,
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
-    foreign_classes: Vec<ForeignerClassInfo>,
+    foreign_classes: Vec<ForeignClassInfo>,
     /// How to use trait to convert types, Trait Name -> Code
     traits_usage_code: FxHashMap<Ident, String>,
     /// code that parsed, but not yet integrated to TypeMap,
@@ -641,7 +641,7 @@ impl TypeMap {
 
     /// find correspoint to rust foreign type (extended)
     pub(crate) fn map_through_conversation_to_foreign<
-        F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
+        F: Fn(&TypeMap, &ForeignClassInfo) -> Option<Type>,
     >(
         &mut self,
         rust_ty: RustTypeIdx,
@@ -906,12 +906,12 @@ impl TypeMap {
     }
 
     pub(crate) fn find_foreigner_class_with_such_this_type<
-        F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
+        F: Fn(&TypeMap, &ForeignClassInfo) -> Option<Type>,
     >(
         &self,
         this_ty: &Type,
         get_this_type: F,
-    ) -> Option<&ForeignerClassInfo> {
+    ) -> Option<&ForeignClassInfo> {
         let this_name = normalize_type(this_ty);
         for fc in &self.foreign_classes {
             if let Some(this_type_for_method) = get_this_type(self, fc) {
@@ -924,7 +924,7 @@ impl TypeMap {
         None
     }
 
-    pub(crate) fn register_foreigner_class(&mut self, class: &ForeignerClassInfo) {
+    pub(crate) fn register_foreigner_class(&mut self, class: &ForeignClassInfo) {
         self.foreign_classes.push(class.clone());
     }
 
@@ -1265,7 +1265,7 @@ mod tests {
             &["SwigForeignClass"],
             SourceId::none(),
         );
-        types_map.register_foreigner_class(&ForeignerClassInfo {
+        types_map.register_foreigner_class(&ForeignClassInfo {
             src_id: SourceId::none(),
             name: Ident::new("Foo", Span::call_site()),
             methods: vec![],
@@ -1273,7 +1273,7 @@ mod tests {
                 self_type: foo_rt.ty.clone(),
                 constructor_ret_type: foo_rt.ty.clone(),
             }),
-            foreigner_code: String::new(),
+            foreign_code: String::new(),
             doc_comments: vec![],
             copy_derived: false,
             clone_derived: false,
