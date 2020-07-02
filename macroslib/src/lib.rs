@@ -70,7 +70,11 @@ use crate::{
 
 pub(crate) static WRITE_TO_MEM_FAILED_MSG: &str = "Write to memory buffer failed, no free mem?";
 pub(crate) static SMART_PTR_COPY_TRAIT: &str = "SmartPtrCopy";
-pub(crate) static KNOWN_CLASS_DERIVES: [&str; 3] = ["Copy", "Clone", SMART_PTR_COPY_TRAIT];
+pub(crate) static COPY_TRAIT: &str = "Copy";
+pub(crate) static CLONE_TRAIT: &str = "Clone";
+pub(crate) static PLAIN_CLASS: &str = "PlainClass";
+pub(crate) static KNOWN_CLASS_DERIVES: [&str; 4] =
+    [CLONE_TRAIT, COPY_TRAIT, SMART_PTR_COPY_TRAIT, PLAIN_CLASS];
 
 pub use extension::MethodInfo;
 use extension::{ClassExtHandlers, MethodExtHandlers};
@@ -454,6 +458,9 @@ impl Generator {
     where
         F: Fn(&mut Vec<u8>, &str) + 'static,
     {
+        if KNOWN_CLASS_DERIVES.iter().any(|x| *x == attr_name) {
+            panic!("This '{}' attribute name is reserved", attr_name);
+        }
         if self.class_ext_handlers.contains_key(attr_name) {
             panic!(
                 "class attribute callback for name '{}' already registered",
