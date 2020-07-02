@@ -29,7 +29,7 @@ use crate::{
         TO_VAR_TYPE_TEMPLATE,
     },
     types::{ForeignClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
-    SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
+    KNOWN_CLASS_DERIVES, SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::cpp) fn generate(ctx: &mut CppContext, class: &ForeignClassInfo) -> Result<()> {
@@ -722,6 +722,7 @@ using {class_name}Ref = {base_class_name}<false>;
     extend_foreign_class(
         class,
         &mut cnt,
+        &KNOWN_CLASS_DERIVES,
         ctx.class_ext_handlers,
         ctx.method_ext_handlers,
     )?;

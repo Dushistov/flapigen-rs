@@ -1,7 +1,7 @@
 use crate::{
     error::{DiagnosticError, Result},
     types::ForeignClassInfo,
-    MethodVariant, KNOWN_CLASS_DERIVES,
+    MethodVariant,
 };
 use rustc_hash::FxHashMap;
 
@@ -16,11 +16,12 @@ pub(crate) type MethodExtHandlers = FxHashMap<String, Box<dyn Fn(&mut Vec<u8>, M
 pub(crate) fn extend_foreign_class(
     class: &ForeignClassInfo,
     cnt: &mut Vec<u8>,
+    reserved_class_derives: &[&str],
     class_ext_handlers: &ClassExtHandlers,
     method_ext_handlers: &MethodExtHandlers,
 ) -> Result<()> {
     for derive in &class.derive_list {
-        if KNOWN_CLASS_DERIVES.iter().any(|x| x == derive) {
+        if reserved_class_derives.iter().any(|x| x == derive) {
             continue;
         }
         if let Some(cb) = class_ext_handlers.get(derive) {

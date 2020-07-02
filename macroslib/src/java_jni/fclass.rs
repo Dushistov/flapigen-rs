@@ -28,7 +28,8 @@ use crate::{
         ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
     types::{ForeignClassInfo, ForeignMethod, MethodAccess, MethodVariant, SelfTypeVariant},
-    JavaConfig, JavaReachabilityFence, WRITE_TO_MEM_FAILED_MSG,
+    JavaConfig, JavaReachabilityFence, CLONE_TRAIT, COPY_TRAIT, SMART_PTR_COPY_TRAIT,
+    WRITE_TO_MEM_FAILED_MSG,
 };
 
 pub(in crate::java_jni) fn generate(ctx: &mut JavaContext, class: &ForeignClassInfo) -> Result<()> {
@@ -512,6 +513,7 @@ May be you need to use `private constructor = empty;` syntax?",
     extend_foreign_class(
         class,
         &mut cnt,
+        &[CLONE_TRAIT, COPY_TRAIT, SMART_PTR_COPY_TRAIT],
         ctx.class_ext_handlers,
         ctx.method_ext_handlers,
     )?;
