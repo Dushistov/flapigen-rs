@@ -79,9 +79,9 @@ impl<'a> DotNetGenerator<'a> {
         config: &'a DotNetConfig,
         generated_files_registry: &mut FxHashSet<PathBuf>,
     ) -> Result<FileWriteCache> {
-        fs::create_dir_all(&config.managed_lib_name).expect("Can't create managed lib directory");
+        fs::create_dir_all(&config.managed_lib_path).expect("Can't create managed lib directory");
 
-        let mut csproj = File::create(format!("{0}/{0}.csproj", config.managed_lib_name))
+        let mut csproj = File::create(config.managed_lib_path.join(config.managed_lib_name.clone() + ".csproj"))
             .with_note("Can't create csproj file")?;
 
         write!(
@@ -100,7 +100,7 @@ impl<'a> DotNetGenerator<'a> {
 
         let cs_file_name = config.managed_lib_name.clone() + ".cs";
         let mut cs_file = FileWriteCache::new(
-            PathBuf::from(&config.managed_lib_name).join(cs_file_name),
+            config.managed_lib_path.join(cs_file_name),
             generated_files_registry,
         );
 

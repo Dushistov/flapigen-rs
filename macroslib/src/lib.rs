@@ -323,14 +323,16 @@ impl PythonConfig {
 pub struct DotNetConfig {
     native_lib_name: String,
     managed_lib_name: String,
+    managed_lib_path: PathBuf,
 }
 
 impl DotNetConfig {
     /// Create `DotNetConfig`
-    pub fn new(managed_lib_name: String) -> DotNetConfig {
+    pub fn new(managed_lib_name: String, managed_lib_path: PathBuf) -> DotNetConfig {
         DotNetConfig {
             native_lib_name: managed_lib_name.clone() + "_native",
-            managed_lib_name: managed_lib_name,
+            managed_lib_name,
+            managed_lib_path,
         }
     }
 
@@ -341,6 +343,11 @@ impl DotNetConfig {
 
     pub fn native_lib_name(mut self, native_lib_name: String) -> DotNetConfig {
         self.native_lib_name = native_lib_name;
+        self
+    }
+    
+    pub fn managed_lib_path(mut self, managed_lib_path: PathBuf) -> DotNetConfig {
+        self.managed_lib_path = managed_lib_path;
         self
     }
 }
