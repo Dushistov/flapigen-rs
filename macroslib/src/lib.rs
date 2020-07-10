@@ -638,9 +638,10 @@ impl Generator {
 
         if self.rustfmt_bindings {
             let source_bytes = file.take_content();
-            let new_cnt = rustfmt_cnt(source_bytes).unwrap_or_else(|err| {
-                panic!("Error during running of rustfmt: {}", err);
-            });
+            let new_cnt =
+                rustfmt_cnt(source_bytes, RustEdition::Edition2018).unwrap_or_else(|err| {
+                    panic!("Error during running of rustfmt: {}", err);
+                });
             file.replace_content(new_cnt);
         }
 
@@ -705,11 +706,27 @@ trait LanguageGenerator {
 }
 
 #[doc(hidden)]
-pub fn rustfmt_cnt(source: Vec<u8>) -> io::Result<Vec<u8>> {
+#[derive(Clone, Copy, PartialEq)]
+pub enum RustEdition {
+    Edition2015,
+    Edition2018,
+}
+
+#[doc(hidden)]
+pub fn rustfmt_cnt(source: Vec<u8>, edition: RustEdition) -> io::Result<Vec<u8>> {
     let rustfmt = which::which("rustfmt")
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))?;
 
     let mut cmd = Command::new(&*rustfmt);
+    cmd.arg("--edition");
+    match edition {
+        RustEdition::Edition2015 => {
+            cmd.arg("2015");
+        }
+        RustEdition::Edition2018 => {
+            cmd.arg("2018");
+        }
+    }
 
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
