@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use flapigen::{rustfmt_cnt, CppConfig, Generator, JavaConfig, LanguageConfig};
+use flapigen::{rustfmt_cnt, CppConfig, Generator, JavaConfig, LanguageConfig, RustEdition};
 use log::warn;
 use syn::Token;
 use tempfile::tempdir;
@@ -675,7 +675,7 @@ fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bo
 
 fn rustfmt_without_errors(rust_code: String) -> String {
     let rust_code2 = rust_code.clone();
-    match rustfmt_cnt(rust_code.into_bytes()) {
+    match rustfmt_cnt(rust_code.into_bytes(), RustEdition::Edition2018) {
         Ok(code) => String::from_utf8(code).expect("not valid utf-8"),
         Err(err) => {
             warn!("rustfmt failed: {}", err);
