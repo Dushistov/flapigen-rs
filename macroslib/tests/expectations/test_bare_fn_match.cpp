@@ -1,6 +1,6 @@
-"typedef void (*c_fn_i32i32_t)(int32_t, void *);";
+"typedef void (*c_fn_i324232mut3232c_void_t)(int32_t, void *);";
 r#"struct CFnOncei32 {
-    c_fn_i32i32_t cb;
+    c_fn_i324232mut3232c_void_t cb;
     void * ctx;
 };"#;
 
@@ -25,7 +25,7 @@ r#"template<bool OWN_DATA>
 
     }"#;
 
-"typedef void (*c_fn_CRustResulti32CRustStringCRustResulti32CRustString_t)(CRustResulti32CRustString, void *);";
+"typedef void (*c_fn_CRustResulti32CRustString4232mut3232c_void_t)(CRustResulti32CRustString, void *);";
 "static std::future<std::variant<int32_t, RustString>> call_fn2() noexcept;";
 
 r#"template<bool OWN_DATA>
