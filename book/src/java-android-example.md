@@ -1,6 +1,6 @@
 # Java/Android
 
-[This example](https://github.com/Dushistov/flapigen/tree/master/android-example) shows off how to use rust to build a native library from android
+[This example](https://github.com/Dushistov/flapigen-rs/tree/master/android-example) shows off how to use rust to build a native library from android
 and use it through an automatically generated JNI wrapper.
 
 [Android Studio](https://developer.android.com/studio) can be used to work with Rust via [Rust plugin](https://intellij-rust.github.io/).

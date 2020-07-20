@@ -4,7 +4,7 @@
 //! [cargo build scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html).
 //! The idea of this softwared based on [swig](http://www.swig.org).
 //! More details can be found at
-//! [README](https://github.com/Dushistov/flapigen/blob/master/README.md)
+//! [README](https://github.com/Dushistov/flapigen-rs/blob/master/README.md)
 
 #![recursion_limit = "128"]
 
