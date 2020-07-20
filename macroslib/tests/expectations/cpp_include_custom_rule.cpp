@@ -56,8 +56,7 @@ public:
     const BtAddrWrapper<true> &as_cref() const noexcept { return reinterpret_cast<const BtAddrWrapper<true> &>(*this); }
 
     BtAddrWrapper(const BtAddrWrapper& o) noexcept {
-        static_assert(OWN_DATA, "copy possible only if class own data");
-
+         static_assert(OWN_DATA, "copy possible only if class own data");
          if (o.self_ != nullptr) {
              self_ = BtAddr_clone(o.self_);
          } else {
