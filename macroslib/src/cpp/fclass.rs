@@ -1284,8 +1284,7 @@ fn genearte_copy_stuff(
             cpp_include_f,
             r#"
     {class_name}(const {class_name}& o) noexcept {{
-        static_assert(OWN_DATA, "copy possible only if class own data");
-
+         {own_data_static_assert}
          if (o.self_ != nullptr) {{
              self_ = {c_clone_func}(o.self_);
          }} else {{
@@ -1293,7 +1292,7 @@ fn genearte_copy_stuff(
          }}
     }}
     {class_name} &operator=(const {class_name}& o) noexcept {{
-        static_assert(OWN_DATA, "copy possible only if class own data");
+        {own_data_static_assert}
         if (this != &o) {{
             free_mem(this->self_);
             if (o.self_ != nullptr) {{
@@ -1304,6 +1303,11 @@ fn genearte_copy_stuff(
         }}
         return *this;
     }}"#,
+            own_data_static_assert = if !plain_class {
+                "static_assert(OWN_DATA, \"copy possible only if class own data\");"
+            } else {
+                ""
+            },
             c_clone_func = c_clone_func,
             class_name = tmp_class_name
         )
@@ -1358,8 +1362,7 @@ fn genearte_copy_stuff(
             cpp_include_f,
             r#"
     {class_name}(const {class_name}& o) noexcept {{
-        static_assert(OWN_DATA, "copy possible only if class own data");
-
+         {own_data_static_assert}
          if (o.self_ != nullptr) {{
              self_ = {c_clone_func}(o.self_);
          }} else {{
@@ -1367,7 +1370,7 @@ fn genearte_copy_stuff(
          }}
     }}
     {class_name} &operator=(const {class_name}& o) noexcept {{
-        static_assert(OWN_DATA, "copy possible only if class own data");
+        {own_data_static_assert}
         if (this != &o) {{
             free_mem(this->self_);
             if (o.self_ != nullptr) {{
@@ -1378,6 +1381,11 @@ fn genearte_copy_stuff(
         }}
         return *this;
     }}"#,
+            own_data_static_assert = if !plain_class {
+                "static_assert(OWN_DATA, \"copy possible only if class own data\");"
+            } else {
+                ""
+            },
             c_clone_func = clone_fn_name,
             class_name = tmp_class_name
         )
