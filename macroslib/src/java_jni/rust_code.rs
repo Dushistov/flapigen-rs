@@ -35,6 +35,13 @@ pub(in crate::java_jni) fn predefined_java_type_to_jni_sig() -> FxHashMap<SmolSt
     m.insert("object".into(), "L".into());
     m.insert("short".into(), "S".into());
     m.insert("void".into(), "V".into());
+    for elem in &[
+        "char", "byte", "double", "float", "int", "long", "short", "boolean",
+    ] {
+        let jni_sig = m.get(*elem).expect("Internal error: no type");
+        let arr_sig = format!("[{}", jni_sig);
+        m.insert(format!("{} []", elem).into(), arr_sig.into());
+    }
     m
 }
 

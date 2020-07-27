@@ -694,6 +694,7 @@ trait CheckAllTypesInCallbackArgs {
     fn check_str(&self, s: &str);
     fn check_path(&self, p: &Path);
     fn check_arr(&self, arr: Vec<Foo>);
+    fn check_byte_arr(&self, arr: Vec<i8>);
 }
 
 foreign_typemap!(
@@ -718,6 +719,7 @@ foreign_callback!(callback CheckAllTypesInCallbackArgs {
     checkStr = CheckAllTypesInCallbackArgs::check_str(&self, s: &str);
     checkPath = CheckAllTypesInCallbackArgs::check_path(&self, s: &Path);
     checkArray = CheckAllTypesInCallbackArgs::check_arr(&self, arr: Vec<Foo>);
+    checkByteArray = CheckAllTypesInCallbackArgs::check_byte_arr(&self, arr: Vec<i8>);
 });
 
 foreign_class!(
@@ -734,6 +736,8 @@ foreign_class!(
             cb.check_str("checkStr");
             cb.check_path(Path::new("/tmp/a.txt"));
             cb.check_arr(vec![Foo::new(1, "1"), Foo::new(2, "2")]);
+            cb.check_byte_arr(vec![]);
+            cb.check_byte_arr(vec![1, -1, 0, -128, 127]);
         }
     }
 );
