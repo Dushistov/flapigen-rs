@@ -567,6 +567,7 @@ class Main {
 	private boolean str_called;
 	private boolean path_called;
 	private boolean arr_called;
+        private int byte_arr_called = 0;
 
 	@Override
 	public void checkAllTypes1(short a0, byte a1, int a2, short a3, long a4, int a5, long a6, int a7) {
@@ -627,6 +628,20 @@ class Main {
 	    assert arr[1].calcF(0, 0) == 2;
 	    arr_called = true;
 	}
+        @Override
+        public void checkByteArray(byte []arr) {
+            ++this.byte_arr_called;
+            if (byte_arr_called == 1) {
+                assert arr.length == 0;
+            } else if (byte_arr_called == 2) {
+                assert arr.length == 5;
+                assert arr[0] == 1;
+                assert arr[1] == -1;
+                assert arr[2] == 0;
+                assert arr[3] == -128;
+                assert arr[4] == 127;
+            }
+        }
     }
 
     private static void testAllTypesInCallbackArgs() {
@@ -638,6 +653,7 @@ class Main {
 	assert cb.str_called;
 	assert cb.path_called;
 	assert cb.arr_called;
+        assert cb.byte_arr_called == 2;
     }
 
     private static void testNumberInputOutput() {

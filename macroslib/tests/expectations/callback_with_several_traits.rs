@@ -1,4 +1,4 @@
-foreign_interface!(interface MyObserver {
+foreign_callback!(interface MyObserver {
     self_type OnEvent + Send;
     onStateChanged = OnEvent::something_change(&self, x: i32, s: &str);
 });
