@@ -1,11 +1,11 @@
 [package]
 name = "flapigen"
-version = "0.6.0-pre4"
+version = "0.6.0-pre5"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 description = "Tool for connecting libraries written in Rust with other languages"
 license = "BSD-3-Clause"
 keywords = ["swig", "java", "jni", "ffi", "cxx"]
-repository = "https://github.com/Dushistov/flapigen"
+repository = "https://github.com/Dushistov/flapigen-rs"
 documentation = "https://docs.rs/flapigen"
 readme = "../README.md"
 edition = "2018"
