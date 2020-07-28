@@ -1066,6 +1066,7 @@ foreign_class!(class TestMultiThreadCallback {
     }
 });
 
+//ANCHOR: inline_method_self
 pub struct Session {
     name: String,
 }
@@ -1084,3 +1085,4 @@ foreign_class!(
         }
     }
 );
+//ANCHOR_END: inline_method_self
