@@ -72,17 +72,28 @@ fn find_suitable_ftypes_for_interace_methods(
                 .find_or_alloc_rust_type(&named_arg.ty, interace.src_id);
             let arg_span = (interace.src_id, named_arg.ty.span());
             let mut f_arg_type = map_type(ctx, &arg_rust_ty, Direction::Outgoing, arg_span)?;
-            if f_arg_type.java_converter.is_some() {
+            if let Some(java_conv) = f_arg_type.java_converter.as_ref() {
                 // it is hard to use Java code during callback, so may be
                 // there is way to convert it to jobject ?
-                ctx.conv_map.convert_rust_types(
-                    arg_rust_ty.to_idx(),
-                    jobject_ty.to_idx(),
-                    "x",
-                    "y",
-                    "ret",
-                    arg_span,
-                )?;
+                ctx.conv_map
+                    .convert_rust_types(
+                        arg_rust_ty.to_idx(),
+                        jobject_ty.to_idx(),
+                        "x",
+                        "y",
+                        "ret",
+                        arg_span,
+                    )
+                    .map_err(|err| {
+                        err.add_span_note(
+                            arg_span,
+                            format!(
+                                "Java code required to convert type to jobject
+It is impossible to use this Java code:{}\nfor callback types conversation",
+                                java_conv.converter
+                            ),
+                        )
+                    })?;
                 f_arg_type.java_converter = None;
                 f_arg_type.base.correspoding_rust_type = jobject_ty.clone();
             }

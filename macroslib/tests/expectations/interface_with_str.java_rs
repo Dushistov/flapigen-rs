@@ -1,9 +1,45 @@
-r#"impl SwigFrom < jobject > for Box < dyn SomeTrait > {
- fn swig_from ( this : jobject , env : * mut JNIEnv ) -> Self {
- let mut cb = JavaCallback :: new ( this , env ) ; cb . methods . reserve ( 1 ) ;
- let class = unsafe { ( * * env ) . GetObjectClass . unwrap ( ) ( env , cb . this ) } ;
- assert ! ( ! class . is_null ( ) , "GetObjectClass return null class for SomeObserver" ) ;
- let method_id : jmethodID = unsafe { ( * * env ) . GetMethodID . unwrap ( ) ( env , class , swig_c_str ! ( "onStateChanged" ) , swig_c_str ! ( "(Ljava/lang/String;)V" ) ) } ;
- assert ! ( ! method_id . is_null ( ) , "Can not find onStateChanged id" ) ;
- cb . methods . push ( method_id ) ;
- Box :: new ( cb ) } }"#;
+r#"impl SwigFrom<jobject> for Box<dyn SomeTrait> {
+    fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {
+        let mut cb = JavaCallback::new(this, env);
+        cb.methods.reserve(1);
+        let class = unsafe { (**env).GetObjectClass.unwrap()(env, cb.this) };
+        assert!(
+            !class.is_null(),
+            "GetObjectClass return null class for SomeObserver"
+        );
+        let method_id: jmethodID = unsafe {
+            (**env).GetMethodID.unwrap()(
+                env,
+                class,
+                swig_c_str!("onStateChanged"),
+                swig_c_str!("(Ljava/lang/String;)V"),
+            )
+        };
+        assert!(!method_id.is_null(), "Can not find onStateChanged id");
+        cb.methods.push(method_id);
+        Box::new(cb)
+    }
+}"#;
+
+r#"impl SomeTrait for JavaCallback {
+    #[allow(unused_mut)]
+    fn on_state_changed(&self, a0: &str) {
+        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
+        swig_assert_eq_size!(::std::os::raw::c_int, i32);
+        let env = self.get_jni_env();
+        if let Some(env) = env.env {
+            let mut a0: jstring = <jstring>::swig_from(a0, env);
+            unsafe {
+                (**env).CallVoidMethod.unwrap()(env, self.this, self.methods[0usize], a0);
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    log::error!(concat!(
+                        stringify!(on_state_changed),
+                        ": java throw exception"
+                    ));
+                    (**env).ExceptionDescribe.unwrap()(env);
+                    (**env).ExceptionClear.unwrap()(env);
+                }
+            };
+        }
+    }
+}"#;
