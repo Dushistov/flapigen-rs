@@ -50,6 +50,11 @@ fields of **struct** or export result of Rust's macros application:
 ```rust,no_run,noplaypen
 {{#include ../../cpp_tests/src/cpp_glue.rs.in:inline_method}}
 ```
+To reference `self` in inline methods you should use `this` name, because of inline method
+is not the real one, it is just code block that included into generated code:
+```rust,no_run,noplaypen
+{{#include ../../cpp_tests/src/cpp_glue.rs.in:inline_method_self}}
+```
 
 ## Methods aliases
 
