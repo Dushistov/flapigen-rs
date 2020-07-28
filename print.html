@@ -1,18 +1,25 @@
 <!DOCTYPE HTML>
-<html lang="en" class="sidebar-visible no-js">
+<html lang="en" class="sidebar-visible no-js light">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>rust_swig</title>
+        <title>flapigen</title>
         
         <meta name="robots" content="noindex" />
         
+        
+
+
+        <!-- Custom HTML head -->
+        
+
 
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
+        <link rel="icon" href="favicon.svg">
         <link rel="shortcut icon" href="favicon.png">
         <link rel="stylesheet" href="css/variables.css">
         <link rel="stylesheet" href="css/general.css">
@@ -21,8 +28,9 @@
 
         <!-- Fonts -->
         <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        <link href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" rel="stylesheet" type="text/css">
-        <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro:500" rel="stylesheet" type="text/css">
+        
+        <link rel="stylesheet" href="fonts/fonts.css">
+        
 
         <!-- Highlight.js Stylesheets -->
         <link rel="stylesheet" href="highlight.css">
@@ -34,11 +42,11 @@
 
         
     </head>
-    <body class="light">
+    <body>
         <!-- Provide site root to javascript -->
         <script type="text/javascript">
             var path_to_root = "";
-            var default_theme = "light";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
         </script>
 
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
@@ -62,8 +70,11 @@
             var theme;
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
-            document.body.className = theme;
-            document.querySelector('html').className = theme + ' js';
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
         </script>
 
         <!-- Hide / unhide sidebar before it is displayed -->
@@ -80,7 +91,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="affix"><a href="about.html">About</a></li><li><a href="getting-started.html"><strong aria-hidden="true">1.</strong> Getting Started</a></li><li><ol class="section"><li><a href="cpp-example.html"><strong aria-hidden="true">1.1.</strong> C++</a></li><li><a href="java-android-example.html"><strong aria-hidden="true">1.2.</strong> Java/Android</a></li><li><a href="java-other-example.html"><strong aria-hidden="true">1.3.</strong> Java/Other</a></li></ol></li><li><a href="foreign-lang-api-descr.html"><strong aria-hidden="true">2.</strong> Foreign Language API Description</a></li><li><ol class="section"><li><a href="foreign-class.html"><strong aria-hidden="true">2.1.</strong> foreign_class</a></li><li><a href="foreign-enum.html"><strong aria-hidden="true">2.2.</strong> foreign_enum</a></li><li><a href="foreign-callback.html"><strong aria-hidden="true">2.3.</strong> foreign_callback</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="about.html">About</a></li><li class="chapter-item expanded "><a href="getting-started.html"><strong aria-hidden="true">1.</strong> Getting Started</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="cpp-example.html"><strong aria-hidden="true">1.1.</strong> C++</a></li><li class="chapter-item expanded "><a href="java-android-example.html"><strong aria-hidden="true">1.2.</strong> Java/Android</a></li><li class="chapter-item expanded "><a href="java-other-example.html"><strong aria-hidden="true">1.3.</strong> Java/Other</a></li></ol></li><li class="chapter-item expanded "><a href="foreign-lang-api-descr.html"><strong aria-hidden="true">2.</strong> Foreign Language API Description</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="foreign-class.html"><strong aria-hidden="true">2.1.</strong> foreign_class</a></li><li class="chapter-item expanded "><a href="foreign-enum.html"><strong aria-hidden="true">2.2.</strong> foreign_enum</a></li><li class="chapter-item expanded "><a href="foreign-callback.html"><strong aria-hidden="true">2.3.</strong> foreign_callback</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -89,37 +100,36 @@
 
             <div class="page">
                 
-                <div id="menu-bar" class="menu-bar">
-                    <div id="menu-bar-sticky-container">
-                        <div class="left-buttons">
-                            <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
-                                <i class="fa fa-bars"></i>
-                            </button>
-                            <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
-                                <i class="fa fa-paint-brush"></i>
-                            </button>
-                            <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
-                                <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
-                                <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
-                                <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
-                                <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
-                                <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
-                            </ul>
-                            
-                            <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
-                                <i class="fa fa-search"></i>
-                            </button>
-                            
-                        </div>
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        
+                    </div>
 
-                        <h1 class="menu-title">rust_swig</h1>
+                    <h1 class="menu-title">flapigen</h1>
 
-                        <div class="right-buttons">
-                            <a href="print.html" title="Print this book" aria-label="Print this book">
-                                <i id="print-button" class="fa fa-print"></i>
-                            </a>
-                            
-                        </div>
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        
                     </div>
                 </div>
 
@@ -147,7 +157,7 @@
 
                 <div id="content" class="content">
                     <main>
-                        <p><code>rust_swig</code> is tool for connecting programs or libraries written in Rust with other languages.
+                        <p><code>flapigen</code> is tool for connecting programs or libraries written in Rust with other languages.
 Currently implemented support for <code>C++</code> and <code>Java</code>, but you can write support
 for any language of your choice.
 It is designed to run by cargo during via cargo's <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html">build script</a> mechanism.</p>
@@ -165,10 +175,10 @@ It should has <code>crate-type</code> <code>cdylib</code> or <code>staticlib</co
 name = &quot;cpp_example_rust_part&quot;
 crate-type = [&quot;cdylib&quot;]
 </code></pre>
-<p>Then you should create <code>build.rs</code> inside this crate
+<p>Then you should create <code>build.rs</code> inside this crate.
 For example:</p>
 <pre><code class="language-rust no_run noplaypen">//build.rs
-use rust_swig::{CppConfig, CppOptional, CppStrView, CppVariant, LanguageConfig};
+use flapigen::{CppConfig, CppOptional, CppStrView, CppVariant, LanguageConfig};
 use std::{env, path::Path};
 
 fn main() {
@@ -184,7 +194,7 @@ fn main() {
     .cpp_variant(CppVariant::Boost)
     .cpp_str_view(CppStrView::Boost);
     //ANCHOR_END: cpp_config
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
+    let swig_gen = flapigen::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
     swig_gen.expand(
         &quot;c++-api-for-rust&quot;,
         // ANCHOR: rust_input
@@ -200,9 +210,8 @@ fn main() {
         Path::new(&quot;src&quot;).join(&quot;cpp_glue.rs.in&quot;).display()
     );
 }
-
 </code></pre>
-<p>Here you instruct <code>rust_swig</code> to generate C++/Rust code from &quot;src/cpp_glue.rs.in&quot; as <strong>intput</strong>:</p>
+<p>Here you instruct <code>flapigen</code> to generate C++/Rust code from &quot;src/cpp_glue.rs.in&quot; as <strong>intput</strong>:</p>
 <pre><code class="language-rust no_run noplaypen">        Path::new(&quot;src/cpp_glue.rs.in&quot;),
 </code></pre>
 <p>and we specify our <strong>output</strong>,
@@ -213,7 +222,7 @@ Rust file:</p>
 <pre><code class="language-rust no_run noplaypen">        Path::new(&quot;..&quot;).join(&quot;cpp-part&quot;).join(&quot;rust-api&quot;),
 </code></pre>
 <p>You can find detailed description of code generation in <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">suitable Cargo book's section</a>.</p>
-<p>Then you should create file for &quot;foreign&quot; language API description,
+<p>Then you should create file for &quot;foreign&quot; language API description.
 For example:</p>
 <pre><code class="language-rust no_run noplaypen">use super::{f2, Foo};
 
@@ -224,7 +233,6 @@ foreign_class!(class Foo {
     fn Foo::f(&amp;self, _: i32, _: i32) -&gt; i32;
     fn f2(_: i32) -&gt; i32;
 });
-
 </code></pre>
 <p>And connect generated code with your crate exactly how described in <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">Cargo book</a> :</p>
 <pre><code class="language-rust no_run noplaypen">// src/lib.rs
@@ -234,15 +242,15 @@ pub use crate::cpp_glue::*;
 <pre><code class="language-rust no_run noplaypen">// src/cpp_glue.rs
 include!(concat!(env!(&quot;OUT_DIR&quot;), &quot;/cpp_glue.rs&quot;));
 </code></pre>
-<p>Do not forget add <code>rust_swig</code> as dependency into <code>[build-dependencies]</code> section of crate's <code>Cargo.toml</code> file and you ready to go.</p>
+<p>Do not forget add <code>flapigen</code> as dependency into <code>[build-dependencies]</code> section of crate's <code>Cargo.toml</code> file and you ready to go.</p>
 <h1><a class="header" href="#c" id="c">C++</a></h1>
-<p>To run cpp-example from <a href="https://github.com/Dushistov/rust_swig/tree/master/cpp-example">here</a> you
+<p>To run cpp-example from <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example">here</a> you
 need <a href="https://www.boost.org/">boost</a>, <a href="https://cmake.org/">cmake</a> and C++11 compatible compiler.</p>
 <h2><a class="header" href="#project-structure" id="project-structure">Project Structure</a></h2>
-<p>The projects consists of two parts: <a href="https://github.com/Dushistov/rust_swig/tree/master/cpp-example/cpp-part">cpp-part</a>
-and <a href="https://github.com/Dushistov/rust_swig/tree/master/cpp-example/rust-part">rust-part</a>.
+<p>The projects consists of two parts: <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example/cpp-part">cpp-part</a>
+and <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example/rust-part">rust-part</a>.
 rust-part is compiled as shared library and linked into executable
-described by <a href="https://github.com/Dushistov/rust_swig/tree/master/cpp-example/cpp-part/CMakeLists.txt">CMakeLists.txt</a>.
+described by <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example/cpp-part/CMakeLists.txt">CMakeLists.txt</a>.
 cpp-part is main part so its build system (cmake) invokes <code>cargo</code> to build rust-part.</p>
 <h2><a class="header" href="#building" id="building">Building</a></h2>
 <p>It is normal CMake project, so you can build as ordinary CMake project.
@@ -291,7 +299,6 @@ foreign_class!(class Foo {
     fn Foo::f(&amp;self, _: i32, _: i32) -&gt; i32;
     fn f2(_: i32) -&gt; i32;
 });
-
 </code></pre>
 <p>Usage from C++:</p>
 <pre><code class="language-c++ no_run noplaypen">// main.cpp
@@ -299,15 +306,15 @@ foreign_class!(class Foo {
     int res = foo.f(1, 2);
 </code></pre>
 <h1><a class="header" href="#javaandroid" id="javaandroid">Java/Android</a></h1>
-<p><a href="https://github.com/Dushistov/rust_swig/tree/master/android-example">This example</a> shows off how to use rust to build a native library from android
+<p><a href="https://github.com/Dushistov/flapigen-rs/tree/master/android-example">This example</a> shows off how to use rust to build a native library from android
 and use it through an automatically generated JNI wrapper.</p>
 <p><a href="https://developer.android.com/studio">Android Studio</a> can be used to work with Rust via <a href="https://intellij-rust.github.io/">Rust plugin</a>.
 So it is not bad idea to integrate invocation of cargo into gradle,
 thus you can build and run android application with Rust inside as ordinary Java/Kotlin application.</p>
 <h2><a class="header" href="#project-structure-1" id="project-structure-1">Project Structure</a></h2>
-<p>The file <code>build.rs</code> defines how rust_swig generates wrapper code:</p>
+<p>The file <code>build.rs</code> defines how flapigen generates wrapper code:</p>
 <pre><code class="language-rust no_run noplaypen">// build.rs
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(
+    let swig_gen = flapigen::Generator::new(LanguageConfig::JavaConfig(
         JavaConfig::new(
             Path::new(&quot;app&quot;)
                 .join(&quot;src&quot;)
@@ -351,7 +358,7 @@ impl Session {
     }
 }
 </code></pre>
-<p>And the file <code>src/java_glue.rs.in</code> contains description for rust_swig how export this API to Java:</p>
+<p>And the file <code>src/java_glue.rs.in</code> contains description for flapigen how export this API to Java:</p>
 <pre><code class="language-rust no_run noplaypen">// src/java_glue.rs.in
 foreign_class!(class Session {
     self_type Session;
@@ -365,8 +372,8 @@ and then build it into apk:</p>
 <pre><code class="language-groovy no_run noplaypen">// app/build.gradle
 def rustBasePath = &quot;..&quot;
 def archTriplets = [
-    'armeabi': 'arm-linux-androideabi',
-    'arm64': 'aarch64-linux-android',
+    'armeabi-v7a': 'armv7-linux-androideabi',
+    'arm64-v8a': 'aarch64-linux-android',
 ]
 
 // TODO: only pass --release if buildType is release
@@ -428,12 +435,11 @@ rustup target add aarch64-linux-android
 environment variable or change path to linker here:</p>
 <pre><code class="language-toml">[target.aarch64-linux-android]
 linker = &quot;aarch64-linux-android21-clang++&quot;
-runner = &quot;./run-on-adroid.sh&quot;
+runner = &quot;./run-on-android.sh&quot;
 
-[target.arm-linux-androideabi]
+[target.armv7-linux-androideabi]
 linker = &quot;armv7a-linux-androideabi21-clang++&quot;
-runner = &quot;./run-on-adroid.sh&quot;
-
+runner = &quot;./run-on-android.sh&quot;
 </code></pre>
 <h2><a class="header" href="#invocation" id="invocation">Invocation</a></h2>
 <p>Gradle will take care of building and deploying the Rust sources. Thus, to build
@@ -446,7 +452,7 @@ also there is instrumentation unit test on Java that invoke Rust code.</p>
 <h1><a class="header" href="#javaother" id="javaother">Java/Other</a></h1>
 <p>TODO</p>
 <h1><a class="header" href="#foreign-language-api-description" id="foreign-language-api-description">Foreign Language API Description</a></h1>
-<p><code>rust_swig</code> provides several methods to describe how your Rust code can be used
+<p><code>flapigen</code> provides several methods to describe how your Rust code can be used
 from &quot;foreign&quot; programming language. The main build block is <code>foreign_class</code>.
 This is the way how describe entity that will be visible for &quot;foreign language&quot; as a class.
 Also it is possible to export C-like enums via <code>foreign_enum</code>, plus it is possible to describe the
@@ -463,7 +469,6 @@ foreign_class!(class Foo {
     fn Foo::f(&amp;self, _: i32, _: i32) -&gt; i32;
     fn f2(_: i32) -&gt; i32;
 });
-
 </code></pre>
 <p>Here <code>Foo</code> may be <strong>struct</strong> or <strong>enum</strong> or more complex type (see bellow).
 The <strong>self_type</strong> can be omitted if there are no <strong>constructor</strong>s and all <strong>fn</strong> do not accept <strong>self</strong>.</p>
@@ -477,10 +482,10 @@ of &quot;foreign language&quot; is not allow it, then you can write:</p>
     fn CircularDepsA::a(&amp;self, b: &amp;CircularDepsB) -&gt; String;
 });
 </code></pre>
-<p>And <code>rust_swig</code> will be instructed to generate code to call each method listed above 
+<p>And <code>flapigen</code> will be instructed to generate code to call each method listed above 
 with <code>lock().unwrap().method</code> syntax.</p>
 <p>Also may be you want export <code>trait</code> implementation as <code>foregin_class</code>.
-The <code>rust_swig</code> can not work with <code>Box&lt;Trait&gt;</code>, because of it requires unstable/unsafe API to
+The <code>flapigen</code> can not work with <code>Box&lt;Trait&gt;</code>, because of it requires unstable/unsafe API to
 convert boxed trait to something that can be transferred via FFI border,
 but it can work with <code>Box&lt;Box&lt;Trait&gt;&gt;</code>, so via <strong>self_type</strong> you can represent boxed trait as class:</p>
 <pre><code class="language-rust no_run noplaypen">pub trait Interface {
@@ -500,18 +505,18 @@ impl Interface for InterfaceImpl {
     }
 }
 
-fn create_interface() -&gt; Box&lt;Box&lt;Interface&gt;&gt; {
+fn create_interface() -&gt; Box&lt;Box&lt;dyn Interface&gt;&gt; {
     Box::new(Box::new(InterfaceImpl { base: 17 }))
 }
 
 foreign_class!(class Interface {
-    self_type Interface;
-    constructor create_interface() -&gt; Box&lt;Box&lt;Interface&gt;&gt;;
+    self_type dyn Interface;
+    constructor create_interface() -&gt; Box&lt;Box&lt;dyn Interface&gt;&gt;;
     fn Interface::f(&amp;self, _: i32) -&gt; i32;
     fn Interface::set(&amp;mut self, x: i32);
 });
 </code></pre>
-<p>Also that should be noted that <code>rust_swig</code> generates code that uses &quot;Universal Function Call Syntax&quot;,
+<p>Also that should be noted that <code>flapigen</code> generates code that uses &quot;Universal Function Call Syntax&quot;,
 so method can be not real methods and declared outside of <strong>impl</strong> blocks:</p>
 <pre><code class="language-rust no_run noplaypen">pub struct TestMethodNotMethod;
 
@@ -538,6 +543,27 @@ fields of <strong>struct</strong> or export result of Rust's macros application:
     }
 });
 </code></pre>
+<p>To reference <code>self</code> in inline methods you should use <code>this</code> name, because of inline method
+is not the real one, it is just code block that included into generated code:</p>
+<pre><code class="language-rust no_run noplaypen">pub struct Session {
+    name: String,
+}
+
+foreign_class!(
+    #[derive(SmartPtrCopy)]
+    class Session {
+        self_type Session;
+        constructor session_init(name: &amp;str) -&gt; Rc&lt;RefCell&lt;Session&gt;&gt; {
+            Rc::new(RefCell::new(Session {
+                name: name.into(),
+            }))
+        }
+        fn name(&amp;self) -&gt; &amp;str {
+            &amp;this.name
+        }
+    }
+);
+</code></pre>
 <h2><a class="header" href="#methods-aliases" id="methods-aliases">Methods aliases</a></h2>
 <p>Also you can create alias for function name:</p>
 <pre><code class="language-rust no_run noplaypen">    fn Foo::f(&amp;self, _: i32, _: i32) -&gt; i32;  alias calcF;
@@ -547,7 +573,7 @@ and you can call it via name after <strong>alias</strong> in foreign language.</
 <p>May be useful for example if you want name functions in Java in camel case style,
 while want in Rust use snake case style.</p>
 <h2><a class="header" href="#foreigner_code" id="foreigner_code">foreigner_code</a></h2>
-<p>Also rust_swig support bypassing of code generation:</p>
+<p>Also flapigen support bypassing of code generation:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(class TestPathAndResult {
     self_type TestPathAndResult;
     constructor TestPathAndResult::empty() -&gt; Result&lt;TestPathAndResult, String&gt;;
@@ -560,10 +586,11 @@ while want in Rust use snake case style.</p>
     private static native Boo[] do_testHandArrayReturn(long me);
 &quot;#;
     fn TestPathAndResult::get_foo_list(&amp;self) -&gt; Vec&lt;Foo&gt;;
+    fn TestPathAndResult::get_result_foo_list(generate_err: bool) -&gt; Result&lt;Vec&lt;Foo&gt;, String&gt;;
 });
 </code></pre>
 <p>after that you can implement Java_com_example_TestPathAndResult_do_1testHandArrayReturn
-function by your self, usefull when rust_swig can not handle something automaticaly,
+function by your self, usefull when flapigen can not handle something automaticaly,
 or you want something special.</p>
 <h2><a class="header" href="#doc-comments" id="doc-comments">Doc comments</a></h2>
 <p>Also you can add comments to generated code with Rust's doc comments:</p>
@@ -616,7 +643,7 @@ foreign_class!(class TestEnumClass {
     constructor Moo::default() -&gt; Moo;
     fn Moo::f1(&amp;mut self, v: MyEnum) -&gt; i32;
     fn Moo::next_enum(v: MyEnum) -&gt; MyEnum;
-    fn call_cb(cb: Box&lt;EnumObserver&gt;) {
+    fn call_cb(cb: Box&lt;dyn EnumObserver&gt;) {
         let mut state = false;
         for e in &amp;[MyEnum::Item1, MyEnum::Item2, MyEnum::Item3] {
             cb.on_state_changed(*e, state);
@@ -625,7 +652,7 @@ foreign_class!(class TestEnumClass {
     }
 });
 </code></pre>
-<p>As result of <code>rust_swig</code> processing <code>foreign_callback!</code> it generates <strong>interface</strong> for Java and
+<p>As result of <code>flapigen</code> processing <code>foreign_callback!</code> it generates <strong>interface</strong> for Java and
 abstract <strong>class</strong> for C++, so you can implements methods in Java/C++ and pass pointer/reference to Rust,
 and for Rust it would be represented as <strong>trait</strong> implementation.</p>
 
@@ -652,6 +679,14 @@ and for Rust it would be represented as <strong>trait</strong> implementation.</
 
         
 
+        
+
+        
+
+        
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
         
 
         
