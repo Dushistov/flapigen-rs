@@ -42,6 +42,16 @@ so method can be not real methods and declared outside of **impl** blocks:
 {{#include ../../cpp_tests/src/cpp_glue.rs.in:method_not_method}}
 ```
 
+## Access modifiers
+
+By default, methods in generated class are public.
+You can change access level via protected and private keywords.
+
+```rust,no_run,noplaypen
+{{#include ../../macroslib/tests/expectations/access.rs}}
+```
+
+
 ## Inline methods
 
 It is also sometimes convenient to write short methods just inside `foreign_class!`, for example to add way to access
