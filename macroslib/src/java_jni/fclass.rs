@@ -134,7 +134,7 @@ public final class {class_name} {{"#,
         let method_access = match method.access {
             MethodAccess::Private => "private",
             MethodAccess::Public => "public",
-            MethodAccess::Protected => unreachable!(),
+            MethodAccess::Protected => "protected",
         };
         let conv_code_flags = match method.variant {
             MethodVariant::StaticMethod => java_code::ArgsFormatFlags::INTERNAL,

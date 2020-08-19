@@ -188,7 +188,7 @@ fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
     Ok(doc_comments)
 }
 
-fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<ForeignClassInfo> {
+fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<ForeignClassInfo> {
     let Attrs {
         doc_comments: class_doc_comments,
         derive_list,
@@ -231,12 +231,12 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         } else {
             MethodAccess::Public
         };
-        if let Language::Cpp = lang {
-            if content.peek(kw::protected) {
-                content.parse::<kw::protected>()?;
-                access = MethodAccess::Protected;
-            }
+
+        if content.peek(kw::protected) {
+            content.parse::<kw::protected>()?;
+            access = MethodAccess::Protected;
         }
+
         let (func_type_name, func_type_name_span): (String, Span) = if content.peek(Token![fn]) {
             let token = content.parse::<Token![fn]>()?;
             (FN.into(), token.span())
