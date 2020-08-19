@@ -232,6 +232,20 @@ foreign_class!(class TestMethodNotMethod {
     fn method_not_method(&amp;self);
 });
 </code></pre>
+<h2><a class="header" href="#access-modifiers" id="access-modifiers">Access modifiers</a></h2>
+<p>By default, methods in generated class are public.
+You can change access level via protected and private keywords.</p>
+<pre><code class="language-rust no_run noplaypen">foreign_class!(
+    class Foo {
+        self_type Foo;
+        constructor Foo::new() -&gt; Foo;
+        private constructor Foo::from_int(_: i32) -&gt; Foo;
+        private fn Foo::private_f();
+        fn Foo::public_f();
+        protected fn Foo::protected_f();
+    }
+);
+</code></pre>
 <h2><a class="header" href="#inline-methods" id="inline-methods">Inline methods</a></h2>
 <p>It is also sometimes convenient to write short methods just inside <code>foreign_class!</code>, for example to add way to access
 fields of <strong>struct</strong> or export result of Rust's macros application:</p>
