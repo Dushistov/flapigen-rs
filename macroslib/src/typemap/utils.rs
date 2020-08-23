@@ -121,10 +121,10 @@ pub(crate) fn create_suitable_types_for_constructor_and_self(
 ) -> (Type, Type) {
     match self_variant {
         SelfTypeVariant::Default => {
-            unimplemented!();
+            unimplemented!("self not supported, use &self or &mut self");
         }
         SelfTypeVariant::Mut => {
-            unimplemented!();
+            unimplemented!("'mut self' not supported, use &self or &mut self");
         }
         SelfTypeVariant::Rptr | SelfTypeVariant::RptrMut => {
             let c_sp = constructor_real_type.span();
