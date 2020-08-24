@@ -108,14 +108,18 @@ pub(in crate::java_jni) fn get_null_annotation_imports(
                 .iter()
                 .chain(std::iter::once(&f_method.output))
             {
-                match arg.annotation {
+                let mut process_null_annotation = |x: Option<NullAnnotation>| match x {
                     Some(NullAnnotation::NonNull) => has_non_null = true,
                     Some(NullAnnotation::Nullable) => has_nullable = true,
                     _ => {}
+                };
+                process_null_annotation(arg.annotation);
+                if let Some(conv) = arg.java_converter.as_ref() {
+                    process_null_annotation(conv.annotation);
                 }
                 if has_non_null && has_nullable {
                     return format!(
-                        "import {package}.NonNull;\nimport {package}.Nullable;\n",
+                        "import {package}.NonNull;\nimport {package}.Nullable;",
                         package = null_annotation_package
                     );
                 }
@@ -130,7 +134,7 @@ pub(in crate::java_jni) fn get_null_annotation_imports(
 
         if has_nullable {
             return format!(
-                "import {package}.Nullable;\n",
+                "import {package}.Nullable;",
                 package = null_annotation_package
             );
         }
