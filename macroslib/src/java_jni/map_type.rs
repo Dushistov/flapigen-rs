@@ -96,21 +96,16 @@ pub(in crate::java_jni) fn map_type(
                 },
             ));
         }
-
+        let annotation = type_annotation(&inter_ft.base.name);
         java_converter = Some(JavaConverter {
             java_transition_type: inter_ft.base.name,
             converter,
+            annotation,
         });
     } else {
         base_rt = rule.rust_ty;
     }
-    let annotation = if base_ft_name.contains("@Nullable") {
-        Some(NullAnnotation::Nullable)
-    } else if base_ft_name.contains("@NonNull") {
-        Some(NullAnnotation::NonNull)
-    } else {
-        None
-    };
+    let annotation = type_annotation(&base_ft_name);
     let mut fti = JavaForeignTypeInfo {
         base: ForeignTypeInfo {
             name: base_ft_name,
@@ -324,5 +319,15 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
         } else {
             Ok(String::new())
         }
+    }
+}
+
+fn type_annotation(typename: &str) -> Option<NullAnnotation> {
+    if typename.contains("@Nullable") {
+        Some(NullAnnotation::Nullable)
+    } else if typename.contains("@NonNull") {
+        Some(NullAnnotation::NonNull)
+    } else {
+        None
     }
 }

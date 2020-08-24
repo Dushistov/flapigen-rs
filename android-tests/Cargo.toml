@@ -16,5 +16,5 @@ android_logger = "0.8"
 
 [build-dependencies]
 flapigen = { path = "../macroslib" }
-bindgen = "0.54.1"
+bindgen = "0.54.0"
 walkdir = "2.2.7"

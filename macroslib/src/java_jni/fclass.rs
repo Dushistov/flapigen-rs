@@ -176,29 +176,6 @@ public final class {class_name} {{"#,
             java_code::ArgsFormatFlags::EXTERNAL,
             null_annotation_package.is_some(),
         );
-        fn calc_output_conv<'a>(
-            output: &'a JavaForeignTypeInfo,
-            conv: &'a JavaConverter,
-            ret_name: &str,
-            conv_ret: &str,
-        ) -> (&'a str, &'a str, String) {
-            let ret_type = output.base.name.as_str();
-            let intermidiate_ret_type = conv.java_transition_type.as_str();
-            let conv_code = conv
-                .converter
-                .replace(FROM_VAR_TEMPLATE, ret_name)
-                .replace(TO_VAR_TYPE_TEMPLATE, &format!("{} {}", ret_type, conv_ret))
-                .replace(TO_VAR_TEMPLATE, &conv_ret);
-            let mut conv_code: String = java_code::filter_null_annotation(&conv_code).trim().into();
-            if !conv_code.is_empty() && !conv_code.starts_with('\n') {
-                let ident = "        ";
-                if !conv_code.starts_with(ident) {
-                    conv_code.insert_str(0, ident);
-                }
-                conv_code.insert(0, '\n');
-            }
-            (ret_type, intermidiate_ret_type, conv_code)
-        }
 
         let (ret_type, intermidiate_ret_type, ret_conv_code) = match method.variant {
             MethodVariant::StaticMethod => {
@@ -1158,4 +1135,28 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
     }
 
     Ok((conv_code, args_for_call_internal, reachability_fence_code))
+}
+
+fn calc_output_conv<'a>(
+    output: &'a JavaForeignTypeInfo,
+    conv: &'a JavaConverter,
+    ret_name: &str,
+    conv_ret: &str,
+) -> (&'a str, &'a str, String) {
+    let ret_type = output.base.name.as_str();
+    let intermidiate_ret_type = conv.java_transition_type.as_str();
+    let conv_code = conv
+        .converter
+        .replace(FROM_VAR_TEMPLATE, ret_name)
+        .replace(TO_VAR_TYPE_TEMPLATE, &format!("{} {}", ret_type, conv_ret))
+        .replace(TO_VAR_TEMPLATE, &conv_ret);
+    let mut conv_code: String = java_code::filter_null_annotation(&conv_code).trim().into();
+    if !conv_code.is_empty() && !conv_code.starts_with('\n') {
+        let ident = "        ";
+        if !conv_code.starts_with(ident) {
+            conv_code.insert_str(0, ident);
+        }
+        conv_code.insert(0, '\n');
+    }
+    (ret_type, intermidiate_ret_type, conv_code)
 }

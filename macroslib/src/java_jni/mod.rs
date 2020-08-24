@@ -77,6 +77,7 @@ impl ForeignTypeInfoT for JavaForeignTypeInfo {
 #[derive(Debug)]
 struct JavaConverter {
     java_transition_type: SmolStr,
+    annotation: Option<NullAnnotation>,
     converter: String,
 }
 
