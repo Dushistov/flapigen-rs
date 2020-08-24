@@ -1,6 +1,4 @@
 mod swig_foreign_types_map {
-    #![swig_foreigner_type = "byte []"]
-    #![swig_rust_type = "jbyteArray"]
     #![swig_foreigner_type = "short []"]
     #![swig_rust_type = "jshortArray"]
     #![swig_foreigner_type = "int []"]
@@ -1005,24 +1003,24 @@ impl<'a> SwigInto<jdoubleArray> for &'a [f64] {
     }
 }
 
-impl SwigDeref for JavaByteArray {
-    type Target = [i8];
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_slice()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &[i8] => jbyteArray {
+        $out = JavaByteArray::from_slice_to_raw($p, env);
+    };
+    (f_type) => "byte []";
+);
 
-impl SwigFrom<jbyteArray> for JavaByteArray {
-    fn swig_from(x: jbyteArray, env: *mut JNIEnv) -> Self {
-        JavaByteArray::new(env, x)
-    }
-}
-
-impl<'a> SwigInto<jbyteArray> for &'a [i8] {
-    fn swig_into(self, env: *mut JNIEnv) -> jbyteArray {
-        JavaByteArray::from_slice_to_raw(self, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaByteArray <= jbyteArray {
+        $out = JavaByteArray::new(env, $p);
+    };
+    (f_type) <= "byte []";
+);
+foreign_typemap!(
+    ($p:r_type) &[i8] <= JavaByteArray {
+        $out = $p.to_slice();
+    };
+);
 
 impl SwigDeref for JavaShortArray {
     type Target = [i16];
