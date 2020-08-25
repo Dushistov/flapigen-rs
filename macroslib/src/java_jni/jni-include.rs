@@ -1,8 +1,4 @@
 mod swig_foreign_types_map {
-    #![swig_foreigner_type = "float []"]
-    #![swig_rust_type = "jfloatArray"]
-    #![swig_foreigner_type = "double []"]
-    #![swig_rust_type = "jdoubleArray"]
     #![swig_foreigner_type = "Object"]
     #![swig_rust_type_not_unique = "jobject"]
     #![swig_foreigner_type = "Object []"]
@@ -959,43 +955,43 @@ foreign_typemap!(
     };
 );
 
-impl SwigDeref for JavaFloatArray {
-    type Target = [f32];
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_slice()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &[f32] => jfloatArray {
+        $out = JavaFloatArray::from_slice_to_raw($p, env);
+    };
+    (f_type) => "float []";
+);
 
-impl SwigFrom<jfloatArray> for JavaFloatArray {
-    fn swig_from(x: jfloatArray, env: *mut JNIEnv) -> Self {
-        JavaFloatArray::new(env, x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaFloatArray <= jfloatArray {
+        $out = JavaFloatArray::new(env, $p);
+    };
+    (f_type) <= "float []";
+);
+foreign_typemap!(
+    ($p:r_type) &[f32] <= JavaFloatArray {
+        $out = $p.to_slice();
+    };
+);
 
-impl<'a> SwigInto<jfloatArray> for &'a [f32] {
-    fn swig_into(self, env: *mut JNIEnv) -> jfloatArray {
-        JavaFloatArray::from_slice_to_raw(self, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &[f64] => jdoubleArray {
+        $out = JavaDoubleArray::from_slice_to_raw($p, env);
+    };
+    (f_type) => "double []";
+);
 
-impl SwigDeref for JavaDoubleArray {
-    type Target = [f64];
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_slice()
-    }
-}
-
-impl SwigFrom<jdoubleArray> for JavaDoubleArray {
-    fn swig_from(x: jdoubleArray, env: *mut JNIEnv) -> Self {
-        JavaDoubleArray::new(env, x)
-    }
-}
-
-impl<'a> SwigInto<jdoubleArray> for &'a [f64] {
-    fn swig_into(self, env: *mut JNIEnv) -> jdoubleArray {
-        JavaDoubleArray::from_slice_to_raw(self, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaDoubleArray <= jdoubleArray {
+        $out = JavaDoubleArray::new(env, $p);
+    };
+    (f_type) <= "double []";
+);
+foreign_typemap!(
+    ($p:r_type) &[f64] <= JavaDoubleArray {
+        $out = $p.to_slice();
+    };
+);
 
 foreign_typemap!(
     ($p:r_type) &[i8] => jbyteArray {
