@@ -244,12 +244,11 @@ impl Drop for JavaString {
     }
 }
 
-impl SwigDeref for JavaString {
-    type Target = str;
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_str()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaString => &str {
+        $out = $p.to_str();
+    };
+);
 
 #[allow(dead_code)]
 struct JavaCallback {
@@ -708,24 +707,26 @@ foreign_typemap!(
     };
 );
 
-impl<'a> SwigFrom<&'a str> for jstring {
-    fn swig_from(x: &'a str, env: *mut JNIEnv) -> Self {
-        let x = ::std::ffi::CString::new(x).unwrap();
-        unsafe { (**env).NewStringUTF.unwrap()(env, x.as_ptr()) }
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &str => jstring {
+        $out = {
+            let x = ::std::ffi::CString::new($p).unwrap();
+            unsafe { (**env).NewStringUTF.unwrap()(env, x.as_ptr()) }
+        };
+    };
+);
 
-impl SwigInto<JavaString> for jstring {
-    fn swig_into(self, env: *mut JNIEnv) -> JavaString {
-        JavaString::new(env, self)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaString <= jstring {
+        $out = JavaString::new(env, $p);
+    };
+);
 
-impl SwigFrom<String> for jstring {
-    fn swig_from(x: String, env: *mut JNIEnv) -> Self {
-        from_std_string_jstring(x, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) String => jstring {
+        $out = from_std_string_jstring($p, env);
+    };
+);
 
 #[allow(dead_code)]
 fn from_std_string_jstring(x: String, env: *mut JNIEnv) -> jstring {
@@ -763,7 +764,7 @@ impl SwigInto<jobjectArray> for Vec<String> {
         };
         assert!(!obj_arr.is_null());
         for (i, r_str) in self.drain(..).enumerate() {
-            let jstr: jstring = jstring::swig_from(r_str, env);
+            let jstr: jstring = from_std_string_jstring(r_str, env);
             assert!(!jstr.is_null());
 
             unsafe {
@@ -1684,8 +1685,8 @@ foreign_typemap!(
     ($p:r_type) Option<&str> <= internal_aliases::JStringOptStr {
         let tmp: JavaString;
         $out = if !$p.is_null() {
-            tmp = $p.swig_into(env);
-            Some(tmp.swig_deref())
+            tmp = JavaString::new(env, $p);
+            Some(tmp.to_str())
         } else {
             None
         };

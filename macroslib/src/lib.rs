@@ -512,7 +512,38 @@ impl Generator {
             code: src_cnt,
         });
 
-        if let Err(err) = self.expand_str(src_id, dst) {
+        if let Err(err) = self.expand_str(&[src_id], dst) {
+            panic_on_parse_error(&self.src_reg, &err);
+        }
+    }
+
+    /// process `srcs` and save result of macro expansion to `dst`
+    ///
+    /// # Panics
+    /// Panics on error
+    pub fn expand_many<S, D>(mut self, crate_name: &str, srcs: &[S], dst: D)
+    where
+        S: AsRef<Path>,
+        D: AsRef<Path>,
+    {
+        let mut src_ids = Vec::with_capacity(srcs.len());
+        for src in srcs {
+            let src_cnt = std::fs::read_to_string(src.as_ref()).unwrap_or_else(|err| {
+                panic!(
+                    "Error during read for file {}: {}",
+                    src.as_ref().display(),
+                    err
+                )
+            });
+
+            let src_id = self.src_reg.register(SourceCode {
+                id_of_code: format!("{}: {}", crate_name, src.as_ref().display()),
+                code: src_cnt,
+            });
+            src_ids.push(src_id);
+        }
+
+        if let Err(err) = self.expand_str(&src_ids, dst) {
             panic_on_parse_error(&self.src_reg, &err);
         }
     }
@@ -521,7 +552,7 @@ impl Generator {
     ///
     /// # Panics
     /// Panics on I/O errors
-    fn expand_str<D>(&mut self, src_id: SourceId, dst: D) -> Result<()>
+    fn expand_str<D>(&mut self, src_ids: &[SourceId], dst: D) -> Result<()>
     where
         D: AsRef<Path>,
     {
@@ -535,9 +566,6 @@ impl Generator {
         }
         let items = self.init_types_map(self.pointer_target_width)?;
 
-        let syn_file = syn::parse_file(self.src_reg.src(src_id))
-            .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
-
         let mut file =
             file_cache::FileWriteCache::new(dst.as_ref(), &mut file_cache::NoNeedFsOpsRegistration);
 
@@ -545,73 +573,77 @@ impl Generator {
             write!(&mut file, "{}", DisplayToTokens(&item)).expect(WRITE_TO_MEM_FAILED_MSG);
         }
 
-        // n / 2 - just guess
-        let mut items_to_expand = Vec::with_capacity(syn_file.items.len() / 2);
+        let mut items_to_expand = Vec::with_capacity(1000);
 
-        for item in syn_file.items {
-            if let syn::Item::Macro(mut item_macro) = item {
-                let is_our_macro = [
-                    FOREIGNER_CLASS_DEPRECATED,
-                    FOREIGN_CLASS,
-                    FOREIGN_ENUM,
-                    FOREIGN_INTERFACE_DEPRECATED,
-                    FOREIGN_CALLBACK,
-                    FOREIGN_TYPEMAP,
-                ]
-                .iter()
-                .any(|x| item_macro.mac.path.is_ident(x));
-                if !is_our_macro {
-                    writeln!(&mut file, "{}", DisplayToTokens(&item_macro))
-                        .expect("mem I/O failed");
-                    continue;
-                }
-                debug!("Found {}", DisplayToTokens(&item_macro.mac.path));
-                if item_macro.mac.tokens.is_empty() {
-                    return Err(DiagnosticError::new(
-                        src_id,
-                        item_macro.span(),
-                        format!(
-                            "missing tokens in call of macro '{}'",
-                            DisplayToTokens(&item_macro.mac.path)
-                        ),
-                    ));
-                }
-                let mut tts = TokenStream::new();
-                mem::swap(&mut tts, &mut item_macro.mac.tokens);
-                if item_macro.mac.path.is_ident(FOREIGNER_CLASS_DEPRECATED)
-                    || item_macro.mac.path.is_ident(FOREIGN_CLASS)
-                {
-                    if item_macro.mac.path.is_ident(FOREIGNER_CLASS_DEPRECATED) {
-                        println!(
-                            "cargo:warning={} is deprecated, use {} instead",
-                            FOREIGNER_CLASS_DEPRECATED, FOREIGN_CLASS
-                        );
+        for src_id in src_ids {
+            let syn_file = syn::parse_file(self.src_reg.src(*src_id))
+                .map_err(|err| DiagnosticError::from_syn_err(*src_id, err))?;
+
+            for item in syn_file.items {
+                if let syn::Item::Macro(mut item_macro) = item {
+                    let is_our_macro = [
+                        FOREIGNER_CLASS_DEPRECATED,
+                        FOREIGN_CLASS,
+                        FOREIGN_ENUM,
+                        FOREIGN_INTERFACE_DEPRECATED,
+                        FOREIGN_CALLBACK,
+                        FOREIGN_TYPEMAP,
+                    ]
+                    .iter()
+                    .any(|x| item_macro.mac.path.is_ident(x));
+                    if !is_our_macro {
+                        writeln!(&mut file, "{}", DisplayToTokens(&item_macro))
+                            .expect("mem I/O failed");
+                        continue;
                     }
-                    let fclass = code_parse::parse_foreigner_class(src_id, &self.config, tts)?;
-                    debug!("expand_foreigner_class: self_desc {:?}", fclass.self_desc);
-                    self.conv_map.register_foreigner_class(&fclass);
-                    items_to_expand.push(ItemToExpand::Class(Box::new(fclass)));
-                } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
-                    let fenum = code_parse::parse_foreign_enum(src_id, tts)?;
-                    items_to_expand.push(ItemToExpand::Enum(fenum));
-                } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE_DEPRECATED)
-                    || item_macro.mac.path.is_ident(FOREIGN_CALLBACK)
-                {
-                    if item_macro.mac.path.is_ident(FOREIGN_INTERFACE_DEPRECATED) {
-                        println!(
-                            "cargo:warning={} is deprecated, use {} instead",
-                            FOREIGN_INTERFACE_DEPRECATED, FOREIGN_CALLBACK
-                        );
+                    debug!("Found {}", DisplayToTokens(&item_macro.mac.path));
+                    if item_macro.mac.tokens.is_empty() {
+                        return Err(DiagnosticError::new(
+                            *src_id,
+                            item_macro.span(),
+                            format!(
+                                "missing tokens in call of macro '{}'",
+                                DisplayToTokens(&item_macro.mac.path)
+                            ),
+                        ));
                     }
-                    let finterface = code_parse::parse_foreign_interface(src_id, tts)?;
-                    items_to_expand.push(ItemToExpand::Interface(finterface));
-                } else if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
-                    self.conv_map.parse_foreign_typemap_macro(src_id, tts)?;
+                    let mut tts = TokenStream::new();
+                    mem::swap(&mut tts, &mut item_macro.mac.tokens);
+                    if item_macro.mac.path.is_ident(FOREIGNER_CLASS_DEPRECATED)
+                        || item_macro.mac.path.is_ident(FOREIGN_CLASS)
+                    {
+                        if item_macro.mac.path.is_ident(FOREIGNER_CLASS_DEPRECATED) {
+                            println!(
+                                "cargo:warning={} is deprecated, use {} instead",
+                                FOREIGNER_CLASS_DEPRECATED, FOREIGN_CLASS
+                            );
+                        }
+                        let fclass = code_parse::parse_foreigner_class(*src_id, &self.config, tts)?;
+                        debug!("expand_foreigner_class: self_desc {:?}", fclass.self_desc);
+                        self.conv_map.register_foreigner_class(&fclass);
+                        items_to_expand.push(ItemToExpand::Class(Box::new(fclass)));
+                    } else if item_macro.mac.path.is_ident(FOREIGN_ENUM) {
+                        let fenum = code_parse::parse_foreign_enum(*src_id, tts)?;
+                        items_to_expand.push(ItemToExpand::Enum(fenum));
+                    } else if item_macro.mac.path.is_ident(FOREIGN_INTERFACE_DEPRECATED)
+                        || item_macro.mac.path.is_ident(FOREIGN_CALLBACK)
+                    {
+                        if item_macro.mac.path.is_ident(FOREIGN_INTERFACE_DEPRECATED) {
+                            println!(
+                                "cargo:warning={} is deprecated, use {} instead",
+                                FOREIGN_INTERFACE_DEPRECATED, FOREIGN_CALLBACK
+                            );
+                        }
+                        let finterface = code_parse::parse_foreign_interface(*src_id, tts)?;
+                        items_to_expand.push(ItemToExpand::Interface(finterface));
+                    } else if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
+                        self.conv_map.parse_foreign_typemap_macro(*src_id, tts)?;
+                    } else {
+                        unreachable!();
+                    }
                 } else {
-                    unreachable!();
+                    writeln!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
                 }
-            } else {
-                writeln!(&mut file, "{}", DisplayToTokens(&item)).expect("mem I/O failed");
             }
         }
         let generator = Generator::language_generator(&self.config);
