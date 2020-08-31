@@ -6,8 +6,6 @@
 //! More details can be found at
 //! [README](https://github.com/Dushistov/flapigen-rs/blob/master/README.md)
 
-#![recursion_limit = "128"]
-
 macro_rules! parse_type {
     ($($tt:tt)*) => {{
         let ty: syn::Type = syn::parse_quote! { $($tt)* };

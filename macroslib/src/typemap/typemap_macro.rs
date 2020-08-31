@@ -554,11 +554,7 @@ fn concat_idents(
             let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
             let i_type: syn::Type = expander.swig_i_type(
                 ty.as_ref(),
-                opt_arg
-                    .as_ref()
-                    .map(syn::Ident::to_string)
-                    .as_ref()
-                    .map(String::as_str),
+                opt_arg.as_ref().map(syn::Ident::to_string).as_deref(),
             )?;
             ident.push_str(&DisplayToTokens(&i_type).to_string());
         }

@@ -43,7 +43,7 @@ pub(in crate::java_jni) fn generate(ctx: &mut JavaContext, class: &ForeignClassI
         ctx,
         class,
         &f_methods_sign,
-        ctx.cfg.null_annotation_package.as_ref().map(String::as_str),
+        ctx.cfg.null_annotation_package.as_deref(),
     )?;
     debug!("generate: java code done");
     generate_rust_code(ctx, class, &f_methods_sign)?;
@@ -712,7 +712,7 @@ May be you need to use `private constructor = empty;` syntax?",
             &JniForeignMethodSignature {
                 output: ForeignTypeInfo {
                     name: "".into(),
-                    correspoding_rust_type: dummy_rust_ty.clone(),
+                    correspoding_rust_type: dummy_rust_ty,
                 }
                 .into(),
                 input: vec![JavaForeignTypeInfo {

@@ -160,7 +160,7 @@ fn do_generate(
             ctx.rust_code.push(fclass_impl_code);
             (this_type_for_method, code_box_this)
         } else {
-            (dummy_rust_ty.clone(), TokenStream::new())
+            (dummy_rust_ty, TokenStream::new())
         };
     let no_this_info = || {
         DiagnosticError::new(

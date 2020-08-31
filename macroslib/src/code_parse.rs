@@ -392,7 +392,7 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
                         .error("constructor or static_method should not contain self argument"));
                 }
             }
-            MethodVariant::Method(ref mut self_type) => match args_in.iter().nth(0) {
+            MethodVariant::Method(ref mut self_type) => match args_in.iter().next() {
                 Some(syn::FnArg::Receiver(syn::Receiver {
                     reference: Some(_),
                     ref mutability,
@@ -749,7 +749,7 @@ impl Parse for ForeignInterfaceParser {
             let args_in: Punctuated<syn::FnArg, Token![,]> =
                 args_parser.parse_terminated(syn::FnArg::parse)?;
             debug!("cb func in args {:?}", args_in);
-            let have_self_args = match args_in.iter().nth(0) {
+            let have_self_args = match args_in.iter().next() {
                 Some(syn::FnArg::Receiver(_)) => true,
                 _ => false,
             };

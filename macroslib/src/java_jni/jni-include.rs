@@ -148,10 +148,12 @@ foreign_typemap!(
     (f_type) "int";
 );
 
+//ANCHOR: foreign_typemap_define_jlong
 foreign_typemap!(
     (r_type) jlong;
     (f_type) "long";
 );
+//ANCHOR_END: foreign_typemap_define_jlong
 
 foreign_typemap!(
     (r_type) jfloat;
@@ -453,14 +455,16 @@ fn jobject_array_to_vec_of_objects<T: SwigForeignClass + Clone>(
 
     result
 }
-
+//ANCHOR: foreign_typemap_generic_example
 foreign_typemap!(
     ($p:r_type) <T: SwigForeignClass + Clone> Vec<T> <= internal_aliases::JForeignObjectsArray<T> {
         $out = jobject_array_to_vec_of_objects(env, $p);
     };
     ($p:f_type, option = "NoNullAnnotations") <= "swig_f_type!(T) []";
-    ($p:f_type, option = "NullAnnotations") <= "@NonNull swig_f_type!(T, NoNullAnnotations) []";
+    ($p:f_type, option = "NullAnnotations")
+                  <= "@NonNull swig_f_type!(T, NoNullAnnotations) []";
 );
+//ANCHOR_END: foreign_typemap_generic_example
 
 #[allow(dead_code)]
 fn vec_of_objects_to_jobject_array<T: SwigForeignClass>(
