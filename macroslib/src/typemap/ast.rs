@@ -287,7 +287,7 @@ impl GenericTypeConv {
                     && subst_map.as_slice()[0].ty.is_none()
                 {
                     debug_assert_eq!(1, self.generic_params.type_params().count());
-                    if let Some(first_generic_ty) = self.generic_params.type_params().nth(0) {
+                    if let Some(first_generic_ty) = self.generic_params.type_params().next() {
                         *subst_map
                             .get_mut(&first_generic_ty.ident)
                             .expect("Type should be there") = Some(goal_ty.ty.clone());
@@ -315,7 +315,7 @@ impl GenericTypeConv {
             if let Some(TyParamsSubstItem {
                 ident: key,
                 ty: Some(ref val),
-            }) = subst_map.as_slice().iter().nth(0).as_ref()
+            }) = subst_map.as_slice().iter().next().as_ref()
             {
                 let val_name = normalize_type(val);
                 let foreign_name =
@@ -336,7 +336,7 @@ impl GenericTypeConv {
             if let Some(TyParamsSubstItem {
                 ident: key,
                 ty: Some(ref val),
-            }) = subst_map.as_slice().iter().nth(0).as_ref()
+            }) = subst_map.as_slice().iter().next().as_ref()
             {
                 let val_name = normalize_type(val);
                 let foreign_name =

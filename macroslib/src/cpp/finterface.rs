@@ -302,7 +302,7 @@ impl Drop for {struct_with_funcs} {{
 }}"#,
         struct_with_funcs = struct_with_funcs
     )
-    .unwrap();
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
     ctx.rust_code.push(
         syn::parse_str(&code)

@@ -32,7 +32,7 @@ pub(in crate::java_jni) fn generate_interface(
         ctx,
         interface,
         &f_methods,
-        ctx.cfg.null_annotation_package.as_ref().map(String::as_str),
+        ctx.cfg.null_annotation_package.as_deref(),
     )
     .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;
     generate_rust_code_for_interface(ctx, interface, &f_methods)?;
