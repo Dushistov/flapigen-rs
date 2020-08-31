@@ -80,6 +80,17 @@ and you can call it via name after **alias** in foreign language.
 May be useful for example if you want name functions in Java in camel case style,
 while want in Rust use snake case style.
 
+## Constructors
+
+Constructors are Rust methods that mapped to constructors in term of "foreign" language.
+Also constructors, more precisely, return type of constructors can be used to
+ask `flapigen` to simplify call of methods, see self_type section for more details.
+Sometimes you need constructor, but you don't want allow to user to construct object,
+then you can use empty constructor:
+```rust,no_run,noplaypen
+{{#include ../../jni_tests/src/java_glue.rs.in:constructor_empty}}
+```
+
 
 ## foreigner_code
 
