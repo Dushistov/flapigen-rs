@@ -877,6 +877,7 @@ impl GamepadId {
     }
 }
 
+//ANCHOR: constructor_empty
 foreign_class!(
     class GamepadId {
         self_type GamepadId;
@@ -884,6 +885,7 @@ foreign_class!(
         fn GamepadId::value(&self) -> usize;
     }
 );
+//ANCHOR_END: constructor_empty
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Code(pub(crate) i32);

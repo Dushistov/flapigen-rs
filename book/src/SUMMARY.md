@@ -9,3 +9,4 @@
   - [foreign_class](./foreign-class.md)
   - [foreign_enum](./foreign-enum.md)
   - [foreign_callback](./foreign-callback.md)
+  - [foreign_typemap](./foreign-typemap.md)
