@@ -19,8 +19,12 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
+        
         <link rel="icon" href="favicon.svg">
+        
+        
         <link rel="shortcut icon" href="favicon.png">
+        
         <link rel="stylesheet" href="css/variables.css">
         <link rel="stylesheet" href="css/general.css">
         <link rel="stylesheet" href="css/chrome.css">
@@ -91,7 +95,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="about.html">About</a></li><li class="chapter-item expanded "><a href="getting-started.html"><strong aria-hidden="true">1.</strong> Getting Started</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="cpp-example.html"><strong aria-hidden="true">1.1.</strong> C++</a></li><li class="chapter-item expanded "><a href="java-android-example.html"><strong aria-hidden="true">1.2.</strong> Java/Android</a></li><li class="chapter-item expanded "><a href="java-other-example.html"><strong aria-hidden="true">1.3.</strong> Java/Other</a></li></ol></li><li class="chapter-item expanded "><a href="foreign-lang-api-descr.html"><strong aria-hidden="true">2.</strong> Foreign Language API Description</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="foreign-class.html"><strong aria-hidden="true">2.1.</strong> foreign_class</a></li><li class="chapter-item expanded "><a href="foreign-enum.html"><strong aria-hidden="true">2.2.</strong> foreign_enum</a></li><li class="chapter-item expanded "><a href="foreign-callback.html"><strong aria-hidden="true">2.3.</strong> foreign_callback</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="about.html">About</a></li><li class="chapter-item expanded "><a href="getting-started.html"><strong aria-hidden="true">1.</strong> Getting Started</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="cpp-example.html"><strong aria-hidden="true">1.1.</strong> C++</a></li><li class="chapter-item expanded "><a href="java-android-example.html"><strong aria-hidden="true">1.2.</strong> Java/Android</a></li><li class="chapter-item expanded "><a href="java-other-example.html"><strong aria-hidden="true">1.3.</strong> Java/Other</a></li></ol></li><li class="chapter-item expanded "><a href="foreign-lang-api-descr.html"><strong aria-hidden="true">2.</strong> Foreign Language API Description</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="foreign-class.html"><strong aria-hidden="true">2.1.</strong> foreign_class</a></li><li class="chapter-item expanded "><a href="foreign-enum.html"><strong aria-hidden="true">2.2.</strong> foreign_enum</a></li><li class="chapter-item expanded "><a href="foreign-callback.html"><strong aria-hidden="true">2.3.</strong> foreign_callback</a></li><li class="chapter-item expanded "><a href="foreign-typemap.html"><strong aria-hidden="true">2.4.</strong> foreign_typemap</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -453,10 +457,11 @@ also there is instrumentation unit test on Java that invoke Rust code.</p>
 <p>TODO</p>
 <h1><a class="header" href="#foreign-language-api-description" id="foreign-language-api-description">Foreign Language API Description</a></h1>
 <p><code>flapigen</code> provides several methods to describe how your Rust code can be used
-from &quot;foreign&quot; programming language. The main build block is <code>foreign_class</code>.
+from &quot;foreign&quot; programming language. The main build block is <a href="./foreign-class.html">foreign_class!</a>.
 This is the way how describe entity that will be visible for &quot;foreign language&quot; as a class.
-Also it is possible to export C-like enums via <code>foreign_enum</code>, plus it is possible to describe the
-way how to pass &quot;callback&quot; into your Rust code from foreign language.</p>
+Also it is possible to export C-like enums via <a href="./foreign-enum.html">foreign_enum!</a>, plus it is possible to describe the
+way how to pass &quot;callback&quot; into your Rust code from foreign language via <a href="./foreign-callback.html">foreign_callback!</a>.
+And of course it is possible to extend or rewrite existing type conversations rules via <a href="./foreign-typemap.html">foreign_typemap!</a></p>
 <h1><a class="header" href="#foreign_class" id="foreign_class">foreign_class!</a></h1>
 <p><code>foreign_class!</code> is the way how describe entity that will be visible for &quot;foreign language&quot; as a class.</p>
 <p>The basic example is:</p>
@@ -586,6 +591,20 @@ foreign_class!(
 and you can call it via name after <strong>alias</strong> in foreign language.</p>
 <p>May be useful for example if you want name functions in Java in camel case style,
 while want in Rust use snake case style.</p>
+<h2><a class="header" href="#constructors" id="constructors">Constructors</a></h2>
+<p>Constructors are Rust methods that mapped to constructors in term of &quot;foreign&quot; language.
+Also constructors, more precisely, return type of constructors can be used to
+ask <code>flapigen</code> to simplify call of methods, see self_type section for more details.
+Sometimes you need constructor, but you don't want allow to user to construct object,
+then you can use empty constructor:</p>
+<pre><code class="language-rust no_run noplaypen">foreign_class!(
+    class GamepadId {
+        self_type GamepadId;
+        private constructor = empty;
+        fn GamepadId::value(&amp;self) -&gt; usize;
+    }
+);
+</code></pre>
 <h2><a class="header" href="#foreigner_code" id="foreigner_code">foreigner_code</a></h2>
 <p>Also flapigen support bypassing of code generation:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(class TestPathAndResult {
@@ -669,6 +688,53 @@ foreign_class!(class TestEnumClass {
 <p>As result of <code>flapigen</code> processing <code>foreign_callback!</code> it generates <strong>interface</strong> for Java and
 abstract <strong>class</strong> for C++, so you can implements methods in Java/C++ and pass pointer/reference to Rust,
 and for Rust it would be represented as <strong>trait</strong> implementation.</p>
+<h1><a class="header" href="#foreign_typemap" id="foreign_typemap">foreign_typemap!</a></h1>
+<p><code>flapigen</code> works with <a href="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)">graph</a> where
+vertices are types and edges are conversation rules between types. To extend or rewrite some rules
+you can use <code>foreign_typemap!</code> macro. <strong>WARNING</strong> syntax is experimental and subject to change.</p>
+<p>Let's take a look at an example:</p>
+<pre><code class="language-rust no_run noplaypen">foreign_typemap!(
+    ($p:r_type) DateTime&lt;Utc&gt; =&gt; jlong {
+        $out = $p.timestamp_millis();
+    };
+    ($p:f_type, option = &quot;NoNullAnnotations&quot;, unique_prefix = &quot;/*chrono*/&quot;)
+        =&gt; &quot;/*chrono*/java.util.Date&quot; &quot;$out = new java.util.Date($p);&quot;;
+    ($p:f_type, option = &quot;NullAnnotations&quot;, unique_prefix = &quot;/*chrono*/&quot;)
+        =&gt; &quot;/*chrono*/@NonNull java.util.Date&quot; &quot;$out = new java.util.Date($p);&quot;;
+);
+</code></pre>
+<p>The <code>(r_type)</code> part of rule is described conversation from any Rust type to Rust type that
+can cross FFI (Foreign Function Interface) border.
+For example, in case of connection Rust and C++, types that can cross border are almost all primitive types,
+plus types marked with <code>repr(C)</code> and some others. After conversation to type that can cross FFI border,
+you sometimes want describe how this type should be converted to &quot;foreign&quot; type. This is done with
+<code>(f_type)</code> part of rule. Returning to our example at first we describe how to convert <code>DateTime&lt;Utc&gt;</code> (Rust type) to
+<code>jlong</code> (Rust type). Then we describe how to convert <code>long</code> (Java type) to <code>java.util.Date</code> (Java type).</p>
+<p>There is one nuance. As you can see Java type is called <code>/*chrono*/java.util.Date</code> instead of
+just <code>java.util.Date</code>. This is done because of you don't want two edges to one vertex in our graph
+mentioned above. There is already rule for <code>std::time::SystemTime</code> (Rust type) to <code>java.util.Date</code> (Java type),
+and it is better not have two rules (edges) that lead to the same vertex <code>java.util.Date</code>,
+so we create new unique vertex <code>/*chrono*/java.util.Date</code> != <code>java.util.Date</code>.</p>
+<p>Almost all parts of <code>foreign_typemap!</code> are optional.
+In the example bellow we define that <code>jlong</code> (Rust type) is corresponding to <code>long</code> (Java type),
+and there is no need to convert anything to get <code>long</code> from <code>jlong</code> and vise versa.</p>
+<pre><code class="language-rust no_run noplaypen">foreign_typemap!(
+    (r_type) jlong;
+    (f_type) &quot;long&quot;;
+);
+</code></pre>
+<p>Also it is possible to use <code>foreign_typemap!</code> for generic type conversation.
+In the example bellow we define the rule to convert any type Java type that looks like <code>X []</code>
+to <code>Vec&lt;T&gt;</code> if for type <code>T</code> there are traits <code>SwigForeignClass + Clone</code>.</p>
+<pre><code class="language-rust no_run noplaypen">foreign_typemap!(
+    ($p:r_type) &lt;T: SwigForeignClass + Clone&gt; Vec&lt;T&gt; &lt;= internal_aliases::JForeignObjectsArray&lt;T&gt; {
+        $out = jobject_array_to_vec_of_objects(env, $p);
+    };
+    ($p:f_type, option = &quot;NoNullAnnotations&quot;) &lt;= &quot;swig_f_type!(T) []&quot;;
+    ($p:f_type, option = &quot;NullAnnotations&quot;)
+                  &lt;= &quot;@NonNull swig_f_type!(T, NoNullAnnotations) []&quot;;
+);
+</code></pre>
 
                     </main>
 
