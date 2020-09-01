@@ -111,12 +111,13 @@ impl TypeConvCode {
             params.push(FROM_VAR_TEMPLATE.into());
         }
 
-        if params.len() < 2 {
-            panic!(
-                "Code: '{}' should contains {} and {}",
-                code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE
-            );
-        }
+        assert!(
+            params.len() >= 2,
+            "Code: '{}' should contains {} and {}",
+            code,
+            TO_VAR_TEMPLATE,
+            FROM_VAR_TEMPLATE
+        );
 
         TypeConvCode { code, span, params }
     }
