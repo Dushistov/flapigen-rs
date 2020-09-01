@@ -1,5 +1,5 @@
 use super::*;
-use crate::error::panic_on_syn_error;
+use crate::{error::panic_on_syn_error, typemap::ast::GenericTypeConv};
 use syn::parse_quote;
 
 #[test]
@@ -542,6 +542,40 @@ fn test_expand_generic_type_with_ptr() {
         },
         new_rule.rtype_right_to_left.unwrap()
     );
+}
+
+#[test]
+fn test_java_c_like_enum_generic() {
+    let rule = macro_to_conv_rule(parse_quote! {
+        foreign_typemap!(
+            ($p:r_type) <T: SwigForeignCLikeEnum> T => jint {
+                $out = $p.as_jint();
+            };
+        )
+    });
+    println!("rule: {:?}", rule);
+    assert!(rule.is_generic());
+
+    let _: GenericTypeConv = macro_to_conv_rule(parse_quote! {
+        foreign_typemap!(
+            ($p:r_type) <T: SwigForeignCLikeEnum> T => jint {
+                $out = $p.as_jint();
+            };
+        )
+    })
+    .try_into()
+    .unwrap();
+    let ty = parse_type! { MyEnum };
+    let subst_map =
+        rule.is_ty_subst_of_my_generic_rtype(&ty, petgraph::Direction::Outgoing, |_ty, _traits| {
+            true
+        });
+    assert!(subst_map.is_some());
+    let subst_map =
+        rule.is_ty_subst_of_my_generic_rtype(&ty, petgraph::Direction::Outgoing, |_ty, _traits| {
+            false
+        });
+    assert!(!subst_map.is_some());
 }
 
 fn cpp_pair_rule() -> TypeMapConvRuleInfo {

@@ -27,11 +27,13 @@ use syn::{
 };
 
 pub(in crate) use self::subst_map::{TyParamsSubstItem, TyParamsSubstList, TyParamsSubstMap};
+use super::typemap_macro::expand_macroses;
 use crate::{
-    error::SourceIdSpan,
+    error::{DiagnosticError, SourceIdSpan},
     source_registry::SourceId,
     typemap::{
         ty::{RustType, RustTypeS, TraitNamesSet},
+        typemap_macro::SWIG_SUBST_TYPE,
         TypeConvCode,
     },
 };
@@ -210,6 +212,13 @@ pub(crate) struct GenericTypeConv {
     pub from_foreigner_hint: Option<String>,
 }
 
+#[derive(PartialEq, Debug)]
+pub(crate) struct ConversationResult<'a> {
+    pub to_ty: syn::Type,
+    pub to_ty_name: SmolStr,
+    pub subst_map: TyParamsSubstMap<'a>,
+}
+
 impl GenericTypeConv {
     pub(crate) fn new(
         from_ty: Type,
@@ -234,7 +243,7 @@ impl GenericTypeConv {
         ty: &RustType,
         goal_ty: Option<&RustType>,
         others: OtherRustTypes,
-    ) -> Option<(syn::Type, SmolStr)>
+    ) -> Option<ConversationResult>
     where
         OtherRustTypes: Fn(&str) -> Option<&'a RustType>,
     {
@@ -351,7 +360,58 @@ impl GenericTypeConv {
         let normalized_name =
             RustTypeS::make_unique_typename_if_need(normalize_type(&to_ty).to_string(), to_suffix)
                 .into();
-        Some((to_ty, normalized_name))
+        Some(ConversationResult {
+            to_ty,
+            to_ty_name: normalized_name,
+            subst_map,
+        })
+    }
+
+    pub(crate) fn code_for_conversation(&self, subst_map: TyParamsSubstMap) -> TypeConvCode {
+        let ctx_span = self.code.span;
+        let new_code = expand_macroses(
+            &self.code.code,
+            |id: &str, params: Vec<&str>, out: &mut String| {
+                if id == SWIG_SUBST_TYPE {
+                    let type_name = if params.len() == 1 {
+                        &params[0]
+                    } else {
+                        return Err(DiagnosticError::new2(
+                            ctx_span,
+                            format!("{} parameters in {} instead of 1", params.len(), id),
+                        ));
+                    };
+                    if let Some(Some(ty)) = subst_map.get(type_name) {
+                        out.push_str(normalize_type(ty));
+                    } else {
+                        out.push_str(type_name);
+                    }
+                } else {
+                    out.push_str(id);
+                    out.push_str("!(");
+                    let mut it = params.iter();
+                    if let Some(first) = it.next() {
+                        out.push_str(*first);
+                    }
+                    for p in it {
+                        out.push_str(", ");
+                        out.push_str(*p);
+                    }
+                    out.push(')');
+                }
+                Ok(())
+            },
+        )
+        .unwrap_or_else(|err| {
+            panic!(
+                "Invalid macroses in such code block: `{}`, error {}",
+                self.code.code, err
+            )
+        });
+        TypeConvCode {
+            code: new_code,
+            ..self.code.clone()
+        }
     }
 }
 
@@ -785,7 +845,7 @@ pub(crate) fn if_option_return_some_type(ty: &RustType) -> Option<Type> {
 
     GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())
         .is_conv_possible(ty, None, |_| None)
-        .map(|x| x.0)
+        .map(|x| x.to_ty)
 }
 
 pub(crate) fn if_result_return_ok_err_types(ty: &RustType) -> Option<(Type, Type)> {
@@ -802,13 +862,13 @@ pub(crate) fn if_result_return_ok_err_types(ty: &RustType) -> Option<(Type, Type
             TypeConvCode::invalid(),
         )
         .is_conv_possible(ty, None, |_| None)
-        .map(|x| x.0)
+        .map(|x| x.to_ty)
     }?;
 
     let err_ty = {
         GenericTypeConv::new(from_ty, err_ty, generic_params, TypeConvCode::invalid())
             .is_conv_possible(ty, None, |_| None)
-            .map(|x| x.0)
+            .map(|x| x.to_ty)
     }?;
     Some((ok_ty, err_ty))
 }
@@ -843,7 +903,7 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
 
     GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())
         .is_conv_possible(ty, None, |_| None)
-        .map(|x| x.0)
+        .map(|x| x.to_ty)
 }
 
 pub(crate) fn list_lifetimes(ty: &Type) -> Vec<&syn::Lifetime> {

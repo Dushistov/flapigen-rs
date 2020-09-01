@@ -189,18 +189,6 @@ pub trait SwigForeignCLikeEnum {
     fn from_jint(_: jint) -> Self;
 }
 
-impl<T: SwigForeignCLikeEnum> SwigFrom<T> for jint {
-    fn swig_from(x: T, _: *mut JNIEnv) -> jint {
-        x.as_jint()
-    }
-}
-
-impl<T: SwigForeignCLikeEnum> SwigFrom<jint> for T {
-    fn swig_from(x: jint, _: *mut JNIEnv) -> T {
-        T::from_jint(x)
-    }
-}
-
 #[allow(dead_code)]
 pub struct JavaString {
     string: jstring,
@@ -1734,4 +1722,16 @@ foreign_typemap!(
     ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/@Nullable swig_f_type!(T)" r#"
         $out = ($p != null) ? $p.getValue() : -1;
 "#;
+);
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignCLikeEnum> T => jint {
+        $out = $p.as_jint();
+    };
+);
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignCLikeEnum> T <= jint {
+        $out = <swig_subst_type!(T)>::from_jint($p);
+    };
 );
