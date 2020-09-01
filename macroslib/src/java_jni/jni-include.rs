@@ -189,18 +189,6 @@ pub trait SwigForeignCLikeEnum {
     fn from_jint(_: jint) -> Self;
 }
 
-impl<T: SwigForeignCLikeEnum> SwigFrom<T> for jint {
-    fn swig_from(x: T, _: *mut JNIEnv) -> jint {
-        x.as_jint()
-    }
-}
-
-impl<T: SwigForeignCLikeEnum> SwigFrom<jint> for T {
-    fn swig_from(x: jint, _: *mut JNIEnv) -> T {
-        T::from_jint(x)
-    }
-}
-
 #[allow(dead_code)]
 pub struct JavaString {
     string: jstring,
@@ -915,12 +903,11 @@ define_array_handling_code!(
     ]
 );
 
-impl<T> SwigDeref for Vec<T> {
-    type Target = [T];
-    fn swig_deref(&self) -> &Self::Target {
-        &*self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Vec<T> => &[T] {
+        $out = $p.as_slice();
+    };
+);
 
 foreign_typemap!(
     ($p:r_type) &[i32] => jintArray {
@@ -1036,12 +1023,11 @@ foreign_typemap!(
     };
 );
 
-impl SwigDeref for String {
-    type Target = str;
-    fn swig_deref(&self) -> &str {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) String => &str {
+        $out = $p.as_str();
+    };
+);
 
 impl<T> SwigDeref for Arc<Mutex<T>> {
     type Target = Mutex<T>;
@@ -1153,11 +1139,11 @@ impl SwigFrom<usize> for jlong {
     }
 }
 
-impl<'a> SwigInto<String> for &'a str {
-    fn swig_into(self, _: *mut JNIEnv) -> String {
-        self.into()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &str => String {
+        $out = $p.to_string();
+    };
+);
 
 #[allow(dead_code)]
 fn to_java_util_optional_double(
@@ -1736,4 +1722,16 @@ foreign_typemap!(
     ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/@Nullable swig_f_type!(T)" r#"
         $out = ($p != null) ? $p.getValue() : -1;
 "#;
+);
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignCLikeEnum> T => jint {
+        $out = $p.as_jint();
+    };
+);
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignCLikeEnum> T <= jint {
+        $out = <swig_subst_type!(T)>::from_jint($p);
+    };
 );

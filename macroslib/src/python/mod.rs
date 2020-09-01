@@ -1297,5 +1297,5 @@ fn if_vec_return_elem_type(ty: &RustType) -> Option<Type> {
 
     GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())
         .is_conv_possible(ty, None, |_| None)
-        .map(|x| x.0)
+        .map(|x| x.to_ty)
 }

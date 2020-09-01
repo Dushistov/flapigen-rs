@@ -30,6 +30,7 @@ use crate::{
     },
     types::ForeignClassInfo,
 };
+use ast::ConversationResult;
 
 pub(crate) use typemap_macro::{
     CItem, CItems, ExpandedFType, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
@@ -111,12 +112,13 @@ impl TypeConvCode {
             params.push(FROM_VAR_TEMPLATE.into());
         }
 
-        if params.len() < 2 {
-            panic!(
-                "Code: '{}' should contains {} and {}",
-                code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE
-            );
-        }
+        assert!(
+            params.len() >= 2,
+            "Code: '{}' should contains {} and {}",
+            code,
+            TO_VAR_TEMPLATE,
+            FROM_VAR_TEMPLATE
+        );
 
         TypeConvCode { code, span, params }
     }
@@ -1186,11 +1188,13 @@ fn try_build_path(
                     edge.to_ty,
                     from
                 );
-                if let Some((to_ty, to_ty_name)) =
-                    edge.is_conv_possible(&from, Some(&goal_to), |name| {
-                        ty_graph.find_type_by_name(name)
-                    })
-                {
+                if let Some(ConversationResult {
+                    to_ty,
+                    to_ty_name,
+                    subst_map,
+                }) = edge.is_conv_possible(&from, Some(&goal_to), |name| {
+                    ty_graph.find_type_by_name(name)
+                }) {
                     if from.normalized_name == to_ty_name {
                         continue;
                     }
@@ -1199,7 +1203,7 @@ fn try_build_path(
                         *from_ty,
                         to,
                         TypeConvEdge {
-                            code: edge.code.clone(),
+                            code: edge.code_for_conversation(subst_map),
                             dependency: edge.dependency.clone(),
                         },
                     );

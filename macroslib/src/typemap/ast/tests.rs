@@ -63,7 +63,11 @@ fn generic_type_conv_find() {
             "check_subst: conv {} -> {} with {}",
             from_ty_name, to_ty_name, ty_check_name
         );
-        let (ret_ty, ret_ty_name) = GenericTypeConv::new(
+        let ConversationResult {
+            to_ty: ret_ty,
+            to_ty_name: ret_ty_name,
+            ..
+        } = GenericTypeConv::new(
             str_to_ty(from_ty_name),
             str_to_ty(to_ty_name),
             generic.clone(),
@@ -203,7 +207,7 @@ fn generic_type_conv_find() {
             None
         })
         .unwrap()
-        .1,
+        .to_ty_name,
         "& Foo"
     );
 
@@ -218,7 +222,7 @@ fn generic_type_conv_find() {
         )
         .is_conv_possible(&str_to_rust_ty("jlong"), Some(&box_foo), |_| None)
         .unwrap()
-        .1,
+        .to_ty_name,
         "Box < Foo >"
     );
 
@@ -347,7 +351,7 @@ fn test_work_with_rc() {
         )
         .is_conv_possible(&str_to_rust_ty(normalize_type(&ty)), None, |_| None)
         .unwrap()
-        .1
+        .to_ty_name
     );
 }
 

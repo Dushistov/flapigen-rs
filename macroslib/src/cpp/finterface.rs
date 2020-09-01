@@ -29,7 +29,7 @@ pub(in crate::cpp) fn generate_interface(
 ) -> Result<()> {
     let mut f_methods = find_suitable_ftypes_for_interace_methods(ctx, interface)?;
     let req_includes = cpp_code::cpp_list_required_includes(&mut f_methods);
-    generate_for_interface(ctx, interface, &req_includes, &f_methods)
+    cpp_code_generate_interface(ctx, interface, &req_includes, &f_methods)
         .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;
     rust_code_generate_interface(ctx, interface, &f_methods)?;
 
@@ -72,7 +72,7 @@ pub(in crate::cpp) fn generate_interface(
     let tmp_name = "$tmp".into();
     let conv_code = format!(
         r#"
-        {c_struct} {tmp_name} = {interface}::to_c_interface({var}.release());
+        {c_struct} {tmp_name} = {interface}::to_c_interface(std::move({var}));
         {to} = &{tmp_name};
 "#,
         var = FROM_VAR_TEMPLATE,
@@ -89,7 +89,7 @@ pub(in crate::cpp) fn generate_interface(
             format!("std::unique_ptr<{}>", interface.name),
             interface.src_id_span(),
         ),
-        provides_by_module: vec![cpp_abs_class_header, "<memory>".into()],
+        provides_by_module: vec![cpp_abs_class_header, "<memory>".into(), "<utility>".into()],
         into_from_rust: None,
         from_into_rust: Some(ForeignConversationRule {
             rust_ty: boxed_trait_rust_ty.to_idx(),
@@ -360,7 +360,7 @@ fn find_suitable_ftypes_for_interace_methods(
     Ok(f_methods)
 }
 
-fn generate_for_interface(
+fn cpp_code_generate_interface(
     ctx: &mut CppContext,
     interface: &ForeignInterface,
     req_includes: &[SmolStr],
@@ -532,6 +532,7 @@ struct C_{interface_name} {{
 #pragma once
 
 #include <cassert>
+#include <memory> //for std::unique_ptr
 
 {includes}
 #include "{c_interface_struct_header}"
@@ -542,12 +543,12 @@ class {interface_name} {{
 public:
     virtual ~{interface_name}() noexcept {{}}
 {virtual_methods}
-    //! @p should be allocated by new
-    static C_{interface_name} to_c_interface({interface_name} *p)
+
+    static C_{interface_name} to_c_interface(std::unique_ptr<{interface_name}> p)
     {{
         assert(p != nullptr);
         C_{interface_name} ret;
-        ret.opaque = p;
+        ret.opaque = p.release();
 {cpp_fill_c_interface_struct}
         return ret;
     }}
