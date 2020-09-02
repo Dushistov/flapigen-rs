@@ -1403,6 +1403,7 @@ fn genearte_copy_stuff(
     Ok(())
 }
 
-fn need_plain_class(class: &ForeignClassInfo) -> bool {
+#[inline]
+pub(in crate::cpp) fn need_plain_class(class: &ForeignClassInfo) -> bool {
     class.derive_list.iter().any(|x| *x == PLAIN_CLASS)
 }

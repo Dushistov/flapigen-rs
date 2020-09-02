@@ -2,7 +2,7 @@ use log::debug;
 use std::rc::Rc;
 use syn::spanned::Spanned;
 
-use super::cpp_code;
+use super::{cpp_code, fclass::need_plain_class};
 use crate::{
     error::{invalid_src_id_span, Result},
     typemap::{
@@ -316,32 +316,36 @@ fn register_main_foreign_types(
     };
     conv_map.alloc_foreign_type(class_ftype_ref_in)?;
 
-    let class_ftype_ref_out = ForeignTypeS {
-        name: TypeName::new(
-            format!("{}Ref", class.name),
-            (class.src_id, class.name.span()),
-        ),
-        provides_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
-        into_from_rust: Some(ForeignConversationRule {
-            rust_ty: this_type_ref,
-            intermediate: Some(ForeignConversationIntermediate {
-                input_to_output: false,
-                intermediate_ty: const_void_ptr_rust_ty,
-                conv_code: Rc::new(TypeConvCode::new(
-                    format!(
-                        "{class}Ref{{ static_cast<const {c_type} *>({var}) }}",
-                        class = class.name,
-                        c_type = cpp_code::c_class_type(class),
-                        var = FROM_VAR_TEMPLATE
-                    ),
-                    invalid_src_id_span(),
-                )),
+    let is_plain_class = need_plain_class(class);
+
+    if !is_plain_class {
+        let class_ftype_ref_out = ForeignTypeS {
+            name: TypeName::new(
+                format!("{}Ref", class.name),
+                (class.src_id, class.name.span()),
+            ),
+            provides_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+            into_from_rust: Some(ForeignConversationRule {
+                rust_ty: this_type_ref,
+                intermediate: Some(ForeignConversationIntermediate {
+                    input_to_output: false,
+                    intermediate_ty: const_void_ptr_rust_ty,
+                    conv_code: Rc::new(TypeConvCode::new(
+                        format!(
+                            "{class}Ref{{ static_cast<const {c_type} *>({var}) }}",
+                            class = class.name,
+                            c_type = cpp_code::c_class_type(class),
+                            var = FROM_VAR_TEMPLATE
+                        ),
+                        invalid_src_id_span(),
+                    )),
+                }),
             }),
-        }),
-        from_into_rust: None,
-        name_prefix: None,
-    };
-    conv_map.alloc_foreign_type(class_ftype_ref_out)?;
+            from_into_rust: None,
+            name_prefix: None,
+        };
+        conv_map.alloc_foreign_type(class_ftype_ref_out)?;
+    }
 
     let class_ftype_mut_ref_in = ForeignTypeS {
         name: TypeName::new(
