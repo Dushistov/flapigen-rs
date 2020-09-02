@@ -1,0 +1,61 @@
+r##"impl SomeTrait for JavaCallback {
+    #[allow(unused_mut)]
+    fn on_state_changed1(&self, a0: i32, a1: bool) {
+        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
+        swig_assert_eq_size!(::std::os::raw::c_int, i32);
+        let env = self.get_jni_env();
+        if let Some(env) = env.env {
+            let mut a0: jint = a0;
+            let mut a1: jboolean = if a1 { 1 as jboolean } else { 0 as jboolean };
+            unsafe {
+                (**env).CallVoidMethod.unwrap()(
+                    env,
+                    self.this,
+                    self.methods[0usize],
+                    a0,
+                    a1 as ::std::os::raw::c_uint,
+                );
+                if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                    log::error!(concat!(
+                        stringify!(on_state_changed1),
+                        ": java throw exception"
+                    ));
+                    (**env).ExceptionDescribe.unwrap()(env);
+                    (**env).ExceptionClear.unwrap()(env);
+                }
+            };
+        }
+    }
+    #[allow(unused_mut)]
+    fn on_state_changed2(&self, a0: bool, a1: f64) -> bool {
+        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
+        swig_assert_eq_size!(::std::os::raw::c_int, i32);
+        let env = self.get_jni_env();
+        let env = env.env.expect(concat!(
+            "Can not get env for ",
+            stringify!(on_state_changed2)
+        ));
+        let mut a0: jboolean = if a0 { 1 as jboolean } else { 0 as jboolean };
+        let mut a1: jdouble = a1;
+        let mut ret: jboolean;
+        unsafe {
+            ret = (**env).CallBooleanMethod.unwrap()(
+                env,
+                self.this,
+                self.methods[1usize],
+                a0 as ::std::os::raw::c_uint,
+                a1,
+            );
+            if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                log::error!(concat!(
+                    stringify!(on_state_changed2),
+                    ": java throw exception"
+                ));
+                (**env).ExceptionDescribe.unwrap()(env);
+                (**env).ExceptionClear.unwrap()(env);
+            }
+        };
+        let mut ret: bool = ret != 0;
+        ret
+    }
+}"##;
