@@ -71,6 +71,13 @@ def build_jar(java_dir: str, java_native_dir: str, use_shell: bool) -> str:
     subprocess.check_call(["jar", "cfv", "Test.jar", "com"], cwd=jar_dir, shell=use_shell)
     return jar_dir
 
+def find_path_to_cargo_artifacts(path_to_crate: str, cfg: str) -> str:
+    target_dir = find_dir("target", path_to_crate)
+    if "CARGO_BUILD_TARGET" in os.environ:
+        return os.path.join(target_dir, os.environ["CARGO_BUILD_TARGET"], cfg)
+    else:
+        return os.path.join(target_dir, cfg)
+
 @show_timing
 def run_jni_tests(use_shell: bool, test_cfg: Set[str]):
     print("run_jni_tests begin: cwd %s" % os.getcwd())
@@ -93,15 +100,20 @@ def run_jni_tests(use_shell: bool, test_cfg: Set[str]):
     jar_dir = build_jar(java_dir, java_native_dir, use_shell)
 
     for cfg in test_cfg:
-        target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
+        target_dir = find_path_to_cargo_artifacts("jni_tests", cfg)
         run_jar(target_dir, jar_dir, use_shell, ["-Xcheck:jni", "-verbose:jni"])
     if RELEASE in test_cfg:
-        target_dir = os.path.join(find_dir("target", "jni_tests"), RELEASE)
+        target_dir = find_path_to_cargo_artifacts("jni_tests", RELEASE)
         run_jar(target_dir, jar_dir, use_shell, ["-Xcomp"])
 
 def calc_cmake_generator() -> List[str]:
     if sys.platform == 'win32' or sys.platform == 'win64':
-        cmake_generator = ["-G", "Visual Studio 16 2019", "-A", "x64"]
+        platform = "x64"
+        if "platform" in os.environ:
+            platform = os.environ["platform"]
+        if platform == "x86":
+            platform = "Win32"
+        cmake_generator = ["-G", "Visual Studio 16 2019", "-A", platform]
     else:
         cmake_generator = ["-G", "Unix Makefiles"]
     return cmake_generator
@@ -130,7 +142,11 @@ def build_cpp_example():
         # hack to force dll to work
         target_path = find_target_path_in_cmakecache(cmake_build_dir)
         dll_name = "cpp_example_rust_part.dll"
-        shutil.copy(os.path.join(target_path, "release", dll_name),
+        if "CARGO_BUILD_TARGET" in os.environ:
+            src_path = os.path.join(target_path, os.environ["CARGO_BUILD_TARGET"], "release", dll_name)
+        else:
+            src_path = os.path.join(target_path, "release", dll_name)
+        shutil.copy(src_path,
                     os.path.join(cmake_build_dir, "Release", dll_name))
         subprocess.check_call(["app"], cwd = str(os.path.join(cmake_build_dir, "Release")), shell = True)
     else:
@@ -194,7 +210,7 @@ def test_python(is_windows: bool, test_cfg: Set[str]):
             # See https://github.com/dgrunwald/rust-cpython/issues/87
             env["RUSTFLAGS"] = "-C link-arg=-undefined -C link-arg=dynamic_lookup"
         subprocess.check_call(cmd, shell = False, env = env)
-        target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
+        target_dir = find_path_to_cargo_artifacts("python_tests", cfg)
         if is_windows:
             shutil.copyfile(os.path.join(target_dir, "flapigen_test_python.dll"), "python_tests/python/flapigen_test_python.pyd")
             if os.getenv('platform') == "x64":

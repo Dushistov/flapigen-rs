@@ -20,8 +20,41 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, beta]
+        include:
+          - name: i686-pc-windows-msvc (stable)
+            os: windows-latest
+            rust: stable
+            target: i686-pc-windows-msvc
+            platform: x86
+          - name: x86_64-pc-windows-msvc (stable)
+            os: windows-latest
+            rust: stable
+            target: x86_64-pc-windows-msvc
+            platform: x64
+          - name: x86_64-pc-windows-msvc (beta)
+            os: windows-latest
+            rust: beta
+            target: x86_64-pc-windows-msvc
+            platform: x64
+          - name: x86_64-unknown-linux-gnu (stable)
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+
+          - name: x86_64-unknown-linux-gnu (beta)
+            os: ubuntu-latest
+            rust: beta
+            target: x86_64-unknown-linux-gnu
+
+          - name: x86_64-apple-darwin (stable)
+            os: macos-latest
+            rust: stable
+            target: x86_64-apple-darwin
+
+          - name: x86_64-apple-darwin (beta)
+            os: macos-latest
+            rust: beta
+            target: x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v2
         with:
@@ -40,11 +73,14 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           profile: minimal
+          target: ${{ matrix.target }}
           override: true
           components: rustfmt
+          default: true
       - uses: actions/setup-python@v2
         with:
           python-version: '3.7.8'
+          architecture: ${{ matrix.platform || 'x64' }}
       - uses: jwlawson/actions-setup-cmake@v1.0
         if: matrix.os != 'windows-latest'
         with:
@@ -118,9 +154,23 @@ jobs:
           echo "::add-path::`pwd`/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl"
           echo "::set-env name=SCCACHE_BUCKET::flapigenamd64ubuntu"
         shell: bash
+      - name: Setup platform variable (for windows build)
+        run: |
+          echo "::set-env name=platform::$platform"
+        shell: bash
+        env:
+          platform: ${{ matrix.platform }}
+      - name: install JDK for 32bit
+        if: matrix.target == 'i686-pc-windows-msvc'
+        uses: actions/setup-java@v1
+        with:
+          java-version: '8'
+          java-package: jdk
+          architecture: x86      
       - name: Check versions
         run: |
           set -e
+          rustc --print cfg
           clang --version
           rustc --version
           cargo --version
@@ -129,10 +179,6 @@ jobs:
           python --version
           sccache --version
           echo "end of versions checking"
-        shell: bash
-      - name: Setup platform variable (for windows build)
-        run: |
-          echo '::set-env name=platform::x64'
         shell: bash
       - name: Run tests
         run: |
@@ -150,3 +196,4 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S_AWS_SECRET_ACCESS_KEY }}
           SCCACHE_ENDPOINT: ${{ secrets.S_SCCACHE_ENDPOINT }}
+          CARGO_BUILD_TARGET: ${{ matrix.target }}

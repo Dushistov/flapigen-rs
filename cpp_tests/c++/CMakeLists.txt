@@ -149,6 +149,10 @@ add_custom_target(flapigen_gen_headers ${CMAKE_COMMAND}
 include(${CMAKE_BINARY_DIR}/flapigen_regen_headers.cmake)
 
 find_target_directory(TARGET_PATH)
+set(CARGO_BUILD_DIR "${TARGET_PATH}")
+if (DEFINED ENV{CARGO_BUILD_TARGET})
+  set(CARGO_BUILD_DIR "${CARGO_BUILD_DIR}/$ENV{CARGO_BUILD_TARGET}")
+endif ()
 required_libs_by_rust_library(RUST_LINK_LIBRARIES)
 
 
@@ -193,9 +197,9 @@ else ()
 endif ()
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
-  target_link_libraries(c++-flapigen-test "${TARGET_PATH}/release/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
+  target_link_libraries(c++-flapigen-test "${CARGO_BUILD_DIR}/release/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
 else()
-  target_link_libraries(c++-flapigen-test "${TARGET_PATH}/debug/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
+  target_link_libraries(c++-flapigen-test "${CARGO_BUILD_DIR}/debug/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
 endif()
 
 if (CXX_17_STD)
