@@ -42,6 +42,8 @@ import com.example.rust.ThreadSafeObserver;
 import com.example.rust.TestMultiThreadCallback;
 import com.example.rust.DropCounter;
 import com.example.rust.LongOperation;
+import com.example.rust.TestReturnInCallback;
+import com.example.rust.ReturnInCallbackTester;
 
 class Main {
     public static void main(String[] args) {
@@ -132,6 +134,7 @@ class Main {
 	    testMultiThreadCallback();
 	    testPrematureGc();
             testPartialEq();
+            testReturnInCallback();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -750,5 +753,27 @@ class Main {
         assert a.equals(b);
         a.setA(-1);
         assert !a.equals(b);
+    }
+
+    private static class JavaTestReturnInCallback implements TestReturnInCallback {
+	@Override
+        public boolean f_bool(boolean x) { return !x; }
+        @Override
+        public byte f_i8(byte x) { return (byte)(x + 1); }
+        @Override
+        public short f_i16(short x) { return (short)(x + 1); }
+        @Override
+        public int f_i32(int x) { return x + 1; }
+        @Override
+        public long f_i64(long x) { return x + 1; }
+        @Override
+        public float f_f32(float x) { return x + 1; }
+        @Override
+        public double f_f64(double x) { return x + 1; }
+    }
+
+    private static void testReturnInCallback() throws Exception {
+        TestReturnInCallback cb = new JavaTestReturnInCallback();
+        ReturnInCallbackTester.run(cb);
     }
 }

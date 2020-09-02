@@ -16,6 +16,7 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{DisplayToTokens, TypeName},
+        ty::RustType,
         utils::rust_to_foreign_convert_method_inputs,
         ForeignTypeInfo,
     },
@@ -106,7 +107,26 @@ It is impossible to use this Java code:{}\nfor callback types conversation",
                 correspoding_rust_type: dummy_rust_ty.clone(),
             }
             .into(),
-            _ => unimplemented!(),
+            syn::ReturnType::Type(_, ref ret_ty) => {
+                let rust_ret_ty = ctx
+                    .conv_map
+                    .find_or_alloc_rust_type(&ret_ty, interace.src_id);
+                let f_ret_type = map_type(
+                    ctx,
+                    &rust_ret_ty,
+                    Direction::Incoming,
+                    rust_ret_ty.src_id_span(),
+                )?;
+                if let Some(conv) = f_ret_type.java_converter {
+                    return Err(DiagnosticError::new2(
+                        rust_ret_ty.src_id_span(),
+                        format!("Java code:\n```{}\n```\n required to convert Rust output type to Java type.
+It is impossible to use for callback function.", conv.converter),
+                    ));
+                }
+
+                f_ret_type
+            }
         };
         f_methods.push(JniForeignMethodSignature { output, input });
     }
@@ -143,7 +163,7 @@ public interface {interface_name} {{"#,
             file,
             r#"
 {doc_comments}
-    void {method_name}({single_args_with_types});"#,
+    {output_type} {method_name}({single_args_with_types});"#,
             method_name = method.name,
             doc_comments = java_code::doc_comments_to_java_comments(&method.doc_comments, false),
             single_args_with_types = java_code::args_with_java_types(
@@ -152,6 +172,7 @@ public interface {interface_name} {{"#,
                 java_code::ArgsFormatFlags::EXTERNAL,
                 use_null_annotation.is_some()
             ),
+            output_type = f_method.output.base.name,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
@@ -261,27 +282,83 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
                 err,
             )
         });
-
-        trait_impl_funcs.push(quote! {
-            #[allow(unused_mut)]
-            fn #func_name(#(#args_with_types),*) {
-                #type_size_asserts
-                let env = self.get_jni_env();
-                if let Some(env) = env.env {
-                    #convert_args
-                    unsafe {
-                        (**env).CallVoidMethod.unwrap()(env, self.this,
-                                                        self.methods[#method_idx],
-                                                        #(#args),*);
-                        if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                            log::error!(concat!(stringify!(#func_name), ": java throw exception"));
-                            (**env).ExceptionDescribe.unwrap()(env);
-                            (**env).ExceptionClear.unwrap()(env);
-                        }
-                    };
+        match method.fn_decl.output {
+            syn::ReturnType::Default => trait_impl_funcs.push(quote! {
+                #[allow(unused_mut)]
+                fn #func_name(#(#args_with_types),*) {
+                    #type_size_asserts
+                    let env = self.get_jni_env();
+                    if let Some(env) = env.env {
+                        #convert_args
+                        unsafe {
+                            (**env).CallVoidMethod.unwrap()(env, self.this,
+                                                            self.methods[#method_idx],
+                                                            #(#args),*);
+                            if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                                log::error!(concat!(stringify!(#func_name), ": java throw exception"));
+                                (**env).ExceptionDescribe.unwrap()(env);
+                                (**env).ExceptionClear.unwrap()(env);
+                            }
+                        };
+                    }
                 }
+            }),
+            syn::ReturnType::Type(_, ref ret_ty) => {
+                let real_output_type: RustType = ctx
+                    .conv_map
+                    .find_or_alloc_rust_type(ret_ty, interface.src_id);
+                let jni_ret_type = &f_method.output.base.correspoding_rust_type;
+                let (mut conv_deps, out_conv_code) = ctx.conv_map.convert_rust_types(
+                    jni_ret_type.to_idx(),
+                    real_output_type.to_idx(),
+                    "ret",
+                    "ret",
+                    real_output_type.normalized_name.as_str(),
+                    (interface.src_id, ret_ty.span()),
+                )?;
+                ctx.rust_code.append(&mut conv_deps);
+
+                let jni_caller = match jni_ret_type.normalized_name.as_str() {
+                    "jboolean" => quote! { CallBooleanMethod },
+                    "jbyte" => quote! {CallByteMethod },
+                    "jshort" => quote! { CallShortMethod },
+                    "jint" => quote!{ CallIntMethod },
+                    "jlong" => quote!{ CallLongMethod },
+                    "jfloat" => quote!{ CallFloatMethod },
+                    "jdouble" => quote!{ CallDoubleMethod },
+                    "jobject" => quote!{ CallObjectMethod },
+                    _ => return Err(DiagnosticError::new2(jni_ret_type.src_id_span(),
+                                                          format!("Have not idea how to handle this type `{}` as return of callback function", jni_ret_type))),
+                };
+                let jni_ret_type = &jni_ret_type.ty;
+                let out_conv_code: TokenStream = syn::parse_str(&out_conv_code).unwrap_or_else(|err| {
+                    panic_on_syn_error("Internal: java_jni/finterface: out_conv_code", out_conv_code, err)
+                });
+                trait_impl_funcs.push(quote! {
+                    #[allow(unused_mut)]
+                    fn #func_name(#(#args_with_types),*) -> #ret_ty {
+                        #type_size_asserts
+                        let env = self.get_jni_env();
+                        let env = env.env.expect(concat!("Can not get env for ", stringify!(#func_name)));
+
+                        #convert_args
+                        let mut ret: #jni_ret_type;
+                        unsafe {
+                            ret = (**env).#jni_caller.unwrap()(env, self.this,
+                                                            self.methods[#method_idx],
+                                                            #(#args),*);
+                            if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                                log::error!(concat!(stringify!(#func_name), ": java throw exception"));
+                                (**env).ExceptionDescribe.unwrap()(env);
+                                (**env).ExceptionClear.unwrap()(env);
+                            }
+                        };
+                        #out_conv_code
+                        ret
+                    }
+                });  
             }
-        });
+        }
     }
 
     let self_type_name = &interface.self_type.bounds[0];
