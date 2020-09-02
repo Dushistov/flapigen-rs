@@ -5,7 +5,7 @@ mod jni {
     use std::{
         cell::{Ref, RefCell, RefMut},
         rc::Rc,
-        sync::{Arc, Mutex, MutexGuard},
+        sync::{Mutex, MutexGuard},
     };
 
     include!(concat!(env!("OUT_DIR"), "/jni-include.rs"));

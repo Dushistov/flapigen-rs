@@ -3,8 +3,6 @@ mod swig_foreign_types_map {
     #![swig_rust_type_not_unique = "jobject"]
     #![swig_foreigner_type = "Object []"]
     #![swig_rust_type_not_unique = "jobjectArray"]
-    #![swig_foreigner_type = "java.lang.String []"]
-    #![swig_rust_type_not_unique = "jobjectArray"]
 }
 
 #[allow(dead_code)]
@@ -26,6 +24,7 @@ mod internal_aliases {
         pub(crate) _marker: ::std::marker::PhantomData<T>,
     }
     pub type JStringPath = jstring;
+    pub type JStringObjectsArray = jobjectArray;
 }
 
 /// Default JNI_VERSION
@@ -745,31 +744,36 @@ foreign_typemap!(
     ($p:f_type, option = "NullAnnotations", unique_prefix="/*Path*/") <= "/*Path*/@NonNull String";
 );
 
-// Vec<String> -> jobjectArray
-#[swig_to_foreigner_hint = "java.lang.String []"]
-impl SwigInto<jobjectArray> for Vec<String> {
-    fn swig_into(mut self, env: *mut JNIEnv) -> jobjectArray {
-        let jcls: jclass = swig_jni_find_class!(JAVA_LANG_STRING, "java/lang/String");
-        assert!(!jcls.is_null());
-        let obj_arr: jobjectArray = unsafe {
-            (**env).NewObjectArray.unwrap()(env, self.len() as jsize, jcls, ::std::ptr::null_mut())
-        };
-        assert!(!obj_arr.is_null());
-        for (i, r_str) in self.drain(..).enumerate() {
-            let jstr: jstring = from_std_string_jstring(r_str, env);
-            assert!(!jstr.is_null());
+#[allow(dead_code)]
+fn vec_string_to_jobject_array(mut arr: Vec<String>, env: *mut JNIEnv) -> jobjectArray {
+    let jcls: jclass = swig_jni_find_class!(JAVA_LANG_STRING, "java/lang/String");
+    assert!(!jcls.is_null());
+    let obj_arr: jobjectArray = unsafe {
+        (**env).NewObjectArray.unwrap()(env, arr.len() as jsize, jcls, ::std::ptr::null_mut())
+    };
+    assert!(!obj_arr.is_null());
+    for (i, r_str) in arr.drain(..).enumerate() {
+        let jstr: jstring = from_std_string_jstring(r_str, env);
+        assert!(!jstr.is_null());
 
-            unsafe {
-                (**env).SetObjectArrayElement.unwrap()(env, obj_arr, i as jsize, jstr);
-                if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                    panic!("SetObjectArrayElement({}) failed", i);
-                }
-                (**env).DeleteLocalRef.unwrap()(env, jstr);
+        unsafe {
+            (**env).SetObjectArrayElement.unwrap()(env, obj_arr, i as jsize, jstr);
+            if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                panic!("SetObjectArrayElement({}) failed", i);
             }
+            (**env).DeleteLocalRef.unwrap()(env, jstr);
         }
-        obj_arr
     }
+    obj_arr
 }
+
+foreign_typemap!(
+    ($p:r_type) Vec<String> => internal_aliases::JStringObjectsArray {
+        $out = vec_string_to_jobject_array($p, env);
+    };
+    ($p:f_type, option = "NoNullAnnotations") => "java.lang.String []";
+    ($p:f_type, option = "NullAnnotations") => "@NonNull java.lang.String []";
+);
 
 macro_rules! define_array_handling_code {
     ($([jni_arr_type = $jni_arr_type:ident,
@@ -1029,12 +1033,11 @@ foreign_typemap!(
     };
 );
 
-impl<T> SwigDeref for Arc<Mutex<T>> {
-    type Target = Mutex<T>;
-    fn swig_deref(&self) -> &Mutex<T> {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Arc<Mutex<T>> => &Mutex<T> {
+        $out = & $p;
+    };
+);
 
 impl<'a, T> SwigFrom<&'a Mutex<T>> for MutexGuard<'a, T> {
     fn swig_from(m: &'a Mutex<T>, _: *mut JNIEnv) -> MutexGuard<'a, T> {
@@ -1042,26 +1045,23 @@ impl<'a, T> SwigFrom<&'a Mutex<T>> for MutexGuard<'a, T> {
     }
 }
 
-impl<'a, T> SwigDeref for MutexGuard<'a, T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <'a, T> MutexGuard<'a, T> => &T {
+        $out = & $p;
+    };
+);
 
-impl<'a, T> SwigDerefMut for MutexGuard<'a, T> {
-    type Target = T;
-    fn swig_deref_mut(&mut self) -> &mut T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <'a, T> MutexGuard<'a, T> => &mut T {
+        $out = & $p;
+    };
+);
 
-impl<T> SwigDeref for Rc<T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Rc<T> => &T {
+        $out = & $p;
+    };
+);
 
 impl<'a, T> SwigDeref for &'a Rc<T> {
     type Target = T;
