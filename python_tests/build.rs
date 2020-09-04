@@ -1,6 +1,6 @@
 use std::{env, path::Path, time::Instant};
 
-use flapigen::{PythonConfig, LanguageConfig};
+use flapigen::{LanguageConfig, PythonConfig};
 
 fn main() {
     env_logger::init();
@@ -24,6 +24,7 @@ fn main() {
 fn flapigen_expand(from: &Path, out: &Path) {
     println!("Run flapigen_expand");
     let python_cfg = PythonConfig::new("flapigen_test_python".to_owned());
-    let swig_gen = flapigen::Generator::new(LanguageConfig::PythonConfig(python_cfg));
+    let swig_gen =
+        flapigen::Generator::new(LanguageConfig::PythonConfig(python_cfg)).rustfmt_bindings(true);
     swig_gen.expand("flapigen_test_python", from, out);
 }

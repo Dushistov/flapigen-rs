@@ -465,10 +465,7 @@ fn generate_conversion_for_argument(
         .implements
         .contains_path(&parse(ENUM_TRAIT_NAME, src_id)?)
     {
-        let enum_py_mod: Ident = parse(
-            &py_wrapper_mod_name(&rust_type.normalized_name.to_string()),
-            src_id,
-        )?;
+        let enum_py_mod: Ident = parse(&py_wrapper_mod_name(&rust_type.normalized_name), src_id)?;
         Ok((
             parse_type!(u32),
             quote! {
@@ -549,7 +546,7 @@ fn generate_conversion_for_argument(
         Err(DiagnosticError::new(
             src_id,
             method_span,
-            format!("Unsupported argument type: {:?}", rust_type.normalized_name),
+            format!("Unsupported argument type: {}", rust_type),
         ))
     }
 }
@@ -561,7 +558,7 @@ fn generate_conversion_for_return(
     conv_map: &mut TypeMap,
     rust_call: TokenStream,
 ) -> Result<(Type, TokenStream)> {
-    if rust_type.normalized_name == "( )" {
+    if rust_type.ty == parse_type! { () } {
         Ok((
             parse_type!(cpython::PyObject),
             quote! {
@@ -697,7 +694,7 @@ fn generate_conversion_for_return(
         Err(DiagnosticError::new(
             src_id,
             method_span,
-            format!("Unsupported return type: {:?}", rust_type.normalized_name),
+            format!("Unsupported return type: {}", rust_type),
         ))
     }
 }

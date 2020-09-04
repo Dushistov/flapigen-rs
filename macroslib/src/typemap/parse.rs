@@ -1072,11 +1072,8 @@ mod swig_foreign_types_map {}
 
         };
         assert_eq!(
-            "[ T ]",
-            unpack_first_associated_type(&trait_impl.items, "Target")
-                .unwrap()
-                .into_token_stream()
-                .to_string()
+            parse_type! { [ T ] },
+            *unpack_first_associated_type(&trait_impl.items, "Target").unwrap()
         );
     }
 
