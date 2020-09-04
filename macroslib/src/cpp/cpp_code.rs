@@ -268,7 +268,7 @@ fn do_generate_c_type(
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
 
-    let s_id = format!("{} {}", ctype.c_type_prefix(), ctype.name());
+    let s_id = format!("pub {} {}", ctype.c_type_prefix(), ctype.name());
     {
         let common_files = &mut ctx.common_files;
         let file_out: &mut FileWriteCache = file_for_module!(ctx, common_files, c_type_header_name);
