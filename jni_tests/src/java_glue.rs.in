@@ -51,10 +51,12 @@ impl Foo {
 
 //ANCHOR: doc_comments_usage
 foreign_class!(
+//ANCHOR: derive_usage
 /// Class comment description for Foo.
 #[derive(Clone)]
 class Foo {
     self_type Foo;
+//ANCHOR_END: derive_usage
     /// some text about the new function
     ///
     /// ```
@@ -405,14 +407,17 @@ impl TestContainers {
     }
 }
 
-foreign_class!(class TestContainers {
-    self_type TestContainers;
-    constructor TestContainers::default() -> TestContainers;
-    fn TestContainers::get_struct_vec(&self) -> Vec<Foo>;
-    fn TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
-    fn TestContainers::get_string_vec(&self) -> Vec<String>;
-    fn TestContainers::set_struct_vec(&mut self, _: Vec<Foo>);
-});
+foreign_class!(
+    #[derive(camelCaseAliases)]
+    class TestContainers {
+        self_type TestContainers;
+        constructor TestContainers::default() -> TestContainers;
+        fn TestContainers::get_struct_vec(&self) -> Vec<Foo>;
+        fn TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
+        fn TestContainers::get_string_vec(&self) -> Vec<String>;
+        fn TestContainers::set_struct_vec(&mut self, _: Vec<Foo>);
+    }
+);
 
 fn f_hypot(a: f64, b: f64) -> f64 {
     a.hypot(b)

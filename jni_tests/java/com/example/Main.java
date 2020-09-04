@@ -486,14 +486,14 @@ class Main {
 
     private static void testContainers() {
 	TestContainers testContainers = new TestContainers();
-	Foo[] sv = testContainers.get_struct_vec();
+	Foo[] sv = testContainers.getStructVec();
 	assert sv.length == 2;
 	assert sv[0].getName().equals("1");
 	assert sv[0].calcF(0, 0) == 1;
 	assert sv[1].getName().equals("2");
 	assert sv[1].calcF(0, 0) == 2;
-	assert testContainers.get_empty_struct_vec().length == 0;
-	String[] strv = testContainers.get_string_vec();
+	assert testContainers.getEmptyStructVec().length == 0;
+	String[] strv = testContainers.getStringVec();
 	assert strv.length == 7;
 	assert strv[0].equals("The");
 	assert strv[1].equals("was");
@@ -504,8 +504,8 @@ class Main {
 	assert strv[6].equals("nose");
 
 	Foo[] owned = {new Foo(17, "")};
-	testContainers.set_struct_vec(owned);
-	Foo[] owned2 = testContainers.get_struct_vec();
+	testContainers.setStructVec(owned);
+	Foo[] owned2 = testContainers.getStructVec();
 	assert owned2.length == 1;
 	assert owned2[0].calcF(0, 0) == 17;
 	assert owned2[0].getName().equals("");

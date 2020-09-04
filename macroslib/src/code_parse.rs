@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use heck::MixedCase;
 use log::debug;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
@@ -24,7 +25,7 @@ use crate::{
         ForeignInterfaceMethod, ForeignMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
         SelfTypeVariant,
     },
-    LanguageConfig, FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE,
+    LanguageConfig, CAMEL_CASE_ALIASES, COPY_TRAIT, FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE,
 };
 
 pub(crate) fn parse_foreigner_class(
@@ -191,7 +192,7 @@ fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
 fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<ForeignClassInfo> {
     let Attrs {
         doc_comments: class_doc_comments,
-        derive_list,
+        mut derive_list,
         unknown_attrs,
     } = parse_attrs(&input, ParseAttrsFlags::DERIVE)?;
     assert!(unknown_attrs.is_empty());
@@ -511,7 +512,7 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
         });
     }
 
-    let copy_derived = derive_list.iter().any(|x| x == "Copy");
+    let copy_derived = derive_list.iter().any(|x| x == COPY_TRAIT);
     let has_clone = |m: &ForeignMethod| {
         if let Some(seg) = m.rust_id.segments.last() {
             seg.ident == "clone"
@@ -545,6 +546,18 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
             ))
         }
     };
+
+    if let Some(pos) = derive_list.iter().position(|x| x == CAMEL_CASE_ALIASES) {
+        derive_list.remove(pos);
+        for m in &mut methods {
+            if m.name_alias.is_none() {
+                m.name_alias = Some(Ident::new(
+                    &m.short_name().to_mixed_case(),
+                    m.rust_id.span(),
+                ));
+            }
+        }
+    }
 
     Ok(ForeignClassInfo {
         src_id: SourceId::none(),
