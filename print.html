@@ -19,12 +19,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
-        
         <link rel="icon" href="favicon.svg">
-        
-        
         <link rel="shortcut icon" href="favicon.png">
-        
         <link rel="stylesheet" href="css/variables.css">
         <link rel="stylesheet" href="css/general.css">
         <link rel="stylesheet" href="css/chrome.css">
@@ -642,6 +638,18 @@ class Foo {
     /// @param name - more information
     constructor Foo::new(val: i32, name: &amp;str) -&gt; Foo;
 </code></pre>
+<h2><a class="header" href="#derives" id="derives">Derives</a></h2>
+<p>You can use &quot;derive&quot; syntax on the top of class, in the way similar to usage on the
+top of &quot;Rust&quot; structs:</p>
+<pre><code class="language-rust no_run noplaypen">/// Class comment description for Foo.
+#[derive(Clone)]
+class Foo {
+    self_type Foo;
+</code></pre>
+<p>Usage of derives changes generated code in various ways.
+For example, you can use <code>Clone,Copy</code> to force generation copy constructor
+and <code>operator=</code> in C++ case.
+Also you can use <code>camelCaseAliases</code> to change names of all methods to camel case.</p>
 <h1><a class="header" href="#foreign_enum" id="foreign_enum">foreign_enum!</a></h1>
 <p>With usage of <code>foreign_enum!</code> macro you can &quot;export&quot; <code>enum</code> (<code>C</code> like enum) to foreign language:</p>
 <pre><code class="language-rust no_run noplaypen">#[derive(Clone, Copy)]
