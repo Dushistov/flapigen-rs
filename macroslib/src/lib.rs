@@ -71,8 +71,14 @@ pub(crate) static SMART_PTR_COPY_TRAIT: &str = "SmartPtrCopy";
 pub(crate) static COPY_TRAIT: &str = "Copy";
 pub(crate) static CLONE_TRAIT: &str = "Clone";
 pub(crate) static PLAIN_CLASS: &str = "PlainClass";
-pub(crate) static KNOWN_CLASS_DERIVES: [&str; 4] =
-    [CLONE_TRAIT, COPY_TRAIT, SMART_PTR_COPY_TRAIT, PLAIN_CLASS];
+pub(crate) static CAMEL_CASE_ALIASES: &str = "camelCaseAliases";
+pub(crate) static KNOWN_CLASS_DERIVES: [&str; 5] = [
+    CLONE_TRAIT,
+    COPY_TRAIT,
+    SMART_PTR_COPY_TRAIT,
+    PLAIN_CLASS,
+    CAMEL_CASE_ALIASES,
+];
 
 pub use extension::MethodInfo;
 use extension::{ClassExtHandlers, MethodExtHandlers};

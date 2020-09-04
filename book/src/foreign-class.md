@@ -111,3 +111,17 @@ Also you can add comments to generated code with Rust's doc comments:
 ```rust,no_run,noplaypen
 {{#include ../../jni_tests/src/java_glue.rs.in:doc_comments_usage}}
 ```
+
+## Derives
+
+You can use "derive" syntax on the top of class, in the way similar to usage on the
+top of "Rust" structs:
+
+```rust,no_run,noplaypen
+{{#include ../../jni_tests/src/java_glue.rs.in:derive_usage}}
+```
+
+Usage of derives changes generated code in various ways.
+For example, you can use `Clone,Copy` to force generation copy constructor
+and `operator=` in C++ case.
+Also you can use `camelCaseAliases` to change names of all methods to camel case.
