@@ -6,15 +6,33 @@ use syn::spanned::Spanned;
 
 #[test]
 fn test_normalize_ty() {
-    assert_eq!(normalize_type(&str_to_ty("&str")), "& str");
-    assert_eq!(normalize_type(&str_to_ty("&'a str")), "& str");
-    assert_eq!(normalize_type(&str_to_ty("string")), "string");
-    assert_eq!(normalize_type(&str_to_ty("()")), "( )");
-    assert_eq!("Foo < T >", normalize_type(&parse_type! { Foo<'a, T> }),);
-    assert_eq!("Foo", normalize_type(&parse_type! { Foo<'a> }));
     assert_eq!(
-        "Box < Trait >",
-        normalize_type(&parse_type! { Box<dyn Trait> })
+        parse_type! { & str },
+        str_to_ty(normalize_type(&parse_type! { &str })),
+    );
+    assert_eq!(
+        parse_type! { & str },
+        str_to_ty(normalize_type(&parse_type! { &'a str })),
+    );
+    assert_eq!(
+        parse_type! { string },
+        str_to_ty(normalize_type(&parse_type! { string })),
+    );
+    assert_eq!(
+        parse_type! { () },
+        str_to_ty(normalize_type(&parse_type! { () })),
+    );
+    assert_eq!(
+        parse_type! { Foo < T > },
+        str_to_ty(normalize_type(&parse_type! { Foo<'a, T> })),
+    );
+    assert_eq!(
+        parse_type! { Foo },
+        str_to_ty(normalize_type(&parse_type! { Foo<'a> }))
+    );
+    assert_eq!(
+        parse_type! { Box < Trait > },
+        str_to_ty(normalize_type(&parse_type! { Box<dyn Trait> })),
     );
 }
 
