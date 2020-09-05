@@ -25,3 +25,20 @@ pub extern "C" fn Java_org_example_NavigationService_do_1subscribeOnUpdates(
     let mut ret: () = subscribeOnUpdates(this, session);
     ret
 }"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Session_do_1setFoo(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    a0: jint,
+) -> () {
+    let mut a0: i32 = a0;
+    let this: &mut RefCell<Session> =
+        unsafe { jlong_to_pointer::<RefCell<Session>>(this).as_mut().unwrap() };
+    let mut this: &RefCell<Session> = this;
+    let mut this: RefMut<Session> = <RefMut<Session>>::swig_from(this, env);
+    let mut this: &mut Session = this.swig_deref_mut();
+    let mut ret: () = setFoo(this, a0);
+    ret
+}"##;

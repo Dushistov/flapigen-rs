@@ -1053,7 +1053,7 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) <'a, T> MutexGuard<'a, T> => &mut T {
-        $out = & $p;
+        $out = &mut $p;
     };
 );
 

@@ -52,6 +52,7 @@ inline_function
 test_bare_fn_match
 cpp_generic_ptr_rule
 smart_ptr_copy_derived
+smart_ptr_copy_derived_arc
 null_annotation_java
 callback_with_several_traits
 reachability_fence_java
