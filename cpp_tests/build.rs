@@ -30,13 +30,11 @@ fn main() {
     let swig_gen = flapigen::Generator::new(LanguageConfig::CppConfig(cpp_cfg))
         .rustfmt_bindings(true)
         .remove_not_generated_files_from_output_directory(true);
+    let src = Path::new("src").join("cpp_glue.rs.in");
     swig_gen.expand(
         "flapigen_test_c++",
-        Path::new("src/cpp_glue.rs.in"),
+        &src,
         &Path::new(&out_dir).join("cpp_glue.rs"),
     );
-    println!(
-        "cargo:rerun-if-changed={}",
-        Path::new("src").join("cpp_glue.rs.in").display()
-    );
+    println!("cargo:rerun-if-changed={}", src.display());
 }
