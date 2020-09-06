@@ -6,6 +6,7 @@ import sys
 import re
 import time
 import shutil
+from typing import List, Set, Optional
 
 JNI_TESTS = "jni_tests"
 PYTHON_TESTS = "python_tests"
@@ -31,7 +32,7 @@ def purge(dir, pattern):
             #            print("removing %s" % os.path.join(dir, f))
             os.remove(os.path.join(dir, f))
 
-def find_dir(dir_name, start_dir):
+def find_dir(dir_name: str, start_dir: str) -> str:
     origin_cwd = os.getcwd()
     os.chdir(start_dir)
     dir = os.getcwd()
@@ -48,7 +49,7 @@ def find_dir(dir_name, start_dir):
     raise Exception("Can not find %s" % dir_name)
 
 @show_timing
-def run_jar(target_dir, jar_dir, use_shell, extra_args):
+def run_jar(target_dir: str, jar_dir: str, use_shell: bool, extra_args):
     jvm_args = ["java"]
     jvm_args.extend(extra_args)
     jvm_args.extend(["-ea", "-Djava.library.path=" + target_dir,
@@ -56,7 +57,7 @@ def run_jar(target_dir, jar_dir, use_shell, extra_args):
     subprocess.check_call(jvm_args, cwd=jar_dir, shell=use_shell)
 
 @show_timing
-def build_jar(java_dir, java_native_dir, use_shell):
+def build_jar(java_dir: str, java_native_dir: str, use_shell: bool) -> str:
     generated_java = [os.path.join("rust", f) for f in os.listdir(java_native_dir)
                       if os.path.isfile(os.path.join(java_native_dir, f)) and f.endswith(".java")]
     javac_cmd_args = ["javac", "Main.java"]
@@ -71,7 +72,7 @@ def build_jar(java_dir, java_native_dir, use_shell):
     return jar_dir
 
 @show_timing
-def run_jni_tests(use_shell, test_cfg):
+def run_jni_tests(use_shell: bool, test_cfg: Set[str]):
     print("run_jni_tests begin: cwd %s" % os.getcwd())
     sys.stdout.flush()
     for cfg in test_cfg:
@@ -98,14 +99,14 @@ def run_jni_tests(use_shell, test_cfg):
         target_dir = os.path.join(find_dir("target", "jni_tests"), RELEASE)
         run_jar(target_dir, jar_dir, use_shell, ["-Xcomp"])
 
-def calc_cmake_generator():
+def calc_cmake_generator() -> List[str]:
     if sys.platform == 'win32' or sys.platform == 'win64':
         cmake_generator = ["-G", "Visual Studio 16 2019", "-A", "x64"]
     else:
         cmake_generator = ["-G", "Unix Makefiles"]
     return cmake_generator
 
-def find_target_path_in_cmakecache(cmake_build_dir):
+def find_target_path_in_cmakecache(cmake_build_dir: str) -> Optional[str]:
     with open(os.path.join(cmake_build_dir, "CMakeCache.txt")) as search:
         for line in search:
             line = line.rstrip()
@@ -138,7 +139,7 @@ def build_cpp_example():
 
 
 @show_timing
-def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
+def build_cpp_code_with_cmake(test_cfg: Set[str], cmake_build_dir: str, addon_params):
     cmake_args = ["cmake"]
     cmake_args.extend(calc_cmake_generator())
     cmake_args.extend(addon_params)
@@ -149,12 +150,12 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
             print("%s exists, we removing it" % cmake_build_dir)
             shutil.rmtree(cmake_build_dir)
         os.makedirs(cmake_build_dir)
-        subprocess.check_call(cmake_args + [".."], cwd = str(cmake_build_dir))
+        subprocess.check_call(cmake_args + [".."], cwd = cmake_build_dir)
         os.environ["CTEST_OUTPUT_ON_FAILURE"] = "1"
         for cfg in test_cfg:
             subprocess.check_call(["cmake", "--build", ".", "--config", cfg], cwd = str(cmake_build_dir))
             subprocess.check_call(["cmake", "--build", ".", "--target", "RUN_TESTS", "--config", cfg],
-                                  cwd = str(cmake_build_dir))
+                                  cwd = cmake_build_dir)
     else:
         for cfg in test_cfg:
             cur_cmake_args = cmake_args[:]
@@ -183,7 +184,7 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
                                        "./c++-flapigen-test"], cwd = str(cur_cmake_build_dir))
 
 @show_timing
-def test_python(is_windows, test_cfg):
+def test_python(is_windows: bool, test_cfg: Set[str]):
     for cfg in test_cfg:
         cmd = ["cargo", "build", "-v", "--package", "flapigen_test_python"]
         if cfg == RELEASE:
@@ -223,7 +224,7 @@ def build_for_android(is_windows):
         subprocess.check_call([gradle_cmd, "connectedAndroidTest"], cwd=os.path.join(os.getcwd(), d))
 
 @show_timing
-def run_unit_tests(test_cfg, test_set):
+def run_unit_tests(test_cfg: Set[str], test_set: Set[str]):
     for cfg in test_cfg:
         cmd_base = ["cargo", "test", "-v", "-p", "flapigen"]
         if CPP_TESTS in test_set:
