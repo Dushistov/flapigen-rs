@@ -74,10 +74,15 @@ else ()
   set(RUST_PART_LIB_NAME "libcpp_example_rust_part.so")
 endif ()
 
+set(CARGO_BUILD_DIR "${TARGET_PATH}")
+if (DEFINED ENV{CARGO_BUILD_TARGET})
+  set(CARGO_BUILD_DIR "${CARGO_BUILD_DIR}/$ENV{CARGO_BUILD_TARGET}")
+endif ()
+
 if (NOT RUST_DEBUG_BUILD)
-  set(RUST_PART_LIB_PATH "${TARGET_PATH}/release/${RUST_PART_LIB_NAME}")
+  set(RUST_PART_LIB_PATH "${CARGO_BUILD_DIR}/release/${RUST_PART_LIB_NAME}")
 else()
-  set(RUST_PART_LIB_PATH "${TARGET_PATH}/debug/${RUST_PART_LIB_NAME}")
+  set(RUST_PART_LIB_PATH "${CARGO_BUILD_DIR}/debug/${RUST_PART_LIB_NAME}")
 endif()
 
 add_custom_command(OUTPUT ${RUST_PART_LIB_PATH}
