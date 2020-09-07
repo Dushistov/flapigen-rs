@@ -166,7 +166,7 @@ jobs:
         with:
           java-version: '8'
           java-package: jdk
-          architecture: x86      
+          architecture: x86
       - name: Check versions
         run: |
           set -e
@@ -197,3 +197,25 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S_AWS_SECRET_ACCESS_KEY }}
           SCCACHE_ENDPOINT: ${{ secrets.S_SCCACHE_ENDPOINT }}
           CARGO_BUILD_TARGET: ${{ matrix.target }}
+  doc_tests:
+    name: Docs (Detect cases where documentation links don't resolve and such)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          # Docs.rs uses nightly, which allows for easier syntax for linking to functions.
+          toolchain: nightly
+          override: true
+      - name: cargo rustdoc
+        run: |
+          set -e
+          rustc --version
+          cargo --version
+          cd $GITHUB_WORKSPACE/macroslib
+          # Need to use `cargo rustdoc` to actually get it to respect -D
+          # warnings... Note: this also requires nightly.
+          cargo rustdoc -- -D warnings
+          echo "doc testing done"
