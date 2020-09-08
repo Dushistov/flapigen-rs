@@ -108,20 +108,6 @@ trait SwigFrom<T> {
 }
 
 #[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_deref();"]
-trait SwigDeref {
-    type Target: ?Sized;
-    fn swig_deref(&self) -> &Self::Target;
-}
-
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_deref_mut();"]
-trait SwigDerefMut {
-    type Target: ?Sized;
-    fn swig_deref_mut(&mut self) -> &mut Self::Target;
-}
-
-#[allow(dead_code)]
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CRustStrView {
@@ -139,86 +125,65 @@ impl CRustStrView {
     }
 }
 
-impl<T> SwigDeref for Arc<Mutex<T>> {
-    type Target = Mutex<T>;
-    fn swig_deref(&self) -> &Mutex<T> {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Arc<Mutex<T>> => &Mutex<T> {
+        $out = & $p;
+    };
+);
 
-impl<'a, T> SwigFrom<&'a Mutex<T>> for MutexGuard<'a, T> {
-    fn swig_from(m: &'a Mutex<T>) -> MutexGuard<'a, T> {
-        m.lock().unwrap()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> &Mutex<T> => MutexGuard<T> {
+        $out = $p.lock().unwrap();
+    };
+);
 
-impl<'a, T> SwigDeref for MutexGuard<'a, T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> MutexGuard<T> => &T {
+        $out = & $p;
+    };
+);
 
-impl<'a, T> SwigDerefMut for MutexGuard<'a, T> {
-    type Target = T;
-    fn swig_deref_mut(&mut self) -> &mut T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> MutexGuard<T> => &mut T {
+        $out = &mut $p;
+    };
+);
 
-impl<T> SwigDeref for Rc<T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Rc<T> => &T {
+        $out = & $p;
+    };
+);
 
-impl<'a, T> SwigDeref for &'a Rc<T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> &Rc<T> => &T {
+        $out = & $p;
+    };
+);
 
-impl<'a, T> SwigFrom<&'a RefCell<T>> for Ref<'a, T> {
-    fn swig_from(m: &'a RefCell<T>) -> Ref<'a, T> {
-        m.borrow()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> &RefCell<T> => Ref<T> {
+        $out = $p.borrow();
+    };
+);
 
-impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
-    fn swig_from(m: &'a RefCell<T>) -> RefMut<'a, T> {
-        m.borrow_mut()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> &RefCell<T> => RefMut<T> {
+        $out = $p.borrow_mut();
+    };
+);
 
-impl<'a, T> SwigDeref for Ref<'a, T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Ref<T> => &T {
+        $out = & $p;
+    };
+);
 
-impl<'a, T> SwigDerefMut for RefMut<'a, T> {
-    type Target = T;
-    fn swig_deref_mut(&mut self) -> &mut T {
-        self
-    }
-}
-
-impl<T: SwigForeignClass> SwigDeref for T {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
-
-impl<T: SwigForeignClass> SwigDerefMut for T {
-    type Target = T;
-    fn swig_deref_mut(&mut self) -> &mut T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> RefMut<T> => &mut T {
+        $out = &mut $p;
+    };
+);
 
 // &str -> &Path
 impl<'a> SwigInto<&'a Path> for &'a str {

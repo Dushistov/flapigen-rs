@@ -20,8 +20,7 @@ pub extern "C" fn Java_org_example_NavigationService_do_1subscribeOnUpdates(
             .unwrap()
     };
     let mut this: &Mutex<NavigationService> = this;
-    let mut this: MutexGuard<NavigationService> =
-        <MutexGuard<NavigationService>>::swig_from(this, env);
+    let mut this: MutexGuard<NavigationService> = this.lock().unwrap();
     let mut this: &mut NavigationService = &mut this;
     let mut ret: () = subscribeOnUpdates(this, session);
     ret
@@ -38,7 +37,7 @@ pub extern "C" fn Java_org_example_Session_do_1setFoo(
     let this: &mut Mutex<Session> =
         unsafe { jlong_to_pointer::<Mutex<Session>>(this).as_mut().unwrap() };
     let mut this: &Mutex<Session> = this;
-    let mut this: MutexGuard<Session> = <MutexGuard<Session>>::swig_from(this, env);
+    let mut this: MutexGuard<Session> = this.lock().unwrap();
     let mut this: &mut Session = &mut this;
     let mut ret: () = setFoo(this, a0);
     ret

@@ -1289,9 +1289,9 @@ mod tests {
 
         assert_eq!(
             r#"    let mut a1: & Rc < RefCell < Foo > > = a0;
-    let mut a1: & RefCell < Foo > = a1.swig_deref();
-    let mut a1: RefMut < Foo > = <RefMut < Foo >>::swig_from(a1, env);
-    let mut a1: & mut Foo = a1.swig_deref_mut();
+    let mut a1: & RefCell < Foo > = & a1 ;
+    let mut a1: RefMut < Foo > = a1 . borrow_mut () ;
+    let mut a1: & mut Foo = & mut a1 ;
 "#,
             types_map
                 .convert_rust_types(
@@ -1311,8 +1311,8 @@ mod tests {
         let foo_ref_ty = types_map.find_or_alloc_rust_type(&parse_type! { &Foo }, SourceId::none());
 
         assert_eq!(
-            r#"    let mut a1: Ref < Foo > = <Ref < Foo >>::swig_from(a0, env);
-    let mut a1: & Foo = a1.swig_deref();
+            r#"    let mut a1: Ref < Foo > = a0 . borrow () ;
+    let mut a1: & Foo = & a1 ;
 "#,
             types_map
                 .convert_rust_types(

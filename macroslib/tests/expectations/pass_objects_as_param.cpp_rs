@@ -26,8 +26,8 @@ r##"# [ no_mangle ]
 r##"# [ no_mangle ] pub extern "C" fn TestPassObjectsAsParams_f4 ( this : * mut TestPassObjectsAsParams , a0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
  assert ! ( ! a0 . is_null ( ) ) ;
  let a0 : & RefCell < Foo > = unsafe { &* ( a0 as * const RefCell < Foo > ) } ;
- let mut a0 : Ref < Foo > = < Ref < Foo >>:: swig_from ( a0 ) ;
- let mut a0 : & Foo = a0 . swig_deref ( ) ;
+ let mut a0 : Ref < Foo > = a0.borrow();
+ let mut a0 : & Foo = & a0;
  let this : & TestPassObjectsAsParams = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : ( ) = TestPassObjectsAsParams :: f4 ( this , a0 ) ; ret }"##;
 
@@ -35,8 +35,8 @@ r##"# [ no_mangle ] pub extern "C" fn TestPassObjectsAsParams_f5 ( this : * mut 
  assert ! ( ! a0 . is_null ( ) ) ;
  let a0 : & mut RefCell < Foo > = unsafe { & mut * ( a0 as * mut RefCell < Foo > ) } ;
  let mut a0 : & RefCell < Foo > = a0 ;
- let mut a0 : RefMut < Foo > = < RefMut < Foo >>:: swig_from ( a0 ) ;
- let mut a0 : & mut Foo = a0 . swig_deref_mut ( ) ;
+ let mut a0 : RefMut < Foo > = a0.borrow_mut();
+ let mut a0 : & mut Foo = &mut a0;
  let this : & TestPassObjectsAsParams = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : ( ) = TestPassObjectsAsParams :: f5 ( this , a0 ) ;
  ret }"##;
