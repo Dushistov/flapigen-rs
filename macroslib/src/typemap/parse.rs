@@ -40,9 +40,6 @@ static SWIG_TO_ATTR_NAME: &str = "swig_to";
 
 static SWIG_INTO_TRAIT: &str = "SwigInto";
 static SWIG_FROM_TRAIT: &str = "SwigFrom";
-static SWIG_DEREF_TRAIT: &str = "SwigDeref";
-static SWIG_DEREF_MUT_TRAIT: &str = "SwigDerefMut";
-static TARGET_ASSOC_TYPE: &str = "Target";
 
 type MyAttrs = FxHashMap<String, Vec<(String, Span)>>;
 
@@ -136,14 +133,6 @@ pub(in crate::typemap) fn parse(
                         .insert(item_trait.ident.clone(), conv_code_template.to_string());
                 }
                 ret.utils_code.push(syn::Item::Trait(item_trait));
-            }
-            Item::Impl(ref mut item_impl)
-                if item_impl_path_is(item_impl, SWIG_DEREF_TRAIT, SWIG_DEREF_MUT_TRAIT) =>
-            {
-                let swig_attrs = handle_attrs!(item_impl);
-                let mut filter = FilterSwigAttrs;
-                filter.visit_item_impl_mut(item_impl);
-                handle_deref_impl(name, &swig_attrs, item_impl, &mut ret)?;
             }
             Item::Macro(mut item_macro) => {
                 if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
@@ -513,96 +502,6 @@ fn handle_into_from_impl(
     Ok(())
 }
 
-fn handle_deref_impl(
-    src_id: SourceId,
-    swig_attrs: &MyAttrs,
-    item_impl: &syn::ItemImpl,
-    ret: &mut TypeMap,
-) -> Result<()> {
-    let target_ty =
-        unpack_first_associated_type(&item_impl.items, TARGET_ASSOC_TYPE).ok_or_else(|| {
-            DiagnosticError::new(src_id, item_impl.span(), "No Target associated type")
-        })?;
-    debug!(
-        "parsing swigderef target {:?}, for_type {:?}",
-        target_ty, item_impl.self_ty
-    );
-
-    let deref_target_name = normalize_type(target_ty);
-    let trait_path = if let Some((_, ref trait_path, _)) = item_impl.trait_ {
-        trait_path
-    } else {
-        unreachable!();
-    };
-    let (deref_trait, to_ref_ty) = if is_ident_ignore_params(trait_path, SWIG_DEREF_TRAIT) {
-        (
-            SWIG_DEREF_TRAIT,
-            parse_ty_with_given_span(&format!("&{}", deref_target_name), item_impl.span())
-                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?,
-        )
-    } else {
-        (
-            SWIG_DEREF_MUT_TRAIT,
-            parse_ty_with_given_span(&format!("&mut {}", deref_target_name), item_impl.span())
-                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?,
-        )
-    };
-
-    let conv_code: &String = ret
-        .traits_usage_code
-        .get(&Ident::new(deref_trait, Span::call_site()))
-        .ok_or_else(|| {
-            DiagnosticError::new(
-                src_id,
-                item_impl.span(),
-                "Can not find conversation code for SwigDeref/SwigDerefMut",
-            )
-        })?;
-    let from_ty = (*item_impl.self_ty).clone();
-    let item_code = item_impl.into_token_stream();
-
-    //for_type -> &Target
-    if item_impl.generics.type_params().next().is_some() {
-        ret.generic_edges.push(GenericTypeConv {
-            src_id,
-            from_ty,
-            to_ty: to_ref_ty,
-            code: TypeConvCode::new(conv_code.clone(), (src_id, item_impl.span())),
-            dependency: Rc::new(RefCell::new(Some(item_code))),
-            generic_params: item_impl.generics.clone(),
-            to_foreigner_hint: get_foreigner_hint_for_generic(
-                src_id,
-                &item_impl.generics,
-                &swig_attrs,
-                ForeignHintVariant::To,
-            )?,
-            from_foreigner_hint: get_foreigner_hint_for_generic(
-                src_id,
-                &item_impl.generics,
-                &swig_attrs,
-                ForeignHintVariant::From,
-            )?,
-        });
-    } else {
-        let to_typename = normalize_type(&to_ref_ty);
-        let to_ty = if let Some(ty_type_idx) = ret.rust_names_map.get(to_typename) {
-            ret.conv_graph[*ty_type_idx].ty.clone()
-        } else {
-            to_ref_ty
-        };
-
-        add_conv_code(
-            src_id,
-            (from_ty, None),
-            (to_ty, None),
-            item_code,
-            TypeConvCode::new(conv_code.clone(), (src_id, item_impl.span())),
-            ret,
-        );
-    }
-    Ok(())
-}
-
 fn handle_macro(
     src_id: SourceId,
     swig_attrs: &MyAttrs,
@@ -807,20 +706,6 @@ fn add_conv_code(
         to.graph_idx,
         TypeConvEdge::new(conv_code, Some(item_code)),
     );
-}
-
-fn unpack_first_associated_type<'a, 'b>(
-    items: &'a [syn::ImplItem],
-    assoc_type_name: &'b str,
-) -> Option<&'a Type> {
-    for item in items {
-        if let syn::ImplItem::Type(ref impl_item_type) = item {
-            if impl_item_type.ident == assoc_type_name {
-                return Some(&impl_item_type.ty);
-            }
-        }
-    }
-    None
 }
 
 fn is_ident_ignore_params<I>(path: &syn::Path, ident: I) -> bool
@@ -1061,23 +946,6 @@ mod swig_foreign_types_map {}
     }
 
     #[test]
-    fn test_unpack_first_associated_type() {
-        let trait_impl: syn::ItemImpl = parse_quote! {
-            impl<T> SwigDeref for Vec<T> {
-                type Target = [T];
-                fn swig_deref(&self) -> &Self::Target {
-                    &*self
-                }
-            }
-
-        };
-        assert_eq!(
-            parse_type! { [ T ] },
-            *unpack_first_associated_type(&trait_impl.items, "Target").unwrap()
-        );
-    }
-
-    #[test]
     fn test_parse_trait_with_code() {
         let _ = env_logger::try_init();
         let mut conv_map = parse(
@@ -1149,44 +1017,6 @@ impl SwigFrom<bool> for jboolean {
     }
 
     #[test]
-    fn test_parse_deref() {
-        let mut conv_map = parse(
-            SourceId::none(),
-            r#"
-#[allow(dead_code)]
-#[swig_code = "let {to_var}: {to_var_type} = {from_var}.swig_deref();"]
-trait SwigDeref {
-    type Target: ?Sized;
-    fn swig_deref(&self) -> &Self::Target;
-}
-
-impl SwigDeref for String {
-    type Target = str;
-    fn swig_deref(&self) -> &str {
-        &self
-    }
-}
-"#,
-            64,
-            FxHashMap::default(),
-        )
-        .unwrap();
-        let string_ty = conv_map.find_or_alloc_rust_type(&parse_type! { String }, SourceId::none());
-        let str_ty = conv_map.find_or_alloc_rust_type(&parse_type! { &str }, SourceId::none());
-        let (_, code) = conv_map
-            .convert_rust_types(
-                string_ty.to_idx(),
-                str_ty.to_idx(),
-                "a0",
-                "a1",
-                "jlong",
-                invalid_src_id_span(),
-            )
-            .unwrap();
-        assert_eq!("    let a1: & str = a0.swig_deref();\n".to_string(), code);
-    }
-
-    #[test]
     fn test_parse_conv_impl_with_type_params() {
         let _ = env_logger::try_init();
 
@@ -1199,38 +1029,29 @@ trait SwigFrom<T> {
     fn swig_from(_: T, env: *mut JNIEnv) -> Self;
 }
 
-#[allow(dead_code)]
-#[swig_code = "let {to_var}: {to_var_type} = {from_var}.swig_deref();"]
-trait SwigDeref {
-    type Target: ?Sized;
-    fn swig_deref(&self) -> &Self::Target;
-}
-
 impl<T: SwigForeignClass> SwigFrom<T> for jobject {
     fn swig_from(x: T, env: *mut JNIEnv) -> Self {
         object_to_jobject(x, <T>::jni_class_name(), env)
     }
 }
 
-impl<T> SwigDeref for Arc<Mutex<T>> {
-    type Target = Mutex<T>;
-    fn swig_deref(&self) -> &Mutex<T> {
-        &self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Arc<Mutex<T>> => &Mutex<T> {
+        $out = & $p;
+    };
+);
 
-impl<'a, T> SwigFrom<&'a Mutex<T>> for MutexGuard<'a, T> {
-    fn swig_from(m: &'a Mutex<T>, _: *mut JNIEnv) -> MutexGuard<'a, T> {
-        m.lock().unwrap()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> &Mutex<T> => MutexGuard<T> {
+        $out = $p.lock().unwrap();
+    };
+);
 
-impl<'a, T> SwigDeref for MutexGuard<'a, T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        &self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> MutexGuard<T> => &T {
+        $out = & $p;
+    };
+);
 "#,
             64,
             FxHashMap::default(),
@@ -1257,9 +1078,9 @@ impl<'a, T> SwigDeref for MutexGuard<'a, T> {
             )
             .unwrap();
         assert_eq!(
-            r#"    let a1: & Mutex < Foo > = a0.swig_deref();
-    let a1: MutexGuard < Foo > = <MutexGuard < Foo >>::swig_from(a1, env);
-    let a1: & Foo = a1.swig_deref();
+            r#"    let mut a1: & Mutex < Foo > = & a0 ;
+    let mut a1: MutexGuard < Foo > = a1 . lock () . unwrap () ;
+    let mut a1: & Foo = & a1 ;
 "#
             .to_string(),
             code

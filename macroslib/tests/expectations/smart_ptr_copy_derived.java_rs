@@ -20,8 +20,8 @@ pub extern "C" fn Java_org_example_NavigationService_do_1subscribeOnUpdates(
             .unwrap()
     };
     let mut this: &RefCell<NavigationService> = this;
-    let mut this: RefMut<NavigationService> = <RefMut<NavigationService>>::swig_from(this, env);
-    let mut this: &mut NavigationService = this.swig_deref_mut();
+    let mut this: RefMut<NavigationService> = this.borrow_mut();
+    let mut this: &mut NavigationService = &mut this;
     let mut ret: () = subscribeOnUpdates(this, session);
     ret
 }"##;
@@ -37,8 +37,8 @@ pub extern "C" fn Java_org_example_Session_do_1setFoo(
     let this: &mut RefCell<Session> =
         unsafe { jlong_to_pointer::<RefCell<Session>>(this).as_mut().unwrap() };
     let mut this: &RefCell<Session> = this;
-    let mut this: RefMut<Session> = <RefMut<Session>>::swig_from(this, env);
-    let mut this: &mut Session = this.swig_deref_mut();
+    let mut this: RefMut<Session> = this.borrow_mut();
+    let mut this: &mut Session = &mut this;
     let mut ret: () = setFoo(this, a0);
     ret
 }"##;
