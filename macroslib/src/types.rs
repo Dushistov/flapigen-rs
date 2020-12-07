@@ -251,6 +251,7 @@ pub(crate) struct ForeignEnumInfo {
     pub(crate) name: Ident,
     pub(crate) items: Vec<ForeignEnumItem>,
     pub(crate) doc_comments: Vec<String>,
+    pub(crate) derive_list: Vec<String>,
 }
 
 impl ForeignEnumInfo {

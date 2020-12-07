@@ -1,4 +1,3 @@
-use crate::typemap::ast;
 use crate::typemap::ty::RustType;
 use crate::{
     error::Result,
@@ -15,6 +14,7 @@ use crate::{
     },
     DiagnosticError, LanguageGenerator, PythonConfig, SourceCode, TypeMap,
 };
+use crate::{extension::ExtHandlers, typemap::ast};
 use heck::SnakeCase;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -33,8 +33,7 @@ impl LanguageGenerator for PythonConfig {
         _code: &[SourceCode],
         items: Vec<ItemToExpand>,
         _remove_not_generated_files: bool,
-        class_ext_handler: &ClassExtHandlers,
-        method_ext_handlers: &MethodExtHandlers,
+        ext_handlers: ExtHandlers,
     ) -> Result<Vec<TokenStream>> {
         for item in &items {
             if let ItemToExpand::Class(ref fclass) = item {
@@ -45,9 +44,12 @@ impl LanguageGenerator for PythonConfig {
         let mut module_initialization = Vec::with_capacity(items.len());
         for item in items {
             let (class_code, initialization) = match item {
-                ItemToExpand::Class(fclass) => {
-                    self.generate_class(conv_map, &fclass, class_ext_handler, method_ext_handlers)?
-                }
+                ItemToExpand::Class(fclass) => self.generate_class(
+                    conv_map,
+                    &fclass,
+                    ext_handlers.class_ext_handlers,
+                    ext_handlers.method_ext_handlers,
+                )?,
                 ItemToExpand::Enum(fenum) => self.generate_enum(conv_map, &fenum)?,
                 ItemToExpand::Interface(finterface) => {
                     self.generate_interface(conv_map, &finterface)?

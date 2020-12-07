@@ -672,7 +672,12 @@ struct ForeignEnumInfoParser(ForeignEnumInfo);
 
 impl Parse for ForeignEnumInfoParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let enum_doc_comments = parse_doc_comments(input)?;
+        let Attrs {
+            doc_comments: enum_doc_comments,
+            derive_list,
+            unknown_attrs,
+        } = parse_attrs(&input, ParseAttrsFlags::DERIVE)?;
+        assert!(unknown_attrs.is_empty());
         input.parse::<Token![enum]>()?;
         let enum_name = input.parse::<Ident>()?;
         debug!("ENUM NAME {:?}", enum_name);
@@ -698,6 +703,7 @@ impl Parse for ForeignEnumInfoParser {
             name: enum_name,
             items,
             doc_comments: enum_doc_comments,
+            derive_list,
         }))
     }
 }

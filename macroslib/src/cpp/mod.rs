@@ -48,7 +48,7 @@ use syn::spanned::Spanned;
 use crate::{
     cpp::{map_class_self_type::register_typemap_for_self_type, map_type::map_type},
     error::{invalid_src_id_span, DiagnosticError, Result},
-    extension::{ClassExtHandlers, MethodExtHandlers},
+    extension::{ClassExtHandlers, EnumExtHandlers, ExtHandlers, MethodExtHandlers},
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
@@ -312,6 +312,7 @@ struct CppContext<'a> {
     generated_foreign_files: &'a mut FxHashSet<PathBuf>,
     class_ext_handlers: &'a ClassExtHandlers,
     method_ext_handlers: &'a MethodExtHandlers,
+    enum_ext_handlers: &'a EnumExtHandlers,
 }
 
 impl LanguageGenerator for CppConfig {
@@ -322,8 +323,7 @@ impl LanguageGenerator for CppConfig {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
         remove_not_generated_files: bool,
-        class_ext_handlers: &ClassExtHandlers,
-        method_ext_handlers: &MethodExtHandlers,
+        ext_handlers: ExtHandlers,
     ) -> Result<Vec<TokenStream>> {
         let mut ret = Vec::with_capacity(items.len());
         let mut files = FxHashMap::<SmolStr, FileWriteCache>::default();
@@ -336,8 +336,9 @@ impl LanguageGenerator for CppConfig {
                 rust_code: &mut ret,
                 common_files: &mut files,
                 generated_foreign_files: &mut generated_foreign_files,
-                class_ext_handlers,
-                method_ext_handlers,
+                class_ext_handlers: ext_handlers.class_ext_handlers,
+                method_ext_handlers: ext_handlers.method_ext_handlers,
+                enum_ext_handlers: ext_handlers.enum_ext_handlers,
             };
             init(&mut ctx, code)?;
             for item in &items {

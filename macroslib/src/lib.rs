@@ -81,7 +81,7 @@ pub(crate) static KNOWN_CLASS_DERIVES: [&str; 5] = [
 ];
 
 pub use extension::MethodInfo;
-use extension::{ClassExtHandlers, MethodExtHandlers};
+use extension::{ClassExtHandlers, EnumExtHandlers, ExtHandlers, MethodExtHandlers};
 use rustc_hash::FxHashMap;
 pub use types::MethodVariant;
 
@@ -335,6 +335,7 @@ pub struct Generator {
     remove_not_generated_files: bool,
     class_ext_handlers: ClassExtHandlers,
     method_ext_handlers: MethodExtHandlers,
+    enum_ext_handlers: EnumExtHandlers,
 }
 
 struct SourceCode {
@@ -422,6 +423,7 @@ impl Generator {
             remove_not_generated_files: false,
             class_ext_handlers: FxHashMap::default(),
             method_ext_handlers: FxHashMap::default(),
+            enum_ext_handlers: FxHashMap::default(),
         }
     }
 
@@ -472,6 +474,24 @@ impl Generator {
             );
         }
         self.class_ext_handlers
+            .insert(attr_name.into(), Box::new(cb));
+        self
+    }
+
+    /// Register callback to extend/modify enum, if `foreign_enum` has #[derive(attr_name)]
+    /// then after foreign code generation `cb` would be called, with full code of module,
+    /// plus enum name
+    pub fn register_enum_attribute_callback<F>(mut self, attr_name: &str, cb: F) -> Self
+    where
+        F: Fn(&mut Vec<u8>, &str) + 'static,
+    {
+        if self.enum_ext_handlers.contains_key(attr_name) {
+            panic!(
+                "enum attribute callback for name '{}' already registered",
+                attr_name
+            );
+        }
+        self.enum_ext_handlers
             .insert(attr_name.into(), Box::new(cb));
         self
     }
@@ -657,8 +677,11 @@ impl Generator {
             &self.foreign_lang_helpers,
             items_to_expand,
             self.remove_not_generated_files,
-            &self.class_ext_handlers,
-            &self.method_ext_handlers,
+            ExtHandlers {
+                class_ext_handlers: &self.class_ext_handlers,
+                method_ext_handlers: &self.method_ext_handlers,
+                enum_ext_handlers: &self.enum_ext_handlers,
+            },
         )?;
         for elem in code {
             writeln!(&mut file, "{}", elem).expect(WRITE_TO_MEM_FAILED_MSG);
@@ -727,8 +750,7 @@ trait LanguageGenerator {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
         remove_not_generated_files: bool,
-        class_ext_handler: &ClassExtHandlers,
-        method_ext_handlers: &MethodExtHandlers,
+        ext_handlers: ExtHandlers,
     ) -> Result<Vec<TokenStream>>;
 
     fn post_proccess_code(
