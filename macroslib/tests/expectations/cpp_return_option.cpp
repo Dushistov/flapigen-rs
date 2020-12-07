@@ -14,7 +14,7 @@ r##"#pragma once
 #include "rust_option.h"
 #include <optional>
 #include <stdint.h>
-#include "c_ControlItem.h"
+#include "ControlItem.hpp"
 #include "rust_str.h"
 #include <string_view>
 

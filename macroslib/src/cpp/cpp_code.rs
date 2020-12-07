@@ -164,7 +164,7 @@ pub(in crate::cpp) fn c_header_name(class: &ForeignClassInfo) -> String {
 }
 
 pub(in crate::cpp) fn cpp_header_name_for_enum(enum_info: &ForeignEnumInfo) -> String {
-    format!("c_{}.h", enum_info.name)
+    format!("{}.hpp", enum_info.name)
 }
 
 pub(in crate::cpp) fn cpp_list_required_includes(
