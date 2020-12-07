@@ -6,6 +6,7 @@ use syn::Type;
 use crate::{
     cpp::{cpp_code, CppContext},
     error::{invalid_src_id_span, DiagnosticError, Result},
+    extension::extend_foreign_enum,
     file_cache::FileWriteCache,
     typemap::{
         ast::{parse_ty_with_given_span, TypeName},
@@ -125,6 +126,9 @@ enum {enum_name} {{"#,
     }
 
     writeln!(file, "}};").expect(WRITE_TO_MEM_FAILED_MSG);
+    let mut cnt = file.take_content();
+    extend_foreign_enum(enum_info, &mut cnt, ctx.enum_ext_handlers)?;
+    file.replace_content(cnt);
     file.update_file_if_necessary()
         .map_err(DiagnosticError::map_any_err_to_our_err)?;
     Ok(())

@@ -17,7 +17,7 @@ use syn::{spanned::Spanned, Type};
 
 use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result},
-    extension::{ClassExtHandlers, MethodExtHandlers},
+    extension::{ClassExtHandlers, ExtHandlers, MethodExtHandlers},
     file_cache::FileWriteCache,
     typemap::{
         ast::{
@@ -183,8 +183,7 @@ impl LanguageGenerator for JavaConfig {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
         remove_not_generated_files: bool,
-        class_ext_handlers: &ClassExtHandlers,
-        method_ext_handlers: &MethodExtHandlers,
+        ext_handlers: ExtHandlers,
     ) -> Result<Vec<TokenStream>> {
         let mut ret = Vec::with_capacity(items.len());
         let mut generated_foreign_files = FxHashSet::default();
@@ -195,8 +194,8 @@ impl LanguageGenerator for JavaConfig {
             rust_code: &mut ret,
             generated_foreign_files: &mut generated_foreign_files,
             java_type_to_jni_sig_map: rust_code::predefined_java_type_to_jni_sig(),
-            class_ext_handlers,
-            method_ext_handlers,
+            class_ext_handlers: ext_handlers.class_ext_handlers,
+            method_ext_handlers: ext_handlers.method_ext_handlers,
         };
         init(&mut ctx, code)?;
         for item in &items {

@@ -366,6 +366,15 @@ class MyObj {
     #[Q_INVOKABLE]
     fn MyObj::f();
 });
+
+foreign_enum!(
+#[derive(EnumClass)]
+/// enum comment
+enum MyEnum {
+  A = MyEnum::A,
+  B = MyEnum::B,
+}
+);
 "#;
     let tmp_dir = tempdir().expect("Can not create tmp directory");
     let swig_gen = Generator::new(LanguageConfig::CppConfig(CppConfig::new(
@@ -414,6 +423,12 @@ class MyObj {
         };
         let pos = find_subsequence(&code, needle.as_bytes()).unwrap();
         code.splice(pos..pos, b"Q_INVOKABLE ".iter().copied());
+    })
+    .register_enum_attribute_callback("EnumClass", |code, ctx| {
+        println!("EnumClass callback, ctx {}", ctx);
+        let needle = format!("enum {}", ctx);
+        let pos = find_subsequence(&code, needle.as_bytes()).unwrap();
+        code.splice((pos + 5)..(pos + 5), b"class ".iter().copied());
     });
     let rust_code_path = tmp_dir.path().join("test.rs");
 
@@ -435,6 +450,12 @@ class MyObjWrapper : public QObject {
 "#
     ));
     assert!(foreign_code.contains("Q_INVOKABLE static void f()"));
+    assert!(foreign_code.contains(
+        r#"//enum comment
+enum class MyEnum {
+A = 0,
+B = 1"#
+    ));
     tmp_dir.close().unwrap();
 }
 
