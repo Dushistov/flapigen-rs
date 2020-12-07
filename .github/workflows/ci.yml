@@ -81,13 +81,13 @@ jobs:
         with:
           python-version: '3.7.8'
           architecture: ${{ matrix.platform || 'x64' }}
-      - uses: jwlawson/actions-setup-cmake@v1.0
+      - uses: jwlawson/actions-setup-cmake@v1.4
         if: matrix.os != 'windows-latest'
         with:
           cmake-version: '3.9.6'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
       # visual studio 16 2019 not supported until cmake 3.14
-      - uses: jwlawson/actions-setup-cmake@v1.0
+      - uses: jwlawson/actions-setup-cmake@v1.4
         if: matrix.os == 'windows-latest'
         with:
           cmake-version: '3.14.7'
@@ -95,7 +95,7 @@ jobs:
       - name: Choose boost version (not ubuntu)
         if: matrix.os != 'ubuntu-latest'
         run: |
-          echo '::set-env name=BOOST_VER::1.66.0'
+          echo 'BOOST_VER=1.66.0'  >> $GITHUB_ENV
         shell: bash
       # gcc (ubuntu) + boost has problem with may be uninitialized field in optional
       # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
@@ -103,7 +103,7 @@ jobs:
       - name: Choose boost version (ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          echo '::set-env name=BOOST_VER::1.73.0'
+          echo 'BOOST_VER=1.73.0'  >> $GITHUB_ENV
         shell: bash
       - name: Install boost
         run: |
@@ -112,7 +112,7 @@ jobs:
           export TAR="boost_$BOOST_VER_NAME.tar.gz"
           curl -L -o $TAR https://dl.bintray.com/boostorg/release/$BOOST_VER/source/$TAR
           tar --exclude more --exclude tools --exclude doc --exclude html --exclude test -xzvf $TAR
-          echo "::set-env name=BOOST_ROOT::$PWD/boost_$BOOST_VER_NAME"
+          echo "BOOST_ROOT=$PWD/boost_$BOOST_VER_NAME" >> $GITHUB_ENV
         shell: bash
       - name: Install valgrind for linux
         if: matrix.os == 'ubuntu-latest'
@@ -123,15 +123,15 @@ jobs:
           set -e
           curl https://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
           7z x llvm-installer.exe -oc:\\llvm-binary
-          echo "::set-env name=LIBCLANG_PATH::C:\\llvm-binary\\bin"
-          echo "::add-path::c:\\llvm-binary\\bin"
+          echo "LIBCLANG_PATH=C:\\llvm-binary\\bin" >> $GITHUB_ENV
+          echo "c:\\llvm-binary\\bin" >> $GITHUB_PATH
         shell: bash
       - name: install sccache (macos)
         if: matrix.os == 'macos-latest'
         run: |
           set -e
           brew install sccache
-          echo "::set-env name=SCCACHE_BUCKET::flapigenamd64macos"
+          echo "SCCACHE_BUCKET=flapigenamd64macos" >> $GITHUB_ENV
         shell: bash
       # there are no prebuild windows binary for 0.2.13
       - name: install sccache (windows 64bit)
@@ -142,8 +142,8 @@ jobs:
           curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
           7z x sccache.tar.gz
           7z x sccache-$SCCACHE_VER-x86_64-pc-windows-msvc.tar
-          echo "::add-path::`pwd`/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc"
-          echo "::set-env name=SCCACHE_BUCKET::flapigenamd64win"
+          echo "`pwd`/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc" >> $GITHUB_PATH
+          echo "SCCACHE_BUCKET=flapigenamd64win" >> $GITHUB_ENV
         shell: bash
       - name: install sccache (linux)
         if: matrix.os == 'ubuntu-latest'
@@ -151,12 +151,12 @@ jobs:
           set -e
           curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl.tar.gz -o sccache.tar.gz
           tar -xzvf sccache.tar.gz
-          echo "::add-path::`pwd`/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl"
-          echo "::set-env name=SCCACHE_BUCKET::flapigenamd64ubuntu"
+          echo "`pwd`/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl" >> $GITHUB_PATH
+          echo "SCCACHE_BUCKET=flapigenamd64ubuntu" >> $GITHUB_ENV
         shell: bash
       - name: Setup platform variable (for windows build)
         run: |
-          echo "::set-env name=platform::$platform"
+          echo "platform=$platform" >> $GITHUB_ENV
         shell: bash
         env:
           platform: ${{ matrix.platform }}
