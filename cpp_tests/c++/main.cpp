@@ -432,12 +432,21 @@ TEST(TestWorkWithVec, iterator)
         ++i;
     }
 
-    auto it = std::find_if(slice_foo.begin(), slice_foo.end(), [tag_len](const FooRef &item) {
-        return static_cast<size_t>(item.f(0, 0)) == tag_len / 2;
-    });
-    ASSERT_NE(slice_foo.end(), it);
-    ASSERT_EQ(tag_len / 2, static_cast<size_t>((*it).f(0, 0)));
-    ASSERT_EQ(tag_len / 2, size_t(it - slice_foo.begin()));
+    {
+        auto it = std::find_if(slice_foo.begin(), slice_foo.end(), [tag_len](const FooRef &item) {
+            return static_cast<size_t>(item.f(0, 0)) == tag_len / 2;
+        });
+        ASSERT_NE(slice_foo.end(), it);
+        ASSERT_EQ(tag_len / 2, static_cast<size_t>((*it).f(0, 0)));
+        ASSERT_EQ(tag_len / 2, size_t(it - slice_foo.begin()));
+    }
+    {
+        RustForeignVecFoo empty_vec;
+        auto it = std::find_if(empty_vec.begin(), empty_vec.end(), [tag_len](const FooRef &item) {
+            return static_cast<size_t>(item.f(0, 0)) == tag_len / 2;
+        });
+        ASSERT_EQ(empty_vec.end(), it);
+    }
 }
 
 TEST(TestEnumClass, smokeTest)
