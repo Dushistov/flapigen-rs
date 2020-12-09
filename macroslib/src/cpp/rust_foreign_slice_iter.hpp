@@ -93,7 +93,13 @@ public:
         assert(this->step == o.step);
         ptrdiff_t diff
             = static_cast<const uint8_t *>(this->ptr) - static_cast<const uint8_t *>(o.ptr);
-        return diff / this->step;
+        // if container empty step may be 0, to prevent div by 0
+        if (diff != 0) {
+            return diff / this->step;
+        }
+        else {
+            return 0;
+        }
     }
 
     bool operator<(const RustForeignSliceIterator &o) const noexcept
