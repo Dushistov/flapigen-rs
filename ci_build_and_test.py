@@ -223,14 +223,17 @@ def test_dotnet(test_cfg):
         elif sys.platform.startswith("win"):
             native_lib_name = "rust_swig_test_dotnet_native.dll"
 
-        shutil.copyfile(os.path.join(target_dir, native_lib_name), os.path.join("dotnet_tests/dotnet/bin/Debug/netcoreapp3.1", native_lib_name))
+        test_projekt_target_dir = "dotnet_tests/dotnet/bin/Debug/netcoreapp3.1"
+
+        os.makedirs(test_projekt_target_dir, exist_ok=True)
+        shutil.copyfile(os.path.join(target_dir, native_lib_name), os.path.join(test_projekt_target_dir, native_lib_name))
         
         # Build managed wrapper dll.
         subprocess.check_call(["dotnet", "build"], cwd = "dotnet_tests/rust_swig_test_dotnet")
         shutil.copyfile("dotnet_tests/rust_swig_test_dotnet/bin/Debug/netstandard2.0/rust_swig_test_dotnet.dll", "dotnet_tests/dotnet/rust_swig_test_dotnet.dll")
 
         # Run test
-        subprocess.check_call(["dotnet", "test"], cwd = "dotnet_tests/dotnet")
+        subprocess.check_call(["dotnet", "test", '--logger:"console;verbosity=detailed"'], cwd = "dotnet_tests/dotnet")
 
 
 @show_timing

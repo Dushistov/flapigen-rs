@@ -62,43 +62,6 @@ impl TestClass {
     }
 }
 
-#[derive(Clone)]
-pub struct TestClass2 {
-    t: TestClass,
-}
-
-impl TestClass2 {
-    pub fn new(t: TestClass) -> TestClass2 {
-        Self {
-            t
-        }
-    }
-    pub fn try_new(t: TestClass) -> Result<TestClass2, TestError> {
-        Ok(Self {
-            t
-        })
-    }
-    pub fn opt_new(t: TestClass) -> Option<TestClass2> {
-        Some(Self {
-            t
-        })
-    }
-    pub fn tuple_new(t: TestClass) -> (TestClass2, i32) {
-        (Self {
-            t
-        }, 1)
-    }
-    pub fn set_option_ref(&mut self, t: Option<&TestClass>) {
-        if let Some(t) = t {
-            self.t = t.clone();
-        }
-    }
-
-    pub fn option_ref(&self) -> Option<&TestClass> {
-        Some(&self.t)
-    }
-}
-
 impl std::ops::Drop for TestClass {
     fn drop(&mut self) {
         println!("Dropping!");
@@ -122,22 +85,6 @@ foreigner_class!(
     }
 );
 
-foreigner_class!(
-    #[derive(Clone)]
-    class TestClass2 {
-        self_type TestClass2;
-        /// Documentation for constructor
-        constructor TestClass2::new(t: TestClass) -> TestClass2;
-        //private constructor = empty;
-        // fn TestClass2::set_option_ref(&mut self, t: Option<&TestClass>);
-        // fn TestClass2::option_ref(&self) -> Option<&TestClass>;
-        // static_method TestClass2::opt_new(t: TestClass) -> Option<TestClass2>;
-        // static_method TestClass2::tuple_new(t: TestClass) -> (TestClass2, i32);
-        // static_method TestClass2::try_new(t: TestClass) -> Result<TestClass2, TestError>;
-        // fn TestClass2::clone(&self) -> TestClass2;
-    }
-);
-
 pub struct Template<T> {
     t: T
 }
@@ -154,7 +101,6 @@ foreigner_class!{
     class TemplateI32 {
         self_type Template<i32>;
         private constructor = empty;
-        // static_method Template::new(t: i32) -> Result<Template<i32>, TestError>;
     }
 }
 
@@ -184,14 +130,7 @@ impl TestStaticClass {
     pub fn concat_str(a: &str, b: &str) -> String {
         a.to_owned() + b
     }
-/*
-    pub fn test_vec(mut vec: Vec<i32>) -> Vec<i32> {
-        for i in vec.iter_mut() {
-            *i += 1;
-        }
-        vec
-    }
-*/
+
     pub fn print_vec_len(mut vec: Vec<i32>) {
         println!("{}", vec.len());
     }
@@ -217,10 +156,6 @@ impl TestStaticClass {
             t: 1
         })
     }
-
-    //pub fn maybe_return_class_ref<'a>(obj: Option<&TestClass>) -> Option<&TestClass> {
-    //    obj
-    //}
 
     pub fn maybe_add_one(i: Option<i32>) -> Option<i32> {
         i.map(|i| i + 1)
@@ -282,18 +217,14 @@ foreigner_class!(
         fn TestStaticClass::add(a: i32, b: i32) -> i32;
         fn TestStaticClass::concat(a: String, b: String) -> String;
         fn TestStaticClass::concat_str(a: &str, b: &str) -> String;
-        //fn TestStaticClass::test_vec(vec: Vec<i32>) -> Vec<i32>;
         fn TestStaticClass::print_vec_len(vec: Vec<i32>);
         fn TestStaticClass::print_slice_len(mut vec: &[i32]);
         fn TestStaticClass::get_vec() -> Vec<i32>;
         fn TestStaticClass::maybe_return_class(str: Option<String>) -> Option<TestClass>;
-        //fn TestStaticClass::maybe_return_class_ref(obj: Option<&TestClass>) -> Option<&TestClass>;
         fn TestStaticClass::return_class_ref(obj: &TestClass) -> &TestClass;
         fn TestStaticClass::maybe_add_one(i: Option<i32>) -> Option<i32>;
         fn TestStaticClass::maybe_return_template() -> Option<Template<i32>>;
         fn TestStaticClass::test_obj_by_value(obj: TestClass);
-
-        //fn TestStaticClass::return_test_2_ref() -> &TestClass2;
 
         fn TestStaticClass::try_create_object_template() -> Result<Template<i32>, TestError>;
         fn TestStaticClass::try_empty_result() -> Result<(), TestError>;

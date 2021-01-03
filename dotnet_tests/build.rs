@@ -23,7 +23,7 @@ fn main() {
 
 fn rust_swig_expand(from: &Path, out: &Path) {
     println!("Run rust_swig_expand");
-    let config = DotNetConfig::new("rust_swig_test_dotnet".to_owned());
+    let config = DotNetConfig::new("rust_swig_test_dotnet".to_owned(), "rust_swig_test_dotnet".into());
     let swig_gen = rust_swig::Generator::new(LanguageConfig::DotNetConfig(config));
     swig_gen.expand("rust_swig_test_dotnet_native", from, out);
 }

@@ -5,25 +5,26 @@ using rust_swig_test_dotnet;
 
 namespace dotnet
 {
-    public class UnitTest1
+    public class UnitTest
     {
         [Fact]
-        public void Test1()
+        /// "Smoke" tests for flapigen dotnet backend.
+        /// Note, that some function does not return anything. They are called here just to verify, that there are no crashes.
+        public void TestAll()
         {
             TestStaticClass.Hello();
             TestStaticClass.PrintNumber(123);
-            Console.Out.WriteLine(TestStaticClass.Add(1, 2));
-            Console.Out.WriteLine(TestStaticClass.Concat("Concatenated ", "String"));
-            Console.Out.WriteLine(TestStaticClass.ConcatStr("Concatenated ", "str"));
-
+            Assert.Equal(3, TestStaticClass.Add(1, 2));
+            Assert.Equal("Concatenated String", TestStaticClass.Concat("Concatenated ", "String"));
+            Assert.Equal("Concatenated str", TestStaticClass.Concat("Concatenated ", "str"));
 
             var obj = new TestClass();
-            obj.Print();
+            Assert.Equal(0, obj.Get());
             obj.Increment();
-            obj.Print();
+            Assert.Equal(1, obj.Get());
             obj.Add(3);
             obj.Print();
-            Console.Out.WriteLine(obj.Get());
+            Assert.Equal(4, obj.Get());
             
             TestStaticClass.TestObjByValue(obj);
 
@@ -33,33 +34,29 @@ namespace dotnet
 
             TestStaticClass.PrintVecLen(vec);
             var new_vec = TestStaticClass.GetVec();
-            foreach (var e in new_vec)
-            {
-                Console.Out.WriteLine(e);
-            }
+            Assert.Equal(3, new_vec.Count);
+            Assert.Equal(5, new_vec[0]);
+            Assert.Equal(6, new_vec[1]);
+            Assert.Equal(7, new_vec[2]);
 
-            TestStaticClass.MaybeReturnClass(new Option<string>("asdf")).Value.Print();
-            Console.Out.WriteLine(TestStaticClass.MaybeAddOne(new Option<int>()).IsSome);
+            Assert.Equal(0, TestStaticClass.MaybeReturnClass(new Option<string>("asdf")).Value.Get());
+            Assert.False(TestStaticClass.MaybeAddOne(new Option<int>()).IsSome);
 
-            TestStaticClass.TryCreateObjectOk().Print();
-            try 
-            {
-                TestStaticClass.TryCreateObjectErr();
-            } catch (Error err)
-            {
-                Console.Out.WriteLine(err);
-            }
-
+            // This shouldn't throw.
+            TestStaticClass.TryCreateObjectOk();
+            // But this one should.
+            Assert.Throws<rust_swig_test_dotnet.Error>(() => TestStaticClass.TryCreateObjectErr());
+            
             var arc_mutex = new TestArcMutex();
             arc_mutex.Inc();
-            Console.Out.WriteLine(arc_mutex.ToString());
-            Console.Out.WriteLine(TestArcMutex.ToStringArc(arc_mutex));
+            Assert.Equal("1", arc_mutex.ToString());
+            Assert.Equal("1", TestArcMutex.ToStringArc(arc_mutex));
 
-            Console.Out.WriteLine(TestStaticClass.ReverseEnum(TestEnum.B));
+            Assert.Equal(TestEnum.A, TestStaticClass.ReverseEnum(TestEnum.B));
 
             var tuple = TestStaticClass.GetTuple();
-            Console.Out.WriteLine(tuple.Item1);
-            Console.Out.WriteLine(tuple.Item2);
+            Assert.Equal(0, tuple.Item1);
+            Assert.Equal("0", tuple.Item2);
         }
     }
 }
