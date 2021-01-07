@@ -91,11 +91,6 @@ fn generate_c_code_for_enum(
         .join(cpp_code::cpp_header_name_for_enum(enum_info));
     let mut file = FileWriteCache::new(&c_path, ctx.generated_foreign_files);
     let enum_doc_comments = cpp_code::doc_comments_to_c_comments(&enum_info.doc_comments, true);
-    let enum_class_keyword = if ctx.cfg.use_enum_class {
-        "class"
-    } else {
-        ""
-    };
 
     writeln!(
         file,
@@ -104,10 +99,9 @@ fn generate_c_code_for_enum(
 
 namespace {namespace} {{
 {doc_comments}
-enum {enum_class_keyword} {enum_name} {{"#,
+enum {enum_name} {{"#,
         enum_name = enum_info.name,
         doc_comments = enum_doc_comments,
-        enum_class_keyword = enum_class_keyword,
         namespace = ctx.cfg.namespace_name,
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);

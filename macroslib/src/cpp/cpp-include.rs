@@ -857,7 +857,7 @@ pub struct CRustForeignVec {
 
 #[allow(dead_code)]
 impl CRustForeignVec {
-    pub fn from_vec<T>(mut v: Vec<T>) -> CRustForeignVec {
+    pub fn from_vec<T: SwigForeignClass>(mut v: Vec<T>) -> CRustForeignVec {
         let data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
         let len = v.len();
         let capacity = v.capacity();
@@ -909,7 +909,7 @@ fn remove_foreign_class_from_vec<T: SwigForeignClass>(
 
 #[allow(dead_code)]
 #[inline]
-fn drop_foreign_class_vec<T>(v: CRustForeignVec) {
+fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec) {
     assert_eq!(::std::mem::size_of::<T>(), v.step);
     let v = unsafe { Vec::from_raw_parts(v.data as *mut T, v.len, v.capacity) };
     drop(v);

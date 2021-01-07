@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from flapigen_test_python import TestStaticClass, TestEnum, TestClass, TestArc, TestArcMutex, TestBox, Error as TestError, Panic
+from flapigen_test_python import TestStaticClass, TestEnum, TestClass, TestArc, TestArcMutex, TestBox, Error as TestError
 
 def test_static_methods():
     assert TestStaticClass.hello() == "Hello from rust"
@@ -72,15 +72,6 @@ def test_box():
     box = TestBox()
     assert str(box) == "0"
 
-def test_panic():
-    try:
-        TestStaticClass.test_panic()
-    except Panic:
-        print("test_panic catched successfully")
-    try:
-        TestStaticClass.test_panic_with_result()
-    except Panic:
-        print("test_panic_with_result catched successfully")
 
 print("Testing python API")
 test_enum()
@@ -92,6 +83,5 @@ test_results()
 test_arc()
 test_arc_mutex()
 test_box()
-test_panic()
 
 print("Testing python API successful")
