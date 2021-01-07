@@ -162,6 +162,18 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
+    ($p:r_type) <T> Arc<T> => &T {
+        $out = & $p;
+    };
+);
+
+foreign_typemap!(
+    ($p:r_type) <T> &Arc<T> => &T {
+        $out = & $p;
+    };
+);
+
+foreign_typemap!(
     ($p:r_type) <T> &RefCell<T> => Ref<T> {
         $out = $p.borrow();
     };
