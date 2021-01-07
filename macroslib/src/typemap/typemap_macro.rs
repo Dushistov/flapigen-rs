@@ -7,7 +7,7 @@ use petgraph::Direction;
 use proc_macro2::{Span, TokenStream};
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
-use std::fmt::Write;
+use std::{cell::RefCell, convert::TryInto, fmt::Write, rc::Rc};
 use syn::{
     spanned::Spanned,
     visit_mut::{visit_type_mut, VisitMut},
@@ -20,7 +20,7 @@ use crate::{
     typemap::{
         ast::{
             get_trait_bounds, is_second_subst_of_first, normalize_type, parse_ty_with_given_span,
-            DisplayToTokens, SpannedSmolStr, TyParamsSubstMap,
+            DisplayToTokens, GenericTypeConv, SpannedSmolStr, TyParamsSubstMap,
         },
         ty::TraitNamesSet,
         TypeConvCode,
@@ -38,7 +38,7 @@ static SWIG_FROM_I_TYPE_TO_RUST: &str = "swig_from_i_type_to_rust";
 static SWIG_FOREIGN_TO_I_TYPE: &str = "swig_foreign_to_i_type";
 static SWIG_FOREIGN_FROM_I_TYPE: &str = "swig_foreign_from_i_type";
 static SWIG_F_TYPE: &str = "swig_f_type";
-static SWIG_SUBST_TYPE: &str = "swig_subst_type";
+pub(in crate::typemap) static SWIG_SUBST_TYPE: &str = "swig_subst_type";
 
 #[derive(Debug)]
 pub(crate) struct TypeMapConvRuleInfo {
@@ -229,7 +229,7 @@ impl TypeMapConvRuleInfo {
                 }
             } else {
                 println!(
-                    "warning=invalid generic bounds({}) refer unknown parameter, subst. map {:?}",
+                    "cargo:warning=invalid generic bounds({}) refer unknown parameter, subst. map {:?}",
                     b.ty_param.as_ref(),
                     subst_map
                 );
@@ -386,6 +386,79 @@ impl TypeMapConvRuleInfo {
         rtype_change_src_id(self.rtype_right_to_left.as_mut(), src_id);
         ftype_change_src_id(&mut self.ftype_left_to_right, src_id);
         ftype_change_src_id(&mut self.ftype_right_to_left, src_id);
+    }
+}
+
+impl TryInto<GenericTypeConv> for TypeMapConvRuleInfo {
+    type Error = TypeMapConvRuleInfo;
+
+    fn try_into(mut self) -> std::result::Result<GenericTypeConv, Self::Error> {
+        if !self.ftype_left_to_right.is_empty()
+            || !self.ftype_right_to_left.is_empty()
+            || !self.c_types.is_none()
+            || !self.generic_c_types.is_none()
+            || !self.f_code.is_empty()
+            || !self.generic_aliases.is_empty()
+        {
+            return Err(self);
+        }
+
+        let generic_params = match self.rtype_generics.take() {
+            Some(x) => x,
+            None => return Err(self),
+        };
+        let r_left_to_right = self.rtype_left_to_right.take();
+        let r_right_to_left = self.rtype_right_to_left.take();
+
+        let (from_ty, to_ty, code) = match (r_left_to_right, r_right_to_left) {
+            (Some(x), Some(y)) => {
+                self.rtype_generics = Some(generic_params);
+                self.rtype_left_to_right = Some(x);
+                self.rtype_right_to_left = Some(y);
+                return Err(self);
+            }
+            (None, None) => {
+                self.rtype_generics = Some(generic_params);
+                return Err(self);
+            }
+            (
+                Some(RTypeConvRule {
+                    left_ty: from_ty,
+                    right_ty: Some(to_ty),
+                    code: Some(conv_code),
+                }),
+                None,
+            ) => (from_ty, to_ty, conv_code),
+            (
+                None,
+                Some(RTypeConvRule {
+                    left_ty: to_ty,
+                    right_ty: Some(from_ty),
+                    code: Some(conv_code),
+                }),
+            ) => (from_ty, to_ty, conv_code),
+            (Some(x), None) => {
+                self.rtype_generics = Some(generic_params);
+                self.rtype_left_to_right = Some(x);
+                return Err(self);
+            }
+            (None, Some(y)) => {
+                self.rtype_generics = Some(generic_params);
+                self.rtype_right_to_left = Some(y);
+                return Err(self);
+            }
+        };
+
+        Ok(GenericTypeConv {
+            src_id: self.src_id,
+            from_ty,
+            to_ty,
+            code,
+            dependency: Rc::new(RefCell::new(None)),
+            generic_params,
+            to_foreigner_hint: None,
+            from_foreigner_hint: None,
+        })
     }
 }
 
@@ -554,11 +627,7 @@ fn concat_idents(
             let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
             let i_type: syn::Type = expander.swig_i_type(
                 ty.as_ref(),
-                opt_arg
-                    .as_ref()
-                    .map(syn::Ident::to_string)
-                    .as_ref()
-                    .map(String::as_str),
+                opt_arg.as_ref().map(syn::Ident::to_string).as_deref(),
             )?;
             ident.push_str(&DisplayToTokens(&i_type).to_string());
         }
@@ -573,9 +642,9 @@ fn concat_idents(
     Ok(())
 }
 
-fn expand_macroses<E>(code: &str, mut expander: E) -> Result<String>
+pub(in crate::typemap) fn expand_macroses<E>(code: &str, mut expander: E) -> Result<String>
 where
-    E: FnMut(&str, Vec<&str>, &mut String) -> Result<()>,
+    E: FnMut(/*id*/ &str, /*params*/ Vec<&str>, /*out*/ &mut String) -> Result<()>,
 {
     let mut prev_pos = 0;
     let mut ret = String::with_capacity(code.len());

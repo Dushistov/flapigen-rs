@@ -17,7 +17,7 @@ use crate::{
         ast::{DisplayToTokens, SpannedSmolStr},
         TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
-    FOREIGNER_CODE, FOREIGN_CODE, FOREIGN_TYPEMAP,
+    FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE, FOREIGN_TYPEMAP,
 };
 
 mod kw {
@@ -115,9 +115,14 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 if main_span.is_none() {
                     main_span = Some(mac.span());
                 }
-                let is_our_macro = [DEFINE_C_TYPE, FOREIGNER_CODE, FOREIGN_CODE, GENERIC_ALIAS]
-                    .iter()
-                    .any(|x| mac.path.is_ident(x));
+                let is_our_macro = [
+                    DEFINE_C_TYPE,
+                    FOREIGNER_CODE_DEPRECATED,
+                    FOREIGN_CODE,
+                    GENERIC_ALIAS,
+                ]
+                .iter()
+                .any(|x| mac.path.is_ident(x));
                 if !is_our_macro {
                     return Err(syn::Error::new(mac.span(), "unknown macro in this context"));
                 }
@@ -132,7 +137,15 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
 
                         Err(_) => generic_c_types = Some(syn::parse2::<GenericCItems>(mac.tokens)?),
                     }
-                } else if mac.path.is_ident(FOREIGN_CODE) || mac.path.is_ident(FOREIGNER_CODE) {
+                } else if mac.path.is_ident(FOREIGN_CODE)
+                    || mac.path.is_ident(FOREIGNER_CODE_DEPRECATED)
+                {
+                    if mac.path.is_ident(FOREIGNER_CODE_DEPRECATED) {
+                        println!(
+                            "cargo:warning={} is deprecated, use {} instead",
+                            FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE
+                        );
+                    }
                     let fc_elem = syn::parse2::<ForeignCode>(mac.tokens)?;
                     f_code.push(fc_elem);
                 } else if mac.path.is_ident(GENERIC_ALIAS) {

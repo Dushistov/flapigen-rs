@@ -3,4 +3,4 @@ authors = ["Evgeniy A. Dushistov"]
 language = "en"
 multilingual = false
 src = "src"
-title = "rust_swig"
+title = "flapigen"

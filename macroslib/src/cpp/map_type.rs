@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use petgraph::Direction;
 use syn::Type;
 
@@ -12,7 +12,7 @@ use crate::{
         ty::{ForeignType, RustType, TraitNamesSet},
         ExpandedFType, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
     },
-    types::ForeignerClassInfo,
+    types::ForeignClassInfo,
     TypeMap,
 };
 
@@ -268,7 +268,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
 
 pub(in crate::cpp) fn calc_this_type_for_method(
     _: &TypeMap,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
 ) -> Option<Type> {
     class
         .self_desc
@@ -292,8 +292,8 @@ fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet
         }
         true
     } else {
-        println!(
-            "warning=mapping types: type {} unknown",
+        warn!(
+            "is_ty_implement_traits: type {} unknown",
             DisplayToTokens(ty)
         );
         false

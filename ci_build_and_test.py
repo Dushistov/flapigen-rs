@@ -6,6 +6,7 @@ import sys
 import re
 import time
 import shutil
+from typing import List, Set, Optional
 
 JNI_TESTS = "jni_tests"
 PYTHON_TESTS = "python_tests"
@@ -32,7 +33,7 @@ def purge(dir, pattern):
             #            print("removing %s" % os.path.join(dir, f))
             os.remove(os.path.join(dir, f))
 
-def find_dir(dir_name, start_dir):
+def find_dir(dir_name: str, start_dir: str) -> str:
     origin_cwd = os.getcwd()
     os.chdir(start_dir)
     dir = os.getcwd()
@@ -49,7 +50,7 @@ def find_dir(dir_name, start_dir):
     raise Exception("Can not find %s" % dir_name)
 
 @show_timing
-def run_jar(target_dir, jar_dir, use_shell, extra_args):
+def run_jar(target_dir: str, jar_dir: str, use_shell: bool, extra_args):
     jvm_args = ["java"]
     jvm_args.extend(extra_args)
     jvm_args.extend(["-ea", "-Djava.library.path=" + target_dir,
@@ -57,7 +58,7 @@ def run_jar(target_dir, jar_dir, use_shell, extra_args):
     subprocess.check_call(jvm_args, cwd=jar_dir, shell=use_shell)
 
 @show_timing
-def build_jar(java_dir, java_native_dir, use_shell):
+def build_jar(java_dir: str, java_native_dir: str, use_shell: bool) -> str:
     generated_java = [os.path.join("rust", f) for f in os.listdir(java_native_dir)
                       if os.path.isfile(os.path.join(java_native_dir, f)) and f.endswith(".java")]
     javac_cmd_args = ["javac", "Main.java"]
@@ -71,15 +72,22 @@ def build_jar(java_dir, java_native_dir, use_shell):
     subprocess.check_call(["jar", "cfv", "Test.jar", "com"], cwd=jar_dir, shell=use_shell)
     return jar_dir
 
+def find_path_to_cargo_artifacts(path_to_crate: str, cfg: str) -> str:
+    target_dir = find_dir("target", path_to_crate)
+    if "CARGO_BUILD_TARGET" in os.environ:
+        return os.path.join(target_dir, os.environ["CARGO_BUILD_TARGET"], cfg)
+    else:
+        return os.path.join(target_dir, cfg)
+
 @show_timing
-def run_jni_tests(use_shell, test_cfg):
+def run_jni_tests(use_shell: bool, test_cfg: Set[str]):
     print("run_jni_tests begin: cwd %s" % os.getcwd())
     sys.stdout.flush()
     for cfg in test_cfg:
         if cfg == DEBUG:
-            subprocess.check_call(["cargo", "build", "-v", "--package", "rust_swig_test_jni"], shell=False)
+            subprocess.check_call(["cargo", "build", "-v", "--package", "flapigen_test_jni"], shell=False)
         elif cfg == RELEASE:
-            subprocess.check_call(["cargo", "build", "-v", "--release", "--package", "rust_swig_test_jni"], shell=False)
+            subprocess.check_call(["cargo", "build", "-v", "--release", "--package", "flapigen_test_jni"], shell=False)
         else:
             raise Exception("Fatal Error: Unknown cfg %s" % cfg)
 
@@ -93,22 +101,25 @@ def run_jni_tests(use_shell, test_cfg):
     jar_dir = build_jar(java_dir, java_native_dir, use_shell)
 
     for cfg in test_cfg:
-        target_dir = os.path.join(find_dir("target", "jni_tests"), cfg)
+        target_dir = find_path_to_cargo_artifacts("jni_tests", cfg)
         run_jar(target_dir, jar_dir, use_shell, ["-Xcheck:jni", "-verbose:jni"])
     if RELEASE in test_cfg:
-        target_dir = os.path.join(find_dir("target", "jni_tests"), RELEASE)
+        target_dir = find_path_to_cargo_artifacts("jni_tests", RELEASE)
         run_jar(target_dir, jar_dir, use_shell, ["-Xcomp"])
 
-def calc_cmake_generator():
-    if sys.platform == 'win32':
-        cmake_generator = "Visual Studio 15 2017"
-        if os.getenv('platform') == "x64":
-            cmake_generator = "Visual Studio 15 2017 Win64"
+def calc_cmake_generator() -> List[str]:
+    if sys.platform == 'win32' or sys.platform == 'win64':
+        platform = "x64"
+        if "platform" in os.environ:
+            platform = os.environ["platform"]
+        if platform == "x86":
+            platform = "Win32"
+        cmake_generator = ["-G", "Visual Studio 16 2019", "-A", platform]
     else:
-        cmake_generator = "Unix Makefiles"
+        cmake_generator = ["-G", "Unix Makefiles"]
     return cmake_generator
 
-def find_target_path_in_cmakecache(cmake_build_dir):
+def find_target_path_in_cmakecache(cmake_build_dir: str) -> Optional[str]:
     with open(os.path.join(cmake_build_dir, "CMakeCache.txt")) as search:
         for line in search:
             line = line.rstrip()
@@ -119,19 +130,24 @@ def find_target_path_in_cmakecache(cmake_build_dir):
 
 @show_timing
 def build_cpp_example():
-    cmake_generator = calc_cmake_generator()
     dir_path = os.path.join("cpp-example", "cpp-part")
     cmake_build_dir = os.path.join(dir_path, "build")
     if not os.path.exists(cmake_build_dir):
         os.makedirs(cmake_build_dir)
-    cmake_args = ["cmake", "-G", cmake_generator, "-DCMAKE_BUILD_TYPE:String=Release"]
+    cmake_args = ["cmake"]
+    cmake_args.extend(calc_cmake_generator())
+    cmake_args.append("-DCMAKE_BUILD_TYPE:String=Release")
     subprocess.check_call(cmake_args + [".."], cwd = str(cmake_build_dir))
     if sys.platform == 'win32' or sys.platform == 'win64':
         subprocess.check_call(["cmake", "--build", ".", "--config", RELEASE], cwd = str(cmake_build_dir))
         # hack to force dll to work
         target_path = find_target_path_in_cmakecache(cmake_build_dir)
         dll_name = "cpp_example_rust_part.dll"
-        shutil.copy(os.path.join(target_path, "release", dll_name),
+        if "CARGO_BUILD_TARGET" in os.environ:
+            src_path = os.path.join(target_path, os.environ["CARGO_BUILD_TARGET"], "release", dll_name)
+        else:
+            src_path = os.path.join(target_path, "release", dll_name)
+        shutil.copy(src_path,
                     os.path.join(cmake_build_dir, "Release", dll_name))
         subprocess.check_call(["app"], cwd = str(os.path.join(cmake_build_dir, "Release")), shell = True)
     else:
@@ -140,9 +156,10 @@ def build_cpp_example():
 
 
 @show_timing
-def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
-    cmake_generator = calc_cmake_generator()
-    cmake_args = ["cmake", "-G", cmake_generator] + addon_params
+def build_cpp_code_with_cmake(test_cfg: Set[str], cmake_build_dir: str, addon_params):
+    cmake_args = ["cmake"]
+    cmake_args.extend(calc_cmake_generator())
+    cmake_args.extend(addon_params)
     if sys.platform == 'win32' or sys.platform == 'win64':
         if os.path.exists(cmake_build_dir):
             #at there is problem with multiply build directories for one source tree
@@ -150,12 +167,12 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
             print("%s exists, we removing it" % cmake_build_dir)
             shutil.rmtree(cmake_build_dir)
         os.makedirs(cmake_build_dir)
-        subprocess.check_call(cmake_args + [".."], cwd = str(cmake_build_dir))
+        subprocess.check_call(cmake_args + [".."], cwd = cmake_build_dir)
         os.environ["CTEST_OUTPUT_ON_FAILURE"] = "1"
         for cfg in test_cfg:
             subprocess.check_call(["cmake", "--build", ".", "--config", cfg], cwd = str(cmake_build_dir))
             subprocess.check_call(["cmake", "--build", ".", "--target", "RUN_TESTS", "--config", cfg],
-                                  cwd = str(cmake_build_dir))
+                                  cwd = cmake_build_dir)
     else:
         for cfg in test_cfg:
             cur_cmake_args = cmake_args[:]
@@ -181,12 +198,12 @@ def build_cpp_code_with_cmake(test_cfg, cmake_build_dir, addon_params):
                 subprocess.check_call(["valgrind", "--error-exitcode=1", "--leak-check=full",
                                        "--show-leak-kinds=all", "--errors-for-leak-kinds=all",
                                        "--suppressions=../../valgrind.supp",
-                                       "./c++-rust-swig-test"], cwd = str(cur_cmake_build_dir))
+                                       "./c++-flapigen-test"], cwd = str(cur_cmake_build_dir))
 
 @show_timing
-def test_python(is_windows, test_cfg):
+def test_python(is_windows: bool, test_cfg: Set[str]):
     for cfg in test_cfg:
-        cmd = ["cargo", "build", "-v", "--package", "rust_swig_test_python"]
+        cmd = ["cargo", "build", "-v", "--package", "flapigen_test_python"]
         if cfg == RELEASE:
             cmd.append("--release")
         env = os.environ.copy()
@@ -194,34 +211,34 @@ def test_python(is_windows, test_cfg):
             # See https://github.com/dgrunwald/rust-cpython/issues/87
             env["RUSTFLAGS"] = "-C link-arg=-undefined -C link-arg=dynamic_lookup"
         subprocess.check_call(cmd, shell = False, env = env)
-        target_dir = os.path.join("target", cfg)
+        target_dir = find_path_to_cargo_artifacts("python_tests", cfg)
         if is_windows:
-            shutil.copyfile(os.path.join(target_dir, "rust_swig_test_python.dll"), "python_tests/python/rust_swig_test_python.pyd")
+            shutil.copyfile(os.path.join(target_dir, "flapigen_test_python.dll"), "python_tests/python/flapigen_test_python.pyd")
             if os.getenv('platform') == "x64":
                 subprocess.check_call(["py", "-3.7-64", "main.py"], cwd = "python_tests/python")
             else:
                 # If we choose 32, we must also choose specific, minor python version.
                 subprocess.check_call(["py", "-3.7-32", "main.py"], cwd = "python_tests/python")
         else:
-            lib_name = "librust_swig_test_python.dylib" if sys.platform == "darwin" else "librust_swig_test_python.so"
-            shutil.copyfile(os.path.join(target_dir, lib_name), "python_tests/python/rust_swig_test_python.so")
+            lib_name = "libflapigen_test_python.dylib" if sys.platform == "darwin" else "libflapigen_test_python.so"
+            shutil.copyfile(os.path.join(target_dir, lib_name), "python_tests/python/flapigen_test_python.so")
             subprocess.check_call(["python3", "main.py"], cwd = "python_tests/python")
 
 @show_timing
 def test_dotnet(test_cfg):
     for cfg in test_cfg:
-        cmd = ["cargo", "build", "-v", "--package", "rust_swig_test_dotnet_native"]
+        cmd = ["cargo", "build", "-v", "--package", "flapigen_test_dotnet_native"]
         if cfg == RELEASE:
             cmd.append("--release")
         env = os.environ.copy()
         subprocess.check_call(cmd, shell = False, env = env)
 
-        target_dir = os.path.join("target", cfg)
-        native_lib_name = "librust_swig_test_dotnet_native.so"
+        target_dir = find_path_to_cargo_artifacts("dotnet_tests", cfg)
+        native_lib_name = "libflapigen_test_dotnet_native.so"
         if sys.platform == "darwin":
-            native_lib_name = "librust_swig_test_dotnet_native.dylib"
+            native_lib_name = "libflapigen_test_dotnet_native.dylib"
         elif sys.platform.startswith("win"):
-            native_lib_name = "rust_swig_test_dotnet_native.dll"
+            native_lib_name = "flapigen_test_dotnet_native.dll"
 
         test_projekt_target_dir = "dotnet_tests/dotnet/bin/Debug/netcoreapp3.1"
 
@@ -229,8 +246,8 @@ def test_dotnet(test_cfg):
         shutil.copyfile(os.path.join(target_dir, native_lib_name), os.path.join(test_projekt_target_dir, native_lib_name))
         
         # Build managed wrapper dll.
-        subprocess.check_call(["dotnet", "build"], cwd = "dotnet_tests/rust_swig_test_dotnet")
-        shutil.copyfile("dotnet_tests/rust_swig_test_dotnet/bin/Debug/netstandard2.0/rust_swig_test_dotnet.dll", "dotnet_tests/dotnet/rust_swig_test_dotnet.dll")
+        subprocess.check_call(["dotnet", "build"], cwd = "dotnet_tests/flapigen_test_dotnet")
+        shutil.copyfile("dotnet_tests/flapigen_test_dotnet/bin/Debug/netstandard2.0/flapigen_test_dotnet.dll", "dotnet_tests/dotnet/flapigen_test_dotnet.dll")
 
         # Run test
         subprocess.check_call(["dotnet", "test", '--logger:"console;verbosity=detailed"'], cwd = "dotnet_tests/dotnet")
@@ -239,7 +256,7 @@ def test_dotnet(test_cfg):
 @show_timing
 def build_cargo_docs():
     print("build docs")
-    subprocess.check_call(["cargo", "doc", "-v", "--package", "rust_swig"])
+    subprocess.check_call(["cargo", "doc", "-v", "--package", "flapigen"])
 
 @show_timing
 def build_for_android(is_windows):
@@ -252,17 +269,17 @@ def build_for_android(is_windows):
         subprocess.check_call([gradle_cmd, "connectedAndroidTest"], cwd=os.path.join(os.getcwd(), d))
 
 @show_timing
-def run_unit_tests(test_cfg, test_set):
+def run_unit_tests(test_cfg: Set[str], test_set: Set[str]):
     for cfg in test_cfg:
-        cmd_base = ["cargo", "test", "-v", "-p", "rust_swig"]
+        cmd_base = ["cargo", "test", "-v", "-p", "flapigen"]
         if CPP_TESTS in test_set:
             cmd_base.append("-p")
-            cmd_base.append("rust_swig_test_cpp")
+            cmd_base.append("flapigen_test_cpp")
             cmd_base.append("-p")
             cmd_base.append("cpp-example-rust-part")
         if JNI_TESTS in test_set:
             cmd_base.append("-p")
-            cmd_base.append("rust_swig_test_jni")
+            cmd_base.append("flapigen_test_jni")
         if cfg == DEBUG:
             pass
         elif cfg == RELEASE:

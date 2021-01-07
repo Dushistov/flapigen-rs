@@ -1,4 +1,4 @@
-`rust_swig` is tool for connecting programs or libraries written in Rust with other languages.
+`flapigen` is tool for connecting programs or libraries written in Rust with other languages.
 Currently implemented support for `C++` and `Java`, but you can write support
 for any language of your choice.
 It is designed to run by cargo during via cargo's [build script](https://doc.rust-lang.org/cargo/reference/build-scripts.html) mechanism.

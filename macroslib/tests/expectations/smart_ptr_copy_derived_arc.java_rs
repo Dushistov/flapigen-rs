@@ -1,0 +1,44 @@
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_NavigationService_do_1subscribeOnUpdates(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    session: jlong,
+) -> () {
+    let session: *mut Mutex<Session> = unsafe {
+        jlong_to_pointer::<Mutex<Session>>(session)
+            .as_mut()
+            .unwrap()
+    };
+    let session: Arc<Mutex<Session>> = unsafe { Arc::from_raw(session) };
+    let tmp: Arc<Mutex<Session>> = session;
+    let session: Arc<Mutex<Session>> = tmp.clone();
+    ::std::mem::forget(tmp);
+    let this: &mut Mutex<NavigationService> = unsafe {
+        jlong_to_pointer::<Mutex<NavigationService>>(this)
+            .as_mut()
+            .unwrap()
+    };
+    let mut this: &Mutex<NavigationService> = this;
+    let mut this: MutexGuard<NavigationService> = this.lock().unwrap();
+    let mut this: &mut NavigationService = &mut this;
+    let mut ret: () = subscribeOnUpdates(this, session);
+    ret
+}"##;
+
+r##"#[no_mangle]
+pub extern "C" fn Java_org_example_Session_do_1setFoo(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    a0: jint,
+) -> () {
+    let mut a0: i32 = a0;
+    let this: &mut Mutex<Session> =
+        unsafe { jlong_to_pointer::<Mutex<Session>>(this).as_mut().unwrap() };
+    let mut this: &Mutex<Session> = this;
+    let mut this: MutexGuard<Session> = this.lock().unwrap();
+    let mut this: &mut Session = &mut this;
+    let mut ret: () = setFoo(this, a0);
+    ret
+}"##;

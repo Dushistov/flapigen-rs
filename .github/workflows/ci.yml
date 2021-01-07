@@ -1,0 +1,221 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: '00 01 */4 * *'
+
+env:
+  RUST_BACKTRACE: 1
+  RUSTUP_MAX_RETRIES: 10
+  CARGO_NET_RETRY: 10
+  SCCACHE_VER: "0.2.13"
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: i686-pc-windows-msvc (stable)
+            os: windows-latest
+            rust: stable
+            target: i686-pc-windows-msvc
+            platform: x86
+          - name: x86_64-pc-windows-msvc (stable)
+            os: windows-latest
+            rust: stable
+            target: x86_64-pc-windows-msvc
+            platform: x64
+          - name: x86_64-pc-windows-msvc (beta)
+            os: windows-latest
+            rust: beta
+            target: x86_64-pc-windows-msvc
+            platform: x64
+          - name: x86_64-unknown-linux-gnu (stable)
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+
+          - name: x86_64-unknown-linux-gnu (beta)
+            os: ubuntu-latest
+            rust: beta
+            target: x86_64-unknown-linux-gnu
+
+          - name: x86_64-apple-darwin (stable)
+            os: macos-latest
+            rust: stable
+            target: x86_64-apple-darwin
+
+          - name: x86_64-apple-darwin (beta)
+            os: macos-latest
+            rust: beta
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+
+      # We need to disable the existing toolchain to avoid updating rust-docs
+      # which takes a long time. The fastest way to do this is to rename the
+      # existing folder, as deleting it takes about as much time as not doing
+      # anything and just updating rust-docs.
+      - name: Rename existing rust toolchain (Windows)
+        if: matrix.os == 'windows-latest'
+        run: Rename-Item C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc.old
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          profile: minimal
+          target: ${{ matrix.target }}
+          override: true
+          components: rustfmt
+          default: true
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7.8'
+          architecture: ${{ matrix.platform || 'x64' }}
+      - uses: jwlawson/actions-setup-cmake@v1.4
+        if: matrix.os != 'windows-latest'
+        with:
+          cmake-version: '3.9.6'
+          github-api-token: ${{ secrets.GITHUB_TOKEN }}
+      # visual studio 16 2019 not supported until cmake 3.14
+      - uses: jwlawson/actions-setup-cmake@v1.4
+        if: matrix.os == 'windows-latest'
+        with:
+          cmake-version: '3.14.7'
+          github-api-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Choose boost version (not ubuntu)
+        if: matrix.os != 'ubuntu-latest'
+        run: |
+          echo 'BOOST_VER=1.66.0'  >> $GITHUB_ENV
+        shell: bash
+      # gcc (ubuntu) + boost has problem with may be uninitialized field in optional
+      # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
+      # use the lastest boost to work around this bug
+      - name: Choose boost version (ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          echo 'BOOST_VER=1.73.0'  >> $GITHUB_ENV
+        shell: bash
+      - name: Install boost
+        run: |
+          set -e
+          export BOOST_VER_NAME=`echo $BOOST_VER | sed 's/\./_/g'`
+          export TAR="boost_$BOOST_VER_NAME.tar.gz"
+          curl -L -o $TAR https://dl.bintray.com/boostorg/release/$BOOST_VER/source/$TAR
+          tar --exclude more --exclude tools --exclude doc --exclude html --exclude test -xzvf $TAR
+          echo "BOOST_ROOT=$PWD/boost_$BOOST_VER_NAME" >> $GITHUB_ENV
+        shell: bash
+      - name: Install valgrind for linux
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get install valgrind
+      - name: Install llvm tools on Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          set -e
+          curl https://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
+          7z x llvm-installer.exe -oc:\\llvm-binary
+          echo "LIBCLANG_PATH=C:\\llvm-binary\\bin" >> $GITHUB_ENV
+          echo "c:\\llvm-binary\\bin" >> $GITHUB_PATH
+        shell: bash
+      - name: install sccache (macos)
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -e
+          brew install sccache
+          echo "SCCACHE_BUCKET=flapigenamd64macos" >> $GITHUB_ENV
+        shell: bash
+      # there are no prebuild windows binary for 0.2.13
+      - name: install sccache (windows 64bit)
+        if: matrix.os == 'windows-latest'
+        run: |
+          set -e
+          export SCCACHE_VER="0.2.12"
+          curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
+          7z x sccache.tar.gz
+          7z x sccache-$SCCACHE_VER-x86_64-pc-windows-msvc.tar
+          echo "`pwd`/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc" >> $GITHUB_PATH
+          echo "SCCACHE_BUCKET=flapigenamd64win" >> $GITHUB_ENV
+        shell: bash
+      - name: install sccache (linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -e
+          curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl.tar.gz -o sccache.tar.gz
+          tar -xzvf sccache.tar.gz
+          echo "`pwd`/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl" >> $GITHUB_PATH
+          echo "SCCACHE_BUCKET=flapigenamd64ubuntu" >> $GITHUB_ENV
+        shell: bash
+      - name: Setup platform variable (for windows build)
+        run: |
+          echo "platform=$platform" >> $GITHUB_ENV
+        shell: bash
+        env:
+          platform: ${{ matrix.platform }}
+      - name: install JDK for 32bit
+        if: matrix.target == 'i686-pc-windows-msvc'
+        uses: actions/setup-java@v1
+        with:
+          java-version: '8'
+          java-package: jdk
+          architecture: x86
+      - name: Check versions
+        run: |
+          set -e
+          rustc --print cfg
+          clang --version
+          rustc --version
+          cargo --version
+          cmake --version
+          javac -version
+          python --version
+          sccache --version
+          echo "end of versions checking"
+        shell: bash
+      - name: Run tests
+        run: |
+          set -e
+          cd $GITHUB_WORKSPACE
+          cp workspace.Cargo.toml Cargo.toml
+          python -c "fin = open('Cargo.toml', 'r'); res = fin.read().replace('debug = true', '').replace('incremental = true', ''); fin.close(); fout = open('Cargo.toml', 'w'); fout.write(res + '\n'); fout.close();"
+          export RUSTC_WRAPPER=`which sccache`
+          echo "SCCACHE_BUCKET: $SCCACHE_BUCKET"
+          sccache --start-server
+          python ci_build_and_test.py --skip-android-tests
+          sccache -s
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S_AWS_SECRET_ACCESS_KEY }}
+          SCCACHE_ENDPOINT: ${{ secrets.S_SCCACHE_ENDPOINT }}
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+  doc_tests:
+    name: Docs (Detect cases where documentation links don't resolve and such)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          # Docs.rs uses nightly, which allows for easier syntax for linking to functions.
+          toolchain: nightly
+          override: true
+      - name: cargo rustdoc
+        run: |
+          set -e
+          rustc --version
+          cargo --version
+          cd $GITHUB_WORKSPACE/macroslib
+          # Need to use `cargo rustdoc` to actually get it to respect -D
+          # warnings... Note: this also requires nightly.
+          cargo rustdoc -- -D warnings
+          echo "doc testing done"

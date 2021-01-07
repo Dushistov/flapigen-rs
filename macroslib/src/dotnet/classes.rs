@@ -9,28 +9,28 @@ use crate::{
         ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
         TypeConvCode, FROM_VAR_TEMPLATE,
     },
-    types::{ForeignerClassInfo, SelfTypeDesc},
+    types::{ForeignClassInfo, SelfTypeDesc},
     TypeMap, SMART_PTR_COPY_TRAIT, source_registry::SourceId,
 };
 
-pub(crate) fn register_class(conv_map: &mut TypeMap, class: &ForeignerClassInfo) -> Result<()> {
+pub(crate) fn register_class(conv_map: &mut TypeMap, class: &ForeignClassInfo) -> Result<()> {
     class
         .validate_class()
         .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
     if let Some(self_desc) = class.self_desc.as_ref() {
         let self_ty = &self_desc.self_type;
         let mut traits = vec!["SwigForeignClass"];
-        if class.clone_derived {
+        if class.clone_derived() {
             traits.push("Clone");
         }
-        if class.copy_derived {
-            if !class.clone_derived {
+        if class.copy_derived() {
+            if !class.clone_derived() {
                 traits.push("Clone");
             }
             traits.push("Copy");
         }
 
-        if class.smart_ptr_copy_derived {
+        if class.smart_ptr_copy_derived() {
             traits.push(SMART_PTR_COPY_TRAIT);
         }
 
@@ -135,7 +135,7 @@ struct ClassTypesInfo {
 }
 
 impl ClassTypesInfo {
-    fn new(conv_map: &mut TypeMap, class: &ForeignerClassInfo, self_type: RustType, self_desc: &SelfTypeDesc, source_span: SourceIdSpan) -> Self {
+    fn new(conv_map: &mut TypeMap, class: &ForeignClassInfo, self_type: RustType, self_desc: &SelfTypeDesc, source_span: SourceIdSpan) -> Self {
         let src_id = source_span.0;
         let span = source_span.1;
         let self_ty = &self_type.ty;
@@ -161,7 +161,7 @@ impl ClassTypesInfo {
 
         Self {
             smart_pointer_type,
-            self_has_clone: class.clone_derived || class.copy_derived,
+            self_has_clone: class.clone_derived() || class.copy_derived(),
             self_type,
             self_type_ref,
             self_type_mut_ref,
@@ -184,7 +184,7 @@ impl ClassTypesInfo {
 
 fn register_typemap_for_self_type(
     conv_map: &mut TypeMap,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     self_type: RustType,
     self_desc: &SelfTypeDesc,
 ) -> Result<()> {
@@ -210,7 +210,7 @@ fn register_typemap_for_self_type(
 
 fn register_intermediate_pointer_types(
     conv_map: &mut TypeMap,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     types_info: &ClassTypesInfo,
 ) -> Result<()> {
     let c_ftype = ForeignTypeS {
@@ -350,7 +350,7 @@ fn register_rust_ty_conversation_rules(
 
 fn register_main_foreign_types(
     conv_map: &mut TypeMap,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     types_info: &ClassTypesInfo,
 ) -> Result<()> {
     debug!(

@@ -1,12 +1,12 @@
 [package]
-name = "rust_swig_test_python"
+name = "flapigen_test_python"
 version = "0.1.0"
 authors = ["Adam Rzepka <adam@simteract.com>"]
 build = "build.rs"
 edition = "2018"
 
 [lib]
-name = "rust_swig_test_python"
+name = "flapigen_test_python"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -15,4 +15,4 @@ cpython = { version = "0.3", features = ["extension-module"] }
 [build-dependencies]
 env_logger = "0.7"
 log = "0.4.6"
-rust_swig = { path = "../macroslib" }
+flapigen = { path = "../macroslib" }

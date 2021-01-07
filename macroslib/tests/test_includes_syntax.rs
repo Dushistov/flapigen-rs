@@ -2,22 +2,12 @@
 
 mod jni {
     use jni_sys::*;
-    use std::{
-        cell::{Ref, RefCell, RefMut},
-        rc::Rc,
-        sync::{Arc, Mutex, MutexGuard},
-    };
 
     include!(concat!(env!("OUT_DIR"), "/jni-include.rs"));
 }
 
 mod cpp {
-    use std::{
-        cell::{Ref, RefCell, RefMut},
-        path::Path,
-        rc::Rc,
-        sync::{Arc, Mutex, MutexGuard},
-    };
+    use std::path::Path;
 
     include!(concat!(env!("OUT_DIR"), "/cpp-include.rs"));
 }

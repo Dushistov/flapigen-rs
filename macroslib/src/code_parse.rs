@@ -1,3 +1,5 @@
+use bitflags::bitflags;
+use heck::MixedCase;
 use log::debug;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
@@ -19,18 +21,18 @@ use crate::{
     source_registry::SourceId,
     typemap::ast::{normalize_type, DisplayToTokens},
     types::{
-        FnArg, ForeignEnumInfo, ForeignEnumItem, ForeignInterface, ForeignInterfaceMethod,
-        ForeignerClassInfo, ForeignerMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
+        FnArg, ForeignClassInfo, ForeignEnumInfo, ForeignEnumItem, ForeignInterface,
+        ForeignInterfaceMethod, ForeignMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
         SelfTypeVariant,
     },
-    LanguageConfig, FOREIGNER_CODE, FOREIGN_CODE, SMART_PTR_COPY_TRAIT,
+    LanguageConfig, CAMEL_CASE_ALIASES, COPY_TRAIT, FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE,
 };
 
 pub(crate) fn parse_foreigner_class(
     src_id: SourceId,
     config: &LanguageConfig,
     tokens: TokenStream,
-) -> Result<ForeignerClassInfo> {
+) -> Result<ForeignClassInfo> {
     match config {
         LanguageConfig::CppConfig(_) => {
             let mut class: CppClass =
@@ -76,7 +78,7 @@ pub(crate) fn parse_foreign_interface(
     Ok(f_interface.0)
 }
 
-struct CppClass(ForeignerClassInfo);
+struct CppClass(ForeignClassInfo);
 
 impl Parse for CppClass {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -84,7 +86,7 @@ impl Parse for CppClass {
     }
 }
 
-struct JavaClass(ForeignerClassInfo);
+struct JavaClass(ForeignClassInfo);
 
 impl Parse for JavaClass {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -92,7 +94,7 @@ impl Parse for JavaClass {
     }
 }
 
-struct PythonClass(ForeignerClassInfo);
+struct PythonClass(ForeignClassInfo);
 
 impl Parse for PythonClass {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -103,7 +105,7 @@ impl Parse for PythonClass {
     }
 }
 
-struct DotNetClass(ForeignerClassInfo);
+struct DotNetClass(ForeignClassInfo);
 
 impl Parse for DotNetClass {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -137,11 +139,21 @@ mod kw {
 struct Attrs {
     doc_comments: Vec<String>,
     derive_list: Vec<String>,
+    unknown_attrs: Vec<String>,
 }
 
-fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attrs> {
+bitflags! {
+    struct ParseAttrsFlags: u8 {
+        const DOC = 1;
+        const DERIVE = 2;
+        const UNKNOWN = 4;
+    }
+}
+
+fn parse_attrs(input: ParseStream, flags: ParseAttrsFlags) -> syn::Result<Attrs> {
     let mut doc_comments = vec![];
     let mut derive_list = vec![];
+    let mut unknown_attrs = vec![];
 
     if input.fork().call(syn::Attribute::parse_outer).is_ok() {
         let attr: Vec<syn::Attribute> = input.call(syn::Attribute::parse_outer)?;
@@ -159,7 +171,7 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
                     ref path,
                     ref nested,
                     ..
-                }) if path.is_ident("derive") && parse_derive_attrs => {
+                }) if path.is_ident("derive") && flags.contains(ParseAttrsFlags::DERIVE) => {
                     for x in nested {
                         if let syn::NestedMeta::Meta(syn::Meta::Path(ref path)) = x {
                             derive_list.push(path.into_token_stream().to_string());
@@ -168,11 +180,14 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
                         }
                     }
                 }
+                _ if flags.contains(ParseAttrsFlags::UNKNOWN) => {
+                    unknown_attrs.push(DisplayToTokens(&meta).to_string());
+                }
                 _ => {
                     return Err(syn::Error::new(
                         a.span(),
                         format!(
-                            "Expect doc attribute or doc comment or derive here, got {}",
+                            "Expect doc attribute or doc comment or derive here, got '{}'",
                             DisplayToTokens(&meta)
                         ),
                     ));
@@ -183,19 +198,23 @@ fn parse_attrs(input: ParseStream, parse_derive_attrs: bool) -> syn::Result<Attr
     Ok(Attrs {
         doc_comments,
         derive_list,
+        unknown_attrs,
     })
 }
 
 fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
-    let Attrs { doc_comments, .. } = parse_attrs(input, false)?;
+    let Attrs { doc_comments, .. } = parse_attrs(input, ParseAttrsFlags::DOC)?;
     Ok(doc_comments)
 }
 
-fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<ForeignerClassInfo> {
+fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<ForeignClassInfo> {
     let Attrs {
         doc_comments: class_doc_comments,
-        derive_list,
-    } = parse_attrs(&input, true)?;
+        mut derive_list,
+        unknown_attrs,
+    } = parse_attrs(&input, ParseAttrsFlags::DERIVE)?;
+    assert!(unknown_attrs.is_empty());
+
     debug!(
         "parse_foreigner_class: class comment {:?}",
         class_doc_comments
@@ -214,24 +233,29 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
     let mut methods = Vec::with_capacity(10);
 
     static CONSTRUCTOR: &str = "constructor";
-    static METHOD: &str = "method";
-    static STATIC_METHOD: &str = "static_method";
+    static METHOD_DEPRECATED: &str = "method";
+    static STATIC_METHOD_DEPRECATED: &str = "static_method";
     static FN: &str = "fn";
 
     while !content.is_empty() {
-        let doc_comments = parse_doc_comments(&&content)?;
+        let Attrs {
+            doc_comments: method_doc_comments,
+            derive_list: method_derive_list,
+            unknown_attrs: method_unknown_attrs,
+        } = parse_attrs(&&content, ParseAttrsFlags::UNKNOWN | ParseAttrsFlags::DOC)?;
+        assert!(method_derive_list.is_empty());
         let mut access = if content.peek(kw::private) {
             content.parse::<kw::private>()?;
             MethodAccess::Private
         } else {
             MethodAccess::Public
         };
-        if let Language::Cpp = lang {
-            if content.peek(kw::protected) {
-                content.parse::<kw::protected>()?;
-                access = MethodAccess::Protected;
-            }
+
+        if content.peek(kw::protected) {
+            content.parse::<kw::protected>()?;
+            access = MethodAccess::Protected;
         }
+
         let (func_type_name, func_type_name_span): (String, Span) = if content.peek(Token![fn]) {
             let token = content.parse::<Token![fn]>()?;
             (FN.into(), token.span())
@@ -247,7 +271,13 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             continue;
         }
 
-        if func_type_name == FOREIGNER_CODE || func_type_name == FOREIGN_CODE {
+        if func_type_name == FOREIGNER_CODE_DEPRECATED || func_type_name == FOREIGN_CODE {
+            if func_type_name == FOREIGNER_CODE_DEPRECATED {
+                println!(
+                    "cargo:warning={} is deprecated, use {} instead",
+                    FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE
+                );
+            }
             let lit: syn::LitStr = content.parse()?;
             debug!("foreigner_code {:?}", lit);
             foreigner_code.push_str(&lit.value());
@@ -302,14 +332,15 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                 }
             };
             let dummy_func = dummy_func.sig;
-            methods.push(ForeignerMethod {
+            methods.push(ForeignMethod {
                 variant: MethodVariant::Constructor,
                 rust_id: dummy_path,
                 fn_decl: dummy_func.try_into()?,
                 name_alias: None,
                 inline_block: None,
                 access,
-                doc_comments,
+                doc_comments: method_doc_comments,
+                unknown_attrs: method_unknown_attrs,
             });
             has_dummy_constructor = true;
             continue;
@@ -329,8 +360,20 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
 
         let mut func_type = match func_type_name {
             _ if func_type_name == CONSTRUCTOR => MethodVariant::Constructor,
-            _ if func_type_name == STATIC_METHOD => MethodVariant::StaticMethod,
-            _ if func_type_name == METHOD => MethodVariant::Method(SelfTypeVariant::Default),
+            _ if func_type_name == STATIC_METHOD_DEPRECATED => {
+                println!(
+                    "cargo:warning={} deprecated, use \"fn\" instead",
+                    STATIC_METHOD_DEPRECATED
+                );
+                MethodVariant::StaticMethod
+            }
+            _ if func_type_name == METHOD_DEPRECATED => {
+                println!(
+                    "cargo:warning={} deprecated, use \"fn\" instead",
+                    METHOD_DEPRECATED
+                );
+                MethodVariant::Method(SelfTypeVariant::Default)
+            }
             _ if func_type_name == FN => {
                 if !args_in.is_empty() {
                     use syn::FnArg::*;
@@ -368,7 +411,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                         .error("constructor or static_method should not contain self argument"));
                 }
             }
-            MethodVariant::Method(ref mut self_type) => match args_in.iter().nth(0) {
+            MethodVariant::Method(ref mut self_type) => match args_in.iter().next() {
                 Some(syn::FnArg::Receiver(syn::Receiver {
                     reference: Some(_),
                     ref mutability,
@@ -471,7 +514,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             }
         }
         let span = func_name.span();
-        methods.push(ForeignerMethod {
+        methods.push(ForeignMethod {
             variant: func_type,
             rust_id: func_name,
             fn_decl: crate::types::FnDecl {
@@ -481,15 +524,14 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             },
             name_alias: func_name_alias,
             access,
-            doc_comments,
+            doc_comments: method_doc_comments,
             inline_block,
+            unknown_attrs: method_unknown_attrs,
         });
     }
 
-    let copy_derived = derive_list.iter().any(|x| x == "Copy");
-    let clone_derived = derive_list.iter().any(|x| x == "Clone");
-    let smart_ptr_copy_derived = derive_list.iter().any(|x| x == SMART_PTR_COPY_TRAIT);
-    let has_clone = |m: &ForeignerMethod| {
+    let copy_derived = derive_list.iter().any(|x| x == COPY_TRAIT);
+    let has_clone = |m: &ForeignMethod| {
         if let Some(seg) = m.rust_id.segments.last() {
             seg.ident == "clone"
         } else {
@@ -523,16 +565,26 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         }
     };
 
-    Ok(ForeignerClassInfo {
+    if let Some(pos) = derive_list.iter().position(|x| x == CAMEL_CASE_ALIASES) {
+        derive_list.remove(pos);
+        for m in &mut methods {
+            if m.name_alias.is_none() {
+                m.name_alias = Some(Ident::new(
+                    &m.short_name().to_mixed_case(),
+                    m.rust_id.span(),
+                ));
+            }
+        }
+    }
+
+    Ok(ForeignClassInfo {
         src_id: SourceId::none(),
         name: class_name,
         methods,
         self_desc,
-        foreigner_code,
+        foreign_code: foreigner_code,
         doc_comments: class_doc_comments,
-        copy_derived,
-        clone_derived,
-        smart_ptr_copy_derived,
+        derive_list,
     })
 }
 
@@ -638,7 +690,12 @@ struct ForeignEnumInfoParser(ForeignEnumInfo);
 
 impl Parse for ForeignEnumInfoParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let enum_doc_comments = parse_doc_comments(input)?;
+        let Attrs {
+            doc_comments: enum_doc_comments,
+            derive_list,
+            unknown_attrs,
+        } = parse_attrs(&input, ParseAttrsFlags::DERIVE)?;
+        assert!(unknown_attrs.is_empty());
         input.parse::<Token![enum]>()?;
         let enum_name = input.parse::<Ident>()?;
         debug!("ENUM NAME {:?}", enum_name);
@@ -664,6 +721,7 @@ impl Parse for ForeignEnumInfoParser {
             name: enum_name,
             items,
             doc_comments: enum_doc_comments,
+            derive_list,
         }))
     }
 }
@@ -728,7 +786,7 @@ impl Parse for ForeignInterfaceParser {
             let args_in: Punctuated<syn::FnArg, Token![,]> =
                 args_parser.parse_terminated(syn::FnArg::parse)?;
             debug!("cb func in args {:?}", args_in);
-            let have_self_args = match args_in.iter().nth(0) {
+            let have_self_args = match args_in.iter().next() {
                 Some(syn::FnArg::Receiver(_)) => true,
                 _ => false,
             };
@@ -799,7 +857,7 @@ mod tests {
                 })
         };
         let java_class = test_parse::<JavaClass>(mac.tokens);
-        assert!(!java_class.0.copy_derived);
+        assert!(!java_class.0.copy_derived());
 
         let mac: syn::Macro = parse_quote! {
             foreigner_class!(class Foo {
@@ -845,7 +903,7 @@ mod tests {
             })
         };
         let class: CppClass = test_parse(mac.tokens);
-        assert!(class.0.copy_derived);
+        assert!(class.0.copy_derived());
     }
 
     #[test]

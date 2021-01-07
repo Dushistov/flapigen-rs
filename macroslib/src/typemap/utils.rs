@@ -18,7 +18,7 @@ use crate::{
         ForeignTypeInfo, RustTypeIdx, TypeMap,
     },
     types::{
-        ForeignInterfaceMethod, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant,
+        ForeignClassInfo, ForeignInterfaceMethod, ForeignMethod, MethodVariant, SelfTypeVariant,
     },
 };
 
@@ -75,7 +75,7 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
 >(
     conv_map: &mut TypeMap,
     src_id: SourceId,
-    method: &ForeignerMethod,
+    method: &ForeignMethod,
     f_method: &dyn ForeignMethodSignature<FI = FTI>,
     arg_names: GI,
     func_ret_type: &str,
@@ -116,7 +116,7 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
 
 pub(crate) fn create_suitable_types_for_constructor_and_self(
     self_variant: SelfTypeVariant,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     constructor_real_type: &Type,
 ) -> (Type, Type) {
     let c_sp = constructor_real_type.span();
@@ -136,18 +136,18 @@ pub(crate) fn create_suitable_types_for_constructor_and_self(
             )
         }
         SelfTypeVariant::Rptr => {
-            (
-                parse_type_spanned_checked!(c_sp, & #constructor_real_type),
-                parse_type_spanned_checked!(s_sp, & #self_type),
-            )
+                (
+                    parse_type_spanned_checked!(c_sp, & #constructor_real_type),
+                    parse_type_spanned_checked!(s_sp, & #self_type),
+                )
         }
         SelfTypeVariant::RptrMut => {
-            (
-                parse_type_spanned_checked!(c_sp, &mut #constructor_real_type),
-                parse_type_spanned_checked!(s_sp, &mut #self_type),
-            )
+                (
+                    parse_type_spanned_checked!(c_sp, &mut #constructor_real_type),
+                    parse_type_spanned_checked!(s_sp, &mut #self_type),
+                )
+            }
         }
-    }
 }
 
 pub(crate) fn rust_to_foreign_convert_method_inputs<

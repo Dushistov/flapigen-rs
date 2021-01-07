@@ -51,10 +51,12 @@ impl Foo {
 
 //ANCHOR: doc_comments_usage
 foreign_class!(
+//ANCHOR: derive_usage
 /// Class comment description for Foo.
 #[derive(Clone)]
 class Foo {
     self_type Foo;
+//ANCHOR_END: derive_usage
     /// some text about the new function
     ///
     /// ```
@@ -88,6 +90,7 @@ class Foo {
     }
 });
 
+#[derive(PartialEq)]
 struct Boo {
     a: i32,
 }
@@ -115,13 +118,16 @@ fn create_boo() -> Rc<RefCell<Boo>> {
     Rc::new(RefCell::new(Boo::new()))
 }
 
-foreign_class!(class Boo {
+foreign_class!(
+#[derive(PartialEq)]
+    class Boo {
     self_type Boo;
     constructor create_boo() -> Rc<RefCell<Boo>>;
     fn Boo::test(&self, _: bool) -> f32;
     fn Boo::set_a(&mut self, _: i32); alias setA;
     fn Boo::get_a(&self) -> i32; alias getA;
 
+    private fn Boo::eq(&self, o: &Boo) -> bool; alias rustEq;
     fn test_u8(v: u8) -> u8 {
         v + 1
     }
@@ -287,7 +293,7 @@ pub fn Java_com_example_rust_TestPathAndResult_do_1testHandArrayReturn(
 }
 
 foreign_class!(class TestInner {
-    foreigner_code r#"
+    foreign_code r#"
     public static final class Inner {
         public final String name;
 
@@ -401,14 +407,17 @@ impl TestContainers {
     }
 }
 
-foreign_class!(class TestContainers {
-    self_type TestContainers;
-    constructor TestContainers::default() -> TestContainers;
-    fn TestContainers::get_struct_vec(&self) -> Vec<Foo>;
-    fn TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
-    fn TestContainers::get_string_vec(&self) -> Vec<String>;
-    fn TestContainers::set_struct_vec(&mut self, _: Vec<Foo>);
-});
+foreign_class!(
+    #[derive(camelCaseAliases)]
+    class TestContainers {
+        self_type TestContainers;
+        constructor TestContainers::default() -> TestContainers;
+        fn TestContainers::get_struct_vec(&self) -> Vec<Foo>;
+        fn TestContainers::get_empty_struct_vec(&self) -> Vec<Xyz>;
+        fn TestContainers::get_string_vec(&self) -> Vec<String>;
+        fn TestContainers::set_struct_vec(&mut self, _: Vec<Foo>);
+    }
+);
 
 fn f_hypot(a: f64, b: f64) -> f64 {
     a.hypot(b)
@@ -690,6 +699,7 @@ trait CheckAllTypesInCallbackArgs {
     fn check_str(&self, s: &str);
     fn check_path(&self, p: &Path);
     fn check_arr(&self, arr: Vec<Foo>);
+    fn check_byte_arr(&self, arr: Vec<i8>);
 }
 
 foreign_typemap!(
@@ -714,6 +724,7 @@ foreign_callback!(callback CheckAllTypesInCallbackArgs {
     checkStr = CheckAllTypesInCallbackArgs::check_str(&self, s: &str);
     checkPath = CheckAllTypesInCallbackArgs::check_path(&self, s: &Path);
     checkArray = CheckAllTypesInCallbackArgs::check_arr(&self, arr: Vec<Foo>);
+    checkByteArray = CheckAllTypesInCallbackArgs::check_byte_arr(&self, arr: Vec<i8>);
 });
 
 foreign_class!(
@@ -730,6 +741,8 @@ foreign_class!(
             cb.check_str("checkStr");
             cb.check_path(Path::new("/tmp/a.txt"));
             cb.check_arr(vec![Foo::new(1, "1"), Foo::new(2, "2")]);
+            cb.check_byte_arr(vec![]);
+            cb.check_byte_arr(vec![1, -1, 0, -128, 127]);
         }
     }
 );
@@ -761,73 +774,6 @@ foreign_class!(class FooWithLifetime {
     self_type FooWithLifetime<'a>;
     constructor foo_with_lifetime_new() -> Rc<RefCell<FooWithLifetime<'a>>>;
     fn FooWithLifetime::set_data(&self, v: i32);
-});
-
-struct TestOptional;
-
-impl TestOptional {
-    fn f1(x: Option<f64>) -> Option<f64> {
-        if let Some(x) = x {
-            Some(x + 1.)
-        } else {
-            None
-        }
-    }
-    fn f2(x: Option<i64>) -> Option<i64> {
-        if let Some(x) = x {
-            Some(x + 1)
-        } else {
-            None
-        }
-    }
-    fn f3(need_something: bool) -> Option<Foo> {
-        if need_something {
-            Some(Foo::new(5, "Some"))
-        } else {
-            None
-        }
-    }
-
-    fn f4(foo: Option<Foo>) -> Option<i64> {
-        foo.map(|x| i64::from(x.data))
-    }
-
-    fn f5(need_something: bool) -> Option<String> {
-        if need_something {
-            Some("true".to_string())
-        } else {
-            None
-        }
-    }
-}
-
-foreign_class!(class TestOptional {
-    fn TestOptional::f1(x: Option<f64>) -> Option<f64>;
-    fn TestOptional::f2(x: Option<i64>) -> Option<i64>;
-    fn TestOptional::f3(need_something: bool) -> Option<Foo>;
-    fn TestOptional::f4(foo: Option<Foo>) -> Option<i64>;
-    fn TestOptional::f5(need_something: bool) -> Option<String>;
-    fn f6(foo: Option<&Foo>) -> Option<String> {
-        foo.map(|x| x.name.clone())
-    }
-    fn test_opt_str(s: Option<&str>) -> Option<String> {
-        s.map(|x| x.into())
-    }
-    fn test_opt_i8(o: Option<i8>) -> Option<i8> {
-        o.map(|x| x + 1)
-    }
-    fn test_opt_i16(o: Option<i16>) -> Option<i16> {
-        o.map(|x| x + 1)
-    }
-    fn test_opt_i32(o: Option<i32>) -> Option<i32> {
-        o.map(|x| x + 1)
-    }
-    fn test_opt_f32(o: Option<f32>) -> Option<f32> {
-        o.map(|x| x + 1.7)
-    }
-    fn test_enum(o: Option<MyEnum>) -> Option<MyEnum> {
-        o.map(|x| Moo::next_enum(x))
-    }
 });
 
 struct CircularDepsA {
@@ -936,6 +882,7 @@ impl GamepadId {
     }
 }
 
+//ANCHOR: constructor_empty
 foreign_class!(
     class GamepadId {
         self_type GamepadId;
@@ -943,6 +890,7 @@ foreign_class!(
         fn GamepadId::value(&self) -> usize;
     }
 );
+//ANCHOR_END: constructor_empty
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Code(pub(crate) i32);
@@ -953,10 +901,10 @@ impl Code {
 }
 
 foreign_class!(
-    class Code {
-        self_type Code;
-        constructor Code::new(v: i32) -> Code;
-    });
+class Code {
+    self_type Code;
+    constructor Code::new(v: i32) -> Code;
+});
 
 struct Gamepad2 {
     id: GamepadId,
@@ -1048,7 +996,7 @@ trait OnThreadEvent {
     fn something_change_in_other_thread(&self, x: i32, s: &str);
 }
 
-foreign_interface!(interface ThreadSafeObserver {
+foreign_callback!(interface ThreadSafeObserver {
     self_type OnThreadEvent + Send;
     onStateChanged = OnThreadEvent::something_change_in_other_thread(&self, x: i32, s: &str);
 });
@@ -1095,3 +1043,41 @@ foreign_class!(class LongOperation {
         println!("End");
     }
 });
+
+trait TestReturnInCallback {
+    fn f_bool(&self, x: bool) -> bool;
+    fn f_i8(&self, x: i8) -> i8;
+    fn f_i16(&self, x: i16) -> i16;
+    fn f_i32(&self, x: i32) -> i32;
+    fn f_i64(&self, x: i64) -> i64;
+    fn f_f32(&self, x: f32) -> f32;
+    fn f_f64(&self, x: f64) -> f64;
+}
+
+foreign_callback!(
+    interface TestReturnInCallback {
+        self_type TestReturnInCallback;
+        f_bool = TestReturnInCallback::f_bool(&self, x: bool) -> bool;
+        f_i8 = TestReturnInCallback::f_i8(&self, x: i8) -> i8;
+        f_i16 = TestReturnInCallback::f_i16(&self, x: i16) -> i16;
+        f_i32 = TestReturnInCallback::f_i32(&self, x: i32) -> i32;
+        f_i64 = TestReturnInCallback::f_i64(&self, x: i64) -> i64;
+        f_f32 = TestReturnInCallback::f_f32(&self, x: f32) -> f32;
+        f_f64 = TestReturnInCallback::f_f64(&self, x: f64) -> f64;
+    }
+);
+
+foreign_class!(
+class ReturnInCallbackTester {
+    fn run(cb: Box<dyn TestReturnInCallback>) {
+        assert_eq!(true, cb.f_bool(false));
+        assert_eq!(false, cb.f_bool(true));
+        assert_eq!(1, cb.f_i8(0));
+        assert_eq!(1, cb.f_i16(0));
+        assert_eq!(1, cb.f_i32(0));
+        assert_eq!(1, cb.f_i64(0));
+        assert_eq!(1.0, cb.f_f32(0.0));
+        assert_eq!(1.0, cb.f_f64(0.0));
+    }
+}
+);

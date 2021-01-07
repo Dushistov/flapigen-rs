@@ -17,7 +17,7 @@ use crate::{
         ast::DisplayToTokens, CItem, CItems, TypeConvCodeSubstParam, FROM_VAR_TEMPLATE,
         TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
-    types::{FnArg, ForeignEnumInfo, ForeignerClassInfo},
+    types::{FnArg, ForeignClassInfo, ForeignEnumInfo},
     WRITE_TO_MEM_FAILED_MSG,
 };
 
@@ -60,7 +60,7 @@ where
     buf
 }
 
-pub(in crate::cpp) fn c_class_type(class: &ForeignerClassInfo) -> String {
+pub(in crate::cpp) fn c_class_type(class: &ForeignClassInfo) -> String {
     format!("{}Opaque", class.name)
 }
 
@@ -155,16 +155,16 @@ pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
     Ok((conv_deps, converted_args))
 }
 
-pub(in crate::cpp) fn cpp_header_name(class: &ForeignerClassInfo) -> String {
+pub(in crate::cpp) fn cpp_header_name(class: &ForeignClassInfo) -> String {
     format!("{}.hpp", class.name)
 }
 
-pub(in crate::cpp) fn c_header_name(class: &ForeignerClassInfo) -> String {
+pub(in crate::cpp) fn c_header_name(class: &ForeignClassInfo) -> String {
     format!("c_{}.h", class.name)
 }
 
 pub(in crate::cpp) fn cpp_header_name_for_enum(enum_info: &ForeignEnumInfo) -> String {
-    format!("c_{}.h", enum_info.name)
+    format!("{}.hpp", enum_info.name)
 }
 
 pub(in crate::cpp) fn cpp_list_required_includes(

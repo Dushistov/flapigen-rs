@@ -6,7 +6,7 @@ use crate::{
         utils::{ForeignMethodSignature, ForeignTypeInfoT, self},
         MapToForeignFlag, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE, TypeMapConvRuleInfoExpanderHelper, ExpandedFType, TypeMapConvRuleInfo, CItem,
     },
-    types::{FnArg, ForeignerClassInfo, ForeignerMethod, MethodVariant, SelfTypeVariant},
+    types::{FnArg, ForeignClassInfo, ForeignMethod, MethodVariant, SelfTypeVariant},
 };
 use itertools::Itertools;
 use log::{debug, info};
@@ -39,7 +39,7 @@ impl ForeignMethodSignature for DotNetForeignMethodSignature {
     }
 }
 
-fn calc_this_type_for_method(_: &TypeMap, class: &ForeignerClassInfo) -> Option<Type> {
+fn calc_this_type_for_method(_: &TypeMap, class: &ForeignClassInfo) -> Option<Type> {
     class
         .self_desc
         .as_ref()
@@ -202,8 +202,8 @@ impl NameGenerator {
 
 pub(crate) fn make_foreign_method_signature(
     generator: &mut DotNetGenerator,
-    class: &ForeignerClassInfo,
-    method: &ForeignerMethod,
+    class: &ForeignClassInfo,
+    method: &ForeignMethod,
 ) -> Result<DotNetForeignMethodSignature> {
     let dummy_ty = parse_type! { () };
     let dummy_rust_ty = generator.conv_map.find_or_alloc_rust_type_no_src_id(&dummy_ty);

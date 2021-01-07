@@ -1,5 +1,9 @@
 use super::*;
-use crate::error::panic_on_syn_error;
+use crate::{
+    error::panic_on_syn_error,
+    typemap::{ast::GenericTypeConv, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE},
+};
+use quote::quote;
 use syn::parse_quote;
 
 #[test]
@@ -79,7 +83,13 @@ fn test_foreign_typemap_cpp_bool() {
             left_ty: parse_type!(bool),
             right_ty: Some(parse_type!(::std::os::raw::c_char)),
             code: Some(TypeConvCode::new(
-                "let mut {to_var}: {to_var_type} = ( {from_var} != 0 ) ;",
+                quote! { let mut out = (inp != 0); }
+                    .to_string()
+                    .replace(
+                        "out",
+                        &format!("{}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE)
+                    )
+                    .replace("inp", FROM_VAR_TEMPLATE),
                 invalid_src_id_span(),
             )),
         },
@@ -87,7 +97,6 @@ fn test_foreign_typemap_cpp_bool() {
     );
 
     assert_eq!(
-        rule.ftype_left_to_right,
         vec![FTypeConvRule {
             unique_prefix: None,
             input_to_output: false,
@@ -102,10 +111,10 @@ fn test_foreign_typemap_cpp_bool() {
             )),
             cfg_option: None,
         }],
+        rule.ftype_left_to_right,
     );
 
     assert_eq!(
-        rule.ftype_right_to_left,
         vec![FTypeConvRule {
             unique_prefix: None,
             input_to_output: false,
@@ -120,6 +129,7 @@ fn test_foreign_typemap_cpp_bool() {
             )),
             cfg_option: None,
         }],
+        rule.ftype_right_to_left,
     );
 }
 
@@ -431,27 +441,38 @@ fn test_foreign_typemap_cpp_pair_syntax() {
             left_ty: parse_type! {(T1, T2)},
             right_ty: Some(parse_type! { CRustPair!() }),
             code: Some(TypeConvCode::new(
-                concat!(
-                    "swig_from_rust_to_i_type ! ( T1 , {from_var} . 0 , p0 ) ; ",
-                    "swig_from_rust_to_i_type ! ( T2 , {from_var} . 1 , p1 ) ; ",
-                    "let mut {to_var}: {to_var_type} = CRustPair ! ( ) { first : p0 , second : p1 , } ;"
-                ),
+                quote!(
+                    swig_from_rust_to_i_type!(T1, inp.0, p0);
+                    swig_from_rust_to_i_type!(T2 , inp.1, p1);
+                    let mut out = CRustPair!() { first: p0, second: p1, };
+                )
+                .to_string()
+                .replace(
+                    "out",
+                    &format!("{}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE)
+                )
+                .replace("inp", FROM_VAR_TEMPLATE),
                 invalid_src_id_span(),
             )),
         },
         *rule.rtype_left_to_right.as_ref().unwrap()
     );
-
     assert_eq!(
         RTypeConvRule {
             left_ty: parse_type! { (T1, T2) },
             right_ty: Some(parse_type! { CRustPair!() }),
             code: Some(TypeConvCode::new(
-                concat!(
-                    "swig_from_i_type_to_rust ! ( T1 , {from_var} . first , p0 ) ; ",
-                    "swig_from_i_type_to_rust ! ( T2 , {from_var} . second , p1 ) ; ",
-                    "let mut {to_var}: {to_var_type} = ( p0 , p1 ) ;"
-                ),
+                quote!(
+                    swig_from_i_type_to_rust!(T1, inp.first, p0);
+                    swig_from_i_type_to_rust!(T2, inp.second, p1);
+                    let mut out = (p0, p1);
+                )
+                .to_string()
+                .replace(
+                    "out",
+                    &format!("{}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE)
+                )
+                .replace("inp", FROM_VAR_TEMPLATE),
                 invalid_src_id_span(),
             )),
         },
@@ -536,12 +557,52 @@ fn test_expand_generic_type_with_ptr() {
             left_ty: parse_type!(Option<&u32>),
             right_ty: Some(parse_type!(*const u32)),
             code: Some(TypeConvCode::new(
-                "let mut {to_var}: {to_var_type} = if ! {from_var} . is_null ( ) { Some ( o ) } else { None } ;",
+                quote! { let mut out = if !inp.is_null() { Some (o) } else { None }; }
+                    .to_string()
+                    .replace(
+                        "out",
+                        &format!("{}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE)
+                    )
+                    .replace("inp", FROM_VAR_TEMPLATE),
                 invalid_src_id_span(),
             )),
         },
         new_rule.rtype_right_to_left.unwrap()
     );
+}
+
+#[test]
+fn test_java_c_like_enum_generic() {
+    let rule = macro_to_conv_rule(parse_quote! {
+        foreign_typemap!(
+            ($p:r_type) <T: SwigForeignCLikeEnum> T => jint {
+                $out = $p.as_jint();
+            };
+        )
+    });
+    println!("rule: {:?}", rule);
+    assert!(rule.is_generic());
+
+    let _: GenericTypeConv = macro_to_conv_rule(parse_quote! {
+        foreign_typemap!(
+            ($p:r_type) <T: SwigForeignCLikeEnum> T => jint {
+                $out = $p.as_jint();
+            };
+        )
+    })
+    .try_into()
+    .unwrap();
+    let ty = parse_type! { MyEnum };
+    let subst_map =
+        rule.is_ty_subst_of_my_generic_rtype(&ty, petgraph::Direction::Outgoing, |_ty, _traits| {
+            true
+        });
+    assert!(subst_map.is_some());
+    let subst_map =
+        rule.is_ty_subst_of_my_generic_rtype(&ty, petgraph::Direction::Outgoing, |_ty, _traits| {
+            false
+        });
+    assert!(!subst_map.is_some());
 }
 
 fn cpp_pair_rule() -> TypeMapConvRuleInfo {

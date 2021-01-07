@@ -1,6 +1,6 @@
 use std::{env, path::Path, time::Instant};
 
-use rust_swig::{PythonConfig, LanguageConfig};
+use flapigen::{LanguageConfig, PythonConfig};
 
 fn main() {
     env_logger::init();
@@ -8,7 +8,7 @@ fn main() {
     let now = Instant::now();
 
     let out_dir = env::var("OUT_DIR").unwrap();
-    rust_swig_expand(
+    flapigen_expand(
         Path::new("src/glue.rs.in"),
         &Path::new(&out_dir).join("glue.rs"),
     );
@@ -21,9 +21,10 @@ fn main() {
     println!("cargo:rerun-if-changed=src/lib.rs");
 }
 
-fn rust_swig_expand(from: &Path, out: &Path) {
-    println!("Run rust_swig_expand");
-    let python_cfg = PythonConfig::new("rust_swig_test_python".to_owned());
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::PythonConfig(python_cfg));
-    swig_gen.expand("rust_swig_test_python", from, out);
+fn flapigen_expand(from: &Path, out: &Path) {
+    println!("Run flapigen_expand");
+    let python_cfg = PythonConfig::new("flapigen_test_python".to_owned());
+    let swig_gen =
+        flapigen::Generator::new(LanguageConfig::PythonConfig(python_cfg)).rustfmt_bindings(true);
+    swig_gen.expand("flapigen_test_python", from, out);
 }

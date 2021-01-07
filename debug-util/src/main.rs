@@ -1,6 +1,6 @@
 use std::{env, fs, io::Read, path::Path};
 
-use rust_swig::{CppConfig, Generator, JavaConfig, LanguageConfig};
+use flapigen::{CppConfig, Generator, JavaConfig, LanguageConfig};
 
 fn main() {
     env_logger::init();

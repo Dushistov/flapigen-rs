@@ -39,7 +39,7 @@ fn main() {
         Path::new("src/cpp/cpp-include.rs"),
     ] {
         let src_cnt_tail = std::fs::read_to_string(include_path)
-            .expect(&format!("Error during read {}", include_path.display()));
+            .unwrap_or_else(|err| panic!("Error during read {}: {}", include_path.display(), err));
         let mut src_cnt = r#"
         macro_rules! foreign_typemap {
             ($($tree:tt)*) => {};
@@ -50,7 +50,7 @@ fn main() {
         src_cnt.push_str(&src_cnt_tail);
 
         let mut file = syn::parse_file(&src_cnt)
-            .expect(&format!("Error during parse {}", include_path.display()));
+            .unwrap_or_else(|err| panic!("Error during parse {}: {}", include_path.display(), err));
 
         let mut filter_swig_attrs = FilterSwigAttrs;
         filter_swig_attrs.visit_file_mut(&mut file);

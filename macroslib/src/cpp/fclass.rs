@@ -14,6 +14,7 @@ use crate::{
         CppForeignMethodSignature, CppForeignTypeInfo, MethodContext,
     },
     error::{panic_on_syn_error, DiagnosticError, Result},
+    extension::extend_foreign_class,
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
@@ -27,11 +28,11 @@ use crate::{
         ForeignTypeInfo, TypeConvCodeSubstParam, TypeMap, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
         TO_VAR_TYPE_TEMPLATE,
     },
-    types::{ForeignerClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
-    SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
+    types::{ForeignClassInfo, MethodAccess, MethodVariant, SelfTypeVariant},
+    KNOWN_CLASS_DERIVES, PLAIN_CLASS, SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
 };
 
-pub(in crate::cpp) fn generate(ctx: &mut CppContext, class: &ForeignerClassInfo) -> Result<()> {
+pub(in crate::cpp) fn generate(ctx: &mut CppContext, class: &ForeignClassInfo) -> Result<()> {
     debug!(
         "generate: begin for {}, this_type_for_method {:?}",
         class.name, class.self_desc
@@ -68,7 +69,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
 fn do_generate(
     ctx: &mut CppContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     req_includes: &[SmolStr],
     methods_sign: &[CppForeignMethodSignature],
 ) -> Result<()> {
@@ -97,7 +98,12 @@ fn do_generate(
     let class_doc_comments = cpp_code::doc_comments_to_c_comments(&class.doc_comments, true);
 
     generte_c_header_preamble(ctx, &class_doc_comments, &c_class_type, &mut c_include_f);
-    let class_name = format!("{}Wrapper", class.name);
+    let plain_class = need_plain_class(class);
+    let class_name = if !plain_class {
+        format!("{}Wrapper", class.name)
+    } else {
+        class.name.to_string()
+    };
 
     let static_only = class
         .methods
@@ -154,7 +160,7 @@ fn do_generate(
             ctx.rust_code.push(fclass_impl_code);
             (this_type_for_method, code_box_this)
         } else {
-            (dummy_rust_ty.clone(), TokenStream::new())
+            (dummy_rust_ty, TokenStream::new())
         };
     let no_this_info = || {
         DiagnosticError::new(
@@ -369,19 +375,34 @@ May be you need to use `private constructor = empty;` syntax?",
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                write!(
-                    &mut inline_impl,
-                    r#"
+                if !plain_class {
+                    write!(
+                        &mut inline_impl,
+                        r#"
     template<bool OWN_DATA>
     inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) noexcept
     {{
 {conv_args_code}"#,
-                    cpp_ret_type = cpp_ret_type,
-                    class_name = class_name,
-                    method_name = method_name,
-                    cpp_args_with_types = cpp_args_with_types,
-                    conv_args_code = conv_args_code,
-                )
+                        cpp_ret_type = cpp_ret_type,
+                        class_name = class_name,
+                        method_name = method_name,
+                        cpp_args_with_types = cpp_args_with_types,
+                        conv_args_code = conv_args_code,
+                    )
+                } else {
+                    write!(
+                        &mut inline_impl,
+                        r#"
+    inline {cpp_ret_type} {class_name}::{method_name}({cpp_args_with_types}) noexcept
+    {{
+{conv_args_code}"#,
+                        cpp_ret_type = cpp_ret_type,
+                        class_name = class_name,
+                        method_name = method_name,
+                        cpp_args_with_types = cpp_args_with_types,
+                        conv_args_code = conv_args_code,
+                    )
+                }
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
                 if f_method.output.as_ref().name != "void" {
@@ -442,18 +463,33 @@ May be you need to use `private constructor = empty;` syntax?",
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                write!(&mut inline_impl, r#"
+                if !plain_class {
+                    write!(&mut inline_impl, r#"
     template<bool OWN_DATA>
     inline {cpp_ret_type} {class_name}<OWN_DATA>::{method_name}({cpp_args_with_types}) {const_if_readonly}noexcept
     {{
 {conv_args_code}"#,
-                       cpp_args_with_types = cpp_args_with_types,
-                       method_name = method_name,
-                       class_name = class_name,
-                       cpp_ret_type = cpp_ret_type,
-                       const_if_readonly = const_if_readonly,
-                       conv_args_code = conv_args_code,
-          ).expect(WRITE_TO_MEM_FAILED_MSG);
+                           cpp_args_with_types = cpp_args_with_types,
+                           method_name = method_name,
+                           class_name = class_name,
+                           cpp_ret_type = cpp_ret_type,
+                           const_if_readonly = const_if_readonly,
+                           conv_args_code = conv_args_code,
+                    )
+                } else {
+                    write!(&mut inline_impl, r#"
+    inline {cpp_ret_type} {class_name}::{method_name}({cpp_args_with_types}) {const_if_readonly}noexcept
+    {{
+{conv_args_code}"#,
+                           cpp_args_with_types = cpp_args_with_types,
+                           method_name = method_name,
+                           class_name = class_name,
+                           cpp_ret_type = cpp_ret_type,
+                           const_if_readonly = const_if_readonly,
+                           conv_args_code = conv_args_code,
+                    )
+                }
+                .expect(WRITE_TO_MEM_FAILED_MSG);
 
                 if f_method.output.as_ref().name != "void" {
                     writeln!(
@@ -602,7 +638,7 @@ pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
 private:
    static void free_mem(SelfType &p) noexcept
    {{
-        if (OWN_DATA && p != nullptr) {{
+        if ({own_data_check}p != nullptr) {{
             {c_destructor_name}(p);
         }}
         p = nullptr;
@@ -614,6 +650,7 @@ public:
     }}"#,
             c_destructor_name = c_destructor_name,
             class_name = class_name,
+            own_data_check = if !plain_class { "OWN_DATA && " } else { "" },
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     } else if !static_only {
@@ -639,8 +676,8 @@ private:
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
-    if !class.foreigner_code.is_empty() {
-        writeln!(cpp_include_f, "\n{}", class.foreigner_code).expect(WRITE_TO_MEM_FAILED_MSG);
+    if !class.foreign_code.is_empty() {
+        writeln!(cpp_include_f, "\n{}", class.foreign_code).expect(WRITE_TO_MEM_FAILED_MSG);
     }
     if !static_only {
         cpp_include_f.write_all(
@@ -672,7 +709,7 @@ private:
         let mut cpp_impl_f = FileWriteCache::new(&cpp_impl_path, ctx.generated_foreign_files);
         writeln!(
             cpp_impl_f,
-            r#"// Automatically generated by rust_swig
+            r#"// Automatically generated by flapigen
 #pragma once
 
 #include "{class_name}.hpp"
@@ -693,9 +730,10 @@ namespace {namespace} {{"#,
             .map_err(map_write_err!(cpp_path))?;
     }
 
-    writeln!(
-        cpp_fwd_f,
-        r#"// Automatically generated by rust_swig
+    if !plain_class {
+        writeln!(
+            cpp_fwd_f,
+            r#"// Automatically generated by flapigen
 #pragma once
 
 namespace {namespace} {{
@@ -704,10 +742,23 @@ class {base_class_name};
 using {class_name} = {base_class_name}<true>;
 using {class_name}Ref = {base_class_name}<false>;
 }} // namespace {namespace}"#,
-        namespace = ctx.cfg.namespace_name,
-        class_name = class.name,
-        base_class_name = class_name
-    )
+            namespace = ctx.cfg.namespace_name,
+            class_name = class.name,
+            base_class_name = class_name
+        )
+    } else {
+        writeln!(
+            cpp_fwd_f,
+            r#"// Automatically generated by flapigen
+#pragma once
+
+namespace {namespace} {{
+class {class_name};
+}} // namespace {namespace}"#,
+            namespace = ctx.cfg.namespace_name,
+            class_name = class.name,
+        )
+    }
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
     cpp_fwd_f
@@ -716,6 +767,17 @@ using {class_name}Ref = {base_class_name}<false>;
     c_include_f
         .update_file_if_necessary()
         .map_err(map_write_err!(c_path))?;
+
+    let mut cnt = cpp_include_f.take_content();
+    extend_foreign_class(
+        class,
+        &mut cnt,
+        &KNOWN_CLASS_DERIVES,
+        ctx.class_ext_handlers,
+        ctx.method_ext_handlers,
+    )?;
+    cpp_include_f.replace_content(cnt);
+
     cpp_include_f
         .update_file_if_necessary()
         .map_err(map_write_err!(cpp_path))?;
@@ -777,7 +839,7 @@ pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
 fn generate_method(
     conv_map: &mut TypeMap,
     mc: &MethodContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     self_variant: SelfTypeVariant,
     this_type_for_method: &RustType,
 ) -> Result<Vec<TokenStream>> {
@@ -932,7 +994,7 @@ fn write_methods_impls(
 
 fn find_suitable_foreign_types_for_methods(
     ctx: &mut CppContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
 ) -> Result<Vec<CppForeignMethodSignature>> {
     let mut ret = Vec::<CppForeignMethodSignature>::with_capacity(class.methods.len());
     let dummy_ty = parse_type! { () };
@@ -997,7 +1059,7 @@ fn generte_c_header_preamble(
 ) {
     writeln!(
         c_include_f,
-        r##"// Automatically generated by rust_swig
+        r##"// Automatically generated by flapigen
 {doc_comments}
 #pragma once
 
@@ -1021,7 +1083,7 @@ extern "C" {{
 
 fn generate_cpp_header_preamble(
     ctx: &mut CppContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     tmp_class_name: &str,
     class_doc_comments: &str,
     req_includes: &[SmolStr],
@@ -1035,9 +1097,11 @@ fn generate_cpp_header_preamble(
     for inc in req_includes {
         writeln!(&mut includes, "#include {}", inc).unwrap();
     }
-    writeln!(
-        cpp_include_f,
-        r#"// Automatically generated by rust_swig
+    let plain_class = need_plain_class(class);
+    if !plain_class {
+        writeln!(
+            cpp_include_f,
+            r#"// Automatically generated by flapigen
 #pragma once
 
 //for assert
@@ -1066,18 +1130,45 @@ public:
     using value_type = {class_name}<true>;
     friend class {class_name}<true>;
     friend class {class_name}<false>;"#,
-        includes = includes,
-        class_name = tmp_class_name,
-        class_dot_name = class.name,
-        namespace = ctx.cfg.namespace_name,
-        doc_comments = class_doc_comments,
-    )
-    .expect(WRITE_TO_MEM_FAILED_MSG);
-
-    if !static_only {
+            includes = includes,
+            class_name = tmp_class_name,
+            class_dot_name = class.name,
+            namespace = ctx.cfg.namespace_name,
+            doc_comments = class_doc_comments,
+        )
+    } else {
         writeln!(
-        cpp_include_f,
-r#"
+            cpp_include_f,
+            r#"// Automatically generated by flapigen
+#pragma once
+
+//for assert
+#include <cassert>
+//for std::abort
+#include <cstdlib>
+//for std::move
+#include <utility>
+
+{includes}
+#include "c_{class_name}.h"
+
+namespace {namespace} {{
+
+{doc_comments}
+class {class_name} {{
+public:"#,
+            includes = includes,
+            class_name = class.name,
+            namespace = ctx.cfg.namespace_name,
+            doc_comments = class_doc_comments,
+        )
+    }
+    .expect(WRITE_TO_MEM_FAILED_MSG);
+    if !static_only {
+        if !plain_class {
+            writeln!(
+                cpp_include_f,
+                r#"
     using SelfType = typename std::conditional<OWN_DATA, {c_class_type} *, const {c_class_type} *>::type;
     using CForeignType = {c_class_type};
 
@@ -1103,9 +1194,39 @@ r#"
     explicit operator SelfType() const noexcept {{ return self_; }}
     {class_name}<false> as_rref() const noexcept {{ return {class_name}<false>{{ self_ }}; }}
     const {class_name}<true> &as_cref() const noexcept {{ return reinterpret_cast<const {class_name}<true> &>(*this); }}"#,
-        c_class_type = c_class_type,
-        class_name = tmp_class_name,
-    ).expect(WRITE_TO_MEM_FAILED_MSG);
+                c_class_type = c_class_type,
+                class_name = tmp_class_name,
+            )
+        } else {
+            writeln!(
+                cpp_include_f,
+                r#"    using SelfType = {c_class_type} *;
+    using CForeignType = {c_class_type};
+
+    {class_name}({class_name} &&o) noexcept: self_(o.self_)
+    {{
+        o.self_ = nullptr;
+    }}
+    {class_name} &operator=({class_name} &&o) noexcept
+    {{
+        assert(this != &o);
+        free_mem(this->self_);
+        self_ = o.self_;
+        o.self_ = nullptr;
+        return *this;
+    }}
+    explicit {class_name}(SelfType o) noexcept: self_(o) {{}}
+    {c_class_type} *release() noexcept
+    {{
+        {c_class_type} *ret = self_;
+        self_ = nullptr;
+        return ret;
+    }}
+    explicit operator SelfType() const noexcept {{ return self_; }}"#,
+                c_class_type = c_class_type,
+                class_name = class.name,
+            )
+        }.expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     if !static_only {
@@ -1123,13 +1244,20 @@ r#"
 
 fn genearte_copy_stuff(
     ctx: &mut CppContext,
-    class: &ForeignerClassInfo,
+    class: &ForeignClassInfo,
     c_class_type: &str,
     c_include_f: &mut FileWriteCache,
     cpp_include_f: &mut FileWriteCache,
     tmp_class_name: &str,
 ) -> Result<()> {
-    if class.copy_derived {
+    let plain_class = need_plain_class(class);
+    let tmp_class_name: Cow<str> = if !plain_class {
+        tmp_class_name.into()
+    } else {
+        class.name.to_string().into()
+    };
+
+    if class.copy_derived() {
         let pos = class
             .methods
             .iter()
@@ -1156,8 +1284,7 @@ fn genearte_copy_stuff(
             cpp_include_f,
             r#"
     {class_name}(const {class_name}& o) noexcept {{
-        static_assert(OWN_DATA, "copy possible only if class own data");
-
+         {own_data_static_assert}
          if (o.self_ != nullptr) {{
              self_ = {c_clone_func}(o.self_);
          }} else {{
@@ -1165,7 +1292,7 @@ fn genearte_copy_stuff(
          }}
     }}
     {class_name} &operator=(const {class_name}& o) noexcept {{
-        static_assert(OWN_DATA, "copy possible only if class own data");
+        {own_data_static_assert}
         if (this != &o) {{
             free_mem(this->self_);
             if (o.self_ != nullptr) {{
@@ -1176,11 +1303,16 @@ fn genearte_copy_stuff(
         }}
         return *this;
     }}"#,
+            own_data_static_assert = if !plain_class {
+                "static_assert(OWN_DATA, \"copy possible only if class own data\");"
+            } else {
+                ""
+            },
             c_clone_func = c_clone_func,
             class_name = tmp_class_name
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
-    } else if class.smart_ptr_copy_derived {
+    } else if class.smart_ptr_copy_derived() {
         let this_type = class
             .self_desc
             .as_ref()
@@ -1230,8 +1362,7 @@ fn genearte_copy_stuff(
             cpp_include_f,
             r#"
     {class_name}(const {class_name}& o) noexcept {{
-        static_assert(OWN_DATA, "copy possible only if class own data");
-
+         {own_data_static_assert}
          if (o.self_ != nullptr) {{
              self_ = {c_clone_func}(o.self_);
          }} else {{
@@ -1239,7 +1370,7 @@ fn genearte_copy_stuff(
          }}
     }}
     {class_name} &operator=(const {class_name}& o) noexcept {{
-        static_assert(OWN_DATA, "copy possible only if class own data");
+        {own_data_static_assert}
         if (this != &o) {{
             free_mem(this->self_);
             if (o.self_ != nullptr) {{
@@ -1250,6 +1381,11 @@ fn genearte_copy_stuff(
         }}
         return *this;
     }}"#,
+            own_data_static_assert = if !plain_class {
+                "static_assert(OWN_DATA, \"copy possible only if class own data\");"
+            } else {
+                ""
+            },
             c_clone_func = clone_fn_name,
             class_name = tmp_class_name
         )
@@ -1265,4 +1401,9 @@ fn genearte_copy_stuff(
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
     Ok(())
+}
+
+#[inline]
+pub(in crate::cpp) fn need_plain_class(class: &ForeignClassInfo) -> bool {
+    class.derive_list.iter().any(|x| *x == PLAIN_CLASS)
 }

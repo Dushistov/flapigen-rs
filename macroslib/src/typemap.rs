@@ -28,8 +28,9 @@ use crate::{
             RustTypeS,
         },
     },
-    types::ForeignerClassInfo,
+    types::ForeignClassInfo,
 };
+use ast::ConversationResult;
 
 pub(crate) use typemap_macro::{
     CItem, CItems, ExpandedFType, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
@@ -111,12 +112,13 @@ impl TypeConvCode {
             params.push(FROM_VAR_TEMPLATE.into());
         }
 
-        if params.len() < 2 {
-            panic!(
-                "Code: '{}' should contains {} and {}",
-                code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE
-            );
-        }
+        assert!(
+            params.len() >= 2,
+            "Code: '{}' should contains {} and {}",
+            code,
+            TO_VAR_TEMPLATE,
+            FROM_VAR_TEMPLATE
+        );
 
         TypeConvCode { code, span, params }
     }
@@ -233,7 +235,7 @@ pub(crate) struct TypeMap {
     rust_names_map: RustTypeNameToGraphIdx,
     utils_code: Vec<syn::Item>,
     generic_edges: Vec<GenericTypeConv>,
-    foreign_classes: Vec<ForeignerClassInfo>,
+    foreign_classes: Vec<ForeignClassInfo>,
     /// How to use trait to convert types, Trait Name -> Code
     traits_usage_code: FxHashMap<Ident, String>,
     /// code that parsed, but not yet integrated to TypeMap,
@@ -659,7 +661,7 @@ impl TypeMap {
 
     /// find correspoint to rust foreign type (extended)
     pub(crate) fn map_through_conversation_to_foreign<
-        F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
+        F: Fn(&TypeMap, &ForeignClassInfo) -> Option<Type>,
     >(
         &mut self,
         rust_ty: RustTypeIdx,
@@ -781,7 +783,7 @@ impl TypeMap {
                                 ));
                             } else {
                                 println!(
-                                    "warning=No foreign_class for type '{}'",
+                                    "cargo:warning=No foreign_class for type '{}'",
                                     rust_ty.normalized_name
                                 );
                             }
@@ -888,7 +890,7 @@ impl TypeMap {
                         Ok(addon_path) => addon_path.len(),
                         Err(_err) => {
                             println!(
-                                "warning=can not build path between foreign type
+                                "cargo:warning=can not build path between foreign type
  '{}' / '{}' and it's intermidiate '{}'",
                                 self[*ftype_idx].name, self[*other], self[*inter_ty]
                             );
@@ -924,12 +926,12 @@ impl TypeMap {
     }
 
     pub(crate) fn find_foreigner_class_with_such_this_type<
-        F: Fn(&TypeMap, &ForeignerClassInfo) -> Option<Type>,
+        F: Fn(&TypeMap, &ForeignClassInfo) -> Option<Type>,
     >(
         &self,
         this_ty: &Type,
         get_this_type: F,
-    ) -> Option<&ForeignerClassInfo> {
+    ) -> Option<&ForeignClassInfo> {
         let this_name = normalize_type(this_ty);
         for fc in &self.foreign_classes {
             if let Some(this_type_for_method) = get_this_type(self, fc) {
@@ -942,7 +944,7 @@ impl TypeMap {
         None
     }
 
-    pub(crate) fn register_foreigner_class(&mut self, class: &ForeignerClassInfo) {
+    pub(crate) fn register_foreigner_class(&mut self, class: &ForeignClassInfo) {
         self.foreign_classes.push(class.clone());
     }
 
@@ -1204,11 +1206,13 @@ fn try_build_path(
                     edge.to_ty,
                     from
                 );
-                if let Some((to_ty, to_ty_name)) =
-                    edge.is_conv_possible(&from, Some(&goal_to), |name| {
-                        ty_graph.find_type_by_name(name)
-                    })
-                {
+                if let Some(ConversationResult {
+                    to_ty,
+                    to_ty_name,
+                    subst_map,
+                }) = edge.is_conv_possible(&from, Some(&goal_to), |name| {
+                    ty_graph.find_type_by_name(name)
+                }) {
                     if from.normalized_name == to_ty_name {
                         continue;
                     }
@@ -1217,7 +1221,7 @@ fn try_build_path(
                         *from_ty,
                         to,
                         TypeConvEdge {
-                            code: edge.code.clone(),
+                            code: edge.code_for_conversation(subst_map),
                             dependency: edge.dependency.clone(),
                         },
                     );
@@ -1283,7 +1287,7 @@ mod tests {
             &["SwigForeignClass"],
             SourceId::none(),
         );
-        types_map.register_foreigner_class(&ForeignerClassInfo {
+        types_map.register_foreigner_class(&ForeignClassInfo {
             src_id: SourceId::none(),
             name: Ident::new("Foo", Span::call_site()),
             methods: vec![],
@@ -1291,11 +1295,9 @@ mod tests {
                 self_type: foo_rt.ty.clone(),
                 constructor_ret_type: foo_rt.ty.clone(),
             }),
-            foreigner_code: String::new(),
+            foreign_code: String::new(),
             doc_comments: vec![],
-            copy_derived: false,
-            clone_derived: false,
-            smart_ptr_copy_derived: false,
+            derive_list: vec![],
         });
 
         let rc_refcell_foo_ty = types_map
@@ -1305,9 +1307,9 @@ mod tests {
 
         assert_eq!(
             r#"    let mut a1: & Rc < RefCell < Foo > > = a0;
-    let mut a1: & RefCell < Foo > = a1.swig_deref();
-    let mut a1: RefMut < Foo > = <RefMut < Foo >>::swig_from(a1, env);
-    let mut a1: & mut Foo = a1.swig_deref_mut();
+    let mut a1: & RefCell < Foo > = & a1 ;
+    let mut a1: RefMut < Foo > = a1 . borrow_mut () ;
+    let mut a1: & mut Foo = & mut a1 ;
 "#,
             types_map
                 .convert_rust_types(
@@ -1327,8 +1329,8 @@ mod tests {
         let foo_ref_ty = types_map.find_or_alloc_rust_type(&parse_type! { &Foo }, SourceId::none());
 
         assert_eq!(
-            r#"    let mut a1: Ref < Foo > = <Ref < Foo >>::swig_from(a0, env);
-    let mut a1: & Foo = a1.swig_deref();
+            r#"    let mut a1: Ref < Foo > = a0 . borrow () ;
+    let mut a1: & Foo = & a1 ;
 "#,
             types_map
                 .convert_rust_types(

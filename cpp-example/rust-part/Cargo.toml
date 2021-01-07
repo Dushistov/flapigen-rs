@@ -15,6 +15,6 @@ crate-type = ["cdylib"]
 
 # ANCHOR: cargo_build_deps
 [build-dependencies]
-rust_swig = { path = "../../macroslib" }
+flapigen = { path = "../../macroslib" }
 # ANCHOR_END: cargo_build_deps
 

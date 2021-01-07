@@ -6,15 +6,33 @@ use syn::spanned::Spanned;
 
 #[test]
 fn test_normalize_ty() {
-    assert_eq!(normalize_type(&str_to_ty("&str")), "& str");
-    assert_eq!(normalize_type(&str_to_ty("&'a str")), "& str");
-    assert_eq!(normalize_type(&str_to_ty("string")), "string");
-    assert_eq!(normalize_type(&str_to_ty("()")), "( )");
-    assert_eq!("Foo < T >", normalize_type(&parse_type! { Foo<'a, T> }),);
-    assert_eq!("Foo", normalize_type(&parse_type! { Foo<'a> }));
     assert_eq!(
-        "Box < Trait >",
-        normalize_type(&parse_type! { Box<dyn Trait> })
+        parse_type! { & str },
+        str_to_ty(normalize_type(&parse_type! { &str })),
+    );
+    assert_eq!(
+        parse_type! { & str },
+        str_to_ty(normalize_type(&parse_type! { &'a str })),
+    );
+    assert_eq!(
+        parse_type! { string },
+        str_to_ty(normalize_type(&parse_type! { string })),
+    );
+    assert_eq!(
+        parse_type! { () },
+        str_to_ty(normalize_type(&parse_type! { () })),
+    );
+    assert_eq!(
+        parse_type! { Foo < T > },
+        str_to_ty(normalize_type(&parse_type! { Foo<'a, T> })),
+    );
+    assert_eq!(
+        parse_type! { Foo },
+        str_to_ty(normalize_type(&parse_type! { Foo<'a> }))
+    );
+    assert_eq!(
+        parse_type! { Box < Trait > },
+        str_to_ty(normalize_type(&parse_type! { Box<dyn Trait> })),
     );
 }
 
@@ -63,7 +81,11 @@ fn generic_type_conv_find() {
             "check_subst: conv {} -> {} with {}",
             from_ty_name, to_ty_name, ty_check_name
         );
-        let (ret_ty, ret_ty_name) = GenericTypeConv::new(
+        let ConversationResult {
+            to_ty: ret_ty,
+            to_ty_name: ret_ty_name,
+            ..
+        } = GenericTypeConv::new(
             str_to_ty(from_ty_name),
             str_to_ty(to_ty_name),
             generic.clone(),
@@ -203,7 +225,7 @@ fn generic_type_conv_find() {
             None
         })
         .unwrap()
-        .1,
+        .to_ty_name,
         "& Foo"
     );
 
@@ -218,7 +240,7 @@ fn generic_type_conv_find() {
         )
         .is_conv_possible(&str_to_rust_ty("jlong"), Some(&box_foo), |_| None)
         .unwrap()
-        .1,
+        .to_ty_name,
         "Box < Foo >"
     );
 
@@ -347,7 +369,7 @@ fn test_work_with_rc() {
         )
         .is_conv_possible(&str_to_rust_ty(normalize_type(&ty)), None, |_| None)
         .unwrap()
-        .1
+        .to_ty_name
     );
 }
 

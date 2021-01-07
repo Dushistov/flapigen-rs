@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rust_swig::{JavaConfig, JavaReachabilityFence, LanguageConfig};
+use flapigen::{JavaConfig, JavaReachabilityFence, LanguageConfig};
 
 fn main() {
     env_logger::init();
@@ -26,14 +26,44 @@ fn main() {
     });
 
     let in_src = Path::new("src").join("java_glue.rs.in");
+    let test_opt_rsc = Path::new("src").join("test_optional.rs.in");
     let out_src = Path::new(&out_dir).join("java_glue.rs");
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(java_cfg))
+    let swig_gen = flapigen::Generator::new(LanguageConfig::JavaConfig(java_cfg))
         .rustfmt_bindings(true)
         .remove_not_generated_files_from_output_directory(true)
-        .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"));
-    swig_gen.expand("rust_swig_test_jni", &in_src, &out_src);
+        .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"))
+        .register_class_attribute_callback("PartialEq", |code, class_name| {
+            let needle = format!("class {} {{", class_name);
+            let class_pos = code
+                .windows(needle.len())
+                .position(|window| window == needle.as_bytes())
+                .expect("Can not find begin of class");
+            let insert_pos = class_pos + needle.len();
+            code.splice(
+                insert_pos..insert_pos,
+                format!(
+                    r#"
+    public boolean equals(Object obj) {{
+        boolean equal = false;
+        if (obj instanceof {class})
+          equal = (({class})obj).rustEq(this);
+        return equal;
+    }}
+    public int hashCode() {{
+        return (int)mNativeObj;
+    }}
+"#,
+                    class = class_name
+                )
+                .as_bytes()
+                .iter()
+                .copied(),
+            );
+        });
+    swig_gen.expand_many("flapigen_test_jni", &[&in_src, &test_opt_rsc], &out_src);
 
     println!("cargo:rerun-if-changed={}", in_src.display());
+    println!("cargo:rerun-if-changed={}", test_opt_rsc.display());
     println!("cargo:rerun-if-changed=src/chrono-include.rs");
 }
 

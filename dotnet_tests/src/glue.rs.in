@@ -68,7 +68,7 @@ impl std::ops::Drop for TestClass {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     #[derive(Clone)]
     /// Test class containing standard methods.
     class TestClass {
@@ -97,7 +97,7 @@ impl<T> Template<T> {
     }
 }
 
-foreigner_class!{
+foreign_class!{
     class TemplateI32 {
         self_type Template<i32>;
         private constructor = empty;
@@ -208,7 +208,7 @@ impl ::std::fmt::Display for TestError {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     /// Test class containing static methods only.
     class TestStaticClass {
         /// Documentation for `TestStaticClass::hello`()
@@ -258,7 +258,7 @@ impl TestArc {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class TestArc {
         self_type TestArc;
         constructor TestArc::new() -> Arc<TestArc>;
@@ -290,7 +290,7 @@ impl TestArcMutex {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class TestArcMutex {
         self_type TestArcMutex;
         constructor TestArcMutex::new() -> Arc<Mutex<TestArcMutex>>;
@@ -314,7 +314,7 @@ impl TestBox {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class TestBox {
         self_type TestBox;
         constructor TestBox::new() -> Box<TestBox>;

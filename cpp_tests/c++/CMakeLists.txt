@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.9)
-project(rust_swig_cpp_tests)
+project(flapigen_cpp_tests)
 
 include(CheckIncludeFileCXX)
 include(ExternalProject)
@@ -126,29 +126,33 @@ if(NOT "${touch_retcode}" STREQUAL "0")
   message(FATAL_ERROR "touch of src/cpp_glue.rs.in failed")
 endif()
 
-configure_file(cmake/rust_swig_gen.cmake.in ${CMAKE_BINARY_DIR}/rust_swig_gen.cmake @ONLY)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/rust_swig_gen)
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/rust_swig_regen_headers.cmake)
-  file(WRITE ${CMAKE_BINARY_DIR}/rust_swig_regen_headers.cmake "")
+configure_file(cmake/flapigen_gen.cmake.in ${CMAKE_BINARY_DIR}/flapigen_gen.cmake @ONLY)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/flapigen_gen)
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/flapigen_regen_headers.cmake)
+  file(WRITE ${CMAKE_BINARY_DIR}/flapigen_regen_headers.cmake "")
 endif()
 execute_process(COMMAND ${CMAKE_COMMAND}
     -DSRCDIR=${CMAKE_SOURCE_DIR}
     -DBINDIR=${CMAKE_BINARY_DIR}
-    -P ${CMAKE_BINARY_DIR}/rust_swig_gen.cmake
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/rust_swig_gen
+    -P ${CMAKE_BINARY_DIR}/flapigen_gen.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/flapigen_gen
     RESULT_VARIABLE retcode)
 if(NOT "${retcode}" STREQUAL "0")
-  message(FATAL_ERROR "run of rust_swig_gen.cmake failed")
+  message(FATAL_ERROR "run of flapigen_gen.cmake failed")
 endif()
 
-add_custom_target(rust_swig_gen_headers ${CMAKE_COMMAND}
+add_custom_target(flapigen_gen_headers ${CMAKE_COMMAND}
     -DSRCDIR=${CMAKE_SOURCE_DIR}
     -DBINDIR=${CMAKE_BINARY_DIR}
-    -P ${CMAKE_BINARY_DIR}/rust_swig_gen.cmake
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/rust_swig_gen)
-include(${CMAKE_BINARY_DIR}/rust_swig_regen_headers.cmake)
+    -P ${CMAKE_BINARY_DIR}/flapigen_gen.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/flapigen_gen)
+include(${CMAKE_BINARY_DIR}/flapigen_regen_headers.cmake)
 
 find_target_directory(TARGET_PATH)
+set(CARGO_BUILD_DIR "${TARGET_PATH}")
+if (DEFINED ENV{CARGO_BUILD_TARGET})
+  set(CARGO_BUILD_DIR "${CARGO_BUILD_DIR}/$ENV{CARGO_BUILD_TARGET}")
+endif ()
 required_libs_by_rust_library(RUST_LINK_LIBRARIES)
 
 
@@ -160,7 +164,7 @@ endif()
 
 
 ExternalProject_Add(
-    rust_swig_test
+    flapigen_test
     DOWNLOAD_COMMAND ""
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ${CARGO_BUILD}
@@ -169,12 +173,12 @@ ExternalProject_Add(
     LOG_BUILD ON)
 
 ExternalProject_Add_Step(
-  rust_swig_test rebuild
+  flapigen_test rebuild
   COMMAND ${CARGO_BUILD}
   ALWAYS 1
   WORKING_DIRECTORY "${RUST_BUILD_CWD}"
 )
-add_executable(c++-rust-swig-test
+add_executable(c++-flapigen-test
   #not use add_subdirectory(gtest/googletest)
   #because of strange compiler settings in google's cmake files
   gtest/googletest/src/gtest-all.cc
@@ -185,24 +189,24 @@ add_executable(c++-rust-swig-test
   main.cpp
   )
 
-add_dependencies(c++-rust-swig-test rust_swig_test rust_swig_gen_headers)
+add_dependencies(c++-flapigen-test flapigen_test flapigen_gen_headers)
 if (WIN32)
-  set(LIBRUST_NAME "rust_swig_test.lib")
+  set(LIBRUST_NAME "flapigen_test.lib")
 else ()
-  set(LIBRUST_NAME "librust_swig_test.a")
+  set(LIBRUST_NAME "libflapigen_test.a")
 endif ()
 
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release" OR "${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
-  target_link_libraries(c++-rust-swig-test "${TARGET_PATH}/release/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
+  target_link_libraries(c++-flapigen-test "${CARGO_BUILD_DIR}/release/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
 else()
-  target_link_libraries(c++-rust-swig-test "${TARGET_PATH}/debug/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
+  target_link_libraries(c++-flapigen-test "${CARGO_BUILD_DIR}/debug/${LIBRUST_NAME}" ${RUST_LINK_LIBRARIES})
 endif()
 
 if (CXX_17_STD)
-  set_target_properties(c++-rust-swig-test PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+  set_target_properties(c++-flapigen-test PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 else ()
-  set_target_properties(c++-rust-swig-test PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED ON)
+  set_target_properties(c++-flapigen-test PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED ON)
 endif ()
 
 enable_testing()
-add_test(NAME c++-rust-swig-test COMMAND c++-rust-swig-test)
+add_test(NAME c++-flapigen-test COMMAND c++-flapigen-test)

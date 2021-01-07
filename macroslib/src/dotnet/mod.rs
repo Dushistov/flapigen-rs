@@ -23,7 +23,7 @@ use typemap::{
     TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
 };
 use types::{
-    ForeignEnumInfo, ForeignerClassInfo, ForeignerMethod, MethodVariant,
+    ForeignEnumInfo, ForeignClassInfo, ForeignMethod, MethodVariant,
 };
 
 pub struct DotNetGenerator<'a> {
@@ -285,7 +285,7 @@ namespace {managed_lib_name}
         Ok(())
     }
 
-    fn generate_class_methods(&mut self, class: &ForeignerClassInfo) -> Result<()> {
+    fn generate_class_methods(&mut self, class: &ForeignClassInfo) -> Result<()> {
         self.generate_rust_destructor(class)?;
         self.generate_dotnet_class_code(class)?;
 
@@ -298,7 +298,7 @@ namespace {managed_lib_name}
         Ok(())
     }
 
-    fn generate_rust_destructor(&mut self, class: &ForeignerClassInfo) -> Result<()> {
+    fn generate_rust_destructor(&mut self, class: &ForeignClassInfo) -> Result<()> {
         // Do not generate destructor for static classes.
         if let Some(self_desc) = class.self_desc.as_ref() {
             let class_name = &class.name;
@@ -323,7 +323,7 @@ namespace {managed_lib_name}
         Ok(())
     }
 
-    fn generate_dotnet_class_code(&mut self, class: &ForeignerClassInfo) -> Result<()> {
+    fn generate_dotnet_class_code(&mut self, class: &ForeignClassInfo) -> Result<()> {
         let class_name = class.name.to_string();
         let docstring = class.doc_comments.iter().map(|doc_line| {
             "/// ".to_owned() + doc_line
@@ -383,8 +383,8 @@ namespace {managed_lib_name}
 
     fn generate_method(
         &mut self,
-        class: &ForeignerClassInfo,
-        method: &ForeignerMethod,
+        class: &ForeignClassInfo,
+        method: &ForeignMethod,
     ) -> Result<()> {
         if method.is_dummy_constructor() {
             return Ok(());
@@ -401,7 +401,7 @@ namespace {managed_lib_name}
 
     fn write_rust_glue_code(
         &mut self,
-        class: &ForeignerClassInfo,
+        class: &ForeignClassInfo,
         foreign_method_signature: &DotNetForeignMethodSignature,
     ) -> Result<()> {
         let method_name = &foreign_method_signature.name;
@@ -468,7 +468,7 @@ namespace {managed_lib_name}
 
     fn write_pinvoke_function_signature(
         &mut self,
-        class: &ForeignerClassInfo,
+        class: &ForeignClassInfo,
         foreign_method_signature: &DotNetForeignMethodSignature,
     ) -> Result<()> {
         let method_name = &foreign_method_signature.name;
@@ -505,7 +505,7 @@ namespace {managed_lib_name}
 
     fn write_dotnet_wrapper_function(
         &mut self,
-        class: &ForeignerClassInfo,
+        class: &ForeignClassInfo,
         foreign_method_signature: &DotNetForeignMethodSignature,
     ) -> Result<()> {
         let mut name_generator = NameGenerator::new();
@@ -629,6 +629,7 @@ impl LanguageGenerator for DotNetConfig {
         _code: &[SourceCode],
         items: Vec<ItemToExpand>,
         _remove_not_generated_files: bool,
+        _ext_handlers: ExtHandlers,
     ) -> Result<Vec<TokenStream>> {
         DotNetGenerator::new(&self, conv_map)?.generate(items)
     }

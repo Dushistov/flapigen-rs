@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Xunit;
-using rust_swig_test_dotnet;
+using flapigen_test_dotnet;
 
 namespace dotnet
 {
@@ -45,7 +45,7 @@ namespace dotnet
             // This shouldn't throw.
             TestStaticClass.TryCreateObjectOk();
             // But this one should.
-            Assert.Throws<rust_swig_test_dotnet.Error>(() => TestStaticClass.TryCreateObjectErr());
+            Assert.Throws<flapigen_test_dotnet.Error>(() => TestStaticClass.TryCreateObjectErr());
             
             var arc_mutex = new TestArcMutex();
             arc_mutex.Inc();

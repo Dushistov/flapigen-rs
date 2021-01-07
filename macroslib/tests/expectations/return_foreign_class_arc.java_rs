@@ -9,3 +9,20 @@ pub extern "C" fn Java_org_example_Moo_do_1getBoo(
     let ret: jlong = <Arc<Mutex<Boo>>>::box_object(ret);
     ret
 }"##;
+
+r##"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[no_mangle]
+pub extern "C" fn Java_org_example_Boo_do_1test(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    a0: jboolean,
+) -> jfloat {
+    let mut a0: bool = a0 != 0;
+    let this: &Mutex<Boo> = unsafe { jlong_to_pointer::<Mutex<Boo>>(this).as_mut().unwrap() };
+    let mut this: MutexGuard<Boo> = this.lock().unwrap();
+    let mut this: &Boo = &this;
+    let mut ret: f32 = Boo::test(this, a0);
+    let mut ret: jfloat = ret;
+    ret
+}"##;

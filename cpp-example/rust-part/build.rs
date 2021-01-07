@@ -1,4 +1,4 @@
-use rust_swig::{CppConfig, CppOptional, CppStrView, CppVariant, LanguageConfig};
+use flapigen::{CppConfig, CppOptional, CppStrView, CppVariant, LanguageConfig};
 use std::{env, path::Path};
 
 fn main() {
@@ -14,7 +14,7 @@ fn main() {
     .cpp_variant(CppVariant::Boost)
     .cpp_str_view(CppStrView::Boost);
     //ANCHOR_END: cpp_config
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
+    let swig_gen = flapigen::Generator::new(LanguageConfig::CppConfig(cpp_cfg));
     swig_gen.expand(
         "c++-api-for-rust",
         // ANCHOR: rust_input

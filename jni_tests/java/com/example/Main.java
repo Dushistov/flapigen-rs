@@ -42,11 +42,13 @@ import com.example.rust.ThreadSafeObserver;
 import com.example.rust.TestMultiThreadCallback;
 import com.example.rust.DropCounter;
 import com.example.rust.LongOperation;
+import com.example.rust.TestReturnInCallback;
+import com.example.rust.ReturnInCallbackTester;
 
 class Main {
     public static void main(String[] args) {
         try {
-            System.loadLibrary("rust_swig_test_jni");
+            System.loadLibrary("flapigen_test_jni");
         } catch (UnsatisfiedLinkError e) {
             System.out.println("Can not load library");
             throw e;
@@ -131,6 +133,8 @@ class Main {
 	    testAllTypesInCallbackArgs();
 	    testMultiThreadCallback();
 	    testPrematureGc();
+            testPartialEq();
+            testReturnInCallback();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -482,14 +486,14 @@ class Main {
 
     private static void testContainers() {
 	TestContainers testContainers = new TestContainers();
-	Foo[] sv = testContainers.get_struct_vec();
+	Foo[] sv = testContainers.getStructVec();
 	assert sv.length == 2;
 	assert sv[0].getName().equals("1");
 	assert sv[0].calcF(0, 0) == 1;
 	assert sv[1].getName().equals("2");
 	assert sv[1].calcF(0, 0) == 2;
-	assert testContainers.get_empty_struct_vec().length == 0;
-	String[] strv = testContainers.get_string_vec();
+	assert testContainers.getEmptyStructVec().length == 0;
+	String[] strv = testContainers.getStringVec();
 	assert strv.length == 7;
 	assert strv[0].equals("The");
 	assert strv[1].equals("was");
@@ -500,8 +504,8 @@ class Main {
 	assert strv[6].equals("nose");
 
 	Foo[] owned = {new Foo(17, "")};
-	testContainers.set_struct_vec(owned);
-	Foo[] owned2 = testContainers.get_struct_vec();
+	testContainers.setStructVec(owned);
+	Foo[] owned2 = testContainers.getStructVec();
 	assert owned2.length == 1;
 	assert owned2[0].calcF(0, 0) == 17;
 	assert owned2[0].getName().equals("");
@@ -566,6 +570,7 @@ class Main {
 	private boolean str_called;
 	private boolean path_called;
 	private boolean arr_called;
+        private int byte_arr_called = 0;
 
 	@Override
 	public void checkAllTypes1(short a0, byte a1, int a2, short a3, long a4, int a5, long a6, int a7) {
@@ -626,6 +631,20 @@ class Main {
 	    assert arr[1].calcF(0, 0) == 2;
 	    arr_called = true;
 	}
+        @Override
+        public void checkByteArray(byte []arr) {
+            ++this.byte_arr_called;
+            if (byte_arr_called == 1) {
+                assert arr.length == 0;
+            } else if (byte_arr_called == 2) {
+                assert arr.length == 5;
+                assert arr[0] == 1;
+                assert arr[1] == -1;
+                assert arr[2] == 0;
+                assert arr[3] == -128;
+                assert arr[4] == 127;
+            }
+        }
     }
 
     private static void testAllTypesInCallbackArgs() {
@@ -637,6 +656,7 @@ class Main {
 	assert cb.str_called;
 	assert cb.path_called;
 	assert cb.arr_called;
+        assert cb.byte_arr_called == 2;
     }
 
     private static void testNumberInputOutput() {
@@ -724,5 +744,36 @@ class Main {
 	    }
 	    assert have_exception;
 	}
+    }
+
+    private static void testPartialEq() throws Exception {
+        Boo a = new Boo();
+        Boo b = new Boo();
+        assert a != b;
+        assert a.equals(b);
+        a.setA(-1);
+        assert !a.equals(b);
+    }
+
+    private static class JavaTestReturnInCallback implements TestReturnInCallback {
+	@Override
+        public boolean f_bool(boolean x) { return !x; }
+        @Override
+        public byte f_i8(byte x) { return (byte)(x + 1); }
+        @Override
+        public short f_i16(short x) { return (short)(x + 1); }
+        @Override
+        public int f_i32(int x) { return x + 1; }
+        @Override
+        public long f_i64(long x) { return x + 1; }
+        @Override
+        public float f_f32(float x) { return x + 1; }
+        @Override
+        public double f_f64(double x) { return x + 1; }
+    }
+
+    private static void testReturnInCallback() throws Exception {
+        TestReturnInCallback cb = new JavaTestReturnInCallback();
+        ReturnInCallbackTester.run(cb);
     }
 }

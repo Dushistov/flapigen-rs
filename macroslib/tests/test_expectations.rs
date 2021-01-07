@@ -4,8 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use flapigen::{rustfmt_cnt, CppConfig, Generator, JavaConfig, LanguageConfig, RustEdition};
 use log::warn;
-use rust_swig::{rustfmt_cnt, CppConfig, Generator, JavaConfig, LanguageConfig};
 use syn::Token;
 use tempfile::tempdir;
 
@@ -22,7 +22,7 @@ fn test_expectations_class_with_methods_without_constructor() {
             &name,
             Source::Str(
                 r#"
-foreigner_class!(class Foo {
+foreign_class!(class Foo {
 });
 "#,
             ),
@@ -37,7 +37,7 @@ foreigner_class!(class Foo {
                 &name,
                 Source::Str(
                     r#"
-    foreigner_class!(class Foo {
+    foreign_class!(class Foo {
        self_type SomeType;
     });
     "#,
@@ -56,7 +56,7 @@ foreigner_class!(class Foo {
                 &name,
                 Source::Str(
                     r#"
-    foreigner_class!(class Foo {
+    foreign_class!(class Foo {
        self_type SomeType;
        method SomeType::f(&self) -> i32;
     });
@@ -95,7 +95,7 @@ foreign_typemap!(
 "#;
 );
 
-foreigner_class!(class Foo {
+foreign_class!(class Foo {
     fn f1() -> TypeX;
 });
 
@@ -146,13 +146,13 @@ fn test_expectations_parse_without_self_type_err() {
                 &name,
                 Source::Str(
                     r#"
-foreigner_class!(class DownloadItem {
+foreign_class!(class DownloadItem {
     self_type DownloadItem;
     private constructor = empty;
     method DownloadItem::total_size(&self) -> u64;
 });
 
-foreigner_class!(class Document {
+foreign_class!(class Document {
     constructor Document::new(remote: DownloadItem) -> Document;
     method Document::remote(&self) -> bool;
 });
@@ -172,14 +172,14 @@ fn test_expectations_foreign_vec_as_arg() {
 
     let name = "foreign_vec_as_arg";
     let src = r#"
-foreigner_class!(
+foreign_class!(
 #[derive(Clone)]
 class Boo {
     self_type Boo;
     constructor Boo::default() -> Boo;
     fn Boo::clone(&self) -> Boo;
 });
-foreigner_class!(class FooImpl {
+foreign_class!(class FooImpl {
     self_type Foo<'a>;
     constructor Foo::create() -> Foo<'a>;
     fn Foo::set_alternate_boarding(&mut self, p: Vec<Boo>);
@@ -214,7 +214,7 @@ foreign_enum!(enum MyEnum {
   ITEM3 = MyEnum::Item3,
 });
 
-foreigner_class!(class TestEnumClass {
+foreign_class!(class TestEnumClass {
     self_type Moo;
     constructor Moo::default() -> Moo;
     fn Moo::f1(&mut self, v: MyEnum) -> i32;
@@ -236,13 +236,13 @@ fn test_return_result_type_with_object() {
 
     let name = "return_result_type_with_object";
     let src = r#"
-foreigner_class!(class Position {
+foreign_class!(class Position {
     self_type GnssInfo;
     private constructor create_position() -> GnssInfo;
     method Position::getLatitude(&self) -> f64;
 });
 
-foreigner_class!(class LocationService {
+foreign_class!(class LocationService {
     static_method LocationService::position() -> Result<GnssInfo, String>;
     static_method LocationService::do_something() -> Result<(), String>;
 });
@@ -277,13 +277,13 @@ fn test_return_foreign_class_ref() {
             "return_foreign_class_ref",
             Source::Str(
                 r#"
-foreigner_class!(class Boo {
+foreign_class!(class Boo {
     self_type Boo;
     constructor create_boo() -> Boo;
     method Boo::test(&self, _: bool) -> f32;
     method Boo::set_a(&mut self, _: i32);
 });
-foreigner_class!(class Moo {
+foreign_class!(class Moo {
     self_type Moo;
     constructor TestPathAndResult::default() -> Moo;
     method TestPathAndResult::get_boo(&self) -> &Boo;
@@ -311,7 +311,7 @@ fn test_foreign_interface_cpp() {
 
     let name = "foreign_interface_cpp";
     let src = r#"
-foreigner_class!(class Uuid {
+foreign_class!(class Uuid {
     self_type Uuid;
     private constructor uuid_private_constructor() -> Uuid;
     static_method Uuid::new_v4() -> Uuid;
@@ -352,6 +352,120 @@ foreign_interface!(interface RepoChangedCallback {
 "#
         ));
     }
+}
+
+#[test]
+fn test_derive_extension_usage() {
+    let _ = env_logger::try_init();
+    let rust_src = r#"
+foreign_class!(
+#[derive(QObject)]
+class MyObj {
+    self_type MyObj;
+    private constructor MyObj::new() -> MyObj;
+    #[Q_INVOKABLE]
+    fn MyObj::f();
+});
+
+foreign_enum!(
+#[derive(EnumClass)]
+/// enum comment
+enum MyEnum {
+  A = MyEnum::A,
+  B = MyEnum::B,
+}
+);
+"#;
+    let tmp_dir = tempdir().expect("Can not create tmp directory");
+    let swig_gen = Generator::new(LanguageConfig::CppConfig(CppConfig::new(
+        tmp_dir.path().into(),
+        "org_examples".into(),
+    )))
+    .with_pointer_target_width(64)
+    .register_class_attribute_callback("QObject", |code, class_name| {
+        println!("class attribute callback class_name {}", class_name);
+        let include = b"#include";
+        let mut last_pos = 0;
+        let mut search_shift = 0;
+        while let Some(pos) = find_subsequence(&code[(last_pos + search_shift)..], include) {
+            last_pos += pos + search_shift;
+            search_shift = 1;
+        }
+        let last_include_pos = last_pos;
+        let new_line = &code[last_include_pos..].iter().position(|x| *x == b'\n');
+        let new_line_pos = last_include_pos + new_line.unwrap();
+        let addon = br##"
+#include <QObject>
+"##;
+        code.splice(new_line_pos..new_line_pos, addon.iter().copied());
+
+        let needle = format!("class {}Wrapper {{", class_name);
+        let class_pos = find_subsequence(&code, needle.as_bytes()).unwrap();
+        let end_pos = class_pos + needle.as_bytes().len();
+        let new_code = format!(
+            r#"class {}Wrapper : public QObject {{
+    Q_OBJECT"#,
+            class_name
+        );
+        code.splice(class_pos..end_pos, new_code.as_bytes().iter().copied());
+    })
+    .register_method_attribute_callback("Q_INVOKABLE", |code, ctx| {
+        println!(
+            "method attribute callback class {}, method {}",
+            ctx.class_name, ctx.method_name
+        );
+        let needle = match ctx.variant {
+            flapigen::MethodVariant::Constructor => {
+                panic!("unsupported");
+            }
+            flapigen::MethodVariant::Method(_) => format!("void {}(", ctx.method_name),
+            flapigen::MethodVariant::StaticMethod => format!("static void {}(", ctx.method_name),
+        };
+        let pos = find_subsequence(&code, needle.as_bytes()).unwrap();
+        code.splice(pos..pos, b"Q_INVOKABLE ".iter().copied());
+    })
+    .register_enum_attribute_callback("EnumClass", |code, ctx| {
+        println!("EnumClass callback, ctx {}", ctx);
+        let needle = format!("enum {}", ctx);
+        let pos = find_subsequence(&code, needle.as_bytes()).unwrap();
+        code.splice((pos + 5)..(pos + 5), b"class ".iter().copied());
+    });
+    let rust_code_path = tmp_dir.path().join("test.rs");
+
+    let rust_src_path = tmp_dir.path().join("src.rs");
+    fs::write(&rust_src_path, rust_src).unwrap();
+    swig_gen.expand("derive_extension_usage", rust_src_path, &rust_code_path);
+
+    let _rust_code = fs::read_to_string(rust_code_path).unwrap();
+    let foreign_code = collect_code_in_dir(tmp_dir.path(), &[".h", ".hpp"]).unwrap();
+    println!("foreign_code: {}", foreign_code);
+    assert!(foreign_code.contains(
+        r##"#include <QObject>
+"##
+    ));
+    assert!(foreign_code.contains(
+        r#"
+class MyObjWrapper : public QObject {
+    Q_OBJECT
+"#
+    ));
+    assert!(foreign_code.contains("Q_INVOKABLE static void f()"));
+    assert!(foreign_code.contains(
+        r#"//enum comment
+enum class MyEnum {
+A = 0,
+B = 1"#
+    ));
+    tmp_dir.close().unwrap();
+}
+
+fn find_subsequence<T>(haystack: &[T], needle: &[T]) -> Option<usize>
+where
+    for<'a> &'a [T]: PartialEq,
+{
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -409,11 +523,11 @@ impl Drop for PrintTestInfo {
             }
 
             println!(
-                "{} / {:?}: rust_swig generated such foreign_code: {}",
+                "{} / {:?}: flapigen generated such foreign_code: {}",
                 self.test_name, self.lang, self.code_pair.foreign_code
             );
             println!(
-                "{} / {:?}: rust_swig generated such rust_code: {}",
+                "{} / {:?}: flapigen generated such rust_code: {}",
                 self.test_name,
                 self.lang,
                 rustfmt_without_errors(self.code_pair.rust_code.clone()),
@@ -582,7 +696,7 @@ fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bo
 
 fn rustfmt_without_errors(rust_code: String) -> String {
     let rust_code2 = rust_code.clone();
-    match rustfmt_cnt(rust_code.into_bytes()) {
+    match rustfmt_cnt(rust_code.into_bytes(), RustEdition::Edition2018) {
         Ok(code) => String::from_utf8(code).expect("not valid utf-8"),
         Err(err) => {
             warn!("rustfmt failed: {}", err);

@@ -3,6 +3,7 @@ foreigner_class!(
     class Session {
         self_type Session;
         constructor session_init() -> Rc<RefCell<Session>>;
+        fn setFoo(&mut self, _: i32);
     }
 );
 

@@ -17,7 +17,7 @@ use std::process::{Command, Stdio};
 use std::{env, fmt};
 
 use bindgen::RustTarget;
-use rust_swig::{JavaConfig, LanguageConfig};
+use flapigen::{JavaConfig, LanguageConfig};
 use walkdir::WalkDir;
 
 fn main() {
@@ -72,7 +72,7 @@ fn gen_for_android() {
         println!("Found SWIG specification: {}", entry.path().display());
         let swigf = entry.path().strip_prefix("src").unwrap();
 
-        rust_swig_expand(&src_dir, &swigf, Path::new(&out_dir));
+        flapigen_expand(&src_dir, &swigf, Path::new(&out_dir));
 
         write_include_file(&src_dir, swigf).expect("Failed to write include file.");
     }
@@ -212,8 +212,8 @@ where
     Ok(())
 }
 
-fn rust_swig_expand(source_dir: &Path, file: &Path, out_dir: &Path) {
-    let swig_gen = rust_swig::Generator::new(LanguageConfig::JavaConfig(
+fn flapigen_expand(source_dir: &Path, file: &Path, out_dir: &Path) {
+    let swig_gen = flapigen::Generator::new(LanguageConfig::JavaConfig(
         JavaConfig::new(
             Path::new(ANDROID_BASE_DIR)
                 .join("src")

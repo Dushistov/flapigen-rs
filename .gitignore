@@ -7,7 +7,7 @@ jni_tests/java/com/example/rust
 /cpp_tests/c++/build_with_boost
 target/
 /macroslib/target/
-/dotnet_tests/rust_swig_test_dotnet
+/dotnet_tests/flapigen_test_dotnet
 /dotnet_tests/dotnet/bin/
 /dotnet_tests/dotnet/obj/
 /dotnet_tests/dotnet/*.dll

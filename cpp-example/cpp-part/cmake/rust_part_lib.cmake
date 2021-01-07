@@ -33,30 +33,30 @@ function (find_cargo_target_directory CACHEVAR)
 endfunction(find_cargo_target_directory)
 
 set(RUST_SWIG_SRCS "${RUST_BUILD_CWD}/src/cpp_glue.rs.in")
-configure_file(cmake/rust_swig_gen.cmake.in ${CMAKE_BINARY_DIR}/rust_swig_gen.cmake @ONLY)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/rust_swig_gen)
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/rust_swig_regen_headers.cmake)
-  file(WRITE ${CMAKE_BINARY_DIR}/rust_swig_regen_headers.cmake "")
+configure_file(cmake/flapigen_gen.cmake.in ${CMAKE_BINARY_DIR}/flapigen_gen.cmake @ONLY)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/flapigen_gen)
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/flapigen_regen_headers.cmake)
+  file(WRITE ${CMAKE_BINARY_DIR}/flapigen_regen_headers.cmake "")
 endif()
 
 execute_process(COMMAND ${CMAKE_COMMAND}
   -DSRCDIR=${CMAKE_SOURCE_DIR}
   -DRUST_BUILD_CWD=${RUST_BUILD_CWD}
     -DBINDIR=${CMAKE_BINARY_DIR}
-    -P ${CMAKE_BINARY_DIR}/rust_swig_gen.cmake
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/rust_swig_gen
+    -P ${CMAKE_BINARY_DIR}/flapigen_gen.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/flapigen_gen
     RESULT_VARIABLE retcode)
 if(NOT "${retcode}" STREQUAL "0")
-  message(FATAL_ERROR "run of rust_swig_gen.cmake failed")
+  message(FATAL_ERROR "run of flapigen_gen.cmake failed")
 endif()
 
-add_custom_target(rust_swig_gen_headers ${CMAKE_COMMAND}
+add_custom_target(flapigen_gen_headers ${CMAKE_COMMAND}
     -DSRCDIR=${CMAKE_SOURCE_DIR}
     -DBINDIR=${CMAKE_BINARY_DIR}
     -DRUST_BUILD_CWD=${RUST_BUILD_CWD}
-    -P ${CMAKE_BINARY_DIR}/rust_swig_gen.cmake
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/rust_swig_gen)
-include(${CMAKE_BINARY_DIR}/rust_swig_regen_headers.cmake)
+    -P ${CMAKE_BINARY_DIR}/flapigen_gen.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/flapigen_gen)
+include(${CMAKE_BINARY_DIR}/flapigen_regen_headers.cmake)
 
 find_cargo_target_directory(TARGET_PATH)
 
@@ -74,10 +74,15 @@ else ()
   set(RUST_PART_LIB_NAME "libcpp_example_rust_part.so")
 endif ()
 
+set(CARGO_BUILD_DIR "${TARGET_PATH}")
+if (DEFINED ENV{CARGO_BUILD_TARGET})
+  set(CARGO_BUILD_DIR "${CARGO_BUILD_DIR}/$ENV{CARGO_BUILD_TARGET}")
+endif ()
+
 if (NOT RUST_DEBUG_BUILD)
-  set(RUST_PART_LIB_PATH "${TARGET_PATH}/release/${RUST_PART_LIB_NAME}")
+  set(RUST_PART_LIB_PATH "${CARGO_BUILD_DIR}/release/${RUST_PART_LIB_NAME}")
 else()
-  set(RUST_PART_LIB_PATH "${TARGET_PATH}/debug/${RUST_PART_LIB_NAME}")
+  set(RUST_PART_LIB_PATH "${CARGO_BUILD_DIR}/debug/${RUST_PART_LIB_NAME}")
 endif()
 
 add_custom_command(OUTPUT ${RUST_PART_LIB_PATH}
@@ -90,7 +95,7 @@ else ()
   add_library(rust_part_lib SHARED IMPORTED GLOBAL)
 endif ()
 add_dependencies(rust_part_lib rust_part_lib_target)
-add_dependencies(rust_part_lib rust_swig_gen_headers)
+add_dependencies(rust_part_lib flapigen_gen_headers)
 set_target_properties(rust_part_lib
     PROPERTIES
     IMPORTED_LOCATION ${RUST_PART_LIB_PATH}

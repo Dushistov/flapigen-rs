@@ -142,7 +142,7 @@ impl TestClass {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     /// Test class containing static methods only.
     class TestStaticClass {
         /// Documentation for `TestStaticClass::hello`()
@@ -166,7 +166,7 @@ foreigner_class!(
     }
 );
 
-foreigner_class!(
+foreign_class!(
     #[derive(Copy)]
     /// Test class containing standard methods.
     class TestClass {
@@ -208,7 +208,7 @@ impl TestArc {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class TestArc {
         self_type TestArc;
         constructor TestArc::new() -> Arc<TestArc>;
@@ -244,7 +244,7 @@ impl TestArcMutex {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class TestArcMutex {
         self_type TestArcMutex;
         constructor TestArcMutex::new() -> Arc<Mutex<TestArcMutex>>;
@@ -269,7 +269,7 @@ impl TestBox {
     }
 }
 
-foreigner_class!(
+foreign_class!(
     class TestBox {
         self_type TestBox;
         constructor TestBox::new() -> Box<TestBox>;

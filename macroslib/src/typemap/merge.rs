@@ -1,5 +1,5 @@
 use crate::typemap::ty::ForeignConversationRule;
-use std::{mem, rc::Rc};
+use std::{convert::TryInto, mem, rc::Rc};
 
 use log::{debug, error, info};
 use petgraph::graph::NodeIndex;
@@ -67,7 +67,10 @@ impl TypeMap {
         debug!("may_be_merge_conv_rule: {:?}", ri);
         ri.set_src_id(src_id);
         if ri.is_generic() {
-            self.generic_rules.push(Rc::new(ri));
+            match ri.try_into() {
+                Ok(edge) => self.generic_edges.push(edge),
+                Err(err) => self.generic_rules.push(Rc::new(err)),
+            }
             return Ok(());
         }
         if ri.contains_data_for_language_backend() {

@@ -1,21 +1,7 @@
 mod swig_foreign_types_map {
-    #![swig_foreigner_type = "byte []"]
-    #![swig_rust_type = "jbyteArray"]
-    #![swig_foreigner_type = "short []"]
-    #![swig_rust_type = "jshortArray"]
-    #![swig_foreigner_type = "int []"]
-    #![swig_rust_type = "jintArray"]
-    #![swig_foreigner_type = "long []"]
-    #![swig_rust_type = "jlongArray"]
-    #![swig_foreigner_type = "float []"]
-    #![swig_rust_type = "jfloatArray"]
-    #![swig_foreigner_type = "double []"]
-    #![swig_rust_type = "jdoubleArray"]
     #![swig_foreigner_type = "Object"]
     #![swig_rust_type_not_unique = "jobject"]
     #![swig_foreigner_type = "Object []"]
-    #![swig_rust_type_not_unique = "jobjectArray"]
-    #![swig_foreigner_type = "java.lang.String []"]
     #![swig_rust_type_not_unique = "jobjectArray"]
 }
 
@@ -38,6 +24,7 @@ mod internal_aliases {
         pub(crate) _marker: ::std::marker::PhantomData<T>,
     }
     pub type JStringPath = jstring;
+    pub type JStringObjectsArray = jobjectArray;
 }
 
 /// Default JNI_VERSION
@@ -102,20 +89,6 @@ trait SwigFrom<T> {
     fn swig_from(_: T, env: *mut JNIEnv) -> Self;
 }
 
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_deref();"]
-trait SwigDeref {
-    type Target: ?Sized;
-    fn swig_deref(&self) -> &Self::Target;
-}
-
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_deref_mut();"]
-trait SwigDerefMut {
-    type Target: ?Sized;
-    fn swig_deref_mut(&mut self) -> &mut Self::Target;
-}
-
 #[allow(unused_macros)]
 macro_rules! swig_c_str {
     ($lit:expr) => {
@@ -160,10 +133,12 @@ foreign_typemap!(
     (f_type) "int";
 );
 
+//ANCHOR: foreign_typemap_define_jlong
 foreign_typemap!(
     (r_type) jlong;
     (f_type) "long";
 );
+//ANCHOR_END: foreign_typemap_define_jlong
 
 foreign_typemap!(
     (r_type) jfloat;
@@ -197,18 +172,6 @@ pub trait SwigForeignCLikeEnum {
     /// # Panics
     /// Panics on error
     fn from_jint(_: jint) -> Self;
-}
-
-impl<T: SwigForeignCLikeEnum> SwigFrom<T> for jint {
-    fn swig_from(x: T, _: *mut JNIEnv) -> jint {
-        x.as_jint()
-    }
-}
-
-impl<T: SwigForeignCLikeEnum> SwigFrom<jint> for T {
-    fn swig_from(x: jint, _: *mut JNIEnv) -> T {
-        T::from_jint(x)
-    }
 }
 
 #[allow(dead_code)]
@@ -256,12 +219,11 @@ impl Drop for JavaString {
     }
 }
 
-impl SwigDeref for JavaString {
-    type Target = str;
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_str()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaString => &str {
+        $out = $p.to_str();
+    };
+);
 
 #[allow(dead_code)]
 struct JavaCallback {
@@ -466,14 +428,16 @@ fn jobject_array_to_vec_of_objects<T: SwigForeignClass + Clone>(
 
     result
 }
-
+//ANCHOR: foreign_typemap_generic_example
 foreign_typemap!(
     ($p:r_type) <T: SwigForeignClass + Clone> Vec<T> <= internal_aliases::JForeignObjectsArray<T> {
         $out = jobject_array_to_vec_of_objects(env, $p);
     };
     ($p:f_type, option = "NoNullAnnotations") <= "swig_f_type!(T) []";
-    ($p:f_type, option = "NullAnnotations") <= "@NonNull swig_f_type!(T, NoNullAnnotations) []";
+    ($p:f_type, option = "NullAnnotations")
+                  <= "@NonNull swig_f_type!(T, NoNullAnnotations) []";
 );
+//ANCHOR_END: foreign_typemap_generic_example
 
 #[allow(dead_code)]
 fn vec_of_objects_to_jobject_array<T: SwigForeignClass>(
@@ -720,24 +684,26 @@ foreign_typemap!(
     };
 );
 
-impl<'a> SwigFrom<&'a str> for jstring {
-    fn swig_from(x: &'a str, env: *mut JNIEnv) -> Self {
-        let x = ::std::ffi::CString::new(x).unwrap();
-        unsafe { (**env).NewStringUTF.unwrap()(env, x.as_ptr()) }
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &str => jstring {
+        $out = {
+            let x = ::std::ffi::CString::new($p).unwrap();
+            unsafe { (**env).NewStringUTF.unwrap()(env, x.as_ptr()) }
+        };
+    };
+);
 
-impl SwigInto<JavaString> for jstring {
-    fn swig_into(self, env: *mut JNIEnv) -> JavaString {
-        JavaString::new(env, self)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaString <= jstring {
+        $out = JavaString::new(env, $p);
+    };
+);
 
-impl SwigFrom<String> for jstring {
-    fn swig_from(x: String, env: *mut JNIEnv) -> Self {
-        from_std_string_jstring(x, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) String => jstring {
+        $out = from_std_string_jstring($p, env);
+    };
+);
 
 #[allow(dead_code)]
 fn from_std_string_jstring(x: String, env: *mut JNIEnv) -> jstring {
@@ -764,31 +730,36 @@ foreign_typemap!(
     ($p:f_type, option = "NullAnnotations", unique_prefix="/*Path*/") <= "/*Path*/@NonNull String";
 );
 
-// Vec<String> -> jobjectArray
-#[swig_to_foreigner_hint = "java.lang.String []"]
-impl SwigInto<jobjectArray> for Vec<String> {
-    fn swig_into(mut self, env: *mut JNIEnv) -> jobjectArray {
-        let jcls: jclass = swig_jni_find_class!(JAVA_LANG_STRING, "java/lang/String");
-        assert!(!jcls.is_null());
-        let obj_arr: jobjectArray = unsafe {
-            (**env).NewObjectArray.unwrap()(env, self.len() as jsize, jcls, ::std::ptr::null_mut())
-        };
-        assert!(!obj_arr.is_null());
-        for (i, r_str) in self.drain(..).enumerate() {
-            let jstr: jstring = jstring::swig_from(r_str, env);
-            assert!(!jstr.is_null());
+#[allow(dead_code)]
+fn vec_string_to_jobject_array(mut arr: Vec<String>, env: *mut JNIEnv) -> jobjectArray {
+    let jcls: jclass = swig_jni_find_class!(JAVA_LANG_STRING, "java/lang/String");
+    assert!(!jcls.is_null());
+    let obj_arr: jobjectArray = unsafe {
+        (**env).NewObjectArray.unwrap()(env, arr.len() as jsize, jcls, ::std::ptr::null_mut())
+    };
+    assert!(!obj_arr.is_null());
+    for (i, r_str) in arr.drain(..).enumerate() {
+        let jstr: jstring = from_std_string_jstring(r_str, env);
+        assert!(!jstr.is_null());
 
-            unsafe {
-                (**env).SetObjectArrayElement.unwrap()(env, obj_arr, i as jsize, jstr);
-                if (**env).ExceptionCheck.unwrap()(env) != 0 {
-                    panic!("SetObjectArrayElement({}) failed", i);
-                }
-                (**env).DeleteLocalRef.unwrap()(env, jstr);
+        unsafe {
+            (**env).SetObjectArrayElement.unwrap()(env, obj_arr, i as jsize, jstr);
+            if (**env).ExceptionCheck.unwrap()(env) != 0 {
+                panic!("SetObjectArrayElement({}) failed", i);
             }
+            (**env).DeleteLocalRef.unwrap()(env, jstr);
         }
-        obj_arr
     }
+    obj_arr
 }
+
+foreign_typemap!(
+    ($p:r_type) Vec<String> => internal_aliases::JStringObjectsArray {
+        $out = vec_string_to_jobject_array($p, env);
+    };
+    ($p:f_type, option = "NoNullAnnotations") => "java.lang.String []";
+    ($p:f_type, option = "NullAnnotations") => "@NonNull java.lang.String []";
+);
 
 macro_rules! define_array_handling_code {
     ($([jni_arr_type = $jni_arr_type:ident,
@@ -922,214 +893,191 @@ define_array_handling_code!(
     ]
 );
 
-impl<T> SwigDeref for Vec<T> {
-    type Target = [T];
-    fn swig_deref(&self) -> &Self::Target {
-        &*self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Vec<T> => &[T] {
+        $out = $p.as_slice();
+    };
+);
 
-impl SwigDeref for JavaIntArray {
-    type Target = [i32];
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_slice()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &[i32] => jintArray {
+        $out = JavaIntArray::from_slice_to_raw($p, env);
+    };
+    (f_type) => "int []";
+);
 
-impl SwigFrom<jintArray> for JavaIntArray {
-    fn swig_from(x: jintArray, env: *mut JNIEnv) -> Self {
-        JavaIntArray::new(env, x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaIntArray <= jintArray {
+        $out = JavaIntArray::new(env, $p);
+    };
+    (f_type) <= "int []";
+);
+foreign_typemap!(
+    ($p:r_type) &[i32] <= JavaIntArray {
+        $out = $p.to_slice();
+    };
+);
 
-impl<'a> SwigInto<jintArray> for &'a [i32] {
-    fn swig_into(self, env: *mut JNIEnv) -> jintArray {
-        JavaIntArray::from_slice_to_raw(self, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &[i64] => jlongArray {
+        $out = JavaLongArray::from_slice_to_raw($p, env);
+    };
+    (f_type) => "long []";
+);
 
-impl SwigDeref for JavaLongArray {
-    type Target = [i64];
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_slice()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaLongArray <= jlongArray {
+        $out = JavaLongArray::new(env, $p);
+    };
+    (f_type) <= "long []";
+);
+foreign_typemap!(
+    ($p:r_type) &[i64] <= JavaLongArray {
+        $out = $p.to_slice();
+    };
+);
 
-impl SwigFrom<jlongArray> for JavaLongArray {
-    fn swig_from(x: jlongArray, env: *mut JNIEnv) -> Self {
-        JavaLongArray::new(env, x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &[f32] => jfloatArray {
+        $out = JavaFloatArray::from_slice_to_raw($p, env);
+    };
+    (f_type) => "float []";
+);
 
-impl<'a> SwigInto<jlongArray> for &'a [i64] {
-    fn swig_into(self, env: *mut JNIEnv) -> jlongArray {
-        JavaLongArray::from_slice_to_raw(self, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaFloatArray <= jfloatArray {
+        $out = JavaFloatArray::new(env, $p);
+    };
+    (f_type) <= "float []";
+);
+foreign_typemap!(
+    ($p:r_type) &[f32] <= JavaFloatArray {
+        $out = $p.to_slice();
+    };
+);
 
-impl SwigDeref for JavaFloatArray {
-    type Target = [f32];
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_slice()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &[f64] => jdoubleArray {
+        $out = JavaDoubleArray::from_slice_to_raw($p, env);
+    };
+    (f_type) => "double []";
+);
 
-impl SwigFrom<jfloatArray> for JavaFloatArray {
-    fn swig_from(x: jfloatArray, env: *mut JNIEnv) -> Self {
-        JavaFloatArray::new(env, x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaDoubleArray <= jdoubleArray {
+        $out = JavaDoubleArray::new(env, $p);
+    };
+    (f_type) <= "double []";
+);
+foreign_typemap!(
+    ($p:r_type) &[f64] <= JavaDoubleArray {
+        $out = $p.to_slice();
+    };
+);
 
-impl<'a> SwigInto<jfloatArray> for &'a [f32] {
-    fn swig_into(self, env: *mut JNIEnv) -> jfloatArray {
-        JavaFloatArray::from_slice_to_raw(self, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &[i8] => jbyteArray {
+        $out = JavaByteArray::from_slice_to_raw($p, env);
+    };
+    (f_type) => "byte []";
+);
 
-impl SwigDeref for JavaDoubleArray {
-    type Target = [f64];
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_slice()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaByteArray <= jbyteArray {
+        $out = JavaByteArray::new(env, $p);
+    };
+    (f_type) <= "byte []";
+);
+foreign_typemap!(
+    ($p:r_type) &[i8] <= JavaByteArray {
+        $out = $p.to_slice();
+    };
+);
 
-impl SwigFrom<jdoubleArray> for JavaDoubleArray {
-    fn swig_from(x: jdoubleArray, env: *mut JNIEnv) -> Self {
-        JavaDoubleArray::new(env, x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &[i16] => jshortArray {
+        $out = JavaShortArray::from_slice_to_raw($p, env);
+    };
+    (f_type) => "short []";
+);
 
-impl<'a> SwigInto<jdoubleArray> for &'a [f64] {
-    fn swig_into(self, env: *mut JNIEnv) -> jdoubleArray {
-        JavaDoubleArray::from_slice_to_raw(self, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) JavaShortArray <= jshortArray {
+        $out = JavaShortArray::new(env, $p);
+    };
+    (f_type) <= "short []";
+);
+foreign_typemap!(
+    ($p:r_type) &[i16] <= JavaShortArray {
+        $out = $p.to_slice();
+    };
+);
 
-impl SwigDeref for JavaByteArray {
-    type Target = [i8];
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_slice()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) String => &str {
+        $out = $p.as_str();
+    };
+);
 
-impl SwigFrom<jbyteArray> for JavaByteArray {
-    fn swig_from(x: jbyteArray, env: *mut JNIEnv) -> Self {
-        JavaByteArray::new(env, x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Arc<Mutex<T>> => &Mutex<T> {
+        $out = & $p;
+    };
+);
 
-impl<'a> SwigInto<jbyteArray> for &'a [i8] {
-    fn swig_into(self, env: *mut JNIEnv) -> jbyteArray {
-        JavaByteArray::from_slice_to_raw(self, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> &Mutex<T> => MutexGuard<T> {
+        $out = $p.lock().unwrap();
+    };
+);
 
-impl SwigDeref for JavaShortArray {
-    type Target = [i16];
-    fn swig_deref(&self) -> &Self::Target {
-        self.to_slice()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> MutexGuard<T> => &T {
+        $out = & $p;
+    };
+);
 
-impl SwigFrom<jshortArray> for JavaShortArray {
-    fn swig_from(x: jshortArray, env: *mut JNIEnv) -> Self {
-        JavaShortArray::new(env, x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> MutexGuard<T> => &mut T {
+        $out = &mut $p;
+    };
+);
 
-impl<'a> SwigInto<jshortArray> for &'a [i16] {
-    fn swig_into(self, env: *mut JNIEnv) -> jshortArray {
-        JavaShortArray::from_slice_to_raw(self, env)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Rc<T> => &T {
+        $out = & $p;
+    };
+);
 
-impl SwigDeref for String {
-    type Target = str;
-    fn swig_deref(&self) -> &str {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> &Rc<T> => &T {
+        $out = & $p;
+    };
+);
 
-impl<T> SwigDeref for Arc<Mutex<T>> {
-    type Target = Mutex<T>;
-    fn swig_deref(&self) -> &Mutex<T> {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> &RefCell<T> => Ref<T> {
+        $out = $p.borrow();
+    };
+);
 
-impl<'a, T> SwigFrom<&'a Mutex<T>> for MutexGuard<'a, T> {
-    fn swig_from(m: &'a Mutex<T>, _: *mut JNIEnv) -> MutexGuard<'a, T> {
-        m.lock().unwrap()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> &RefCell<T> => RefMut<T> {
+        $out = $p.borrow_mut();
+    };
+);
 
-impl<'a, T> SwigDeref for MutexGuard<'a, T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Ref<T> => &T {
+        $out = & $p;
+    };
+);
 
-impl<'a, T> SwigDerefMut for MutexGuard<'a, T> {
-    type Target = T;
-    fn swig_deref_mut(&mut self) -> &mut T {
-        self
-    }
-}
-
-impl<T> SwigDeref for Rc<T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
-
-impl<'a, T> SwigDeref for &'a Rc<T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
-
-impl<'a, T> SwigFrom<&'a RefCell<T>> for Ref<'a, T> {
-    fn swig_from(m: &'a RefCell<T>, _: *mut JNIEnv) -> Ref<'a, T> {
-        m.borrow()
-    }
-}
-
-impl<'a, T> SwigFrom<&'a RefCell<T>> for RefMut<'a, T> {
-    fn swig_from(m: &'a RefCell<T>, _: *mut JNIEnv) -> RefMut<'a, T> {
-        m.borrow_mut()
-    }
-}
-
-impl<'a, T> SwigDeref for Ref<'a, T> {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
-
-impl<'a, T> SwigDerefMut for RefMut<'a, T> {
-    type Target = T;
-    fn swig_deref_mut(&mut self) -> &mut T {
-        self
-    }
-}
-
-impl<T: SwigForeignClass> SwigDeref for T {
-    type Target = T;
-    fn swig_deref(&self) -> &T {
-        self
-    }
-}
-
-impl<T: SwigForeignClass> SwigDerefMut for T {
-    type Target = T;
-    fn swig_deref_mut(&mut self) -> &mut T {
-        self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> RefMut<T> => &mut T {
+        $out = &mut $p;
+    };
+);
 
 #[cfg(target_pointer_width = "32")]
 impl SwigFrom<isize> for jint {
@@ -1160,11 +1108,11 @@ impl SwigFrom<usize> for jlong {
     }
 }
 
-impl<'a> SwigInto<String> for &'a str {
-    fn swig_into(self, _: *mut JNIEnv) -> String {
-        self.into()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &str => String {
+        $out = $p.to_string();
+    };
+);
 
 #[allow(dead_code)]
 fn to_java_util_optional_double(
@@ -1696,8 +1644,8 @@ foreign_typemap!(
     ($p:r_type) Option<&str> <= internal_aliases::JStringOptStr {
         let tmp: JavaString;
         $out = if !$p.is_null() {
-            tmp = $p.swig_into(env);
-            Some(tmp.swig_deref())
+            tmp = JavaString::new(env, $p);
+            Some(tmp.to_str())
         } else {
             None
         };
@@ -1743,4 +1691,16 @@ foreign_typemap!(
     ($p:f_type, option = "NullAnnotations", unique_prefix = "/*opt*/") <= "/*opt*/@Nullable swig_f_type!(T)" r#"
         $out = ($p != null) ? $p.getValue() : -1;
 "#;
+);
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignCLikeEnum> T => jint {
+        $out = $p.as_jint();
+    };
+);
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignCLikeEnum> T <= jint {
+        $out = <swig_subst_type!(T)>::from_jint($p);
+    };
 );

@@ -17,6 +17,7 @@ use syn::{spanned::Spanned, Type};
 
 use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result},
+    extension::{ClassExtHandlers, ExtHandlers, MethodExtHandlers},
     file_cache::FileWriteCache,
     typemap::{
         ast::{
@@ -30,7 +31,7 @@ use crate::{
         },
         ForeignTypeInfo, TypeMapConvRuleInfo,
     },
-    types::{ForeignerClassInfo, ForeignerMethod, ItemToExpand, MethodVariant},
+    types::{ForeignClassInfo, ForeignMethod, ItemToExpand, MethodVariant},
     JavaConfig, JavaReachabilityFence, LanguageGenerator, SourceCode, TypeMap,
     SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
 };
@@ -40,7 +41,6 @@ const INTERNAL_PTR_MARKER: &str = "InternalPointerMarker";
 const JAVA_RUST_SELF_NAME: &str = "mNativeObj";
 const REACHABILITY_FENCE_CLASS: &str = "JNIReachabilityFence";
 
-#[derive(Debug)]
 struct JavaContext<'a> {
     cfg: &'a JavaConfig,
     conv_map: &'a mut TypeMap,
@@ -48,6 +48,8 @@ struct JavaContext<'a> {
     rust_code: &'a mut Vec<TokenStream>,
     generated_foreign_files: &'a mut FxHashSet<PathBuf>,
     java_type_to_jni_sig_map: FxHashMap<SmolStr, SmolStr>,
+    class_ext_handlers: &'a ClassExtHandlers,
+    method_ext_handlers: &'a MethodExtHandlers,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -75,6 +77,7 @@ impl ForeignTypeInfoT for JavaForeignTypeInfo {
 #[derive(Debug)]
 struct JavaConverter {
     java_transition_type: SmolStr,
+    annotation: Option<NullAnnotation>,
     converter: String,
 }
 
@@ -113,7 +116,7 @@ impl ForeignMethodSignature for JniForeignMethodSignature {
 }
 
 impl JavaConfig {
-    fn register_class(&self, ctx: &mut JavaContext, class: &ForeignerClassInfo) -> Result<()> {
+    fn register_class(&self, ctx: &mut JavaContext, class: &ForeignClassInfo) -> Result<()> {
         class
             .validate_class()
             .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
@@ -123,16 +126,16 @@ impl JavaConfig {
                 .unwrap_or_else(|| constructor_ret_type.clone());
 
             let mut traits = vec!["SwigForeignClass"];
-            if class.clone_derived {
+            if class.clone_derived() {
                 traits.push("Clone");
             }
-            if class.copy_derived {
-                if !class.clone_derived {
+            if class.copy_derived() {
+                if !class.clone_derived() {
                     traits.push("Clone");
                 }
                 traits.push("Copy");
             }
-            if class.smart_ptr_copy_derived {
+            if class.smart_ptr_copy_derived() {
                 traits.push(SMART_PTR_COPY_TRAIT);
             }
 
@@ -141,10 +144,10 @@ impl JavaConfig {
                 &traits,
                 class.src_id,
             );
-            if class.smart_ptr_copy_derived {
-                if class.copy_derived {
+            if class.smart_ptr_copy_derived() {
+                if class.copy_derived() {
                     println!(
-                        "warning=class {} marked as Copy and {}, ignore Copy",
+                        "cargo:warning=class {} marked as Copy and {}, ignore Copy",
                         class.name, SMART_PTR_COPY_TRAIT
                     );
                 }
@@ -180,6 +183,7 @@ impl LanguageGenerator for JavaConfig {
         code: &[SourceCode],
         items: Vec<ItemToExpand>,
         remove_not_generated_files: bool,
+        ext_handlers: ExtHandlers,
     ) -> Result<Vec<TokenStream>> {
         let mut ret = Vec::with_capacity(items.len());
         let mut generated_foreign_files = FxHashSet::default();
@@ -190,6 +194,8 @@ impl LanguageGenerator for JavaConfig {
             rust_code: &mut ret,
             generated_foreign_files: &mut generated_foreign_files,
             java_type_to_jni_sig_map: rust_code::predefined_java_type_to_jni_sig(),
+            class_ext_handlers: ext_handlers.class_ext_handlers,
+            method_ext_handlers: ext_handlers.method_ext_handlers,
         };
         init(&mut ctx, code)?;
         for item in &items {
@@ -236,7 +242,7 @@ impl LanguageGenerator for JavaConfig {
     }
 }
 
-fn method_name(method: &ForeignerMethod, f_method: &JniForeignMethodSignature) -> String {
+fn method_name(method: &ForeignMethod, f_method: &JniForeignMethodSignature) -> String {
     let need_conv = f_method.input.iter().any(|v: &JavaForeignTypeInfo| {
         v.java_converter
             .as_ref()
@@ -268,7 +274,7 @@ fn java_class_name_to_jni(full_name: &str) -> String {
     full_name.replace(".", "/")
 }
 
-fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignerClassInfo) -> Option<Type> {
+fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignClassInfo) -> Option<Type> {
     if let Some(constructor_ret_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
         Some(
             if_result_return_ok_err_types(
@@ -357,7 +363,7 @@ fn init(ctx: &mut JavaContext, _code: &[SourceCode]) -> Result<()> {
     writeln!(
         src_file,
         r#"
-// Automatically generated by rust_swig
+// Automatically generated by flapigen
 package {package};
 
 /*package*/ enum {enum_name} {{
@@ -384,7 +390,7 @@ package {package};
             write!(
                 src_file,
                 r#"
-// Automatically generated by rust_swig
+// Automatically generated by flapigen
 package {package};
 
 /*package*/ final class {class_name} {{

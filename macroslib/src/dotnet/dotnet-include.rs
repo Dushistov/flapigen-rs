@@ -88,33 +88,6 @@ foreign_typemap!(
     (f_type) "/* const c_str_u16 */ IntPtr";
 );
 
-
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_into();"]
-trait SwigInto<T> {
-    fn swig_into(self) -> T;
-}
-
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var});"]
-trait SwigFrom<T> {
-    fn swig_from(_: T) -> Self;
-}
-
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_deref();"]
-trait SwigDeref {
-    type Target: ?Sized;
-    fn swig_deref(&self) -> &Self::Target;
-}
-
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_deref_mut();"]
-trait SwigDerefMut {
-    type Target: ?Sized;
-    fn swig_deref_mut(&mut self) -> &mut Self::Target;
-}
-
 foreign_typemap!(
     ($p:r_type) bool => u8 {
         $out = if $p  { 1 } else { 0 };
@@ -185,32 +158,29 @@ foreign_typemap!(
     ($p:f_type) <= "string" "RustString.dotnet_to_rust($p)";
 );
 
+foreign_typemap!(
+    ($p:r_type) String => &str {
+        $out = & $p;
+    };
+);
 
-impl SwigDeref for String {
-    type Target = str;
-    fn swig_deref(&self) -> &str {
-        &self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> Vec<T> => &[T] {
+        $out = & $p;
+    };
+);
 
-impl<T> SwigDeref for Vec<T> {
-    type Target = [T];
-    fn swig_deref(&self) -> &[T] {
-        &self
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &str => String {
+        $out = $p.to_owned();
+    };
+);
 
-impl SwigInto<String> for &str {
-    fn swig_into(self) -> String {
-        self.to_owned()
-    }
-}
-
-impl<T> SwigInto<Vec<T>> for &[T] {
-    fn swig_into(self) -> Vec<T> {
-        self.to_owned()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) <T> &[T] => Vec<T> {
+        $out = $p.to_owned();
+    };
+);
 
 #[allow(dead_code)]
 pub trait SwigForeignEnum: Sized {
@@ -259,7 +229,7 @@ foreign_typemap!(
         }
     );
 
-    foreigner_code!(
+    foreign_code!(
         module = "Option<T>";
         r#"
 
@@ -318,7 +288,7 @@ foreign_typemap!(
         "#
     );
 
-    foreigner_code!(
+    foreign_code!(
         module = "RustOptionT!()";
         r#"
     internal static class RustOptionT!() {
@@ -464,7 +434,7 @@ foreign_typemap!(
         }
     );
 
-    foreigner_code!(
+    foreign_code!(
         module = "RustVecT!()";
         r#"
     public static class RustVecT!() {
@@ -601,7 +571,7 @@ foreign_typemap!(
         }
     );
 
-    foreigner_code!(
+    foreign_code!(
         module = "RustVecT!()";
         r#"
     public static class RustVecT!() {
@@ -660,10 +630,6 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
-    // generic_alias!(RustResultT = swig_concat_idents!(RustResult, swig_f_type!(T1)));
-    // generic_alias!(RustResultT_is_ok = swig_concat_idents!(RustResult, swig_f_type!(T1), _is_ok));
-    // generic_alias!(RustResultT_take_ok = swig_concat_idents!(RustResult, swig_f_type!(T1), _take_ok));
-    // generic_alias!(RustResultT_take_err = swig_concat_idents!(RustResult, swig_f_type!(T1), _take_error));
 
     define_c_type!(
         module = "RustResultVoid";
@@ -682,7 +648,7 @@ foreign_typemap!(
         }
     );
 
-    foreigner_code!(
+    foreign_code!(
         module = "RustResultVoid";
         r#"
     internal static class RustResultVoid {
@@ -753,7 +719,7 @@ foreign_typemap!(
         }
     );
 
-    foreigner_code!(
+    foreign_code!(
         module = "RustResultT!()";
         r#"
     internal static class RustResultT!() {
@@ -845,7 +811,7 @@ foreign_typemap!(
         }
     );
 
-    foreigner_code!(
+    foreign_code!(
         module = "RustTuple2T!()";
         r#"
     internal static class RustTuple2T!() {

@@ -1,12 +1,12 @@
 [package]
-name = "rust_swig"
-version = "0.5.0"
+name = "flapigen"
+version = "0.6.0-pre8"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 description = "Tool for connecting libraries written in Rust with other languages"
 license = "BSD-3-Clause"
 keywords = ["swig", "java", "jni", "ffi", "cxx"]
-repository = "https://github.com/Dushistov/rust_swig"
-documentation = "https://docs.rs/rust_swig"
+repository = "https://github.com/Dushistov/flapigen-rs"
+documentation = "https://docs.rs/flapigen"
 readme = "../README.md"
 edition = "2018"
 
@@ -35,6 +35,3 @@ jni-sys = "0.3.0"
 [build-dependencies]
 syn = { version = "1.0", features = ["full", "extra-traits", "visit-mut", "visit"] }
 quote = "1.0"
-
-[badges]
-azure-devops = { project = "Dushistov/rust_swig", pipeline = "Dushistov.rust_swig" }
