@@ -220,12 +220,10 @@ impl PythonConfig {
         let registration_code = quote! {
             mod py_error {
                 py_exception!(#module_name, Error);
-                py_exception!(#module_name, Panic);
             }
 
             py_module_initializer!(#module_name, #module_init, #module_py_init, |py, m| {
                 m.add(py, "Error", py_error::Error::type_object(py))?;
-                m.add(py, "Panic", py_error::Panic::type_object(py))?;
                 #(#module_initialization_code)*
                 Ok(())
             });
@@ -370,15 +368,7 @@ fn generate_method_code(
         ) -> cpython::PyResult<#return_type> {
             #[allow(unused)]
             use super::*;
-            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                Ok(#rust_call_with_return_conversion)
-            })) {
-                Ok(val) => val,
-                Err(_) => Err(cpython::PyErr::new::<super::py_error::Panic, _>(
-                    py,
-                    "Rust panic"
-                ))
-            }
+            Ok(#rust_call_with_return_conversion)
         }
     })
 }

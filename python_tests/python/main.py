@@ -72,7 +72,6 @@ def test_box():
     box = TestBox()
     assert str(box) == "0"
 
-
 print("Testing python API")
 test_enum()
 test_static_methods()

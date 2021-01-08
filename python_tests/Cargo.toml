@@ -10,7 +10,7 @@ name = "flapigen_test_python"
 crate-type = ["cdylib"]
 
 [dependencies]
-cpython = { version = "0.3", features = ["extension-module"] }
+cpython = { version = "0.5", features = ["extension-module"] }
 
 [build-dependencies]
 env_logger = "0.7"
