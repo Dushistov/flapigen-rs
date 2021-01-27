@@ -1,0 +1,2 @@
+r#"class VecOfPaths {
+public:"#;

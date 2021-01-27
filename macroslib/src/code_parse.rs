@@ -551,10 +551,15 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
         derive_list.remove(pos);
         for m in &mut methods {
             if m.name_alias.is_none() {
-                m.name_alias = Some(Ident::new(
-                    &m.short_name().to_mixed_case(),
-                    m.rust_id.span(),
-                ));
+                let short_name = m.short_name();
+                if short_name.is_empty() {
+                    if m.variant == MethodVariant::Constructor {
+                        continue;
+                    } else {
+                        return Err(syn::Error::new(m.span(), "method name should not be empty"));
+                    }
+                }
+                m.name_alias = Some(Ident::new(&short_name.to_mixed_case(), m.rust_id.span()));
             }
         }
     }
