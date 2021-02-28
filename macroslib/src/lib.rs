@@ -307,7 +307,7 @@ impl CppConfig {
     }
 }
 
-/// Configuration for Java binding generation
+/// Configuration for Python binding generation
 pub struct PythonConfig {
     module_name: String,
 }
