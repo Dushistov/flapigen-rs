@@ -24,4 +24,20 @@ r#"impl Foo for C_Foo {
         };
         ret
     }
+    #[allow(unused_mut)]
+    fn remove(&self) -> Result<(), Error> {
+        let ret: CRustVoidOkResult4232mut3232c_void = (self.remove)(self.opaque);
+        let mut ret: Result<(), Error> = unsafe {
+            if ret.is_ok != 0 {
+                Ok(())
+            } else {
+                assert!(!ret.data.err.is_null());
+                let x: *mut Error = ret.data.err as *mut Error;
+                let x: Box<Error> = unsafe { Box::from_raw(x) };
+                let x: Error = *x;
+                Err(x)
+            }
+        };
+        ret
+    }
 }"#;

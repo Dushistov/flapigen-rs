@@ -629,12 +629,10 @@ TEST(TestResult, smokeTest)
     EXPECT_TRUE(nullptr != std::get_if<RustString>(&res));
     EXPECT_EQ(std::string_view("this is error"), std::get<RustString>(res).to_string_view());
     auto res2 = TestResult::f(true);
-    EXPECT_TRUE(nullptr == std::get_if<RustString>(&res2));
-    EXPECT_TRUE(nullptr != std::get_if<void *>(&res2));
+    EXPECT_EQ(std::nullopt, res2);
     auto res3 = TestResult::f(false);
-    EXPECT_TRUE(nullptr != std::get_if<RustString>(&res3));
-    EXPECT_TRUE(nullptr == std::get_if<void *>(&res3));
-    EXPECT_EQ(std::string_view("Not ok"), std::get<RustString>(res3).to_string_view());
+    ASSERT_TRUE(!!res3);
+    EXPECT_EQ(std::string_view("Not ok"), res3->to_string_view());
 
     auto res_vec = TestResult::f_vec(true);
     EXPECT_TRUE(nullptr == std::get_if<RustString>(&res_vec));
@@ -729,17 +727,13 @@ TEST(TestResult, smokeTest)
                   boost::get<RustString>(std::move(res)).to_std_string());
 #endif
         auto res2 = TestResult::f(true);
-        EXPECT_EQ(nullptr, boost::get<RustString>(&res2));
-        EXPECT_NE(nullptr, boost::get<void *>(&res2));
+        EXPECT_EQ(boost::none, res2);
         auto res3 = TestResult::f(false);
-        EXPECT_NE(nullptr, boost::get<RustString>(&res3));
-        EXPECT_EQ(nullptr, boost::get<void *>(&res3));
+        ASSERT_TRUE(!!res3);
 #ifdef HAS_BOOST_STRING_VIEW_HPP
-        EXPECT_EQ(boost::string_view("Not ok"),
-                  boost::get<RustString>(std::move(res3)).to_boost_string_view());
-#else
-        EXPECT_EQ(std::string("Not ok"), boost::get<RustString>(std::move(res3)).to_std_string());
+        EXPECT_EQ(boost::string_view("Not ok"), res3->to_boost_string_view());
 #endif
+        EXPECT_EQ(std::string("Not ok"), res3->to_std_string());
     }
     {
         auto res_vec = TestResult::f_vec(true);

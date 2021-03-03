@@ -1,21 +1,12 @@
-r##"#pragma once
-
-#include <cassert>
-#include <memory> //for std::unique_ptr
-
-#include "rust_str.h"
-#include <string_view>
-#include "Error.hpp"
-#include "c_Error.h"
-#include "rust_resultCRustStrView4232mut3232c_void.h"
-#include <variant>
-
-#include "c_Foo.h"
-
-namespace org_examples {
-
-class Foo {
+r##"class Foo {
 public:
     virtual ~Foo() noexcept {}
 
-    virtual std::variant<std::string_view, Error> unpack(std::string_view x) noexcept = 0;"##;
+    virtual std::variant<std::string_view, Error> unpack(std::string_view x) noexcept = 0;
+
+    virtual std::optional<Error> remove() noexcept = 0;"##;
+
+r#"union CRustVoidOkResultUnion4232mut3232c_void {
+    uint8_t ok;
+    void * err;
+};"#;
