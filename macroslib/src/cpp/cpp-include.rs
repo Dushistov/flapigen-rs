@@ -1075,7 +1075,7 @@ foreign_typemap!(
                swig_from_i_type_to_rust!(T1, $p.data.ok, x)
                Ok(x)
            } else {
-               swig_from_i_type_to_rust!(T1, $p.data.err, x)
+               swig_from_i_type_to_rust!(T2, $p.data.err, x)
                Err(x)
            }
        };
