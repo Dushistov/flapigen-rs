@@ -1069,15 +1069,17 @@ foreign_typemap!(
               std::variant<swig_f_type!(T1), swig_f_type!(T2)> { swig_foreign_from_i_type!(T1, $p.data.ok) } :
               std::variant<swig_f_type!(T1), swig_f_type!(T2)> { swig_foreign_from_i_type!(T2, $p.data.err) }"#;
 
-    ($p:r_type) <T1, T2> Result<T1, T2> <= CRustRes!() {
-        $out = if $p.is_ok != 0 {
-            swig_from_i_type_to_rust!(T1, $p.data.ok, x)
-                Ok(x)
-        } else {
-            swig_from_i_type_to_rust!(T2, $p.data.err, x)
-                Err(x)
-        };
-    };
+   ($p:r_type) <T1, T2> Result<T1, T2> <= CRustRes!() {
+       $out = unsafe {
+           if $p.is_ok != 0 {
+               swig_from_i_type_to_rust!(T1, $p.data.ok, x)
+               Ok(x)
+           } else {
+               swig_from_i_type_to_rust!(T2, $p.data.err, x)
+               Err(x)
+           }
+       };
+   };
 
    ($p:f_type, option = "CppVariant::Boost", $tmp:temporary,
     req_modules = ["\"CRustResModule!().h\"", "<boost/variant.hpp>", "<cassert>"])

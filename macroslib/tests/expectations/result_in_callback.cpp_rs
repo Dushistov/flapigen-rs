@@ -3,7 +3,8 @@ r#"impl Foo for C_Foo {
     fn unpack(&self, a0: &str) -> Result<String, Error> {
         let mut a0: CRustStrView = CRustStrView::from_str(a0);
         let ret: CRustResultCRustStrView4232mut3232c_void = (self.unpack)(a0, self.opaque);
-        let mut ret: Result<String, Error> = if ret.is_ok != 0 {
+        let mut ret: Result<String, Error> = unsafe {
+            if ret.is_ok != 0 {
                 let mut x: &str = unsafe {
                     let slice: &[u8] = ::std::slice::from_raw_parts(
                         ret.data.ok.data as *const u8,
@@ -19,7 +20,8 @@ r#"impl Foo for C_Foo {
                 let x: Box<Error> = unsafe { Box::from_raw(x) };
                 let x: Error = *x;
                 Err(x)
-            };
+            }
+        };
         ret
     }
 }"#;
