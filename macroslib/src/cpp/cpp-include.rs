@@ -1034,33 +1034,38 @@ foreign_typemap!(
        };
    };
 
-   ($p:f_type, option = "CppVariant::Boost", $tmp:temporary,
-    req_modules = ["\"CRustResModule!().h\"", "<boost/optional.hpp>", "<cassert>"],
+   ($p:f_type, option = "CppVariant::Boost",
+    req_modules = ["\"CRustResModule!().h\"", "<boost/optional.hpp>",
+                   "<cassert>", "<utility>"],
     unique_prefix = "/*res_empty*/")
        <= "/*res_empty*/boost::optional<swig_f_type!(T)>"
-       r#"
-            $out;
-            if (!$p) {
-                $out.is_ok = 1;
+       r#"[](boost::optional<swig_f_type!(T)> p) -> CRustRes!() {
+            CRustRes!() out;
+            if (!p) {
+                out.is_ok = 1;
             } else {
-                swig_f_type!(T) $tmp = std::move(*$p);
-                $out.data.err = swig_foreign_to_i_type!(T, $tmp);
-                $out.is_ok = 0;
-            }"#;
+                swig_f_type!(T) tmp = std::move(*p);
+                out.data.err = swig_foreign_to_i_type!(T, tmp);
+                out.is_ok = 0;
+            }
+            return out;
+           }(std::move($p))"#;
 
-   ($p:f_type, option = "CppVariant::Std17", $tmp:temporary,
+   ($p:f_type, option = "CppVariant::Std17",
     req_modules = ["\"CRustResModule!().h\"", "<optional>"],
     unique_prefix = "/*res_empty*/")
        <= "/*res_empty*/std::optional<swig_f_type!(T)>"
-       r#"
-            $out;
-            if (!$p) {
-                $out.is_ok = 1;
+       r#"[](std::optional<swig_f_type!(T)> p) -> CRustRes!() {
+            CRustRes!() out;
+            if (!p) {
+                out.is_ok = 1;
             } else {
-                swig_f_type!(T) $tmp = std::move(*$p);
-                $out.data.err = swig_foreign_to_i_type!(T, $tmp);
-                $out.is_ok = 0;
-            }"#;
+                swig_f_type!(T) tmp = std::move(*p);
+                out.data.err = swig_foreign_to_i_type!(T, tmp);
+                out.is_ok = 0;
+            }
+            return out;
+          }(std::move($p))"#;
 );
 
 foreign_typemap!(
@@ -1124,35 +1129,39 @@ foreign_typemap!(
        };
    };
 
-   ($p:f_type, option = "CppVariant::Boost", $tmp:temporary,
+   ($p:f_type, option = "CppVariant::Boost",
     req_modules = ["\"CRustResModule!().h\"", "<boost/variant.hpp>", "<cassert>"])
        <= "boost::variant<swig_f_type!(T1), swig_f_type!(T2)>"
-       r#"
-            $out;
-            if (boost::get<swig_f_type!(T1)>(&$p) != nullptr) {
-                swig_f_type!(T1) $tmp = boost::get<swig_f_type!(T1)>(std::move($p));
-                $out.data.ok = swig_foreign_to_i_type!(T1, $tmp);
-                $out.is_ok = 1;
+       r#"[](boost::variant<swig_f_type!(T1), swig_f_type!(T2)> p) -> CRustRes!() {
+            CRustRes!() out;
+            if (boost::get<swig_f_type!(T1)>(&p) != nullptr) {
+                swig_f_type!(T1) tmp = boost::get<swig_f_type!(T1)>(std::move(p));
+                out.data.ok = swig_foreign_to_i_type!(T1, tmp);
+                out.is_ok = 1;
             } else {
-                assert(boost::get<swig_f_type!(T2)>(&$p) != nullptr);
-                swig_f_type!(T2) $tmp = boost::get<swig_f_type!(T2)>(std::move($p));
-                $out.data.err = swig_foreign_to_i_type!(T2, $tmp);
-                $out.is_ok = 0;
-            }"#;
+                assert(boost::get<swig_f_type!(T2)>(&p) != nullptr);
+                swig_f_type!(T2) tmp = boost::get<swig_f_type!(T2)>(std::move(p));
+                out.data.err = swig_foreign_to_i_type!(T2, tmp);
+                out.is_ok = 0;
+            }
+            return out;
+         }(std::move($p))"#;
 
-   ($p:f_type, option = "CppVariant::Std17", $tmp:temporary,
+   ($p:f_type, option = "CppVariant::Std17",
     req_modules = ["\"CRustResModule!().h\"", "<variant>"])
        <= "std::variant<swig_f_type!(T1), swig_f_type!(T2)>"
-       r#"
-            $out;
-            if (std::get_if<swig_f_type!(T1)>(&$p) != nullptr) {
-                swig_f_type!(T1) $tmp = std::get<swig_f_type!(T1)>(std::move($p));
-                $out.data.ok = swig_foreign_to_i_type!(T1, $tmp);
-                $out.is_ok = 1;
+       r#"[](std::variant<swig_f_type!(T1), swig_f_type!(T2)> p) -> CRustRes!() {
+            CRustRes!() out;
+            if (std::get_if<swig_f_type!(T1)>(&p) != nullptr) {
+                swig_f_type!(T1) tmp = std::get<swig_f_type!(T1)>(std::move(p));
+                out.data.ok = swig_foreign_to_i_type!(T1, tmp);
+                out.is_ok = 1;
             } else {
-                assert(std::get_if<swig_f_type!(T2)>(&$p) != nullptr);
-                swig_f_type!(T2) $tmp = std::get<swig_f_type!(T2)>(std::move($p));
-                $out.data.err = swig_foreign_to_i_type!(T2, $tmp);
-                $out.is_ok = 0;
-            }"#;
+                assert(std::get_if<swig_f_type!(T2)>(&p) != nullptr);
+                swig_f_type!(T2) tmp = std::get<swig_f_type!(T2)>(std::move(p));
+                out.data.err = swig_foreign_to_i_type!(T2, tmp);
+                out.is_ok = 0;
+            }
+            return out;
+          }(std::move($p))"#;
 );
