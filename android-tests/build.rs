@@ -13,7 +13,7 @@ static ANDROID_PACKAGE_ID: &str = "net.akaame.myapplication";
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::{env, fmt};
 
 use bindgen::RustTarget;
@@ -30,6 +30,7 @@ fn main() {
         "arm-linux-androideabi",
         "i686-linux-android",
         "x86_64-linux-android",
+        "armv7-linux-androideabi",
     ]
     .contains(&target.as_str())
     {
@@ -40,8 +41,7 @@ fn main() {
 fn gen_for_android() {
     let target = env::var("TARGET").unwrap();
 
-    let include_dirs =
-        get_gcc_system_include_dirs(&target).expect("Can't get NDK's system include dirs");
+    let include_dirs = get_cc_system_include_dirs().expect("Can't get NDK's system include dirs");
 
     let include_headers: Vec<_> = INCLUDE_SYS_H
         .iter()
@@ -86,62 +86,47 @@ fn gen_for_android() {
     println!("cargo:rerun-if-changed={}", out_dir);
 }
 
-fn get_gcc_system_include_dirs(target: &str) -> Result<Vec<PathBuf>, String> {
-    let gcc_cmd = match env::var("RUSTC_LINKER") {
-        Ok(path) => path,
-        Err(_) => target.to_owned() + "-gcc",
-    };
+fn get_cc_system_include_dirs() -> Result<Vec<PathBuf>, String> {
+    let cc_build = cc::Build::new();
 
-    println!("Trying Android gcc from '{}'", gcc_cmd);
-
-    let gcc_process = match Command::new(&gcc_cmd)
+    let cc_process = cc_build
+        .get_compiler()
+        .to_command()
+        .env("LANG", "C")
+        .env("LC_MESSAGES", "C")
         .args(&["-v", "-x", "c", "-E", "-"])
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
         .stdout(Stdio::inherit())
         .spawn()
-    {
-        // there are more elegant ways to write this, but this works
-        Err(e) => {
-            if std::io::ErrorKind::NotFound == e.kind() {
-                panic!(
-                    "Could not find a suitable NDK gcc (tried {})
-You can fix this either by adding the toolchain's bin/ to your $PATH, or by
-merging PR#5394 form github.com/rust-lang/cargo into your version of Cargo.",
-                    &gcc_cmd
-                );
-            } else {
-                panic!("Failed to spawn NDK gcc: {}", e);
-            }
-        }
-        Ok(p) => p,
-    };
+        .map_err(|err| err.to_string())?;
 
-    gcc_process
+    cc_process
         .stdin
-        .ok_or(format!("Cannot get stdin of {}", gcc_cmd).as_str())?
-        .write_all("\n".as_bytes())
+        .ok_or_else(|| "can not get stdin of cc".to_string())?
+        .write_all(b"\n")
         .map_err(|err| err.to_string())?;
 
-    let mut gcc_output = String::new();
-    gcc_process
+    let mut cc_output = String::new();
+
+    cc_process
         .stderr
-        .ok_or(format!("Cannot get stderr of {}", gcc_cmd).as_str())?
-        .read_to_string(&mut gcc_output)
+        .ok_or_else(|| "can not get stderr of cc".to_string())?
+        .read_to_string(&mut cc_output)
         .map_err(|err| err.to_string())?;
 
-    const BEGIN_PAT: &'static str = "\n#include <...> search starts here:\n";
-    const END_PAT: &'static str = "\nEnd of search list.\n";
-    let start_includes = gcc_output
+    const BEGIN_PAT: &str = "\n#include <...> search starts here:\n";
+    const END_PAT: &str = "\nEnd of search list.\n";
+    let start_includes = cc_output
         .find(BEGIN_PAT)
-        .ok_or(format!("No '{}' in output from {}", BEGIN_PAT, gcc_cmd).as_str())?
+        .ok_or_else(|| format!("No '{}' in output from C compiler", BEGIN_PAT))?
         + BEGIN_PAT.len();
-    let end_includes = (&gcc_output[start_includes..])
+    let end_includes = (&cc_output[start_includes..])
         .find(END_PAT)
-        .ok_or(format!("No '{}' in output from {}", END_PAT, gcc_cmd).as_str())?
+        .ok_or_else(|| format!("No '{}' in output from C compiler", END_PAT))?
         + start_includes;
 
-    Ok((&gcc_output[start_includes..end_includes])
+    Ok((&cc_output[start_includes..end_includes])
         .split('\n')
         .map(|s| PathBuf::from(s.trim().to_string()))
         .collect())
