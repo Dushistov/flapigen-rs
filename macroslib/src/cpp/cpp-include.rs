@@ -783,7 +783,7 @@ foreign_typemap!(
 "##);
     ($p:r_type) <T: SwigTypeIsReprC> &mut [T] => CRustSliceMut!() {
         $out =  CRustSliceMut!() {
-            data: $p.as_ptr(),
+            data: $p.as_mut_ptr(),
             len: $p.len(),
         };
     };

@@ -28,3 +28,12 @@ r#"template<bool OWN_DATA>
         return RustSlice<const uintptr_t>{ret.data, ret.len};
     }"#;
 
+"RustSlice<uintptr_t> f4() const noexcept;";
+"struct CRustSliceMutusize Boo_f4(const BooOpaque * const self);";
+r#"template<bool OWN_DATA>
+    inline RustSlice<uintptr_t> BooWrapper<OWN_DATA>::f4() const noexcept
+    {
+
+        struct CRustSliceMutusize ret = Boo_f4(this->self_);
+        return RustSlice<uintptr_t>{ret.data, ret.len};
+    }"#;
