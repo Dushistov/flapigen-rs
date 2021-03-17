@@ -16,4 +16,13 @@ r##"# [ no_mangle ] pub extern "C" fn Boo_f3 ( this : * mut Boo , ) -> CRustSlic
  let mut ret : CRustSliceusize = CRustSliceusize { data : ret . as_ptr ( ) , len : ret . len ( ) , } ;
  ret }"##;
 
-
+r##"#[no_mangle]
+pub extern "C" fn Boo_f4(this: *mut Boo) -> CRustSliceMutusize {
+    let this: &Boo = unsafe { this.as_mut().unwrap() };
+    let mut ret: &mut [usize] = Boo::f4(this);
+    let mut ret: CRustSliceMutusize = CRustSliceMutusize {
+        data: ret.as_mut_ptr(),
+        len: ret.len(),
+    };
+    ret
+}"##;
