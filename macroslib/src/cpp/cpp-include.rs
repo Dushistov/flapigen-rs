@@ -162,6 +162,18 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
+    ($p:r_type) <T> Arc<T> => &T {
+        $out = & $p;
+    };
+);
+
+foreign_typemap!(
+    ($p:r_type) <T> &Arc<T> => &T {
+        $out = & $p;
+    };
+);
+
+foreign_typemap!(
     ($p:r_type) <T> &RefCell<T> => Ref<T> {
         $out = $p.borrow();
     };
@@ -979,6 +991,26 @@ using CForeignVecModule!() = RustForeignVec<swig_f_type!(&T, output), CRustForei
         "CForeignVecModule!(){$p}";
     ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) <= "CForeignVecModule!()"
         "$p.release()";
+);
+
+foreign_typemap!(
+    ($p:r_type) <T: SwigForeignClass> Vec<&T> => CRustForeignVec {
+        let cloned = $p.into_iter().cloned().collect::<Vec<_>>();
+        $out = CRustForeignVec::from_vec(cloned);
+    };
+    ($p:r_type) <T: SwigForeignClass> Vec<&T> <= CRustForeignVec {
+        let as_ref = $p.iter().collect::<Vec<_>>();
+        $out = unsafe { Vec::from_raw_parts(as_ref.data as *mut swig_subst_type!(T), as_ref.len, as_ref.capacity) };
+    };
+);
+
+foreign_typemap!(
+    ($p:r_type) <T1, T2> Vec<(T1,T2)> => CRustForeignVec {
+        $out = CRustForeignVec::from_vec($p);
+    };
+    ($p:r_type) <T1, T2> Vec<(T1,T2)> <= CRustForeignVec {
+        $out = unsafe { Vec::from_raw_parts($p.data as *mut swig_subst_type!(T), $p.len, $p.capacity) };
+    };
 );
 
 // order is important!!!

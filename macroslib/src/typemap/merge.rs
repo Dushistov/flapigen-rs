@@ -466,7 +466,7 @@ fn validate_rule_rewrite(
             if !prev_rule.conv_code.src_id().is_none()
                 && prev_rule.conv_code.src_id() == new_rule.conv_code.src_id()
             {
-                error!("prev_rule {:?}, new_rule {:?}", prev_rule, new_rule);
+                error!("prev_rule {:?}, new_rule {:?}", prev, new);
                 return Err(DiagnosticError::new(
                     new_rule.conv_code.src_id(),
                     new_rule.conv_code.span(),

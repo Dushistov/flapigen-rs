@@ -24,6 +24,7 @@ smol_str = "0.1.15"
 strum = { version = "0.18.0", features = ["derive"] }
 heck = "0.3.1"
 which = { version = "3.0", default-features = false }
+itertools = "0.9"
 
 [dev-dependencies]
 env_logger = "0.8.3"

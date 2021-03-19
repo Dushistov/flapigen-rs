@@ -153,7 +153,7 @@ impl<'a> TraitNamesSet<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ForeignTypeS {
     pub name: TypeName,
     /// specify which foreign module provides this type
@@ -184,6 +184,7 @@ impl ForeignTypeS {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationRule {
+    // Storage type
     pub(crate) rust_ty: RustTypeIdx,
     pub(crate) intermediate: Option<ForeignConversationIntermediate>,
 }
@@ -191,8 +192,10 @@ pub(crate) struct ForeignConversationRule {
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignConversationIntermediate {
     pub(crate) input_to_output: bool,
+    // something like *mut T
     pub(crate) intermediate_ty: RustTypeIdx,
-    pub(crate) conv_code: Rc<TypeConvCode>,
+    // Conversion code in a target language
+    pub(crate) conv_code: Rc<TypeConvCode>, 
 }
 
 #[derive(Debug, Clone, Copy)]
