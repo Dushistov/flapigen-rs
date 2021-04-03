@@ -18,6 +18,8 @@ use crate::{
     },
 };
 
+use super::TypesConvGraph;
+
 impl TypeMap {
     pub(crate) fn merge(
         &mut self,
@@ -302,9 +304,17 @@ impl TypeMap {
                 let name = ForeignTypeName::new(ft1.name, (src_id, ft1.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 let res_ftype = &mut self.ftypes_storage[ftype_idx];
-                validate_rule_rewrite(res_ftype.into_from_rust.as_ref(), &into_from_rust)?;
+                validate_rule_rewrite(
+                    res_ftype.into_from_rust.as_ref(),
+                    &into_from_rust,
+                    &self.conv_graph,
+                )?;
                 res_ftype.into_from_rust = Some(into_from_rust);
-                validate_rule_rewrite(res_ftype.from_into_rust.as_ref(), &from_into_rust)?;
+                validate_rule_rewrite(
+                    res_ftype.from_into_rust.as_ref(),
+                    &from_into_rust,
+                    &self.conv_graph,
+                )?;
                 res_ftype.from_into_rust = Some(from_into_rust);
                 res_ftype.provides_by_module =
                     convert_req_module_to_provides_by_module(req_modules);
@@ -314,7 +324,11 @@ impl TypeMap {
                 let name = ForeignTypeName::new(ft.name, (src_id, ft.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 let res_ftype = &mut self.ftypes_storage[ftype_idx];
-                validate_rule_rewrite(res_ftype.into_from_rust.as_ref(), &into_from_rust)?;
+                validate_rule_rewrite(
+                    res_ftype.into_from_rust.as_ref(),
+                    &into_from_rust,
+                    &self.conv_graph,
+                )?;
                 res_ftype.into_from_rust = Some(into_from_rust);
                 res_ftype.provides_by_module =
                     convert_req_module_to_provides_by_module(req_modules);
@@ -324,7 +338,11 @@ impl TypeMap {
                 let name = ForeignTypeName::new(ft.name, (src_id, ft.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 let res_ftype = &mut self.ftypes_storage[ftype_idx];
-                validate_rule_rewrite(res_ftype.from_into_rust.as_ref(), &from_into_rust)?;
+                validate_rule_rewrite(
+                    res_ftype.from_into_rust.as_ref(),
+                    &from_into_rust,
+                    &self.conv_graph,
+                )?;
                 res_ftype.from_into_rust = Some(from_into_rust);
                 res_ftype.provides_by_module =
                     convert_req_module_to_provides_by_module(req_modules);
@@ -458,7 +476,22 @@ fn convert_req_module_to_provides_by_module(v: Vec<ModuleName>) -> Vec<SmolStr> 
 fn validate_rule_rewrite(
     prev: Option<&ForeignConversationRule>,
     new: &ForeignConversationRule,
+    diagnostic_map: &TypesConvGraph,
 ) -> Result<()> {
+    fn types_from_rule_to_string(
+        diagnostic_map: &TypesConvGraph,
+        rule: &ForeignConversationRule,
+    ) -> String {
+        format!(
+            "main rust type {}, intermediate {}",
+            diagnostic_map[rule.rust_ty],
+            rule.intermediate
+                .as_ref()
+                .map(|x| diagnostic_map[x.intermediate_ty].normalized_name.as_str())
+                .unwrap_or("")
+        )
+    }
+
     if let Some(prev) = prev {
         if let (Some(prev_rule), Some(new_rule)) =
             (prev.intermediate.as_ref(), new.intermediate.as_ref())
@@ -470,11 +503,17 @@ fn validate_rule_rewrite(
                 return Err(DiagnosticError::new(
                     new_rule.conv_code.src_id(),
                     new_rule.conv_code.span(),
-                    "new rule f_type here",
+                    format!(
+                        "new rule f_type ({}) here",
+                        types_from_rule_to_string(diagnostic_map, new)
+                    ),
                 )
                 .add_span_note(
                     (prev_rule.conv_code.src_id(), prev_rule.conv_code.span()),
-                    "overwrite f_type defined in the same file",
+                    format!(
+                        "overwrite f_type ({}) defined in the same file",
+                        types_from_rule_to_string(diagnostic_map, prev)
+                    ),
                 ));
             }
         }

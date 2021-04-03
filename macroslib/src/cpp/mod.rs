@@ -175,7 +175,7 @@ impl CppForeignTypeInfo {
             base_ft_name,
             cpp_converter
         );
-        Ok(CppForeignTypeInfo {
+        Ok(Self {
             input_to_output,
             base: ForeignTypeInfo {
                 name: base_ft_name.clone(),

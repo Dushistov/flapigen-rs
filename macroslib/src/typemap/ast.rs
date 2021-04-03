@@ -107,6 +107,15 @@ impl Into<UniqueName> for SmolStr {
     }
 }
 
+impl Into<UniqueName> for String {
+    fn into(self) -> UniqueName {
+        UniqueName {
+            value: self.into(),
+            unique_prefix_len: 0,
+        }
+    }
+}
+
 impl<'a> Into<UniqueName> for &'a str {
     fn into(self) -> UniqueName {
         UniqueName {
@@ -164,8 +173,7 @@ impl Display for ForeignTypeName {
 }
 
 impl ForeignTypeName {
-    pub(crate) fn new<S: Into<SmolStr>>(tn: S, span: SourceIdSpan) -> Self {
-        let tn: SmolStr = tn.into();
+    pub(crate) fn new<S: Into<UniqueName>>(tn: S, span: SourceIdSpan) -> Self {
         Self {
             typename: tn.into(),
             span,
