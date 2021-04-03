@@ -11,12 +11,14 @@ use crate::{
     error::{DiagnosticError, Result},
     source_registry::SourceId,
     typemap::{
-        ast::{SpannedSmolStr, TypeName},
+        ast::{ForeignTypeName, SpannedSmolStr},
         ty::{ForeignConversationIntermediate, ForeignTypeS, ForeignTypesStorage},
         typemap_macro::{FTypeLeftRightPair, ModuleName, TypeMapConvRuleInfo},
         TypeConvEdge, TypeMap,
     },
 };
+
+use super::TypesConvGraph;
 
 impl TypeMap {
     pub(crate) fn merge(
@@ -94,7 +96,7 @@ impl TypeMap {
             let r_ty = self.find_or_alloc_rust_type(r_ty, src_id).graph_idx;
             self.invalidate_conv_for_rust_type(r_ty);
             let ftype_idx = self.add_foreign_rust_ty_idx(
-                TypeName::new(f_ty.name.clone(), (src_id, f_ty.sp)),
+                ForeignTypeName::new(f_ty.name.clone(), (src_id, f_ty.sp)),
                 r_ty,
             )?;
             let ftype = &mut self.ftypes_storage[ftype_idx];
@@ -299,32 +301,48 @@ impl TypeMap {
                     )
                     .add_span_note((src_id, ft2.sp), format!("another type is {}", ft2.name)));
                 }
-                let name = TypeName::new(ft1.name, (src_id, ft1.sp));
+                let name = ForeignTypeName::new(ft1.name, (src_id, ft1.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 let res_ftype = &mut self.ftypes_storage[ftype_idx];
-                validate_rule_rewrite(res_ftype.into_from_rust.as_ref(), &into_from_rust)?;
+                validate_rule_rewrite(
+                    res_ftype.into_from_rust.as_ref(),
+                    &into_from_rust,
+                    &self.conv_graph,
+                )?;
                 res_ftype.into_from_rust = Some(into_from_rust);
-                validate_rule_rewrite(res_ftype.from_into_rust.as_ref(), &from_into_rust)?;
+                validate_rule_rewrite(
+                    res_ftype.from_into_rust.as_ref(),
+                    &from_into_rust,
+                    &self.conv_graph,
+                )?;
                 res_ftype.from_into_rust = Some(from_into_rust);
                 res_ftype.provides_by_module =
                     convert_req_module_to_provides_by_module(req_modules);
                 set_unique_prefix(res_ftype, ft_unique_prefix, src_id)?;
             }
             (Some((ft, into_from_rust)), None) => {
-                let name = TypeName::new(ft.name, (src_id, ft.sp));
+                let name = ForeignTypeName::new(ft.name, (src_id, ft.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 let res_ftype = &mut self.ftypes_storage[ftype_idx];
-                validate_rule_rewrite(res_ftype.into_from_rust.as_ref(), &into_from_rust)?;
+                validate_rule_rewrite(
+                    res_ftype.into_from_rust.as_ref(),
+                    &into_from_rust,
+                    &self.conv_graph,
+                )?;
                 res_ftype.into_from_rust = Some(into_from_rust);
                 res_ftype.provides_by_module =
                     convert_req_module_to_provides_by_module(req_modules);
                 set_unique_prefix(res_ftype, ft_unique_prefix, src_id)?;
             }
             (None, Some((ft, from_into_rust))) => {
-                let name = TypeName::new(ft.name, (src_id, ft.sp));
+                let name = ForeignTypeName::new(ft.name, (src_id, ft.sp));
                 let ftype_idx = self.ftypes_storage.find_or_alloc(name);
                 let res_ftype = &mut self.ftypes_storage[ftype_idx];
-                validate_rule_rewrite(res_ftype.from_into_rust.as_ref(), &from_into_rust)?;
+                validate_rule_rewrite(
+                    res_ftype.from_into_rust.as_ref(),
+                    &from_into_rust,
+                    &self.conv_graph,
+                )?;
                 res_ftype.from_into_rust = Some(from_into_rust);
                 res_ftype.provides_by_module =
                     convert_req_module_to_provides_by_module(req_modules);
@@ -399,7 +417,7 @@ fn add_new_ftypes(
         ftype_map_rust_types(&mut new_ftype, new_node_to_our_map);
         match data
             .ftypes_storage
-            .find_ftype_by_name(new_ftype.name.as_str())
+            .find_ftype_by_name(new_ftype.name.value())
         {
             Some(ftype_idx) => {
                 ftype_merge(&mut data.ftypes_storage[ftype_idx], new_ftype);
@@ -458,7 +476,22 @@ fn convert_req_module_to_provides_by_module(v: Vec<ModuleName>) -> Vec<SmolStr> 
 fn validate_rule_rewrite(
     prev: Option<&ForeignConversationRule>,
     new: &ForeignConversationRule,
+    diagnostic_map: &TypesConvGraph,
 ) -> Result<()> {
+    fn types_from_rule_to_string(
+        diagnostic_map: &TypesConvGraph,
+        rule: &ForeignConversationRule,
+    ) -> String {
+        format!(
+            "main rust type {}, intermediate {}",
+            diagnostic_map[rule.rust_ty],
+            rule.intermediate
+                .as_ref()
+                .map(|x| diagnostic_map[x.intermediate_ty].normalized_name.as_str())
+                .unwrap_or("")
+        )
+    }
+
     if let Some(prev) = prev {
         if let (Some(prev_rule), Some(new_rule)) =
             (prev.intermediate.as_ref(), new.intermediate.as_ref())
@@ -470,11 +503,17 @@ fn validate_rule_rewrite(
                 return Err(DiagnosticError::new(
                     new_rule.conv_code.src_id(),
                     new_rule.conv_code.span(),
-                    "new rule f_type here",
+                    format!(
+                        "new rule f_type ({}) here",
+                        types_from_rule_to_string(diagnostic_map, new)
+                    ),
                 )
                 .add_span_note(
                     (prev_rule.conv_code.src_id(), prev_rule.conv_code.span()),
-                    "overwrite f_type defined in the same file",
+                    format!(
+                        "overwrite f_type ({}) defined in the same file",
+                        types_from_rule_to_string(diagnostic_map, prev)
+                    ),
                 ));
             }
         }
@@ -488,30 +527,30 @@ fn set_unique_prefix(
     unique_prefix: Option<SpannedSmolStr>,
     src_id: SourceId,
 ) -> Result<()> {
-    let different = match (&unique_prefix, &ft.name_prefix) {
-        (Some(x), Some(y)) => x.as_str() != y.as_str(),
+    let different = match (&unique_prefix, ft.name.unique_prefix()) {
+        (Some(x), Some(y)) => x.as_str() != y,
         (None, None) => false,
         (Some(_), None) | (None, Some(_)) => true,
     };
-    if let Some(ref name_prefix) = ft.name_prefix {
+    if let Some(name_prefix) = ft.name.unique_prefix() {
         if different && !ft.name.span.0.is_none() && ft.name.span.0 == src_id {
             return Err(DiagnosticError::new2(
                 ft.name.span,
                 format!(
                     "you change unique_prefix in the same file, was '{}', new '{:?}'",
-                    name_prefix.as_str(),
-                    unique_prefix
+                    name_prefix, unique_prefix
                 ),
             ));
         }
     }
     if let Some(unique_prefix) = unique_prefix.as_ref() {
-        if !ft.name.as_str().starts_with(unique_prefix.as_str()) {
+        if !ft.name.value().starts_with(unique_prefix.as_str()) {
             //just ignore prefix
             return Ok(());
         }
     }
-    ft.name_prefix = unique_prefix.map(|x| x.value);
+    ft.name
+        .set_name_prefix(unique_prefix.as_ref().map(|x| x.value.as_str()));
     Ok(())
 }
 
@@ -620,7 +659,7 @@ fn helper3() {
                 },
             )
             .unwrap();
-        assert_eq!("int", types_map[fti].name.as_str(),);
+        assert_eq!("int", types_map[fti].name.display());
         assert_eq!(
             "let mut {to_var}: {to_var_type} = {from_var}.swig_into(env);",
             {

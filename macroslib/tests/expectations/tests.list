@@ -63,3 +63,4 @@ access
 import_null_annotation_java
 parse_errors
 result_in_callback
+cpp_ret_opt_qstring

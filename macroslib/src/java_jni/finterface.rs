@@ -15,7 +15,7 @@ use crate::{
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
-        ast::{DisplayToTokens, TypeName},
+        ast::{DisplayToTokens, ForeignTypeName},
         ty::RustType,
         utils::rust_to_foreign_convert_method_inputs,
         ForeignTypeInfo,
@@ -45,7 +45,7 @@ pub(in crate::java_jni) fn generate_interface(
     );
     ctx.conv_map.add_foreign(
         my_jobj_ti,
-        TypeName::from_ident(&interface.name, interface.src_id),
+        ForeignTypeName::from_ident(&interface.name, interface.src_id),
     )?;
     Ok(())
 }

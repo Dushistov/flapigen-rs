@@ -640,20 +640,27 @@ fn parse_f_type_rule(
         match (conv_rule_type.as_ref(), left_ty.as_ref()) {
             (Some(ConvertRuleType::LeftToRight(tname)), Some(left_ty))
             | (Some(ConvertRuleType::RightToLeft(tname)), Some(left_ty)) => {
-                if !tname.name.starts_with(unique_prefix.value.as_str())
-                    && !left_ty.name.starts_with(unique_prefix.value.as_str())
+                if !tname.name.value().starts_with(unique_prefix.value.as_str())
+                    && !left_ty
+                        .name
+                        .value()
+                        .starts_with(unique_prefix.value.as_str())
                 {
                     return to_error(tname);
                 }
             }
             (Some(ConvertRuleType::LeftToRight(tname)), None)
             | (Some(ConvertRuleType::RightToLeft(tname)), None) => {
-                if !tname.name.starts_with(unique_prefix.value.as_str()) {
+                if !tname.name.value().starts_with(unique_prefix.value.as_str()) {
                     return to_error(tname);
                 }
             }
             (_, Some(left_ty)) => {
-                if !left_ty.name.starts_with(unique_prefix.value.as_str()) {
+                if !left_ty
+                    .name
+                    .value()
+                    .starts_with(unique_prefix.value.as_str())
+                {
                     return to_error(left_ty);
                 }
             }

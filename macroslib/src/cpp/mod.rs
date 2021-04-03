@@ -52,7 +52,10 @@ use crate::{
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
-        ast::{check_if_smart_pointer_return_inner_type, parse_ty_with_given_span, TypeName},
+        ast::{
+            check_if_smart_pointer_return_inner_type, parse_ty_with_given_span, ForeignTypeName,
+            UniqueName,
+        },
         ty::{ForeignConversationRule, ForeignType, ForeignTypeS, RustType},
         utils::{
             configure_ftype_rule, remove_files_if, validate_cfg_options, ForeignMethodSignature,
@@ -67,7 +70,7 @@ use crate::{
 
 #[derive(Debug)]
 struct CppConverter {
-    typename: SmolStr,
+    typename: UniqueName,
     converter: Rc<TypeConvCode>,
 }
 
@@ -80,8 +83,8 @@ struct CppForeignTypeInfo {
 }
 
 impl ForeignTypeInfoT for CppForeignTypeInfo {
-    fn name(&self) -> &str {
-        self.base.name.as_str()
+    fn display(&self) -> &str {
+        self.base.name.display()
     }
     fn correspoding_rust_type(&self) -> &RustType {
         &self.base.correspoding_rust_type
@@ -119,7 +122,7 @@ impl CppForeignTypeInfo {
         if let Some(intermediate) = rule.intermediate.as_ref() {
             input_to_output = intermediate.input_to_output;
             base_rt = intermediate.intermediate_ty;
-            let typename = ftype.typename();
+            let typename = ftype.typename().typename.clone();
             let converter = intermediate.conv_code.clone();
             let intermediate_ty = intermediate.intermediate_ty;
 
@@ -165,17 +168,17 @@ impl CppForeignTypeInfo {
             });
         } else {
             base_rt = rule.rust_ty;
-            base_ft_name = ftype.typename();
+            base_ft_name = ftype.name.typename.clone();
         }
         trace!(
             "CppForeignTypeInfo::try_new base_ft_name {}, cpp_converter {:?}",
             base_ft_name,
             cpp_converter
         );
-        Ok(CppForeignTypeInfo {
+        Ok(Self {
             input_to_output,
             base: ForeignTypeInfo {
-                name: base_ft_name,
+                name: base_ft_name.clone(),
                 correspoding_rust_type: ctx.conv_map[base_rt].clone(),
             },
             provides_by_module,
@@ -443,16 +446,14 @@ fn register_c_type(
         let rust_ty = tmap.find_or_alloc_rust_type(&rust_ty, src_id);
         debug!("init::c_types add {} / {}", rust_ty, c_name);
         if let Some(ftype_idx) = tmap.find_foreign_type_related_to_rust_ty(rust_ty.to_idx()) {
-            if tmap[ftype_idx].name.as_str() != c_name {
+            if tmap[ftype_idx].name.display() != c_name {
                 return Err(DiagnosticError::new(
                     src_id,
                     f_ident.span(),
                     format!(
                         "There is already exists foreign type related to rust type '{}', \
                          but name is different: should be {}, have {}",
-                        rust_ty,
-                        c_name,
-                        tmap[ftype_idx].name.as_str()
+                        rust_ty, c_name, tmap[ftype_idx].name
                     ),
                 ));
             }
@@ -462,11 +463,10 @@ fn register_c_type(
                 intermediate: None,
             };
             tmap.alloc_foreign_type(ForeignTypeS {
-                name: TypeName::new(c_name, (src_id, f_ident.span())),
+                name: ForeignTypeName::new(c_name, (src_id, f_ident.span())),
                 provides_by_module: vec![format!("\"{}\"", c_types.header_name).into()],
                 into_from_rust: Some(rule.clone()),
                 from_into_rust: Some(rule),
-                name_prefix: None,
             })?;
         }
     }

@@ -182,7 +182,7 @@ public final class {class_name} {{"#,
                 if let Some(conv) = f_method.output.java_converter.as_ref() {
                     calc_output_conv(&f_method.output, conv, &ret_name, &conv_ret)
                 } else {
-                    let ret_type = f_method.output.base.name.as_str();
+                    let ret_type = f_method.output.base.name.display();
                     (ret_type, ret_type, String::new())
                 }
             }
@@ -190,7 +190,7 @@ public final class {class_name} {{"#,
                 if let Some(conv) = f_method.output.java_converter.as_ref() {
                     calc_output_conv(&f_method.output, conv, &ret_name, &conv_ret)
                 } else {
-                    let ret_type = f_method.output.base.name.as_str();
+                    let ret_type = f_method.output.base.name.display();
                     (ret_type, ret_type, String::new())
                 }
             }
@@ -1076,7 +1076,7 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
             None
         };
         if let Some(after_conv_arg_name) = after_conv_arg_name {
-            if !java_code::is_primitive_type(&arg.base.name) {
+            if !java_code::is_primitive_type(arg.base.name.display()) {
                 protect_args.push(arg_name);
             }
             args_for_call_internal.push_str(&after_conv_arg_name);
@@ -1143,8 +1143,8 @@ fn calc_output_conv<'a>(
     ret_name: &str,
     conv_ret: &str,
 ) -> (&'a str, &'a str, String) {
-    let ret_type = output.base.name.as_str();
-    let intermidiate_ret_type = conv.java_transition_type.as_str();
+    let ret_type = output.base.name.display();
+    let intermidiate_ret_type = conv.java_transition_type.display();
     let conv_code = conv
         .converter
         .replace(FROM_VAR_TEMPLATE, ret_name)

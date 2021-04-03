@@ -22,7 +22,9 @@ use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result, SourceIdSpan},
     source_registry::SourceId,
     typemap::{
-        ast::{get_trait_bounds, normalize_type, DisplayToTokens, GenericTypeConv, TypeName},
+        ast::{
+            get_trait_bounds, normalize_type, DisplayToTokens, ForeignTypeName, GenericTypeConv,
+        },
         ty::{
             ForeignConversationRule, ForeignType, ForeignTypeS, ForeignTypesStorage, RustType,
             RustTypeS,
@@ -35,6 +37,8 @@ use ast::ConversationResult;
 pub(crate) use typemap_macro::{
     CItem, CItems, ExpandedFType, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
 };
+
+use self::ast::UniqueName;
 pub(crate) static TO_VAR_TEMPLATE: &str = "{to_var}";
 pub(crate) static FROM_VAR_TEMPLATE: &str = "{from_var}";
 pub(crate) static TO_VAR_TYPE_TEMPLATE: &str = "{to_var_type}";
@@ -374,7 +378,7 @@ impl PossiblePath {
 
 #[derive(Debug)]
 pub(crate) struct ForeignTypeInfo {
-    pub name: SmolStr,
+    pub name: UniqueName,
     pub correspoding_rust_type: RustType,
 }
 
@@ -483,7 +487,7 @@ impl TypeMap {
     pub(crate) fn add_foreign(
         &mut self,
         correspoding_rty: RustType,
-        foreign_name: TypeName,
+        foreign_name: ForeignTypeName,
     ) -> Result<ForeignType> {
         trace!("add_foreign: {} / {}", foreign_name, correspoding_rty);
         self.ftypes_storage
@@ -492,7 +496,7 @@ impl TypeMap {
 
     pub(crate) fn add_foreign_rust_ty_idx(
         &mut self,
-        foreign_name: TypeName,
+        foreign_name: ForeignTypeName,
         correspoding_rty: NodeIndex,
     ) -> Result<ForeignType> {
         trace!(
@@ -761,7 +765,10 @@ impl TypeMap {
                                 new_foreign_types.insert((
                                     edge.to_ty.clone(),
                                     suffix,
-                                    TypeName::new(foreign_name, (class.src_id, class.name.span())),
+                                    ForeignTypeName::new(
+                                        foreign_name,
+                                        (class.src_id, class.name.span()),
+                                    ),
                                 ));
                             } else {
                                 println!(

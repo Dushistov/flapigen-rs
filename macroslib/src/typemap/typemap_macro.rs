@@ -23,7 +23,7 @@ use crate::{
             DisplayToTokens, GenericTypeConv, SpannedSmolStr, TyParamsSubstMap,
         },
         ty::TraitNamesSet,
-        TypeConvCode,
+        TypeConvCode, UniqueName,
     },
     WRITE_TO_MEM_FAILED_MSG,
 };
@@ -499,7 +499,7 @@ impl FTypeLeftRightPair {
 
 #[derive(Debug, Clone)]
 pub(crate) struct FTypeName {
-    pub name: SmolStr,
+    pub name: UniqueName,
     pub sp: Span,
 }
 
@@ -519,7 +519,7 @@ impl From<LitStr> for FTypeName {
 }
 
 pub(crate) struct ExpandedFType {
-    pub name: SmolStr,
+    pub name: UniqueName,
     pub provides_by_module: Vec<SmolStr>,
 }
 
@@ -635,7 +635,7 @@ fn concat_idents(
             let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
             let mut f_type = expander.swig_f_type(ty.as_ref(), None)?;
             req_modules.append(&mut f_type.provides_by_module);
-            ident.push_str(&f_type.name);
+            ident.push_str(f_type.name.display());
         }
         GenericAliasItem::Ident(id) => ident.push_str(&id.to_string()),
     }
@@ -992,7 +992,7 @@ fn call_swig_f_type(
     };
 
     let f_type = expander.swig_f_type(ty.as_ref(), opt_param)?;
-    out.push_str(&f_type.name);
+    out.push_str(f_type.name.value());
     Ok(f_type.provides_by_module)
 }
 
@@ -1008,7 +1008,7 @@ fn expand_ftype_name(
 
     let new_fytpe = expand_str_in_ftype_name_context(
         ctx_span,
-        ftype.name.as_str(),
+        ftype.name.display(),
         param_map,
         expander,
         generic_aliases,
@@ -1040,7 +1040,7 @@ fn expand_str_in_ftype_name_context(
             Ok(())
         } else if id == SWIG_SUBST_TYPE {
             let type_name = if params.len() == 1 {
-                &params[0]
+                params[0]
             } else {
                 return Err(DiagnosticError::new2(
                     ctx_span,
@@ -1048,7 +1048,7 @@ fn expand_str_in_ftype_name_context(
                 ));
             };
             let ty = find_type_param(param_map, type_name, ctx_span)?;
-            write!(out, "{}", normalize_type(ty.as_ref())).expect(WRITE_TO_MEM_FAILED_MSG);
+            out.push_str(normalize_type(ty.as_ref()));
             Ok(())
         } else if let Some(pos) = generic_aliases.iter().position(|a| a.name == id) {
             write!(out, "{}", DisplayToTokens(&generic_aliases[pos].value))
@@ -1096,7 +1096,7 @@ fn find_type_param<'a, 'b>(
             .add_span_note(invalid_src_id_span(), err)
     })?;
     if let Type::Reference(ty_ref) = compound_ty {
-        let param = format!("{}", DisplayToTokens(&ty_ref.elem));
+        let param = DisplayToTokens(&ty_ref.elem).to_string();
         if let Some(Some(ty)) = param_map.get(&param) {
             let new_ty = Type::Reference(syn::TypeReference {
                 and_token: ty_ref.and_token,
@@ -1259,7 +1259,7 @@ fn expand_foreign_code(
                     let ty = find_type_param(param_map, param, ctx_span)?;
                     let i_type = expander.swig_i_type(ty.as_ref(), opt_arg)?;
                     let f_type = expander.swig_f_type(&i_type, opt_arg)?;
-                    out.push_str(&f_type.name);
+                    out.push_str(f_type.name.display());
                 }
                 _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {
                     let (type_name, var_name) = if params.len() == 2 {

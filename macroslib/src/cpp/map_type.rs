@@ -8,7 +8,7 @@ use crate::{
     cpp::{merge_c_types, merge_rule, CppContext, CppForeignTypeInfo, MergeCItemsFlags},
     error::{DiagnosticError, Result, SourceIdSpan},
     typemap::{
-        ast::{DisplayToTokens, TyParamsSubstList},
+        ast::{DisplayToTokens, TyParamsSubstList, UniqueName},
         ty::{ForeignType, RustType, TraitNamesSet},
         ExpandedFType, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
     },
@@ -225,12 +225,15 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
         let direction = self.arg_direction(param1)?;
         let f_info = map_type(self.ctx, &rust_ty, direction, self.arg_ty_span)?;
         let fname = if let Some(ref cpp_conv) = f_info.cpp_converter {
-            cpp_conv.typename.as_str()
+            &cpp_conv.typename
         } else {
-            f_info.base.name.as_str()
+            &f_info.base.name
         };
         Ok(ExpandedFType {
-            name: fname.replace("struct ", "").replace("union ", "").into(),
+            name: UniqueName::new(
+                fname.value().replace("struct ", "").replace("union ", ""),
+                fname.unique_prefix().unwrap_or(""),
+            ),
             provides_by_module: f_info.provides_by_module.clone(),
         })
     }

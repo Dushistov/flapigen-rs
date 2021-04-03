@@ -22,7 +22,7 @@ use crate::{
     typemap::{
         ast::{
             check_if_smart_pointer_return_inner_type, if_result_return_ok_err_types,
-            if_ty_result_return_ok_type, DisplayToTokens,
+            if_ty_result_return_ok_type, DisplayToTokens, UniqueName,
         },
         ty::RustType,
         utils::{
@@ -66,8 +66,8 @@ struct JavaForeignTypeInfo {
 }
 
 impl ForeignTypeInfoT for JavaForeignTypeInfo {
-    fn name(&self) -> &str {
-        self.base.name.as_str()
+    fn display(&self) -> &str {
+        self.base.name.display()
     }
     fn correspoding_rust_type(&self) -> &RustType {
         &self.base.correspoding_rust_type
@@ -76,7 +76,7 @@ impl ForeignTypeInfoT for JavaForeignTypeInfo {
 
 #[derive(Debug)]
 struct JavaConverter {
-    java_transition_type: SmolStr,
+    java_transition_type: UniqueName,
     annotation: Option<NullAnnotation>,
     converter: String,
 }

@@ -23,13 +23,13 @@ use crate::{
 };
 
 pub(crate) trait ForeignTypeInfoT {
-    fn name(&self) -> &str;
+    fn display(&self) -> &str;
     fn correspoding_rust_type(&self) -> &RustType;
 }
 
 impl ForeignTypeInfoT for ForeignTypeInfo {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    fn display(&self) -> &str {
+        self.name.display()
     }
     fn correspoding_rust_type(&self) -> &RustType {
         &self.correspoding_rust_type

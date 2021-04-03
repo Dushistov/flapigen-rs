@@ -4,7 +4,7 @@ use crate::{
     extension::{ClassExtHandlers, MethodExtHandlers},
     source_registry::SourceId,
     typemap::{
-        ast::{GenericTypeConv, TypeName},
+        ast::{ForeignTypeName, GenericTypeConv},
         ty::ForeignTypeS,
         TypeConvCode,
     },
@@ -181,14 +181,13 @@ impl PythonConfig {
             enum_info.src_id,
         );
         let enum_ftype = ForeignTypeS {
-            name: TypeName::new(
+            name: ForeignTypeName::new(
                 enum_info.name.to_string(),
                 (enum_info.src_id, enum_info.name.span()),
             ),
             provides_by_module: vec![],
             into_from_rust: None,
             from_into_rust: None,
-            name_prefix: None,
         };
         conv_map.alloc_foreign_type(enum_ftype)?;
 

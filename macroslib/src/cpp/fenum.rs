@@ -9,7 +9,7 @@ use crate::{
     extension::extend_foreign_enum,
     file_cache::FileWriteCache,
     typemap::{
-        ast::{parse_ty_with_given_span, TypeName},
+        ast::{parse_ty_with_given_span, ForeignTypeName},
         ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS},
         TypeConvCode, FROM_VAR_TEMPLATE,
     },
@@ -45,7 +45,7 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
         .find_or_alloc_rust_type_no_src_id(&parse_type! { u32 });
 
     let enum_ftype = ForeignTypeS {
-        name: TypeName::new(fenum.name.to_string(), (fenum.src_id, fenum.name.span())),
+        name: ForeignTypeName::new(fenum.name.to_string(), (fenum.src_id, fenum.name.span())),
         provides_by_module: vec![
             format!("\"{}\"", cpp_code::cpp_header_name_for_enum(fenum)).into()
         ],
@@ -75,7 +75,6 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
                 )),
             }),
         }),
-        name_prefix: None,
     };
     ctx.conv_map.alloc_foreign_type(enum_ftype)?;
     Ok(())

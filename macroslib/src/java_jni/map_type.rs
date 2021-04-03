@@ -51,14 +51,13 @@ pub(in crate::java_jni) fn map_type(
         )
     })?;
     let base_rt;
-    let base_ft_name = ftype.typename();
+    let base_ft_name = ftype.typename().typename.clone();
     let mut java_converter = None;
     if let Some(intermediate) = rule.intermediate.as_ref() {
         if intermediate.input_to_output {
             unimplemented!();
         }
         base_rt = intermediate.intermediate_ty;
-        let typename = ftype.typename();
         let converter = intermediate.conv_code.to_string();
         let intermediate_ty = intermediate.intermediate_ty;
 
@@ -73,7 +72,7 @@ pub(in crate::java_jni) fn map_type(
                 format!(
                     "Error during conversation {} for {},\n
                     intermidiate type '{}' can not directrly converted to Java",
-                    typename,
+                    base_ft_name,
                     match direction {
                         petgraph::Direction::Outgoing => "output",
                         petgraph::Direction::Incoming => "input",
@@ -96,7 +95,7 @@ pub(in crate::java_jni) fn map_type(
                 },
             ));
         }
-        let annotation = type_annotation(&inter_ft.base.name);
+        let annotation = type_annotation(inter_ft.base.name.display());
         java_converter = Some(JavaConverter {
             java_transition_type: inter_ft.base.name,
             converter,
@@ -105,7 +104,7 @@ pub(in crate::java_jni) fn map_type(
     } else {
         base_rt = rule.rust_ty;
     }
-    let annotation = type_annotation(&base_ft_name);
+    let annotation = type_annotation(base_ft_name.display());
     let mut fti = JavaForeignTypeInfo {
         base: ForeignTypeInfo {
             name: base_ft_name,
@@ -114,7 +113,7 @@ pub(in crate::java_jni) fn map_type(
         java_converter,
         annotation,
     };
-    if fti.annotation.is_none() && !java_code::is_primitive_type(&fti.base.name) {
+    if fti.annotation.is_none() && !java_code::is_primitive_type(fti.base.name.display()) {
         fti.annotation = Some(if if_option_return_some_type(arg_ty).is_none() {
             NullAnnotation::NonNull
         } else {
@@ -286,9 +285,11 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let f_info = map_type(self.ctx, &rust_ty, self.direction, self.arg_ty_span)?;
         let fname = match param1 {
-            Some("NoNullAnnotations") => java_code::filter_null_annotation(&f_info.base.name)
-                .trim()
-                .into(),
+            Some("NoNullAnnotations") => {
+                java_code::filter_null_annotation(f_info.base.name.display())
+                    .trim()
+                    .into()
+            }
             None => f_info.base.name,
             Some(param) => {
                 return Err(DiagnosticError::new2(
