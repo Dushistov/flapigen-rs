@@ -340,7 +340,7 @@ May be you need to use `private constructor = empty;` syntax?",
             ),
         };
         //rename types like "struct Foo" to "Foo" to make VC++ compiler happy
-        let cpp_ret_type = cpp_ret_type.as_str().replace("struct", "");
+        let cpp_ret_type = cpp_ret_type.display().replace("struct", "");
 
         let input_to_output_ret_code = if let Some((_, ref arg_name)) = input_to_output_arg {
             format!(
@@ -405,7 +405,7 @@ May be you need to use `private constructor = empty;` syntax?",
                 }
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                if f_method.output.as_ref().name != "void" {
+                if f_method.output.as_ref().name.display() != "void" {
                     writeln!(
                         &mut inline_impl,
                         r#"
@@ -491,7 +491,7 @@ May be you need to use `private constructor = empty;` syntax?",
                 }
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                if f_method.output.as_ref().name != "void" {
+                if f_method.output.as_ref().name.display() != "void" {
                     writeln!(
                         &mut inline_impl,
                         r#"

@@ -32,9 +32,9 @@ pub(in crate::java_jni) fn args_with_java_types<'a, NI: Iterator<Item = &'a str>
     for (i, (arg, arg_name)) in method.input.iter().zip(arg_name_iter).enumerate() {
         let type_name = match arg.java_converter.as_ref() {
             Some(converter) if flags.contains(ArgsFormatFlags::INTERNAL) => {
-                &converter.java_transition_type
+                converter.java_transition_type.display()
             }
-            _ => arg.as_ref().name.as_str(),
+            _ => arg.as_ref().name.display(),
         };
         let type_arlready_null_anotated =
             type_name.contains("@NonNull") || type_name.contains("@Nullable");

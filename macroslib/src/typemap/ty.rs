@@ -1,10 +1,7 @@
 use crate::{
     error::DiagnosticError,
     source_registry::SourceId,
-    typemap::{
-        ast::{strip_lifetimes, TypeName},
-        RustTypeIdx, TypeConvCode,
-    },
+    typemap::{ast::strip_lifetimes, RustTypeIdx, TypeConvCode},
 };
 use proc_macro2::Span;
 use quote::ToTokens;
@@ -13,6 +10,8 @@ use smallvec::SmallVec;
 use smol_str::SmolStr;
 use std::{fmt, ops, rc::Rc};
 use syn::spanned::Spanned;
+
+use super::ast::ForeignTypeName;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RustTypeS {
@@ -155,30 +154,21 @@ impl<'a> TraitNamesSet<'a> {
 
 #[derive(Debug)]
 pub(crate) struct ForeignTypeS {
-    pub name: TypeName,
+    pub name: ForeignTypeName,
     /// specify which foreign module provides this type
     /// it is possible that provided by multiplines modules
     /// for example C++ `std::variant<TypeA, TypeB>
     pub provides_by_module: Vec<SmolStr>,
     pub into_from_rust: Option<ForeignConversationRule>,
     pub from_into_rust: Option<ForeignConversationRule>,
-    /// sometimes you need make unique typename,
-    /// but do not show user this "uniqueness"
-    pub name_prefix: Option<SmolStr>,
 }
 
 impl ForeignTypeS {
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
         self.name.span
     }
-    pub(crate) fn typename(&self) -> SmolStr {
-        match self.name_prefix {
-            None => self.name.typename.clone(),
-            Some(ref prefix) => {
-                debug_assert!(self.name.typename.as_str().starts_with(prefix.as_str()));
-                self.name.typename.as_str()[prefix.len()..].into()
-            }
-        }
+    pub(crate) fn typename(&self) -> &ForeignTypeName {
+        &self.name
     }
 }
 
@@ -207,7 +197,7 @@ pub(in crate::typemap) struct ForeignTypesStorage {
 impl ForeignTypesStorage {
     pub(in crate::typemap) fn alloc_new(
         &mut self,
-        tn: TypeName,
+        tn: ForeignTypeName,
         binded_rust_ty: RustTypeIdx,
     ) -> Result<ForeignType, DiagnosticError> {
         let rule = ForeignConversationRule {
@@ -219,7 +209,6 @@ impl ForeignTypesStorage {
             provides_by_module: Vec::new(),
             into_from_rust: Some(rule.clone()),
             from_into_rust: Some(rule),
-            name_prefix: None,
         })
     }
 
@@ -227,7 +216,7 @@ impl ForeignTypesStorage {
         &mut self,
         ft: ForeignTypeS,
     ) -> Result<ForeignType, DiagnosticError> {
-        if let Some(ft2) = self.name_to_ftype.get(ft.name.as_str()) {
+        if let Some(ft2) = self.name_to_ftype.get(ft.name.value()) {
             let mut err = DiagnosticError::new2(
                 self.ftypes[ft2.0].name.span,
                 format!("Type {} already defined here", ft.name),
@@ -238,12 +227,12 @@ impl ForeignTypesStorage {
         let idx = ForeignType(self.ftypes.len());
         self.ftypes.push(ft);
         self.name_to_ftype
-            .insert(self.ftypes[idx.0].name.typename.clone(), idx);
+            .insert(self.ftypes[idx.0].name.typename.value_ref().clone(), idx);
         Ok(idx)
     }
 
-    pub(in crate::typemap) fn find_or_alloc(&mut self, ftype_name: TypeName) -> ForeignType {
-        if let Some(ft) = self.name_to_ftype.get(ftype_name.as_str()) {
+    pub(in crate::typemap) fn find_or_alloc(&mut self, ftype_name: ForeignTypeName) -> ForeignType {
+        if let Some(ft) = self.name_to_ftype.get(ftype_name.value()) {
             *ft
         } else {
             let ftype = ForeignTypeS {
@@ -251,7 +240,6 @@ impl ForeignTypesStorage {
                 provides_by_module: Vec::new(),
                 into_from_rust: None,
                 from_into_rust: None,
-                name_prefix: None,
             };
             self.add_new_ftype(ftype)
                 .unwrap_or_else(|err| panic!("Internal error in find_or_alloc_ftype: {}", err))
@@ -306,7 +294,7 @@ impl fmt::Display for ForeignTypesStorage {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         writeln!(f, "Foreign types begin")?;
         for item in self.iter() {
-            writeln!(f, "{}", item.name.as_str())?;
+            f.write_str(item.name.display())?;
         }
         writeln!(f, "Foreign types end")
     }

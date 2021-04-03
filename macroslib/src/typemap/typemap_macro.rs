@@ -29,6 +29,8 @@ use crate::{
 };
 use parse::CItemsList;
 
+use super::ast::UniqueName;
+
 static GENERIC_ALIAS: &str = "generic_alias";
 static SWIG_CONCAT_IDENTS: &str = "swig_concat_idents";
 static SWIG_I_TYPE: &str = "swig_i_type";
@@ -519,7 +521,7 @@ impl From<LitStr> for FTypeName {
 }
 
 pub(crate) struct ExpandedFType {
-    pub name: SmolStr,
+    pub name: UniqueName,
     pub provides_by_module: Vec<SmolStr>,
 }
 
@@ -635,7 +637,7 @@ fn concat_idents(
             let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
             let mut f_type = expander.swig_f_type(ty.as_ref(), None)?;
             req_modules.append(&mut f_type.provides_by_module);
-            ident.push_str(&f_type.name);
+            ident.push_str(f_type.name.display());
         }
         GenericAliasItem::Ident(id) => ident.push_str(&id.to_string()),
     }
@@ -992,7 +994,7 @@ fn call_swig_f_type(
     };
 
     let f_type = expander.swig_f_type(ty.as_ref(), opt_param)?;
-    out.push_str(&f_type.name);
+    out.push_str(f_type.name.display());
     Ok(f_type.provides_by_module)
 }
 
@@ -1259,7 +1261,7 @@ fn expand_foreign_code(
                     let ty = find_type_param(param_map, param, ctx_span)?;
                     let i_type = expander.swig_i_type(ty.as_ref(), opt_arg)?;
                     let f_type = expander.swig_f_type(&i_type, opt_arg)?;
-                    out.push_str(&f_type.name);
+                    out.push_str(f_type.name.display());
                 }
                 _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {
                     let (type_name, var_name) = if params.len() == 2 {

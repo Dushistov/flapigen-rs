@@ -26,6 +26,8 @@ use crate::{
     FOREIGN_TYPEMAP,
 };
 
+use super::ast::ForeignTypeName;
+
 static MOD_NAME_WITH_FOREIGN_TYPES: &str = "swig_foreign_types_map";
 static SWIG_FOREIGNER_TYPE: &str = "swig_foreigner_type";
 static SWIG_RUST_TYPE: &str = "swig_rust_type";
@@ -192,15 +194,15 @@ fn fill_foreign_types_map(
 
 #[derive(Debug)]
 struct TypeNamesMapEntry {
-    foreign_name: TypeName,
+    foreign_name: ForeignTypeName,
     rust_name: TypeName,
     rust_ty: Type,
 }
 
 fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<TypeNamesMapEntry>> {
-    let mut ftype: Option<TypeName> = None;
+    let mut ftype: Option<ForeignTypeName> = None;
 
-    let mut names_map = FxHashMap::<TypeName, (TypeName, Type)>::default();
+    let mut names_map = FxHashMap::<ForeignTypeName, (TypeName, Type)>::default();
 
     for a in &item.attrs {
         if a.path.is_ident(SWIG_FOREIGNER_TYPE) {
@@ -212,7 +214,7 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
                 ..
             }) = meta_attr
             {
-                ftype = Some(TypeName::new(value.value(), (src_id, value.span())));
+                ftype = Some(ForeignTypeName::new(value.value(), (src_id, value.span())));
             } else {
                 return Err(DiagnosticError::new(
                     src_id,
@@ -276,8 +278,10 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)
                     .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
                 attr_value_tn.typename = normalize_type(&rust_ty).into();
-                let unique_name =
-                    RustTypeS::make_unique_typename(&attr_value_tn.typename, &ftype.typename);
+                let unique_name = RustTypeS::make_unique_typename(
+                    &attr_value_tn.typename,
+                    ftype.typename.value(),
+                );
                 names_map.insert(
                     ftype,
                     (TypeName::new(unique_name, invalid_src_id_span()), rust_ty),

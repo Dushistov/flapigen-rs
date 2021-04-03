@@ -38,28 +38,92 @@ use crate::{
     },
 };
 
+/// sometimes you need make unique typename,
+/// but do not show user this "uniqueness"
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct UniqueName {
+    value: SmolStr,
+    unique_prefix_len: usize,
+}
+
+impl UniqueName {
+    pub(crate) fn new<S: Into<SmolStr>>(value: S, prefix: &str) -> Self {
+        let value: SmolStr = value.into();
+        assert!(
+            value.as_str().starts_with(prefix),
+            "{} should starts with {}",
+            value,
+            prefix
+        );
+        Self {
+            value,
+            unique_prefix_len: prefix.len(),
+        }
+    }
+    pub(crate) fn display(&self) -> &str {
+        &self.value.as_str()[self.unique_prefix_len..]
+    }
+    pub(crate) fn value(&self) -> &str {
+        self.value.as_str()
+    }
+    pub(crate) fn value_ref(&self) -> &SmolStr {
+        &self.value
+    }
+    pub(crate) fn unique_prefix(&self) -> Option<&str> {
+        if self.unique_prefix_len > 0 {
+            Some(&self.value.as_str()[0..self.unique_prefix_len])
+        } else {
+            None
+        }
+    }
+    pub(crate) fn set_name_prefix(&mut self, prefix: Option<&str>) {
+        match prefix {
+            Some(p) => {
+                assert!(
+                    self.value.as_str().starts_with(p),
+                    "{} should starts with {}",
+                    self.value,
+                    p
+                );
+                self.unique_prefix_len = p.len();
+            }
+            None => self.unique_prefix_len = 0,
+        }
+    }
+}
+
+impl Display for UniqueName {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+        f.write_str(self.display())
+    }
+}
+
+impl Into<UniqueName> for SmolStr {
+    fn into(self) -> UniqueName {
+        UniqueName {
+            value: self,
+            unique_prefix_len: 0,
+        }
+    }
+}
+
+impl<'a> Into<UniqueName> for &'a str {
+    fn into(self) -> UniqueName {
+        UniqueName {
+            value: self.into(),
+            unique_prefix_len: 0,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct TypeName {
-    pub(crate) typename: SmolStr,
-    pub(crate) span: SourceIdSpan,
-}
-
-impl PartialEq for TypeName {
-    fn eq(&self, o: &Self) -> bool {
-        self.typename == o.typename
-    }
-}
-
-impl Eq for TypeName {}
-
-impl Hash for TypeName {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.typename.hash(state)
-    }
+    pub typename: SmolStr,
+    pub span: SourceIdSpan,
 }
 
 impl Display for TypeName {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
         f.write_str(self.typename.as_str())
     }
 }
@@ -71,12 +135,66 @@ impl TypeName {
             span,
         }
     }
-    pub(crate) fn from_ident(id: &Ident, src_id: SourceId) -> Self {
-        TypeName::new(id.to_string(), (src_id, id.span()))
+}
+
+#[derive(Debug)]
+pub(crate) struct ForeignTypeName {
+    pub typename: UniqueName,
+    pub span: SourceIdSpan,
+}
+
+impl PartialEq for ForeignTypeName {
+    fn eq(&self, o: &Self) -> bool {
+        self.typename == o.typename
     }
-    #[inline]
-    pub(crate) fn as_str(&self) -> &str {
-        self.typename.as_str()
+}
+
+impl Eq for ForeignTypeName {}
+
+impl Hash for ForeignTypeName {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.typename.hash(state)
+    }
+}
+
+impl Display for ForeignTypeName {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+        f.write_str(self.display())
+    }
+}
+
+impl ForeignTypeName {
+    pub(crate) fn new<S: Into<SmolStr>>(tn: S, span: SourceIdSpan) -> Self {
+        let tn: SmolStr = tn.into();
+        Self {
+            typename: tn.into(),
+            span,
+        }
+    }
+    pub(crate) fn new_with_unique_prefix<S: Into<SmolStr>>(
+        tn: S,
+        prefix: &str,
+        span: SourceIdSpan,
+    ) -> Self {
+        Self {
+            typename: UniqueName::new(tn, prefix),
+            span,
+        }
+    }
+    pub(crate) fn from_ident(id: &Ident, src_id: SourceId) -> Self {
+        Self::new(id.to_string(), (src_id, id.span()))
+    }
+    pub(crate) fn unique_prefix(&self) -> Option<&str> {
+        self.typename.unique_prefix()
+    }
+    pub(crate) fn set_name_prefix(&mut self, prefix: Option<&str>) {
+        self.typename.set_name_prefix(prefix);
+    }
+    pub(crate) fn display(&self) -> &str {
+        self.typename.display()
+    }
+    pub(crate) fn value(&self) -> &str {
+        self.typename.value()
     }
 }
 

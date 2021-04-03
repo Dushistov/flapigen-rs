@@ -95,8 +95,8 @@ pub(in crate::java_jni) fn generate_jni_func_name(
             let type_name = arg
                 .java_converter
                 .as_ref()
-                .map(|x| x.java_transition_type.as_str())
-                .unwrap_or_else(|| arg.as_ref().name.as_str());
+                .map(|x| x.java_transition_type.display())
+                .unwrap_or_else(|| arg.as_ref().name.display());
 
             let type_name = java_type_to_jni_signature(ctx, type_name).ok_or_else(|| {
                 DiagnosticError::new2(
@@ -123,7 +123,7 @@ pub(in crate::java_jni) fn jni_method_signature(
 ) -> String {
     let mut ret: String = "(".into();
     for arg in &method.input {
-        let java_type: String = filter_null_annotation(arg.as_ref().name.as_str())
+        let java_type: String = filter_null_annotation(arg.as_ref().name.display())
             .trim()
             .into();
         let sig = java_type_to_jni_signature(ctx, &java_type).unwrap_or_else(|| {
@@ -137,7 +137,7 @@ pub(in crate::java_jni) fn jni_method_signature(
     }
     ret.push(')');
     let sig =
-        java_type_to_jni_signature(ctx, method.output.base.name.as_str()).unwrap_or_else(|| {
+        java_type_to_jni_signature(ctx, method.output.base.name.display()).unwrap_or_else(|| {
             panic!(
                 "Unknown type `{}`, can not generate JNI signature",
                 method.output.base.name

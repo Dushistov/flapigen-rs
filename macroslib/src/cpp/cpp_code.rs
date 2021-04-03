@@ -431,7 +431,7 @@ extern "C" {
                 includes.insert(inc.clone());
             }
             fn_decl_out
-                .write_all(fti.base.name.as_str().as_bytes())
+                .write_all(fti.base.name.display().as_bytes())
                 .expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }
@@ -461,7 +461,7 @@ extern "C" {
                 write!(
                     &mut fn_decl_out,
                     "{} {}",
-                    fti.base.name.as_str(),
+                    fti.base.name.display(),
                     named_arg.name
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);

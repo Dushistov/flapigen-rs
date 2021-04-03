@@ -14,7 +14,7 @@ use crate::{
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
-        ast::{parse_ty_with_given_span, DisplayToTokens, TypeName},
+        ast::{parse_ty_with_given_span, DisplayToTokens, ForeignTypeName},
         ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
         utils::rust_to_foreign_convert_method_inputs,
         ForeignTypeInfo, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
@@ -44,7 +44,7 @@ pub(in crate::cpp) fn generate_interface(
         format!("\"{}\"", c_interface_header(interface)).into();
 
     ctx.conv_map.alloc_foreign_type(ForeignTypeS {
-        name: TypeName::new(c_struct_pointer, interface.src_id_span()),
+        name: ForeignTypeName::new(c_struct_pointer, interface.src_id_span()),
         provides_by_module: vec![c_interface_struct_header],
         into_from_rust: Some(ForeignConversationRule {
             rust_ty: rust_ty.to_idx(),
@@ -54,7 +54,6 @@ pub(in crate::cpp) fn generate_interface(
             rust_ty: rust_ty.to_idx(),
             intermediate: None,
         }),
-        name_prefix: None,
     })?;
 
     let cpp_abs_class_header: SmolStr = format!("\"{}\"", cpp_interface_header(interface)).into();
@@ -85,7 +84,7 @@ pub(in crate::cpp) fn generate_interface(
     let conv_code = TypeConvCode::with_params(conv_code, invalid_src_id_span(), params);
 
     ctx.conv_map.alloc_foreign_type(ForeignTypeS {
-        name: TypeName::new(
+        name: ForeignTypeName::new(
             format!("std::unique_ptr<{}>", interface.name),
             interface.src_id_span(),
         ),
@@ -99,7 +98,6 @@ pub(in crate::cpp) fn generate_interface(
                 conv_code: Rc::new(conv_code),
             }),
         }),
-        name_prefix: None,
     })?;
 
     ctx.conv_map.add_conversation_rule(
@@ -408,7 +406,7 @@ struct C_{interface_name} {{
     );
 
     for (method, f_method) in interface.items.iter().zip(f_methods) {
-        let c_ret_type = f_method.output.base.name.clone();
+        let c_ret_type = &f_method.output.base.name;
         let mut known_names: FxHashSet<SmolStr> =
             method.arg_names_without_self().map(|x| x.into()).collect();
         let opaque_name = new_unique_name(&known_names, "opaque");
@@ -480,7 +478,7 @@ struct C_{interface_name} {{
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
-        if c_ret_type == "void" {
+        if c_ret_type.display() == "void" {
             writeln!(
                 &mut cpp_static_reroute_methods,
                 r#"

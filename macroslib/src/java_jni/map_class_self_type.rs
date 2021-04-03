@@ -1,5 +1,4 @@
 use log::debug;
-use smol_str::SmolStr;
 use std::{fmt::Write, rc::Rc};
 use syn::spanned::Spanned;
 
@@ -8,7 +7,7 @@ use crate::{
     error::{invalid_src_id_span, Result},
     source_registry::SourceId,
     typemap::{
-        ast::TypeName,
+        ast::ForeignTypeName,
         ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
         utils::{boxed_type, convert_to_heap_pointer, unpack_from_heap_pointer},
         RustTypeIdx, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
@@ -178,10 +177,11 @@ fn register_main_foreign_types(
             )
             .into(),
         );
-        let name_prefix: SmolStr = format!("/*{}*/", out_val_prefix).into();
+        let name_prefix = format!("/*{}*/", out_val_prefix);
         ctx.conv_map.alloc_foreign_type(ForeignTypeS {
-            name: TypeName::new(
+            name: ForeignTypeName::new_with_unique_prefix(
                 format!("{}long", name_prefix),
+                &name_prefix,
                 (class.src_id, class.name.span()),
             ),
             provides_by_module: vec![],
@@ -190,7 +190,6 @@ fn register_main_foreign_types(
                 rust_ty: jlong_out_val_rty.to_idx(),
                 intermediate: None,
             }),
-            name_prefix: Some(name_prefix),
         })?;
     }
     let in_val_prefix = format!("{}InVal", class.name);
@@ -272,10 +271,11 @@ fn register_main_foreign_types(
             );
         }
 
-        let name_prefix: SmolStr = format!("/*{}*/", in_val_prefix).into();
+        let name_prefix = format!("/*{}*/", in_val_prefix);
         ctx.conv_map.alloc_foreign_type(ForeignTypeS {
-            name: TypeName::new(
+            name: ForeignTypeName::new_with_unique_prefix(
                 format!("{}long", name_prefix),
+                &name_prefix,
                 (class.src_id, class.name.span()),
             ),
             provides_by_module: vec![],
@@ -284,7 +284,6 @@ fn register_main_foreign_types(
                 rust_ty: jlong_in_val_rty.to_idx(),
                 intermediate: None,
             }),
-            name_prefix: Some(name_prefix),
         })?;
     }
 
@@ -313,7 +312,7 @@ fn register_main_foreign_types(
     };
 
     let class_ftype = ForeignTypeS {
-        name: TypeName::new(format!("{}{}", null_annot, class.name), (class.src_id, class.name.span())),
+        name: ForeignTypeName::new(format!("{}{}", null_annot, class.name), (class.src_id, class.name.span())),
         provides_by_module: vec![],
         into_from_rust: Some(ForeignConversationRule {
             rust_ty: this_type,
@@ -343,7 +342,6 @@ fn register_main_foreign_types(
                 )),
             }),
         }),
-        name_prefix: None,
     };
     ctx.conv_map.alloc_foreign_type(class_ftype)?;
 
@@ -353,8 +351,9 @@ fn register_main_foreign_types(
         ctx.conv_map[this_type_ref]
     );
     let class_ftype_ref_in = ForeignTypeS {
-        name: TypeName::new(
+        name: ForeignTypeName::new_with_unique_prefix(
             format!("/*ref*/{}{}", null_annot, class.name),
+            "/*ref*/",
             (class.src_id, class.name.span()),
         ),
         provides_by_module: vec![],
@@ -375,7 +374,6 @@ fn register_main_foreign_types(
             }),
         }),
         into_from_rust: None,
-        name_prefix: Some("/*ref*/".into()),
     };
     ctx.conv_map.alloc_foreign_type(class_ftype_ref_in)?;
 
@@ -384,8 +382,9 @@ fn register_main_foreign_types(
         ctx.conv_map[this_type_mut_ref]
     );
     let class_ftype_mut_ref_in = ForeignTypeS {
-        name: TypeName::new(
+        name: ForeignTypeName::new_with_unique_prefix(
             format!("/*mut ref*/{}{}", null_annot, class.name),
+            "/*mut ref*/",
             (class.src_id, class.name.span()),
         ),
         provides_by_module: vec![],
@@ -406,7 +405,6 @@ fn register_main_foreign_types(
             }),
         }),
         into_from_rust: None,
-        name_prefix: Some("/*mut ref*/".into()),
     };
     ctx.conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
 
@@ -427,8 +425,9 @@ fn register_main_foreign_types(
                 self_type_mut_ref
             );
             let class_ftype_mut_ref_in = ForeignTypeS {
-                name: TypeName::new(
+                name: ForeignTypeName::new_with_unique_prefix(
                     format!("/*ref 2*/{}{}", null_annot, class.name),
+                    "/*ref 2*/",
                     (class.src_id, class.name.span()),
                 ),
                 provides_by_module: vec![],
@@ -449,7 +448,6 @@ fn register_main_foreign_types(
                     }),
                 }),
                 into_from_rust: None,
-                name_prefix: Some("/*ref 2*/".into()),
             };
             ctx.conv_map.alloc_foreign_type(class_ftype_mut_ref_in)?;
         }
@@ -458,8 +456,9 @@ fn register_main_foreign_types(
             let self_type_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
             let class_ftype_ref_in = ForeignTypeS {
-                name: TypeName::new(
+                name: ForeignTypeName::new_with_unique_prefix(
                     format!("/*mut ref 2*/{}{}", null_annot, class.name),
+                    "/*mut ref 2*/",
                     (class.src_id, class.name.span()),
                 ),
                 provides_by_module: vec![],
@@ -480,7 +479,6 @@ fn register_main_foreign_types(
                     }),
                 }),
                 into_from_rust: None,
-                name_prefix: Some("/*mut ref 2*/".into()),
             };
             ctx.conv_map.alloc_foreign_type(class_ftype_ref_in)?;
         }

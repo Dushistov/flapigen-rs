@@ -12,7 +12,7 @@ use crate::{
     error::{invalid_src_id_span, DiagnosticError, Result},
     file_cache::FileWriteCache,
     typemap::{
-        ast::{parse_ty_with_given_span, TypeName},
+        ast::{parse_ty_with_given_span, ForeignTypeName},
         ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS},
         RustTypeIdx, TypeConvCode, TypeConvEdge, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
@@ -50,7 +50,7 @@ pub(in crate::java_jni) fn generate_enum(
     let jint_rty = ctx.conv_map.ty_to_rust_type(&parse_type! { jint });
 
     let enum_ftype = ForeignTypeS {
-        name: TypeName::new(fenum.name.to_string(), (fenum.src_id, fenum.name.span())),
+        name: ForeignTypeName::new(fenum.name.to_string(), (fenum.src_id, fenum.name.span())),
         provides_by_module: vec![],
         into_from_rust: Some(ForeignConversationRule {
             rust_ty: enum_rty.to_idx(),
@@ -79,7 +79,6 @@ pub(in crate::java_jni) fn generate_enum(
                 )),
             }),
         }),
-        name_prefix: None,
     };
     ctx.conv_map.alloc_foreign_type(enum_ftype)?;
 
