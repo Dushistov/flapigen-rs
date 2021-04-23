@@ -633,6 +633,7 @@ foreign_typemap!(
 
 #[allow(dead_code)]
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct CRustObjectSlice {
     data: *const ::std::os::raw::c_void,
     len: usize,
