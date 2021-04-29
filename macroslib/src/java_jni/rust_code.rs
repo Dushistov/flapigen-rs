@@ -277,7 +277,7 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
     let jni_load_func: syn::Item = parse_quote! {
         #[no_mangle]
         pub extern "system" fn JNI_OnLoad(java_vm: *mut JavaVM, _reserved: *mut ::std::os::raw::c_void) -> jint {
-            println!("JNI_OnLoad begin");
+            log::debug!("JNI_OnLoad begin");
             assert!(!java_vm.is_null());
             let mut env: *mut JNIEnv = ::std::ptr::null_mut();
             let res = unsafe {
@@ -300,7 +300,7 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
     let jni_unload_func: syn::Item = parse_quote! {
         #[no_mangle]
         pub extern "system" fn JNI_OnUnload(java_vm: *mut JavaVM, _reserved: *mut ::std::os::raw::c_void) {
-            println!("JNI_OnUnLoad begin");
+            log::debug!("JNI_OnUnLoad begin");
             assert!(!java_vm.is_null());
             let mut env: *mut JNIEnv = ::std::ptr::null_mut();
             let res = unsafe {
