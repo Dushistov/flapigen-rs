@@ -110,7 +110,7 @@ jobs:
           set -e
           export BOOST_VER_NAME=`echo $BOOST_VER | sed 's/\./_/g'`
           export TAR="boost_$BOOST_VER_NAME.tar.gz"
-          curl -L -o $TAR https://dl.bintray.com/boostorg/release/$BOOST_VER/source/$TAR
+          curl -L -o $TAR https://boostorg.jfrog.io/artifactory/main/release/$BOOST_VER/source/$TAR
           tar --exclude more --exclude tools --exclude doc --exclude html --exclude test -xzvf $TAR
           echo "BOOST_ROOT=$PWD/boost_$BOOST_VER_NAME" >> $GITHUB_ENV
         shell: bash
