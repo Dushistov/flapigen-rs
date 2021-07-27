@@ -1,4 +1,4 @@
-foreigner_class!(class Boo {
+foreign_class!(class Boo {
   self_type Boo;
   constructor Boo::new() -> Boo;
   fn Boo::something(&self) -> i32;
@@ -11,7 +11,7 @@ foreign_enum!(
     }
 );
 
-foreigner_class!(class Foo {
+foreign_class!(class Foo {
    self_type Foo;
    constructor Foo::default() -> Foo;
    constructor Foo::new(_: Option<Boo>, _: Option<f64>) -> Foo;
