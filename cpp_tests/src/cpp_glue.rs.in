@@ -35,6 +35,8 @@ impl Foo {
         cb.on_state_changed_without_args();
         assert!(cb.is_odd(1));
         assert!(!cb.is_odd(2));
+        assert!(cb.check_opt(0.0).is_none());
+        assert_eq!(Some(Vec2 { x: 1.0, y: 1.0 }), cb.check_opt(1.0));
     }
     fn one_and_half(&self) -> f64 {
         f64::from(self.data) * 1.5
@@ -57,6 +59,7 @@ trait SomeObserver {
     fn on_state_changed(&self, _: i32, _: bool);
     fn on_state_changed_without_args(&self);
     fn is_odd(&self, x: i32) -> bool;
+    fn check_opt(&self, x: f32) -> Option<Vec2>;
 }
 
 foreign_callback!(callback SomeObserver {
@@ -64,6 +67,7 @@ foreign_callback!(callback SomeObserver {
     onStateChanged = SomeObserver::on_state_changed(&self, _: i32, _: bool);
     onStateChangedWithoutArgs = SomeObserver::on_state_changed_without_args(&self);
     isOdd = SomeObserver::is_odd(&self, x: i32) -> bool;
+    checkOpt = SomeObserver::check_opt(&self, x: f32) -> Option<Vec2>;
 });
 
 foreign_class!(class Foo {

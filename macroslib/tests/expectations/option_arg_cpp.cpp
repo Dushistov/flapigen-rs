@@ -8,30 +8,35 @@
 r#"template<bool OWN_DATA>
     inline void FooWrapper<OWN_DATA>::f6(std::optional<std::string_view> x) noexcept
     {
-        struct CRustOptionCRustStrView a0;
-        if (!!x) {
-            a0.val.data = CRustStrView{ (*x).data(), (*x).size() };
-            a0.is_some = 1;
-        } else {
-            a0.is_some = 0;
-        }
-        Foo_f6(std::move(a0));
+
+        Foo_f6([](std::optional<std::string_view> p) -> CRustOptionCRustStrView {
+            CRustOptionCRustStrView out;
+            if (p.has_value()) {
+                out.val.data = CRustStrView{ (*p).data(), (*p).size() };
+                out.is_some = 1;
+            } else {
+                out.is_some = 0;
+            }
+            return out;
+            }(std::move(x)));
     }"#;
 
 "void f3(std::optional<ControlItem> a0) noexcept;";
 r#"template<bool OWN_DATA>
     inline void FooWrapper<OWN_DATA>::f3(std::optional<ControlItem> a0) noexcept
     {
-        struct CRustOptionu32 a00;
-        if (!!a0) {
-            a00.val.data = static_cast<uint32_t>((*a0));
-            a00.is_some = 1;
-        } else {
-            a00.is_some = 0;
-        }
-        Foo_f3(this->self_, std::move(a00));
-    }"#;
 
+        Foo_f3(this->self_, [](std::optional<ControlItem> p) -> CRustOptionu32 {
+            CRustOptionu32 out;
+            if (p.has_value()) {
+                out.val.data = static_cast<uint32_t>((*p));
+                out.is_some = 1;
+            } else {
+                out.is_some = 0;
+            }
+            return out;
+            }(std::move(a0)));
+    }"#;
 "void Foo_f3(FooOpaque * const self, struct CRustOptionu32 a0);";
 
 "static void f7(const Boo * x) noexcept;";

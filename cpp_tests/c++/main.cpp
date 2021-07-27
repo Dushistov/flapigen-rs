@@ -83,6 +83,22 @@ static char c_simple_cb_is_odd(int32_t x, void *opaque)
     return (x % 2) == 1;
 }
 
+struct CRustOptionVec2 c_simple_cb_check_opt(float x, void *opaque)
+{
+    assert(opaque != nullptr);
+    const int tag = *static_cast<int *>(opaque);
+    EXPECT_EQ(17, tag);
+    struct CRustOptionVec2 ret;
+    if (x == 0.0) {
+        ret.is_some = 0;
+    }
+    else {
+        ret.val.data = Vec2{ x, x };
+        ret.is_some = 1;
+    }
+    return ret;
+}
+
 TEST(c_Foo, Simple)
 {
     auto foo = Foo_new(1, CRustStrView{ "a", 1 });
@@ -95,7 +111,8 @@ TEST(c_Foo, Simple)
     Foo_set_field(foo, 5);
     EXPECT_EQ(7, Foo_f(foo, 1, 1));
     const C_SomeObserver obs = {
-        new int(17), c_delete_int, c_simple_cb, c_simple_cb_without_args, c_simple_cb_is_odd,
+        new int(17),        c_delete_int,          c_simple_cb, c_simple_cb_without_args,
+        c_simple_cb_is_odd, c_simple_cb_check_opt,
     };
     c_simple_cb_counter = 0;
     c_simple_cb_counter_without_args = 0;
@@ -118,7 +135,8 @@ TEST(Foo, Simple)
     foo.set_field(5);
     EXPECT_EQ(7, foo.f(1, 1));
     const C_SomeObserver obs = {
-        new int(17), c_delete_int, c_simple_cb, c_simple_cb_without_args, c_simple_cb_is_odd,
+        new int(17),        c_delete_int,          c_simple_cb, c_simple_cb_without_args,
+        c_simple_cb_is_odd, c_simple_cb_check_opt,
     };
     c_simple_cb_counter = 0;
     c_simple_cb_counter_without_args = 0;
@@ -163,6 +181,20 @@ struct MySomeObserver final : public SomeObserver {
         ++f2_call;
     }
     bool isOdd(int32_t num) noexcept override { return num % 2 == 1; }
+#ifdef USE_BOOST
+    boost::optional<Vec2>
+#else
+    std::optional<Vec2>
+#endif
+    checkOpt(float x) noexcept override
+    {
+        if (x == 0.0f) {
+            return {};
+        }
+        else {
+            return Vec2{ x, x };
+        }
+    }
 };
 
 size_t MySomeObserver::f1_call = 0;

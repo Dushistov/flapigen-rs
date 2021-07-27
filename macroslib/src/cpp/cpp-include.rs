@@ -611,24 +611,30 @@ foreign_typemap!(
     ($p:f_type, option = "CppOptional::Boost", req_modules = ["\"rust_option.h\"", "<boost/optional.hpp>"]) => "boost::optional<swig_f_type!(T)>"
         "($p.is_some != 0) ? boost::optional<swig_f_type!(T)>(swig_foreign_from_i_type!(T, $p.val.data)) : boost::optional<swig_f_type!(T)>()";
     ($p:f_type, option = "CppOptional::Boost", req_modules = ["\"rust_option.h\"", "<boost/optional.hpp>"]) <= "boost::optional<swig_f_type!(T)>"
-        r#"        $out;
-        if (!!$p) {
-            $out.val.data = swig_foreign_to_i_type!(T, (*$p));
-            $out.is_some = 1;
-        } else {
-            $out.is_some = 0;
-        }"#;
+        r#"[](boost::optional<swig_f_type!(T)> p) -> CRustOpt!() {
+            CRustOpt!() out;
+            if (!!p) {
+                out.val.data = swig_foreign_to_i_type!(T, (*p));
+                out.is_some = 1;
+            } else {
+                out.is_some = 0;
+            }
+            return out;
+            }(std::move($p))"#;
 
     ($p:f_type, option = "CppOptional::Std17", req_modules = ["\"rust_option.h\"", "<optional>"]) => "std::optional<swig_f_type!(T)>"
         "($p.is_some != 0) ? std::optional<swig_f_type!(T)>(swig_foreign_from_i_type!(T, $p.val.data)) : std::optional<swig_f_type!(T)>()";
     ($p:f_type, option = "CppOptional::Std17", req_modules = ["\"rust_option.h\"", "<optional>"]) <= "std::optional<swig_f_type!(T)>"
-        r#"        $out;
-        if (!!$p) {
-            $out.val.data = swig_foreign_to_i_type!(T, (*$p));
-            $out.is_some = 1;
-        } else {
-            $out.is_some = 0;
-        }"#;
+        r#"[](std::optional<swig_f_type!(T)> p) -> CRustOpt!() {
+            CRustOpt!() out;
+            if (p.has_value()) {
+                out.val.data = swig_foreign_to_i_type!(T, (*p));
+                out.is_some = 1;
+            } else {
+                out.is_some = 0;
+            }
+            return out;
+            }(std::move($p))"#;
 );
 
 #[allow(dead_code)]
