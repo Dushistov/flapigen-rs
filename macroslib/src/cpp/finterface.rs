@@ -10,7 +10,7 @@ use crate::{
         cpp_code, map_type, rust_generate_args_with_types, CppContext, CppForeignMethodSignature,
         CppForeignTypeInfo,
     },
-    error::{invalid_src_id_span, panic_on_syn_error, DiagnosticError, Result},
+    error::{invalid_src_id_span, panic_on_syn_error, DiagnosticError, Result, SourceIdSpan},
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
@@ -34,27 +34,39 @@ pub(in crate::cpp) fn generate_interface(
     rust_code_generate_interface(ctx, interface, &f_methods)?;
 
     let c_struct_name = format!("C_{}", interface.name);
-    let rust_struct_pointer = format!("*const {}", c_struct_name);
-    let rust_ty: Type = parse_ty_with_given_span(&rust_struct_pointer, interface.name.span())
-        .map_err(|err| DiagnosticError::from_syn_err(interface.src_id, err))?;
-    let c_struct_pointer = format!("const struct {} * const", c_struct_name);
 
-    let rust_ty = ctx.conv_map.find_or_alloc_rust_type_no_src_id(&rust_ty);
     let c_interface_struct_header: SmolStr =
         format!("\"{}\"", c_interface_header(interface)).into();
 
-    ctx.conv_map.alloc_foreign_type(ForeignTypeS {
-        name: ForeignTypeName::new(c_struct_pointer, interface.src_id_span()),
-        provides_by_module: vec![c_interface_struct_header],
-        into_from_rust: Some(ForeignConversationRule {
-            rust_ty: rust_ty.to_idx(),
-            intermediate: None,
-        }),
-        from_into_rust: Some(ForeignConversationRule {
-            rust_ty: rust_ty.to_idx(),
-            intermediate: None,
-        }),
-    })?;
+    let struct_with_funcs_rust_ty = register_rust_type_and_c_type(
+        ctx,
+        c_struct_name.clone(),
+        c_struct_name.clone(),
+        c_interface_struct_header.clone(),
+        interface.src_id_span(),
+    )?;
+    register_reference(
+        ctx,
+        struct_with_funcs_rust_ty.clone(),
+        true,
+        c_interface_struct_header.clone(),
+    )?;
+    register_reference(
+        ctx,
+        struct_with_funcs_rust_ty,
+        false,
+        c_interface_struct_header.clone(),
+    )?;
+
+    let rust_struct_pointer = format!("*const {}", c_struct_name);
+    let c_struct_pointer = format!("const struct {} * const", c_struct_name);
+    let rust_ty = register_rust_type_and_c_type(
+        ctx,
+        rust_struct_pointer,
+        c_struct_pointer,
+        c_interface_struct_header,
+        interface.src_id_span(),
+    )?;
 
     let cpp_abs_class_header: SmolStr = format!("\"{}\"", cpp_interface_header(interface)).into();
     let boxed_trait_name = format!("Box<dyn {}>", DisplayToTokens(&interface.self_type));
@@ -154,7 +166,7 @@ pub struct {struct_with_funcs} {{
             args = args,
             ret_type = DisplayToTokens(&f_method.output.base.correspoding_rust_type.ty),
         )
-        .unwrap();
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     code.push_str(
@@ -581,4 +593,97 @@ fn c_interface_header(interface: &ForeignInterface) -> String {
 
 fn cpp_interface_header(interface: &ForeignInterface) -> String {
     format!("{}.hpp", interface.name)
+}
+
+fn register_rust_type_and_c_type(
+    ctx: &mut CppContext,
+    rust_ty_name: String,
+    c_type_name: String,
+    header_file: SmolStr,
+    ext_span: SourceIdSpan,
+) -> Result<RustType> {
+    let (src_id, span) = ext_span;
+    let ty: Type = parse_ty_with_given_span(&rust_ty_name, span)
+        .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+    let rust_ty = ctx.conv_map.find_or_alloc_rust_type(&ty, src_id);
+
+    ctx.conv_map.alloc_foreign_type(ForeignTypeS {
+        name: ForeignTypeName::new(c_type_name, ext_span),
+        provides_by_module: vec![header_file],
+        into_from_rust: Some(ForeignConversationRule {
+            rust_ty: rust_ty.to_idx(),
+            intermediate: None,
+        }),
+        from_into_rust: Some(ForeignConversationRule {
+            rust_ty: rust_ty.to_idx(),
+            intermediate: None,
+        }),
+    })?;
+    Ok(rust_ty)
+}
+
+fn register_reference(
+    ctx: &mut CppContext,
+    rust_ty: RustType,
+    const_ref: bool,
+    c_header_name: SmolStr,
+) -> Result<()> {
+    let ty = &rust_ty.ty;
+    let (src_id, span) = rust_ty.src_id_span();
+    let ref_ty = if const_ref {
+        parse_type_spanned_checked!(span, & #ty)
+    } else {
+        parse_type_spanned_checked!(span, &mut #ty)
+    };
+    let ref_ty = ctx.conv_map.find_or_alloc_rust_type(&ref_ty, src_id);
+
+    let ptr_ty = if const_ref {
+        parse_type_spanned_checked!(span, *const #ty)
+    } else {
+        parse_type_spanned_checked!(span, *mut #ty)
+    };
+    let ptr_ty = ctx.conv_map.find_or_alloc_rust_type(&ptr_ty, src_id);
+
+    ctx.conv_map.add_conversation_rule(
+        ref_ty.to_idx(),
+        ptr_ty.to_idx(),
+        TypeConvCode::new2(
+            format!(
+                r#"
+            let {to_var}: {res_type} = {from_var};
+        "#,
+                to_var = TO_VAR_TEMPLATE,
+                from_var = FROM_VAR_TEMPLATE,
+                res_type = DisplayToTokens(&ptr_ty.ty),
+            ),
+            invalid_src_id_span(),
+        )
+        .into(),
+    );
+
+    let mut params = Vec::with_capacity(1);
+    params.push(FROM_VAR_TEMPLATE.into());
+    let cpp_type = if const_ref {
+        format!("const {} &", rust_ty.typename())
+    } else {
+        format!("{} &", rust_ty.typename())
+    };
+    let conv_code = format!("*{var}", var = FROM_VAR_TEMPLATE,);
+    let conv_code = Rc::new(TypeConvCode::with_params(conv_code, (src_id, span), params));
+
+    ctx.conv_map.alloc_foreign_type(ForeignTypeS {
+        name: ForeignTypeName::new(cpp_type, (src_id, span)),
+        provides_by_module: vec![c_header_name],
+        into_from_rust: Some(ForeignConversationRule {
+            rust_ty: ref_ty.to_idx(),
+            intermediate: Some(ForeignConversationIntermediate {
+                input_to_output: false,
+                intermediate_ty: ptr_ty.to_idx(),
+                conv_code: conv_code.clone(),
+            }),
+        }),
+        from_into_rust: None,
+    })?;
+
+    Ok(())
 }

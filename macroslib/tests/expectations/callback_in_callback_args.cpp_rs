@@ -1,0 +1,24 @@
+r#"#[repr(C)]
+#[derive(Clone)]
+#[allow(non_snake_case)]
+pub struct C_Boo {
+    opaque: *const ::std::os::raw::c_void,
+    C_Boo_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    g: extern "C" fn(a0: *const C_Foo, _: *const ::std::os::raw::c_void) -> (),
+    h: extern "C" fn(a0: *mut C_Foo, _: *const ::std::os::raw::c_void) -> (),
+}"#;
+
+r#"impl Boo for C_Boo {
+    #[allow(unused_mut)]
+    fn g(&self, a0: &C_Foo) -> () {
+        let a0: *const C_Foo = a0;
+        let ret: () = (self.g)(a0, self.opaque);
+        ret
+    }
+    #[allow(unused_mut)]
+    fn h(&self, a0: &mut C_Foo) -> () {
+        let a0: *mut C_Foo = a0;
+        let ret: () = (self.h)(a0, self.opaque);
+        ret
+    }
+}"#;
