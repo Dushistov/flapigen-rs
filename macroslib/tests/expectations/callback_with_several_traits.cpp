@@ -8,3 +8,4 @@ r#"template<bool OWN_DATA>
 
         Test_f(std::move(a00));
     }"#;
+"void Test_f(const struct C_MyObserver * const a0);";
