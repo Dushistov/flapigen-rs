@@ -9,4 +9,7 @@ r#"public interface SomeObserver {
 
     void onStateChangedFoo(@NonNull Foo foo);
 
+
+    float getTextSize();
+
 }"#;

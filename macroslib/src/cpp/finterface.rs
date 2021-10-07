@@ -511,7 +511,11 @@ struct C_{interface_name} {{
                 ret = ret_name,
                 method_name = method.name,
                 input_args = call_input_args,
-                cpp_out_conv = cpp_out_conv,
+                cpp_out_conv = if cpp_out_conv.is_empty() {
+                    ret_name.as_str()
+                } else {
+                    cpp_out_conv.as_str()
+                },
                 p = interface_ptr,
             )
             .expect(WRITE_TO_MEM_FAILED_MSG);
