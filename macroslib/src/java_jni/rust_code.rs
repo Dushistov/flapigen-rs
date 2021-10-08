@@ -81,9 +81,9 @@ pub(in crate::java_jni) fn generate_jni_func_name(
         }
     }
     escape_underscore(&ctx.cfg.package_name, &mut output);
-    output.push_str("_");
+    output.push('_');
     escape_underscore(class_name, &mut output);
-    output.push_str("_");
+    output.push('_');
     escape_underscore(java_method_name, &mut output);
 
     if overloaded {
@@ -150,7 +150,7 @@ pub(in crate::java_jni) fn jni_method_signature(
 pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
     generated_code: &mut Vec<u8>,
 ) -> Result<()> {
-    let code = str::from_utf8(&generated_code).map_err(|err| {
+    let code = str::from_utf8(generated_code).map_err(|err| {
         DiagnosticError::new2(
             invalid_src_id_span(),
             format!("Generated code not valid utf-8: {}", err),

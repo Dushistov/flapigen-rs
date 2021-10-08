@@ -179,7 +179,7 @@ impl ForeignMethod {
                     if !acc.is_empty() {
                         acc.push_str(", ");
                     }
-                    acc.push_str(&x);
+                    acc.push_str(x);
                     acc
                 });
             if let MethodVariant::Method(_) = self.variant {

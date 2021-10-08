@@ -108,7 +108,7 @@ pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
                 || conv.converter.has_param(TO_VAR_TEMPLATE)
             {
                 let templ = format!("a{}", i);
-                let var_name = new_unique_name(&known_names, &templ);
+                let var_name = new_unique_name(known_names, &templ);
                 known_names.insert(var_name.clone());
                 Some(var_name)
             } else {
@@ -119,7 +119,7 @@ pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
                     .generate_code_with_subst_func(|param_name| match param_name {
                         TypeConvCodeSubstParam::Name(name) => {
                             if name == FROM_VAR_TEMPLATE {
-                                Some(Cow::Borrowed(&arg_name))
+                                Some(Cow::Borrowed(arg_name))
                             } else if name == TO_VAR_TYPE_TEMPLATE {
                                 Some(
                                     format!(
@@ -136,7 +136,7 @@ pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
                             }
                         }
                         TypeConvCodeSubstParam::Tmp(name_template) => {
-                            let tmp_name = new_unique_name(&known_names, name_template);
+                            let tmp_name = new_unique_name(known_names, name_template);
                             let tmp_name_ret = tmp_name.to_string().into();
                             known_names.insert(tmp_name);
                             Some(tmp_name_ret)
@@ -173,9 +173,9 @@ pub(in crate::cpp) fn cpp_list_required_includes(
     let mut includes = Vec::<SmolStr>::with_capacity(methods.len());
     for m in methods {
         for p in &mut m.input {
-            includes.extend(mem::replace(&mut p.provides_by_module, Vec::new()).into_iter());
+            includes.extend(mem::take(&mut p.provides_by_module).into_iter());
         }
-        includes.extend(mem::replace(&mut m.output.provides_by_module, Vec::new()).into_iter());
+        includes.extend(mem::take(&mut m.output.provides_by_module).into_iter());
     }
 
     // prerserve order of includes
@@ -238,7 +238,7 @@ impl CItemDescriptor for syn::ItemStruct {
     }
     fn fields(&self) -> Result<&syn::FieldsNamed, syn::Error> {
         match self.fields {
-            syn::Fields::Named(ref x) => Ok(&x),
+            syn::Fields::Named(ref x) => Ok(x),
             _ => Err(syn::Error::new(
                 self.fields.span(),
                 "only fields with names accepted in this context",

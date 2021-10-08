@@ -102,7 +102,7 @@ fn eprint_error_location(err: &syn::Error, src: &SourceCode) {
         .take(nlines)
         .enumerate()
     {
-        code_problem.push_str(&line);
+        code_problem.push_str(line);
         code_problem.push('\n');
         if i == 0 && start.column > 0 {
             write!(&mut code_problem, "{:1$}", ' ', start.column).expect("write to String failed");

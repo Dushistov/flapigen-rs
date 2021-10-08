@@ -178,7 +178,7 @@ impl CppForeignTypeInfo {
         Ok(Self {
             input_to_output,
             base: ForeignTypeInfo {
-                name: base_ft_name.clone(),
+                name: base_ft_name,
                 correspoding_rust_type: ctx.conv_map[base_rt].clone(),
             },
             provides_by_module,
@@ -503,7 +503,7 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
         merge_c_types(ctx, c_types, MergeCItemsFlags::DefineOnlyCItem, rule.src_id)?;
     }
 
-    let f_codes = mem::replace(&mut rule.f_code, vec![]);
+    let f_codes = mem::take(&mut rule.f_code);
     for fcode in f_codes {
         let module_name = &fcode.module_name;
         let common_files = &mut ctx.common_files;

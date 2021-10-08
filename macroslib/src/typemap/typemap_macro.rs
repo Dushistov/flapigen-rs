@@ -248,7 +248,7 @@ impl TypeMapConvRuleInfo {
         debug!("subst_generic_params_to_c_items");
         assert!(self.is_generic());
         let type_aliases =
-            build_generic_aliases(self.src_id, &self.generic_aliases, &param_map, expander)?;
+            build_generic_aliases(self.src_id, &self.generic_aliases, param_map, expander)?;
         let mut c_types = self.c_types.clone();
         if let Some(generic_c_types) = self.generic_c_types.as_ref() {
             let code_span = generic_c_types.types.span();
@@ -395,8 +395,8 @@ impl TryInto<GenericTypeConv> for TypeMapConvRuleInfo {
     fn try_into(mut self) -> std::result::Result<GenericTypeConv, Self::Error> {
         if !self.ftype_left_to_right.is_empty()
             || !self.ftype_right_to_left.is_empty()
-            || !self.c_types.is_none()
-            || !self.generic_c_types.is_none()
+            || self.c_types.is_some()
+            || self.generic_c_types.is_some()
             || !self.f_code.is_empty()
             || !self.generic_aliases.is_empty()
         {
@@ -1218,7 +1218,7 @@ fn expand_rust_code(
                                 write!(out, ", {}", p).expect(WRITE_TO_MEM_FAILED_MSG);
                             }
                         }
-                        out.push_str(")");
+                        out.push(')');
                     }
                 }
             }

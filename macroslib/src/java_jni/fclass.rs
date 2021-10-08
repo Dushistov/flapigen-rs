@@ -660,7 +660,7 @@ May be you need to use `private constructor = empty;` syntax?",
             f_method,
             jni_func_name: &jni_func_name,
             decl_func_args: &decl_func_args,
-            real_output_typename: &real_output_typename,
+            real_output_typename: real_output_typename,
             ret_name: &ret_name,
         };
 
@@ -964,7 +964,7 @@ fn generate_method(
         mc.method,
         mc.f_method,
         mc.method.arg_names_without_self(),
-        &jni_ret_type,
+        jni_ret_type,
     )?;
     ctx.rust_code.append(&mut deps_code_in);
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
@@ -973,7 +973,7 @@ fn generate_method(
         &mc.method.fn_decl.output,
         mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
-        &jni_ret_type,
+        jni_ret_type,
     )?;
     ctx.rust_code.append(&mut deps_code_out);
 
@@ -1149,7 +1149,7 @@ fn calc_output_conv<'a>(
         .converter
         .replace(FROM_VAR_TEMPLATE, ret_name)
         .replace(TO_VAR_TYPE_TEMPLATE, &format!("{} {}", ret_type, conv_ret))
-        .replace(TO_VAR_TEMPLATE, &conv_ret);
+        .replace(TO_VAR_TEMPLATE, conv_ret);
     let mut conv_code: String = java_code::filter_null_annotation(&conv_code).trim().into();
     if !conv_code.is_empty() && !conv_code.starts_with('\n') {
         let ident = "        ";

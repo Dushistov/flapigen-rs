@@ -232,10 +232,7 @@ impl {trait_name} for {struct_with_funcs} {{"#,
                 acc.push_str(&x);
                 acc
             });
-        let self_arg = format!(
-            "{}",
-            method.fn_decl.inputs[0].as_self_arg(interface.src_id)?
-        );
+        let self_arg = method.fn_decl.inputs[0].as_self_arg(interface.src_id)?;
 
         let args_with_types: String = [self_arg.to_string(), rest_args_with_types].concat();
         assert!(!method.fn_decl.inputs.is_empty());
@@ -665,8 +662,7 @@ fn register_reference(
         .into(),
     );
 
-    let mut params = Vec::with_capacity(1);
-    params.push(FROM_VAR_TEMPLATE.into());
+    let params = vec![FROM_VAR_TEMPLATE.into()];
     let cpp_type = if const_ref {
         format!("const {} &", rust_ty.typename())
     } else {
@@ -683,7 +679,7 @@ fn register_reference(
             intermediate: Some(ForeignConversationIntermediate {
                 input_to_output: false,
                 intermediate_ty: ptr_ty.to_idx(),
-                conv_code: conv_code.clone(),
+                conv_code,
             }),
         }),
         from_into_rust: None,

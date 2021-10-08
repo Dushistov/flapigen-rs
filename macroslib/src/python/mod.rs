@@ -249,7 +249,7 @@ fn generate_rust_instance_field_and_methods(
                 "Self type and (inner) type returned from constructor doesn't match",
             ));
         }
-        let storage_type = wrap_type_for_class(&rust_self_type, storage_smart_pointer.pointer_type);
+        let storage_type = wrap_type_for_class(rust_self_type, storage_smart_pointer.pointer_type);
         let storage_type_ref = &storage_type;
         let class_name = &class.name;
         Ok((
@@ -473,7 +473,7 @@ fn generate_conversion_for_argument(
                 super::#enum_py_mod::from_u32(py, #arg_name_ident)?
             },
         ))
-    } else if let Some(inner) = ast::if_option_return_some_type(&rust_type) {
+    } else if let Some(inner) = ast::if_option_return_some_type(rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
             &conv_map.find_or_alloc_rust_type(&inner, src_id),
             method_span,
@@ -493,7 +493,7 @@ fn generate_conversion_for_argument(
         ))
     } else if let Some(inner) = if_type_slice_return_elem_type(&rust_type.ty, false) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
-            &conv_map.find_or_alloc_rust_type(&inner, src_id),
+            &conv_map.find_or_alloc_rust_type(inner, src_id),
             method_span,
             src_id,
             conv_map,
@@ -506,7 +506,7 @@ fn generate_conversion_for_argument(
                 &#arg_name_ident.into_iter().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
             },
         ))
-    } else if let Some(inner) = if_vec_return_elem_type(&rust_type) {
+    } else if let Some(inner) = if_vec_return_elem_type(rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
             &conv_map.find_or_alloc_rust_type(&inner, src_id),
             method_span,
@@ -530,7 +530,7 @@ fn generate_conversion_for_argument(
             ));
         }
         let (inner_py_type, inner_conversion) = generate_conversion_for_argument(
-            &conv_map.find_or_alloc_rust_type(&inner.elem.deref(), src_id),
+            &conv_map.find_or_alloc_rust_type(inner.elem.deref(), src_id),
             method_span,
             src_id,
             conv_map,
@@ -569,7 +569,7 @@ fn generate_conversion_for_return(
     } else if is_cpython_supported_type(rust_type) {
         Ok((rust_type.ty.clone(), rust_call))
     } else if let Some((ty, conversion)) = if_exported_class_generate_return_conversion(
-        &rust_type,
+        rust_type,
         conv_map,
         &rust_call,
         method_span,
@@ -586,7 +586,7 @@ fn generate_conversion_for_return(
                 #rust_call as u32
             },
         ))
-    } else if let Some(inner) = ast::if_option_return_some_type(&rust_type) {
+    } else if let Some(inner) = ast::if_option_return_some_type(rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
             &conv_map.find_or_alloc_rust_type(&inner, src_id),
             method_span,
@@ -605,7 +605,7 @@ fn generate_conversion_for_return(
         ))
     } else if let Some(inner) = if_type_slice_return_elem_type(&rust_type.ty, false) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
-            &conv_map.find_or_alloc_rust_type(&inner, src_id),
+            &conv_map.find_or_alloc_rust_type(inner, src_id),
             method_span,
             src_id,
             conv_map,
@@ -617,7 +617,7 @@ fn generate_conversion_for_return(
                 #rust_call.iter().cloned().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
             },
         ))
-    } else if let Some(inner) = if_vec_return_elem_type(&rust_type) {
+    } else if let Some(inner) = if_vec_return_elem_type(rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
             &conv_map.find_or_alloc_rust_type(&inner, src_id),
             method_span,
@@ -631,7 +631,7 @@ fn generate_conversion_for_return(
                 #rust_call.into_iter().map(|inner| Ok(#inner_conversion)).collect::<cpython::PyResult<Vec<_>>>()?
             },
         ))
-    } else if let Some((inner_ok, _inner_err)) = ast::if_result_return_ok_err_types(&rust_type) {
+    } else if let Some((inner_ok, _inner_err)) = ast::if_result_return_ok_err_types(rust_type) {
         let (inner_py_type, inner_conversion) = generate_conversion_for_return(
             &conv_map.find_or_alloc_rust_type(&inner_ok, src_id),
             method_span,
@@ -653,7 +653,7 @@ fn generate_conversion_for_return(
         ))
     } else if let Type::Reference(ref inner) = rust_type.ty {
         generate_conversion_for_return(
-            &conv_map.find_or_alloc_rust_type(&inner.elem.deref(), src_id),
+            &conv_map.find_or_alloc_rust_type(inner.elem.deref(), src_id),
             method_span,
             src_id,
             conv_map,
@@ -781,15 +781,13 @@ fn smart_pointer(
         } else {
             SmartPointerInfo::new(PointerType::Arc, rust_inner_ty)
         }
-    } else if let Some(inner_ty) =
-        ast::check_if_smart_pointer_return_inner_type(&rust_type, "Mutex")
+    } else if let Some(inner_ty) = ast::check_if_smart_pointer_return_inner_type(rust_type, "Mutex")
     {
         SmartPointerInfo::new(
             PointerType::Mutex,
             conv_map.find_or_alloc_rust_type(&inner_ty, src_id),
         )
-    } else if let Some(inner_ty) = ast::check_if_smart_pointer_return_inner_type(&rust_type, "Box")
-    {
+    } else if let Some(inner_ty) = ast::check_if_smart_pointer_return_inner_type(rust_type, "Box") {
         SmartPointerInfo::new(
             PointerType::Box,
             conv_map.find_or_alloc_rust_type(&inner_ty, src_id),
