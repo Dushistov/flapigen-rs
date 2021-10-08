@@ -61,12 +61,13 @@ foreign_class!(class Foo {
 });
 ```
 
-Or you could simply also use [rifgen](https://crates.io/crates/rifgen) to generate that rust file for you!
-
 and that's all, as a result flapigen generates JNI wrappers for Rust functions
 and Java code to call these JNI functions
 or generates C compatible wrappers in case of C++ and
 C++ code to call these C functions.
+
+If you want the interface file (the file containing `foreign_class!` and so on)
+to be automatically generated for you, checkout [rifgen](https://crates.io/crates/rifgen)
 
 ## Users Guide
 
