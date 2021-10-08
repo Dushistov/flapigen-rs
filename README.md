@@ -67,7 +67,7 @@ or generates C compatible wrappers in case of C++ and
 C++ code to call these C functions.
 
 If you want the interface file (the file containing `foreign_class!` and so on)
-to be automatically generated for you, checkout [rifgen](https://crates.io/crates/rifgen)
+to be automatically generated for you, checkout [rifgen](https://crates.io/crates/rifgen).
 
 ## Users Guide
 
