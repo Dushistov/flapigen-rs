@@ -42,10 +42,10 @@ impl<'a> TyParamsSubstMap<'a> {
         Ident: PartialEq<K>,
         K: ?Sized,
     {
-        match self.inner.iter().position(|it| it.ident == k) {
-            Some(idx) => Some(self.inner[idx].ty.as_ref()),
-            None => None,
-        }
+        self.inner
+            .iter()
+            .position(|it| it.ident == k)
+            .map(|idx| self.inner[idx].ty.as_ref())
     }
     pub fn get_mut<K>(&mut self, k: &K) -> Option<&mut Option<syn::Type>>
     where

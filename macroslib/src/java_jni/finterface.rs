@@ -110,7 +110,7 @@ It is impossible to use this Java code:{}\nfor callback types conversation",
             syn::ReturnType::Type(_, ref ret_ty) => {
                 let rust_ret_ty = ctx
                     .conv_map
-                    .find_or_alloc_rust_type(&ret_ty, interace.src_id);
+                    .find_or_alloc_rust_type(ret_ty, interace.src_id);
                 let f_ret_type = map_type(
                     ctx,
                     &rust_ret_ty,

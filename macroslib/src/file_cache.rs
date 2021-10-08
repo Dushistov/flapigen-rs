@@ -57,7 +57,7 @@ impl FileWriteCache {
 
     #[allow(dead_code)]
     pub fn take_content(&mut self) -> Vec<u8> {
-        mem::replace(&mut self.cnt, vec![])
+        mem::take(&mut self.cnt)
     }
 
     #[allow(dead_code)]

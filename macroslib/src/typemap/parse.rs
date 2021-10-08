@@ -323,13 +323,13 @@ fn is_wrong_cfg_pointer_width(attrs: &[syn::Attribute], target_pointer_width: us
                     if let syn::NestedMeta::Meta(syn::Meta::NameValue(ref name_val)) = nested[0] {
                         if name_val.path.is_ident("target_pointer_width") {
                             let val = name_val.lit.clone().into_token_stream().to_string();
-                            let val = if val.starts_with('"') {
-                                &val[1..]
+                            let val = if let Some(stripped) = val.strip_prefix('"') {
+                                stripped
                             } else {
                                 &val
                             };
-                            let val = if val.ends_with('"') {
-                                &val[..val.len() - 1]
+                            let val = if let Some(stripped) = val.strip_suffix('"') {
+                                stripped
                             } else {
                                 &val
                             };
@@ -394,7 +394,7 @@ fn get_swig_code_from_attrs<'a, 'b>(
             ))
         } else {
             let (ref conv_code_template, sp) = swig_code[0];
-            validate_code_template((item_span.0, sp), &conv_code_template.as_str())?;
+            validate_code_template((item_span.0, sp), conv_code_template.as_str())?;
             Ok(conv_code_template)
         }
     } else {
@@ -482,13 +482,13 @@ fn handle_into_from_impl(
             to_foreigner_hint: get_foreigner_hint_for_generic(
                 src_id,
                 &item_impl.generics,
-                &swig_attrs,
+                swig_attrs,
                 ForeignHintVariant::To,
             )?,
             from_foreigner_hint: get_foreigner_hint_for_generic(
                 src_id,
                 &item_impl.generics,
-                &swig_attrs,
+                swig_attrs,
                 ForeignHintVariant::From,
             )?,
         });
@@ -541,7 +541,7 @@ fn handle_macro(
     assert!(!to_typename.is_empty());
 
     let code_template =
-        get_swig_code_from_attrs((src_id, item_macro.span()), SWIG_CODE, &swig_attrs)?;
+        get_swig_code_from_attrs((src_id, item_macro.span()), SWIG_CODE, swig_attrs)?;
 
     if let Some(generic_types) = swig_attrs.get(SWIG_GENERIC_ARG) {
         assert!(!generic_types.is_empty());
@@ -564,13 +564,13 @@ fn handle_macro(
         let to_foreigner_hint = get_foreigner_hint_for_generic(
             src_id,
             &generic_params,
-            &swig_attrs,
+            swig_attrs,
             ForeignHintVariant::To,
         )?;
         let from_foreigner_hint = get_foreigner_hint_for_generic(
             src_id,
             &generic_params,
-            &swig_attrs,
+            swig_attrs,
             ForeignHintVariant::From,
         )?;
 

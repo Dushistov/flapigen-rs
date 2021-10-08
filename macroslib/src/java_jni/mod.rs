@@ -275,24 +275,27 @@ fn java_class_name_to_jni(full_name: &str) -> String {
 }
 
 fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignClassInfo) -> Option<Type> {
-    if let Some(constructor_ret_type) = class.self_desc.as_ref().map(|x| &x.constructor_ret_type) {
-        Some(
-            if_result_return_ok_err_types(
-                &tm.ty_to_rust_type_checked(constructor_ret_type)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Internal error: constructor type {} for class {} unknown",
-                            DisplayToTokens(constructor_ret_type),
-                            class.name
-                        );
-                    }),
+    class
+        .self_desc
+        .as_ref()
+        .map(|x| &x.constructor_ret_type)
+        .map(|constructor_ret_type| {
+            Some(
+                if_result_return_ok_err_types(
+                    &tm.ty_to_rust_type_checked(constructor_ret_type)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Internal error: constructor type {} for class {} unknown",
+                                DisplayToTokens(constructor_ret_type),
+                                class.name
+                            );
+                        }),
+                )
+                .map(|(ok_ty, _err_ty)| ok_ty)
+                .unwrap_or_else(|| constructor_ret_type.clone()),
             )
-            .map(|(ok_ty, _err_ty)| ok_ty)
-            .unwrap_or_else(|| constructor_ret_type.clone()),
-        )
-    } else {
-        None
-    }
+        })
+        .unwrap_or(None)
 }
 
 fn merge_rule(ctx: &mut JavaContext, mut rule: TypeMapConvRuleInfo) -> Result<()> {

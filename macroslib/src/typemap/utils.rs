@@ -251,7 +251,7 @@ pub(crate) fn convert_to_heap_pointer(
         if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, *smart_pointer) {
             let inner_ty: RustType = tmap.find_or_alloc_rust_type(&inner_ty, from.src_id);
             let inner_ty_norm: Type = inner_ty.to_type_without_lifetimes();
-            let smart_pointer_ty: Type = syn::parse_str(&smart_pointer).unwrap_or_else(|err| {
+            let smart_pointer_ty: Type = syn::parse_str(smart_pointer).unwrap_or_else(|err| {
                 panic_on_syn_error(
                     "typemap::utils internal error, can not parse smart ptr",
                     (*smart_pointer).into(),

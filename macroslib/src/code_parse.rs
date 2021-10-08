@@ -194,7 +194,7 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
         doc_comments: class_doc_comments,
         mut derive_list,
         unknown_attrs,
-    } = parse_attrs(&input, ParseAttrsFlags::DERIVE)?;
+    } = parse_attrs(input, ParseAttrsFlags::DERIVE)?;
     assert!(unknown_attrs.is_empty());
 
     debug!(
@@ -224,7 +224,7 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
             doc_comments: method_doc_comments,
             derive_list: method_derive_list,
             unknown_attrs: method_unknown_attrs,
-        } = parse_attrs(&&content, ParseAttrsFlags::UNKNOWN | ParseAttrsFlags::DOC)?;
+        } = parse_attrs(&content, ParseAttrsFlags::UNKNOWN | ParseAttrsFlags::DOC)?;
         assert!(method_derive_list.is_empty());
         let mut access = if content.peek(kw::private) {
             content.parse::<kw::private>()?;
@@ -681,7 +681,7 @@ impl Parse for ForeignEnumInfoParser {
             doc_comments: enum_doc_comments,
             derive_list,
             unknown_attrs,
-        } = parse_attrs(&input, ParseAttrsFlags::DERIVE)?;
+        } = parse_attrs(input, ParseAttrsFlags::DERIVE)?;
         assert!(unknown_attrs.is_empty());
         input.parse::<Token![enum]>()?;
         let enum_name = input.parse::<Ident>()?;

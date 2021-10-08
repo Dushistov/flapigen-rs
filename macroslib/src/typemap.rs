@@ -166,10 +166,10 @@ impl TypeConvCode {
     {
         let mut subst = Vec::with_capacity(self.params.len());
         for p in &self.params {
-            let param_id = if p.starts_with('$') {
-                TypeConvCodeSubstParam::Tmp(&p[1..])
+            let param_id = if let Some(stripped) = p.strip_prefix('$') {
+                TypeConvCodeSubstParam::Tmp(stripped)
             } else {
-                TypeConvCodeSubstParam::Name(&p)
+                TypeConvCodeSubstParam::Name(p)
             };
             let param_val = subst_func(param_id).ok_or_else(|| {
                 DiagnosticError::new2(self.span, format!("Can not substitude parameter {}", p))
@@ -1030,7 +1030,7 @@ impl TypeMap {
     }
 
     pub(crate) fn take_not_merged_not_generic_rules(&mut self) -> Vec<TypeMapConvRuleInfo> {
-        mem::replace(&mut self.not_merged_data, vec![])
+        mem::take(&mut self.not_merged_data)
     }
 
     pub(crate) fn generic_rules(&self) -> &[Rc<TypeMapConvRuleInfo>] {
@@ -1161,7 +1161,7 @@ fn try_build_path(
         conv_graph.node_count(),
         conv_graph.edge_count()
     );
-    let mut ty_graph = TypeGraphSnapshot::new(conv_graph, &rust_names_map);
+    let mut ty_graph = TypeGraphSnapshot::new(conv_graph, rust_names_map);
 
     let mut cur_step = FxHashSet::default();
     cur_step.insert(start_from_idx);
@@ -1222,7 +1222,7 @@ fn try_build_path(
                         None,
                     ) {
                         let path = find_conversation_path(
-                            &ty_graph.conv_graph,
+                            ty_graph.conv_graph,
                             start_from_idx,
                             goal_to_idx,
                             build_for_sp,

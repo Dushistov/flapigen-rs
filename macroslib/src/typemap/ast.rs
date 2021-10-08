@@ -454,10 +454,10 @@ impl GenericTypeConv {
             {
                 let val_name = normalize_type(val);
                 let foreign_name =
-                    (*from_foreigner_hint.as_str()).replace(&key.to_string(), &val_name);
+                    (*from_foreigner_hint.as_str()).replace(&key.to_string(), val_name);
                 let clean_from_ty = normalize_type(&self.from_ty);
                 if ty.normalized_name
-                    != RustTypeS::make_unique_typename(&clean_from_ty, &foreign_name)
+                    != RustTypeS::make_unique_typename(clean_from_ty, &foreign_name)
                 {
                     trace!("is_conv_possible: check failed by from_foreigner_hint check");
                     return None;
@@ -475,7 +475,7 @@ impl GenericTypeConv {
             {
                 let val_name = normalize_type(val);
                 let foreign_name =
-                    (*to_foreigner_hint.as_str()).replace(&key.to_string(), &val_name);
+                    (*to_foreigner_hint.as_str()).replace(&key.to_string(), val_name);
                 Some(foreign_name)
             } else {
                 None
@@ -891,7 +891,7 @@ impl<'a> AsRef<Ident> for TyParamRef<'_> {
     fn as_ref(&self) -> &Ident {
         match self {
             TyParamRef::Ref(x) => x,
-            TyParamRef::Own(x) => &x,
+            TyParamRef::Own(x) => x,
         }
     }
 }
@@ -922,7 +922,7 @@ pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> GenericTraitBoundVec 
                 ..
             }) = *bound
             {
-                ret_elem.trait_names.insert(&trait_path);
+                ret_elem.trait_names.insert(trait_path);
             }
         }
         if !ret_elem.trait_names.is_empty() {
@@ -939,7 +939,7 @@ pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> GenericTraitBoundVec 
             {
                 let mut ret_elem = GenericTraitBound {
                     ty_param: TyParamRef::Own(Ident::new(
-                        &normalize_type(bounded_ty),
+                        normalize_type(bounded_ty),
                         Span::call_site(),
                     )),
                     trait_names: TraitNamesSet::default(),
@@ -951,7 +951,7 @@ pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> GenericTraitBoundVec 
                         ..
                     }) = *bound
                     {
-                        ret_elem.trait_names.insert(&trait_path);
+                        ret_elem.trait_names.insert(trait_path);
                     }
                 }
                 if !ret_elem.trait_names.is_empty() {
@@ -1036,7 +1036,7 @@ pub(crate) fn list_lifetimes(ty: &Type) -> Vec<&syn::Lifetime> {
     struct CatchLifetimes<'a>(Vec<&'a syn::Lifetime>);
     impl<'ast> Visit<'ast> for CatchLifetimes<'ast> {
         fn visit_lifetime(&mut self, lifetime: &'ast syn::Lifetime) {
-            self.0.push(&lifetime);
+            self.0.push(lifetime);
             visit_lifetime(self, lifetime)
         }
     }

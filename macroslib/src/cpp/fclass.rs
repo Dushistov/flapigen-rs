@@ -797,7 +797,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
         &mc.method.fn_decl.output,
         mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
-        &c_ret_type,
+        c_ret_type,
     )?;
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
@@ -805,7 +805,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
         mc.method,
         mc.f_method,
         mc.method.arg_names_without_self(),
-        &c_ret_type,
+        c_ret_type,
     )?;
     let code = format!(
         r#"
@@ -855,7 +855,7 @@ fn generate_method(
         mc.method,
         mc.f_method,
         mc.method.arg_names_without_self(),
-        &c_ret_type,
+        c_ret_type,
     )?;
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         conv_map,
@@ -863,7 +863,7 @@ fn generate_method(
         &mc.method.fn_decl.output,
         mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
-        &c_ret_type,
+        c_ret_type,
     )?;
     //&mut constructor_real_type -> &mut class.self_type
     let (from_ty, to_ty): (Type, Type) = create_suitable_types_for_constructor_and_self(
@@ -880,7 +880,7 @@ fn generate_method(
         to_ty.to_idx(),
         "this",
         "this",
-        &c_ret_type,
+        c_ret_type,
         (mc.class.src_id, mc.method.span()),
     )?;
     let code = format!(
@@ -936,7 +936,7 @@ fn generate_constructor(
         mc.method,
         mc.f_method,
         mc.method.arg_names_without_self(),
-        &ret_type_name,
+        ret_type_name,
     )?;
     let construct_ret_type: RustType = conv_map.ty_to_rust_type(&construct_ret_type);
     let (mut deps_this, convert_this) = conv_map.convert_rust_types(
@@ -944,7 +944,7 @@ fn generate_constructor(
         this_type.to_idx(),
         "this",
         "this",
-        &ret_type_name,
+        ret_type_name,
         (mc.class.src_id, mc.method.span()),
     )?;
 
