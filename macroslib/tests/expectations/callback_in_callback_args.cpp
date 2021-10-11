@@ -5,7 +5,7 @@ public:
     virtual void f() noexcept = 0;
 
 
-    static C_Foo to_c_interface(std::unique_ptr<Foo> p)
+    static C_Foo to_c_interface(std::unique_ptr<Foo> p) noexcept
     {
         assert(p != nullptr);
         C_Foo ret;
@@ -16,7 +16,16 @@ public:
 
         return ret;
     }
-private:
+    static C_Foo reference_to_c_interface(Foo &cpp_interface) noexcept
+    {
+        C_Foo ret;
+        ret.opaque = &cpp_interface;
+        ret.f = c_f;
+
+        ret.C_Foo_deref = [](void *) {};
+        return ret;
+    }
+protected:
 
     static void c_Foo_deref(void *opaque)
     {
@@ -43,7 +52,7 @@ public:
     virtual void h(C_Foo & x) noexcept = 0;
 
 
-    static C_Boo to_c_interface(std::unique_ptr<Boo> p)
+    static C_Boo to_c_interface(std::unique_ptr<Boo> p) noexcept
     {
         assert(p != nullptr);
         C_Boo ret;
@@ -55,7 +64,17 @@ public:
 
         return ret;
     }
-private:
+    static C_Boo reference_to_c_interface(Boo &cpp_interface) noexcept
+    {
+        C_Boo ret;
+        ret.opaque = &cpp_interface;
+        ret.g = c_g;
+        ret.h = c_h;
+
+        ret.C_Boo_deref = [](void *) {};
+        return ret;
+    }
+protected:
 
     static void c_Boo_deref(void *opaque)
     {

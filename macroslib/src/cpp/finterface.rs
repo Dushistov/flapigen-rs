@@ -407,12 +407,7 @@ struct C_{interface_name} {{
 "#,
         interface_name = interface.name
     );
-    let mut cpp_fill_c_interface_struct = format!(
-        r#"
-        ret.C_{interface_name}_deref = c_{interface_name}_deref;
-"#,
-        interface_name = interface.name
-    );
+    let mut cpp_fill_c_interface_struct = String::with_capacity(128);
 
     for (method, f_method) in interface.items.iter().zip(f_methods) {
         let c_ret_type = &f_method.output.base.name;
@@ -555,15 +550,25 @@ public:
     virtual ~{interface_name}() noexcept {{}}
 {virtual_methods}
 
-    static C_{interface_name} to_c_interface(std::unique_ptr<{interface_name}> p)
+    static C_{interface_name} to_c_interface(std::unique_ptr<{interface_name}> p) noexcept
     {{
         assert(p != nullptr);
         C_{interface_name} ret;
         ret.opaque = p.release();
+
+        ret.C_{interface_name}_deref = c_{interface_name}_deref;
 {cpp_fill_c_interface_struct}
         return ret;
     }}
-private:
+    static C_{interface_name} reference_to_c_interface({interface_name} &cpp_interface) noexcept
+    {{
+        C_{interface_name} ret;
+        ret.opaque = &cpp_interface;
+{cpp_fill_c_interface_struct}
+        ret.C_{interface_name}_deref = [](void *) {{}};
+        return ret;
+    }}
+protected:
 {static_reroute_methods}
 }};
 }} // namespace {namespace_name}"##,
