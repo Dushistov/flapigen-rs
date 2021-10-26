@@ -120,7 +120,7 @@ pub(in crate::cpp) fn generate_interface(
                 r#"
             assert!(!{from_var}.is_null());
             let {to_var}: &{struct_with_funcs} = unsafe {{ {from_var}.as_ref().unwrap() }};
-            let {to_var}: {res_type} = Box::new({to_var}.clone());
+            let mut {to_var}: {res_type} = Box::new({to_var}.clone());
         "#,
                 to_var = TO_VAR_TEMPLATE,
                 from_var = FROM_VAR_TEMPLATE,

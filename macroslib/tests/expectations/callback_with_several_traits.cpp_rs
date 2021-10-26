@@ -2,7 +2,7 @@ r##"#[no_mangle]
 pub extern "C" fn Test_f(a0: *const C_MyObserver) -> () {
     assert!(!a0.is_null());
     let a0: &C_MyObserver = unsafe { a0.as_ref().unwrap() };
-    let a0: Box<dyn OnEvent + Send> = Box::new(a0.clone());
+    let mut a0: Box<dyn OnEvent + Send> = Box::new(a0.clone());
     let mut ret: () = f(a0);
     ret
 }"##;
