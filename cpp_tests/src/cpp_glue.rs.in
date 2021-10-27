@@ -283,6 +283,13 @@ impl TestWorkWithVec {
         }
         res.into_bytes()
     }
+    fn change_bytes(&self, x: u8, mut bytes: Vec<u8>) -> Vec<u8> {
+        for b in &mut bytes {
+            *b += x;
+        }
+        bytes.push(x);
+        bytes
+    }
 
     fn get_vec_u32(&self) -> Vec<u32> {
         self.vec_u32.clone()
@@ -351,6 +358,7 @@ foreign_class!(class TestWorkWithVec {
     self_type TestWorkWithVec;
     constructor TestWorkWithVec::new(_: &str) -> TestWorkWithVec;
     fn TestWorkWithVec::get_bytes(&self, n: u32) -> Vec<u8>;
+    fn TestWorkWithVec::change_bytes(&self, x: u8, bytes: Vec<u8>) -> Vec<u8>;
     fn TestWorkWithVec::get_u32_slice(&self) -> &[u32];
     fn TestWorkWithVec::get_vec_u32(&self) -> Vec<u32>;
     fn TestWorkWithVec::get_vec_f32(&self) -> Vec<f32>;

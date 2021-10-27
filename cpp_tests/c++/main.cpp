@@ -306,6 +306,22 @@ TEST(TestWorkWithVec, smokeTest)
         }
     }
 
+    {
+        auto vec = t.get_bytes(111);
+        std::vector<uint8_t> vec_copy;
+        vec_copy.reserve(vec.size());
+        const auto &cvec = vec;
+        for (auto byte : cvec)
+            vec_copy.push_back(byte);
+        const uint8_t ADD = 17;
+        auto vec2 = t.change_bytes(ADD, std::move(vec));
+        ASSERT_EQ(vec2.size(), vec_copy.size() + 1);
+        EXPECT_EQ(ADD, vec2[vec2.size() - 1]);
+        for (size_t i = 0; i < vec_copy.size(); ++i) {
+            EXPECT_EQ(vec_copy[i] + ADD, vec2[i]);
+        }
+    }
+
     auto sp = t.get_u32_slice();
     ASSERT_EQ(tag_len + 1, sp.size());
     for (size_t i = 0; i < tag_len; ++i) {
