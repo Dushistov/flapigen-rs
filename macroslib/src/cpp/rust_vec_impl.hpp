@@ -11,8 +11,9 @@ namespace internal {
 template <typename CContainerType, void (*FreeFunc)(CContainerType)>
 class RustVec final : private CContainerType {
 public:
-    using value_type = typename std::remove_const<typename std::remove_reference<decltype(
-        *internal::field_type(&CContainerType::data))>::type>::type;
+    using value_type =
+        typename std::remove_const<typename std::remove_reference<decltype(*internal::field_type(
+            &CContainerType::data))>::type>::type;
     using iterator = value_type *;
     using const_iterator = const value_type *;
 
@@ -54,7 +55,7 @@ public:
     void clear() noexcept { free_mem(); }
     CContainerType release() noexcept
     {
-        CContainerType ret{ this->data, this->len, this->capacity, this->step };
+        CContainerType ret{ this->data, this->len, this->capacity };
         reset(*this);
         return ret;
     }

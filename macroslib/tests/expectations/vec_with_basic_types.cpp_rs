@@ -1,0 +1,18 @@
+r#"impl IXyz for C_IXyz {
+    #[allow(unused_mut)]
+    fn on_have_data(&mut self, a0: Vec<u8>) -> () {
+        let mut tmp = a0;
+        let p = tmp.as_mut_ptr();
+        let len = tmp.len();
+        let cap = tmp.capacity();
+        ::std::mem::forget(tmp);
+        let mut a0: CRustVecu8 = CRustVecu8 {
+            data: p,
+            len: len,
+            capacity: cap,
+        };
+        let ret: () = (self.on_have_data)(a0, self.opaque);
+        ret
+    }
+}"#;
+

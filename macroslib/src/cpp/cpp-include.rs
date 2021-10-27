@@ -838,10 +838,11 @@ using CppRustVec!() = RustVec<CRustVec!(), CRustVecFree!()>;
 #endif
 "##);
     ($p:r_type) <T: SwigTypeIsReprC> Vec<T> => CRustVec!() {
-        let p = $p.as_mut_ptr();
-        let len = $p.len();
-        let cap = $p.capacity();
-        ::std::mem::forget($p);
+        let mut tmp = $p;
+        let p = tmp.as_mut_ptr();
+        let len = tmp.len();
+        let cap = tmp.capacity();
+        ::std::mem::forget(tmp);
         $out = CRustVec!() {
             data: p,
             len: len,
@@ -850,6 +851,11 @@ using CppRustVec!() = RustVec<CRustVec!(), CRustVecFree!()>;
     };
     ($p:f_type, req_modules = ["\"CRustVecModule!().h\""]) => "CppRustVec!()"
         "CppRustVec!(){$p}";
+    ($p:r_type) <T: SwigTypeIsReprC> Vec<T> <= CRustVec!() {
+        $out = unsafe { Vec::from_raw_parts($p.data as *mut swig_subst_type!(T), $p.len, $p.capacity) };
+    };
+    ($p:f_type, req_modules = ["\"CRustVecModule!().h\""]) <= "CppRustVec!()"
+        "$p.release()";
 );
 
 #[allow(dead_code)]
