@@ -519,7 +519,7 @@ macro_rules! impl_jni_jni_invalid_value {
 }
 
 impl_jni_jni_invalid_value! {
-    jbyte jshort jint jlong jfloat jdouble
+    jbyte jshort jint jlong jfloat jdouble jboolean
 }
 
 foreign_typemap!(
