@@ -155,8 +155,8 @@
 
                 <div id="content" class="content">
                     <main>
-                        <p>In the first step you should choose &quot;main&quot; crate that would be bridge between Rust and other language.
-It should has <code>crate-type</code> <code>cdylib</code> or <code>staticlib</code>, see <a href="https://doc.rust-lang.org/reference/linkage.html">suitable Rust book's section</a> for detailed description.</p>
+                        <p>In the first step you should choose &quot;main&quot; crate that would be the bridge between Rust and other language.
+It should have <code>crate-type</code> <code>cdylib</code> or <code>staticlib</code>, see <a href="https://doc.rust-lang.org/reference/linkage.html">suitable Rust book's section</a> for a detailed description.</p>
 <p>For example:</p>
 <pre><code class="language-toml no_run noplaypen">[lib]
 name = &quot;cpp_example_rust_part&quot;
@@ -198,7 +198,7 @@ fn main() {
     );
 }
 </code></pre>
-<p>Here you instruct <code>flapigen</code> to generate C++/Rust code from &quot;src/cpp_glue.rs.in&quot; as <strong>intput</strong>:</p>
+<p>Here you instruct <code>flapigen</code> to generate C++/Rust code from &quot;src/cpp_glue.rs.in&quot; as <strong>input</strong>:</p>
 <pre><code class="language-rust no_run noplaypen">        Path::new(&quot;src/cpp_glue.rs.in&quot;),
 </code></pre>
 <p>and we specify our <strong>output</strong>,
@@ -208,8 +208,8 @@ Rust file:</p>
 <p>directory for C++ files:</p>
 <pre><code class="language-rust no_run noplaypen">        Path::new(&quot;..&quot;).join(&quot;cpp-part&quot;).join(&quot;rust-api&quot;),
 </code></pre>
-<p>You can find detailed description of code generation in <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">suitable Cargo book's section</a>.</p>
-<p>Then you should create file for &quot;foreign&quot; language API description.
+<p>You can find a detailed description of code generation in the <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">suitable Cargo book section</a>.</p>
+<p>Then you should create a file for the &quot;foreign&quot; language API description.
 For example:</p>
 <pre><code class="language-rust no_run noplaypen">use super::{f2, Foo};
 
@@ -221,7 +221,7 @@ foreign_class!(class Foo {
     fn f2(_: i32) -&gt; i32;
 });
 </code></pre>
-<p>And connect generated code with your crate exactly how described in <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">Cargo book</a> :</p>
+<p>And connect the generated code with your crate exactly how as in the <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">Cargo book</a> :</p>
 <pre><code class="language-rust no_run noplaypen">// src/lib.rs
 mod cpp_glue;
 pub use crate::cpp_glue::*;
@@ -229,7 +229,7 @@ pub use crate::cpp_glue::*;
 <pre><code class="language-rust no_run noplaypen">// src/cpp_glue.rs
 include!(concat!(env!(&quot;OUT_DIR&quot;), &quot;/cpp_glue.rs&quot;));
 </code></pre>
-<p>Do not forget add <code>flapigen</code> as dependency into <code>[build-dependencies]</code> section of crate's <code>Cargo.toml</code> file and you ready to go.</p>
+<p>Do not forget to add <code>flapigen</code> as a dependency into <code>[build-dependencies]</code> section of your crate's <code>Cargo.toml</code> file and you are ready to go.</p>
 
                     </main>
 

@@ -168,8 +168,8 @@ put resulted Rust and other language code that generated after processing API de
 so generated Rust's code is wrapper around you code to provide C API.
 Generated code in other programming language is the way to make your API
 as easy as possible to use in other language.</p>
-<p>In the first step you should choose &quot;main&quot; crate that would be bridge between Rust and other language.
-It should has <code>crate-type</code> <code>cdylib</code> or <code>staticlib</code>, see <a href="https://doc.rust-lang.org/reference/linkage.html">suitable Rust book's section</a> for detailed description.</p>
+<p>In the first step you should choose &quot;main&quot; crate that would be the bridge between Rust and other language.
+It should have <code>crate-type</code> <code>cdylib</code> or <code>staticlib</code>, see <a href="https://doc.rust-lang.org/reference/linkage.html">suitable Rust book's section</a> for a detailed description.</p>
 <p>For example:</p>
 <pre><code class="language-toml no_run noplaypen">[lib]
 name = &quot;cpp_example_rust_part&quot;
@@ -211,7 +211,7 @@ fn main() {
     );
 }
 </code></pre>
-<p>Here you instruct <code>flapigen</code> to generate C++/Rust code from &quot;src/cpp_glue.rs.in&quot; as <strong>intput</strong>:</p>
+<p>Here you instruct <code>flapigen</code> to generate C++/Rust code from &quot;src/cpp_glue.rs.in&quot; as <strong>input</strong>:</p>
 <pre><code class="language-rust no_run noplaypen">        Path::new(&quot;src/cpp_glue.rs.in&quot;),
 </code></pre>
 <p>and we specify our <strong>output</strong>,
@@ -221,8 +221,8 @@ Rust file:</p>
 <p>directory for C++ files:</p>
 <pre><code class="language-rust no_run noplaypen">        Path::new(&quot;..&quot;).join(&quot;cpp-part&quot;).join(&quot;rust-api&quot;),
 </code></pre>
-<p>You can find detailed description of code generation in <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">suitable Cargo book's section</a>.</p>
-<p>Then you should create file for &quot;foreign&quot; language API description.
+<p>You can find a detailed description of code generation in the <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">suitable Cargo book section</a>.</p>
+<p>Then you should create a file for the &quot;foreign&quot; language API description.
 For example:</p>
 <pre><code class="language-rust no_run noplaypen">use super::{f2, Foo};
 
@@ -234,7 +234,7 @@ foreign_class!(class Foo {
     fn f2(_: i32) -&gt; i32;
 });
 </code></pre>
-<p>And connect generated code with your crate exactly how described in <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">Cargo book</a> :</p>
+<p>And connect the generated code with your crate exactly how as in the <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">Cargo book</a> :</p>
 <pre><code class="language-rust no_run noplaypen">// src/lib.rs
 mod cpp_glue;
 pub use crate::cpp_glue::*;
@@ -242,20 +242,20 @@ pub use crate::cpp_glue::*;
 <pre><code class="language-rust no_run noplaypen">// src/cpp_glue.rs
 include!(concat!(env!(&quot;OUT_DIR&quot;), &quot;/cpp_glue.rs&quot;));
 </code></pre>
-<p>Do not forget add <code>flapigen</code> as dependency into <code>[build-dependencies]</code> section of crate's <code>Cargo.toml</code> file and you ready to go.</p>
+<p>Do not forget to add <code>flapigen</code> as a dependency into <code>[build-dependencies]</code> section of your crate's <code>Cargo.toml</code> file and you are ready to go.</p>
 <h1><a class="header" href="#c" id="c">C++</a></h1>
-<p>To run cpp-example from <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example">here</a> you
-need <a href="https://www.boost.org/">boost</a>, <a href="https://cmake.org/">cmake</a> and C++11 compatible compiler.</p>
+<p>To run the cpp-example from <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example">here</a> you
+need <a href="https://www.boost.org/">boost</a>, <a href="https://cmake.org/">cmake</a> and a C++11 compatible compiler.</p>
 <h2><a class="header" href="#project-structure" id="project-structure">Project Structure</a></h2>
 <p>The projects consists of two parts: <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example/cpp-part">cpp-part</a>
 and <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example/rust-part">rust-part</a>.
-rust-part is compiled as shared library and linked into executable
+The Rust part is compiled as shared library and linked into executable
 described by <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example/cpp-part/CMakeLists.txt">CMakeLists.txt</a>.
-cpp-part is main part so its build system (cmake) invokes <code>cargo</code> to build rust-part.</p>
+The cpp-part is the main part so its build system (cmake) invokes <code>cargo</code> to build the Rust part.</p>
 <h2><a class="header" href="#building" id="building">Building</a></h2>
-<p>It is normal CMake project, so you can build as ordinary CMake project.
+<p>It is a normal CMake project, so you can build it as an ordinary CMake project.
 By default it requires C++11 and boost, but if your compiler is modern enough
-you can use C++17 and then you no need boost at all.</p>
+you can use C++17 and then you don't need boost at all.</p>
 <p>Just delete all mentions of boost here:</p>
 <pre><code class="language-rust no_run noplaypen">// build.rs
     let cpp_cfg = CppConfig::new(
@@ -267,7 +267,7 @@ you can use C++17 and then you no need boost at all.</p>
     .cpp_str_view(CppStrView::Boost);
 </code></pre>
 <h2><a class="header" href="#the-main-functionality" id="the-main-functionality">The main functionality</a></h2>
-<p>Project demonstrate how export Rust in form of class to C++.</p>
+<p>This project demonstrates how to export Rust in the form of a class to C++.</p>
 <p>Rust code:</p>
 <pre><code class="language-rust no_run noplaypen">// src/lib.rs
 pub struct Foo {
@@ -306,11 +306,11 @@ foreign_class!(class Foo {
     int res = foo.f(1, 2);
 </code></pre>
 <h1><a class="header" href="#javaandroid" id="javaandroid">Java/Android</a></h1>
-<p><a href="https://github.com/Dushistov/flapigen-rs/tree/master/android-example">This example</a> shows off how to use rust to build a native library from android
+<p><a href="https://github.com/Dushistov/flapigen-rs/tree/master/android-example">This example</a> shows off how to use rust to build a native library from Android
 and use it through an automatically generated JNI wrapper.</p>
-<p><a href="https://developer.android.com/studio">Android Studio</a> can be used to work with Rust via <a href="https://intellij-rust.github.io/">Rust plugin</a>.
-So it is not bad idea to integrate invocation of cargo into gradle,
-thus you can build and run android application with Rust inside as ordinary Java/Kotlin application.</p>
+<p><a href="https://developer.android.com/studio">Android Studio</a> can be used to work with Rust via its <a href="https://intellij-rust.github.io/">Rust plugin</a>.
+So it's not a bad idea to integrate invocations of cargo into gradle,
+so you can build and run Rust inside an ordinary Java/Kotlin Android application.</p>
 <h2><a class="header" href="#project-structure-1" id="project-structure-1">Project Structure</a></h2>
 <p>The file <code>build.rs</code> defines how flapigen generates wrapper code:</p>
 <pre><code class="language-rust no_run noplaypen">// build.rs
@@ -358,7 +358,7 @@ impl Session {
     }
 }
 </code></pre>
-<p>And the file <code>src/java_glue.rs.in</code> contains description for flapigen how export this API to Java:</p>
+<p>And the file <code>src/java_glue.rs.in</code> contains descriptions for flapigen to export this API to Java:</p>
 <pre><code class="language-rust no_run noplaypen">// src/java_glue.rs.in
 foreign_class!(class Session {
     self_type Session;
@@ -367,7 +367,7 @@ foreign_class!(class Session {
     fn Session::greet(to: &amp;str) -&gt; String;
 });
 </code></pre>
-<p>Then the <code>app/build.gradle</code> contains rule how to invokes <code>cargo</code> to build shared library from Rust code,
+<p>Then the <code>app/build.gradle</code> contains rules to invoke <code>cargo</code> to build a shared library from Rust code,
 and then build it into apk:</p>
 <pre><code class="language-groovy no_run noplaypen">// app/build.gradle
 def rustBasePath = &quot;..&quot;
@@ -427,12 +427,12 @@ archTriplets.each { arch, target -&gt;
 }
 </code></pre>
 <h2><a class="header" href="#building-1" id="building-1">Building</a></h2>
-<p>To build the demo, you will need the latest version of Cargo, Android NDK and install proper Rust toolchains:</p>
+<p>To build the demo, you will need the latest version of Cargo, Android NDK and install the proper Rust toolchain targets:</p>
 <pre><code class="language-shell">rustup target add arm-linux-androideabi
 rustup target add aarch64-linux-android
 </code></pre>
-<p>To link the result into shared library you need add path to proper clang binary into <code>PATH</code>
-environment variable or change path to linker here:</p>
+<p>To link Rust code into a shared library you need add the path to the proper clang binary into your <code>PATH</code>
+environment variable or change the path to the linker here:</p>
 <pre><code class="language-toml">[target.aarch64-linux-android]
 linker = &quot;aarch64-linux-android21-clang++&quot;
 runner = &quot;./run-on-android.sh&quot;
@@ -448,18 +448,18 @@ the project in release mode, simply call <code>./gradlew androidRelease</code>.<
 <code>cargo build --target arm-linux-androideabi</code>.</p>
 <h2><a class="header" href="#testing" id="testing">Testing</a></h2>
 <p>It is possible to run Rust unit tests on Android phone via <code>run-on-android.sh</code> script mentioned in <code>.cargo/config</code>,
-also there is instrumentation unit test on Java that invoke Rust code.</p>
+there are also instrumentation unit tests in Java that invoke Rust code.</p>
 <h1><a class="header" href="#javaother" id="javaother">Java/Other</a></h1>
 <p>TODO</p>
 <h1><a class="header" href="#foreign-language-api-description" id="foreign-language-api-description">Foreign Language API Description</a></h1>
 <p><code>flapigen</code> provides several methods to describe how your Rust code can be used
-from &quot;foreign&quot; programming language. The main build block is <a href="./foreign-class.html">foreign_class!</a>.
-This is the way how describe entity that will be visible for &quot;foreign language&quot; as a class.
-Also it is possible to export C-like enums via <a href="./foreign-enum.html">foreign_enum!</a>, plus it is possible to describe the
-way how to pass &quot;callback&quot; into your Rust code from foreign language via <a href="./foreign-callback.html">foreign_callback!</a>.
+from a &quot;foreign&quot; programming language. The main building block is <a href="./foreign-class.html">foreign_class!</a>.
+This is the way to describe entities that will be visible for the &quot;foreign language&quot; as classes.
+It is also possible to export C-like enums via <a href="./foreign-enum.html">foreign_enum!</a>, plus it is possible to describe the
+way to pass a &quot;callback&quot; into your Rust code from the foreign language via <a href="./foreign-callback.html">foreign_callback!</a>.
 And of course it is possible to extend or rewrite existing type conversations rules via <a href="./foreign-typemap.html">foreign_typemap!</a></p>
 <h1><a class="header" href="#foreign_class" id="foreign_class">foreign_class!</a></h1>
-<p><code>foreign_class!</code> is the way how describe entity that will be visible for &quot;foreign language&quot; as a class.</p>
+<p><code>foreign_class!</code> is the way to describe an entity that will be visible for the &quot;foreign language&quot; as a class.</p>
 <p>The basic example is:</p>
 <pre><code class="language-rust no_run noplaypen">use super::{f2, Foo};
 
@@ -471,24 +471,24 @@ foreign_class!(class Foo {
     fn f2(_: i32) -&gt; i32;
 });
 </code></pre>
-<p>Here <code>Foo</code> may be <strong>struct</strong> or <strong>enum</strong> or more complex type (see bellow).
+<p>Here <code>Foo</code> may be <strong>struct</strong> or <strong>enum</strong> or a more complex type (see below).
 The <strong>self_type</strong> can be omitted if there are no <strong>constructor</strong>s and all <strong>fn</strong> do not accept <strong>self</strong>.</p>
 <h2><a class="header" href="#self_type" id="self_type">self_type</a></h2>
-<p>The <strong>self_type</strong> is used as &quot;neat&quot; way to call methods of types inside &quot;smart pointers&quot;.
-For example sometimes you can not use your <strong>struct</strong> or <strong>enum</strong> explicitly, because of semantic
-of &quot;foreign language&quot; is not allow it, then you can write:</p>
+<p>The <strong>self_type</strong> is used as a &quot;neat&quot; way to call methods of types inside &quot;smart pointers&quot;.
+For example sometimes you can not use your <strong>struct</strong> or <strong>enum</strong> explicitly, because of the semantic
+of the &quot;foreign language&quot; does not allow it, then you can write:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(class CircularDepsA {
     self_type CircularDepsA;
     constructor CircularDepsA::java_new(_: &amp;str) -&gt; Arc&lt;Mutex&lt;CircularDepsA&gt;&gt;;
     fn CircularDepsA::a(&amp;self, b: &amp;CircularDepsB) -&gt; String;
 });
 </code></pre>
-<p>And <code>flapigen</code> will be instructed to generate code to call each method listed above 
+<p>And <code>flapigen</code> will be instructed to generate code to call each method listed above
 with <code>lock().unwrap().method</code> syntax.</p>
-<p>Also may be you want export <code>trait</code> implementation as <code>foregin_class</code>.
-The <code>flapigen</code> can not work with <code>Box&lt;Trait&gt;</code>, because of it requires unstable/unsafe API to
-convert boxed trait to something that can be transferred via FFI border,
-but it can work with <code>Box&lt;Box&lt;Trait&gt;&gt;</code>, so via <strong>self_type</strong> you can represent boxed trait as class:</p>
+<p>Also maybe you want export a <code>trait</code> implementation as <code>foregin_class</code>.
+The <code>flapigen</code> cannot work with <code>Box&lt;Trait&gt;</code>, because it requires unstable/unsafe APIs to
+convert the boxed trait into something that can be transferred over the FFI border,
+but it can work with <code>Box&lt;Box&lt;Trait&gt;&gt;</code>, so via <strong>self_type</strong> you can represent a boxed trait as class:</p>
 <pre><code class="language-rust no_run noplaypen">pub trait Interface {
     fn f(&amp;self, _: i32) -&gt; i32;
     fn set(&amp;mut self, _: i32);
@@ -517,8 +517,8 @@ foreign_class!(class Interface {
     fn Interface::set(&amp;mut self, x: i32);
 });
 </code></pre>
-<p>Also that should be noted that <code>flapigen</code> generates code that uses &quot;Universal Function Call Syntax&quot;,
-so method can be not real methods and declared outside of <strong>impl</strong> blocks:</p>
+<p>Also it should be noted that <code>flapigen</code> generates code that uses &quot;Universal Function Call Syntax&quot;,
+so methods can be fake methods and declared outside of <strong>impl</strong> blocks:</p>
 <pre><code class="language-rust no_run noplaypen">pub struct TestMethodNotMethod;
 
 impl TestMethodNotMethod {
@@ -550,16 +550,16 @@ You can change access level via protected and private keywords.</p>
 );
 </code></pre>
 <h2><a class="header" href="#inline-methods" id="inline-methods">Inline methods</a></h2>
-<p>It is also sometimes convenient to write short methods just inside <code>foreign_class!</code>, for example to add way to access
-fields of <strong>struct</strong> or export result of Rust's macros application:</p>
+<p>It is also sometimes convenient to write short methods just inside <code>foreign_class!</code>, for example to add a way to access
+fields of a <strong>struct</strong> or to export a result of a Rust macro call:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(class TestFnInline {
     fn int_to_str(a: i32) -&gt; String {
         format!(&quot;{}&quot;, a)
     }
 });
 </code></pre>
-<p>To reference <code>self</code> in inline methods you should use <code>this</code> name, because of inline method
-is not the real one, it is just code block that included into generated code:</p>
+<p>To reference <code>self</code> in inline methods you should use the <code>this</code> variable, because the inline method
+is not the real one, it is just code block that gets included into the generated code:</p>
 <pre><code class="language-rust no_run noplaypen">pub struct Session {
     name: String,
 }
@@ -580,19 +580,19 @@ foreign_class!(
 );
 </code></pre>
 <h2><a class="header" href="#methods-aliases" id="methods-aliases">Methods aliases</a></h2>
-<p>Also you can create alias for function name:</p>
+<p>Also you can create an alias for a function name:</p>
 <pre><code class="language-rust no_run noplaypen">    fn Foo::f(&amp;self, _: i32, _: i32) -&gt; i32;  alias calcF;
 </code></pre>
-<p>So it would be called by path after <strong>fn</strong> in Rust code,
-and you can call it via name after <strong>alias</strong> in foreign language.</p>
-<p>May be useful for example if you want name functions in Java in camel case style,
-while want in Rust use snake case style.</p>
+<p>So it would be called by path with <strong>fn</strong> in Rust code,
+and you can call it via name with <strong>alias</strong> in foreign language.</p>
+<p>This may be useful for example if you want to name functions in Java in camel case style,
+while you want to use snake case style in Rust.</p>
 <h2><a class="header" href="#constructors" id="constructors">Constructors</a></h2>
-<p>Constructors are Rust methods that mapped to constructors in term of &quot;foreign&quot; language.
-Also constructors, more precisely, return type of constructors can be used to
-ask <code>flapigen</code> to simplify call of methods, see self_type section for more details.
-Sometimes you need constructor, but you don't want allow to user to construct object,
-then you can use empty constructor:</p>
+<p>Constructors are Rust methods that mapped to constructors in terms of the &quot;foreign&quot; language.
+Also constructors, more precisely, the return type of constructors can be used to
+ask <code>flapigen</code> to simplify calls of methods, see the self_type section for more details.
+Sometimes you need a constructor, but you don't want allow the user to construct objects,
+then you can use an empty constructor:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(
     class GamepadId {
         self_type GamepadId;
@@ -602,7 +602,7 @@ then you can use empty constructor:</p>
 );
 </code></pre>
 <h2><a class="header" href="#foreigner_code" id="foreigner_code">foreigner_code</a></h2>
-<p>Also flapigen support bypassing of code generation:</p>
+<p>flapigen also supports bypassing code generation:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(class TestPathAndResult {
     self_type TestPathAndResult;
     constructor TestPathAndResult::empty() -&gt; Result&lt;TestPathAndResult, String&gt;;
@@ -618,11 +618,11 @@ then you can use empty constructor:</p>
     fn TestPathAndResult::get_result_foo_list(generate_err: bool) -&gt; Result&lt;Vec&lt;Foo&gt;, String&gt;;
 });
 </code></pre>
-<p>after that you can implement Java_com_example_TestPathAndResult_do_1testHandArrayReturn
-function by your self, usefull when flapigen can not handle something automaticaly,
-or you want something special.</p>
+<p>After that you can implement the Java_com_example_TestPathAndResult_do_1testHandArrayReturn
+function yourself, useful for when flapigen cannot handle something automatically,
+or you want to do something special.</p>
 <h2><a class="header" href="#doc-comments" id="doc-comments">Doc comments</a></h2>
-<p>Also you can add comments to generated code with Rust's doc comments:</p>
+<p>You can also add comments to generated code with Rust doc comments:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(
 /// Class comment description for Foo.
 #[derive(Clone)]
@@ -639,19 +639,18 @@ class Foo {
     constructor Foo::new(val: i32, name: &amp;str) -&gt; Foo;
 </code></pre>
 <h2><a class="header" href="#derives" id="derives">Derives</a></h2>
-<p>You can use &quot;derive&quot; syntax on the top of class, in the way similar to usage on the
-top of &quot;Rust&quot; structs:</p>
+<p>You can use &quot;derive&quot; syntax on the declaration of classes, in a similar way to the usage on &quot;Rust&quot; structs:</p>
 <pre><code class="language-rust no_run noplaypen">/// Class comment description for Foo.
 #[derive(Clone)]
 class Foo {
     self_type Foo;
 </code></pre>
 <p>Usage of derives changes generated code in various ways.
-For example, you can use <code>Clone,Copy</code> to force generation copy constructor
+For example, you can use <code>Clone,Copy</code> to force the generation of a copy constructor
 and <code>operator=</code> in C++ case.
-Also you can use <code>camelCaseAliases</code> to change names of all methods to camel case.</p>
+You can also use <code>camelCaseAliases</code> to change names of all methods to camel case.</p>
 <h1><a class="header" href="#foreign_enum" id="foreign_enum">foreign_enum!</a></h1>
-<p>With usage of <code>foreign_enum!</code> macro you can &quot;export&quot; <code>enum</code> (<code>C</code> like enum) to foreign language:</p>
+<p>Through the usage of the <code>foreign_enum!</code> macro you can &quot;export&quot; <code>enum</code>s (<code>C</code> like enum) to a foreign language:</p>
 <pre><code class="language-rust no_run noplaypen">#[derive(Clone, Copy)]
 enum MyEnum {
     Item1,
@@ -667,9 +666,9 @@ foreign_enum!(
     }
 );
 </code></pre>
-<p>This allow you can use it as input or output types for <code>foreign_class!</code> methods.</p>
+<p>This allows you to use it as input or output types for <code>foreign_class!</code> methods.</p>
 <h1><a class="header" href="#foreign_callback" id="foreign_callback">foreign_callback!</a></h1>
-<p>Also you can use <code>trait</code> to describe callback from Rust to Java/C++:</p>
+<p>You can also use a <code>trait</code> to describe a callback from Rust to Java/C++:</p>
 <pre><code class="language-rust no_run noplaypen">trait EnumObserver {
     fn on_state_changed(&amp;self, item: MyEnum, is_ok: bool);
 }
@@ -693,13 +692,13 @@ foreign_class!(class TestEnumClass {
     }
 });
 </code></pre>
-<p>As result of <code>flapigen</code> processing <code>foreign_callback!</code> it generates <strong>interface</strong> for Java and
-abstract <strong>class</strong> for C++, so you can implements methods in Java/C++ and pass pointer/reference to Rust,
-and for Rust it would be represented as <strong>trait</strong> implementation.</p>
+<p>As a result of <code>flapigen</code> processing <code>foreign_callback!</code> it generates an <strong>interface</strong> for Java and
+an abstract <strong>class</strong> for C++, so you can implement methods in Java/C++ and pass a pointer/reference to Rust,
+and for Rust it would be represented as a <strong>trait</strong> implementation.</p>
 <h1><a class="header" href="#foreign_typemap" id="foreign_typemap">foreign_typemap!</a></h1>
-<p><code>flapigen</code> works with <a href="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)">graph</a> where
-vertices are types and edges are conversation rules between types. To extend or rewrite some rules
-you can use <code>foreign_typemap!</code> macro. <strong>WARNING</strong> syntax is experimental and subject to change.</p>
+<p><code>flapigen</code> works with a <a href="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)">graph</a> where
+vertices are types and edges are conversion rules between types. To extend or rewrite some rules
+you can use the <code>foreign_typemap!</code> macro. <strong>WARNING</strong> this syntax is experimental and subject to change.</p>
 <p>Let's take a look at an example:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_typemap!(
     ($p:r_type) DateTime&lt;Utc&gt; =&gt; jlong {
@@ -711,29 +710,29 @@ you can use <code>foreign_typemap!</code> macro. <strong>WARNING</strong> syntax
         =&gt; &quot;/*chrono*/@NonNull java.util.Date&quot; &quot;$out = new java.util.Date($p);&quot;;
 );
 </code></pre>
-<p>The <code>(r_type)</code> part of rule is described conversation from any Rust type to Rust type that
-can cross FFI (Foreign Function Interface) border.
-For example, in case of connection Rust and C++, types that can cross border are almost all primitive types,
-plus types marked with <code>repr(C)</code> and some others. After conversation to type that can cross FFI border,
-you sometimes want describe how this type should be converted to &quot;foreign&quot; type. This is done with
-<code>(f_type)</code> part of rule. Returning to our example at first we describe how to convert <code>DateTime&lt;Utc&gt;</code> (Rust type) to
+<p>The <code>(r_type)</code> part of the rule describes a conversion from any Rust type to a Rust type that
+can cross the FFI (Foreign Function Interface) border.
+For example, in the case of connection Rust and C++, types that can cross the FFI border are nearly all primitive types,
+plus types marked with <code>repr(C)</code> and some others. After conversion to the type that can cross the FFI border,
+you sometimes want to describe how this type should be converted to &quot;foreign&quot; type. This is done with the
+<code>(f_type)</code> part of the rule. Returning to our example, first we describe how to convert <code>DateTime&lt;Utc&gt;</code> (Rust type) to
 <code>jlong</code> (Rust type). Then we describe how to convert <code>long</code> (Java type) to <code>java.util.Date</code> (Java type).</p>
-<p>There is one nuance. As you can see Java type is called <code>/*chrono*/java.util.Date</code> instead of
-just <code>java.util.Date</code>. This is done because of you don't want two edges to one vertex in our graph
-mentioned above. There is already rule for <code>std::time::SystemTime</code> (Rust type) to <code>java.util.Date</code> (Java type),
+<p>There is one nuance. As you can see the Java type is called <code>/*chrono*/java.util.Date</code> instead of
+just <code>java.util.Date</code>. This is done because you don't want two edges to one vertex in our graph
+mentioned above. There is already a rule for <code>std::time::SystemTime</code> (Rust type) to <code>java.util.Date</code> (Java type),
 and it is better not have two rules (edges) that lead to the same vertex <code>java.util.Date</code>,
 so we create new unique vertex <code>/*chrono*/java.util.Date</code> != <code>java.util.Date</code>.</p>
 <p>Almost all parts of <code>foreign_typemap!</code> are optional.
-In the example bellow we define that <code>jlong</code> (Rust type) is corresponding to <code>long</code> (Java type),
+In the example below we define that <code>jlong</code> (Rust type) is corresponding to <code>long</code> (Java type),
 and there is no need to convert anything to get <code>long</code> from <code>jlong</code> and vise versa.</p>
 <pre><code class="language-rust no_run noplaypen">foreign_typemap!(
     (r_type) jlong;
     (f_type) &quot;long&quot;;
 );
 </code></pre>
-<p>Also it is possible to use <code>foreign_typemap!</code> for generic type conversation.
-In the example bellow we define the rule to convert any type Java type that looks like <code>X []</code>
-to <code>Vec&lt;T&gt;</code> if for type <code>T</code> there are traits <code>SwigForeignClass + Clone</code>.</p>
+<p>It is also possible to use <code>foreign_typemap!</code> for generic type conversion.
+In the example below we define the rule to convert any Java type that looks like <code>X []</code>
+to <code>Vec&lt;T&gt;</code> if type <code>T</code> implements the traits <code>SwigForeignClass + Clone</code>.</p>
 <pre><code class="language-rust no_run noplaypen">foreign_typemap!(
     ($p:r_type) &lt;T: SwigForeignClass + Clone&gt; Vec&lt;T&gt; &lt;= internal_aliases::JForeignObjectsArray&lt;T&gt; {
         $out = jobject_array_to_vec_of_objects(env, $p);

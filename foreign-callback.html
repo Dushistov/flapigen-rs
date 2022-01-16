@@ -156,7 +156,7 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#foreign_callback" id="foreign_callback">foreign_callback!</a></h1>
-<p>Also you can use <code>trait</code> to describe callback from Rust to Java/C++:</p>
+<p>You can also use a <code>trait</code> to describe a callback from Rust to Java/C++:</p>
 <pre><code class="language-rust no_run noplaypen">trait EnumObserver {
     fn on_state_changed(&amp;self, item: MyEnum, is_ok: bool);
 }
@@ -180,9 +180,9 @@ foreign_class!(class TestEnumClass {
     }
 });
 </code></pre>
-<p>As result of <code>flapigen</code> processing <code>foreign_callback!</code> it generates <strong>interface</strong> for Java and
-abstract <strong>class</strong> for C++, so you can implements methods in Java/C++ and pass pointer/reference to Rust,
-and for Rust it would be represented as <strong>trait</strong> implementation.</p>
+<p>As a result of <code>flapigen</code> processing <code>foreign_callback!</code> it generates an <strong>interface</strong> for Java and
+an abstract <strong>class</strong> for C++, so you can implement methods in Java/C++ and pass a pointer/reference to Rust,
+and for Rust it would be represented as a <strong>trait</strong> implementation.</p>
 
                     </main>
 

@@ -156,7 +156,7 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#foreign_class" id="foreign_class">foreign_class!</a></h1>
-<p><code>foreign_class!</code> is the way how describe entity that will be visible for &quot;foreign language&quot; as a class.</p>
+<p><code>foreign_class!</code> is the way to describe an entity that will be visible for the &quot;foreign language&quot; as a class.</p>
 <p>The basic example is:</p>
 <pre><code class="language-rust no_run noplaypen">use super::{f2, Foo};
 
@@ -168,24 +168,24 @@ foreign_class!(class Foo {
     fn f2(_: i32) -&gt; i32;
 });
 </code></pre>
-<p>Here <code>Foo</code> may be <strong>struct</strong> or <strong>enum</strong> or more complex type (see bellow).
+<p>Here <code>Foo</code> may be <strong>struct</strong> or <strong>enum</strong> or a more complex type (see below).
 The <strong>self_type</strong> can be omitted if there are no <strong>constructor</strong>s and all <strong>fn</strong> do not accept <strong>self</strong>.</p>
 <h2><a class="header" href="#self_type" id="self_type">self_type</a></h2>
-<p>The <strong>self_type</strong> is used as &quot;neat&quot; way to call methods of types inside &quot;smart pointers&quot;.
-For example sometimes you can not use your <strong>struct</strong> or <strong>enum</strong> explicitly, because of semantic
-of &quot;foreign language&quot; is not allow it, then you can write:</p>
+<p>The <strong>self_type</strong> is used as a &quot;neat&quot; way to call methods of types inside &quot;smart pointers&quot;.
+For example sometimes you can not use your <strong>struct</strong> or <strong>enum</strong> explicitly, because of the semantic
+of the &quot;foreign language&quot; does not allow it, then you can write:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(class CircularDepsA {
     self_type CircularDepsA;
     constructor CircularDepsA::java_new(_: &amp;str) -&gt; Arc&lt;Mutex&lt;CircularDepsA&gt;&gt;;
     fn CircularDepsA::a(&amp;self, b: &amp;CircularDepsB) -&gt; String;
 });
 </code></pre>
-<p>And <code>flapigen</code> will be instructed to generate code to call each method listed above 
+<p>And <code>flapigen</code> will be instructed to generate code to call each method listed above
 with <code>lock().unwrap().method</code> syntax.</p>
-<p>Also may be you want export <code>trait</code> implementation as <code>foregin_class</code>.
-The <code>flapigen</code> can not work with <code>Box&lt;Trait&gt;</code>, because of it requires unstable/unsafe API to
-convert boxed trait to something that can be transferred via FFI border,
-but it can work with <code>Box&lt;Box&lt;Trait&gt;&gt;</code>, so via <strong>self_type</strong> you can represent boxed trait as class:</p>
+<p>Also maybe you want export a <code>trait</code> implementation as <code>foregin_class</code>.
+The <code>flapigen</code> cannot work with <code>Box&lt;Trait&gt;</code>, because it requires unstable/unsafe APIs to
+convert the boxed trait into something that can be transferred over the FFI border,
+but it can work with <code>Box&lt;Box&lt;Trait&gt;&gt;</code>, so via <strong>self_type</strong> you can represent a boxed trait as class:</p>
 <pre><code class="language-rust no_run noplaypen">pub trait Interface {
     fn f(&amp;self, _: i32) -&gt; i32;
     fn set(&amp;mut self, _: i32);
@@ -214,8 +214,8 @@ foreign_class!(class Interface {
     fn Interface::set(&amp;mut self, x: i32);
 });
 </code></pre>
-<p>Also that should be noted that <code>flapigen</code> generates code that uses &quot;Universal Function Call Syntax&quot;,
-so method can be not real methods and declared outside of <strong>impl</strong> blocks:</p>
+<p>Also it should be noted that <code>flapigen</code> generates code that uses &quot;Universal Function Call Syntax&quot;,
+so methods can be fake methods and declared outside of <strong>impl</strong> blocks:</p>
 <pre><code class="language-rust no_run noplaypen">pub struct TestMethodNotMethod;
 
 impl TestMethodNotMethod {
@@ -247,16 +247,16 @@ You can change access level via protected and private keywords.</p>
 );
 </code></pre>
 <h2><a class="header" href="#inline-methods" id="inline-methods">Inline methods</a></h2>
-<p>It is also sometimes convenient to write short methods just inside <code>foreign_class!</code>, for example to add way to access
-fields of <strong>struct</strong> or export result of Rust's macros application:</p>
+<p>It is also sometimes convenient to write short methods just inside <code>foreign_class!</code>, for example to add a way to access
+fields of a <strong>struct</strong> or to export a result of a Rust macro call:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(class TestFnInline {
     fn int_to_str(a: i32) -&gt; String {
         format!(&quot;{}&quot;, a)
     }
 });
 </code></pre>
-<p>To reference <code>self</code> in inline methods you should use <code>this</code> name, because of inline method
-is not the real one, it is just code block that included into generated code:</p>
+<p>To reference <code>self</code> in inline methods you should use the <code>this</code> variable, because the inline method
+is not the real one, it is just code block that gets included into the generated code:</p>
 <pre><code class="language-rust no_run noplaypen">pub struct Session {
     name: String,
 }
@@ -277,19 +277,19 @@ foreign_class!(
 );
 </code></pre>
 <h2><a class="header" href="#methods-aliases" id="methods-aliases">Methods aliases</a></h2>
-<p>Also you can create alias for function name:</p>
+<p>Also you can create an alias for a function name:</p>
 <pre><code class="language-rust no_run noplaypen">    fn Foo::f(&amp;self, _: i32, _: i32) -&gt; i32;  alias calcF;
 </code></pre>
-<p>So it would be called by path after <strong>fn</strong> in Rust code,
-and you can call it via name after <strong>alias</strong> in foreign language.</p>
-<p>May be useful for example if you want name functions in Java in camel case style,
-while want in Rust use snake case style.</p>
+<p>So it would be called by path with <strong>fn</strong> in Rust code,
+and you can call it via name with <strong>alias</strong> in foreign language.</p>
+<p>This may be useful for example if you want to name functions in Java in camel case style,
+while you want to use snake case style in Rust.</p>
 <h2><a class="header" href="#constructors" id="constructors">Constructors</a></h2>
-<p>Constructors are Rust methods that mapped to constructors in term of &quot;foreign&quot; language.
-Also constructors, more precisely, return type of constructors can be used to
-ask <code>flapigen</code> to simplify call of methods, see self_type section for more details.
-Sometimes you need constructor, but you don't want allow to user to construct object,
-then you can use empty constructor:</p>
+<p>Constructors are Rust methods that mapped to constructors in terms of the &quot;foreign&quot; language.
+Also constructors, more precisely, the return type of constructors can be used to
+ask <code>flapigen</code> to simplify calls of methods, see the self_type section for more details.
+Sometimes you need a constructor, but you don't want allow the user to construct objects,
+then you can use an empty constructor:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(
     class GamepadId {
         self_type GamepadId;
@@ -299,7 +299,7 @@ then you can use empty constructor:</p>
 );
 </code></pre>
 <h2><a class="header" href="#foreigner_code" id="foreigner_code">foreigner_code</a></h2>
-<p>Also flapigen support bypassing of code generation:</p>
+<p>flapigen also supports bypassing code generation:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(class TestPathAndResult {
     self_type TestPathAndResult;
     constructor TestPathAndResult::empty() -&gt; Result&lt;TestPathAndResult, String&gt;;
@@ -315,11 +315,11 @@ then you can use empty constructor:</p>
     fn TestPathAndResult::get_result_foo_list(generate_err: bool) -&gt; Result&lt;Vec&lt;Foo&gt;, String&gt;;
 });
 </code></pre>
-<p>after that you can implement Java_com_example_TestPathAndResult_do_1testHandArrayReturn
-function by your self, usefull when flapigen can not handle something automaticaly,
-or you want something special.</p>
+<p>After that you can implement the Java_com_example_TestPathAndResult_do_1testHandArrayReturn
+function yourself, useful for when flapigen cannot handle something automatically,
+or you want to do something special.</p>
 <h2><a class="header" href="#doc-comments" id="doc-comments">Doc comments</a></h2>
-<p>Also you can add comments to generated code with Rust's doc comments:</p>
+<p>You can also add comments to generated code with Rust doc comments:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(
 /// Class comment description for Foo.
 #[derive(Clone)]
@@ -336,17 +336,16 @@ class Foo {
     constructor Foo::new(val: i32, name: &amp;str) -&gt; Foo;
 </code></pre>
 <h2><a class="header" href="#derives" id="derives">Derives</a></h2>
-<p>You can use &quot;derive&quot; syntax on the top of class, in the way similar to usage on the
-top of &quot;Rust&quot; structs:</p>
+<p>You can use &quot;derive&quot; syntax on the declaration of classes, in a similar way to the usage on &quot;Rust&quot; structs:</p>
 <pre><code class="language-rust no_run noplaypen">/// Class comment description for Foo.
 #[derive(Clone)]
 class Foo {
     self_type Foo;
 </code></pre>
 <p>Usage of derives changes generated code in various ways.
-For example, you can use <code>Clone,Copy</code> to force generation copy constructor
+For example, you can use <code>Clone,Copy</code> to force the generation of a copy constructor
 and <code>operator=</code> in C++ case.
-Also you can use <code>camelCaseAliases</code> to change names of all methods to camel case.</p>
+You can also use <code>camelCaseAliases</code> to change names of all methods to camel case.</p>
 
                     </main>
 

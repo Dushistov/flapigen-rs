@@ -156,11 +156,11 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#javaandroid" id="javaandroid">Java/Android</a></h1>
-<p><a href="https://github.com/Dushistov/flapigen-rs/tree/master/android-example">This example</a> shows off how to use rust to build a native library from android
+<p><a href="https://github.com/Dushistov/flapigen-rs/tree/master/android-example">This example</a> shows off how to use rust to build a native library from Android
 and use it through an automatically generated JNI wrapper.</p>
-<p><a href="https://developer.android.com/studio">Android Studio</a> can be used to work with Rust via <a href="https://intellij-rust.github.io/">Rust plugin</a>.
-So it is not bad idea to integrate invocation of cargo into gradle,
-thus you can build and run android application with Rust inside as ordinary Java/Kotlin application.</p>
+<p><a href="https://developer.android.com/studio">Android Studio</a> can be used to work with Rust via its <a href="https://intellij-rust.github.io/">Rust plugin</a>.
+So it's not a bad idea to integrate invocations of cargo into gradle,
+so you can build and run Rust inside an ordinary Java/Kotlin Android application.</p>
 <h2><a class="header" href="#project-structure" id="project-structure">Project Structure</a></h2>
 <p>The file <code>build.rs</code> defines how flapigen generates wrapper code:</p>
 <pre><code class="language-rust no_run noplaypen">// build.rs
@@ -208,7 +208,7 @@ impl Session {
     }
 }
 </code></pre>
-<p>And the file <code>src/java_glue.rs.in</code> contains description for flapigen how export this API to Java:</p>
+<p>And the file <code>src/java_glue.rs.in</code> contains descriptions for flapigen to export this API to Java:</p>
 <pre><code class="language-rust no_run noplaypen">// src/java_glue.rs.in
 foreign_class!(class Session {
     self_type Session;
@@ -217,7 +217,7 @@ foreign_class!(class Session {
     fn Session::greet(to: &amp;str) -&gt; String;
 });
 </code></pre>
-<p>Then the <code>app/build.gradle</code> contains rule how to invokes <code>cargo</code> to build shared library from Rust code,
+<p>Then the <code>app/build.gradle</code> contains rules to invoke <code>cargo</code> to build a shared library from Rust code,
 and then build it into apk:</p>
 <pre><code class="language-groovy no_run noplaypen">// app/build.gradle
 def rustBasePath = &quot;..&quot;
@@ -277,12 +277,12 @@ archTriplets.each { arch, target -&gt;
 }
 </code></pre>
 <h2><a class="header" href="#building" id="building">Building</a></h2>
-<p>To build the demo, you will need the latest version of Cargo, Android NDK and install proper Rust toolchains:</p>
+<p>To build the demo, you will need the latest version of Cargo, Android NDK and install the proper Rust toolchain targets:</p>
 <pre><code class="language-shell">rustup target add arm-linux-androideabi
 rustup target add aarch64-linux-android
 </code></pre>
-<p>To link the result into shared library you need add path to proper clang binary into <code>PATH</code>
-environment variable or change path to linker here:</p>
+<p>To link Rust code into a shared library you need add the path to the proper clang binary into your <code>PATH</code>
+environment variable or change the path to the linker here:</p>
 <pre><code class="language-toml">[target.aarch64-linux-android]
 linker = &quot;aarch64-linux-android21-clang++&quot;
 runner = &quot;./run-on-android.sh&quot;
@@ -298,7 +298,7 @@ the project in release mode, simply call <code>./gradlew androidRelease</code>.<
 <code>cargo build --target arm-linux-androideabi</code>.</p>
 <h2><a class="header" href="#testing" id="testing">Testing</a></h2>
 <p>It is possible to run Rust unit tests on Android phone via <code>run-on-android.sh</code> script mentioned in <code>.cargo/config</code>,
-also there is instrumentation unit test on Java that invoke Rust code.</p>
+there are also instrumentation unit tests in Java that invoke Rust code.</p>
 
                     </main>
 

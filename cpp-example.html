@@ -156,18 +156,18 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#c" id="c">C++</a></h1>
-<p>To run cpp-example from <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example">here</a> you
-need <a href="https://www.boost.org/">boost</a>, <a href="https://cmake.org/">cmake</a> and C++11 compatible compiler.</p>
+<p>To run the cpp-example from <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example">here</a> you
+need <a href="https://www.boost.org/">boost</a>, <a href="https://cmake.org/">cmake</a> and a C++11 compatible compiler.</p>
 <h2><a class="header" href="#project-structure" id="project-structure">Project Structure</a></h2>
 <p>The projects consists of two parts: <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example/cpp-part">cpp-part</a>
 and <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example/rust-part">rust-part</a>.
-rust-part is compiled as shared library and linked into executable
+The Rust part is compiled as shared library and linked into executable
 described by <a href="https://github.com/Dushistov/flapigen-rs/tree/master/cpp-example/cpp-part/CMakeLists.txt">CMakeLists.txt</a>.
-cpp-part is main part so its build system (cmake) invokes <code>cargo</code> to build rust-part.</p>
+The cpp-part is the main part so its build system (cmake) invokes <code>cargo</code> to build the Rust part.</p>
 <h2><a class="header" href="#building" id="building">Building</a></h2>
-<p>It is normal CMake project, so you can build as ordinary CMake project.
+<p>It is a normal CMake project, so you can build it as an ordinary CMake project.
 By default it requires C++11 and boost, but if your compiler is modern enough
-you can use C++17 and then you no need boost at all.</p>
+you can use C++17 and then you don't need boost at all.</p>
 <p>Just delete all mentions of boost here:</p>
 <pre><code class="language-rust no_run noplaypen">// build.rs
     let cpp_cfg = CppConfig::new(
@@ -179,7 +179,7 @@ you can use C++17 and then you no need boost at all.</p>
     .cpp_str_view(CppStrView::Boost);
 </code></pre>
 <h2><a class="header" href="#the-main-functionality" id="the-main-functionality">The main functionality</a></h2>
-<p>Project demonstrate how export Rust in form of class to C++.</p>
+<p>This project demonstrates how to export Rust in the form of a class to C++.</p>
 <p>Rust code:</p>
 <pre><code class="language-rust no_run noplaypen">// src/lib.rs
 pub struct Foo {

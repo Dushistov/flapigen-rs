@@ -156,9 +156,9 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#foreign_typemap" id="foreign_typemap">foreign_typemap!</a></h1>
-<p><code>flapigen</code> works with <a href="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)">graph</a> where
-vertices are types and edges are conversation rules between types. To extend or rewrite some rules
-you can use <code>foreign_typemap!</code> macro. <strong>WARNING</strong> syntax is experimental and subject to change.</p>
+<p><code>flapigen</code> works with a <a href="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)">graph</a> where
+vertices are types and edges are conversion rules between types. To extend or rewrite some rules
+you can use the <code>foreign_typemap!</code> macro. <strong>WARNING</strong> this syntax is experimental and subject to change.</p>
 <p>Let's take a look at an example:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_typemap!(
     ($p:r_type) DateTime&lt;Utc&gt; =&gt; jlong {
@@ -170,29 +170,29 @@ you can use <code>foreign_typemap!</code> macro. <strong>WARNING</strong> syntax
         =&gt; &quot;/*chrono*/@NonNull java.util.Date&quot; &quot;$out = new java.util.Date($p);&quot;;
 );
 </code></pre>
-<p>The <code>(r_type)</code> part of rule is described conversation from any Rust type to Rust type that
-can cross FFI (Foreign Function Interface) border.
-For example, in case of connection Rust and C++, types that can cross border are almost all primitive types,
-plus types marked with <code>repr(C)</code> and some others. After conversation to type that can cross FFI border,
-you sometimes want describe how this type should be converted to &quot;foreign&quot; type. This is done with
-<code>(f_type)</code> part of rule. Returning to our example at first we describe how to convert <code>DateTime&lt;Utc&gt;</code> (Rust type) to
+<p>The <code>(r_type)</code> part of the rule describes a conversion from any Rust type to a Rust type that
+can cross the FFI (Foreign Function Interface) border.
+For example, in the case of connection Rust and C++, types that can cross the FFI border are nearly all primitive types,
+plus types marked with <code>repr(C)</code> and some others. After conversion to the type that can cross the FFI border,
+you sometimes want to describe how this type should be converted to &quot;foreign&quot; type. This is done with the
+<code>(f_type)</code> part of the rule. Returning to our example, first we describe how to convert <code>DateTime&lt;Utc&gt;</code> (Rust type) to
 <code>jlong</code> (Rust type). Then we describe how to convert <code>long</code> (Java type) to <code>java.util.Date</code> (Java type).</p>
-<p>There is one nuance. As you can see Java type is called <code>/*chrono*/java.util.Date</code> instead of
-just <code>java.util.Date</code>. This is done because of you don't want two edges to one vertex in our graph
-mentioned above. There is already rule for <code>std::time::SystemTime</code> (Rust type) to <code>java.util.Date</code> (Java type),
+<p>There is one nuance. As you can see the Java type is called <code>/*chrono*/java.util.Date</code> instead of
+just <code>java.util.Date</code>. This is done because you don't want two edges to one vertex in our graph
+mentioned above. There is already a rule for <code>std::time::SystemTime</code> (Rust type) to <code>java.util.Date</code> (Java type),
 and it is better not have two rules (edges) that lead to the same vertex <code>java.util.Date</code>,
 so we create new unique vertex <code>/*chrono*/java.util.Date</code> != <code>java.util.Date</code>.</p>
 <p>Almost all parts of <code>foreign_typemap!</code> are optional.
-In the example bellow we define that <code>jlong</code> (Rust type) is corresponding to <code>long</code> (Java type),
+In the example below we define that <code>jlong</code> (Rust type) is corresponding to <code>long</code> (Java type),
 and there is no need to convert anything to get <code>long</code> from <code>jlong</code> and vise versa.</p>
 <pre><code class="language-rust no_run noplaypen">foreign_typemap!(
     (r_type) jlong;
     (f_type) &quot;long&quot;;
 );
 </code></pre>
-<p>Also it is possible to use <code>foreign_typemap!</code> for generic type conversation.
-In the example bellow we define the rule to convert any type Java type that looks like <code>X []</code>
-to <code>Vec&lt;T&gt;</code> if for type <code>T</code> there are traits <code>SwigForeignClass + Clone</code>.</p>
+<p>It is also possible to use <code>foreign_typemap!</code> for generic type conversion.
+In the example below we define the rule to convert any Java type that looks like <code>X []</code>
+to <code>Vec&lt;T&gt;</code> if type <code>T</code> implements the traits <code>SwigForeignClass + Clone</code>.</p>
 <pre><code class="language-rust no_run noplaypen">foreign_typemap!(
     ($p:r_type) &lt;T: SwigForeignClass + Clone&gt; Vec&lt;T&gt; &lt;= internal_aliases::JForeignObjectsArray&lt;T&gt; {
         $out = jobject_array_to_vec_of_objects(env, $p);
