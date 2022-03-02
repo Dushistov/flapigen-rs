@@ -3,6 +3,7 @@ use std::{
     f32, f64,
     path::Path,
     rc::Rc,
+    sync::Arc,
 };
 
 #[derive(Clone)]
@@ -1098,3 +1099,29 @@ foreign_class!(
     }
 );
 //ANCHOR_END: inline_method_self
+
+pub struct ReturnArcSlice {
+    d: Vec<Arc<Foo>>,
+}
+
+impl ReturnArcSlice {
+    fn new(beg: i32, end: i32) -> Self {
+        let mut d = Vec::with_capacity((end - beg) as usize);
+        for i in beg..end {
+            d.push(Arc::new(Foo {
+                data: i,
+                name: format!("Arc<Foo> {}", i),
+            }));
+        }
+        Self { d }
+    }
+    fn slice(&self) -> &[Arc<Foo>] {
+        &self.d
+    }
+}
+
+foreign_class!(class ReturnArcSlice {
+    self_type ReturnArcSlice;
+    constructor ReturnArcSlice::new(beg: i32, end: i32) -> ReturnArcSlice;
+    fn ReturnArcSlice::slice(&self) -> &[Arc<Foo>];
+});
