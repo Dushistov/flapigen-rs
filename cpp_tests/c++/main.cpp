@@ -44,6 +44,7 @@
 #include "rust_interface/ThreadSafeObserver.hpp"
 #include "rust_interface/TestMultiThreadCallback.hpp"
 #include "rust_interface/Session.hpp"
+#include "rust_interface/ReturnArcSlice.hpp"
 
 using namespace rust;
 
@@ -1154,6 +1155,21 @@ TEST(SmartPtrCopy, smokeTest)
               static_cast<const SessionOpaque *>(session));
     EXPECT_EQ(static_cast<const SessionOpaque *>(session2),
               static_cast<const SessionOpaque *>(session3));
+}
+
+TEST(ReturnArcSlice, smokeTest)
+{
+    for (const size_t size : { 0, 1, 17, 500 }) {
+        ReturnArcSlice obj(0, size);
+        const auto sl = obj.slice();
+        ASSERT_EQ(size, sl.size());
+        for (size_t i = 0; i < sl.size(); ++i) {
+            std::stringstream fmt;
+            fmt << "Arc<Foo> " << i;
+            ASSERT_EQ(fmt.str(), sl[i].getName());
+            ASSERT_EQ(int32_t(i), sl[i].f(0, 0));
+        }
+    }
 }
 
 int main(int argc, char *argv[])
