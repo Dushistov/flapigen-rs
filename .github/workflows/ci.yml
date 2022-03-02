@@ -22,17 +22,17 @@ jobs:
       matrix:
         include:
           - name: i686-pc-windows-msvc (stable)
-            os: windows-latest
+            os: windows-2019
             rust: stable
             target: i686-pc-windows-msvc
             platform: x86
           - name: x86_64-pc-windows-msvc (stable)
-            os: windows-latest
+            os: windows-2019
             rust: stable
             target: x86_64-pc-windows-msvc
             platform: x64
           - name: x86_64-pc-windows-msvc (beta)
-            os: windows-latest
+            os: windows-2019
             rust: beta
             target: x86_64-pc-windows-msvc
             platform: x64
@@ -65,7 +65,7 @@ jobs:
       # existing folder, as deleting it takes about as much time as not doing
       # anything and just updating rust-docs.
       - name: Rename existing rust toolchain (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2019'
         run: Rename-Item C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc.old
 
       - name: Install Rust toolchain
@@ -82,13 +82,13 @@ jobs:
           python-version: '3.7.8'
           architecture: ${{ matrix.platform || 'x64' }}
       - uses: jwlawson/actions-setup-cmake@v1.4
-        if: matrix.os != 'windows-latest'
+        if: matrix.os != 'windows-2019'
         with:
           cmake-version: '3.9.6'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
       # visual studio 16 2019 not supported until cmake 3.14
       - uses: jwlawson/actions-setup-cmake@v1.4
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2019'
         with:
           cmake-version: '3.14.7'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
@@ -118,7 +118,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get -y update && sudo apt-get install -y valgrind
       - name: Install llvm tools on Windows
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2019'
         run: |
           set -e
           curl https://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
@@ -135,7 +135,7 @@ jobs:
         shell: bash
       # there are no prebuild windows binary for 0.2.13
       - name: install sccache (windows 64bit)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2019'
         run: |
           set -e
           export SCCACHE_VER="0.2.12"
