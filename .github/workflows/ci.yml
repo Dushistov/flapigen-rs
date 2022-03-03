@@ -12,7 +12,7 @@ env:
   RUST_BACKTRACE: 1
   RUSTUP_MAX_RETRIES: 10
   CARGO_NET_RETRY: 10
-  SCCACHE_VER: "0.2.13"
+  SCCACHE_VER: "v0.2.15"
 
 jobs:
   test:
@@ -133,15 +133,13 @@ jobs:
           brew install sccache
           echo "SCCACHE_BUCKET=flapigenamd64macos" >> $GITHUB_ENV
         shell: bash
-      # there are no prebuild windows binary for 0.2.13
       - name: install sccache (windows 64bit)
         if: matrix.os == 'windows-2019'
         run: |
           set -e
-          export SCCACHE_VER="0.2.12"
           curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
           7z x sccache.tar.gz
-          7z x sccache-$SCCACHE_VER-x86_64-pc-windows-msvc.tar
+          7z x sccache.tar
           echo "`pwd`/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc" >> $GITHUB_PATH
           echo "SCCACHE_BUCKET=flapigenamd64win" >> $GITHUB_ENV
         shell: bash
@@ -151,6 +149,7 @@ jobs:
           set -e
           curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl.tar.gz -o sccache.tar.gz
           tar -xzvf sccache.tar.gz
+          chmod 755 "./sccache-$SCCACHE_VER-x86_64-unknown-linux-musl/sccache"
           echo "`pwd`/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl" >> $GITHUB_PATH
           echo "SCCACHE_BUCKET=flapigenamd64ubuntu" >> $GITHUB_ENV
         shell: bash
