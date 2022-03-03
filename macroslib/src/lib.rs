@@ -404,8 +404,8 @@ impl Generator {
                     code: include_str!("cpp/rust_slice_tmpl.hpp").into(),
                 });
                 foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_smart_ptr_foreign_slice_impl.hpp".into(),
-                    code: include_str!("cpp/rust_smart_ptr_foreign_slice_impl.hpp").into(),
+                    id_of_code: "rust_slice_access.hpp".into(),
+                    code: include_str!("cpp/rust_slice_access.hpp").into(),
                 });
             }
             LanguageConfig::PythonConfig(..) => {
