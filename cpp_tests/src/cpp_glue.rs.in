@@ -1100,28 +1100,90 @@ foreign_class!(
 );
 //ANCHOR_END: inline_method_self
 
-pub struct ReturnArcSlice {
-    d: Vec<Arc<Foo>>,
+pub struct FooArc {
+    val: i32,
+    s: String,
 }
 
-impl ReturnArcSlice {
+impl FooArc {
+    fn val(&self) -> i32 {
+        self.val
+    }
+    fn s(&self) -> &str {
+        &self.s
+    }
+}
+
+foreign_class!(class FooArc {
+    self_type FooArc;
+    constructor new(val: i32, s: String) -> Arc<FooArc> {
+        Arc::new(FooArc { val, s })
+    }
+    fn FooArc::val(&self) -> i32;
+    fn FooArc::s(&self) -> &str;
+});
+
+pub struct WorkWithSlice {
+    d: Vec<Arc<FooArc>>,
+}
+
+impl WorkWithSlice {
     fn new(beg: i32, end: i32) -> Self {
         let mut d = Vec::with_capacity((end - beg) as usize);
         for i in beg..end {
-            d.push(Arc::new(Foo {
-                data: i,
-                name: format!("Arc<Foo> {}", i),
+            d.push(Arc::new(FooArc {
+                val: i,
+                s: format!("Arc<FooArc> {}", i),
             }));
         }
         Self { d }
     }
-    fn slice(&self) -> &[Arc<Foo>] {
+    fn slice(&self) -> &[Arc<FooArc>] {
         &self.d
     }
 }
 
-foreign_class!(class ReturnArcSlice {
-    self_type ReturnArcSlice;
-    constructor ReturnArcSlice::new(beg: i32, end: i32) -> ReturnArcSlice;
-    fn ReturnArcSlice::slice(&self) -> &[Arc<Foo>];
+foreign_typemap!(
+    define_c_type!(
+        module = "foo_arc_access.h";
+        #[no_mangle]
+        pub extern "C" fn foo_arc_access(sl: CRustSliceAccess, idx: usize) -> *const ::std::os::raw::c_void {
+            let slice: &[Arc<FooArc>] = unsafe { ::std::slice::from_raw_parts(sl.data as *const Arc<FooArc>, sl.len) };
+            let elem_ref: &FooArc = &slice[idx];
+            elem_ref as *const FooArc as *const ::std::os::raw::c_void
+        }
+    );
+    foreign_code!(module = "rust_slice.h";
+                    r##"
+#ifdef __cplusplus
+#include "foo_arc_access.h"
+#include "rust_slice_access.hpp"
+#include "FooArc.hpp"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+struct FooArcAccess {
+       using ReturnType = FooArcRef;
+       FooArcRef operator()(CRustSliceAccess slice, size_t idx) const noexcept {
+           auto p = static_cast<const FooArcOpaque *>(foo_arc_access(slice, idx));
+           return FooArcRef{ p };
+       }
+};
+using RustFooArcConstSlice = RustSliceAccess<FooArcAccess>;
+}
+#endif
+"##);
+    ($p:r_type) &[Arc<FooArc>] => CRustSliceAccess {
+        $out = CRustSliceAccess {
+            data: $p.as_ptr() as *const ::std::os::raw::c_void,
+            len: $p.len(),
+        };
+    };
+    ($p:f_type, req_modules = ["\"rust_slice.h\""]) => "RustFooArcConstSlice"
+        "RustFooArcConstSlice{$p}";
+);
+
+foreign_class!(class WorkWithSlice {
+    self_type WorkWithSlice;
+    constructor WorkWithSlice::new(beg: i32, end: i32) -> WorkWithSlice;
+    fn WorkWithSlice::slice(&self) -> &[Arc<FooArc>];
 });

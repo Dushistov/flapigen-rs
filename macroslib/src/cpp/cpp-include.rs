@@ -724,7 +724,7 @@ foreign_typemap!(
 #[allow(dead_code)]
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct CRustSmartPtrObjectSlice {
+pub struct CRustSliceAccess {
     data: *const ::std::os::raw::c_void,
     len: usize,
 }
@@ -734,46 +734,12 @@ foreign_typemap!(
         module = "rust_slice.h";
         #[repr(C)]
         #[derive(Clone, Copy)]
-        pub struct CRustSmartPtrObjectSlice {
+        pub struct CRustSliceAccess {
             data: *const ::std::os::raw::c_void,
             len: usize,
         });
-    (r_type) CRustSmartPtrObjectSlice;
-    (f_type) "CRustSmartPtrObjectSlice";
-);
-
-foreign_typemap!(
-    generic_alias!(CRustSmartPtrObjectSliceIndexAccess = swig_concat_idents!(CRustSmartPtrObjectSlice, swig_i_type!(T), _index_access));
-    generic_alias!(CRustSmartPtrObjectSliceModule = swig_concat_idents!(smart_ptr_obj_slice_, swig_i_type!(T)));
-    define_c_type!(
-        module = "CRustSmartPtrObjectSliceModule!().h";
-        #[no_mangle]
-        pub extern "C" fn CRustSmartPtrObjectSliceIndexAccess!()(sl: CRustSmartPtrObjectSlice, idx: usize) -> *const ::std::os::raw::c_void {
-            let slice: &[Arc<swig_subst_type!(T)>] = unsafe { ::std::slice::from_raw_parts(sl.data as *const Arc<swig_subst_type!(T)>, sl.len) };
-            let elem_ref: &swig_subst_type!(T) = &slice[idx];
-            elem_ref as *const swig_subst_type!(T) as *const ::std::os::raw::c_void
-        }
-    );
-    foreign_code!(module = "rust_slice.h";
-                    r##"
-#ifdef __cplusplus
-#include "rust_smart_ptr_foreign_slice_impl.hpp"
-#include "CRustSmartPtrObjectSliceModule!().h"
-
-namespace $RUST_SWIG_USER_NAMESPACE {
-template<typename T>
-using RustSmartPtrForeignSliceConst = RustSmartPtrForeignSlice<T, CRustSmartPtrObjectSlice, CRustSmartPtrObjectSliceIndexAccess!()>;
-}
-#endif
-"##);
-    ($p:r_type) <T: SwigForeignClass> &[Arc<T>] => CRustSmartPtrObjectSlice {
-        $out = CRustSmartPtrObjectSlice {
-            data: $p.as_ptr() as *const ::std::os::raw::c_void,
-            len: $p.len(),
-        };
-    };
-    ($p:f_type, req_modules = ["\"rust_slice.h\""]) => "RustSmartPtrForeignSliceConst<swig_f_type!(&T)>"
-        "RustSmartPtrForeignSliceConst<swig_f_type!(&T)>{$p}";
+    (r_type) CRustSliceAccess;
+    (f_type) "CRustSliceAccess";
 );
 
 foreign_typemap!(
