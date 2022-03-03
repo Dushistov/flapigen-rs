@@ -1169,6 +1169,15 @@ TEST(WorkWithSlice, smokeTest)
             ASSERT_EQ(fmt.str(), sl[i].s());
             ASSERT_EQ(int32_t(i), sl[i].val());
         }
+
+        const auto v = obj.vec();
+        ASSERT_EQ(size, v.size());
+        for (size_t i = 0; i < v.size(); ++i) {
+            std::stringstream fmt;
+            fmt << "Arc<FooArc> " << i;
+            ASSERT_EQ(fmt.str(), sl[i].s());
+            ASSERT_EQ(int32_t(i), sl[i].val());
+        }
     }
 }
 
