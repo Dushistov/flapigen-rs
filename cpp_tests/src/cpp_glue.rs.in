@@ -1141,11 +1141,14 @@ impl WorkWithSlice {
     fn slice(&self) -> &[Arc<FooArc>] {
         &self.d
     }
+    fn vec(&self) -> Vec<Arc<FooArc>> {
+        self.d.clone()
+    }
 }
 
 foreign_typemap!(
     define_c_type!(
-        module = "foo_arc_access.h";
+        module = "foo_arc_slice_access.h";
         #[no_mangle]
         pub extern "C" fn foo_arc_access(sl: CRustSliceAccess, idx: usize) -> *const ::std::os::raw::c_void {
             let slice: &[Arc<FooArc>] = unsafe { ::std::slice::from_raw_parts(sl.data as *const Arc<FooArc>, sl.len) };
@@ -1156,14 +1159,14 @@ foreign_typemap!(
     foreign_code!(module = "rust_slice.h";
                     r##"
 #ifdef __cplusplus
-#include "foo_arc_access.h"
+#include "foo_arc_slice_access.h"
 #include "rust_slice_access.hpp"
 #include "FooArc.hpp"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
 struct FooArcAccess {
        using ReturnType = FooArcRef;
-       FooArcRef operator()(CRustSliceAccess slice, size_t idx) const noexcept {
+       static FooArcRef index(CRustSliceAccess slice, size_t idx) noexcept {
            auto p = static_cast<const FooArcOpaque *>(foo_arc_access(slice, idx));
            return FooArcRef{ p };
        }
@@ -1173,17 +1176,59 @@ using RustFooArcConstSlice = RustSliceAccess<FooArcAccess>;
 #endif
 "##);
     ($p:r_type) &[Arc<FooArc>] => CRustSliceAccess {
-        $out = CRustSliceAccess {
-            data: $p.as_ptr() as *const ::std::os::raw::c_void,
-            len: $p.len(),
-        };
+        $out = CRustSliceAccess::from_slice($p);
     };
     ($p:f_type, req_modules = ["\"rust_slice.h\""]) => "RustFooArcConstSlice"
         "RustFooArcConstSlice{$p}";
+);
+
+foreign_typemap!(
+    define_c_type!(
+        module = "foo_arc_vec_access.h";
+        #[no_mangle]
+        pub extern "C" fn foo_arc_vec_access(sl: CRustVecAccess, idx: usize) -> *const ::std::os::raw::c_void {
+            let v = CRustVecAccess::to_slice::<Arc<FooArc>>(sl);
+            let elem_ref: &FooArc = &v[idx];
+            elem_ref as *const FooArc as *const ::std::os::raw::c_void
+        }
+        #[no_mangle]
+        pub extern "C" fn foo_arc_vec_drop(sl: CRustVecAccess) {
+            let v = CRustVecAccess::to_vec::<Arc<FooArc>>(sl);
+            drop(v);
+        }
+    );
+    foreign_code!(module = "rust_vec_foo_arc.hpp";
+                    r##"
+#pragma once
+
+#include "foo_arc_vec_access.h"
+#include "rust_vec_access.hpp"
+#include "FooArc.hpp"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+struct FooArcVecAccess {
+       using ElemType = FooArcRef;
+       static FooArcRef index(CRustVecAccess cs, size_t idx) noexcept {
+           auto p = static_cast<const FooArcOpaque *>(foo_arc_vec_access(cs, idx));
+           return FooArcRef{ p };
+       }
+       static void free(CRustVecAccess cs) noexcept {
+           foo_arc_vec_drop(cs);
+       }
+};
+using RustVecFooArc = RustVecAccess<FooArcVecAccess, CRustVecAccess>;
+}
+"##);
+    ($p:r_type) Vec<Arc<FooArc>> => CRustVecAccess {
+        $out = CRustVecAccess::from_vec($p);
+    };
+    ($p:f_type, req_modules = ["\"rust_vec_foo_arc.hpp\""]) => "RustVecFooArc"
+        "RustVecFooArc{$p}";
 );
 
 foreign_class!(class WorkWithSlice {
     self_type WorkWithSlice;
     constructor WorkWithSlice::new(beg: i32, end: i32) -> WorkWithSlice;
     fn WorkWithSlice::slice(&self) -> &[Arc<FooArc>];
+    fn WorkWithSlice::vec(&self) -> Vec<Arc<FooArc>>;
 });

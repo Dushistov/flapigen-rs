@@ -729,6 +729,16 @@ pub struct CRustSliceAccess {
     len: usize,
 }
 
+#[allow(dead_code)]
+impl CRustSliceAccess {
+    pub fn from_slice<T>(sl: &[T]) -> Self {
+        Self {
+            data: sl.as_ptr() as *const ::std::os::raw::c_void,
+            len: sl.len(),
+        }
+    }
+}
+
 foreign_typemap!(
     define_c_type!(
         module = "rust_slice.h";
@@ -740,6 +750,51 @@ foreign_typemap!(
         });
     (r_type) CRustSliceAccess;
     (f_type) "CRustSliceAccess";
+);
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CRustVecAccess {
+    data: *const ::std::os::raw::c_void,
+    len: usize,
+    capacity: usize,
+}
+
+#[allow(dead_code)]
+impl CRustVecAccess {
+    pub fn from_vec<T>(mut v: Vec<T>) -> Self {
+        let data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
+        let len = v.len();
+        let capacity = v.capacity();
+        ::std::mem::forget(v);
+        Self {
+            data,
+            len,
+            capacity,
+        }
+    }
+    pub fn to_slice<'a, T>(cs: Self) -> &'a [T] {
+        unsafe { ::std::slice::from_raw_parts(cs.data as *const T, cs.len) }
+    }
+    pub fn to_vec<T>(cs: Self) -> Vec<T> {
+        unsafe { Vec::from_raw_parts(cs.data as *mut T, cs.len, cs.capacity) }
+    }
+}
+
+foreign_typemap!(
+    define_c_type!(
+        module = "rust_vec.h";
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        pub struct CRustVecAccess {
+            data: *const ::std::os::raw::c_void,
+            len: usize,
+            capacity: usize,
+        }
+    );
+    (r_type) CRustVecAccess;
+    (f_type) "CRustVecccess";
 );
 
 foreign_typemap!(

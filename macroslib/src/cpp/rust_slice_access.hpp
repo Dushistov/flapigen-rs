@@ -37,7 +37,7 @@ public:
     ReturnType operator[](size_t i) const noexcept
     {
         assert(i < this->len);
-        return IndexAccess()(*this, i);
+        return IndexAccess::index(*this, i);
     }
 
 private:
