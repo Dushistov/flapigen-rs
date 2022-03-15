@@ -15,19 +15,19 @@ syn = { version = "1.0.12", features = ["full", "extra-traits", "visit-mut", "vi
 quote = "1.0"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 log = "0.4.6"
-petgraph = "0.5.0"
+petgraph = { version = "0.6.0", default-features = false }
 bitflags = "1.0.4"
 lazy_static = "1.0.2"
 smallvec = "1.1.0"
 rustc-hash = "1.0.1"
 smol_str = "0.1.15"
-strum = { version = "0.18.0", features = ["derive"] }
-heck = "0.3.1"
-which = { version = "3.0", default-features = false }
+strum = { version = "0.24.0", default-features = false, features = ["derive"] }
+heck = { version = "0.4.0", default-features = false }
+which = { version = "4.2.4", default-features = false }
 
 [dev-dependencies]
-env_logger = "0.8.3"
-pulldown-cmark = "0.7.0"
+env_logger = "0.9.0"
+pulldown-cmark = "0.9.1"
 tempfile = "3.0"
 jni-sys = "0.3.0"
 

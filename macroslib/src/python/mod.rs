@@ -15,7 +15,7 @@ use crate::{
     DiagnosticError, LanguageGenerator, PythonConfig, SourceCode, TypeMap,
 };
 use crate::{extension::ExtHandlers, typemap::ast};
-use heck::SnakeCase;
+use heck::ToSnakeCase;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use quote::ToTokens;

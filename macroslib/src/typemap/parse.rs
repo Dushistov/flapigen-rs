@@ -13,7 +13,7 @@ use syn::{
 };
 
 use crate::{
-    error::{invalid_src_id_span, DiagnosticError, Result, SourceIdSpan},
+    error::{DiagnosticError, Result, SourceIdSpan},
     source_registry::SourceId,
     typemap::{
         ast::{
@@ -241,7 +241,7 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
                     ));
                 };
                 let span = attr_value.span();
-                let mut attr_value_tn = TypeName::new(attr_value.value(), (src_id, span));
+                let mut attr_value_tn = TypeName::new(attr_value.value());
 
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)
                     .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
@@ -274,7 +274,7 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
                     ));
                 };
                 let span = attr_value.span();
-                let mut attr_value_tn = TypeName::new(attr_value.value(), (src_id, span));
+                let mut attr_value_tn = TypeName::new(attr_value.value());
                 let rust_ty = parse_ty_with_given_span(&attr_value_tn.typename, span)
                     .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
                 attr_value_tn.typename = normalize_type(&rust_ty).into();
@@ -282,10 +282,7 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
                     &attr_value_tn.typename,
                     ftype.typename.value(),
                 );
-                names_map.insert(
-                    ftype,
-                    (TypeName::new(unique_name, invalid_src_id_span()), rust_ty),
-                );
+                names_map.insert(ftype, (TypeName::new(unique_name), rust_ty));
             } else {
                 return Err(DiagnosticError::new(
                     src_id,
@@ -739,6 +736,8 @@ impl VisitMut for FilterSwigAttrs {
 
 #[cfg(test)]
 mod tests {
+    use crate::error::invalid_src_id_span;
+
     use super::*;
     use rustc_hash::FxHashSet;
     use syn::parse_quote;

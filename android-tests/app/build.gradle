@@ -43,9 +43,9 @@ dependencies {
 def rustBasePath = ".."
 //def cargoOutputDir = "${rustBasePath}/target"
 def archTriplets = [
-       'armeabi-v7a': 'armv7-linux-androideabi',
+    'armeabi-v7a': 'armv7-linux-androideabi',
+    'arm64': 'aarch64-linux-android',
         // 'armeabi': 'arm-linux-androideabi',
-        //            'arm64': 'aarch64-linux-android',
         //            'x86': 'i686-linux-android',
         //            'x86_64': 'x86_64-linux-android'
         ]
