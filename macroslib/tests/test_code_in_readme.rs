@@ -5,8 +5,8 @@ use std::{
     path::Path,
 };
 
-use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag};
 use flapigen::{CppConfig, Generator, JavaConfig, LanguageConfig};
+use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag};
 use tempfile::tempdir;
 
 #[test]
@@ -17,7 +17,9 @@ fn test_code_in_readme() {
 
     println!("{}: tmp_dir {}", file!(), tmp_dir.path().display());
     for test in &tests {
-        if test.text.contains("foreigner_class!") {
+        if test.in_rust
+            && (test.text.contains("foreigner_class!") || test.text.contains("foreign_class"))
+        {
             println!("{} with such code:\n{}", test.name, test.text);
             fs::create_dir_all(&tmp_dir.path().join(&test.name)).unwrap();
             let rust_path_src = tmp_dir.path().join(&test.name).join("test.rs.in");
@@ -62,17 +64,13 @@ struct CodeBlockInfo {
     template: Option<String>,
 }
 
-#[derive(Debug)]
-struct Test {
+struct Code {
     name: String,
     text: String,
-    ignore: bool,
-    no_run: bool,
-    should_panic: bool,
-    template: Option<String>,
+    in_rust: bool,
 }
 
-fn parse_readme() -> Vec<Test> {
+fn parse_readme() -> Vec<Code> {
     let mut file = File::open(Path::new("../README.md")).expect("Can not open README");
     let mut cnt = String::new();
     file.read_to_string(&mut cnt).unwrap();
@@ -97,13 +95,10 @@ fn parse_readme() -> Vec<Test> {
             Event::End(Tag::CodeBlock(ref info)) => {
                 let code_block_info = parse_code_block_info(info);
                 if let Some(buf) = code_buffer.take() {
-                    tests.push(Test {
+                    tests.push(Code {
                         name: format!("test_{}", test_number),
                         text: buf.iter().fold(String::new(), |acc, x| acc + x.as_str()),
-                        ignore: code_block_info.ignore,
-                        no_run: code_block_info.no_run,
-                        should_panic: code_block_info.should_panic,
-                        template: code_block_info.template,
+                        in_rust: code_block_info.is_rust,
                     });
                     test_number += 1;
                 }

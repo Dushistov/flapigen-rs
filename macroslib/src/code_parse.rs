@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use heck::MixedCase;
+use heck::ToLowerCamelCase;
 use log::debug;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
@@ -495,12 +495,10 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
                 constructor_ret_type = Some((*ret_type).clone());
             }
         }
-        let span = func_name.span();
         methods.push(ForeignMethod {
             variant: func_type,
             rust_id: func_name,
             fn_decl: crate::types::FnDecl {
-                span,
                 inputs: fn_args,
                 output: out_type,
             },
@@ -559,7 +557,10 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
                         return Err(syn::Error::new(m.span(), "method name should not be empty"));
                     }
                 }
-                m.name_alias = Some(Ident::new(&short_name.to_mixed_case(), m.rust_id.span()));
+                m.name_alias = Some(Ident::new(
+                    &short_name.to_lower_camel_case(),
+                    m.rust_id.span(),
+                ));
             }
         }
     }
@@ -579,7 +580,6 @@ impl TryFrom<syn::Signature> for crate::types::FnDecl {
     type Error = syn::Error;
     fn try_from(x: syn::Signature) -> std::result::Result<Self, Self::Error> {
         Ok(crate::types::FnDecl {
-            span: x.fn_token.span(),
             inputs: parse_fn_args(x.inputs)?.0,
             output: x.output,
         })
@@ -786,12 +786,10 @@ impl Parse for ForeignInterfaceParser {
             let fn_args = parse_fn_args(args_in)?.0;
             let out_type: syn::ReturnType = item_parser.parse()?;
             item_parser.parse::<Token![;]>()?;
-            let span = rust_func_name.span();
             items.push(ForeignInterfaceMethod {
                 name: func_name,
                 rust_name: rust_func_name,
                 fn_decl: crate::types::FnDecl {
-                    span,
                     inputs: fn_args,
                     output: out_type,
                 },

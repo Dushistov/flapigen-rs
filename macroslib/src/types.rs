@@ -132,7 +132,6 @@ pub(crate) struct NamedArg {
 
 #[derive(Debug, Clone)]
 pub(crate) struct FnDecl {
-    pub(crate) span: Span,
     pub(crate) inputs: Vec<FnArg>,
     pub(crate) output: syn::ReturnType,
 }

@@ -128,7 +128,6 @@ impl<'a> Into<UniqueName> for &'a str {
 #[derive(Debug)]
 pub(crate) struct TypeName {
     pub typename: SmolStr,
-    pub span: SourceIdSpan,
 }
 
 impl Display for TypeName {
@@ -138,10 +137,9 @@ impl Display for TypeName {
 }
 
 impl TypeName {
-    pub(crate) fn new<S: Into<SmolStr>>(tn: S, span: SourceIdSpan) -> Self {
+    pub(crate) fn new<S: Into<SmolStr>>(tn: S) -> Self {
         TypeName {
             typename: tn.into(),
-            span,
         }
     }
 }
