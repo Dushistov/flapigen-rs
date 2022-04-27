@@ -1,4 +1,4 @@
-"bool f1(bool a0)";
+"bool f1(bool a0) noexcept";
 r#"template<bool OWN_DATA>
     inline bool FooWrapper<OWN_DATA>::f1(bool a0) noexcept
     {
@@ -27,11 +27,11 @@ r#"template<bool OWN_DATA>
         return (ret != 0);
     }"#;
 
-"virtual void onStateChanged1(int32_t a0, bool a1) noexcept = 0;";
+"virtual void onStateChanged1(int32_t a0, bool a1) const noexcept = 0;";
 r#"static void c_onStateChanged1(int32_t a0, char a1, void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<SomeObserver *>(opaque);
+        auto pi = static_cast<const SomeObserver *>(opaque);
 
         pi->onStateChanged1(a0, (a1 != 0));
     }"#;

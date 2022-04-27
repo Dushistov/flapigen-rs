@@ -169,25 +169,25 @@ struct MySomeObserver final : public SomeObserver {
         deleted = 0;
     }
     ~MySomeObserver() { ++deleted; }
-    void onStateChanged(int32_t a, bool b) noexcept override
+    void onStateChanged(int32_t a, bool b) const noexcept override
     {
         std::cout << "onStateChanged: a: " << a << ", b: " << b << "\n";
         ASSERT_EQ(2, a);
         ASSERT_FALSE(!!b);
         ++f1_call;
     }
-    void onStateChangedWithoutArgs(void) noexcept override
+    void onStateChangedWithoutArgs() const noexcept override
     {
         std::cout << "onStateChangedWithoutArgs\n";
         ++f2_call;
     }
-    bool isOdd(int32_t num) noexcept override { return num % 2 == 1; }
+    bool isOdd(int32_t num) const noexcept override { return num % 2 == 1; }
 #ifdef USE_BOOST
     boost::optional<Vec2>
 #else
     std::optional<Vec2>
 #endif
-    checkOpt(float x) noexcept override
+    checkOpt(float x) const noexcept override
     {
         if (x == 0.0f) {
             return {};
@@ -1107,7 +1107,7 @@ public:
         assert(state_ != nullptr);
         assert(!state_->called);
     }
-    void onStateChanged(int32_t x, RustString s) noexcept override
+    void onStateChanged(int32_t x, RustString s) const noexcept override
     {
         std::lock_guard<std::mutex> guard(state_->lock);
         state_->called = true;
