@@ -328,16 +328,16 @@ foreign_interface!(interface RepoChangedCallback {
         println!("c/c++: {}", cpp_code.foreign_code);
         assert!(cpp_code
             .foreign_code
-            .contains("virtual void on_save(UuidRef uuid) noexcept = 0;"));
+            .contains("virtual void on_save(UuidRef uuid) const noexcept = 0;"));
         assert!(cpp_code
             .foreign_code
-            .contains("virtual void on_remove(UuidRef uuid) noexcept = 0;"));
+            .contains("virtual void on_remove(UuidRef uuid) const noexcept = 0;"));
         assert!(cpp_code.foreign_code.contains(
             r#"
     static void c_on_save(const UuidOpaque * uuid, void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<RepoChangedCallback *>(opaque);
+        auto pi = static_cast<const RepoChangedCallback *>(opaque);
 
         pi->on_save(UuidRef{ static_cast<const UuidOpaque *>(uuid) });
     }
@@ -345,7 +345,7 @@ foreign_interface!(interface RepoChangedCallback {
     static void c_on_remove(const UuidOpaque * uuid, void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<RepoChangedCallback *>(opaque);
+        auto pi = static_cast<const RepoChangedCallback *>(opaque);
 
         pi->on_remove(UuidRef{ static_cast<const UuidOpaque *>(uuid) });
     }

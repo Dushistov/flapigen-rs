@@ -2,13 +2,13 @@ r#"class SomeObserver {
 public:
     virtual ~SomeObserver() noexcept {}
 
-    virtual void onStateChanged(int32_t a0, bool a1) noexcept = 0;
+    virtual void onStateChanged(int32_t a0, bool a1) const noexcept = 0;
 
-    virtual void onStateChangedWithoutArgs() noexcept = 0;
+    virtual void onStateChangedWithoutArgs() const noexcept = 0;
 
-    virtual void onStateChangedFoo(Foo foo) noexcept = 0;
+    virtual void onStateChangedFoo(Foo foo) const noexcept = 0;
 
-    virtual float getTextSize() noexcept = 0;
+    virtual float getTextSize() const noexcept = 0;
 "#;
 
 r#"    static void c_SomeObserver_deref(void *opaque)
@@ -20,7 +20,7 @@ r#"    static void c_SomeObserver_deref(void *opaque)
     static void c_onStateChanged(int32_t a0, char a1, void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<SomeObserver *>(opaque);
+        auto pi = static_cast<const SomeObserver *>(opaque);
 
         pi->onStateChanged(a0, (a1 != 0));
     }
@@ -28,7 +28,7 @@ r#"    static void c_SomeObserver_deref(void *opaque)
     static void c_onStateChangedWithoutArgs(void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<SomeObserver *>(opaque);
+        auto pi = static_cast<const SomeObserver *>(opaque);
 
         pi->onStateChangedWithoutArgs();
     }
@@ -36,7 +36,7 @@ r#"    static void c_SomeObserver_deref(void *opaque)
     static void c_onStateChangedFoo(FooOpaque * foo, void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<SomeObserver *>(opaque);
+        auto pi = static_cast<const SomeObserver *>(opaque);
 
         pi->onStateChangedFoo(Foo(static_cast<FooOpaque *>(foo)));
     }
@@ -44,7 +44,7 @@ r#"    static void c_SomeObserver_deref(void *opaque)
     static float c_getTextSize(void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<SomeObserver *>(opaque);
+        auto pi = static_cast<const SomeObserver *>(opaque);
 
         auto ret = pi->getTextSize();
         return ret;

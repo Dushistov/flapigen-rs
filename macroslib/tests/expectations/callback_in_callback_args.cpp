@@ -2,7 +2,7 @@ r#"class Foo {
 public:
     virtual ~Foo() noexcept {}
 
-    virtual void f() noexcept = 0;
+    virtual void f() const noexcept = 0;
 
 
     static C_Foo to_c_interface(std::unique_ptr<Foo> p) noexcept
@@ -36,7 +36,7 @@ protected:
     static void c_f(void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<Foo *>(opaque);
+        auto pi = static_cast<const Foo *>(opaque);
 
         pi->f();
     }
@@ -47,9 +47,9 @@ r#"class Boo {
 public:
     virtual ~Boo() noexcept {}
 
-    virtual void g(const C_Foo & x) noexcept = 0;
+    virtual void g(const C_Foo & x) const noexcept = 0;
 
-    virtual void h(C_Foo & x) noexcept = 0;
+    virtual void h(C_Foo & x) const noexcept = 0;
 
 
     static C_Boo to_c_interface(std::unique_ptr<Boo> p) noexcept
@@ -85,7 +85,7 @@ protected:
     static void c_g(const struct C_Foo * const x, void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<Boo *>(opaque);
+        auto pi = static_cast<const Boo *>(opaque);
 
         pi->g(*x);
     }
@@ -93,7 +93,7 @@ protected:
     static void c_h(C_Foo * x, void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<Boo *>(opaque);
+        auto pi = static_cast<const Boo *>(opaque);
 
         pi->h(*x);
     }

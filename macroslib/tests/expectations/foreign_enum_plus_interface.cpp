@@ -1,4 +1,4 @@
-"virtual void onSessionUpdate(ControlItem item, bool is_ok) noexcept = 0;";
+"virtual void onSessionUpdate(ControlItem item, bool is_ok) const noexcept = 0;";
 
 r#"enum ControlItem {
 GNSS = 0,
@@ -19,7 +19,7 @@ r#"struct C_ControlStateObserver {
 r#"static void c_onSessionUpdate(uint32_t item, char is_ok, void *opaque)
     {
         assert(opaque != nullptr);
-        auto pi = static_cast<ControlStateObserver *>(opaque);
+        auto pi = static_cast<const ControlStateObserver *>(opaque);
 
         pi->onSessionUpdate(static_cast<ControlItem>(item), (is_ok != 0));
     }"#;

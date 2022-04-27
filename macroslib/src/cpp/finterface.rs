@@ -445,15 +445,27 @@ struct C_{interface_name} {{
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
+        let const_sig = {
+            let const_method = method.fn_decl.inputs[0]
+                .as_self_arg(interface.src_id)?
+                .is_read_only();
+            if const_method {
+                "const "
+            } else {
+                ""
+            }
+        };
+
         writeln!(
             &mut cpp_virtual_methods,
             r#"{doc_comments}
-    virtual {cpp_ret_type} {method_name}({single_args_with_types}) noexcept = 0;"#,
+    virtual {cpp_ret_type} {method_name}({single_args_with_types}) {const_sig}noexcept = 0;"#,
             method_name = method.name,
             doc_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false),
             single_args_with_types =
                 cpp_code::cpp_generate_args_with_types(f_method, method.arg_names_without_self()),
             cpp_ret_type = cpp_ret_type,
+            const_sig = const_sig,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
@@ -466,7 +478,7 @@ struct C_{interface_name} {{
     static {c_ret_type} c_{method_name}({single_args_with_types}void *{opaque})
     {{
         assert({opaque} != nullptr);
-        auto {p} = static_cast<{interface_name} *>({opaque});
+        auto {p} = static_cast<{const_sig}{interface_name} *>({opaque});
 {conv_args_code}"#,
             c_ret_type = c_ret_type,
             method_name = method.name,
@@ -479,6 +491,7 @@ struct C_{interface_name} {{
             p = interface_ptr,
             interface_name = interface.name,
             conv_args_code = conv_args_code,
+            const_sig = const_sig,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
