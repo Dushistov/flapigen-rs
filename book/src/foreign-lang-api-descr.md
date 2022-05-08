@@ -5,4 +5,4 @@ from a "foreign" programming language. The main building block is [foreign_class
 This is the way to describe entities that will be visible for the "foreign language" as classes.
 It is also possible to export C-like enums via [foreign_enum!](./foreign-enum.md), plus it is possible to describe the
 way to pass a "callback" into your Rust code from the foreign language via [foreign_callback!](./foreign-callback.md).
-And of course it is possible to extend or rewrite existing type conversations rules via [foreign_typemap!](./foreign-typemap.md)
+And of course it is possible to extend or rewrite existing type conversions rules via [foreign_typemap!](./foreign-typemap.md)

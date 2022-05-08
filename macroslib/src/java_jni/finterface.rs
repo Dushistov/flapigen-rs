@@ -90,7 +90,7 @@ fn find_suitable_ftypes_for_interace_methods(
                             arg_span,
                             format!(
                                 "Java code required to convert type to jobject
-It is impossible to use this Java code:{}\nfor callback types conversation",
+It is impossible to use this Java code:{}\nfor callback types conversion",
                                 java_conv.converter
                             ),
                         )
@@ -383,10 +383,10 @@ lazy_static! {
 }
 
 // To use `C` function with variable number of arguments,
-// we need automatic type conversation, see
+// we need automatic type conversion, see
 // http://en.cppreference.com/w/c/language/conversion#Default_argument_promotions
 // for more details.
-// return arg with conversation plus asserts
+// return arg with conversion plus asserts
 fn convert_args_for_variadic_function_call(
     f_method: &JniForeignMethodSignature,
 ) -> (Vec<TokenStream>, TokenStream) {
@@ -398,7 +398,7 @@ fn convert_args_for_variadic_function_call(
         {
             let conv_type: TokenStream = syn::parse_str(*conv_type_str).unwrap_or_else(|err| {
                 panic_on_syn_error(
-                    "java/jni internal error: can not parse type for variable conversation",
+                    "java/jni internal error: can not parse type for variable conversion",
                     conv_type_str.to_string(),
                     err,
                 )

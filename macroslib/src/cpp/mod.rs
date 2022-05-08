@@ -18,7 +18,7 @@ macro_rules! file_for_module {
 
 #ifdef __cplusplus
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * {sizeof_usize},
-   "our conversation usize <-> uintptr_t is wrong");
+   "our conversion usize <-> uintptr_t is wrong");
 #endif
             "##,
                     sizeof_usize = target_pointer_width / 8,
@@ -56,7 +56,7 @@ use crate::{
             check_if_smart_pointer_return_inner_type, parse_ty_with_given_span, ForeignTypeName,
             UniqueName,
         },
-        ty::{ForeignConversationRule, ForeignType, ForeignTypeS, RustType},
+        ty::{ForeignConversionRule, ForeignType, ForeignTypeS, RustType},
         utils::{
             configure_ftype_rule, remove_files_if, validate_cfg_options, ForeignMethodSignature,
             ForeignTypeInfoT,
@@ -135,7 +135,7 @@ impl CppForeignTypeInfo {
                 return Err(DiagnosticError::new2(
                     origin_ftype_span,
                     format!(
-                        "Error during conversation {} for {},\n
+                        "Error during conversion {} for {},\n
                     intermidiate type '{}' can not directrly converted to C",
                         typename,
                         match direction {
@@ -154,7 +154,7 @@ impl CppForeignTypeInfo {
                         )
                     } else {
                         format!(
-                            "Type '{}' require conversation to type '{}' before usage as C type",
+                            "Type '{}' require conversion to type '{}' before usage as C type",
                             ctx.conv_map[base_rt], inter_ft.base.correspoding_rust_type
                         )
                     },
@@ -458,7 +458,7 @@ fn register_c_type(
                 ));
             }
         } else {
-            let rule = ForeignConversationRule {
+            let rule = ForeignConversionRule {
                 rust_ty: rust_ty.to_idx(),
                 intermediate: None,
             };

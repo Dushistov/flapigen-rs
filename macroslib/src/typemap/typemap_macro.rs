@@ -1288,7 +1288,7 @@ fn expand_foreign_code(
                     } else {
                         return Err(DiagnosticError::new2(
                             ctx_span,
-                            format!("unknown macro {} in f_type conversation code", id),
+                            format!("unknown macro {} in f_type conversion code", id),
                         ));
                     }
                 }

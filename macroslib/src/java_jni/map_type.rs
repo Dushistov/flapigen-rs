@@ -70,7 +70,7 @@ pub(in crate::java_jni) fn map_type(
             return Err(DiagnosticError::new2(
                 origin_ftype_span,
                 format!(
-                    "Error during conversation {} for {},\n
+                    "Error during conversion {} for {},\n
                     intermidiate type '{}' can not directrly converted to Java",
                     base_ft_name,
                     match direction {
@@ -89,7 +89,7 @@ pub(in crate::java_jni) fn map_type(
                     )
                 } else {
                     format!(
-                        "Type '{}' require conversation to type '{}' before usage as Java type",
+                        "Type '{}' require conversion to type '{}' before usage as Java type",
                         ctx.conv_map[base_rt], inter_ft.base.correspoding_rust_type
                     )
                 },
@@ -131,7 +131,7 @@ fn do_map_type(
     arg_ty_span: SourceIdSpan,
 ) -> Result<ForeignType> {
     debug!("do_map_type: arg_ty {}, direction {:?}", arg_ty, direction);
-    if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
+    if let Some(ftype) = ctx.conv_map.map_through_conversion_to_foreign(
         arg_ty.to_idx(),
         direction,
         MapToForeignFlag::FastSearch,
@@ -180,7 +180,7 @@ fn do_map_type(
             })?;
         debug_assert!(!new_rule.is_empty());
         merge_rule(ctx, new_rule)?;
-        if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
+        if let Some(ftype) = ctx.conv_map.map_through_conversion_to_foreign(
             arg_ty.to_idx(),
             direction,
             MapToForeignFlag::FullSearch,
@@ -189,7 +189,7 @@ fn do_map_type(
         ) {
             return Ok(ftype);
         }
-    } else if let Some(ftype) = ctx.conv_map.map_through_conversation_to_foreign(
+    } else if let Some(ftype) = ctx.conv_map.map_through_conversion_to_foreign(
         arg_ty.to_idx(),
         direction,
         MapToForeignFlag::FullSearch,
@@ -203,7 +203,7 @@ fn do_map_type(
         Direction::Outgoing => Err(DiagnosticError::new2(
             arg_ty_span,
             format!(
-                "Do not know conversation from \
+                "Do not know conversion from \
                  such rust type '{}' to Java type",
                 arg_ty
             ),
@@ -212,7 +212,7 @@ fn do_map_type(
         Direction::Incoming => Err(DiagnosticError::new2(
             arg_ty_span,
             format!(
-                "Do not know conversation from Java type \
+                "Do not know conversion from Java type \
                  to such rust type '{}'",
                 arg_ty
             ),

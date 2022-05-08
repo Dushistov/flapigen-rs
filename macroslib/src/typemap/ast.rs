@@ -337,7 +337,7 @@ pub(crate) struct GenericTypeConv {
 }
 
 #[derive(PartialEq, Debug)]
-pub(crate) struct ConversationResult<'a> {
+pub(crate) struct ConversionResult<'a> {
     pub to_ty: syn::Type,
     pub to_ty_name: SmolStr,
     pub subst_map: TyParamsSubstMap<'a>,
@@ -367,7 +367,7 @@ impl GenericTypeConv {
         ty: &RustType,
         goal_ty: Option<&RustType>,
         others: OtherRustTypes,
-    ) -> Option<ConversationResult>
+    ) -> Option<ConversionResult>
     where
         OtherRustTypes: Fn(&str) -> Option<&'a RustType>,
     {
@@ -484,14 +484,14 @@ impl GenericTypeConv {
         let normalized_name =
             RustTypeS::make_unique_typename_if_need(normalize_type(&to_ty).to_string(), to_suffix)
                 .into();
-        Some(ConversationResult {
+        Some(ConversionResult {
             to_ty,
             to_ty_name: normalized_name,
             subst_map,
         })
     }
 
-    pub(crate) fn code_for_conversation(&self, subst_map: TyParamsSubstMap) -> TypeConvCode {
+    pub(crate) fn code_for_conversion(&self, subst_map: TyParamsSubstMap) -> TypeConvCode {
         let ctx_span = self.code.span;
         let new_code = expand_macroses(
             &self.code.code,

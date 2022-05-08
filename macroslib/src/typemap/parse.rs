@@ -462,7 +462,7 @@ fn handle_into_from_impl(
             DiagnosticError::new(
                 src_id,
                 item_impl.span(),
-                "Can not find conversation code for SwigInto/SwigFrom",
+                "Can not find conversion code for SwigInto/SwigFrom",
             )
         })?;
 
@@ -511,7 +511,7 @@ fn handle_macro(
 ) -> Result<()> {
     assert!(!swig_attrs.is_empty());
 
-    debug!("conversation macro {:?}", item_macro.ident);
+    debug!("conversion macro {:?}", item_macro.ident);
 
     let from_typename = swig_attrs.get(SWIG_FROM_ATTR_NAME).ok_or_else(|| {
         DiagnosticError::new(

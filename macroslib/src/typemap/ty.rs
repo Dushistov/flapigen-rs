@@ -159,8 +159,8 @@ pub(crate) struct ForeignTypeS {
     /// it is possible that provided by multiplines modules
     /// for example C++ `std::variant<TypeA, TypeB>
     pub provides_by_module: Vec<SmolStr>,
-    pub into_from_rust: Option<ForeignConversationRule>,
-    pub from_into_rust: Option<ForeignConversationRule>,
+    pub into_from_rust: Option<ForeignConversionRule>,
+    pub from_into_rust: Option<ForeignConversionRule>,
 }
 
 impl ForeignTypeS {
@@ -173,13 +173,13 @@ impl ForeignTypeS {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ForeignConversationRule {
+pub(crate) struct ForeignConversionRule {
     pub(crate) rust_ty: RustTypeIdx,
-    pub(crate) intermediate: Option<ForeignConversationIntermediate>,
+    pub(crate) intermediate: Option<ForeignConversionIntermediate>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ForeignConversationIntermediate {
+pub(crate) struct ForeignConversionIntermediate {
     pub(crate) input_to_output: bool,
     pub(crate) intermediate_ty: RustTypeIdx,
     pub(crate) conv_code: Rc<TypeConvCode>,
@@ -200,7 +200,7 @@ impl ForeignTypesStorage {
         tn: ForeignTypeName,
         binded_rust_ty: RustTypeIdx,
     ) -> Result<ForeignType, DiagnosticError> {
-        let rule = ForeignConversationRule {
+        let rule = ForeignConversionRule {
             rust_ty: binded_rust_ty,
             intermediate: None,
         };

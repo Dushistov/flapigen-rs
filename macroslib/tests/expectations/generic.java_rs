@@ -39,7 +39,7 @@ pub extern "C" fn Java_org_example_Boo_r_1test_1u8(
     v: jshort,
 ) -> jshort {
     let mut v: u8 =
-        <u8 as ::std::convert::TryFrom<jshort>>::try_from(v).expect("invalid jshort, in jshort => u8 conversation");
+        <u8 as ::std::convert::TryFrom<jshort>>::try_from(v).expect("invalid jshort, in jshort => u8 conversion");
     let mut ret: Result<u8, &str> = r_test_u8(v);
     let mut ret: jshort = match ret {
         Ok(x) => {

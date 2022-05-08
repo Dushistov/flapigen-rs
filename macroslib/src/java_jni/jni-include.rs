@@ -410,7 +410,7 @@ fn jobject_array_to_vec_of_objects<T: SwigForeignClass + Clone>(
     assert!(!field_id.is_null());
     let length = unsafe { (**env).GetArrayLength.unwrap()(env, arr.inner) };
     let len = <usize as ::std::convert::TryFrom<jsize>>::try_from(length)
-        .expect("invalid jsize, in jsize => usize conversation");
+        .expect("invalid jsize, in jsize => usize conversion");
     let mut result = Vec::with_capacity(len);
     for i in 0..length {
         let native: &mut T = unsafe {
@@ -447,7 +447,7 @@ fn vec_of_objects_to_jobject_array<T: SwigForeignClass>(
     let jcls: jclass = <T>::jni_class();
     assert!(!jcls.is_null());
     let arr_len = <jsize as ::std::convert::TryFrom<usize>>::try_from(arr.len())
-        .expect("invalid usize, in usize => to jsize conversation");
+        .expect("invalid usize, in usize => to jsize conversion");
     let obj_arr: jobjectArray =
         unsafe { (**env).NewObjectArray.unwrap()(env, arr_len, jcls, ::std::ptr::null_mut()) };
     assert!(!obj_arr.is_null());
@@ -598,7 +598,7 @@ foreign_typemap!(
 foreign_typemap!(
     ($p:r_type) u8 <= jshort {
         $out = <u8 as ::std::convert::TryFrom<jshort>>::try_from($p)
-            .expect("invalid jshort, in jshort => u8 conversation");
+            .expect("invalid jshort, in jshort => u8 conversion");
     };
 );
 
@@ -617,7 +617,7 @@ foreign_typemap!(
     };
     ($p:r_type) u16 <= jint {
         $out = <u16 as ::std::convert::TryFrom<jint>>::try_from($p)
-            .expect("invalid jint, in jint => u16 conversation");
+            .expect("invalid jint, in jint => u16 conversion");
     };
 );
 
@@ -636,7 +636,7 @@ foreign_typemap!(
     };
     ($p:r_type) u32 <= jlong {
         $out = <u32 as ::std::convert::TryFrom<jlong>>::try_from($p)
-            .expect("invalid jlong, in jlong => u32 conversation");
+            .expect("invalid jlong, in jlong => u32 conversion");
     };
 );
 
@@ -652,18 +652,18 @@ foreign_typemap!(
 foreign_typemap!(
     ($p:r_type) u64 => jlong {
         $out = <jlong as ::std::convert::TryFrom<u64>>::try_from($p)
-            .expect("invalid u64, in u64 => jlong conversation");
+            .expect("invalid u64, in u64 => jlong conversion");
     };
     ($p:r_type) u64 <= jlong {
         $out = <u64 as ::std::convert::TryFrom<jlong>>::try_from($p)
-            .expect("invalid jlong, in jlong => u64 conversation");
+            .expect("invalid jlong, in jlong => u64 conversion");
     };
 );
 
 #[allow(dead_code)]
 pub fn u64_to_jlong_checked(x: u64) -> jlong {
     <jlong as ::std::convert::TryFrom<u64>>::try_from(x)
-        .expect("invalid u64, in u64 => jlong conversation")
+        .expect("invalid u64, in u64 => jlong conversion")
 }
 
 foreign_typemap!(
@@ -717,7 +717,7 @@ fn from_std_string_jstring(x: String, env: *mut JNIEnv) -> jstring {
 foreign_typemap!(
     ($p:r_type) usize <= jlong {
         $out = <usize as ::std::convert::TryFrom<jlong>>::try_from($p)
-            .expect("invalid jlong, in jlong => usize conversation");
+            .expect("invalid jlong, in jlong => usize conversion");
     };
 );
 
