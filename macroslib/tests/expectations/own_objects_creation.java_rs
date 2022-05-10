@@ -32,7 +32,7 @@ pub extern "C" fn Java_org_example_Boo_init(
 ) -> jlong {
     let mut a0: i32 = a0;
     let mut a1: usize = <usize as ::std::convert::TryFrom<jlong>>::try_from(a1)
-        .expect("invalid jlong, in jlong => usize conversation");
+        .expect("invalid jlong, in jlong => usize conversion");
     let this: Result<Boo, String> = Boo::new(a0, a1);
     let mut this: jlong = match this {
         Ok(x) => {

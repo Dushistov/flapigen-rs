@@ -13,7 +13,7 @@ use crate::{
     file_cache::FileWriteCache,
     typemap::{
         ast::{parse_ty_with_given_span, ForeignTypeName},
-        ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS},
+        ty::{ForeignConversionIntermediate, ForeignConversionRule, ForeignTypeS},
         RustTypeIdx, TypeConvCode, TypeConvEdge, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::ForeignEnumInfo,
@@ -52,9 +52,9 @@ pub(in crate::java_jni) fn generate_enum(
     let enum_ftype = ForeignTypeS {
         name: ForeignTypeName::new(fenum.name.to_string(), (fenum.src_id, fenum.name.span())),
         provides_by_module: vec![],
-        into_from_rust: Some(ForeignConversationRule {
+        into_from_rust: Some(ForeignConversionRule {
             rust_ty: enum_rty.to_idx(),
-            intermediate: Some(ForeignConversationIntermediate {
+            intermediate: Some(ForeignConversionIntermediate {
                 input_to_output: false,
                 intermediate_ty: jint_rty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
@@ -68,9 +68,9 @@ pub(in crate::java_jni) fn generate_enum(
                 )),
             }),
         }),
-        from_into_rust: Some(ForeignConversationRule {
+        from_into_rust: Some(ForeignConversionRule {
             rust_ty: enum_rty.to_idx(),
-            intermediate: Some(ForeignConversationIntermediate {
+            intermediate: Some(ForeignConversionIntermediate {
                 input_to_output: false,
                 intermediate_ty: jint_rty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
@@ -82,7 +82,7 @@ pub(in crate::java_jni) fn generate_enum(
     };
     ctx.conv_map.alloc_foreign_type(enum_ftype)?;
 
-    add_conversation_from_enum_to_jobject_for_callbacks(ctx, fenum, enum_rty.to_idx());
+    add_conversion_from_enum_to_jobject_for_callbacks(ctx, fenum, enum_rty.to_idx());
     let enum_name = fenum.name.to_string();
     ctx.java_type_to_jni_sig_map.insert(
         enum_name.clone().into(),
@@ -209,7 +209,7 @@ fn generate_rust_code_for_enum(ctx: &mut JavaContext, fenum: &ForeignEnumInfo) -
     Ok(())
 }
 
-fn add_conversation_from_enum_to_jobject_for_callbacks(
+fn add_conversion_from_enum_to_jobject_for_callbacks(
     ctx: &mut JavaContext,
     fenum: &ForeignEnumInfo,
     fenum_rty: RustTypeIdx,
@@ -265,7 +265,7 @@ fn add_conversation_from_enum_to_jobject_for_callbacks(
     let jobject_ty = ctx
         .conv_map
         .find_or_alloc_rust_type_no_src_id(&parse_type! { jobject });
-    ctx.conv_map.add_conversation_rule(
+    ctx.conv_map.add_conversion_rule(
         fenum_rty,
         jobject_ty.to_idx(),
         TypeConvEdge::new(

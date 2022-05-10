@@ -1068,7 +1068,7 @@ fn generte_c_header_preamble(
 
 #ifdef __cplusplus
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * {sizeof_usize},
-   "our conversation usize <-> uintptr_t is wrong");
+   "our conversion usize <-> uintptr_t is wrong");
 extern "C" {{
 #endif
 

@@ -10,7 +10,7 @@ use crate::{
     file_cache::FileWriteCache,
     typemap::{
         ast::{parse_ty_with_given_span, ForeignTypeName},
-        ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS},
+        ty::{ForeignConversionIntermediate, ForeignConversionRule, ForeignTypeS},
         TypeConvCode, FROM_VAR_TEMPLATE,
     },
     types::ForeignEnumInfo,
@@ -49,9 +49,9 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
         provides_by_module: vec![
             format!("\"{}\"", cpp_code::cpp_header_name_for_enum(fenum)).into()
         ],
-        into_from_rust: Some(ForeignConversationRule {
+        into_from_rust: Some(ForeignConversionRule {
             rust_ty: enum_rty.to_idx(),
-            intermediate: Some(ForeignConversationIntermediate {
+            intermediate: Some(ForeignConversionIntermediate {
                 input_to_output: false,
                 intermediate_ty: u32_rty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
@@ -64,9 +64,9 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
                 )),
             }),
         }),
-        from_into_rust: Some(ForeignConversationRule {
+        from_into_rust: Some(ForeignConversionRule {
             rust_ty: enum_rty.to_idx(),
-            intermediate: Some(ForeignConversationIntermediate {
+            intermediate: Some(ForeignConversionIntermediate {
                 input_to_output: false,
                 intermediate_ty: u32_rty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(

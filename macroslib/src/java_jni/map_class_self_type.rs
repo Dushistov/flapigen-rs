@@ -8,7 +8,7 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::ForeignTypeName,
-        ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
+        ty::{ForeignConversionIntermediate, ForeignConversionRule, ForeignTypeS, RustType},
         utils::{boxed_type, convert_to_heap_pointer, unpack_from_heap_pointer},
         RustTypeIdx, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
@@ -47,7 +47,7 @@ pub(in crate::java_jni) fn register_typemap_for_self_type(
     let gen_ty = parse_type_spanned_checked!(span, &mut #this_type_inner_ty);
     let this_type_mut_ref = ctx.conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
-    register_rust_ty_conversation_rules(ctx, &this_type)?;
+    register_rust_ty_conversion_rules(ctx, &this_type)?;
     let self_type = ctx
         .conv_map
         .find_or_alloc_rust_type(&self_desc.self_type, class.src_id);
@@ -63,7 +63,7 @@ pub(in crate::java_jni) fn register_typemap_for_self_type(
     Ok(())
 }
 
-fn register_rust_ty_conversation_rules(ctx: &mut JavaContext, this_type: &RustType) -> Result<()> {
+fn register_rust_ty_conversion_rules(ctx: &mut JavaContext, this_type: &RustType) -> Result<()> {
     let (this_type_for_method, _code_box_this) =
         convert_to_heap_pointer(ctx.conv_map, this_type, "this");
 
@@ -77,7 +77,7 @@ fn register_rust_ty_conversation_rules(ctx: &mut JavaContext, this_type: &RustTy
         .conv_map
         .find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
     //handle foreigner_class as input arg
-    ctx.conv_map.add_conversation_rule(
+    ctx.conv_map.add_conversion_rule(
         jlong_ti.to_idx(),
         this_type_ref.to_idx(),
         TypeConvCode::new2(
@@ -101,7 +101,7 @@ fn register_rust_ty_conversation_rules(ctx: &mut JavaContext, this_type: &RustTy
         .conv_map
         .find_or_alloc_rust_type(&gen_ty, this_type_for_method.src_id);
     //handle foreigner_class as input arg
-    ctx.conv_map.add_conversation_rule(
+    ctx.conv_map.add_conversion_rule(
         jlong_ti.to_idx(),
         this_type_mut_ref.to_idx(),
         TypeConvCode::new2(
@@ -123,7 +123,7 @@ fn register_rust_ty_conversation_rules(ctx: &mut JavaContext, this_type: &RustTy
     let jobject_ty = ctx
         .conv_map
         .find_or_alloc_rust_type_no_src_id(&parse_type! { jobject });
-    ctx.conv_map.add_conversation_rule(
+    ctx.conv_map.add_conversion_rule(
         this_type.to_idx(),
         jobject_ty.to_idx(),
         TypeConvCode::new2(
@@ -161,7 +161,7 @@ fn register_main_foreign_types(
         ctx.conv_map
             .find_or_alloc_rust_type_with_suffix(&jlong_ty, &out_val_prefix, class.src_id);
     {
-        ctx.conv_map.add_conversation_rule(
+        ctx.conv_map.add_conversion_rule(
             this_type,
             jlong_out_val_rty.to_idx(),
             TypeConvCode::new2(
@@ -186,7 +186,7 @@ fn register_main_foreign_types(
             ),
             provides_by_module: vec![],
             from_into_rust: None,
-            into_from_rust: Some(ForeignConversationRule {
+            into_from_rust: Some(ForeignConversionRule {
                 rust_ty: jlong_out_val_rty.to_idx(),
                 intermediate: None,
             }),
@@ -203,7 +203,7 @@ fn register_main_foreign_types(
 
         if class.smart_ptr_copy_derived() {
             let unpack_code = unpack_from_heap_pointer(&this_type2, TO_VAR_TEMPLATE, true);
-            ctx.conv_map.add_conversation_rule(
+            ctx.conv_map.add_conversion_rule(
                 jlong_in_val_rty.to_idx(),
                 this_type,
                 TypeConvCode::new2(
@@ -228,7 +228,7 @@ fn register_main_foreign_types(
                 .into(),
             );
         } else if class.copy_derived() {
-            ctx.conv_map.add_conversation_rule(
+            ctx.conv_map.add_conversion_rule(
                 jlong_in_val_rty.to_idx(),
                 this_type,
                 TypeConvCode::new2(
@@ -249,7 +249,7 @@ fn register_main_foreign_types(
             );
         } else {
             let unpack_code = unpack_from_heap_pointer(&this_type2, TO_VAR_TEMPLATE, true);
-            ctx.conv_map.add_conversation_rule(
+            ctx.conv_map.add_conversion_rule(
                 jlong_in_val_rty.to_idx(),
                 this_type,
                 TypeConvCode::new2(
@@ -280,7 +280,7 @@ fn register_main_foreign_types(
             ),
             provides_by_module: vec![],
             into_from_rust: None,
-            from_into_rust: Some(ForeignConversationRule {
+            from_into_rust: Some(ForeignConversionRule {
                 rust_ty: jlong_in_val_rty.to_idx(),
                 intermediate: None,
             }),
@@ -314,9 +314,9 @@ fn register_main_foreign_types(
     let class_ftype = ForeignTypeS {
         name: ForeignTypeName::new(format!("{}{}", null_annot, class.name), (class.src_id, class.name.span())),
         provides_by_module: vec![],
-        into_from_rust: Some(ForeignConversationRule {
+        into_from_rust: Some(ForeignConversionRule {
             rust_ty: this_type,
-            intermediate: Some(ForeignConversationIntermediate {
+            intermediate: Some(ForeignConversionIntermediate {
                 input_to_output: false,
                 intermediate_ty: jlong_out_val_rty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
@@ -331,9 +331,9 @@ fn register_main_foreign_types(
                 )),
             }),
         }),
-        from_into_rust: Some(ForeignConversationRule {
+        from_into_rust: Some(ForeignConversionRule {
             rust_ty: this_type,
-            intermediate: Some(ForeignConversationIntermediate {
+            intermediate: Some(ForeignConversionIntermediate {
                 input_to_output: false,
                 intermediate_ty: jlong_in_val_rty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
@@ -357,9 +357,9 @@ fn register_main_foreign_types(
             (class.src_id, class.name.span()),
         ),
         provides_by_module: vec![],
-        from_into_rust: Some(ForeignConversationRule {
+        from_into_rust: Some(ForeignConversionRule {
             rust_ty: this_type_ref,
-            intermediate: Some(ForeignConversationIntermediate {
+            intermediate: Some(ForeignConversionIntermediate {
                 input_to_output: false,
                 intermediate_ty: jlong_ty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
@@ -388,9 +388,9 @@ fn register_main_foreign_types(
             (class.src_id, class.name.span()),
         ),
         provides_by_module: vec![],
-        from_into_rust: Some(ForeignConversationRule {
+        from_into_rust: Some(ForeignConversionRule {
             rust_ty: this_type_mut_ref,
-            intermediate: Some(ForeignConversationIntermediate {
+            intermediate: Some(ForeignConversionIntermediate {
                 input_to_output: false,
                 intermediate_ty: jlong_ty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
@@ -431,9 +431,9 @@ fn register_main_foreign_types(
                     (class.src_id, class.name.span()),
                 ),
                 provides_by_module: vec![],
-                from_into_rust: Some(ForeignConversationRule {
+                from_into_rust: Some(ForeignConversionRule {
                     rust_ty: self_type_mut_ref.to_idx(),
-                    intermediate: Some(ForeignConversationIntermediate {
+                    intermediate: Some(ForeignConversionIntermediate {
                         input_to_output: false,
                         intermediate_ty: jlong_ty.to_idx(),
                         conv_code: Rc::new(TypeConvCode::new(
@@ -462,9 +462,9 @@ fn register_main_foreign_types(
                     (class.src_id, class.name.span()),
                 ),
                 provides_by_module: vec![],
-                from_into_rust: Some(ForeignConversationRule {
+                from_into_rust: Some(ForeignConversionRule {
                     rust_ty: self_type_ref.to_idx(),
-                    intermediate: Some(ForeignConversationIntermediate {
+                    intermediate: Some(ForeignConversionIntermediate {
                         input_to_output: false,
                         intermediate_ty: jlong_ty.to_idx(),
                         conv_code: Rc::new(TypeConvCode::new(

@@ -1,4 +1,4 @@
-use crate::typemap::ty::ForeignConversationRule;
+use crate::typemap::ty::ForeignConversionRule;
 use std::{convert::TryInto, mem, rc::Rc};
 
 use log::{debug, error, info};
@@ -12,7 +12,7 @@ use crate::{
     source_registry::SourceId,
     typemap::{
         ast::{ForeignTypeName, SpannedSmolStr},
-        ty::{ForeignConversationIntermediate, ForeignTypeS, ForeignTypesStorage},
+        ty::{ForeignConversionIntermediate, ForeignTypeS, ForeignTypesStorage},
         typemap_macro::{FTypeLeftRightPair, ModuleName, TypeMapConvRuleInfo},
         TypeConvEdge, TypeMap,
     },
@@ -193,9 +193,9 @@ impl TypeMap {
                 Some(conv_code) => {
                     ft_into_from_rust = Some((
                         right_fty,
-                        ForeignConversationRule {
+                        ForeignConversionRule {
                             rust_ty: rty_left,
-                            intermediate: Some(ForeignConversationIntermediate {
+                            intermediate: Some(ForeignConversionIntermediate {
                                 input_to_output: rule.input_to_output,
                                 intermediate_ty: rty_right,
                                 conv_code: Rc::new(conv_code),
@@ -206,7 +206,7 @@ impl TypeMap {
                 None => {
                     ft_into_from_rust = Some((
                         right_fty,
-                        ForeignConversationRule {
+                        ForeignConversionRule {
                             rust_ty: rty_right,
                             intermediate: None,
                         },
@@ -269,9 +269,9 @@ impl TypeMap {
                 Some(conv_code) => {
                     ft_from_into_rust = Some((
                         right_fty,
-                        ForeignConversationRule {
+                        ForeignConversionRule {
                             rust_ty: rty_left,
-                            intermediate: Some(ForeignConversationIntermediate {
+                            intermediate: Some(ForeignConversionIntermediate {
                                 input_to_output: rule.input_to_output,
                                 intermediate_ty: rty_right,
                                 conv_code: Rc::new(conv_code),
@@ -282,7 +282,7 @@ impl TypeMap {
                 None => {
                     ft_from_into_rust = Some((
                         right_fty,
-                        ForeignConversationRule {
+                        ForeignConversionRule {
                             rust_ty: rty_right,
                             intermediate: None,
                         },
@@ -392,7 +392,7 @@ fn add_new_edges(
                 .expect("At this step we should have full map new -> our");
             if let Some(existing_edge) = data.conv_graph.find_edge(*our_idx, our_target) {
                 info!(
-                    "typemap merge: replace {:?} with new conversation rule {:?}, for {} -> {}",
+                    "typemap merge: replace {:?} with new conversion rule {:?}, for {} -> {}",
                     data.conv_graph[existing_edge],
                     new_data.conv_graph[new_edge],
                     data.conv_graph[*our_idx],
@@ -443,7 +443,7 @@ fn ftype_map_rust_types(
 }
 
 fn ftype_rule_map_rust_type(
-    rule: &mut ForeignConversationRule,
+    rule: &mut ForeignConversionRule,
     new_node_to_our_map: &FxHashMap<NodeIndex, NodeIndex>,
 ) {
     rule.rust_ty = *new_node_to_our_map
@@ -474,13 +474,13 @@ fn convert_req_module_to_provides_by_module(v: Vec<ModuleName>) -> Vec<SmolStr> 
 }
 
 fn validate_rule_rewrite(
-    prev: Option<&ForeignConversationRule>,
-    new: &ForeignConversationRule,
+    prev: Option<&ForeignConversionRule>,
+    new: &ForeignConversionRule,
     diagnostic_map: &TypesConvGraph,
 ) -> Result<()> {
     fn types_from_rule_to_string(
         diagnostic_map: &TypesConvGraph,
-        rule: &ForeignConversationRule,
+        rule: &ForeignConversionRule,
     ) -> String {
         format!(
             "main rust type {}, intermediate {}",
@@ -559,7 +559,7 @@ mod tests {
     use super::*;
     use crate::{
         error::invalid_src_id_span,
-        typemap::{find_conversation_path, MapToForeignFlag},
+        typemap::{find_conversion_path, MapToForeignFlag},
     };
     use rustc_hash::FxHashSet;
 
@@ -647,7 +647,7 @@ fn helper3() {
         );
         let ty_i32 = types_map.find_or_alloc_rust_type(&parse_type! { i32 }, SourceId::none());
         let fti = types_map
-            .map_through_conversation_to_foreign(
+            .map_through_conversion_to_foreign(
                 ty_i32.to_idx(),
                 petgraph::Direction::Outgoing,
                 MapToForeignFlag::FullSearch,
@@ -673,14 +673,14 @@ fn helper3() {
         let from = types_map.rust_names_map["jboolean"];
         let to = types_map.rust_names_map["bool"];
         assert_eq!(
-            find_conversation_path(&types_map.conv_graph, from, to, invalid_src_id_span()).unwrap(),
+            find_conversion_path(&types_map.conv_graph, from, to, invalid_src_id_span()).unwrap(),
             vec![types_map.conv_graph.find_edge(from, to).unwrap()]
         );
 
         let from = types_map.rust_names_map["bool"];
         let to = types_map.rust_names_map["jboolean"];
         assert_eq!(
-            find_conversation_path(&types_map.conv_graph, from, to, invalid_src_id_span()).unwrap(),
+            find_conversion_path(&types_map.conv_graph, from, to, invalid_src_id_span()).unwrap(),
             vec![types_map.conv_graph.find_edge(from, to).unwrap()]
         );
         assert_eq!(

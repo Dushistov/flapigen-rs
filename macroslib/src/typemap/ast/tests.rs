@@ -81,7 +81,7 @@ fn generic_type_conv_find() {
             "check_subst: conv {} -> {} with {}",
             from_ty_name, to_ty_name, ty_check_name
         );
-        let ConversationResult {
+        let ConversionResult {
             to_ty: ret_ty,
             to_ty_name: ret_ty_name,
             ..

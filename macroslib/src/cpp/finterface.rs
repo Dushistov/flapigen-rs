@@ -15,7 +15,7 @@ use crate::{
     namegen::new_unique_name,
     typemap::{
         ast::{parse_ty_with_given_span, DisplayToTokens, ForeignTypeName},
-        ty::{ForeignConversationIntermediate, ForeignConversationRule, ForeignTypeS, RustType},
+        ty::{ForeignConversionIntermediate, ForeignConversionRule, ForeignTypeS, RustType},
         utils::rust_to_foreign_convert_method_inputs,
         ForeignTypeInfo, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
@@ -102,9 +102,9 @@ pub(in crate::cpp) fn generate_interface(
         ),
         provides_by_module: vec![cpp_abs_class_header, "<memory>".into(), "<utility>".into()],
         into_from_rust: None,
-        from_into_rust: Some(ForeignConversationRule {
+        from_into_rust: Some(ForeignConversionRule {
             rust_ty: boxed_trait_rust_ty.to_idx(),
-            intermediate: Some(ForeignConversationIntermediate {
+            intermediate: Some(ForeignConversionIntermediate {
                 input_to_output: false,
                 intermediate_ty: rust_ty.to_idx(),
                 conv_code: Rc::new(conv_code),
@@ -112,7 +112,7 @@ pub(in crate::cpp) fn generate_interface(
         }),
     })?;
 
-    ctx.conv_map.add_conversation_rule(
+    ctx.conv_map.add_conversion_rule(
         rust_ty.to_idx(),
         boxed_trait_rust_ty.to_idx(),
         TypeConvCode::new2(
@@ -629,11 +629,11 @@ fn register_rust_type_and_c_type(
     ctx.conv_map.alloc_foreign_type(ForeignTypeS {
         name: ForeignTypeName::new(c_type_name, ext_span),
         provides_by_module: vec![header_file],
-        into_from_rust: Some(ForeignConversationRule {
+        into_from_rust: Some(ForeignConversionRule {
             rust_ty: rust_ty.to_idx(),
             intermediate: None,
         }),
-        from_into_rust: Some(ForeignConversationRule {
+        from_into_rust: Some(ForeignConversionRule {
             rust_ty: rust_ty.to_idx(),
             intermediate: None,
         }),
@@ -663,7 +663,7 @@ fn register_reference(
     };
     let ptr_ty = ctx.conv_map.find_or_alloc_rust_type(&ptr_ty, src_id);
 
-    ctx.conv_map.add_conversation_rule(
+    ctx.conv_map.add_conversion_rule(
         ref_ty.to_idx(),
         ptr_ty.to_idx(),
         TypeConvCode::new2(
@@ -692,9 +692,9 @@ fn register_reference(
     ctx.conv_map.alloc_foreign_type(ForeignTypeS {
         name: ForeignTypeName::new(cpp_type, (src_id, span)),
         provides_by_module: vec![c_header_name],
-        into_from_rust: Some(ForeignConversationRule {
+        into_from_rust: Some(ForeignConversionRule {
             rust_ty: ref_ty.to_idx(),
-            intermediate: Some(ForeignConversationIntermediate {
+            intermediate: Some(ForeignConversionIntermediate {
                 input_to_output: false,
                 intermediate_ty: ptr_ty.to_idx(),
                 conv_code,

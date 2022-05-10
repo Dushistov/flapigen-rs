@@ -202,11 +202,11 @@ public final class {class_name} {{"#,
             &intermidiate_ret_type
         };
 
-        let need_conversation = !convert_code.is_empty() || !ret_conv_code.is_empty();
+        let need_conversion = !convert_code.is_empty() || !ret_conv_code.is_empty();
 
         match method.variant {
             MethodVariant::StaticMethod => {
-                let (native, end) = if !need_conversation {
+                let (native, end) = if !need_conversion {
                     ("native ", ";\n")
                 } else {
                     ("", " {\n")
@@ -225,7 +225,7 @@ public final class {class_name} {{"#,
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
 
-                if need_conversation {
+                if need_conversion {
                     if !convert_code.is_empty() {
                         let mut code = convert_code.as_bytes();
                         if code[0] == b'\n' {
@@ -796,7 +796,7 @@ fn find_suitable_foreign_types_for_methods(
             MethodVariant::Constructor => {
                 if let syn::ReturnType::Type(_, ref rt) = method.fn_decl.output {
                     let ret_rust_ty = ctx.conv_map.find_or_alloc_rust_type(rt, class.src_id);
-                    //cache conversation to typemap
+                    //cache conversion to typemap
                     map_type(
                         ctx,
                         &ret_rust_ty,

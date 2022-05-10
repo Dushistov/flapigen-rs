@@ -232,7 +232,7 @@ fn parse_r_type_rule(
         let var_name = var_name.ok_or_else(|| {
             syn::Error::new(
                 keyword.span(),
-                "there is conversation code, but name of input variable not defined here",
+                "there is conversion code, but name of input variable not defined here",
             )
         })?;
         //because of $var most likely will be reformated to "$ var", so
@@ -251,7 +251,7 @@ fn parse_r_type_rule(
             return Err(syn::Error::new(
                 conv_body.span(),
                 format!(
-                    "no $out or $out_no_type or ${} in conversation code",
+                    "no $out or $out_no_type or ${} in conversion code",
                     var_name
                 ),
             ));
@@ -672,7 +672,7 @@ fn parse_f_type_rule(
         let var_name = var_name.ok_or_else(|| {
             syn::Error::new(
                 keyword.span(),
-                "there is conversation code, but name of input variable not defined here",
+                "there is conversion code, but name of input variable not defined here",
             )
         })?;
         let var_name = format!("${}", var_name);

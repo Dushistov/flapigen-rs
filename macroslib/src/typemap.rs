@@ -26,13 +26,13 @@ use crate::{
             get_trait_bounds, normalize_type, DisplayToTokens, ForeignTypeName, GenericTypeConv,
         },
         ty::{
-            ForeignConversationRule, ForeignType, ForeignTypeS, ForeignTypesStorage, RustType,
+            ForeignConversionRule, ForeignType, ForeignTypeS, ForeignTypesStorage, RustType,
             RustTypeS,
         },
     },
     types::ForeignClassInfo,
 };
-use ast::ConversationResult;
+use ast::ConversionResult;
 
 pub(crate) use typemap_macro::{
     CItem, CItems, ExpandedFType, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
@@ -319,7 +319,7 @@ struct DisplayTypesConvGraph<'a>(&'a TypesConvGraph);
 impl<'a> fmt::Display for DisplayTypesConvGraph<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         let conv_graph = self.0;
-        writeln!(f, "conversation graph begin")?;
+        writeln!(f, "conversion graph begin")?;
         for node in conv_graph.node_indices() {
             write!(
                 f,
@@ -335,7 +335,7 @@ impl<'a> fmt::Display for DisplayTypesConvGraph<'a> {
             }
             writeln!(f)?;
         }
-        writeln!(f, "conversation graph end")
+        writeln!(f, "conversion graph end")
     }
 }
 
@@ -518,11 +518,11 @@ impl TypeMap {
     ) -> Option<ForeignType> {
         for (idx, ft) in self.ftypes_storage.iter_enumerate() {
             if let (
-                Some(ForeignConversationRule {
+                Some(ForeignConversionRule {
                     rust_ty: into,
                     intermediate: None,
                 }),
-                Some(ForeignConversationRule {
+                Some(ForeignConversionRule {
                     rust_ty: from,
                     intermediate: None,
                 }),
@@ -536,14 +536,14 @@ impl TypeMap {
         None
     }
 
-    pub(crate) fn add_conversation_rule(
+    pub(crate) fn add_conversion_rule(
         &mut self,
         from: RustTypeIdx,
         to: RustTypeIdx,
         rule: TypeConvEdge,
     ) {
         debug!(
-            "TypesConvMap::add_conversation_rule '{}' -> '{}': {:?}",
+            "TypesConvMap::add_conversion_rule '{}' -> '{}': {:?}",
             self[from], self[to], rule
         );
         self.conv_graph.update_edge(from, to, rule);
@@ -617,7 +617,7 @@ impl TypeMap {
         if from == to {
             return Ok(vec![]);
         }
-        find_conversation_path(&self.conv_graph, from, to, build_for_sp)
+        find_conversion_path(&self.conv_graph, from, to, build_for_sp)
     }
 
     fn build_path_if_possible(
@@ -646,7 +646,7 @@ impl TypeMap {
     }
 
     /// find correspoint to rust foreign type (extended)
-    pub(crate) fn map_through_conversation_to_foreign<
+    pub(crate) fn map_through_conversion_to_foreign<
         F: Fn(&TypeMap, &ForeignClassInfo) -> Option<Type>,
     >(
         &mut self,
@@ -657,7 +657,7 @@ impl TypeMap {
         calc_this_type_for_method: F,
     ) -> Option<ForeignType> {
         debug!(
-            "map_through_conversation_to_foreign: {} {:?}",
+            "map_through_conversion_to_foreign: {} {:?}",
             self[rust_ty], direction
         );
 
@@ -671,11 +671,11 @@ impl TypeMap {
 
         {
             debug!(
-                "map_through_conversation_to_foreign: graph node {:?}",
+                "map_through_conversion_to_foreign: graph node {:?}",
                 self.conv_graph[rust_ty]
             );
             let find_path = |from, to| {
-                find_conversation_path(&self.conv_graph, from, to, invalid_src_id_span()).ok()
+                find_conversion_path(&self.conv_graph, from, to, invalid_src_id_span()).ok()
             };
             let mut min_path: Option<(usize, RustTypeIdx, ForeignType)> = None;
             for (ftype_idx, ftype) in self.ftypes_storage.iter_enumerate() {
@@ -697,7 +697,7 @@ impl TypeMap {
                 };
                 if let Some(path) = path {
                     trace!(
-                        "map_through_conversation_to_foreign: path found: {} / {}",
+                        "map_through_conversion_to_foreign: path found: {} / {}",
                         ftype.name,
                         self.conv_graph[related_rty_idx]
                     );
@@ -802,7 +802,7 @@ impl TypeMap {
                 );
                 continue;
             }
-            *conv_rule = Some(ForeignConversationRule {
+            *conv_rule = Some(ForeignConversionRule {
                 rust_ty: rust_ty.graph_idx,
                 intermediate: None,
             });
@@ -901,7 +901,7 @@ impl TypeMap {
         if log_enabled!(log::Level::Debug) {
             match ret {
                 Some(f_idx) => debug!(
-                    "map_through_conversation_to_foreign: we found path after deep search: r {} <-> f {}",
+                    "map_through_conversion_to_foreign: we found path after deep search: r {} <-> f {}",
                     self[rust_ty], self[f_idx].name,
                 ),
                 None => debug!(
@@ -1090,14 +1090,14 @@ pub(in crate::typemap) fn validate_code_template(sp: SourceIdSpan, code: &str) -
     }
 }
 
-fn find_conversation_path(
+fn find_conversion_path(
     conv_graph: &TypesConvGraph,
     from: RustTypeIdx,
     to: RustTypeIdx,
     build_for_sp: SourceIdSpan,
 ) -> Result<Vec<EdgeIndex<TypeGraphIdx>>> {
     trace!(
-        "find_conversation_path: search path {} -> {}",
+        "find_conversion_path: search path {} -> {}",
         conv_graph[from],
         conv_graph[to]
     );
@@ -1114,14 +1114,14 @@ fn find_conversation_path(
             edges.push(
                 conv_graph
                     .find_edge(*cur_node, *next_node)
-                    .expect("Internal error: find_conversation_path no edge"),
+                    .expect("Internal error: find_conversion_path no edge"),
             );
         }
         Ok(edges)
     } else {
         let mut err = DiagnosticError::new2(
             conv_graph[from].src_id_span(),
-            format!("Can not find conversation from type '{}'", conv_graph[from]),
+            format!("Can not find conversion from type '{}'", conv_graph[from]),
         );
         err.span_note(
             conv_graph[to].src_id_span(),
@@ -1195,7 +1195,7 @@ fn try_build_path(
                     edge.to_ty,
                     from
                 );
-                if let Some(ConversationResult {
+                if let Some(ConversionResult {
                     to_ty,
                     to_ty_name,
                     subst_map,
@@ -1210,7 +1210,7 @@ fn try_build_path(
                         *from_ty,
                         to,
                         TypeConvEdge {
-                            code: edge.code_for_conversation(subst_map),
+                            code: edge.code_for_conversion(subst_map),
                             dependency: edge.dependency.clone(),
                         },
                     );
@@ -1221,7 +1221,7 @@ fn try_build_path(
                         goal_to_idx,
                         None,
                     ) {
-                        let path = find_conversation_path(
+                        let path = find_conversion_path(
                             ty_graph.conv_graph,
                             start_from_idx,
                             goal_to_idx,
