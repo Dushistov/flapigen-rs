@@ -12,7 +12,7 @@ r#"impl Foo for C_Foo {
                     );
                     ::std::str::from_utf8_unchecked(slice)
                 };
-                let mut x: String = x.swig_into();
+                let mut x: String = String::from(x);
                 Ok(x)
             } else {
                 assert!(!ret.data.err.is_null());

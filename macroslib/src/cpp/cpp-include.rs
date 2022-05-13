@@ -6,8 +6,23 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
+    (r_type) ::std::os::raw::c_short;
+    (f_type) "short";
+);
+
+foreign_typemap!(
+    (r_type) ::std::os::raw::c_ushort;
+    (f_type) "unsigned short";
+);
+
+foreign_typemap!(
     (r_type) ::std::os::raw::c_int;
     (f_type) "int";
+);
+
+foreign_typemap!(
+    (r_type) ::std::os::raw::c_uint;
+    (f_type) "unsgined int";
 );
 
 foreign_typemap!(
@@ -96,12 +111,6 @@ pub trait SwigForeignEnum {
 }
 
 #[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_into();"]
-trait SwigInto<T> {
-    fn swig_into(self) -> T;
-}
-
-#[allow(dead_code)]
 #[swig_code = "let mut {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var});"]
 trait SwigFrom<T> {
     fn swig_from(_: T) -> Self;
@@ -185,12 +194,11 @@ foreign_typemap!(
     };
 );
 
-// &str -> &Path
-impl<'a> SwigInto<&'a Path> for &'a str {
-    fn swig_into(self) -> &'a Path {
-        Path::new(self)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &str => &Path {
+        $out = Path::new($p);
+    };
+);
 
 #[allow(dead_code)]
 #[repr(C)]
@@ -216,11 +224,11 @@ impl CRustString {
     }
 }
 
-impl<'a> SwigInto<String> for &'a str {
-    fn swig_into(self) -> String {
-        self.into()
-    }
-}
+foreign_typemap!(
+    ($p:r_type) &str => String {
+        $out = String::from($p);
+    };
+);
 
 impl<T: SwigForeignEnum> SwigFrom<T> for u32 {
     fn swig_from(x: T) -> u32 {
