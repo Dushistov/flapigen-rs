@@ -7,8 +7,6 @@ mod jni {
 }
 
 mod cpp {
-    use std::path::Path;
-
     include!(concat!(env!("OUT_DIR"), "/cpp-include.rs"));
 }
 
