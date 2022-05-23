@@ -1,3 +1,4 @@
 #![allow(unused)]
 
-include!(concat!(env!("OUT_DIR"), "/glue.rs"));
+mod python_glue;
+use python_glue::*;
