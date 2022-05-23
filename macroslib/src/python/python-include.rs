@@ -1,5 +1,4 @@
 
-#[macro_use] extern crate cpython;
 use cpython::{ObjectProtocol as CPythonObjectProtocol, PythonObjectWithTypeObject as CPythonObjectWithTypeObject};
 
 // It is currently unused.

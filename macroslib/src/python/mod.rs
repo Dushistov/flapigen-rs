@@ -117,7 +117,7 @@ impl PythonConfig {
             mod #wrapper_mod_name {
                 use super::*;
                 #[allow(unused)]
-                py_class!(pub class #class_name |py| {
+                cpython::py_class!(pub class #class_name |py| {
                     static __doc__  = #docstring;
 
                     #rust_instance_field
@@ -159,7 +159,7 @@ impl PythonConfig {
         let docstring = enum_info.doc_comments.as_slice().join("\n");
         let class_code = quote! {
             mod #wrapper_mod_name {
-                py_class!(pub class #enum_name |py| {
+                cpython::py_class!(pub class #enum_name |py| {
                     static __doc__  = #docstring;
                     #( static #foreign_variants = super::#rust_variants_ref_1 as u32; )*
                 });
@@ -218,10 +218,10 @@ impl PythonConfig {
             parse::<syn::Ident>(&format!("PyInit_{}", &self.module_name), SourceId::none())?;
         let registration_code = quote! {
             mod py_error {
-                py_exception!(#module_name, Error);
+                cpython::py_exception!(#module_name, Error);
             }
 
-            py_module_initializer!(#module_name, #module_init, #module_py_init, |py, m| {
+            cpython::py_module_initializer!(#module_name, #module_init, #module_py_init, |py, m| {
                 m.add(py, "Error", py_error::Error::type_object(py))?;
                 #(#module_initialization_code)*
                 Ok(())
