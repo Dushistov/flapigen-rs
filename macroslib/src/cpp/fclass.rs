@@ -37,10 +37,10 @@ pub(in crate::cpp) fn generate(ctx: &mut CppContext, class: &ForeignClassInfo) -
         "generate: begin for {}, this_type_for_method {:?}",
         class.name, class.self_desc
     );
-    let has_methods = class.methods.iter().any(|m| match m.variant {
-        MethodVariant::Method(_) => true,
-        _ => false,
-    });
+    let has_methods = class
+        .methods
+        .iter()
+        .any(|m| matches!(m.variant, MethodVariant::Method(_)));
     let has_constructor = class
         .methods
         .iter()

@@ -327,7 +327,7 @@ fn generate_method_code(
         .into_iter()
         .map(|(name, t)| {
             parse(
-                &format!("{}: {}", name, t.into_token_stream().to_string()),
+                &format!("{}: {}", name, t.into_token_stream()),
                 class.src_id,
             )
         })
@@ -433,13 +433,10 @@ fn self_type_conversion(
 }
 
 fn has_any_methods(class: &ForeignClassInfo) -> bool {
-    class.methods.iter().any(|m| {
-        if let MethodVariant::Method(_) = m.variant {
-            true
-        } else {
-            false
-        }
-    })
+    class
+        .methods
+        .iter()
+        .any(|m| matches!(m.variant, MethodVariant::Method(_)))
 }
 
 fn generate_conversion_for_argument(

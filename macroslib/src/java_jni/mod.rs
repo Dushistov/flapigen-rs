@@ -271,7 +271,7 @@ fn java_class_full_name(package_name: &str, class_name: &str) -> String {
 }
 
 fn java_class_name_to_jni(full_name: &str) -> String {
-    full_name.replace(".", "/")
+    full_name.replace('.', "/")
 }
 
 fn calc_this_type_for_method(tm: &TypeMap, class: &ForeignClassInfo) -> Option<Type> {

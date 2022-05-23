@@ -660,7 +660,7 @@ May be you need to use `private constructor = empty;` syntax?",
             f_method,
             jni_func_name: &jni_func_name,
             decl_func_args: &decl_func_args,
-            real_output_typename: real_output_typename,
+            real_output_typename,
             ret_name: &ret_name,
         };
 
@@ -840,7 +840,7 @@ fn generate_static_method(ctx: &mut JavaContext, mc: &MethodContext) -> Result<(
         &mc.method.fn_decl.output,
         mc.f_method.output.base.correspoding_rust_type.to_idx(),
         mc.ret_name,
-        &jni_ret_type,
+        jni_ret_type,
     )?;
     ctx.rust_code.append(&mut deps_code_out);
     let (mut deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
@@ -849,7 +849,7 @@ fn generate_static_method(ctx: &mut JavaContext, mc: &MethodContext) -> Result<(
         mc.method,
         mc.f_method,
         mc.method.arg_names_without_self(),
-        &jni_ret_type,
+        jni_ret_type,
     )?;
     ctx.rust_code.append(&mut deps_code_in);
 

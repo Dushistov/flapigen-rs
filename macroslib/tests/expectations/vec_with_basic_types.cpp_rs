@@ -8,7 +8,7 @@ r#"impl IXyz for C_IXyz {
         ::std::mem::forget(tmp);
         let mut a0: CRustVecu8 = CRustVecu8 {
             data: p,
-            len: len,
+            len,
             capacity: cap,
         };
         let ret: () = (self.on_have_data)(a0, self.opaque);

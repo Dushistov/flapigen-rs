@@ -269,13 +269,7 @@ impl VisitMut for StripLifetime {
         mem::swap(&mut args, &mut i.args);
         i.args = args
             .into_iter()
-            .filter(|x| {
-                if let syn::GenericArgument::Lifetime(_) = x {
-                    false
-                } else {
-                    true
-                }
-            })
+            .filter(|x| !matches!(x, syn::GenericArgument::Lifetime(_)))
             .collect();
         visit_angle_bracketed_generic_arguments_mut(self, i);
     }
