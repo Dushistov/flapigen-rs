@@ -772,11 +772,8 @@ impl Parse for ForeignInterfaceParser {
             parenthesized!(args_parser in item_parser);
             let args_in: Punctuated<syn::FnArg, Token![,]> =
                 args_parser.parse_terminated(syn::FnArg::parse)?;
-            debug!("cb func in args {:?}", args_in);
-            let have_self_args = match args_in.iter().next() {
-                Some(syn::FnArg::Receiver(_)) => true,
-                _ => false,
-            };
+            debug!("cb func in args {args_in:?}");
+            let have_self_args = matches!(args_in.iter().next(), Some(syn::FnArg::Receiver(_)));
             if !have_self_args {
                 return Err(syn::Error::new(
                     rust_func_name.span(),

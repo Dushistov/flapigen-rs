@@ -328,7 +328,7 @@ fn is_wrong_cfg_pointer_width(attrs: &[syn::Attribute], target_pointer_width: us
                             let val = if let Some(stripped) = val.strip_suffix('"') {
                                 stripped
                             } else {
-                                &val
+                                val
                             };
                             if let Ok(width) = <usize>::from_str(val) {
                                 return target_pointer_width != width;

@@ -929,7 +929,7 @@ using CppRustVec!() = RustVec<CRustVec!(), CRustVecFree!()>;
         ::std::mem::forget(tmp);
         $out = CRustVec!() {
             data: p,
-            len: len,
+            len,
             capacity: cap,
         };
     };

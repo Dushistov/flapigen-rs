@@ -71,7 +71,7 @@ fn main() {
         let mut cache =
             file_cache::FileWriteCache::new(&out_path, &mut file_cache::NoNeedFsOpsRegistration);
         let write_err_msg = format!("Error during write to file {}", out_path.display());
-        write!(&mut cache, "{}", file.into_token_stream().to_string()).expect(&write_err_msg);
+        write!(&mut cache, "{}", file.into_token_stream()).expect(&write_err_msg);
         cache.update_file_if_necessary().expect(&write_err_msg);
         println!("cargo:rerun-if-changed={}", include_path.display());
     }
