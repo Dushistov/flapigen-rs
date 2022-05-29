@@ -178,7 +178,7 @@ pub(in crate::cpp) fn cpp_list_required_includes(
         includes.extend(mem::take(&mut m.output.provides_by_module).into_iter());
     }
 
-    // prerserve order of includes
+    // preserve order of includes
     let mut uniques = FxHashSet::default();
     includes.retain(|e| uniques.insert(e.clone()));
 

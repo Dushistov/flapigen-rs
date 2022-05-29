@@ -97,7 +97,7 @@ fn do_generate(
     let c_class_type = cpp_code::c_class_type(class);
     let class_doc_comments = cpp_code::doc_comments_to_c_comments(&class.doc_comments, true);
 
-    generte_c_header_preamble(ctx, &class_doc_comments, &c_class_type, &mut c_include_f);
+    generate_c_header_preamble(ctx, &class_doc_comments, &c_class_type, &mut c_include_f);
     let plain_class = need_plain_class(class);
     let class_name = if !plain_class {
         format!("{}Wrapper", class.name)
@@ -1051,7 +1051,7 @@ fn find_suitable_foreign_types_for_methods(
     Ok(ret)
 }
 
-fn generte_c_header_preamble(
+fn generate_c_header_preamble(
     ctx: &CppContext,
     class_doc_comments: &str,
     c_class_type: &str,
@@ -1230,7 +1230,7 @@ public:"#,
     }
 
     if !static_only {
-        genearte_copy_stuff(
+        generate_copy_stuff(
             ctx,
             class,
             c_class_type,
@@ -1242,7 +1242,7 @@ public:"#,
     Ok(())
 }
 
-fn genearte_copy_stuff(
+fn generate_copy_stuff(
     ctx: &mut CppContext,
     class: &ForeignClassInfo,
     c_class_type: &str,
