@@ -922,7 +922,7 @@ fn expand_ftype_rule(
                 sp: m.sp,
             });
         }
-        // prerserve order of modules
+        // preserve order of modules
         let mut mod_uniques = FxHashSet::default();
         provides_by_module.retain(|e| mod_uniques.insert(e.name.clone()));
         let unique_prefix = if let Some(unique_prefix) = grule.unique_prefix.as_ref() {
