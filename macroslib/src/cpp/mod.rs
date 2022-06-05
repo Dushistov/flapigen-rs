@@ -77,7 +77,7 @@ struct CppConverter {
 #[derive(Debug)]
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
-    provides_by_module: Vec<SmolStr>,
+    provided_by_module: Vec<SmolStr>,
     input_to_output: bool,
     pub(in crate::cpp) cpp_converter: Option<CppConverter>,
 }
@@ -115,7 +115,7 @@ impl CppForeignTypeInfo {
                 ),
             )
         })?;
-        let mut provides_by_module = ftype.provides_by_module.clone();
+        let mut provided_by_module = ftype.provided_by_module.clone();
         let base_rt;
         let base_ft_name;
         let mut input_to_output = false;
@@ -160,7 +160,7 @@ impl CppForeignTypeInfo {
                     },
                 ));
             }
-            provides_by_module.extend_from_slice(&inter_ft.provides_by_module);
+            provided_by_module.extend_from_slice(&inter_ft.provided_by_module);
             base_ft_name = inter_ft.base.name;
             cpp_converter = Some(CppConverter {
                 typename,
@@ -181,7 +181,7 @@ impl CppForeignTypeInfo {
                 name: base_ft_name,
                 correspoding_rust_type: ctx.conv_map[base_rt].clone(),
             },
-            provides_by_module,
+            provided_by_module,
             cpp_converter,
         })
     }
@@ -206,7 +206,7 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
                 name: x.name,
                 correspoding_rust_type: x.correspoding_rust_type,
             },
-            provides_by_module: Vec::new(),
+            provided_by_module: Vec::new(),
             cpp_converter: None,
         }
     }
@@ -464,7 +464,7 @@ fn register_c_type(
             };
             tmap.alloc_foreign_type(ForeignTypeS {
                 name: ForeignTypeName::new(c_name, (src_id, f_ident.span())),
-                provides_by_module: vec![format!("\"{}\"", c_types.header_name).into()],
+                provided_by_module: vec![format!("\"{}\"", c_types.header_name).into()],
                 into_from_rust: Some(rule.clone()),
                 from_into_rust: Some(rule),
             })?;

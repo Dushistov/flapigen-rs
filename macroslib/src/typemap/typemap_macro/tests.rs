@@ -680,7 +680,7 @@ impl TypeMapConvRuleInfoExpanderHelper for Dummy {
                 panic!("swig_f_type: Unknown type: {}", DisplayToTokens(ty));
             }
             .into(),
-            provides_by_module: vec![],
+            provided_by_module: vec![],
         })
     }
     fn swig_foreign_to_i_type(&mut self, _ty: &syn::Type, var_name: &str) -> Result<String> {

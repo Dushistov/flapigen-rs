@@ -100,7 +100,7 @@ pub(in crate::cpp) fn generate_interface(
             format!("std::unique_ptr<{}>", interface.name),
             interface.src_id_span(),
         ),
-        provides_by_module: vec![cpp_abs_class_header, "<memory>".into(), "<utility>".into()],
+        provided_by_module: vec![cpp_abs_class_header, "<memory>".into(), "<utility>".into()],
         into_from_rust: None,
         from_into_rust: Some(ForeignConversionRule {
             rust_ty: boxed_trait_rust_ty.to_idx(),
@@ -628,7 +628,7 @@ fn register_rust_type_and_c_type(
 
     ctx.conv_map.alloc_foreign_type(ForeignTypeS {
         name: ForeignTypeName::new(c_type_name, ext_span),
-        provides_by_module: vec![header_file],
+        provided_by_module: vec![header_file],
         into_from_rust: Some(ForeignConversionRule {
             rust_ty: rust_ty.to_idx(),
             intermediate: None,
@@ -691,7 +691,7 @@ fn register_reference(
 
     ctx.conv_map.alloc_foreign_type(ForeignTypeS {
         name: ForeignTypeName::new(cpp_type, (src_id, span)),
-        provides_by_module: vec![c_header_name],
+        provided_by_module: vec![c_header_name],
         into_from_rust: Some(ForeignConversionRule {
             rust_ty: ref_ty.to_idx(),
             intermediate: Some(ForeignConversionIntermediate {

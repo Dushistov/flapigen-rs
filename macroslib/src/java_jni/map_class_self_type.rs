@@ -184,7 +184,7 @@ fn register_main_foreign_types(
                 &name_prefix,
                 (class.src_id, class.name.span()),
             ),
-            provides_by_module: vec![],
+            provided_by_module: vec![],
             from_into_rust: None,
             into_from_rust: Some(ForeignConversionRule {
                 rust_ty: jlong_out_val_rty.to_idx(),
@@ -278,7 +278,7 @@ fn register_main_foreign_types(
                 &name_prefix,
                 (class.src_id, class.name.span()),
             ),
-            provides_by_module: vec![],
+            provided_by_module: vec![],
             into_from_rust: None,
             from_into_rust: Some(ForeignConversionRule {
                 rust_ty: jlong_in_val_rty.to_idx(),
@@ -313,7 +313,7 @@ fn register_main_foreign_types(
 
     let class_ftype = ForeignTypeS {
         name: ForeignTypeName::new(format!("{}{}", null_annot, class.name), (class.src_id, class.name.span())),
-        provides_by_module: vec![],
+        provided_by_module: vec![],
         into_from_rust: Some(ForeignConversionRule {
             rust_ty: this_type,
             intermediate: Some(ForeignConversionIntermediate {
@@ -356,7 +356,7 @@ fn register_main_foreign_types(
             "/*ref*/",
             (class.src_id, class.name.span()),
         ),
-        provides_by_module: vec![],
+        provided_by_module: vec![],
         from_into_rust: Some(ForeignConversionRule {
             rust_ty: this_type_ref,
             intermediate: Some(ForeignConversionIntermediate {
@@ -387,7 +387,7 @@ fn register_main_foreign_types(
             "/*mut ref*/",
             (class.src_id, class.name.span()),
         ),
-        provides_by_module: vec![],
+        provided_by_module: vec![],
         from_into_rust: Some(ForeignConversionRule {
             rust_ty: this_type_mut_ref,
             intermediate: Some(ForeignConversionIntermediate {
@@ -430,7 +430,7 @@ fn register_main_foreign_types(
                     "/*ref 2*/",
                     (class.src_id, class.name.span()),
                 ),
-                provides_by_module: vec![],
+                provided_by_module: vec![],
                 from_into_rust: Some(ForeignConversionRule {
                     rust_ty: self_type_mut_ref.to_idx(),
                     intermediate: Some(ForeignConversionIntermediate {
@@ -461,7 +461,7 @@ fn register_main_foreign_types(
                     "/*mut ref 2*/",
                     (class.src_id, class.name.span()),
                 ),
-                provides_by_module: vec![],
+                provided_by_module: vec![],
                 from_into_rust: Some(ForeignConversionRule {
                     rust_ty: self_type_ref.to_idx(),
                     intermediate: Some(ForeignConversionIntermediate {

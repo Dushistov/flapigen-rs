@@ -234,7 +234,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
                 fname.value().replace("struct ", "").replace("union ", ""),
                 fname.unique_prefix().unwrap_or(""),
             ),
-            provides_by_module: f_info.provides_by_module.clone(),
+            provided_by_module: f_info.provided_by_module.clone(),
         })
     }
     fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String> {

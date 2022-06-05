@@ -520,7 +520,7 @@ impl From<LitStr> for FTypeName {
 
 pub(crate) struct ExpandedFType {
     pub name: UniqueName,
-    pub provides_by_module: Vec<SmolStr>,
+    pub provided_by_module: Vec<SmolStr>,
 }
 
 pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
@@ -634,7 +634,7 @@ fn concat_idents(
         GenericAliasItem::SwigFType(id) => {
             let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
             let mut f_type = expander.swig_f_type(ty.as_ref(), None)?;
-            req_modules.append(&mut f_type.provides_by_module);
+            req_modules.append(&mut f_type.provided_by_module);
             ident.push_str(f_type.name.display());
         }
         GenericAliasItem::Ident(id) => ident.push_str(&id.to_string()),
@@ -865,7 +865,7 @@ fn expand_ftype_rule(
 
     for grule in grules {
         use FTypeLeftRightPair::*;
-        let mut provides_by_module = Vec::<ModuleName>::new();
+        let mut provided_by_module = Vec::<ModuleName>::new();
         let left_right_ty = match grule.left_right_ty {
             OnlyLeft(ref ftype) => OnlyLeft(expand_ftype_name(
                 src_id,
@@ -873,7 +873,7 @@ fn expand_ftype_rule(
                 param_map,
                 expander,
                 generic_aliases,
-                &mut provides_by_module,
+                &mut provided_by_module,
             )?),
             OnlyRight(ref ftype) => OnlyRight(expand_ftype_name(
                 src_id,
@@ -881,7 +881,7 @@ fn expand_ftype_rule(
                 param_map,
                 expander,
                 generic_aliases,
-                &mut provides_by_module,
+                &mut provided_by_module,
             )?),
             Both(ref fl, ref fr) => Both(
                 expand_ftype_name(
@@ -890,7 +890,7 @@ fn expand_ftype_rule(
                     param_map,
                     expander,
                     generic_aliases,
-                    &mut provides_by_module,
+                    &mut provided_by_module,
                 )?,
                 expand_ftype_name(
                     src_id,
@@ -898,7 +898,7 @@ fn expand_ftype_rule(
                     param_map,
                     expander,
                     generic_aliases,
-                    &mut provides_by_module,
+                    &mut provided_by_module,
                 )?,
             ),
         };
@@ -917,24 +917,24 @@ fn expand_ftype_rule(
         };
         for m in &grule.req_modules {
             let mod_name = expand_module_name(&m.name, (src_id, m.sp), generic_aliases)?;
-            provides_by_module.push(ModuleName {
+            provided_by_module.push(ModuleName {
                 name: mod_name,
                 sp: m.sp,
             });
         }
         // preserve order of modules
         let mut mod_uniques = FxHashSet::default();
-        provides_by_module.retain(|e| mod_uniques.insert(e.name.clone()));
+        provided_by_module.retain(|e| mod_uniques.insert(e.name.clone()));
         let unique_prefix = if let Some(unique_prefix) = grule.unique_prefix.as_ref() {
             let ctx_span = (src_id, unique_prefix.sp);
-            let mut provides_by_module = vec![];
+            let mut provided_by_module = vec![];
             let new_unique_prefix = expand_str_in_ftype_name_context(
                 ctx_span,
                 unique_prefix.as_str(),
                 param_map,
                 expander,
                 generic_aliases,
-                &mut provides_by_module,
+                &mut provided_by_module,
             )?;
             Some(SpannedSmolStr {
                 sp: unique_prefix.sp,
@@ -946,7 +946,7 @@ fn expand_ftype_rule(
 
         ret.push(FTypeConvRule {
             unique_prefix,
-            req_modules: provides_by_module,
+            req_modules: provided_by_module,
             cfg_option: grule.cfg_option.clone(),
             left_right_ty,
             input_to_output: grule.input_to_output,
@@ -993,7 +993,7 @@ fn call_swig_f_type(
 
     let f_type = expander.swig_f_type(ty.as_ref(), opt_param)?;
     out.push_str(f_type.name.value());
-    Ok(f_type.provides_by_module)
+    Ok(f_type.provided_by_module)
 }
 
 fn expand_ftype_name(
@@ -1002,7 +1002,7 @@ fn expand_ftype_name(
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
     generic_aliases: &[CalcGenericAlias],
-    provides_by_module: &mut Vec<ModuleName>,
+    provided_by_module: &mut Vec<ModuleName>,
 ) -> Result<FTypeName> {
     let ctx_span = (src_id, ftype.sp);
 
@@ -1012,7 +1012,7 @@ fn expand_ftype_name(
         param_map,
         expander,
         generic_aliases,
-        provides_by_module,
+        provided_by_module,
     )?;
 
     Ok(FTypeName {
@@ -1027,13 +1027,13 @@ fn expand_str_in_ftype_name_context(
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
     generic_aliases: &[CalcGenericAlias],
-    provides_by_module: &mut Vec<ModuleName>,
+    provided_by_module: &mut Vec<ModuleName>,
 ) -> Result<String> {
     expand_macroses(input, |id: &str, params: Vec<&str>, out: &mut String| {
         if id == SWIG_F_TYPE {
             let modules: Vec<SmolStr> =
                 call_swig_f_type(ctx_span, params, out, param_map, expander, generic_aliases)?;
-            provides_by_module.extend(modules.into_iter().map(|name| ModuleName {
+            provided_by_module.extend(modules.into_iter().map(|name| ModuleName {
                 name,
                 sp: Span::call_site(),
             }));
@@ -1053,7 +1053,7 @@ fn expand_str_in_ftype_name_context(
         } else if let Some(pos) = generic_aliases.iter().position(|a| a.name == id) {
             write!(out, "{}", DisplayToTokens(&generic_aliases[pos].value))
                 .expect(WRITE_TO_MEM_FAILED_MSG);
-            provides_by_module.extend(generic_aliases[pos].req_modules.iter().map(|name| {
+            provided_by_module.extend(generic_aliases[pos].req_modules.iter().map(|name| {
                 ModuleName {
                     name: name.clone(),
                     sp: Span::call_site(),

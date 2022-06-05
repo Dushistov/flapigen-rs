@@ -51,7 +51,7 @@ pub(in crate::java_jni) fn generate_enum(
 
     let enum_ftype = ForeignTypeS {
         name: ForeignTypeName::new(fenum.name.to_string(), (fenum.src_id, fenum.name.span())),
-        provides_by_module: vec![],
+        provided_by_module: vec![],
         into_from_rust: Some(ForeignConversionRule {
             rust_ty: enum_rty.to_idx(),
             intermediate: Some(ForeignConversionIntermediate {

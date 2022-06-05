@@ -100,8 +100,8 @@ impl TypeMap {
                 r_ty,
             )?;
             let ftype = &mut self.ftypes_storage[ftype_idx];
-            ftype.provides_by_module =
-                convert_req_module_to_provides_by_module(req_modules.to_vec());
+            ftype.provided_by_module =
+                convert_req_module_to_provided_by_module(req_modules.to_vec());
             set_unique_prefix(ftype, unique_prefix.cloned(), src_id)?;
             return Ok(());
         }
@@ -316,8 +316,8 @@ impl TypeMap {
                     &self.conv_graph,
                 )?;
                 res_ftype.from_into_rust = Some(from_into_rust);
-                res_ftype.provides_by_module =
-                    convert_req_module_to_provides_by_module(req_modules);
+                res_ftype.provided_by_module =
+                    convert_req_module_to_provided_by_module(req_modules);
                 set_unique_prefix(res_ftype, ft_unique_prefix, src_id)?;
             }
             (Some((ft, into_from_rust)), None) => {
@@ -330,8 +330,8 @@ impl TypeMap {
                     &self.conv_graph,
                 )?;
                 res_ftype.into_from_rust = Some(into_from_rust);
-                res_ftype.provides_by_module =
-                    convert_req_module_to_provides_by_module(req_modules);
+                res_ftype.provided_by_module =
+                    convert_req_module_to_provided_by_module(req_modules);
                 set_unique_prefix(res_ftype, ft_unique_prefix, src_id)?;
             }
             (None, Some((ft, from_into_rust))) => {
@@ -344,8 +344,8 @@ impl TypeMap {
                     &self.conv_graph,
                 )?;
                 res_ftype.from_into_rust = Some(from_into_rust);
-                res_ftype.provides_by_module =
-                    convert_req_module_to_provides_by_module(req_modules);
+                res_ftype.provided_by_module =
+                    convert_req_module_to_provided_by_module(req_modules);
                 set_unique_prefix(res_ftype, ft_unique_prefix, src_id)?;
             }
             (None, None) => {}
@@ -465,7 +465,7 @@ fn ftype_merge(our: &mut ForeignTypeS, extrn_ft: ForeignTypeS) {
     }
 }
 
-fn convert_req_module_to_provides_by_module(v: Vec<ModuleName>) -> Vec<SmolStr> {
+fn convert_req_module_to_provided_by_module(v: Vec<ModuleName>) -> Vec<SmolStr> {
     let mut ret = Vec::with_capacity(v.len());
     for x in v {
         ret.push(x.name);

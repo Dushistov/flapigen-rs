@@ -34,7 +34,7 @@ pub(in crate::java_jni) fn map_type(
     let fti = do_map_type(ctx, arg_ty, direction, arg_ty_span)?;
     let ftype = &ctx.conv_map[fti];
     let origin_ftype_span = ftype.src_id_span();
-    if !ftype.provides_by_module.is_empty() {
+    if !ftype.provided_by_module.is_empty() {
         unimplemented!();
     }
     let rule = match direction {
@@ -300,7 +300,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
         };
         Ok(ExpandedFType {
             name: fname,
-            provides_by_module: vec![],
+            provided_by_module: vec![],
         })
     }
     fn swig_foreign_to_i_type(&mut self, _ty: &syn::Type, _var_name: &str) -> Result<String> {

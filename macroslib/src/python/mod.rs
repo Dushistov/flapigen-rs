@@ -185,7 +185,7 @@ impl PythonConfig {
                 enum_info.name.to_string(),
                 (enum_info.src_id, enum_info.name.span()),
             ),
-            provides_by_module: vec![],
+            provided_by_module: vec![],
             into_from_rust: None,
             from_into_rust: None,
         };
