@@ -179,6 +179,12 @@ foreign_class!(class CheckPrimitiveTypesClass {
     fn test_i64(v: i64) -> i64;
     fn test_f32(v: f32) -> f32;
     fn test_f64(v: f64) -> f64;
+    fn test_uint(v: ::std::os::raw::c_uint) -> ::std::os::raw::c_uint {
+        v + 1
+    }
+    fn test_long(v: ::std::os::raw::c_long) -> ::std::os::raw::c_long {
+        v + 1
+    }
     fn invert(_: bool) -> bool;
     fn xor(_: bool, _: bool) -> bool; alias Xor;
 });

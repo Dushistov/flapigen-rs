@@ -22,7 +22,12 @@ foreign_typemap!(
 
 foreign_typemap!(
     (r_type) ::std::os::raw::c_uint;
-    (f_type) "unsgined int";
+    (f_type) "unsigned int";
+);
+
+foreign_typemap!(
+    (r_type) ::std::os::raw::c_long;
+    (f_type) "long";
 );
 
 foreign_typemap!(
