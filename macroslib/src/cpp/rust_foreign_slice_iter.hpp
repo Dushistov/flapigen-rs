@@ -4,15 +4,14 @@
 #include <cassert>
 #include <iterator>
 
-template <typename T>
-class RustForeignSliceIterator final
-    : public std::iterator<std::random_access_iterator_tag, // iterator_category
-                           T, // value_type
-                           ptrdiff_t, // difference_type
-                           const T *, // pointer
-                           T // reference
-                           > {
+template <typename T> class RustForeignSliceIterator final {
 public:
+    using iterator_category = std::random_access_iterator_tag;
+    using value_type = T;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const T *;
+    using reference = T;
+
     using CForeignType = typename T::CForeignType;
 
     RustForeignSliceIterator() noexcept
