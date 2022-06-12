@@ -3,7 +3,6 @@
 r#"enum ControlItem {
 GNSS = 0,
 GPS_PROVIDER = 1
-
 };"#;
 
 

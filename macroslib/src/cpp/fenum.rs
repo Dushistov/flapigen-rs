@@ -70,7 +70,7 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
                 input_to_output: false,
                 intermediate_ty: u32_rty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
-                    format!("static_cast<uint32_t>({})", FROM_VAR_TEMPLATE),
+                    format!("static_cast<uint32_t>({FROM_VAR_TEMPLATE})"),
                     invalid_src_id_span(),
                 )),
             }),
@@ -118,7 +118,7 @@ enum {enum_name} {{"#,
             index = i,
             doc_comments = doc_comments,
             separator = if i == enum_info.items.len() - 1 {
-                "\n"
+                ""
             } else {
                 ","
             },
