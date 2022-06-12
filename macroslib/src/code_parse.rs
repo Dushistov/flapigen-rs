@@ -685,15 +685,19 @@ impl Parse for ForeignEnumInfoParser {
         assert!(unknown_attrs.is_empty());
         input.parse::<Token![enum]>()?;
         let enum_name = input.parse::<Ident>()?;
-        debug!("ENUM NAME {:?}", enum_name);
+        debug!("ENUM NAME {enum_name:?}");
         let item_parser;
         braced!(item_parser in input);
         let mut items = vec![];
         while !item_parser.is_empty() {
             let doc_comments = parse_doc_comments(&item_parser)?;
             let f_item_name = item_parser.parse::<Ident>()?;
-            item_parser.parse::<Token![=]>()?;
-            let item_name = item_parser.call(syn::Path::parse_mod_style)?;
+            let item_name = if item_parser.peek(Token![=]) {
+                item_parser.parse::<Token![=]>()?;
+                item_parser.call(syn::Path::parse_mod_style)?
+            } else {
+                syn::parse_quote! { #enum_name :: #f_item_name }
+            };
             item_parser.parse::<Token![,]>()?;
 
             items.push(ForeignEnumItem {
