@@ -50,9 +50,6 @@ static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
 extern "C" {
 #endif
 
-    typedef struct BooOpaque BooOpaque;
-
-
     uint32_t Boo_return_is_enum();
 
     void Boo_param_is_enum(uint32_t e);

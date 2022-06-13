@@ -67,3 +67,4 @@ cpp_ret_opt_qstring
 callback_in_callback_args
 fenum
 cenum
+c_self_type
