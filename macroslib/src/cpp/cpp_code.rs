@@ -167,6 +167,10 @@ pub(in crate::cpp) fn cpp_header_name_for_enum(enum_info: &ForeignEnumInfo) -> S
     format!("{}.hpp", enum_info.name)
 }
 
+pub(in crate::cpp) fn c_header_name_for_enum(enum_info: &ForeignEnumInfo) -> String {
+    format!("c_{}.h", enum_info.name)
+}
+
 pub(in crate::cpp) fn cpp_list_required_includes(
     methods: &mut [CppForeignMethodSignature],
 ) -> Vec<SmolStr> {
