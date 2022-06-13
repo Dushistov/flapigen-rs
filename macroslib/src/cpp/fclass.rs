@@ -97,18 +97,18 @@ fn do_generate(
     let c_class_type = cpp_code::c_class_type(class);
     let class_doc_comments = cpp_code::doc_comments_to_c_comments(&class.doc_comments, true);
 
-    generate_c_header_preamble(ctx, &class_doc_comments, &c_class_type, &mut c_include_f);
+    let static_only = class
+        .methods
+        .iter()
+        .all(|x| x.variant == MethodVariant::StaticMethod);
+
+    generate_c_header_preamble(ctx, &class_doc_comments, &c_class_type, &mut c_include_f, static_only);
     let plain_class = need_plain_class(class);
     let class_name = if !plain_class {
         format!("{}Wrapper", class.name)
     } else {
         class.name.to_string()
     };
-
-    let static_only = class
-        .methods
-        .iter()
-        .all(|x| x.variant == MethodVariant::StaticMethod);
 
     generate_cpp_header_preamble(
         ctx,
@@ -1056,6 +1056,7 @@ fn generate_c_header_preamble(
     class_doc_comments: &str,
     c_class_type: &str,
     c_include_f: &mut FileWriteCache,
+    static_only: bool,
 ) {
     writeln!(
         c_include_f,
@@ -1070,15 +1071,21 @@ fn generate_c_header_preamble(
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * {sizeof_usize},
    "our conversion usize <-> uintptr_t is wrong");
 extern "C" {{
-#endif
-
-    typedef struct {c_class_type} {c_class_type};
-"##,
+#endif"##,
         doc_comments = class_doc_comments,
-        c_class_type = c_class_type,
         sizeof_usize = ctx.target_pointer_width / 8,
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);
+
+    if ! static_only {
+        writeln!(c_include_f,
+        r##"
+
+    typedef struct {c_class_type} {c_class_type};"##,
+                 c_class_type = c_class_type,
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+    }
 }
 
 fn generate_cpp_header_preamble(
