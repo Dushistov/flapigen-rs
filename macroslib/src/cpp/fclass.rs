@@ -275,7 +275,7 @@ May be you need to use `private constructor = empty;` syntax?",
                 &mut rust_args_with_types,
                 "{}: {}, ",
                 arg_name,
-                f_type_info.as_ref().correspoding_rust_type.typename(),
+                f_type_info.as_ref().corresponding_rust_type.typename(),
             )
             .expect(WRITE_TO_MEM_FAILED_MSG);
         }
@@ -789,13 +789,13 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
         .f_method
         .output
         .as_ref()
-        .correspoding_rust_type
+        .corresponding_rust_type
         .typename();
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        mc.f_method.output.base.correspoding_rust_type.to_idx(),
+        mc.f_method.output.base.corresponding_rust_type.to_idx(),
         mc.ret_name,
         c_ret_type,
     )?;
@@ -847,7 +847,7 @@ fn generate_method(
         .f_method
         .output
         .as_ref()
-        .correspoding_rust_type
+        .corresponding_rust_type
         .typename();
     let (deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         conv_map,
@@ -861,7 +861,7 @@ fn generate_method(
         conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        mc.f_method.output.base.correspoding_rust_type.to_idx(),
+        mc.f_method.output.base.corresponding_rust_type.to_idx(),
         mc.ret_name,
         c_ret_type,
     )?;
@@ -1026,13 +1026,13 @@ fn find_suitable_foreign_types_for_methods(
         let output: CppForeignTypeInfo = match method.variant {
             MethodVariant::Constructor => ForeignTypeInfo {
                 name: "".into(),
-                correspoding_rust_type: dummy_rust_ty.clone(),
+                corresponding_rust_type: dummy_rust_ty.clone(),
             }
             .into(),
             _ => match method.fn_decl.output {
                 syn::ReturnType::Default => ForeignTypeInfo {
                     name: "void".into(),
-                    correspoding_rust_type: dummy_rust_ty.clone(),
+                    corresponding_rust_type: dummy_rust_ty.clone(),
                 }
                 .into(),
                 syn::ReturnType::Type(_, ref rt) => {

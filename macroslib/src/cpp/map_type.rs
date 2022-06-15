@@ -167,8 +167,8 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let direction = self.arg_direction(opt_arg)?;
         let f_info = map_type(self.ctx, &rust_ty, direction, self.arg_ty_span)?;
-        trace!("swig_i_type return {}", f_info.base.correspoding_rust_type);
-        Ok(f_info.base.correspoding_rust_type.ty.clone())
+        trace!("swig_i_type return {}", f_info.base.corresponding_rust_type);
+        Ok(f_info.base.corresponding_rust_type.ty.clone())
     }
     fn swig_from_rust_to_i_type(
         &mut self,
@@ -184,7 +184,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
 
         let (mut conv_deps, conv_code) = self.ctx.conv_map.convert_rust_types(
             rust_ty.to_idx(),
-            f_info.base.correspoding_rust_type.to_idx(),
+            f_info.base.corresponding_rust_type.to_idx(),
             in_var_name,
             out_var_name,
             "#error",
@@ -206,7 +206,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
         let f_info = map_type(self.ctx, &rust_ty, Direction::Incoming, self.arg_ty_span)?;
 
         let (mut conv_deps, conv_code) = self.ctx.conv_map.convert_rust_types(
-            f_info.base.correspoding_rust_type.to_idx(),
+            f_info.base.corresponding_rust_type.to_idx(),
             rust_ty.to_idx(),
             in_var_name,
             out_var_name,
@@ -316,7 +316,7 @@ pub(in crate::cpp) fn map_repr_c_type(
         arg_ty_span,
     )?;
 
-    if fti.cpp_converter.is_some() || fti.base.correspoding_rust_type.to_idx() != rty.to_idx() {
+    if fti.cpp_converter.is_some() || fti.base.corresponding_rust_type.to_idx() != rty.to_idx() {
         return Err(DiagnosticError::new2(
             arg_ty_span,
             format!(

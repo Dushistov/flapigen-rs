@@ -96,7 +96,7 @@ It is impossible to use this Java code:{}\nfor callback types conversion",
                         )
                     })?;
                 f_arg_type.java_converter = None;
-                f_arg_type.base.correspoding_rust_type = jobject_ty.clone();
+                f_arg_type.base.corresponding_rust_type = jobject_ty.clone();
             }
 
             input.push(f_arg_type);
@@ -104,7 +104,7 @@ It is impossible to use this Java code:{}\nfor callback types conversion",
         let output = match method.fn_decl.output {
             syn::ReturnType::Default => ForeignTypeInfo {
                 name: void_sym.into(),
-                correspoding_rust_type: dummy_rust_ty.clone(),
+                corresponding_rust_type: dummy_rust_ty.clone(),
             }
             .into(),
             syn::ReturnType::Type(_, ref ret_ty) => {
@@ -307,7 +307,7 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
                 let real_output_type: RustType = ctx
                     .conv_map
                     .find_or_alloc_rust_type(ret_ty, interface.src_id);
-                let jni_ret_type = &f_method.output.base.correspoding_rust_type;
+                let jni_ret_type = &f_method.output.base.corresponding_rust_type;
                 let (mut conv_deps, out_conv_code) = ctx.conv_map.convert_rust_types(
                     jni_ret_type.to_idx(),
                     real_output_type.to_idx(),
@@ -394,7 +394,7 @@ fn convert_args_for_variadic_function_call(
     for (i, arg) in f_method.input.iter().enumerate() {
         let arg_name = Ident::new(&format!("a{}", i), Span::call_site());
         if let Some(conv_type_str) = JNI_FOR_VARIADIC_C_FUNC_CALL
-            .get(&*arg.as_ref().correspoding_rust_type.normalized_name.as_str())
+            .get(&*arg.as_ref().corresponding_rust_type.normalized_name.as_str())
         {
             let conv_type: TokenStream = syn::parse_str(*conv_type_str).unwrap_or_else(|err| {
                 panic_on_syn_error(

@@ -164,7 +164,7 @@ pub struct {struct_with_funcs} {{
 {method_name}: extern "C" fn({args}_: *const ::std::os::raw::c_void) -> {ret_type},"#,
             method_name = method.name,
             args = args,
-            ret_type = DisplayToTokens(&f_method.output.base.correspoding_rust_type.ty),
+            ret_type = DisplayToTokens(&f_method.output.base.corresponding_rust_type.ty),
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
@@ -253,7 +253,7 @@ impl {trait_name} for {struct_with_funcs} {{"#,
                     .conv_map
                     .find_or_alloc_rust_type(ret_ty, interface.src_id);
                 let (mut conv_deps, conv_code) = ctx.conv_map.convert_rust_types(
-                    f_method.output.base.correspoding_rust_type.to_idx(),
+                    f_method.output.base.corresponding_rust_type.to_idx(),
                     real_output_type.to_idx(),
                     "ret",
                     "ret",
@@ -266,7 +266,7 @@ impl {trait_name} for {struct_with_funcs} {{"#,
         };
         let ret_type = format!(
             "{}",
-            DisplayToTokens(&f_method.output.base.correspoding_rust_type.ty)
+            DisplayToTokens(&f_method.output.base.corresponding_rust_type.ty)
         );
         writeln!(
             &mut code,
@@ -347,7 +347,7 @@ fn find_suitable_ftypes_for_interace_methods(
         let output = match method.fn_decl.output {
             syn::ReturnType::Default => ForeignTypeInfo {
                 name: void_sym.into(),
-                correspoding_rust_type: dummy_rust_ty.clone(),
+                corresponding_rust_type: dummy_rust_ty.clone(),
             }
             .into(),
             syn::ReturnType::Type(_, ref ret_ty) => {

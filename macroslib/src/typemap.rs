@@ -379,7 +379,7 @@ impl PossiblePath {
 #[derive(Debug)]
 pub(crate) struct ForeignTypeInfo {
     pub name: UniqueName,
-    pub correspoding_rust_type: RustType,
+    pub corresponding_rust_type: RustType,
 }
 
 impl AsRef<ForeignTypeInfo> for ForeignTypeInfo {
@@ -486,26 +486,26 @@ impl TypeMap {
 
     pub(crate) fn add_foreign(
         &mut self,
-        correspoding_rty: RustType,
+        corresponding_rty: RustType,
         foreign_name: ForeignTypeName,
     ) -> Result<ForeignType> {
-        trace!("add_foreign: {} / {}", foreign_name, correspoding_rty);
+        trace!("add_foreign: {} / {}", foreign_name, corresponding_rty);
         self.ftypes_storage
-            .alloc_new(foreign_name, correspoding_rty.graph_idx)
+            .alloc_new(foreign_name, corresponding_rty.graph_idx)
     }
 
     pub(crate) fn add_foreign_rust_ty_idx(
         &mut self,
         foreign_name: ForeignTypeName,
-        correspoding_rty: NodeIndex,
+        corresponding_rty: NodeIndex,
     ) -> Result<ForeignType> {
         trace!(
             "add_foreign_rust_ty_idx: {} / {}",
             foreign_name,
-            self[correspoding_rty]
+            self[corresponding_rty]
         );
         self.ftypes_storage
-            .alloc_new(foreign_name, correspoding_rty)
+            .alloc_new(foreign_name, corresponding_rty)
     }
 
     pub(crate) fn alloc_foreign_type(&mut self, ft: ForeignTypeS) -> Result<ForeignType> {

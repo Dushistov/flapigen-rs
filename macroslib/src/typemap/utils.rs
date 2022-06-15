@@ -24,15 +24,15 @@ use crate::{
 
 pub(crate) trait ForeignTypeInfoT {
     fn display(&self) -> &str;
-    fn correspoding_rust_type(&self) -> &RustType;
+    fn corresponding_rust_type(&self) -> &RustType;
 }
 
 impl ForeignTypeInfoT for ForeignTypeInfo {
     fn display(&self) -> &str {
         self.name.display()
     }
-    fn correspoding_rust_type(&self) -> &RustType {
-        &self.correspoding_rust_type
+    fn corresponding_rust_type(&self) -> &RustType {
+        &self.corresponding_rust_type
     }
 }
 
@@ -101,7 +101,7 @@ pub(crate) fn foreign_to_rust_convert_method_inputs<
             .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
         let to: RustType = conv_map.find_or_alloc_rust_type(&to_named_arg.ty, src_id);
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
-            f_from.correspoding_rust_type().to_idx(),
+            f_from.corresponding_rust_type().to_idx(),
             to.to_idx(),
             arg_name.as_ref(),
             arg_name.as_ref(),
@@ -174,7 +174,7 @@ pub(crate) fn rust_to_foreign_convert_method_inputs<
         let from: RustType = conv_map.find_or_alloc_rust_type(&from_named_arg.ty, src_id);
         let (mut cur_deps, cur_code) = conv_map.convert_rust_types(
             from.to_idx(),
-            to_f.correspoding_rust_type().to_idx(),
+            to_f.corresponding_rust_type().to_idx(),
             &arg_name,
             &arg_name,
             func_ret_type,

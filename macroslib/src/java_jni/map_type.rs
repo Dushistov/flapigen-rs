@@ -65,7 +65,7 @@ pub(in crate::java_jni) fn map_type(
         let arg_span = intermediate.conv_code.full_span();
         let inter_ft = map_type(ctx, &rty, direction, arg_span)?;
         if inter_ft.java_converter.is_some()
-            || base_rt != inter_ft.base.correspoding_rust_type.to_idx()
+            || base_rt != inter_ft.base.corresponding_rust_type.to_idx()
         {
             return Err(DiagnosticError::new2(
                 origin_ftype_span,
@@ -90,7 +90,7 @@ pub(in crate::java_jni) fn map_type(
                 } else {
                     format!(
                         "Type '{}' require conversion to type '{}' before usage as Java type",
-                        ctx.conv_map[base_rt], inter_ft.base.correspoding_rust_type
+                        ctx.conv_map[base_rt], inter_ft.base.corresponding_rust_type
                     )
                 },
             ));
@@ -108,7 +108,7 @@ pub(in crate::java_jni) fn map_type(
     let mut fti = JavaForeignTypeInfo {
         base: ForeignTypeInfo {
             name: base_ft_name,
-            correspoding_rust_type: ctx.conv_map[base_rt].clone(),
+            corresponding_rust_type: ctx.conv_map[base_rt].clone(),
         },
         java_converter,
         annotation,
@@ -244,8 +244,8 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
         let f_info = map_type(self.ctx, &rust_ty, self.direction, self.arg_ty_span)?;
-        trace!("swig_i_type return {}", f_info.base.correspoding_rust_type);
-        Ok(f_info.base.correspoding_rust_type.ty.clone())
+        trace!("swig_i_type return {}", f_info.base.corresponding_rust_type);
+        Ok(f_info.base.corresponding_rust_type.ty.clone())
     }
     fn swig_from_rust_to_i_type(
         &mut self,
@@ -261,7 +261,7 @@ impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'a, 'b> {
 
         let (mut conv_deps, conv_code) = self.ctx.conv_map.convert_rust_types(
             rust_ty.to_idx(),
-            f_info.base.correspoding_rust_type.to_idx(),
+            f_info.base.corresponding_rust_type.to_idx(),
             in_var_name,
             out_var_name,
             "#error",
