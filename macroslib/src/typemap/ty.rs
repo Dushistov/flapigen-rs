@@ -158,7 +158,7 @@ pub(crate) struct ForeignTypeS {
     /// specify which foreign module provides this type
     /// it is possible that provided by multiplines modules
     /// for example C++ `std::variant<TypeA, TypeB>
-    pub provides_by_module: Vec<SmolStr>,
+    pub provided_by_module: Vec<SmolStr>,
     pub into_from_rust: Option<ForeignConversionRule>,
     pub from_into_rust: Option<ForeignConversionRule>,
 }
@@ -206,7 +206,7 @@ impl ForeignTypesStorage {
         };
         self.add_new_ftype(ForeignTypeS {
             name: tn,
-            provides_by_module: Vec::new(),
+            provided_by_module: Vec::new(),
             into_from_rust: Some(rule.clone()),
             from_into_rust: Some(rule),
         })
@@ -237,7 +237,7 @@ impl ForeignTypesStorage {
         } else {
             let ftype = ForeignTypeS {
                 name: ftype_name,
-                provides_by_module: Vec::new(),
+                provided_by_module: Vec::new(),
                 into_from_rust: None,
                 from_into_rust: None,
             };

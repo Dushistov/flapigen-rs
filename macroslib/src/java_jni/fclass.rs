@@ -642,7 +642,7 @@ May be you need to use `private constructor = empty;` syntax?",
                     &mut buf,
                     "{}: {}, ",
                     arg_name,
-                    f_type_info.as_ref().correspoding_rust_type.typename()
+                    f_type_info.as_ref().corresponding_rust_type.typename()
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
             }
@@ -712,13 +712,13 @@ May be you need to use `private constructor = empty;` syntax?",
             &JniForeignMethodSignature {
                 output: ForeignTypeInfo {
                     name: "".into(),
-                    correspoding_rust_type: dummy_rust_ty,
+                    corresponding_rust_type: dummy_rust_ty,
                 }
                 .into(),
                 input: vec![JavaForeignTypeInfo {
                     base: ForeignTypeInfo {
                         name: "long".into(),
-                        correspoding_rust_type: jlong_type,
+                        corresponding_rust_type: jlong_type,
                     },
                     java_converter: None,
                     annotation: None,
@@ -806,14 +806,14 @@ fn find_suitable_foreign_types_for_methods(
                 }
                 ForeignTypeInfo {
                     name: empty_symbol.into(),
-                    correspoding_rust_type: dummy_rust_ty.clone(),
+                    corresponding_rust_type: dummy_rust_ty.clone(),
                 }
                 .into()
             }
             _ => match method.fn_decl.output {
                 syn::ReturnType::Default => ForeignTypeInfo {
                     name: "void".into(),
-                    correspoding_rust_type: dummy_rust_ty.clone(),
+                    corresponding_rust_type: dummy_rust_ty.clone(),
                 }
                 .into(),
                 syn::ReturnType::Type(_, ref rt) => {
@@ -833,12 +833,12 @@ fn find_suitable_foreign_types_for_methods(
 }
 
 fn generate_static_method(ctx: &mut JavaContext, mc: &MethodContext) -> Result<()> {
-    let jni_ret_type = mc.f_method.output.base.correspoding_rust_type.typename();
+    let jni_ret_type = mc.f_method.output.base.corresponding_rust_type.typename();
     let (mut deps_code_out, convert_output_code) = foreign_from_rust_convert_method_output(
         ctx.conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        mc.f_method.output.base.correspoding_rust_type.to_idx(),
+        mc.f_method.output.base.corresponding_rust_type.to_idx(),
         mc.ret_name,
         jni_ret_type,
     )?;
@@ -957,7 +957,7 @@ fn generate_method(
     self_variant: SelfTypeVariant,
     this_type_for_method: &RustType,
 ) -> Result<()> {
-    let jni_ret_type = mc.f_method.output.base.correspoding_rust_type.typename();
+    let jni_ret_type = mc.f_method.output.base.corresponding_rust_type.typename();
     let (mut deps_code_in, convert_input_code) = foreign_to_rust_convert_method_inputs(
         ctx.conv_map,
         mc.class.src_id,
@@ -971,7 +971,7 @@ fn generate_method(
         ctx.conv_map,
         mc.class.src_id,
         &mc.method.fn_decl.output,
-        mc.f_method.output.base.correspoding_rust_type.to_idx(),
+        mc.f_method.output.base.corresponding_rust_type.to_idx(),
         mc.ret_name,
         jni_ret_type,
     )?;

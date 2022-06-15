@@ -100,7 +100,7 @@ pub(in crate::cpp) fn generate_interface(
             format!("std::unique_ptr<{}>", interface.name),
             interface.src_id_span(),
         ),
-        provides_by_module: vec![cpp_abs_class_header, "<memory>".into(), "<utility>".into()],
+        provided_by_module: vec![cpp_abs_class_header, "<memory>".into(), "<utility>".into()],
         into_from_rust: None,
         from_into_rust: Some(ForeignConversionRule {
             rust_ty: boxed_trait_rust_ty.to_idx(),
@@ -164,7 +164,7 @@ pub struct {struct_with_funcs} {{
 {method_name}: extern "C" fn({args}_: *const ::std::os::raw::c_void) -> {ret_type},"#,
             method_name = method.name,
             args = args,
-            ret_type = DisplayToTokens(&f_method.output.base.correspoding_rust_type.ty),
+            ret_type = DisplayToTokens(&f_method.output.base.corresponding_rust_type.ty),
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
@@ -253,7 +253,7 @@ impl {trait_name} for {struct_with_funcs} {{"#,
                     .conv_map
                     .find_or_alloc_rust_type(ret_ty, interface.src_id);
                 let (mut conv_deps, conv_code) = ctx.conv_map.convert_rust_types(
-                    f_method.output.base.correspoding_rust_type.to_idx(),
+                    f_method.output.base.corresponding_rust_type.to_idx(),
                     real_output_type.to_idx(),
                     "ret",
                     "ret",
@@ -266,7 +266,7 @@ impl {trait_name} for {struct_with_funcs} {{"#,
         };
         let ret_type = format!(
             "{}",
-            DisplayToTokens(&f_method.output.base.correspoding_rust_type.ty)
+            DisplayToTokens(&f_method.output.base.corresponding_rust_type.ty)
         );
         writeln!(
             &mut code,
@@ -347,7 +347,7 @@ fn find_suitable_ftypes_for_interace_methods(
         let output = match method.fn_decl.output {
             syn::ReturnType::Default => ForeignTypeInfo {
                 name: void_sym.into(),
-                correspoding_rust_type: dummy_rust_ty.clone(),
+                corresponding_rust_type: dummy_rust_ty.clone(),
             }
             .into(),
             syn::ReturnType::Type(_, ref ret_ty) => {
@@ -628,7 +628,7 @@ fn register_rust_type_and_c_type(
 
     ctx.conv_map.alloc_foreign_type(ForeignTypeS {
         name: ForeignTypeName::new(c_type_name, ext_span),
-        provides_by_module: vec![header_file],
+        provided_by_module: vec![header_file],
         into_from_rust: Some(ForeignConversionRule {
             rust_ty: rust_ty.to_idx(),
             intermediate: None,
@@ -691,7 +691,7 @@ fn register_reference(
 
     ctx.conv_map.alloc_foreign_type(ForeignTypeS {
         name: ForeignTypeName::new(cpp_type, (src_id, span)),
-        provides_by_module: vec![c_header_name],
+        provided_by_module: vec![c_header_name],
         into_from_rust: Some(ForeignConversionRule {
             rust_ty: ref_ty.to_idx(),
             intermediate: Some(ForeignConversionIntermediate {

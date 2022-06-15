@@ -177,9 +177,9 @@ pub(in crate::cpp) fn cpp_list_required_includes(
     let mut includes = Vec::<SmolStr>::with_capacity(methods.len());
     for m in methods {
         for p in &mut m.input {
-            includes.extend(mem::take(&mut p.provides_by_module).into_iter());
+            includes.extend(mem::take(&mut p.provided_by_module).into_iter());
         }
-        includes.extend(mem::take(&mut m.output.provides_by_module).into_iter());
+        includes.extend(mem::take(&mut m.output.provided_by_module).into_iter());
     }
 
     // preserve order of includes
@@ -313,7 +313,7 @@ fn test_{name}_layout() {{
         let rty = ctx.conv_map.find_or_alloc_rust_type(&f.ty, src_id);
         let field_fty = map_repr_c_type(ctx, &rty, rty.src_id_span())?;
 
-        for inc in &field_fty.provides_by_module {
+        for inc in &field_fty.provided_by_module {
             includes.insert(inc.clone());
         }
 
@@ -431,7 +431,7 @@ extern "C" {
         syn::ReturnType::Type(_, ref ty) => {
             let rty = ctx.conv_map.find_or_alloc_rust_type(ty, src_id);
             let fti = map_repr_c_type(ctx, &rty, (src_id, rty.ty.span()))?;
-            for inc in &fti.provides_by_module {
+            for inc in &fti.provided_by_module {
                 includes.insert(inc.clone());
             }
             fn_decl_out
@@ -456,7 +456,7 @@ extern "C" {
             FnArg::Default(named_arg) => {
                 let rty = ctx.conv_map.find_or_alloc_rust_type(&named_arg.ty, src_id);
                 let fti = map_repr_c_type(ctx, &rty, (src_id, rty.ty.span()))?;
-                for inc in &fti.provides_by_module {
+                for inc in &fti.provided_by_module {
                     includes.insert(inc.clone());
                 }
                 if i != 0 {

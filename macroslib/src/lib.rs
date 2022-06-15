@@ -734,7 +734,7 @@ impl Generator {
 
         if self.conv_map.is_empty() {
             return Err(DiagnosticError::new_without_src_info(
-                "After merge all \"types maps\" have no convertion code",
+                "After merge all \"types maps\" have no conversion code",
             ));
         }
 

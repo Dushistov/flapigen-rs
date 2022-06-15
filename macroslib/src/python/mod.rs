@@ -185,7 +185,7 @@ impl PythonConfig {
                 enum_info.name.to_string(),
                 (enum_info.src_id, enum_info.name.span()),
             ),
-            provides_by_module: vec![],
+            provided_by_module: vec![],
             into_from_rust: None,
             from_into_rust: None,
         };
@@ -298,7 +298,7 @@ fn generate_method_code(
     } else {
         0
     };
-    let (args_list, mut args_convertions): (Vec<_>, Vec<_>) = method
+    let (args_list, mut args_conversions): (Vec<_>, Vec<_>) = method
         .fn_decl
         .inputs
         .iter()
@@ -307,7 +307,7 @@ fn generate_method_code(
             let named_arg = a
                 .as_named_arg()
                 .map_err(|err| DiagnosticError::from_syn_err(class.src_id, err))?;
-            let (arg_type, arg_convertion) = generate_conversion_for_argument(
+            let (arg_type, arg_conversion) = generate_conversion_for_argument(
                 &conv_map.find_or_alloc_rust_type(&named_arg.ty, class.src_id),
                 method.span(),
                 class.src_id,
@@ -315,13 +315,13 @@ fn generate_method_code(
                 &named_arg.name,
                 true,
             )?;
-            Ok(((&named_arg.name, arg_type), arg_convertion))
+            Ok(((&named_arg.name, arg_type), arg_conversion))
         })
         .collect::<Result<Vec<_>>>()?
         .into_iter()
         .unzip();
-    if let Some(self_convertion) = self_type_conversion(class, method, conv_map)? {
-        args_convertions.insert(0, self_convertion);
+    if let Some(self_conversion) = self_type_conversion(class, method, conv_map)? {
+        args_conversions.insert(0, self_conversion);
     }
     let mut args_list_tokens = args_list
         .into_iter()
@@ -349,7 +349,7 @@ fn generate_method_code(
         class.src_id,
         conv_map,
         quote! {
-            #method_rust_path(#( #args_convertions ),*)
+            #method_rust_path(#( #args_conversions ),*)
         },
     )?;
     let docstring = if !method_name.to_string().starts_with("__") {

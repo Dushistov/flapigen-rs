@@ -77,7 +77,7 @@ struct CppConverter {
 #[derive(Debug)]
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
-    provides_by_module: Vec<SmolStr>,
+    provided_by_module: Vec<SmolStr>,
     input_to_output: bool,
     pub(in crate::cpp) cpp_converter: Option<CppConverter>,
 }
@@ -86,8 +86,8 @@ impl ForeignTypeInfoT for CppForeignTypeInfo {
     fn display(&self) -> &str {
         self.base.name.display()
     }
-    fn correspoding_rust_type(&self) -> &RustType {
-        &self.base.correspoding_rust_type
+    fn corresponding_rust_type(&self) -> &RustType {
+        &self.base.corresponding_rust_type
     }
 }
 
@@ -115,7 +115,7 @@ impl CppForeignTypeInfo {
                 ),
             )
         })?;
-        let mut provides_by_module = ftype.provides_by_module.clone();
+        let mut provided_by_module = ftype.provided_by_module.clone();
         let base_rt;
         let base_ft_name;
         let mut input_to_output = false;
@@ -130,7 +130,7 @@ impl CppForeignTypeInfo {
             let arg_span = intermediate.conv_code.full_span();
             let inter_ft = map_type(ctx, &rty, direction, arg_span)?;
             if inter_ft.cpp_converter.is_some()
-                || base_rt != inter_ft.base.correspoding_rust_type.to_idx()
+                || base_rt != inter_ft.base.corresponding_rust_type.to_idx()
             {
                 return Err(DiagnosticError::new2(
                     origin_ftype_span,
@@ -155,12 +155,12 @@ impl CppForeignTypeInfo {
                     } else {
                         format!(
                             "Type '{}' require conversion to type '{}' before usage as C type",
-                            ctx.conv_map[base_rt], inter_ft.base.correspoding_rust_type
+                            ctx.conv_map[base_rt], inter_ft.base.corresponding_rust_type
                         )
                     },
                 ));
             }
-            provides_by_module.extend_from_slice(&inter_ft.provides_by_module);
+            provided_by_module.extend_from_slice(&inter_ft.provided_by_module);
             base_ft_name = inter_ft.base.name;
             cpp_converter = Some(CppConverter {
                 typename,
@@ -179,9 +179,9 @@ impl CppForeignTypeInfo {
             input_to_output,
             base: ForeignTypeInfo {
                 name: base_ft_name,
-                correspoding_rust_type: ctx.conv_map[base_rt].clone(),
+                corresponding_rust_type: ctx.conv_map[base_rt].clone(),
             },
-            provides_by_module,
+            provided_by_module,
             cpp_converter,
         })
     }
@@ -204,9 +204,9 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
             input_to_output: false,
             base: ForeignTypeInfo {
                 name: x.name,
-                correspoding_rust_type: x.correspoding_rust_type,
+                corresponding_rust_type: x.corresponding_rust_type,
             },
-            provides_by_module: Vec::new(),
+            provided_by_module: Vec::new(),
             cpp_converter: None,
         }
     }
@@ -417,7 +417,7 @@ fn rust_generate_args_with_types(f_method: &CppForeignMethodSignature) -> String
             &mut buf,
             "a{}: {}, ",
             i,
-            f_type_info.as_ref().correspoding_rust_type.typename(),
+            f_type_info.as_ref().corresponding_rust_type.typename(),
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
@@ -464,7 +464,7 @@ fn register_c_type(
             };
             tmap.alloc_foreign_type(ForeignTypeS {
                 name: ForeignTypeName::new(c_name, (src_id, f_ident.span())),
-                provides_by_module: vec![format!("\"{}\"", c_types.header_name).into()],
+                provided_by_module: vec![format!("\"{}\"", c_types.header_name).into()],
                 into_from_rust: Some(rule.clone()),
                 from_into_rust: Some(rule),
             })?;

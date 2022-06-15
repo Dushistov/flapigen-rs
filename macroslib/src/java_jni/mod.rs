@@ -69,8 +69,8 @@ impl ForeignTypeInfoT for JavaForeignTypeInfo {
     fn display(&self) -> &str {
         self.base.name.display()
     }
-    fn correspoding_rust_type(&self) -> &RustType {
-        &self.base.correspoding_rust_type
+    fn corresponding_rust_type(&self) -> &RustType {
+        &self.base.corresponding_rust_type
     }
 }
 
@@ -92,7 +92,7 @@ impl From<ForeignTypeInfo> for JavaForeignTypeInfo {
         JavaForeignTypeInfo {
             base: ForeignTypeInfo {
                 name: x.name,
-                correspoding_rust_type: x.correspoding_rust_type,
+                corresponding_rust_type: x.corresponding_rust_type,
             },
             java_converter: None,
             annotation: None,
@@ -407,7 +407,7 @@ package {package};
                 output: JavaForeignTypeInfo {
                     base: ForeignTypeInfo {
                         name: "void".into(),
-                        correspoding_rust_type: dummy_rust_ty.clone(),
+                        corresponding_rust_type: dummy_rust_ty.clone(),
                     },
                     java_converter: None,
                     annotation: None,
@@ -433,7 +433,7 @@ package {package};
                 f_method.input.push(JavaForeignTypeInfo {
                     base: ForeignTypeInfo {
                         name: "Object".into(),
-                        correspoding_rust_type: dummy_rust_ty.clone(),
+                        corresponding_rust_type: dummy_rust_ty.clone(),
                     },
                     java_converter: None,
                     annotation: None,
