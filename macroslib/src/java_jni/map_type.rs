@@ -71,7 +71,7 @@ pub(in crate::java_jni) fn map_type(
                 origin_ftype_span,
                 format!(
                     "Error during conversion {} for {},\n
-                    intermidiate type '{}' can not directrly converted to Java",
+                    intermediate type '{}' can not directrly converted to Java",
                     base_ft_name,
                     match direction {
                         petgraph::Direction::Outgoing => "output",
