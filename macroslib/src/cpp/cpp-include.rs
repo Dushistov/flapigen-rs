@@ -807,7 +807,7 @@ foreign_typemap!(
         }
     );
     (r_type) CRustVecAccess;
-    (f_type) "CRustVecccess";
+    (f_type) "CRustVecAccess";
 );
 
 foreign_typemap!(
