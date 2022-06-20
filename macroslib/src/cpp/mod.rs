@@ -136,7 +136,7 @@ impl CppForeignTypeInfo {
                     origin_ftype_span,
                     format!(
                         "Error during conversion {} for {},\n
-                    intermediate type '{}' can not directrly converted to C",
+                    intermediate type '{}' can not be directly converted to C",
                         typename,
                         match direction {
                             petgraph::Direction::Outgoing => "output",
