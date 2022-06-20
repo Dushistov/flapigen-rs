@@ -47,7 +47,7 @@ pub(in crate::cpp) fn register_typemap_for_self_type(
     let gen_ty = parse_type_spanned_checked!(span, &mut #ty);
     let this_type_mut_ref = conv_map.find_or_alloc_rust_type(&gen_ty, class.src_id);
 
-    register_intermidiate_pointer_types(
+    register_intermediate_pointer_types(
         conv_map,
         class,
         void_ptr_rust_ty.to_idx(),
@@ -79,7 +79,7 @@ pub(in crate::cpp) fn register_typemap_for_self_type(
     Ok(())
 }
 
-fn register_intermidiate_pointer_types(
+fn register_intermediate_pointer_types(
     conv_map: &mut TypeMap,
     class: &ForeignClassInfo,
     void_ptr_rust_ty: RustTypeIdx,

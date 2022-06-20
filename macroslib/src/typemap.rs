@@ -880,7 +880,7 @@ impl TypeMap {
                         Err(_err) => {
                             println!(
                                 "cargo:warning=can not build path between foreign type
- '{}' / '{}' and it's intermidiate '{}'",
+ '{}' / '{}' and it's intermediate '{}'",
                                 self[*ftype_idx].name, self[*other], self[*inter_ty]
                             );
                             0_usize

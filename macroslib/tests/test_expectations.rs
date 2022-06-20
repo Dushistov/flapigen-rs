@@ -71,8 +71,8 @@ foreign_class!(class Foo {
 }
 
 #[test]
-fn test_foreign_typemap_not_direct_intermidiate() {
-    let name = "test_foreign_typemap_not_direct_intermidiate";
+fn test_foreign_typemap_not_direct_intermediate() {
+    let name = "test_foreign_typemap_not_direct_intermediate";
     let _ = env_logger::try_init();
     for lang in &[ForeignLang::Java, ForeignLang::Cpp] {
         let ret = panic::catch_unwind(|| {

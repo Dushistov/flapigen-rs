@@ -177,7 +177,7 @@ public final class {class_name} {{"#,
             null_annotation_package.is_some(),
         );
 
-        let (ret_type, intermidiate_ret_type, ret_conv_code) = match method.variant {
+        let (ret_type, intermediate_ret_type, ret_conv_code) = match method.variant {
             MethodVariant::StaticMethod => {
                 if let Some(conv) = f_method.output.java_converter.as_ref() {
                     calc_output_conv(&f_method.output, conv, &ret_name, &conv_ret)
@@ -196,10 +196,10 @@ public final class {class_name} {{"#,
             }
             MethodVariant::Constructor => ("long", "long", String::new()),
         };
-        let intermidiate_ret_type_code = if ret_conv_code.is_empty() {
+        let intermediate_ret_type_code = if ret_conv_code.is_empty() {
             &ret_type
         } else {
-            &intermidiate_ret_type
+            &intermediate_ret_type
         };
 
         let need_conversion = !convert_code.is_empty() || !ret_conv_code.is_empty();
@@ -237,11 +237,11 @@ public final class {class_name} {{"#,
                     if ret_type != "void" {
                         writeln!(
                             file,
-                            r#"        {intermidiate_ret_type} {ret_name} = {func_name}({args});{ret_conv_code}"#,
+                            r#"        {intermediate_ret_type} {ret_name} = {func_name}({args});{ret_conv_code}"#,
                             ret_conv_code = ret_conv_code,
                             ret_name = ret_name,
-                            intermidiate_ret_type =
-                                java_code::filter_null_annotation(intermidiate_ret_type_code)
+                            intermediate_ret_type =
+                                java_code::filter_null_annotation(intermediate_ret_type_code)
                                     .trim(),
                             func_name = func_name,
                             args = args_for_call_internal,
@@ -277,9 +277,9 @@ public final class {class_name} {{"#,
                     writeln!(
                         file,
                         r#"
-    private static native {intermidiate_ret_type} {func_name}({args_with_types}){exception_spec};"#,
+    private static native {intermediate_ret_type} {func_name}({args_with_types}){exception_spec};"#,
                         func_name = func_name,
-                        intermidiate_ret_type = intermidiate_ret_type,
+                        intermediate_ret_type = intermediate_ret_type,
                         exception_spec = exception_spec,
                         args_with_types = java_code::args_with_java_types(
                             f_method,
@@ -315,12 +315,12 @@ public final class {class_name} {{"#,
                     writeln!(
                         file,
                         r#"
-        {intermidiate_ret_type} {ret_name} = {func_name}({rust_self_name}{args});{ret_conv_code}"#,
+        {intermediate_ret_type} {ret_name} = {func_name}({rust_self_name}{args});{ret_conv_code}"#,
                         rust_self_name = JAVA_RUST_SELF_NAME,
                         ret_conv_code = ret_conv_code,
                         ret_name = ret_name,
-                        intermidiate_ret_type =
-                            java_code::filter_null_annotation(intermidiate_ret_type_code).trim(),
+                        intermediate_ret_type =
+                            java_code::filter_null_annotation(intermediate_ret_type_code).trim(),
                         func_name = func_name,
                         args = args_for_call_internal,
                     )
@@ -360,8 +360,8 @@ public final class {class_name} {{"#,
                 writeln!(
                     file,
                     r#"
-    private static native {intermidiate_ret_type} {func_name}(long self{args_with_types}){exception_spec};"#,
-                    intermidiate_ret_type = intermidiate_ret_type,
+    private static native {intermediate_ret_type} {func_name}(long self{args_with_types}){exception_spec};"#,
+                    intermediate_ret_type = intermediate_ret_type,
                     exception_spec = exception_spec,
                     func_name = func_name,
                     args_with_types = java_code::args_with_java_types(
@@ -1144,7 +1144,7 @@ fn calc_output_conv<'a>(
     conv_ret: &str,
 ) -> (&'a str, &'a str, String) {
     let ret_type = output.base.name.display();
-    let intermidiate_ret_type = conv.java_transition_type.display();
+    let intermediate_ret_type = conv.java_transition_type.display();
     let conv_code = conv
         .converter
         .replace(FROM_VAR_TEMPLATE, ret_name)
@@ -1158,5 +1158,5 @@ fn calc_output_conv<'a>(
         }
         conv_code.insert(0, '\n');
     }
-    (ret_type, intermidiate_ret_type, conv_code)
+    (ret_type, intermediate_ret_type, conv_code)
 }
