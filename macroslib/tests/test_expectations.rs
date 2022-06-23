@@ -574,8 +574,10 @@ fn collect_code_in_dir(dir_with_code: &Path, exts: &[&str]) -> Result<String, Er
                 .iter()
                 .any(|ext| path.path().to_str().map_or(false, |x| x.ends_with(ext)))
         {
+            code.push_str(format!("<<< generated file: {:?} >>>\n", path.file_name()).as_str());
             code.push_str(&fs::read_to_string(path.path())?);
             code.push('\n');
+            code.push_str(format!(">>> end of file: {:?} <<<\n", path.file_name()).as_str());
         }
     }
     Ok(code)

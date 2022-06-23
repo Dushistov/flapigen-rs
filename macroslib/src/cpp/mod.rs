@@ -311,6 +311,7 @@ struct CppContext<'a> {
     conv_map: &'a mut TypeMap,
     target_pointer_width: usize,
     rust_code: &'a mut Vec<TokenStream>,
+    foreign_code_cache: &'a mut FxHashSet<(SmolStr, String)>,
     common_files: &'a mut FxHashMap<SmolStr, FileWriteCache>,
     generated_foreign_files: &'a mut FxHashSet<PathBuf>,
     class_ext_handlers: &'a ClassExtHandlers,
@@ -330,6 +331,7 @@ impl LanguageGenerator for CppConfig {
     ) -> Result<Vec<TokenStream>> {
         let mut ret = Vec::with_capacity(items.len());
         let mut files = FxHashMap::<SmolStr, FileWriteCache>::default();
+        let mut foreign_code_cache = FxHashSet::<(SmolStr, String)>::default();
         let mut generated_foreign_files = FxHashSet::default();
         {
             let mut ctx = CppContext {
@@ -337,6 +339,7 @@ impl LanguageGenerator for CppConfig {
                 conv_map,
                 target_pointer_width,
                 rust_code: &mut ret,
+                foreign_code_cache: &mut foreign_code_cache,
                 common_files: &mut files,
                 generated_foreign_files: &mut generated_foreign_files,
                 class_ext_handlers: ext_handlers.class_ext_handlers,
@@ -515,15 +518,16 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
             .unwrap_or(true);
 
         if use_fcode {
-            c_header_f
-                .write_all(
-                    fcode
-                        .code
-                        .replace("$RUST_SWIG_USER_NAMESPACE", &ctx.cfg.namespace_name)
-                        .as_bytes(),
-                )
-                .map_err(DiagnosticError::map_any_err_to_our_err)?;
-        }
+            let raw_f_code = fcode
+                .code
+                .replace("$RUST_SWIG_USER_NAMESPACE", &ctx.cfg.namespace_name);
+
+            let cached_code = &mut ctx.foreign_code_cache;
+            if ! cache_f_code(cached_code, &fcode.module_name, &raw_f_code) {
+                c_header_f
+                    .write_all(raw_f_code.as_bytes())
+                    .map_err(DiagnosticError::map_any_err_to_our_err)?;
+            }        }
     }
 
     configure_ftype_rule(&mut rule.ftype_left_to_right, "=>", rule.src_id, &options)?;
@@ -531,6 +535,16 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
 
     ctx.conv_map.merge_conv_rule(rule.src_id, rule)?;
     Ok(())
+}
+
+fn cache_f_code(cached_code: &mut FxHashSet<(SmolStr, String)>, f_module_name: &SmolStr, f_code_str: &String) -> bool {
+    let entry = (f_module_name.clone(), f_code_str.clone());
+    if cached_code.contains(&entry) {
+        return true;
+    }
+
+    cached_code.insert(entry);
+    false
 }
 
 #[derive(Clone, Copy, PartialEq)]
