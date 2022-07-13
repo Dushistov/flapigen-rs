@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use syn::{
     parse::{Parse, ParseStream},
     parse_quote,
@@ -9,7 +9,7 @@ use syn::{
 
 #[derive(Default)]
 pub struct JniCacheMacroCalls {
-    pub calls: HashMap<String, JniFindClass>,
+    pub calls: FxHashMap<String, JniFindClass>,
 }
 
 impl JniCacheMacroCalls {
