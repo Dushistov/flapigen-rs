@@ -1,6 +1,6 @@
 [package]
 name = "flapigen"
-version = "0.6.0-pre12"
+version = "0.6.0-pre13"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 description = "Tool for connecting libraries written in Rust with other languages"
 license = "BSD-3-Clause"
