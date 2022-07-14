@@ -5,3 +5,51 @@ r##"# [ no_mangle ] pub extern "C" fn Foo_f ( this : * mut Foo , ) -> CRustPair4
  let p1 : * mut :: std :: os :: raw :: c_void = < Two >:: box_object ( ret . 1 ) ;
  let mut ret : CRustPair4232mut3232c_void4232mut3232c_void = CRustPair4232mut3232c_void4232mut3232c_void { first : p0 , second : p1 , } ;
  ret }"##;
+
+r##"
+#[no_mangle]
+pub extern "C" fn Foo_g(this: *mut Foo) -> CRustPairi32i32 {
+    let this: &Foo = unsafe { this.as_mut().unwrap() };
+    let mut ret: (i32, i32) = Foo::g(this);
+    let mut p0 = ret.0;
+    let mut p1 = ret.1;
+    let mut ret: CRustPairi32i32 = CRustPairi32i32 {
+        first: p0,
+        second: p1,
+    };
+    ret
+}
+"##;
+
+r##"
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CRustPairi32i32 {
+    first: i32,
+    second: i32,
+}
+"##;
+
+r##"
+#[no_mangle]
+pub extern "C" fn Foo_h(this: *mut Foo) -> CRustPairCRustStrViewCRustStrView {
+    let this: &Foo = unsafe { this.as_mut().unwrap() };
+    let mut ret: (&str, &str) = Foo::h(this);
+    let mut p0: CRustStrView = CRustStrView::from_str(ret.0);
+    let mut p1: CRustStrView = CRustStrView::from_str(ret.1);
+    let mut ret: CRustPairCRustStrViewCRustStrView = CRustPairCRustStrViewCRustStrView {
+        first: p0,
+        second: p1,
+    };
+    ret
+}
+"##;
+
+r##"
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CRustPairCRustStrViewCRustStrView {
+    first: CRustStrView,
+    second: CRustStrView,
+}
+"##;

@@ -11,5 +11,7 @@ foreigner_class!(class Two {
 foreigner_class!(class Foo {
     self_type Foo;
     private constructor = empty;
-    method Foo::f(&self) -> (One, Two);
+    fn Foo::f(&self) -> (One, Two);
+    fn Foo::g(&self) -> (i32, i32);
+    fn Foo::h(&self) -> (&str, &str);
 });

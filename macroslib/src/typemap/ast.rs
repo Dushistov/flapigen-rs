@@ -561,7 +561,7 @@ pub(in crate::typemap) fn is_second_subst_of_first(
     subst_map: &mut TyParamsSubstMap,
 ) -> bool {
     trace!(
-        "is_second_substitude_of_first {} vs {}",
+        "is_second_substitude_of_first begin: {} vs {}",
         DisplayToTokens(ty1),
         DisplayToTokens(ty2)
     );
@@ -662,6 +662,20 @@ pub(in crate::typemap) fn is_second_subst_of_first(
             }
 
             true
+        }
+        (Type::Path(syn::TypePath { path: ref p1, .. }), _)
+            if p1.segments.len() == 1
+                && subst_map
+                    .get(&p1.segments[0].ident)
+                    .map(|s| s.is_none())
+                    .unwrap_or(false) =>
+        {
+            // TODO: rewrite after stabilazation of
+            // https://github.com/rust-lang/rust/issues/53667
+            let subst = subst_map.get_mut(&p1.segments[0].ident).unwrap();
+            assert!(subst.is_none());
+            *subst = Some(ty2.clone());
+            return true;
         }
         _ => {
             let ret = ty1 == ty2;
