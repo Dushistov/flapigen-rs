@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 log = "0.4.6"
 log-panics = "2.0"
-android_logger = { version = "0.11.0", default-features = false }
+android_logger = { version = "0.11.1", default-features = false }
 
 [build-dependencies]
 flapigen = { path = "../macroslib" }
