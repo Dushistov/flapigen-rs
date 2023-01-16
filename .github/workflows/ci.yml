@@ -37,12 +37,12 @@ jobs:
             target: x86_64-pc-windows-msvc
             platform: x64
           - name: x86_64-unknown-linux-gnu (stable)
-            os: ubuntu-latest
+            os: ubuntu-18.04
             rust: stable
             target: x86_64-unknown-linux-gnu
 
           - name: x86_64-unknown-linux-gnu (beta)
-            os: ubuntu-latest
+            os: ubuntu-18.04
             rust: beta
             target: x86_64-unknown-linux-gnu
 
@@ -56,7 +56,7 @@ jobs:
             rust: beta
             target: x86_64-apple-darwin
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: 'recursive'
 
@@ -93,7 +93,7 @@ jobs:
           cmake-version: '3.14.7'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Choose boost version (not ubuntu)
-        if: matrix.os != 'ubuntu-latest'
+        if: matrix.os != 'ubuntu-18.04'
         run: |
           echo 'BOOST_VER=1.66.0'  >> $GITHUB_ENV
         shell: bash
@@ -101,7 +101,7 @@ jobs:
       # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
       # use the lastest boost to work around this bug
       - name: Choose boost version (ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-18.04'
         run: |
           echo 'BOOST_VER=1.73.0'  >> $GITHUB_ENV
         shell: bash
@@ -115,7 +115,7 @@ jobs:
           echo "BOOST_ROOT=$PWD/boost_$BOOST_VER_NAME" >> $GITHUB_ENV
         shell: bash
       - name: Install valgrind for linux
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-18.04'
         run: sudo apt-get -y update && sudo apt-get install -y valgrind
       - name: Install llvm tools on Windows
         if: matrix.os == 'windows-2019'
@@ -144,7 +144,7 @@ jobs:
           echo "SCCACHE_BUCKET=flapigenamd64win" >> $GITHUB_ENV
         shell: bash
       - name: install sccache (linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-18.04'
         run: |
           set -e
           curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl.tar.gz -o sccache.tar.gz
@@ -198,9 +198,9 @@ jobs:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
   doc_tests:
     name: Docs (Detect cases where documentation links don't resolve and such)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - uses: actions-rs/toolchain@v1
         with:
