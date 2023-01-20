@@ -175,57 +175,6 @@ pub trait SwigForeignCLikeEnum {
 }
 
 #[allow(dead_code)]
-pub struct JavaString {
-    string: jstring,
-    chars: *const ::std::os::raw::c_char,
-    env: *mut JNIEnv,
-}
-#[allow(dead_code)]
-impl JavaString {
-    pub fn new(env: *mut JNIEnv, js: jstring) -> JavaString {
-        let chars = if !js.is_null() {
-            unsafe { (**env).GetStringUTFChars.unwrap()(env, js, ::std::ptr::null_mut()) }
-        } else {
-            ::std::ptr::null_mut()
-        };
-        JavaString {
-            string: js,
-            chars: chars,
-            env: env,
-        }
-    }
-    pub fn to_str(&self) -> &str {
-        if !self.chars.is_null() {
-            let s = unsafe { ::std::ffi::CStr::from_ptr(self.chars) };
-            s.to_str().unwrap()
-        } else {
-            ""
-        }
-    }
-}
-
-#[allow(dead_code)]
-impl Drop for JavaString {
-    fn drop(&mut self) {
-        assert!(!self.env.is_null());
-        if !self.string.is_null() {
-            assert!(!self.chars.is_null());
-            unsafe {
-                (**self.env).ReleaseStringUTFChars.unwrap()(self.env, self.string, self.chars)
-            };
-            self.env = ::std::ptr::null_mut();
-            self.chars = ::std::ptr::null_mut();
-        }
-    }
-}
-
-foreign_typemap!(
-    ($p:r_type) JavaString => &str {
-        $out = $p.to_str();
-    };
-);
-
-#[allow(dead_code)]
 struct JavaCallback {
     java_vm: *mut JavaVM,
     this: jobject,
@@ -694,8 +643,14 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
-    ($p:r_type) JavaString <= jstring {
-        $out = JavaString::new(env, $p);
+    ($p:r_type) String <= jstring {
+        $out = from_jstring_std_string($p, env);
+    };
+);
+
+foreign_typemap!(
+    ($p:r_type) String => &str {
+        $out = $p.as_str();
     };
 );
 
@@ -704,6 +659,54 @@ foreign_typemap!(
         $out = from_std_string_jstring($p, env);
     };
 );
+
+#[allow(dead_code)]
+struct JavaUTF16Slice {
+    string: jstring,
+    chars: *const ::std::os::raw::c_ushort,
+    len: usize,
+    env: *mut JNIEnv,
+}
+
+#[allow(dead_code)]
+impl JavaUTF16Slice {
+    pub fn new(env: *mut JNIEnv, js: jstring) -> JavaUTF16Slice {
+        let len = unsafe { (**env).GetStringLength.unwrap()(env, js) };
+        let chars = unsafe { (**env).GetStringChars.unwrap()(env, js, ::std::ptr::null_mut()) };
+        JavaUTF16Slice {
+            string: js,
+            chars,
+            len: len as usize,
+            env,
+        }
+    }
+
+    pub fn as_slice(&self) -> &[u16] {
+        unsafe { ::std::slice::from_raw_parts(self.chars, self.len) }
+    }
+
+    pub fn to_string(self) -> String {
+        String::from_utf16(self.as_slice()).unwrap()
+    }
+}
+
+#[allow(dead_code)]
+impl Drop for JavaUTF16Slice {
+    fn drop(&mut self) {
+        unsafe {
+            (**self.env).ReleaseStringChars.unwrap()(self.env, self.string, self.chars);
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn from_jstring_std_string(js: jstring, env: *mut JNIEnv) -> String {
+    if !js.is_null() {
+        JavaUTF16Slice::new(env, js).to_string()
+    } else {
+        "".to_string()
+    }
+}
 
 #[allow(dead_code)]
 fn from_std_string_jstring(x: String, env: *mut JNIEnv) -> jstring {
@@ -723,8 +726,8 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) &Path <= internal_aliases::JStringPath {
-        let jstr = JavaString::new(env, $p);
-        $out = Path::new(jstr.to_str());
+        let jstr = from_jstring_std_string($p, env);
+        $out = Path::new(jstr.as_str());
     };
     ($p:f_type, option = "NoNullAnnotations", unique_prefix="/*Path*/") <= "/*Path*/String";
     ($p:f_type, option = "NullAnnotations", unique_prefix="/*Path*/") <= "/*Path*/@NonNull String";
@@ -1642,10 +1645,10 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) Option<&str> <= internal_aliases::JStringOptStr {
-        let tmp: JavaString;
+        let tmp: String;
         $out = if !$p.is_null() {
-            tmp = JavaString::new(env, $p);
-            Some(tmp.to_str())
+            tmp = from_jstring_std_string($p, env);
+            Some(tmp.as_str())
         } else {
             None
         };

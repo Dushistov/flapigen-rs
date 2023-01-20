@@ -58,8 +58,8 @@ r##"pub extern "C" fn Java_org_example_Foo_init(
     a1: jstring,
 ) -> jlong {
     let mut a0: i32 = a0;
-    let mut a1: JavaString = JavaString::new(env, a1);
-    let mut a1: &str = a1.to_str();
+    let mut a1: String = from_jstring_std_string(a1, env);
+    let mut a1: &str = a1.as_str();
     let this: Rc<RefCell<Foo>> = Foo::new(a0, a1);
     let this: *const RefCell<Foo> = Rc::into_raw(this);
     this as jlong
@@ -74,7 +74,7 @@ pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f4(
 ) -> () {
     let a0: &RefCell<Foo> = unsafe { jlong_to_pointer::<RefCell<Foo>>(a0).as_mut().unwrap() };
     let mut a0: Ref<Foo> = a0.borrow();
-    let mut a0: &Foo = & a0;
+    let mut a0: &Foo = &a0;
     let this: &TestPassObjectsAsParams = unsafe {
         jlong_to_pointer::<TestPassObjectsAsParams>(this)
             .as_mut()
