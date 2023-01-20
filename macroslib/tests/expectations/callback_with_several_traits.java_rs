@@ -6,10 +6,7 @@ r##"impl OnEvent for JavaCallback {
         let env = self.get_jni_env();
         if let Some(env) = env.env {
             let mut a0: jint = a0;
-            let mut a1: jstring = {
-                let x = ::std::ffi::CString::new(a1).unwrap();
-                unsafe { (**env).NewStringUTF.unwrap()(env, x.as_ptr()) }
-            };
+            let mut a1: jstring = from_std_str_jstring(a1, env);
             unsafe {
                 (**env).CallVoidMethod.unwrap()(env, self.this, self.methods[0usize], a0, a1);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {

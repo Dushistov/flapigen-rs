@@ -28,10 +28,7 @@ r#"impl SomeTrait for JavaCallback {
         swig_assert_eq_size!(::std::os::raw::c_int, i32);
         let env = self.get_jni_env();
         if let Some(env) = env.env {
-            let mut a0: jstring = {
-                let x = ::std::ffi::CString::new(a0).unwrap();
-                unsafe { (**env).NewStringUTF.unwrap()(env, x.as_ptr()) }
-            };
+            let mut a0: jstring = from_std_str_jstring(a0, env);
             unsafe {
                 (**env).CallVoidMethod.unwrap()(env, self.this, self.methods[0usize], a0);
                 if (**env).ExceptionCheck.unwrap()(env) != 0 {
