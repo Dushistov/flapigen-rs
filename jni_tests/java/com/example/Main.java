@@ -44,6 +44,7 @@ import com.example.rust.DropCounter;
 import com.example.rust.LongOperation;
 import com.example.rust.TestReturnInCallback;
 import com.example.rust.ReturnInCallbackTester;
+import com.example.rust.TestStringEncodings;
 
 class Main {
     public static void main(String[] args) {
@@ -135,6 +136,7 @@ class Main {
 	    testPrematureGc();
             testPartialEq();
             testReturnInCallback();
+            testStringEncodings();
         } catch (Throwable ex) {
             ex.printStackTrace();
             System.exit(-1);
@@ -775,5 +777,20 @@ class Main {
     private static void testReturnInCallback() throws Exception {
         TestReturnInCallback cb = new JavaTestReturnInCallback();
         ReturnInCallbackTester.run(cb);
+    }
+
+    private static void testStringEncodings() {
+        TestStringEncodings x = new TestStringEncodings();
+        x.embedded_nulls_in_str("Hello\0World\0");
+        x.four_byte_chars_in_str("𐐷");
+        x.embedded_nulls_in_string("Hello\0World\0");
+        x.four_byte_chars_in_string("𐐷");
+
+        String embedded_nulls_out = x.embedded_nulls_out();
+        System.out.printf("embedded_nulls_out = %s\n", embedded_nulls_out);
+        assert embedded_nulls_out.equals("Hello\0World\0");
+        String four_byte_chars_out = x.four_byte_chars_out();
+        System.out.printf("four_byte_chars_out = %s\n", four_byte_chars_out);
+        assert four_byte_chars_out.equals("𐐷");
     }
 }
