@@ -635,10 +635,7 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) &str => jstring {
-        $out = {
-            let x = ::std::ffi::CString::new($p).unwrap();
-            unsafe { (**env).NewStringUTF.unwrap()(env, x.as_ptr()) }
-        };
+        $out = from_std_str_jstring($p, env);
     };
 );
 
@@ -656,7 +653,7 @@ foreign_typemap!(
 
 foreign_typemap!(
     ($p:r_type) String => jstring {
-        $out = from_std_string_jstring($p, env);
+        $out = from_std_str_jstring(&$p, env);
     };
 );
 
@@ -685,7 +682,7 @@ impl JavaUTF16Slice {
         unsafe { ::std::slice::from_raw_parts(self.chars, self.len) }
     }
 
-    pub fn to_string(self) -> String {
+    pub fn into_string(self) -> String {
         String::from_utf16(self.as_slice()).unwrap()
     }
 }
@@ -702,19 +699,16 @@ impl Drop for JavaUTF16Slice {
 #[allow(dead_code)]
 fn from_jstring_std_string(js: jstring, env: *mut JNIEnv) -> String {
     if !js.is_null() {
-        JavaUTF16Slice::new(env, js).to_string()
+        JavaUTF16Slice::new(env, js).into_string()
     } else {
         "".to_string()
     }
 }
 
 #[allow(dead_code)]
-fn from_std_string_jstring(x: String, env: *mut JNIEnv) -> jstring {
-    let x = x.into_bytes();
-    unsafe {
-        let x = ::std::ffi::CString::from_vec_unchecked(x);
-        (**env).NewStringUTF.unwrap()(env, x.as_ptr())
-    }
+fn from_std_str_jstring(x: &str, env: *mut JNIEnv) -> jstring {
+    let x: Vec<::std::os::raw::c_ushort> = x.encode_utf16().collect();
+    unsafe { (**env).NewString.unwrap()(env, x.as_ptr(), x.len() as i32) }
 }
 
 foreign_typemap!(
@@ -742,7 +736,7 @@ fn vec_string_to_jobject_array(mut arr: Vec<String>, env: *mut JNIEnv) -> jobjec
     };
     assert!(!obj_arr.is_null());
     for (i, r_str) in arr.drain(..).enumerate() {
-        let jstr: jstring = from_std_string_jstring(r_str, env);
+        let jstr: jstring = from_std_str_jstring(&r_str, env);
         assert!(!jstr.is_null());
 
         unsafe {
@@ -1625,7 +1619,7 @@ foreign_typemap!(
 foreign_typemap!(
     ($p:r_type) Option<String> => internal_aliases::JStringOptStr {
         $out = match $p {
-            Some(s) => from_std_string_jstring(s, env),
+            Some(s) => from_std_str_jstring(&s, env),
             None => ::std::ptr::null_mut(),
         };
     };
