@@ -1081,3 +1081,41 @@ class ReturnInCallbackTester {
     }
 }
 );
+
+#[derive(Default)]
+struct TestStringEncodings;
+
+impl TestStringEncodings {
+    fn embedded_nulls_in_str(s: &str) {
+        assert_eq!(dbg!(s), "Hello\0World\0");
+    }
+    fn four_byte_chars_in_str(s: &str) {
+        assert_eq!(dbg!(s), "𐐷");
+    }
+
+    fn embedded_nulls_in_string(s: String) {
+        assert_eq!(dbg!(s), "Hello\0World\0");
+    }
+    fn four_byte_chars_in_string(s: String) {
+        assert_eq!(dbg!(s), "𐐷");
+    }
+
+    fn embedded_nulls_out() -> String {
+        dbg!("Hello\0World\0".to_string())
+    }
+    fn four_byte_chars_out() -> String {
+        dbg!("𐐷".to_string())
+    }
+}
+
+foreign_class!(class TestStringEncodings {
+    self_type TestStringEncodings;
+    constructor TestStringEncodings::default() -> TestStringEncodings;
+
+    fn TestStringEncodings::embedded_nulls_in_str(s: &str);
+    fn TestStringEncodings::four_byte_chars_in_str(s: &str);
+    fn TestStringEncodings::embedded_nulls_in_string(s: String);
+    fn TestStringEncodings::four_byte_chars_in_string(s: String);
+    fn TestStringEncodings::embedded_nulls_out() -> String;
+    fn TestStringEncodings::four_byte_chars_out() -> String;
+});
