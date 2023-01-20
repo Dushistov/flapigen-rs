@@ -5,10 +5,10 @@ pub extern "C" fn Java_org_example_Foo_do_1f7(
     this: jlong,
     a0: internal_aliases::JStringOptStr,
 ) -> () {
-    let tmp: JavaString;
+    let tmp: String;
     let mut a0: Option<&str> = if !a0.is_null() {
-        tmp = JavaString::new(env, a0);
-        Some(tmp.to_str())
+        tmp = from_jstring_std_string(a0, env);
+        Some(tmp.as_str())
     } else {
         None
     };
