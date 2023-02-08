@@ -477,7 +477,7 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
             };
             if let Some(ref constructor_ret_type) = constructor_ret_type {
                 debug!("second constructor, ret type: {:?}", constructor_ret_type);
-                if normalize_type(constructor_ret_type) != normalize_type(&*ret_type) {
+                if normalize_type(constructor_ret_type) != normalize_type(&ret_type) {
                     return Err(syn::Error::new(
                         constructor_ret_type.span(),
                         format!(

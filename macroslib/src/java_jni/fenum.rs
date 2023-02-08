@@ -44,7 +44,7 @@ pub(in crate::java_jni) fn generate_enum(
     );
 
     generate_java_code_for_enum(ctx, fenum)
-        .map_err(|err| DiagnosticError::new(fenum.src_id, fenum.span(), &err))?;
+        .map_err(|err| DiagnosticError::new(fenum.src_id, fenum.span(), err))?;
     generate_rust_code_for_enum(ctx, fenum)?;
 
     let jint_rty = ctx.conv_map.ty_to_rust_type(&parse_type! { jint });
@@ -171,7 +171,7 @@ public enum {enum_name} {{"#,
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
-    file.update_file_if_necessary().map_err(&map_write_err)?;
+    file.update_file_if_necessary().map_err(map_write_err)?;
     Ok(())
 }
 

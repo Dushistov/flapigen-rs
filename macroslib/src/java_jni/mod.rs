@@ -119,7 +119,7 @@ impl JavaConfig {
     fn register_class(&self, ctx: &mut JavaContext, class: &ForeignClassInfo) -> Result<()> {
         class
             .validate_class()
-            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), &err))?;
+            .map_err(|err| DiagnosticError::new(class.src_id, class.span(), err))?;
         if let Some(self_desc) = class.self_desc.as_ref() {
             let constructor_ret_type = &self_desc.constructor_ret_type;
             let this_type_for_method = if_ty_result_return_ok_type(constructor_ret_type)

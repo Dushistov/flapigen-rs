@@ -651,7 +651,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
         let real_output_typename = match method.fn_decl.output {
             syn::ReturnType::Default => "()",
-            syn::ReturnType::Type(_, ref ty) => normalize_type(&*ty),
+            syn::ReturnType::Type(_, ref ty) => normalize_type(ty),
         };
 
         let method_ctx = MethodContext {
@@ -678,10 +678,10 @@ May be you need to use `private constructor = empty;` syntax?",
                         .self_desc
                         .as_ref()
                         .map(|x| &x.constructor_ret_type)
-                        .ok_or_else(&no_this_info)?
+                        .ok_or_else(no_this_info)?
                         .clone();
                     let this_type =
-                        calc_this_type_for_method(ctx.conv_map, class).ok_or_else(&no_this_info)?;
+                        calc_this_type_for_method(ctx.conv_map, class).ok_or_else(no_this_info)?;
                     generate_constructor(
                         ctx,
                         &method_ctx,
@@ -696,7 +696,7 @@ May be you need to use `private constructor = empty;` syntax?",
 
     if have_constructor {
         let this_type: RustType = ctx.conv_map.find_or_alloc_rust_type(
-            &calc_this_type_for_method(ctx.conv_map, class).ok_or_else(&no_this_info)?,
+            &calc_this_type_for_method(ctx.conv_map, class).ok_or_else(no_this_info)?,
             class.src_id,
         );
         let jlong_type = ctx.conv_map.ty_to_rust_type(&parse_type! { jlong });

@@ -178,7 +178,7 @@ public interface {interface_name} {{"#,
     }
 
     file.write_all(b"\n}\n").expect(WRITE_TO_MEM_FAILED_MSG);
-    file.update_file_if_necessary().map_err(&map_write_err)?;
+    file.update_file_if_necessary().map_err(map_write_err)?;
     Ok(())
 }
 
@@ -394,9 +394,9 @@ fn convert_args_for_variadic_function_call(
     for (i, arg) in f_method.input.iter().enumerate() {
         let arg_name = Ident::new(&format!("a{}", i), Span::call_site());
         if let Some(conv_type_str) = JNI_FOR_VARIADIC_C_FUNC_CALL
-            .get(&*arg.as_ref().corresponding_rust_type.normalized_name.as_str())
+            .get(arg.as_ref().corresponding_rust_type.normalized_name.as_str())
         {
-            let conv_type: TokenStream = syn::parse_str(*conv_type_str).unwrap_or_else(|err| {
+            let conv_type: TokenStream = syn::parse_str(conv_type_str).unwrap_or_else(|err| {
                 panic_on_syn_error(
                     "java/jni internal error: can not parse type for variable conversion",
                     conv_type_str.to_string(),
