@@ -26,7 +26,7 @@ use syn::{
     Type,
 };
 
-pub(in crate) use self::subst_map::{TyParamsSubstItem, TyParamsSubstList, TyParamsSubstMap};
+pub(crate) use self::subst_map::{TyParamsSubstItem, TyParamsSubstList, TyParamsSubstMap};
 use super::typemap_macro::expand_macroses;
 use crate::{
     error::{DiagnosticError, SourceIdSpan},
@@ -251,7 +251,7 @@ fn with_normalize_type_cache<T, F: FnOnce(&mut NormalizeTyLifetimesCache) -> T>(
     thread_local!(static INTERNER: RefCell<NormalizeTyLifetimesCache> = {
         RefCell::new(NormalizeTyLifetimesCache::new())
     });
-    INTERNER.with(|interner| f(&mut *interner.borrow_mut()))
+    INTERNER.with(|interner| f(&mut interner.borrow_mut()))
 }
 
 struct StripLifetime;
@@ -509,11 +509,11 @@ impl GenericTypeConv {
                     out.push_str("!(");
                     let mut it = params.iter();
                     if let Some(first) = it.next() {
-                        out.push_str(*first);
+                        out.push_str(first);
                     }
                     for p in it {
                         out.push_str(", ");
-                        out.push_str(*p);
+                        out.push_str(p);
                     }
                     out.push(')');
                 }
@@ -575,7 +575,7 @@ pub(in crate::typemap) fn is_second_subst_of_first(
                 trace!("is_second_substitude_of_first mutable not match");
                 false
             } else {
-                is_second_subst_of_first(&*mut_ty1.elem, &*mut_ty2.elem, subst_map)
+                is_second_subst_of_first(&mut_ty1.elem, &mut_ty2.elem, subst_map)
             }
         }
         (Type::Ptr(ref ptr_ty1), Type::Ptr(ref ptr_ty2)) => {
@@ -583,11 +583,11 @@ pub(in crate::typemap) fn is_second_subst_of_first(
                 trace!("is_second_substitude_of_first mutable not match");
                 false
             } else {
-                is_second_subst_of_first(&*ptr_ty1.elem, &*ptr_ty2.elem, subst_map)
+                is_second_subst_of_first(&ptr_ty1.elem, &ptr_ty2.elem, subst_map)
             }
         }
         (Type::Slice(ref ty1), Type::Slice(ref ty2)) => {
-            is_second_subst_of_first(&*ty1.elem, &*ty2.elem, subst_map)
+            is_second_subst_of_first(&ty1.elem, &ty2.elem, subst_map)
         }
         (Type::Tuple(ref ty1), Type::Tuple(ref ty2)) => {
             if ty1.elems.len() != ty2.elems.len() {
@@ -675,7 +675,7 @@ pub(in crate::typemap) fn is_second_subst_of_first(
             let subst = subst_map.get_mut(&p1.segments[0].ident).unwrap();
             assert!(subst.is_none());
             *subst = Some(ty2.clone());
-            return true;
+            true
         }
         _ => {
             let ret = ty1 == ty2;
@@ -893,7 +893,7 @@ impl<'a> PartialEq for TyParamRef<'_> {
     }
 }
 
-impl<'a> AsRef<Ident> for TyParamRef<'_> {
+impl AsRef<Ident> for TyParamRef<'_> {
     fn as_ref(&self) -> &Ident {
         match self {
             TyParamRef::Ref(x) => x,

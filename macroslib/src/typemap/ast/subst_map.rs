@@ -3,7 +3,7 @@ use smallvec::SmallVec;
 
 struct IdentRef<'a>(&'a Ident);
 
-impl<'a> PartialEq<IdentRef<'_>> for Ident {
+impl PartialEq<IdentRef<'_>> for Ident {
     fn eq(&self, o: &IdentRef<'_>) -> bool {
         self == o.0
     }

@@ -810,12 +810,12 @@ fn get_reference_info_and_inner_type(
         if reference.mutability.is_some() {
             (
                 Reference::MutRef,
-                conv_map.find_or_alloc_rust_type(&*reference.elem, src_id),
+                conv_map.find_or_alloc_rust_type(&reference.elem, src_id),
             )
         } else {
             (
                 Reference::Ref,
-                conv_map.find_or_alloc_rust_type(&*reference.elem, src_id),
+                conv_map.find_or_alloc_rust_type(&reference.elem, src_id),
             )
         }
     } else {
@@ -1274,7 +1274,7 @@ fn if_type_slice_return_elem_type(ty: &Type, accept_mutbl_slice: bool) -> Option
             return None;
         }
         if let syn::Type::Slice(syn::TypeSlice { ref elem, .. }) = **elem {
-            Some(&*elem)
+            Some(elem)
         } else {
             None
         }

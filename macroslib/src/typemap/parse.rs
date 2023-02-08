@@ -375,9 +375,9 @@ fn my_syn_attrs_to_hashmap(src_id: SourceId, attrs: &[syn::Attribute]) -> Result
     Ok(ret)
 }
 
-fn get_swig_code_from_attrs<'a, 'b>(
+fn get_swig_code_from_attrs<'b>(
     item_span: SourceIdSpan,
-    swig_code_attr_name: &'a str,
+    swig_code_attr_name: &str,
     attrs: &'b MyAttrs,
 ) -> Result<&'b str> {
     if let Some(swig_code) = attrs.get(swig_code_attr_name) {

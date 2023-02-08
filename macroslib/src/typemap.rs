@@ -758,10 +758,10 @@ impl TypeMap {
                                 let ty_param_name = trait_bound.ty_param.as_ref().to_string();
                                 let suffix = to_foreigner_hint
                                     .as_str()
-                                    .replace(&ty_param_name, &*rust_ty.normalized_name.as_str());
+                                    .replace(&ty_param_name, rust_ty.normalized_name.as_str());
                                 let foreign_name = to_foreigner_hint
                                     .as_str()
-                                    .replace(&ty_param_name, &*class.name.to_string());
+                                    .replace(&ty_param_name, &class.name.to_string());
                                 new_foreign_types.insert((
                                     edge.to_ty.clone(),
                                     suffix,

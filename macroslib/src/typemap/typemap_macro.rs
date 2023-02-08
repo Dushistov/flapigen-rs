@@ -549,10 +549,10 @@ struct CalcGenericAlias<'a> {
     req_modules: Vec<SmolStr>,
 }
 
-fn build_generic_aliases<'a, 'b>(
+fn build_generic_aliases<'a>(
     src_id: SourceId,
     generic_aliases: &'a [GenericAlias],
-    param_map: &'b TyParamsSubstMap,
+    param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
 ) -> Result<Vec<CalcGenericAlias<'a>>> {
     let mut ret = vec![];
@@ -649,7 +649,7 @@ where
     let mut prev_pos = 0;
     let mut ret = String::with_capacity(code.len());
     loop {
-        match (&code[prev_pos..]).find(char::is_alphabetic) {
+        match (code[prev_pos..]).find(char::is_alphabetic) {
             Some(pos) => {
                 let skip_chunk = &code[prev_pos..(prev_pos + pos)];
                 ret.push_str(skip_chunk);
@@ -658,7 +658,7 @@ where
                     expander(macro_id, params, &mut ret)?;
                     prev_pos += macro_call_end;
                 } else {
-                    match (&code[prev_pos..]).find(|ch: char| !ch.is_alphabetic()) {
+                    match (code[prev_pos..]).find(|ch: char| !ch.is_alphabetic()) {
                         Some(pos) => {
                             let skip_chunk = &code[prev_pos..(prev_pos + pos)];
                             ret.push_str(skip_chunk);
@@ -683,12 +683,12 @@ where
 
 fn find_macro(code: &str) -> Option<(&str, Vec<&str>, usize)> {
     let id_end = code.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))?;
-    let mut next_pos = id_end + (&code[id_end..]).find(|ch: char| !ch.is_whitespace())?;
+    let mut next_pos = id_end + (code[id_end..]).find(|ch: char| !ch.is_whitespace())?;
     if &code[next_pos..=next_pos] != "!" {
         return None;
     }
     next_pos += 1;
-    next_pos = next_pos + (&code[next_pos..]).find(|ch: char| !ch.is_whitespace())?;
+    next_pos = next_pos + (code[next_pos..]).find(|ch: char| !ch.is_whitespace())?;
     if &code[next_pos..=next_pos] != "(" {
         return None;
     }
@@ -696,7 +696,7 @@ fn find_macro(code: &str) -> Option<(&str, Vec<&str>, usize)> {
     let cnt_start = next_pos;
     let mut bracket_counter: usize = 1;
     let mut close_bracket_pos = None;
-    for (idx, ch) in (&code[next_pos..]).chars().enumerate() {
+    for (idx, ch) in code[next_pos..].chars().enumerate() {
         if ch == ')' {
             bracket_counter -= 1;
             if bracket_counter == 0 {
@@ -710,7 +710,7 @@ fn find_macro(code: &str) -> Option<(&str, Vec<&str>, usize)> {
     next_pos += close_bracket_pos?;
     let cnt_end = next_pos;
     let id = &code[0..id_end];
-    let params: Vec<&str> = (&code[cnt_start..cnt_end])
+    let params: Vec<&str> = code[cnt_start..cnt_end]
         .trim()
         .split(',')
         .filter_map(|x| {
@@ -979,7 +979,7 @@ fn call_swig_f_type(
         }
     };
     let ty = if type_name.ends_with("!()") {
-        let alias_name = (&type_name[0..type_name.len() - 3]).trim();
+        let alias_name = type_name[0..type_name.len() - 3].trim();
         let pos = generic_aliases
             .iter()
             .position(|a| a.name == alias_name)
@@ -1074,7 +1074,7 @@ enum TyValueOrRef<'a> {
     Ref(&'a Type),
 }
 
-impl<'a> AsRef<Type> for TyValueOrRef<'_> {
+impl AsRef<Type> for TyValueOrRef<'_> {
     fn as_ref(&self) -> &Type {
         match self {
             TyValueOrRef::Value(ref ty) => ty,
@@ -1083,9 +1083,9 @@ impl<'a> AsRef<Type> for TyValueOrRef<'_> {
     }
 }
 
-fn find_type_param<'a, 'b>(
+fn find_type_param<'b>(
     param_map: &'b TyParamsSubstMap,
-    param: &'a str,
+    param: &str,
     param_span: SourceIdSpan,
 ) -> Result<TyValueOrRef<'b>> {
     if let Some(Some(ty)) = param_map.get(param) {

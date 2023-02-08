@@ -102,7 +102,13 @@ fn do_generate(
         .iter()
         .all(|x| x.variant == MethodVariant::StaticMethod);
 
-    generate_c_header_preamble(ctx, &class_doc_comments, &c_class_type, &mut c_include_f, static_only);
+    generate_c_header_preamble(
+        ctx,
+        &class_doc_comments,
+        &c_class_type,
+        &mut c_include_f,
+        static_only,
+    );
     let plain_class = need_plain_class(class);
     let class_name = if !plain_class {
         format!("{}Wrapper", class.name)
@@ -578,7 +584,7 @@ May be you need to use `private constructor = empty;` syntax?",
                         .self_desc
                         .as_ref()
                         .map(|x| &x.constructor_ret_type)
-                        .ok_or_else(&no_this_info)?
+                        .ok_or_else(no_this_info)?
                         .clone();
                     let this_type = constructor_ret_type.clone();
                     ctx.rust_code.append(&mut generate_constructor(
@@ -599,7 +605,7 @@ May be you need to use `private constructor = empty;` syntax?",
                 .self_desc
                 .as_ref()
                 .map(|x| &x.constructor_ret_type)
-                .ok_or_else(&no_this_info)?,
+                .ok_or_else(no_this_info)?,
         );
 
         let unpack_code = unpack_from_heap_pointer(&this_type, "this", false);
@@ -1077,12 +1083,13 @@ extern "C" {{
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
-    if ! static_only {
-        writeln!(c_include_f,
-        r##"
+    if !static_only {
+        writeln!(
+            c_include_f,
+            r##"
 
     typedef struct {c_class_type} {c_class_type};"##,
-                 c_class_type = c_class_type,
+            c_class_type = c_class_type,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
