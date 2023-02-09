@@ -17,4 +17,4 @@ jni-sys = "0.3.0"
 
 [build-dependencies]
 flapigen = { path = "../macroslib" }
-env_logger = "0.9"
+env_logger = "0.10"
