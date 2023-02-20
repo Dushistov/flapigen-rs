@@ -782,15 +782,15 @@ class Main {
     private static void testStringEncodings() {
         TestStringEncodings x = new TestStringEncodings();
         x.embedded_nulls_in_str("Hello\0World\0");
-        x.four_byte_chars_in_str("𐐷");
+        x.four_byte_chars_in_str("\uD801\uDC37"); // U+10437 as a surrogate pair
         x.embedded_nulls_in_string("Hello\0World\0");
-        x.four_byte_chars_in_string("𐐷");
+        x.four_byte_chars_in_string("\uD801\uDC37");
 
         String embedded_nulls_out = x.embedded_nulls_out();
         System.out.printf("embedded_nulls_out = %s\n", embedded_nulls_out);
         assert embedded_nulls_out.equals("Hello\0World\0");
         String four_byte_chars_out = x.four_byte_chars_out();
         System.out.printf("four_byte_chars_out = %s\n", four_byte_chars_out);
-        assert four_byte_chars_out.equals("𐐷");
+        assert four_byte_chars_out.equals("\uD801\uDC37");
     }
 }
