@@ -1,6 +1,6 @@
 [package]
 name = "flapigen"
-version = "0.6.0-pre13"
+version = "0.6.0"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 description = "Tool for connecting libraries written in Rust with other languages"
 license = "BSD-3-Clause"
@@ -20,7 +20,7 @@ bitflags = "1.0.4"
 lazy_static = "1.0.2"
 smallvec = "1.1.0"
 rustc-hash = "1.0.1"
-smol_str = "0.1.15"
+smol_str = "0.2.0"
 strum = { version = "0.24.0", default-features = false, features = ["derive"] }
 heck = { version = "0.4.0", default-features = false }
 which = { version = "4.2.4", default-features = false }
