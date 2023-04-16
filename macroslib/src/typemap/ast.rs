@@ -98,28 +98,28 @@ impl Display for UniqueName {
     }
 }
 
-impl Into<UniqueName> for SmolStr {
-    fn into(self) -> UniqueName {
-        UniqueName {
-            value: self,
+impl From<SmolStr> for UniqueName {
+    fn from(value: SmolStr) -> Self {
+        Self {
+            value,
             unique_prefix_len: 0,
         }
     }
 }
 
-impl Into<UniqueName> for String {
-    fn into(self) -> UniqueName {
-        UniqueName {
-            value: self.into(),
+impl From<String> for UniqueName {
+    fn from(value: String) -> Self {
+        Self {
+            value: value.into(),
             unique_prefix_len: 0,
         }
     }
 }
 
-impl<'a> Into<UniqueName> for &'a str {
-    fn into(self) -> UniqueName {
-        UniqueName {
-            value: self.into(),
+impl<'a> From<&'a str> for UniqueName {
+    fn from(value: &'a str) -> Self {
+        Self {
+            value: value.into(),
             unique_prefix_len: 0,
         }
     }
@@ -887,8 +887,8 @@ pub(crate) enum TyParamRef<'a> {
     Own(Ident),
 }
 
-impl<'a> PartialEq for TyParamRef<'_> {
-    fn eq<'b>(&self, o: &TyParamRef<'b>) -> bool {
+impl PartialEq for TyParamRef<'_> {
+    fn eq(&self, o: &TyParamRef) -> bool {
         self.as_ref() == o.as_ref()
     }
 }
