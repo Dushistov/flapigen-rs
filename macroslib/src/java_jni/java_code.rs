@@ -148,8 +148,8 @@ pub(in crate::java_jni) fn filter_null_annotation(type_name: &str) -> String {
 }
 
 pub(in crate::java_jni) fn is_primitive_type(type_name: &str) -> bool {
-    match type_name {
-        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double" => true,
-        _ => false,
-    }
+    matches!(
+        type_name,
+        "void" | "boolean" | "byte" | "short" | "int" | "long" | "float" | "double"
+    )
 }
