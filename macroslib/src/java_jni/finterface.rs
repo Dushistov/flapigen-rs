@@ -356,7 +356,7 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
                         #out_conv_code
                         ret
                     }
-                });  
+                });
             }
         }
     }
@@ -393,9 +393,12 @@ fn convert_args_for_variadic_function_call(
     let mut ret = Vec::with_capacity(f_method.input.len());
     for (i, arg) in f_method.input.iter().enumerate() {
         let arg_name = Ident::new(&format!("a{}", i), Span::call_site());
-        if let Some(conv_type_str) = JNI_FOR_VARIADIC_C_FUNC_CALL
-            .get(arg.as_ref().corresponding_rust_type.normalized_name.as_str())
-        {
+        if let Some(conv_type_str) = JNI_FOR_VARIADIC_C_FUNC_CALL.get(
+            arg.as_ref()
+                .corresponding_rust_type
+                .normalized_name
+                .as_str(),
+        ) {
             let conv_type: TokenStream = syn::parse_str(conv_type_str).unwrap_or_else(|err| {
                 panic_on_syn_error(
                     "java/jni internal error: can not parse type for variable conversion",
