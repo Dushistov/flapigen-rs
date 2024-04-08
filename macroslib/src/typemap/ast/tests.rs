@@ -1,5 +1,4 @@
 use super::*;
-use crate::typemap::ty::RustTypeS;
 use proc_macro2::LineColumn;
 use smallvec::smallvec;
 use syn::spanned::Spanned;

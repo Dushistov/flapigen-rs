@@ -816,7 +816,6 @@ impl Parse for ForeignInterfaceParser {
 mod tests {
     use super::*;
     use crate::error::panic_on_syn_error;
-    use quote::ToTokens;
 
     #[test]
     fn test_do_parse_foreigner_class() {
