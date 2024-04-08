@@ -166,7 +166,7 @@ enum {enum_name} {{"#,
         enum_name = enum_info.name,
         doc_comments = enum_doc_comments,
     )
-        .expect(WRITE_TO_MEM_FAILED_MSG);
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
     for (i, item) in enum_info.items.iter().enumerate() {
         //Enums are aligned left, so we pass true to get left aligned comments.
@@ -187,7 +187,7 @@ enum {enum_name} {{"#,
                 ""
             },
         )
-            .expect(WRITE_TO_MEM_FAILED_MSG);
+        .expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     // Need to name it C<enum_name>, else this may conflicts with C++ bindings code.
@@ -199,7 +199,7 @@ typedef enum {enum_name} C{enum_name};
 ",
         enum_name = enum_info.name
     )
-        .expect(WRITE_TO_MEM_FAILED_MSG);
+    .expect(WRITE_TO_MEM_FAILED_MSG);
 
     let mut cnt = file.take_content();
     extend_foreign_enum(enum_info, &mut cnt, ctx.enum_ext_handlers)?;

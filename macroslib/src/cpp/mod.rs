@@ -523,11 +523,12 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
                 .replace("$RUST_SWIG_USER_NAMESPACE", &ctx.cfg.namespace_name);
 
             let cached_code = &mut ctx.foreign_code_cache;
-            if ! cache_f_code(cached_code, &fcode.module_name, &raw_f_code) {
+            if !cache_f_code(cached_code, &fcode.module_name, &raw_f_code) {
                 c_header_f
                     .write_all(raw_f_code.as_bytes())
                     .map_err(DiagnosticError::map_any_err_to_our_err)?;
-            }        }
+            }
+        }
     }
 
     configure_ftype_rule(&mut rule.ftype_left_to_right, "=>", rule.src_id, &options)?;
@@ -537,7 +538,11 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
     Ok(())
 }
 
-fn cache_f_code(cached_code: &mut FxHashSet<(SmolStr, String)>, f_module_name: &SmolStr, f_code_str: &String) -> bool {
+fn cache_f_code(
+    cached_code: &mut FxHashSet<(SmolStr, String)>,
+    f_module_name: &SmolStr,
+    f_code_str: &String,
+) -> bool {
     let entry = (f_module_name.clone(), f_code_str.clone());
     if cached_code.contains(&entry) {
         return true;
