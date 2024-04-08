@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     error::panic_on_syn_error,
-    typemap::{ast::GenericTypeConv, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE},
+    typemap::{FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE},
 };
 use quote::quote;
 use syn::parse_quote;

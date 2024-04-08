@@ -1258,7 +1258,6 @@ fn try_build_path(
 mod tests {
     use super::*;
     use crate::{source_registry::SourceRegistry, types::SelfTypeDesc, SourceCode};
-    use proc_macro2::Span;
 
     #[test]
     fn test_try_build_path() {
