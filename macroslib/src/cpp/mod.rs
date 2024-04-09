@@ -83,9 +83,6 @@ struct CppForeignTypeInfo {
 }
 
 impl ForeignTypeInfoT for CppForeignTypeInfo {
-    fn display(&self) -> &str {
-        self.base.name.display()
-    }
     fn corresponding_rust_type(&self) -> &RustType {
         &self.base.corresponding_rust_type
     }
@@ -214,9 +211,6 @@ impl From<ForeignTypeInfo> for CppForeignTypeInfo {
 
 impl ForeignMethodSignature for CppForeignMethodSignature {
     type FI = CppForeignTypeInfo;
-    fn output(&self) -> &dyn ForeignTypeInfoT {
-        &self.output.base
-    }
     fn input(&self) -> &[CppForeignTypeInfo] {
         &self.input[..]
     }

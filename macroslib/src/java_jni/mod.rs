@@ -66,9 +66,6 @@ struct JavaForeignTypeInfo {
 }
 
 impl ForeignTypeInfoT for JavaForeignTypeInfo {
-    fn display(&self) -> &str {
-        self.base.name.display()
-    }
     fn corresponding_rust_type(&self) -> &RustType {
         &self.base.corresponding_rust_type
     }
@@ -107,9 +104,6 @@ struct JniForeignMethodSignature {
 
 impl ForeignMethodSignature for JniForeignMethodSignature {
     type FI = JavaForeignTypeInfo;
-    fn output(&self) -> &dyn ForeignTypeInfoT {
-        &self.output
-    }
     fn input(&self) -> &[JavaForeignTypeInfo] {
         &self.input[..]
     }
