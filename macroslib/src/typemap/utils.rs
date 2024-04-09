@@ -23,14 +23,10 @@ use crate::{
 };
 
 pub(crate) trait ForeignTypeInfoT {
-    fn display(&self) -> &str;
     fn corresponding_rust_type(&self) -> &RustType;
 }
 
 impl ForeignTypeInfoT for ForeignTypeInfo {
-    fn display(&self) -> &str {
-        self.name.display()
-    }
     fn corresponding_rust_type(&self) -> &RustType {
         &self.corresponding_rust_type
     }
@@ -38,7 +34,6 @@ impl ForeignTypeInfoT for ForeignTypeInfo {
 
 pub(crate) trait ForeignMethodSignature {
     type FI: ForeignTypeInfoT;
-    fn output(&self) -> &dyn ForeignTypeInfoT;
     fn input(&self) -> &[Self::FI];
 }
 
