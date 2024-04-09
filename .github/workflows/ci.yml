@@ -12,7 +12,8 @@ env:
   RUST_BACKTRACE: 1
   RUSTUP_MAX_RETRIES: 10
   CARGO_NET_RETRY: 10
-  SCCACHE_VER: "v0.3.0"
+  SCCACHE_VER: "v0.7.7"
+  SCCACHE_REGION: "auto"
 
 jobs:
   test:
