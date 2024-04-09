@@ -441,6 +441,30 @@ TEST(TestWorkWithVec, smokeTest)
     }
 }
 
+TEST(TestWorkWithVec, workWithEmptyVecs)
+{
+    RustVecu32 vec_u32;
+    ASSERT_EQ(0, vec_u32.size());
+    const auto c_vec_u32 = vec_u32.release();
+    CRustVecu32_free(c_vec_u32);
+
+    RustForeignVecFoo vec_foo;
+    ASSERT_EQ(0, vec_foo.size());
+    vec_foo.push(Foo{ 17, "ABC" });
+
+    ASSERT_EQ(1, vec_foo.size());
+    EXPECT_EQ(17, vec_foo[0].f(0, 0));
+    EXPECT_EQ(std::string("ABC"), vec_foo[0].getName());
+
+    vec_foo.push(Foo{ 18, "DEBUG" });
+
+    ASSERT_EQ(2, vec_foo.size());
+    EXPECT_EQ(17, vec_foo[0].f(0, 0));
+    EXPECT_EQ(std::string("ABC"), vec_foo[0].getName());
+    EXPECT_EQ(18, vec_foo[1].f(0, 0));
+    EXPECT_EQ(std::string("DEBUG"), vec_foo[1].getName());
+}
+
 TEST(TestWorkWithVec, assign)
 {
     const size_t N = 2000;
