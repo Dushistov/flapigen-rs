@@ -432,7 +432,7 @@ fn register_c_type(
         let (f_ident, c_name) = match c_type {
             CItem::Struct(ref s) => (&s.ident, format!("struct {}", s.ident)),
             CItem::Union(ref u) => (&u.ident, format!("union {}", u.ident)),
-            CItem::Fn(_) => continue,
+            CItem::Fn(_) | CItem::Static(_) => continue,
         };
         if fcode.is_item_defined(&c_name) {
             continue;
