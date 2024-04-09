@@ -61,6 +61,7 @@ pub(crate) enum CItem {
     Struct(syn::ItemStruct),
     Union(syn::ItemUnion),
     Fn(syn::ItemFn),
+    Static(syn::ItemStatic),
 }
 
 #[derive(Debug, Clone, PartialEq)]

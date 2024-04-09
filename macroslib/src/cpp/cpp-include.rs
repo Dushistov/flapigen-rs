@@ -954,7 +954,6 @@ pub struct CRustForeignVec {
     data: *const ::std::os::raw::c_void,
     len: usize,
     capacity: usize,
-    step: usize,
 }
 
 #[allow(dead_code)]
@@ -968,7 +967,6 @@ impl CRustForeignVec {
             data,
             len,
             capacity,
-            step: ::std::mem::size_of::<T>(),
         }
     }
 }
@@ -981,8 +979,6 @@ fn push_foreign_class_to_vec<T: SwigForeignClass>(
 ) {
     assert!(!vec.is_null());
     let vec: &mut CRustForeignVec = unsafe { &mut *vec };
-    assert!(vec.len == 0 || ::std::mem::size_of::<T>() == vec.step);
-    vec.step = ::std::mem::size_of::<T>();
     let mut v = unsafe { Vec::from_raw_parts(vec.data as *mut T, vec.len, vec.capacity) };
     v.push(T::unbox_object(elem));
     vec.data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
@@ -999,7 +995,6 @@ fn remove_foreign_class_from_vec<T: SwigForeignClass>(
 ) -> *mut ::std::os::raw::c_void {
     assert!(!vec.is_null());
     let vec: &mut CRustForeignVec = unsafe { &mut *vec };
-    assert_eq!(::std::mem::size_of::<T>(), vec.step);
     let mut v = unsafe { Vec::from_raw_parts(vec.data as *mut T, vec.len, vec.capacity) };
     let elem: T = v.remove(index);
     vec.data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
@@ -1012,7 +1007,6 @@ fn remove_foreign_class_from_vec<T: SwigForeignClass>(
 #[allow(dead_code)]
 #[inline]
 fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec) {
-    assert_eq!(::std::mem::size_of::<T>(), v.step);
     let v = unsafe { Vec::from_raw_parts(v.data as *mut T, v.len, v.capacity) };
     drop(v);
 }
@@ -1026,7 +1020,6 @@ foreign_typemap!(
             data: *const ::std::os::raw::c_void,
             len: usize,
             capacity: usize,
-            step: usize,
         });
     (r_type) CRustForeignVec;
     (f_type) "CRustForeignVec";
@@ -1037,6 +1030,7 @@ foreign_typemap!(
     generic_alias!(CForeignVecFree = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _free));
     generic_alias!(CForeignVecPush = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _push));
     generic_alias!(CForeignVecRemove = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _remove));
+    generic_alias!(CForeignVecElemSize = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _ELEM_SIZE));
 
     define_c_type!(
         module = "CForeignVecModule!().h";
@@ -1057,6 +1051,8 @@ foreign_typemap!(
         pub extern "C" fn CForeignVecRemove!()(v: *mut CRustForeignVec, idx: usize) -> *mut ::std::os::raw::c_void {
             remove_foreign_class_from_vec::<swig_subst_type!(T)>(v, idx)
         }
+        #[no_mangle]
+        pub static CForeignVecElemSize!() : usize = ::std::mem::size_of::<swig_subst_type!(T)>();
     );
 
     foreign_code!(module = "CForeignVecModule!().h";
@@ -1066,7 +1062,7 @@ foreign_typemap!(
 #include "rust_foreign_vec_impl.hpp"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
-using CForeignVecModule!() = RustForeignVec<swig_f_type!(&T, output), CRustForeignVec, CForeignVecFree!(), CForeignVecPush!(), CForeignVecRemove!()>;
+using CForeignVecModule!() = RustForeignVec<swig_f_type!(&T, output), CRustForeignVec, CForeignVecFree!(), CForeignVecPush!(), CForeignVecRemove!(), CForeignVecElemSize!()>;
 }
 #endif
 "##);

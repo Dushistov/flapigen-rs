@@ -197,27 +197,40 @@ pub(in crate::cpp) fn generate_c_type(
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
 
+    fn is_item_defined(ctx: &mut CppContext, module_name: &SmolStr, item: &str) -> bool {
+        let common_files = &mut ctx.common_files;
+        let out: &mut FileWriteCache = file_for_module!(ctx, common_files, module_name);
+        out.is_item_defined(item)
+    }
+    fn define_item(ctx: &mut CppContext, module_name: &SmolStr, item: String) {
+        let common_files = &mut ctx.common_files;
+        let out: &mut FileWriteCache = file_for_module!(ctx, common_files, module_name);
+        out.define_item(item);
+    }
+
+    let module_name = &c_types.header_name;
     for c_type in &c_types.items {
         let ctype: &dyn CItemDescriptor = match c_type {
             CItem::Struct(ref s) => s,
             CItem::Union(ref u) => u,
             CItem::Fn(ref f) => {
                 let fn_id = format!("fn {}", f.sig.ident);
-                let module_name = &c_types.header_name;
-                {
-                    let common_files = &mut ctx.common_files;
-                    let out: &mut FileWriteCache = file_for_module!(ctx, common_files, module_name);
-                    if out.is_item_defined(&fn_id) {
-                        continue;
-                    }
+                if is_item_defined(ctx, &module_name, &fn_id) {
+                    continue;
                 }
                 add_func_forward_decl(ctx, f, src_id, module_name)?;
                 ctx.rust_code.push(f.into_token_stream());
-                {
-                    let common_files = &mut ctx.common_files;
-                    let out: &mut FileWriteCache = file_for_module!(ctx, common_files, module_name);
-                    out.define_item(fn_id);
+                define_item(ctx, &module_name, fn_id);
+                continue;
+            }
+            CItem::Static(ref s) => {
+                let s_id = format!("static {}", s.ident);
+                if is_item_defined(ctx, &module_name, &s_id) {
+                    continue;
                 }
+                add_const_forward_decl(ctx, s, src_id, module_name)?;
+                ctx.rust_code.push(s.into_token_stream());
+                define_item(ctx, &module_name, s_id);
                 continue;
             }
         };
@@ -396,6 +409,52 @@ extern "C" {
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     file_out.define_item(s_id);
+    Ok(())
+}
+
+fn add_const_forward_decl(
+    ctx: &mut CppContext,
+    static_: &syn::ItemStatic,
+    src_id: SourceId,
+    c_type_header_name: &SmolStr,
+) -> Result<(), DiagnosticError> {
+    use std::io::Write;
+
+    {
+        let common_files = &mut ctx.common_files;
+        let out: &mut FileWriteCache = file_for_module!(ctx, common_files, c_type_header_name);
+        out.write_all(
+            br##"
+#ifdef __cplusplus
+extern "C" {
+#endif
+"##,
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+    }
+
+    let rty = ctx.conv_map.find_or_alloc_rust_type(&static_.ty, src_id);
+    let fti = map_repr_c_type(ctx, &rty, (src_id, rty.ty.span()))?;
+
+    let common_files = &mut ctx.common_files;
+    let out: &mut FileWriteCache = file_for_module!(ctx, common_files, c_type_header_name);
+
+    write!(
+        out,
+        "extern const {f_ty} {name};\n",
+        f_ty = fti.base.name.display(),
+        name = static_.ident
+    )
+    .expect(WRITE_TO_MEM_FAILED_MSG);
+
+    out.write_all(
+        br##"
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+"##,
+    )
+    .expect(WRITE_TO_MEM_FAILED_MSG);
     Ok(())
 }
 

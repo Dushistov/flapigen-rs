@@ -381,7 +381,23 @@ impl syn::parse::Parse for CItemsList {
 
                     types.push(CItem::Fn(f));
                 }
-                _ => return Err(syn::Error::new(item.span(), "Expect struct or union here")),
+                syn::Item::Static(s) => {
+                    let mangle_attr: syn::Attribute = parse_quote! { #[no_mangle] };
+                    if !s.attrs.iter().any(|a| *a == mangle_attr) {
+                        return Err(syn::Error::new(
+                            s.span(),
+                            "static has no #[no_mangle] attribute",
+                        ));
+                    }
+
+                    types.push(CItem::Static(s));
+                }
+                _ => {
+                    return Err(syn::Error::new(
+                        item.span(),
+                        "Expect struct or union or function or static here",
+                    ))
+                }
             }
         }
         Ok(CItemsList(types))
