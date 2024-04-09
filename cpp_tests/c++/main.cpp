@@ -64,7 +64,6 @@ static void c_simple_cb(int32_t a, char b, void *opaque)
     assert(opaque != nullptr);
     const int tag = *static_cast<int *>(opaque);
     ASSERT_EQ(17, tag);
-    printf("!!! a %d, b: %d, tag %d\n", static_cast<int>(a), b, tag);
     ++c_simple_cb_counter;
 }
 
