@@ -63,14 +63,13 @@ public:
 private:
     void free_mem() noexcept
     {
-        if (this->data != nullptr) {
-            FreeFunc(*this);
-            reset(*this);
-        }
+        FreeFunc(*this);
+        reset(*this);
     }
     static void reset(RustVec &o) noexcept
     {
-        o.data = nullptr;
+        // Rust Vec::new uses NonNull::danling with similar value
+        o.data = reinterpret_cast<value_type *>(std::alignment_of<value_type>::value);
         o.len = 0;
         o.capacity = 0;
     }
