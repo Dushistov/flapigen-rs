@@ -1,5 +1,6 @@
 #define _USE_MATH_DEFINES // for C++
 #include <atomic>
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
