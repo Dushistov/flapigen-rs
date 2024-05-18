@@ -206,11 +206,11 @@ class Main {
 
     private static void testDateTime() {
 	{
+	    final Date today = Calendar.getInstance().getTime();
 	    final Date now = Foo.now();
 	    final Date nowChrono = Foo.chrono_now();
 	    final DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
 	    System.out.println("now: " + df.format(now));
-	    final Date today = Calendar.getInstance().getTime();
 	    System.out.println("now: " + now);
 	    System.out.println("today: " + today);
 	    assert Math.abs(today.getTime() - now.getTime()) < 2000;
