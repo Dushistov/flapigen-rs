@@ -48,12 +48,12 @@ jobs:
             target: x86_64-unknown-linux-gnu
 
           - name: x86_64-apple-darwin (stable)
-            os: macos-latest
+            os: macos-13
             rust: stable
             target: x86_64-apple-darwin
 
           - name: x86_64-apple-darwin (beta)
-            os: macos-latest
+            os: macos-13
             rust: beta
             target: x86_64-apple-darwin
     steps:
@@ -78,7 +78,7 @@ jobs:
           override: true
           components: rustfmt
           default: true
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.7.8'
           architecture: ${{ matrix.platform || 'x64' }}
@@ -128,7 +128,7 @@ jobs:
           echo "c:\\llvm-binary\\bin" >> $GITHUB_PATH
         shell: bash
       - name: install sccache (macos)
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-13'
         run: |
           set -e
           brew install sccache
