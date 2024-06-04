@@ -1,4 +1,6 @@
-# flapigen [![Build Status](https://github.com/Dushistov/flapigen-rs/workflows/CI/badge.svg)](https://github.com/Dushistov/flapigen-rs/actions?query=workflow%3ACI+branch%3Amaster) [![License](https://img.shields.io/badge/license-BSD-green.svg)](https://github.com/Dushistov/flapigen-rs/blob/master/LICENSE) [![Rust Documentation](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/flapigen)
+# flapigen [![Build Status](https://github.com/Dushistov/flapigen-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/Dushistov/flapigen-rs/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-BSD-green.svg)](https://github.com/Dushistov/flapigen-rs/blob/master/LICENSE) [![Rust Documentation](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/flapigen)
+
+
 
 Tool for connecting programs or libraries written in Rust with other languages.
 Foreign language api generator - flapigen. Former name rust_swig was changed to not confuse
