@@ -12,10 +12,10 @@ crate-type = ["cdylib"]
 [dependencies]
 log = "0.4.6"
 chrono = "0.4.6"
-env_logger = "0.10.0"
+env_logger = "0.11.3"
 
 [build-dependencies]
-env_logger = "0.10.0"
+env_logger = "0.11.3"
 log = "0.4.6"
 flapigen = { path = "../macroslib" }
-bindgen = { version = "0.65.1", default-features = false, features = ["logging", "runtime", "which-rustfmt"] }
+bindgen = { version = "0.69.4", default-features = false, features = ["logging", "runtime", "which-rustfmt"] }

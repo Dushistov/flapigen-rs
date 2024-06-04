@@ -16,7 +16,7 @@ quote = "1.0"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 log = "0.4.6"
 petgraph = { version = "0.6.0", default-features = false }
-bitflags = "1.0.4"
+bitflags = "2.5.0"
 lazy_static = "1.0.2"
 smallvec = "1.1.0"
 rustc-hash = "1.0.1"
@@ -26,7 +26,7 @@ heck = { version = "0.4.0", default-features = false }
 which = { version = "4.2.4", default-features = false }
 
 [dev-dependencies]
-env_logger = "0.10.0"
+env_logger = "0.11.3"
 pulldown-cmark = "0.9.1"
 tempfile = "3.0"
 jni-sys = "0.3.0"
