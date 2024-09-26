@@ -8,7 +8,7 @@ keywords = ["swig", "java", "jni", "ffi", "cxx"]
 repository = "https://github.com/Dushistov/flapigen-rs"
 documentation = "https://docs.rs/flapigen"
 readme = "../README.md"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 syn = { version = "1.0.12", features = ["full", "extra-traits", "visit-mut", "visit"] }
