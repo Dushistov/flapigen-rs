@@ -13,8 +13,8 @@ rust-version = "1.82.0"
 
 [dependencies]
 syn = { version = "2.0.87", features = ["full", "extra-traits", "visit-mut", "visit"] }
-quote = "1.0"
-proc-macro2 = { version = "1.0", features = ["span-locations"] }
+quote = "1.0.37"
+proc-macro2 = { version = "1.0.83", features = ["span-locations"] }
 log = "0.4.6"
 petgraph = { version = "0.6.0", default-features = false }
 bitflags = "2.5.0"
@@ -26,7 +26,7 @@ heck = { version = "0.5.0", default-features = false }
 which = { version = "4.2.4", default-features = false }
 
 [dev-dependencies]
-env_logger = "0.11.3"
+env_logger = { version = "0.11.3", default-features = false }
 pulldown-cmark = "0.9.1"
 tempfile = "3.0"
 jni-sys = "0.3.0"
