@@ -2,7 +2,7 @@
 name = "cpp-example-rust-part"
 version = "0.1.0"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
-edition = "2018"
+edition = "2021"
 build = "build.rs"
 
 # ANCHOR: cargo_lib_section

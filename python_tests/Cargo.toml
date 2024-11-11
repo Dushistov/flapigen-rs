@@ -3,7 +3,7 @@ name = "flapigen_test_python"
 version = "0.1.0"
 authors = ["Adam Rzepka <adam@simteract.com>"]
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 
 [lib]
 name = "flapigen_test_python"
