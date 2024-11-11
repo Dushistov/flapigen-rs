@@ -10,7 +10,7 @@ name = "flapigen_test"
 crate-type = ["staticlib"]
 
 [build-dependencies]
-env_logger = "0.11.3"
+env_logger = { version = "0.11.3", default-features = false }
 log = "0.4.6"
 flapigen = { path = "../macroslib" }
 
