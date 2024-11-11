@@ -1012,6 +1012,7 @@ foreign_typemap!(
     ($p:r_type) <T> impl FnOnce(T) <= CFnOnce!()
     {
         $out_no_type = move |x| {
+            let _ = & $p;
             swig_from_rust_to_i_type!(T, x, x)
             ($p.cb)(x, $p.ctx);
         };

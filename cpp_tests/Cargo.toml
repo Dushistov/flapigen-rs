@@ -3,7 +3,7 @@ name = "flapigen_test_cpp"
 version = "0.1.0"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 
 [lib]
 name = "flapigen_test"

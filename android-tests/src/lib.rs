@@ -16,7 +16,7 @@ impl Session {
         #[cfg(target_os = "android")]
         android_logger::init_once(
             android_logger::Config::default()
-                .with_min_level(log::Level::Debug)
+                .with_max_level(log::LevelFilter::Debug)
                 .with_tag("Hello"),
         );
         log_panics::init(); // log panics rather than printing them

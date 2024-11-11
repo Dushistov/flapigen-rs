@@ -3,7 +3,7 @@ name = "flapigen-android-tests"
 version = "0.0.1"
 authors = ["Evgeniy A. Dushistov <dushistov@mail.ru>"]
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 
 [lib]
 name = "mobcore"
