@@ -1,9 +1,8 @@
-use lazy_static::lazy_static;
 use petgraph::Direction;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use rustc_hash::FxHashMap;
-use std::io::Write;
+use std::{io::Write, sync::LazyLock};
 use syn::{spanned::Spanned, Ident};
 
 use super::{
@@ -371,16 +370,15 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
     Ok(())
 }
 
-lazy_static! {
-    static ref JNI_FOR_VARIADIC_C_FUNC_CALL: FxHashMap<&'static str, &'static str> = {
+static JNI_FOR_VARIADIC_C_FUNC_CALL: LazyLock<FxHashMap<&'static str, &'static str>> =
+    LazyLock::new(|| {
         let mut m = FxHashMap::default();
         m.insert("jboolean", "::std::os::raw::c_uint");
         m.insert("jbyte", "::std::os::raw::c_int");
         m.insert("jshort", "::std::os::raw::c_int");
         m.insert("jfloat", "f64");
         m
-    };
-}
+    });
 
 // To use `C` function with variable number of arguments,
 // we need automatic type conversion, see
