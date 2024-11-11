@@ -28,7 +28,7 @@ pub(in crate::java_jni) fn generate_enum(
 ) -> Result<()> {
     let enum_name = &fenum.name;
     trace!("generate_enum: enum {}", enum_name);
-    if (fenum.items.len() as u64) >= (i32::max_value() as u64) {
+    if (fenum.items.len() as u64) >= (i32::MAX as u64) {
         return Err(DiagnosticError::new(
             fenum.src_id,
             fenum.span(),
@@ -178,7 +178,7 @@ public enum {enum_name} {{"#,
 fn generate_rust_code_for_enum(ctx: &mut JavaContext, fenum: &ForeignEnumInfo) -> Result<()> {
     let mut arms_to_jint = Vec::with_capacity(fenum.items.len());
     let mut arms_from_jint = Vec::with_capacity(fenum.items.len());
-    assert!((fenum.items.len() as u64) <= u64::from(i32::max_value() as u32));
+    assert!((fenum.items.len() as u64) <= u64::from(i32::MAX as u32));
     for (i, item) in fenum.items.iter().enumerate() {
         let item_name = &item.rust_name;
         let idx = i as i32;

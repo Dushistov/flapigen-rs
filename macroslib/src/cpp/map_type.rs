@@ -145,7 +145,7 @@ struct CppContextForArg<'a, 'b> {
     direction: Direction,
 }
 
-impl<'a, 'b> CppContextForArg<'a, 'b> {
+impl CppContextForArg<'_, '_> {
     fn arg_direction(&self, param1: Option<&str>) -> Result<Direction> {
         match param1 {
             Some("output") => Ok(Direction::Outgoing),
@@ -153,13 +153,13 @@ impl<'a, 'b> CppContextForArg<'a, 'b> {
             None => Ok(self.direction),
             Some(param) => Err(DiagnosticError::new2(
                 self.arg_ty_span,
-                format!("Invalid argument '{}' for swig_f_type", param),
+                format!("Invalid argument '{param}' for swig_f_type"),
             )),
         }
     }
 }
 
-impl<'a, 'b> TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'a, 'b> {
+impl TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'_, '_> {
     fn swig_i_type(&mut self, ty: &syn::Type, opt_arg: Option<&str>) -> Result<syn::Type> {
         let rust_ty = self
             .ctx

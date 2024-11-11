@@ -652,7 +652,7 @@ fn get_foreigner_hint_for_generic(
                 attrs[1].1,
                 format!("Several {} attributes", attr_name),
             );
-            err.span_note((src_id, attrs[0].1), &format!("First {}", attr_name));
+            err.span_note((src_id, attrs[0].1), format!("First {attr_name}"));
             return Err(err);
         }
         let mut ty_params = generic.type_params();

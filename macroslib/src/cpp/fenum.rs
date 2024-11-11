@@ -18,7 +18,7 @@ use crate::{
 };
 
 pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInfo) -> Result<()> {
-    if (fenum.items.len() as u64) >= u64::from(u32::max_value()) {
+    if (fenum.items.len() as u64) >= u64::from(u32::MAX) {
         return Err(DiagnosticError::new(
             fenum.src_id,
             fenum.span(),
@@ -212,7 +212,7 @@ typedef enum {enum_name} C{enum_name};
 fn generate_rust_trait_for_enum(ctx: &mut CppContext, enum_info: &ForeignEnumInfo) -> Result<()> {
     let mut arms_to_u32 = Vec::with_capacity(enum_info.items.len());
     let mut arms_from_u32 = Vec::with_capacity(enum_info.items.len());
-    assert!((enum_info.items.len() as u64) <= u64::from(u32::max_value()));
+    assert!((enum_info.items.len() as u64) <= u64::from(u32::MAX));
     for (i, item) in enum_info.items.iter().enumerate() {
         let item_name = &item.rust_name;
         let idx = i as u32;

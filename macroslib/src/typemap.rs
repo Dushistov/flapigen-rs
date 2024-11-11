@@ -316,7 +316,7 @@ impl Default for TypeMap {
 
 struct DisplayTypesConvGraph<'a>(&'a TypesConvGraph);
 
-impl<'a> fmt::Display for DisplayTypesConvGraph<'a> {
+impl fmt::Display for DisplayTypesConvGraph<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         let conv_graph = self.0;
         writeln!(f, "conversion graph begin")?;
@@ -456,7 +456,7 @@ impl<'a> TypeGraphSnapshot<'a> {
     }
 }
 
-impl<'a> Drop for TypeGraphSnapshot<'a> {
+impl Drop for TypeGraphSnapshot<'_> {
     fn drop(&mut self) {
         for edge in self.new_edges.iter().rev() {
             self.conv_graph.remove_edge(*edge);

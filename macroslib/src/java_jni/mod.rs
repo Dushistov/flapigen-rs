@@ -355,7 +355,7 @@ fn init(ctx: &mut JavaContext, _code: &[SourceCode]) -> Result<()> {
     let src_path = ctx
         .cfg
         .output_dir
-        .join(&format!("{}.java", INTERNAL_PTR_MARKER));
+        .join(format!("{INTERNAL_PTR_MARKER}.java"));
     let mut src_file = FileWriteCache::new(&src_path, ctx.generated_foreign_files);
     writeln!(
         src_file,
@@ -382,7 +382,7 @@ package {package};
             let src_path = ctx
                 .cfg
                 .output_dir
-                .join(&format!("{}.java", REACHABILITY_FENCE_CLASS));
+                .join(format!("{REACHABILITY_FENCE_CLASS}.java"));
             let mut src_file = FileWriteCache::new(&src_path, ctx.generated_foreign_files);
             write!(
                 src_file,
