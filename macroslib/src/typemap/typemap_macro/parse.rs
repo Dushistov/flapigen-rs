@@ -467,7 +467,7 @@ impl syn::parse::Parse for GenericCItems {
     }
 }
 
-struct MacroArgs(Vec<Ident>);
+pub(crate) struct MacroArgs(pub(crate) Vec<Ident>);
 impl syn::parse::Parse for MacroArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<MacroArgs> {
         let ret = syn::punctuated::Punctuated::<Ident, Token![,]>::parse_terminated(input)?;

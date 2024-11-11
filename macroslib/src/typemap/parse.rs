@@ -205,38 +205,40 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
     let mut names_map = FxHashMap::<ForeignTypeName, (TypeName, Type)>::default();
 
     for a in &item.attrs {
-        if a.path.is_ident(SWIG_FOREIGNER_TYPE) {
-            let meta_attr = a
-                .parse_meta()
-                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        if a.path().is_ident(SWIG_FOREIGNER_TYPE) {
             if let syn::Meta::NameValue(syn::MetaNameValue {
-                lit: syn::Lit::Str(value),
+                value:
+                    syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(ref value),
+                        ..
+                    }),
                 ..
-            }) = meta_attr
+            }) = a.meta
             {
                 ftype = Some(ForeignTypeName::new(value.value(), (src_id, value.span())));
             } else {
                 return Err(DiagnosticError::new(
                     src_id,
-                    meta_attr.span(),
+                    a.meta.span(),
                     "Expect name value attribute",
                 ));
             }
-        } else if a.path.is_ident(SWIG_RUST_TYPE) {
-            let meta_attr = a
-                .parse_meta()
-                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        } else if a.path().is_ident(SWIG_RUST_TYPE) {
             if let Some(ftype) = ftype.take() {
                 let attr_value = if let syn::Meta::NameValue(syn::MetaNameValue {
-                    lit: syn::Lit::Str(value),
+                    value:
+                        syn::Expr::Lit(syn::ExprLit {
+                            lit: syn::Lit::Str(ref value),
+                            ..
+                        }),
                     ..
-                }) = meta_attr
+                }) = a.meta
                 {
                     value
                 } else {
                     return Err(DiagnosticError::new(
                         src_id,
-                        meta_attr.span(),
+                        a.meta.span(),
                         "Expect name value attribute",
                     ));
                 };
@@ -251,25 +253,25 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
                 return Err(DiagnosticError::new(
                     src_id,
                     a.span(),
-                    format!("No {} for {}", SWIG_FOREIGNER_TYPE, SWIG_RUST_TYPE),
+                    format!("No {SWIG_FOREIGNER_TYPE} for {SWIG_RUST_TYPE}"),
                 ));
             }
-        } else if a.path.is_ident(SWIG_RUST_TYPE_NOT_UNIQUE) {
-            let meta_attr = a
-                .parse_meta()
-                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
-
+        } else if a.path().is_ident(SWIG_RUST_TYPE_NOT_UNIQUE) {
             if let Some(ftype) = ftype.take() {
                 let attr_value = if let syn::Meta::NameValue(syn::MetaNameValue {
-                    lit: syn::Lit::Str(value),
+                    value:
+                        syn::Expr::Lit(syn::ExprLit {
+                            lit: syn::Lit::Str(ref value),
+                            ..
+                        }),
                     ..
-                }) = meta_attr
+                }) = a.meta
                 {
                     value
                 } else {
                     return Err(DiagnosticError::new(
                         src_id,
-                        meta_attr.span(),
+                        a.meta.span(),
                         "Expect name value attribute",
                     ));
                 };
@@ -287,10 +289,7 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
                 return Err(DiagnosticError::new(
                     src_id,
                     a.span(),
-                    format!(
-                        "No {} for {}",
-                        SWIG_FOREIGNER_TYPE, SWIG_RUST_TYPE_NOT_UNIQUE
-                    ),
+                    format!("No {SWIG_FOREIGNER_TYPE} for {SWIG_RUST_TYPE_NOT_UNIQUE}"),
                 ));
             }
         } else {
@@ -313,34 +312,31 @@ fn parse_foreign_types_map_mod(src_id: SourceId, item: &ItemMod) -> Result<Vec<T
 }
 
 fn is_wrong_cfg_pointer_width(attrs: &[syn::Attribute], target_pointer_width: usize) -> bool {
+    let mut result = false;
     for a in attrs {
-        if a.path.is_ident("cfg") {
-            if let Ok(syn::Meta::List(syn::MetaList { ref nested, .. })) = a.parse_meta() {
-                if nested.len() == 1 {
-                    if let syn::NestedMeta::Meta(syn::Meta::NameValue(ref name_val)) = nested[0] {
-                        if name_val.path.is_ident("target_pointer_width") {
-                            let val = name_val.lit.clone().into_token_stream().to_string();
-                            let val = if let Some(stripped) = val.strip_prefix('"') {
-                                stripped
-                            } else {
-                                &val
-                            };
-                            let val = if let Some(stripped) = val.strip_suffix('"') {
-                                stripped
-                            } else {
-                                val
-                            };
-                            if let Ok(width) = <usize>::from_str(val) {
-                                return target_pointer_width != width;
-                            }
+        if a.path().is_ident("cfg") {
+            if let Err(err) = a.parse_nested_meta(|meta| {
+                if meta.path.is_ident("target_pointer_width") {
+                    let value = meta.value()?;
+                    let value: syn::LitStr = value.parse()?;
+                    match <usize>::from_str(&value.value()) {
+                        Ok(width) => {
+                            result = target_pointer_width != width;
+                        }
+                        Err(err) => {
+                            eprintln!("Error during parse of value of cfg item: {err}");
                         }
                     }
                 }
+                Ok(())
+            }) {
+                eprintln!("Error during parse cfg item: {err}");
+                break;
             }
         }
     }
 
-    false
+    result
 }
 
 fn my_syn_attrs_to_hashmap(src_id: SourceId, attrs: &[syn::Attribute]) -> Result<MyAttrs> {
@@ -354,15 +350,16 @@ fn my_syn_attrs_to_hashmap(src_id: SourceId, attrs: &[syn::Attribute]) -> Result
     ];
     let mut ret = FxHashMap::default();
     for a in attrs {
-        if KNOWN_SWIG_ATTRS.iter().any(|x| a.path.is_ident(x)) {
-            let meta = a
-                .parse_meta()
-                .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
+        if KNOWN_SWIG_ATTRS.iter().any(|x| a.path().is_ident(x)) {
             if let syn::Meta::NameValue(syn::MetaNameValue {
                 ref path,
-                lit: syn::Lit::Str(ref value),
+                value:
+                    syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(ref value),
+                        ..
+                    }),
                 ..
-            }) = meta
+            }) = a.meta
             {
                 ret.entry(path.into_token_stream().to_string())
                     .or_insert_with(Vec::new)
@@ -721,7 +718,7 @@ struct FilterSwigAttrs;
 
 impl VisitMut for FilterSwigAttrs {
     fn visit_attribute_mut(&mut self, i: &mut syn::Attribute) {
-        if i.path
+        if i.path()
             .clone()
             .into_token_stream()
             .to_string()

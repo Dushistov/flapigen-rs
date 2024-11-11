@@ -29,6 +29,8 @@ use crate::{
 };
 use parse::CItemsList;
 
+pub(crate) use parse::MacroArgs;
+
 static GENERIC_ALIAS: &str = "generic_alias";
 static SWIG_CONCAT_IDENTS: &str = "swig_concat_idents";
 static SWIG_I_TYPE: &str = "swig_i_type";

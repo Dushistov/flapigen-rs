@@ -12,7 +12,7 @@ struct FilterSwigAttrs;
 
 impl VisitMut for FilterSwigAttrs {
     fn visit_attribute_mut(&mut self, i: &mut syn::Attribute) {
-        if i.path
+        if i.path()
             .clone()
             .into_token_stream()
             .to_string()
