@@ -859,7 +859,7 @@ pub(in crate::typemap) fn replace_all_types_with(
     struct ReplaceTypes<'a, 'b> {
         subst_map: &'a TyParamsSubstMap<'b>,
     }
-    impl<'a, 'b> VisitMut for ReplaceTypes<'a, 'b> {
+    impl VisitMut for ReplaceTypes<'_, '_> {
         fn visit_type_mut(&mut self, t: &mut Type) {
             let ty_name = normalize_type(t);
             if let Some(Some(subst)) = self.subst_map.get(&ty_name) {

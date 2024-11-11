@@ -215,22 +215,22 @@ pub(in crate::cpp) fn generate_c_type(
             CItem::Union(ref u) => u,
             CItem::Fn(ref f) => {
                 let fn_id = format!("fn {}", f.sig.ident);
-                if is_item_defined(ctx, &module_name, &fn_id) {
+                if is_item_defined(ctx, module_name, &fn_id) {
                     continue;
                 }
                 add_func_forward_decl(ctx, f, src_id, module_name)?;
                 ctx.rust_code.push(f.into_token_stream());
-                define_item(ctx, &module_name, fn_id);
+                define_item(ctx, module_name, fn_id);
                 continue;
             }
             CItem::Static(ref s) => {
                 let s_id = format!("static {}", s.ident);
-                if is_item_defined(ctx, &module_name, &s_id) {
+                if is_item_defined(ctx, module_name, &s_id) {
                     continue;
                 }
                 add_const_forward_decl(ctx, s, src_id, module_name)?;
                 ctx.rust_code.push(s.into_token_stream());
-                define_item(ctx, &module_name, s_id);
+                define_item(ctx, module_name, s_id);
                 continue;
             }
         };
@@ -306,7 +306,7 @@ fn test_{name}_layout() {{
         name = ctype.name(),
     );
     let mut mem_out = Vec::<u8>::new();
-    writeln!(&mut mem_out, "{} {{", s_id).expect(WRITE_TO_MEM_FAILED_MSG);
+    writeln!(mem_out, "{s_id} {{").expect(WRITE_TO_MEM_FAILED_MSG);
 
     let mut includes = FxHashSet::<SmolStr>::default();
 
@@ -330,14 +330,13 @@ fn test_{name}_layout() {{
             includes.insert(inc.clone());
         }
 
-        writeln!(&mut mem_out, "    {} {};", field_fty.base.name, id)
-            .expect(WRITE_TO_MEM_FAILED_MSG);
-        writeln!(&mut rust_layout_test, "{}: {},", id, DisplayToTokens(&f.ty))
+        writeln!(mem_out, "    {} {};", field_fty.base.name, id).expect(WRITE_TO_MEM_FAILED_MSG);
+        writeln!(rust_layout_test, "{}: {},", id, DisplayToTokens(&f.ty))
             .expect(WRITE_TO_MEM_FAILED_MSG);
 
         writeln!(
-                        &mut fields_asserts_code,
-                        r#"
+            fields_asserts_code,
+            r#"
 #[allow(dead_code)]
 fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} {{
     &s.{field_name}
@@ -355,7 +354,7 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
     mem_out.write_all(b"};\n").expect(WRITE_TO_MEM_FAILED_MSG);
 
     writeln!(
-        &mut rust_layout_test,
+        rust_layout_test,
         r#"}}
     assert_eq!(::std::mem::size_of::<My{name}>(), ::std::mem::size_of::<{name}>());
     assert_eq!(::std::mem::align_of::<My{name}>(), ::std::mem::align_of::<{name}>());
@@ -386,7 +385,7 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
 
     for inc in &includes {
         if self_inc != *inc {
-            writeln!(file_out, "#include {}", inc).expect(WRITE_TO_MEM_FAILED_MSG);
+            writeln!(file_out, "#include {inc}").expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }
     file_out

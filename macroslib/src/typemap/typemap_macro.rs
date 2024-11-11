@@ -141,7 +141,7 @@ impl TypeMapConvRuleInfo {
         }
         match (
             self.rtype_left_to_right.as_ref(),
-            self.ftype_left_to_right.get(0),
+            self.ftype_left_to_right.first(),
         ) {
             (
                 Some(RTypeConvRule {
@@ -785,7 +785,7 @@ fn expand_type(
         generic_aliases: &'a [CalcGenericAlias<'c>],
         err: Option<DiagnosticError>,
     }
-    impl<'a, 'b, 'c> VisitMut for ReplaceTypes<'a, 'b, 'c> {
+    impl VisitMut for ReplaceTypes<'_, '_, '_> {
         fn visit_type_mut(&mut self, t: &mut Type) {
             if self.err.is_some() {
                 return;

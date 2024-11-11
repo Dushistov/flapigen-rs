@@ -129,7 +129,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
                 if mac.path.is_ident(DEFINE_C_TYPE) {
                     if c_types.is_some() || generic_c_types.is_some() {
                         return Err(
-                            input.error(format!("{} should be used only once", DEFINE_C_TYPE))
+                            input.error(format!("{DEFINE_C_TYPE} should be used only once"))
                         );
                     }
                     match syn::parse2::<CItems>(mac.tokens.clone()) {
