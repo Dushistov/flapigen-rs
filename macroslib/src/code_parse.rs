@@ -2,7 +2,6 @@ use bitflags::bitflags;
 use heck::ToLowerCamelCase;
 use log::debug;
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::ToTokens;
 use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use std::convert::{TryFrom, TryInto};
@@ -19,7 +18,10 @@ use crate::{
     error::{DiagnosticError, Result},
     namegen::new_unique_name,
     source_registry::SourceId,
-    typemap::ast::{normalize_type, DisplayToTokens},
+    typemap::{
+        ast::{normalize_type, DisplayToTokens},
+        MacroArgs,
+    },
     types::{
         FnArg, ForeignClassInfo, ForeignEnumInfo, ForeignEnumItem, ForeignInterface,
         ForeignInterfaceMethod, ForeignMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
@@ -140,37 +142,37 @@ fn parse_attrs(input: ParseStream, flags: ParseAttrsFlags) -> syn::Result<Attrs>
     if input.fork().call(syn::Attribute::parse_outer).is_ok() {
         let attr: Vec<syn::Attribute> = input.call(syn::Attribute::parse_outer)?;
         for a in attr {
-            let meta = a.parse_meta()?;
-            match meta {
+            match a.meta {
                 syn::Meta::NameValue(syn::MetaNameValue {
                     ref path,
-                    lit: syn::Lit::Str(ref lit_str),
+                    value:
+                        syn::Expr::Lit(syn::ExprLit {
+                            lit: syn::Lit::Str(ref lit_str),
+                            ..
+                        }),
                     ..
                 }) if path.is_ident("doc") => {
                     doc_comments.push(lit_str.value());
                 }
                 syn::Meta::List(syn::MetaList {
                     ref path,
-                    ref nested,
+                    ref tokens,
                     ..
                 }) if path.is_ident("derive") && flags.contains(ParseAttrsFlags::DERIVE) => {
-                    for x in nested {
-                        if let syn::NestedMeta::Meta(syn::Meta::Path(ref path)) = x {
-                            derive_list.push(path.into_token_stream().to_string());
-                        } else {
-                            return Err(syn::Error::new(x.span(), "Invalid derive format"));
-                        }
+                    let args: MacroArgs = syn::parse2(tokens.clone())?;
+                    for arg in args.0 {
+                        derive_list.push(arg.to_string());
                     }
                 }
                 _ if flags.contains(ParseAttrsFlags::UNKNOWN) => {
-                    unknown_attrs.push(DisplayToTokens(&meta).to_string());
+                    unknown_attrs.push(DisplayToTokens(&a.meta).to_string());
                 }
                 _ => {
                     return Err(syn::Error::new(
                         a.span(),
                         format!(
                             "Expect doc attribute or doc comment or derive here, got '{}'",
-                            DisplayToTokens(&meta)
+                            DisplayToTokens(&a.meta)
                         ),
                     ));
                 }
@@ -197,14 +199,11 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
     } = parse_attrs(input, ParseAttrsFlags::DERIVE)?;
     assert!(unknown_attrs.is_empty());
 
-    debug!(
-        "parse_foreigner_class: class comment {:?}",
-        class_doc_comments
-    );
+    debug!("parse_foreigner_class: class comment {class_doc_comments:?}");
 
     input.parse::<kw::class>()?;
     let class_name: Ident = input.parse()?;
-    debug!("class_name {:?}", class_name);
+    debug!("class_name {class_name:?}");
     let content;
     braced!(content in input);
 
@@ -328,7 +327,7 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
             continue;
         }
         let func_name: syn::Path = content.call(syn::Path::parse_mod_style)?;
-        debug!("func_name {:?}", func_name);
+        debug!("func_name {func_name:?}");
 
         //just skip <'a,...> section
         if content.fork().parse::<syn::Generics>().is_ok() {
@@ -337,8 +336,8 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
         let args_parser;
         parenthesized!(args_parser in content);
         let args_in: Punctuated<syn::FnArg, Token![,]> =
-            args_parser.parse_terminated(syn::FnArg::parse)?;
-        debug!("func in args {:?}", args_in);
+            args_parser.parse_terminated(syn::FnArg::parse, Token![,])?;
+        debug!("func in args {args_in:?}");
 
         let mut func_type = match func_type_name {
             _ if func_type_name == CONSTRUCTOR => MethodVariant::Constructor,
@@ -762,6 +761,7 @@ impl Parse for ForeignInterfaceParser {
                             }
                         }
                         Lifetime(_) => {}
+                        _ => unimplemented!(),
                     }
                 }
                 self_type = Some(traits);
@@ -775,7 +775,7 @@ impl Parse for ForeignInterfaceParser {
             let args_parser;
             parenthesized!(args_parser in item_parser);
             let args_in: Punctuated<syn::FnArg, Token![,]> =
-                args_parser.parse_terminated(syn::FnArg::parse)?;
+                args_parser.parse_terminated(syn::FnArg::parse, Token![,])?;
             debug!("cb func in args {args_in:?}");
             let have_self_args = matches!(args_in.iter().next(), Some(syn::FnArg::Receiver(_)));
             if !have_self_args {
@@ -816,6 +816,7 @@ impl Parse for ForeignInterfaceParser {
 mod tests {
     use super::*;
     use crate::error::panic_on_syn_error;
+    use quote::ToTokens;
 
     #[test]
     fn test_do_parse_foreigner_class() {

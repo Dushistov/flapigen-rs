@@ -631,6 +631,7 @@ pub(in crate::typemap) fn is_second_subst_of_first(
                         trace!("is_second_subst_of_first: impl Trait, Lifetime vs Trait");
                         return false;
                     }
+                    _ => unimplemented!("not expected"),
                 }
             }
             true
