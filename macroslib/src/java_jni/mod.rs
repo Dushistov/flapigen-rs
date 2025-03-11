@@ -446,7 +446,7 @@ package {package};
                 let jni_args = &jni_args;
                 ctx.rust_code.push(quote! {
                     #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
-                    #[no_mangle]
+                    #[unsafe(no_mangle)]
                     pub extern "C" fn #jni_func_name(_env: *mut JNIEnv, _: jclass, #(#jni_args),*) {
                     }
                 });

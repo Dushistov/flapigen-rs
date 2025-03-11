@@ -1,4 +1,4 @@
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Foo_do_1f1(
     env: *mut JNIEnv,
     _: jclass,
@@ -12,7 +12,7 @@ pub extern "C" fn Java_org_example_Foo_do_1f1(
     ret
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Foo_f2(env: *mut JNIEnv, _: jclass, a0: jboolean) -> jboolean {
     let mut a0: bool = a0 != 0;
     let mut ret: bool = f2(a0);
@@ -21,7 +21,7 @@ pub extern "C" fn Java_org_example_Foo_f2(env: *mut JNIEnv, _: jclass, a0: jbool
 }"##;
 
 
-r##"# [ no_mangle ] pub extern "C" fn Java_org_example_Foo_init ( env : * mut JNIEnv , _ : jclass , a0 : jboolean , ) -> jlong {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Java_org_example_Foo_init ( env : * mut JNIEnv , _ : jclass , a0 : jboolean , ) -> jlong {
  let mut a0 : bool = a0 != 0;
  let this : Foo = Foo :: new ( a0 ) ;
  let this : Box < Foo > = Box :: new ( this ) ;

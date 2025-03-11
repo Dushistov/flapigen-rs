@@ -1,4 +1,4 @@
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Moo_do_1getBoo(
     env: *mut JNIEnv,
     _: jclass,

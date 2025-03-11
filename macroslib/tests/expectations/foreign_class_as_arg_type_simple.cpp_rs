@@ -9,7 +9,7 @@ r#"fn Boo_with_foo ( f : * mut :: std :: os :: raw :: c_void , ) -> * const :: s
  this as * const :: std :: os :: raw :: c_void
  }"#;
 
-r##"# [ no_mangle ] pub extern "C" fn Boo_f ( this : * mut Boo , foo : * mut :: std :: os :: raw :: c_void , ) -> usize {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_f ( this : * mut Boo , foo : * mut :: std :: os :: raw :: c_void , ) -> usize {
  assert ! ( ! foo . is_null ( ) ) ;
  let foo : * mut Foo = foo as * mut Foo ;
  let foo : Box < Foo > = unsafe { Box :: from_raw ( foo ) } ;
@@ -19,7 +19,7 @@ r##"# [ no_mangle ] pub extern "C" fn Boo_f ( this : * mut Boo , foo : * mut :: 
  ret
  }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn Boo_f2 ( a0 : f64 , foo : * mut :: std :: os :: raw :: c_void , ) -> i32 {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_f2 ( a0 : f64 , foo : * mut :: std :: os :: raw :: c_void , ) -> i32 {
  assert ! ( ! foo . is_null ( ) ) ;
  let foo : * mut Foo = foo as * mut Foo ;
  let foo : Box < Foo > = unsafe { Box :: from_raw ( foo ) } ;

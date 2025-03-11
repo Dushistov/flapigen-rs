@@ -1,4 +1,4 @@
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f1(
     env: *mut JNIEnv,
     _: jclass,
@@ -15,7 +15,7 @@ pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f1(
     ret
 }"##;
 
-r#"#[no_mangle]
+r#"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f2(
     env: *mut JNIEnv,
     _: jclass,
@@ -33,7 +33,7 @@ pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f2(
     ret
 }"#;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f3(
     env: *mut JNIEnv,
     _: jclass,
@@ -65,7 +65,7 @@ r##"pub extern "C" fn Java_org_example_Foo_init(
     this as jlong
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f4(
     env: *mut JNIEnv,
     _: jclass,
@@ -85,7 +85,7 @@ pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f4(
 }"##;
 
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f5(
     env: *mut JNIEnv,
     _: jclass,

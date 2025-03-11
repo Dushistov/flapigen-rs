@@ -1,4 +1,4 @@
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Moo_do_1getBoo(
     env: *mut JNIEnv,
     _: jclass,
@@ -11,7 +11,7 @@ pub extern "C" fn Java_org_example_Moo_do_1getBoo(
 }"##;
 
 r##"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1test(
     env: *mut JNIEnv,
     _: jclass,

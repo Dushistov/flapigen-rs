@@ -1,9 +1,9 @@
-r#"# [ no_mangle ] pub extern "C" fn Java_org_example_A_do_1a ( env : * mut JNIEnv , _ : jclass , b : jlong , ) -> ( ) {
+r#"# [ unsafe ( no_mangle ) ] pub extern "C" fn Java_org_example_A_do_1a ( env : * mut JNIEnv , _ : jclass , b : jlong , ) -> ( ) {
  let b : & B = unsafe { jlong_to_pointer ::< B > ( b ) . as_mut ( ) . unwrap ( ) } ;
  let mut ret : ( ) = A :: a ( b ) ;
  ret
  }"#;
-r#"# [ no_mangle ] pub extern "C" fn Java_org_example_B_do_1b ( env : * mut JNIEnv , _ : jclass , a : jlong , ) -> ( ) {
+r#"# [ unsafe ( no_mangle ) ] pub extern "C" fn Java_org_example_B_do_1b ( env : * mut JNIEnv , _ : jclass , a : jlong , ) -> ( ) {
  let a : & A = unsafe { jlong_to_pointer ::< A > ( a ) . as_mut ( ) . unwrap ( ) } ;
  let mut ret : ( ) = B :: b ( a ) ;
  ret

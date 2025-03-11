@@ -1,4 +1,4 @@
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_BLAUtils_latitude_1to_1str(
     env: *mut JNIEnv,
     _: jclass,
@@ -21,7 +21,7 @@ pub extern "C" fn Java_org_example_BLAUtils_latitude_1to_1str(
     ret
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_BLAUtils_longitude_1to_1str(
     env: *mut JNIEnv,
     _: jclass,

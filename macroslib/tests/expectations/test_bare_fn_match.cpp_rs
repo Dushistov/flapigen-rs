@@ -1,4 +1,4 @@
-r##"# [ no_mangle ]
+r##"# [ unsafe ( no_mangle ) ]
  pub extern "C" fn TestFuture_call_fn ( f : CFnOncei32 , ) -> ( ) {
  let mut f = | x | { ; f . cb ( x , f . ctx ) ; } ;
  let mut ret : ( ) = { f ( 5 ) ; } ;

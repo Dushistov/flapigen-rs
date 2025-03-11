@@ -1,4 +1,4 @@
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jclass, a0: jint) -> jlong {
     let mut a0: i32 = a0;
     let this: Foo = Foo::new(a0);
@@ -7,7 +7,7 @@ pub extern "C" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jclass, a0: jin
     this as jlong
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Foo_do_1f(
     env: *mut JNIEnv,
     _: jclass,
@@ -23,7 +23,7 @@ pub extern "C" fn Java_org_example_Foo_do_1f(
     ret
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_init(
     env: *mut JNIEnv,
     _: jclass,
@@ -47,7 +47,7 @@ pub extern "C" fn Java_org_example_Boo_init(
     this as jlong
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1factory_1method(env: *mut JNIEnv, _: jclass) -> jlong {
     let mut ret: Result<Boo, String> = Boo::factory_method();
     let mut ret: jlong = match ret {
@@ -63,7 +63,7 @@ pub extern "C" fn Java_org_example_Boo_do_1factory_1method(env: *mut JNIEnv, _: 
     ret
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1boo_1as_1arg(
     env: *mut JNIEnv,
     _: jclass,
@@ -79,7 +79,7 @@ pub extern "C" fn Java_org_example_Boo_do_1boo_1as_1arg(
     ret
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1get_1one_1foo(
     env: *mut JNIEnv,
     _: jclass,

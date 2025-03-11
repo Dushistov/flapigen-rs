@@ -356,11 +356,11 @@ impl syn::parse::Parse for CItemsList {
                     types.push(CItem::Union(u));
                 }
                 syn::Item::Fn(f) => {
-                    let mangle_attr: syn::Attribute = parse_quote! { #[no_mangle] };
+                    let mangle_attr: syn::Attribute = parse_quote! { #[unsafe(no_mangle)] };
                     if !f.attrs.iter().any(|a| *a == mangle_attr) {
                         return Err(syn::Error::new(
                             f.span(),
-                            "fn has no #[no_mangle] attribute",
+                            "fn has no #[unsafe(no_mangle)] attribute",
                         ));
                     }
 
@@ -382,11 +382,11 @@ impl syn::parse::Parse for CItemsList {
                     types.push(CItem::Fn(f));
                 }
                 syn::Item::Static(s) => {
-                    let mangle_attr: syn::Attribute = parse_quote! { #[no_mangle] };
+                    let mangle_attr: syn::Attribute = parse_quote! { #[unsafe(no_mangle)] };
                     if !s.attrs.iter().any(|a| *a == mangle_attr) {
                         return Err(syn::Error::new(
                             s.span(),
-                            "static has no #[no_mangle] attribute",
+                            "static has no #[unsafe(no_mangle)] attribute",
                         ));
                     }
 

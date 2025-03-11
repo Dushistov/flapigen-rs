@@ -729,7 +729,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let code = format!(
             r#"
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong) {{
     let this: *mut {this_type} = unsafe {{
         jlong_to_pointer::<{this_type}>(this).as_mut().unwrap()
@@ -856,7 +856,7 @@ fn generate_static_method(ctx: &mut JavaContext, mc: &MethodContext) -> Result<(
     let code = format!(
         r#"
 #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> {jni_ret_type} {{
 {convert_input_code}
     let mut {ret_name}: {real_output_typename} = {call};
@@ -921,7 +921,7 @@ fn generate_constructor(
     let code = format!(
         r#"
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> jlong {{
 {convert_input_code}
     let this: {real_output_typename} = {call};
@@ -1005,7 +1005,7 @@ fn generate_method(
     let code = format!(
         r#"
 #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C"
  fn {func_name}(env: *mut JNIEnv, _: jclass, this: jlong, {decl_func_args}) -> {jni_ret_type} {{
 {convert_input_code}

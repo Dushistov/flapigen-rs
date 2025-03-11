@@ -414,13 +414,13 @@ foreign_typemap!(
             capacity: usize,
         }
 
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn crust_string_free(x: CRustString) {
             let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
             drop(s);
         }
 
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn crust_string_clone(x: CRustString) -> CRustString {
             let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
             let ret = CRustString::from_string(s.clone());
@@ -908,7 +908,7 @@ foreign_typemap!(
             capacity: usize,
         }
 
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn CRustVecFree!()(v: CRustVec!()) {
             let v = unsafe { Vec::from_raw_parts(v.data as *mut swig_subst_type!(T), v.len, v.capacity) };
             drop(v);
@@ -1035,23 +1035,23 @@ foreign_typemap!(
     define_c_type!(
         module = "CForeignVecModule!().h";
         #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn CForeignVecFree!()(v: CRustForeignVec) {
             drop_foreign_class_vec::<swig_subst_type!(T)>(v);
         }
 
         #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn CForeignVecPush!()(v: *mut CRustForeignVec, e: *mut ::std::os::raw::c_void) {
             push_foreign_class_to_vec::<swig_subst_type!(T)>(v, e);
         }
 
         #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn CForeignVecRemove!()(v: *mut CRustForeignVec, idx: usize) -> *mut ::std::os::raw::c_void {
             remove_foreign_class_from_vec::<swig_subst_type!(T)>(v, idx)
         }
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub static CForeignVecElemSize!() : usize = ::std::mem::size_of::<swig_subst_type!(T)>();
     );
 

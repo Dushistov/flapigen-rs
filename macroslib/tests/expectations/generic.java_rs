@@ -1,4 +1,4 @@
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1get_1foo_1arr(
     env: *mut JNIEnv,
     _: jclass,
@@ -11,7 +11,7 @@ pub extern "C" fn Java_org_example_Boo_do_1get_1foo_1arr(
     ret
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1get_1one_1foo(
     env: *mut JNIEnv,
     _: jclass,
@@ -32,7 +32,7 @@ pub extern "C" fn Java_org_example_Boo_do_1get_1one_1foo(
     ret
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_r_1test_1u8(
     env: *mut JNIEnv,
     _: jclass,
@@ -54,7 +54,7 @@ pub extern "C" fn Java_org_example_Boo_r_1test_1u8(
     ret
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1now(env: *mut JNIEnv, _: jclass) -> jlong {
     let mut ret: SystemTime = now();
     let since_unix_epoch = ret

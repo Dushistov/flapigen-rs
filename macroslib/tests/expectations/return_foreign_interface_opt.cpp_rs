@@ -1,4 +1,4 @@
-r##"# [ no_mangle ] pub extern "C" fn Boo_f2 ( this : * mut Boo , ) -> CRustOption4232mut3232c_void {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_f2 ( this : * mut Boo , ) -> CRustOption4232mut3232c_void {
  let this : & mut Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : Option < Box < Box < Foo > > > = Boo :: f2 ( this , ) ;
  let mut ret : CRustOption4232mut3232c_void = match ret { Some ( mut x ) => {
