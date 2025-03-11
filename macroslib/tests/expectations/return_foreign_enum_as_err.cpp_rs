@@ -1,4 +1,4 @@
-r##"# [ no_mangle ] pub extern "C" fn Boo_f ( this : * mut Boo , ) -> CRustResult4232mut3232c_voidu32 {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_f ( this : * mut Boo , ) -> CRustResult4232mut3232c_voidu32 {
  let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : Result < Moo , Foo > = Boo :: f ( this , ) ;
  let mut ret : CRustResult4232mut3232c_voidu32 = match ret { Ok ( mut x ) => {
@@ -8,7 +8,7 @@ r##"# [ no_mangle ] pub extern "C" fn Boo_f ( this : * mut Boo , ) -> CRustResul
    CRustResult4232mut3232c_voidu32 { data : CRustResultUnion4232mut3232c_voidu32 { err } , is_ok : 0 , } } } ;
  ret }"##;
 
-r#"# [ no_mangle ] pub extern "C" fn Boo_f2 ( this : * mut Boo , a0 : u32 , ) -> u32 {
+r#"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_f2 ( this : * mut Boo , a0 : u32 , ) -> u32 {
  let mut a0 : Foo = < Foo >:: swig_from ( a0 ) ;
  let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : Foo = Boo :: f2 ( this , a0 ) ;

@@ -1,22 +1,22 @@
-r##"# [ no_mangle ] pub extern "C" fn Boo_boo_init ( ) -> * const :: std :: os :: raw :: c_void {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_boo_init ( ) -> * const :: std :: os :: raw :: c_void {
  let this : Rc < RefCell < Boo > > = boo_init ( ) ;
  let this : * const RefCell < Boo > = Rc :: into_raw ( this ) ;
  this as * const :: std :: os :: raw :: c_void
  }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn Boo_f1 ( this : * mut RefCell < Boo >, ) -> ( ) {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_f1 ( this : * mut RefCell < Boo >, ) -> ( ) {
  let this : & RefCell < Boo > = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut this : Ref < Boo > = this.borrow();
  let mut this : & Boo = & this;
  let mut ret : ( ) = Boo :: f1 ( this , ) ;
  ret }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn Boo_delete ( this : * mut RefCell < Boo > ) {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_delete ( this : * mut RefCell < Boo > ) {
  let this : Rc < RefCell < Boo > > = unsafe { Rc :: from_raw ( this ) } ;
  drop ( this ) ;
  }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn Foo_f1 ( a0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Foo_f1 ( a0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
  assert ! ( ! a0 . is_null ( ) ) ;
  let a0 : & RefCell < Boo > = unsafe { &* ( a0 as * const RefCell < Boo > ) } ;
  let mut a0 : Ref < Boo > = a0.borrow();
@@ -24,7 +24,7 @@ r##"# [ no_mangle ] pub extern "C" fn Foo_f1 ( a0 : * const :: std :: os :: raw 
  let mut ret : ( ) = f1 ( a0 ) ;
  ret }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn Foo_f2 ( a0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Foo_f2 ( a0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
  assert ! ( ! a0 . is_null ( ) ) ;
  let a0 : & mut RefCell < Boo > = unsafe { & mut * ( a0 as * mut RefCell < Boo > ) } ;
  let mut a0 : & RefCell < Boo > = a0 ;

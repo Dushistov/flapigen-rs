@@ -1,4 +1,4 @@
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Test_f(a0: *const C_MyObserver) -> () {
     assert!(!a0.is_null());
     let a0: &C_MyObserver = unsafe { a0.as_ref().unwrap() };

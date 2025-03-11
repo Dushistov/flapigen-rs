@@ -1,4 +1,4 @@
-r##"# [ no_mangle ]
+r##"# [ unsafe ( no_mangle ) ]
  pub extern "C" fn BLAUtils_latitude_to_str ( lat : CRustOptionf64 , plus_sym : CRustStrView , minus_sym : CRustStrView , ) -> CRustString {
  let mut lat : Option < f64 > = if lat . is_some != 0 { let mut ret = unsafe { lat . val . data } ; Some ( ret ) }
  else { None } ;
@@ -8,7 +8,7 @@ r##"# [ no_mangle ]
  let mut ret : CRustString = CRustString :: from_string ( ret ) ;
  ret }"##;
 
-r##"# [ no_mangle ]
+r##"# [ unsafe ( no_mangle ) ]
  pub extern "C" fn BLAUtils_longitude_to_str ( lon : CRustOptionf64 , plus_sym : CRustStrView , minus_sym : CRustStrView , ) -> CRustString {
  let mut lon : Option < f64 > = if lon . is_some != 0 { let mut ret = unsafe { lon . val . data } ; Some ( ret ) } else { None } ;
  let mut plus_sym : & str = unsafe { let slice : & [ u8 ] = :: std :: slice :: from_raw_parts ( plus_sym . data as * const u8 , plus_sym . len ) ; :: std :: str :: from_utf8_unchecked ( slice ) } ;

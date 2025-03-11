@@ -1,4 +1,4 @@
-r##"# [ no_mangle ] pub extern "C" fn Foo_f ( this : * mut Foo , ) -> CRustPair4232mut3232c_void4232mut3232c_void {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Foo_f ( this : * mut Foo , ) -> CRustPair4232mut3232c_void4232mut3232c_void {
  let this : & Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : ( One , Two ) = Foo :: f ( this , ) ;
  let p0 : * mut :: std :: os :: raw :: c_void = < One >:: box_object ( ret . 0 ) ;
@@ -7,7 +7,7 @@ r##"# [ no_mangle ] pub extern "C" fn Foo_f ( this : * mut Foo , ) -> CRustPair4
  ret }"##;
 
 r##"
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn Foo_g(this: *mut Foo) -> CRustPairi32i32 {
     let this: &Foo = unsafe { this.as_mut().unwrap() };
     let mut ret: (i32, i32) = Foo::g(this);
@@ -31,7 +31,7 @@ pub struct CRustPairi32i32 {
 "##;
 
 r##"
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn Foo_h(this: *mut Foo) -> CRustPairCRustStrViewCRustStrView {
     let this: &Foo = unsafe { this.as_mut().unwrap() };
     let mut ret: (&str, &str) = Foo::h(this);

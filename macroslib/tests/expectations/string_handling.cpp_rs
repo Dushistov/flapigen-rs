@@ -1,4 +1,4 @@
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Foo_f(this: *mut Foo, a0: i32, a1: i32, a2: CRustStrView) -> CRustString {
     let mut a2: &str = unsafe {
         let slice: &[u8] = ::std::slice::from_raw_parts(a2.data as *const u8, a2.len);

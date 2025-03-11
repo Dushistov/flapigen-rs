@@ -1,4 +1,4 @@
-r##"# [ no_mangle ] pub extern "C" fn Java_org_example_Foo_do_1static_1foo ( env : * mut JNIEnv , _ : jclass , a0 : jlong , ) -> ( ) {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Java_org_example_Foo_do_1static_1foo ( env : * mut JNIEnv , _ : jclass , a0 : jlong , ) -> ( ) {
  let a0 : & RefCell < Boo > = unsafe { jlong_to_pointer ::< RefCell < Boo >> ( a0 ) . as_mut ( ) . unwrap ( ) } ;
  let mut a0 : Ref < Boo > = a0.borrow();
  let mut a0 : & Boo = &a0;

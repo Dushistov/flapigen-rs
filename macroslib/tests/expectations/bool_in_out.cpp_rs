@@ -11,7 +11,7 @@ r#"pub extern "C" fn Foo_new ( a0 : :: std :: os :: raw :: c_char , ) -> * const
  let this : * mut Foo = Box :: into_raw ( this ) ;
  this as * const :: std :: os :: raw :: c_void
  }"#;
-r#"# [ no_mangle ]
+r#"# [ unsafe ( no_mangle ) ]
  pub extern "C" fn Foo_f2 ( a0 : :: std :: os :: raw :: c_char , ) -> :: std :: os :: raw :: c_char {
  let mut a0 : bool = a0 != 0 ;
  let mut ret : bool = f2 ( a0 ) ;

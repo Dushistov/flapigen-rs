@@ -1,4 +1,4 @@
-r##"# [ no_mangle ]
+r##"# [ unsafe ( no_mangle ) ]
  pub extern "C" fn TestPassObjectsAsParams_f1 ( this : * mut TestPassObjectsAsParams , a0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
  assert ! ( ! a0 . is_null ( ) ) ;
  let a0 : & RefCell < Foo > = unsafe { &* ( a0 as * const RefCell < Foo > ) } ;
@@ -6,7 +6,7 @@ r##"# [ no_mangle ]
  let mut ret : ( ) = TestPassObjectsAsParams :: f1 ( this , a0 ) ;
  ret }"##;
 
-r##"# [ no_mangle ]
+r##"# [ unsafe ( no_mangle ) ]
  pub extern "C" fn TestPassObjectsAsParams_f2 ( this : * mut TestPassObjectsAsParams , a0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
  assert ! ( ! a0 . is_null ( ) ) ;
  let a0 : * mut RefCell < Foo > = a0 as * mut RefCell < Foo >;
@@ -15,7 +15,7 @@ r##"# [ no_mangle ]
  let mut ret : ( ) = TestPassObjectsAsParams :: f2 ( this , a0 ) ;
  ret }"##;
 
-r##"# [ no_mangle ]
+r##"# [ unsafe ( no_mangle ) ]
  pub extern "C" fn TestPassObjectsAsParams_f3 ( this : * mut TestPassObjectsAsParams , a0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
  assert ! ( ! a0 . is_null ( ) ) ;
  let a0 : & mut RefCell < Foo > = unsafe { & mut * ( a0 as * mut RefCell < Foo > ) } ;
@@ -23,7 +23,7 @@ r##"# [ no_mangle ]
  let mut ret : ( ) = TestPassObjectsAsParams :: f3 ( this , a0 ) ;
  ret }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn TestPassObjectsAsParams_f4 ( this : * mut TestPassObjectsAsParams , a0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn TestPassObjectsAsParams_f4 ( this : * mut TestPassObjectsAsParams , a0 : * const :: std :: os :: raw :: c_void , ) -> ( ) {
  assert ! ( ! a0 . is_null ( ) ) ;
  let a0 : & RefCell < Foo > = unsafe { &* ( a0 as * const RefCell < Foo > ) } ;
  let mut a0 : Ref < Foo > = a0.borrow();
@@ -31,7 +31,7 @@ r##"# [ no_mangle ] pub extern "C" fn TestPassObjectsAsParams_f4 ( this : * mut 
  let this : & TestPassObjectsAsParams = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : ( ) = TestPassObjectsAsParams :: f4 ( this , a0 ) ; ret }"##;
 
-r##"# [ no_mangle ] pub extern "C" fn TestPassObjectsAsParams_f5 ( this : * mut TestPassObjectsAsParams , a0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn TestPassObjectsAsParams_f5 ( this : * mut TestPassObjectsAsParams , a0 : * mut :: std :: os :: raw :: c_void , ) -> ( ) {
  assert ! ( ! a0 . is_null ( ) ) ;
  let a0 : & mut RefCell < Foo > = unsafe { & mut * ( a0 as * mut RefCell < Foo > ) } ;
  let mut a0 : & RefCell < Foo > = a0 ;

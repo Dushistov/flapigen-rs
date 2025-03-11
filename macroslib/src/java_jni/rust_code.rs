@@ -275,7 +275,7 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
     }
 
     let jni_load_func: syn::Item = parse_quote! {
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "system" fn JNI_OnLoad(java_vm: *mut JavaVM, _reserved: *mut ::std::os::raw::c_void) -> jint {
             log::debug!("JNI_OnLoad begin");
             assert!(!java_vm.is_null());
@@ -298,7 +298,7 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
     };
     addon_code.push(jni_load_func);
     let jni_unload_func: syn::Item = parse_quote! {
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "system" fn JNI_OnUnload(java_vm: *mut JavaVM, _reserved: *mut ::std::os::raw::c_void) {
             log::debug!("JNI_OnUnLoad begin");
             assert!(!java_vm.is_null());

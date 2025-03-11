@@ -1,4 +1,4 @@
-r##"# [ no_mangle ] pub extern "C" fn Foo_f6 ( this : * mut Foo , ) -> CRustOptionu32 {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Foo_f6 ( this : * mut Foo , ) -> CRustOptionu32 {
  let this : & Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : Option < ControlItem > = Foo :: f6 ( this , ) ;
  let mut ret : CRustOptionu32 = match ret { Some ( mut x ) => {

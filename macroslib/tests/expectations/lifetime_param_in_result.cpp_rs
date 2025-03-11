@@ -1,4 +1,4 @@
-r#"# [ no_mangle ] pub extern "C" fn Foo_f ( this : * mut RefCell < Foo >, a0 : i32 , ) -> ( ) {
+r#"# [ unsafe ( no_mangle ) ] pub extern "C" fn Foo_f ( this : * mut RefCell < Foo >, a0 : i32 , ) -> ( ) {
  let this : & RefCell < Foo > = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut this : Ref < Foo > = this.borrow();
  let mut this : & Foo = & this;

@@ -613,7 +613,7 @@ May be you need to use `private constructor = empty;` syntax?",
         let code = format!(
             r#"
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn {c_destructor_name}(this: *mut {this_type}) {{
 {unpack_code}
     drop(this);
@@ -816,7 +816,7 @@ fn generate_static_method(conv_map: &mut TypeMap, mc: &MethodContext) -> Result<
     let code = format!(
         r#"
 #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn {func_name}({decl_func_args}) -> {c_ret_type} {{
 {convert_input_code}
     let mut {ret_name}: {real_output_typename} = {call};
@@ -892,7 +892,7 @@ fn generate_method(
     let code = format!(
         r#"
 #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn {func_name}(this: *mut {this_type}, {decl_func_args}) -> {c_ret_type} {{
 {convert_input_code}
     let this: {this_type_ref} = unsafe {{
@@ -957,7 +957,7 @@ fn generate_constructor(
     let code = format!(
         r#"
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn {func_name}({decl_func_args}) -> *const ::std::os::raw::c_void {{
 {convert_input_code}
     let this: {real_output_typename} = {call};
@@ -1356,7 +1356,7 @@ fn generate_copy_stuff(
 
         ctx.rust_code.push(quote! {
             #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
-            #[no_mangle]
+            #[unsafe(no_mangle)]
             pub extern "C" fn #clone_fn_name(this: *const #this_type_for_method_ty) -> *mut ::std::os::raw::c_void {
                 #unpack_code
                 let ret: #this_type_ty = this.clone();

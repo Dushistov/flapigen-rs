@@ -1,4 +1,4 @@
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Foo_f4(this: *mut Foo, x: CRustOptionusize) -> () {
     let mut x: Option<usize> = if x.is_some != 0 {
         let mut ret = unsafe { x.val.data };
@@ -11,7 +11,7 @@ pub extern "C" fn Foo_f4(this: *mut Foo, x: CRustOptionusize) -> () {
     ret
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Foo_f5(x: CRustOptionf64, y: CRustOptionusize) -> () {
     let mut x: Option<f64> = if x.is_some != 0 {
         let mut ret = unsafe { x.val.data };
@@ -29,7 +29,7 @@ pub extern "C" fn Foo_f5(x: CRustOptionf64, y: CRustOptionusize) -> () {
     ret
 }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Foo_f6(x: CRustOptionCRustStrView) -> () {
     let mut x: Option<&str> = if x.is_some != 0 {
         let mut ret: &str = unsafe {
@@ -48,7 +48,7 @@ pub extern "C" fn Foo_f6(x: CRustOptionCRustStrView) -> () {
 }"##;
 
 
-r##"# [ no_mangle ] pub extern "C" fn Foo_f3 ( this : * mut Foo , a0 : CRustOptionu32 , ) -> ( ) {
+r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Foo_f3 ( this : * mut Foo , a0 : CRustOptionu32 , ) -> ( ) {
  let mut a0 : Option < ControlItem > = if a0 . is_some != 0 {
  let mut ret : ControlItem = < ControlItem >:: swig_from ( unsafe { a0 . val . data } ) ;
  Some ( ret ) } else { None } ;
@@ -56,7 +56,7 @@ r##"# [ no_mangle ] pub extern "C" fn Foo_f3 ( this : * mut Foo , a0 : CRustOpti
  let mut ret : ( ) = Foo :: f3 ( this , a0 ) ;
  ret }"##;
 
-r##"#[no_mangle]
+r##"#[unsafe(no_mangle)]
 pub extern "C" fn Foo_f7(x: CRustClassOptBoo) -> () {
     let mut x: Option<&Boo> = if !x.p.is_null() {
         assert!(!x.p.is_null());
