@@ -724,7 +724,7 @@ impl VisitMut for FilterSwigAttrs {
             .to_string()
             .starts_with("swig_")
         {
-            *i = syn::parse_quote! { #[doc = ""] };
+            *i = syn::parse_quote! { #[doc(hidden)] };
         } else {
             visit_attribute_mut(self, i);
         }

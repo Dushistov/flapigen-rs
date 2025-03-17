@@ -104,12 +104,12 @@ macro_rules! swig_assert_eq_size {
 }
 
 #[cfg(target_pointer_width = "32")]
-pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+pub fn jlong_to_pointer<T>(val: jlong) -> *mut T {
     (val as u32) as *mut T
 }
 
 #[cfg(target_pointer_width = "64")]
-pub unsafe fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+pub fn jlong_to_pointer<T>(val: jlong) -> *mut T {
     val as *mut T
 }
 
@@ -193,7 +193,7 @@ struct JniEnvHolder<'a> {
 }
 
 #[allow(dead_code)]
-impl<'a> Drop for JniEnvHolder<'a> {
+impl Drop for JniEnvHolder<'_> {
     fn drop(&mut self) {
         if self.need_detach {
             let res = unsafe {
@@ -368,7 +368,7 @@ fn jobject_array_to_vec_of_objects<T: SwigForeignClass + Clone>(
                 panic!("Failed to retrieve element {} from this `jobjectArray'", i);
             }
             let ptr = (**env).GetLongField.unwrap()(env, obj, field_id);
-            let native = (jlong_to_pointer(ptr) as *mut T).as_mut().unwrap();
+            let native = jlong_to_pointer::<T>(ptr).as_mut().unwrap();
             (**env).DeleteLocalRef.unwrap()(env, obj);
             native
         };
@@ -786,12 +786,12 @@ macro_rules! define_array_handling_code {
                 fn to_slice(&self) -> &[$rust_elem_type] {
                     unsafe {
                         let len: jsize = (**self.env).GetArrayLength.unwrap()(self.env, self.array);
-                        assert!((len as u64) <= (usize::max_value() as u64));
+                        assert!((len as u64) <= (usize::MAX as u64));
                         ::std::slice::from_raw_parts(self.data, len as usize)
                     }
                 }
                 fn from_slice_to_raw(arr: &[$rust_elem_type], env: *mut JNIEnv) -> $jni_arr_type {
-                    assert!((arr.len() as u64) <= (jsize::max_value() as u64));
+                    assert!((arr.len() as u64) <= (jsize::MAX as u64));
                     let jarr: $jni_arr_type = unsafe {
                         (**env).$jni_new_array.unwrap()(env, arr.len() as jsize)
                     };
