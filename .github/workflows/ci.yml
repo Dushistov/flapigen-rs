@@ -70,14 +70,11 @@ jobs:
         run: Rename-Item C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc.old
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: hecrj/setup-rust-action@v2
         with:
-          toolchain: ${{ matrix.rust }}
-          profile: minimal
-          target: ${{ matrix.target }}
-          override: true
+          rust-version: ${{ matrix.rust }}
+          targets: ${{ matrix.target }}
           components: rustfmt
-          default: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.7.8'
@@ -203,12 +200,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions-rs/toolchain@v1
+      - uses: hecrj/setup-rust-action@v2
         with:
-          profile: minimal
           # Docs.rs uses nightly, which allows for easier syntax for linking to functions.
-          toolchain: nightly
-          override: true
+          rust-version: nightly
       - name: cargo rustdoc
         run: |
           set -e
