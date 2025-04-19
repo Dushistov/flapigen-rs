@@ -499,11 +499,17 @@ public:
                     option = "CppStrView::Std17";
                     r##"
     std::string_view to_string_view() const { return std::string_view(data, len); }
+    bool operator==(const RustString& o) const noexcept {
+        return to_string_view() == o.to_string_view();
+    }
 "##);
     foreign_code!(module = "rust_str.h";
                     option = "CppStrView::Boost";
                     r#"
     boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
+    bool operator==(const RustString& o) const noexcept {
+        return to_boost_string_view() == o.to_boost_string_view();
+    }
 "#);
     foreign_code!(module = "rust_str.h";
                     r##"
