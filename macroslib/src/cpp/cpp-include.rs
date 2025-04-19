@@ -371,7 +371,7 @@ foreign_typemap!(
     ($pin:r_type) bool <= ::std::os::raw::c_char {
         $out = $pin != 0;
     };
-    ($pin:f_type) <= "bool" "$pin ? 1 : 0";
+    ($pin:f_type) <= "bool" "static_cast<char>($pin ? 1 : 0)";
 );
 
 foreign_typemap!(
