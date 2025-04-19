@@ -214,10 +214,10 @@ def test_python(is_windows: bool, test_cfg: Set[str]):
         if is_windows:
             shutil.copyfile(os.path.join(target_dir, "flapigen_test_python.dll"), "python_tests/python/flapigen_test_python.pyd")
             if os.getenv('platform') == "x64":
-                subprocess.check_call(["py", "-3.7-64", "main.py"], cwd = "python_tests/python")
+                subprocess.check_call(["py", "-3.8-64", "main.py"], cwd = "python_tests/python")
             else:
                 # If we choose 32, we must also choose specific, minor python version.
-                subprocess.check_call(["py", "-3.7-32", "main.py"], cwd = "python_tests/python")
+                subprocess.check_call(["py", "-3.8-32", "main.py"], cwd = "python_tests/python")
         else:
             lib_name = "libflapigen_test_python.dylib" if sys.platform == "darwin" else "libflapigen_test_python.so"
             shutil.copyfile(os.path.join(target_dir, lib_name), "python_tests/python/flapigen_test_python.so")
