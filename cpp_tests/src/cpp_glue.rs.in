@@ -914,6 +914,12 @@ foreign_class!(class TestPair {
     fn return_tuple3() -> (bool, i32, String) {
         (true, 17, "tuple3".to_string())
     }
+    fn swap_int_in_tuple3(x: (i32, bool, i32)) -> (i32, bool, i32) {
+        (x.2, x.1, x.0)
+    }
+    fn swap_int_in_tuple4(x: (i32, bool, i32, bool)) -> (i32, bool, i32, bool) {
+        (x.2, x.1, x.0, x.3)
+    }
 });
 
 #[derive(Clone)]

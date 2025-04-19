@@ -999,6 +999,10 @@ TEST(TestPair, smokeTest)
         EXPECT_EQ(17, p2);
         EXPECT_EQ("tuple3", p3.to_std_string());
     }
+    EXPECT_EQ(std::make_tuple(1, true, 17),
+              TestPair::swap_int_in_tuple3(std::make_tuple(17, true, 1)));
+    EXPECT_EQ(std::make_tuple(1, true, 17, false),
+              TestPair::swap_int_in_tuple4(std::make_tuple(17, true, 1, false)));
 }
 
 TEST(TestCopy, smokeTest)
