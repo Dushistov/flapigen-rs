@@ -3,7 +3,7 @@ r#"template<bool OWN_DATA>
     inline bool FooWrapper<OWN_DATA>::f1(bool a0) noexcept
     {
 
-        char ret = Foo_f1(this->self_, a0 ? 1 : 0);
+        char ret = Foo_f1(this->self_, static_cast<char>(a0 ? 1 : 0));
         return (ret != 0);
     }"#;
 "char Foo_f1(FooOpaque * const self, char a0);";
@@ -11,7 +11,7 @@ r#"template<bool OWN_DATA>
 r#"FooWrapper(bool a0) noexcept
     {
 
-        this->self_ = Foo_new(a0 ? 1 : 0);
+        this->self_ = Foo_new(static_cast<char>(a0 ? 1 : 0));
         if (this->self_ == nullptr) {
             std::abort();
         }
@@ -23,7 +23,7 @@ r#"template<bool OWN_DATA>
     inline bool FooWrapper<OWN_DATA>::f2(bool a0) noexcept
     {
 
-        char ret = Foo_f2(a0 ? 1 : 0);
+        char ret = Foo_f2(static_cast<char>(a0 ? 1 : 0));
         return (ret != 0);
     }"#;
 

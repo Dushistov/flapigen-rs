@@ -16,6 +16,6 @@ r#"static char c_onStateChanged2(char a0, double a1, void *opaque)
         auto pi = static_cast<const SomeObserver *>(opaque);
 
         auto ret = pi->onStateChanged2((a0 != 0), a1);
-        return ret ? 1 : 0;
+        return static_cast<char>(ret ? 1 : 0);
     }"#;
 "char (*onStateChanged2)(char a0, double a1, void *opaque);";
