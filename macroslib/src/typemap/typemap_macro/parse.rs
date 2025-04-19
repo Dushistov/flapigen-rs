@@ -339,6 +339,8 @@ pub(super) struct CItemsList(pub(super) Vec<CItem>);
 
 impl syn::parse::Parse for CItemsList {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mangle_attr_old: syn::Attribute = parse_quote! { #[no_mangle] };
+        let mangle_attr: syn::Attribute = parse_quote! { #[unsafe(no_mangle)] };
         let mut types = vec![];
         while !input.is_empty() {
             let item: syn::Item = input.parse()?;
@@ -356,11 +358,14 @@ impl syn::parse::Parse for CItemsList {
                     types.push(CItem::Union(u));
                 }
                 syn::Item::Fn(f) => {
-                    let mangle_attr: syn::Attribute = parse_quote! { #[unsafe(no_mangle)] };
-                    if !f.attrs.iter().any(|a| *a == mangle_attr) {
+                    if !f
+                        .attrs
+                        .iter()
+                        .any(|a| *a == mangle_attr || *a == mangle_attr_old)
+                    {
                         return Err(syn::Error::new(
                             f.span(),
-                            "fn has no #[unsafe(no_mangle)] attribute",
+                            "fn has no #[no_mangle] or #[unsafe(no_mangle)] attribute",
                         ));
                     }
 
@@ -382,11 +387,14 @@ impl syn::parse::Parse for CItemsList {
                     types.push(CItem::Fn(f));
                 }
                 syn::Item::Static(s) => {
-                    let mangle_attr: syn::Attribute = parse_quote! { #[unsafe(no_mangle)] };
-                    if !s.attrs.iter().any(|a| *a == mangle_attr) {
+                    if !s
+                        .attrs
+                        .iter()
+                        .any(|a| *a == mangle_attr || *a == mangle_attr_old)
+                    {
                         return Err(syn::Error::new(
                             s.span(),
-                            "static has no #[unsafe(no_mangle)] attribute",
+                            "static has no #[no_mangle] or #[unsafe(no_mangle)] attribute",
                         ));
                     }
 
