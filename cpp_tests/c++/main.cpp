@@ -1183,6 +1183,10 @@ TEST(SmartPtrCopy, smokeTest)
               static_cast<const SessionOpaque *>(session));
     EXPECT_EQ(static_cast<const SessionOpaque *>(session2),
               static_cast<const SessionOpaque *>(session3));
+
+    auto s = Session::test_copy(session);
+    EXPECT_EQ("Session", session.name());
+    EXPECT_EQ("Session", s.to_std_string());
 }
 
 TEST(WorkWithSlice, smokeTest)
