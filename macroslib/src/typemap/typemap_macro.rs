@@ -197,7 +197,7 @@ impl TypeMapConvRuleInfo {
         ty: &Type,
         direction: Direction,
         impl_trait: TraitChecker,
-    ) -> Option<TyParamsSubstMap>
+    ) -> Option<TyParamsSubstMap<'_>>
     where
         TraitChecker: Fn(&Type, &TraitNamesSet) -> bool,
     {
@@ -268,11 +268,11 @@ impl TypeMapConvRuleInfo {
                     DiagnosticError::new(
                         self.src_id,
                         code_span,
-                        format!("can not parse this code after expand: {}", err),
+                        format!("can not parse this code after expand: {err}"),
                     )
                     .add_span_note(
                         invalid_src_id_span(),
-                        format!("Code after expand: ```\n{}\n```", code),
+                        format!("Code after expand: ```\n{code}\n```"),
                     )
                 })?;
             assert!(self.c_types.is_none());
@@ -577,7 +577,7 @@ fn build_generic_aliases<'a>(
             parse_ty_with_given_span(&ident, ga.value.span()).map_err(|err| {
                 DiagnosticError::from_syn_err(src_id, err).add_span_note(
                     invalid_src_id_span(),
-                    format!("trying to parse '{}' as type", ident),
+                    format!("trying to parse '{ident}' as type"),
                 )
             })?;
         ret.push(CalcGenericAlias {
@@ -987,7 +987,7 @@ fn call_swig_f_type(
             .iter()
             .position(|a| a.name == alias_name)
             .ok_or_else(|| {
-                DiagnosticError::new2(ctx_sp, format!("unknown type alias '{}'", alias_name))
+                DiagnosticError::new2(ctx_sp, format!("unknown type alias '{alias_name}'"))
             })?;
         TyValueOrRef::Ref(&generic_aliases[pos].value)
     } else {
@@ -1066,7 +1066,7 @@ fn expand_str_in_ftype_name_context(
         } else {
             Err(DiagnosticError::new2(
                 ctx_span,
-                format!("unknown macros '{}' in this context", id),
+                format!("unknown macros '{id}' in this context"),
             ))
         }
     })
@@ -1095,7 +1095,7 @@ fn find_type_param<'b>(
         return Ok(TyValueOrRef::Ref(ty));
     }
     let compound_ty: Type = parse_ty_with_given_span(param, param_span.1).map_err(|err| {
-        DiagnosticError::new2(param_span, format!("unknown type parameter '{}'", param))
+        DiagnosticError::new2(param_span, format!("unknown type parameter '{param}'"))
             .add_span_note(invalid_src_id_span(), err)
     })?;
     if let Type::Reference(ty_ref) = compound_ty {
@@ -1112,7 +1112,7 @@ fn find_type_param<'b>(
     }
     Err(DiagnosticError::new2(
         param_span,
-        format!("unknown type parameter '{}'", param),
+        format!("unknown type parameter '{param}'"),
     ))
 }
 
@@ -1127,10 +1127,7 @@ fn expand_module_name(
             if !params.is_empty() {
                 Err(DiagnosticError::new2(
                     ctx_sp,
-                    format!(
-                        "{} ({}) does not accept parameters: {:?}",
-                        GENERIC_ALIAS, id, params
-                    ),
+                    format!("{GENERIC_ALIAS} ({id}) does not accept parameters: {params:?}"),
                 ))
             } else if let Some(pos) = aliases.iter().position(|e| e.name == id) {
                 write!(out, "{}", DisplayToTokens(&aliases[pos].value))
@@ -1139,7 +1136,7 @@ fn expand_module_name(
             } else {
                 Err(DiagnosticError::new2(
                     ctx_sp,
-                    format!("unknown macros '{}' in this context", id),
+                    format!("unknown macros '{id}' in this context"),
                 ))
             }
         },
@@ -1175,7 +1172,7 @@ fn expand_rust_code(
                     } else {
                         unreachable!()
                     };
-                    write!(out, "{}", tt).expect(WRITE_TO_MEM_FAILED_MSG);
+                    write!(out, "{tt}").expect(WRITE_TO_MEM_FAILED_MSG);
                 }
                 _ if id == SWIG_I_TYPE => {
                     let (param, opt_arg) = match params.len() {
@@ -1213,12 +1210,12 @@ fn expand_rust_code(
                         write!(out, "{}", normalize_type(&generic_aliases[alias_idx].value))
                             .expect(WRITE_TO_MEM_FAILED_MSG);
                     } else {
-                        write!(out, "{}!(", id).expect(WRITE_TO_MEM_FAILED_MSG);
+                        write!(out, "{id}!(").expect(WRITE_TO_MEM_FAILED_MSG);
                         for (i, p) in params.iter().enumerate() {
                             if i == 0 {
                                 out.push_str(p);
                             } else {
-                                write!(out, ", {}", p).expect(WRITE_TO_MEM_FAILED_MSG);
+                                write!(out, ", {p}").expect(WRITE_TO_MEM_FAILED_MSG);
                             }
                         }
                         out.push(')');
@@ -1282,7 +1279,7 @@ fn expand_foreign_code(
                     } else {
                         unreachable!()
                     };
-                    write!(out, "{}", tt).expect(WRITE_TO_MEM_FAILED_MSG);
+                    write!(out, "{tt}").expect(WRITE_TO_MEM_FAILED_MSG);
                 }
                 _ => {
                     if let Some(pos) = generic_aliases.iter().position(|a| a.name == id) {
@@ -1291,7 +1288,7 @@ fn expand_foreign_code(
                     } else {
                         return Err(DiagnosticError::new2(
                             ctx_span,
-                            format!("unknown macro {} in f_type conversion code", id),
+                            format!("unknown macro {id} in f_type conversion code"),
                         ));
                     }
                 }

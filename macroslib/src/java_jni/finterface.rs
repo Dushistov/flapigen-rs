@@ -257,7 +257,7 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
                 .enumerate()
                 .map(|(i, v)| {
                     let arg_ty = &v.as_named_arg().unwrap().ty;
-                    let arg_name = Ident::new(&format!("a{}", i), Span::call_site());
+                    let arg_name = Ident::new(&format!("a{i}"), Span::call_site());
                     quote!(#arg_name: #arg_ty)
                 }),
         );
@@ -270,7 +270,7 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
             interface.src_id,
             method,
             f_method,
-            (0..n_args).map(|v| format!("a{}", v)),
+            (0..n_args).map(|v| format!("a{v}")),
             "()",
         )?;
         ctx.rust_code.append(&mut conv_deps);
@@ -327,7 +327,7 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
                     "jdouble" => quote!{ CallDoubleMethod },
                     "jobject" => quote!{ CallObjectMethod },
                     _ => return Err(DiagnosticError::new2(jni_ret_type.src_id_span(),
-                                                          format!("Have not idea how to handle this type `{}` as return of callback function", jni_ret_type))),
+                                                          format!("Have not idea how to handle this type `{jni_ret_type}` as return of callback function"))),
                 };
                 let jni_ret_type = &jni_ret_type.ty;
                 let out_conv_code: TokenStream = syn::parse_str(&out_conv_code).unwrap_or_else(|err| {
@@ -390,7 +390,7 @@ fn convert_args_for_variadic_function_call(
 ) -> (Vec<TokenStream>, TokenStream) {
     let mut ret = Vec::with_capacity(f_method.input.len());
     for (i, arg) in f_method.input.iter().enumerate() {
-        let arg_name = Ident::new(&format!("a{}", i), Span::call_site());
+        let arg_name = Ident::new(&format!("a{i}"), Span::call_site());
         if let Some(conv_type_str) = JNI_FOR_VARIADIC_C_FUNC_CALL.get(
             arg.as_ref()
                 .corresponding_rust_type

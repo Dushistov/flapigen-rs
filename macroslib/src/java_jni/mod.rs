@@ -298,7 +298,7 @@ fn merge_rule(ctx: &mut JavaContext, mut rule: TypeMapConvRuleInfo) -> Result<()
         return Err(DiagnosticError::new(
             rule.src_id,
             rule.span,
-            format!("rule {:?} is empty", rule),
+            format!("rule {rule:?} is empty"),
         ));
     }
     let all_options = {
@@ -412,15 +412,14 @@ package {package};
             let mut jni_args = Vec::with_capacity(max_args);
 
             for i in 1..=max_args {
-                let java_method_name = format!("reachabilityFence{}", i);
+                let java_method_name = format!("reachabilityFence{i}");
                 write!(
                     src_file,
-                    "\n    /*package*/ static native void {}(Object ref1",
-                    java_method_name
+                    "\n    /*package*/ static native void {java_method_name}(Object ref1"
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
                 for j in 2..=i {
-                    write!(src_file, ", Object ref{}", j).expect(WRITE_TO_MEM_FAILED_MSG);
+                    write!(src_file, ", Object ref{j}").expect(WRITE_TO_MEM_FAILED_MSG);
                 }
                 src_file.write_all(b");").expect(WRITE_TO_MEM_FAILED_MSG);
 
@@ -465,5 +464,5 @@ package {package};
 }
 
 fn map_write_err<Err: fmt::Display>(err: Err) -> String {
-    format!("write failed: {}", err)
+    format!("write failed: {err}")
 }

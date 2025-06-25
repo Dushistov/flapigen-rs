@@ -292,7 +292,6 @@ pub(crate) fn unpack_from_heap_pointer(
             r#"
     let {var_name}: {inside_box_type} = *{var_name};
 "#,
-            var_name = var_name,
             inside_box_type = from
         )
     } else {
@@ -303,9 +302,7 @@ pub(crate) fn unpack_from_heap_pointer(
     let {var_name}: Box<{inside_box_type}> = unsafe {{ Box::from_raw({var_name}) }};
 {unbox_code}
 "#,
-        var_name = var_name,
         inside_box_type = from,
-        unbox_code = unbox_code
     )
 }
 
@@ -327,14 +324,13 @@ pub(crate) fn configure_ftype_rule(
             rule_src_id,
             first_rule.left_right_ty.span(),
             format!(
-                "multiply f_type '{}' rules, that possible to use in this configuration, first",
-                rule_type,
+                "multiply f_type '{rule_type}' rules, that possible to use in this configuration, first"
             ),
         );
         for other in f_type_rules.iter() {
             err.span_note(
                 (rule_src_id, other.left_right_ty.span()),
-                format!("other f_type '{}' rule", rule_type),
+                format!("other f_type '{rule_type}' rule"),
             );
         }
         return Err(err);
@@ -357,12 +353,7 @@ where
 
     for path in entries {
         let path = path
-            .map_err(|err| {
-                format!(
-                    "Can not get next entry during parsing read_dir output: {}",
-                    err
-                )
-            })?
+            .map_err(|err| format!("Can not get next entry during parsing read_dir output: {err}"))?
             .path();
         if if_remove_filter(&path) {
             fs::remove_file(&path)

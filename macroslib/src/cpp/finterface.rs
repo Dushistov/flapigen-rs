@@ -58,8 +58,8 @@ pub(in crate::cpp) fn generate_interface(
         c_interface_struct_header.clone(),
     )?;
 
-    let rust_struct_pointer = format!("*const {}", c_struct_name);
-    let c_struct_pointer = format!("const struct {} * const", c_struct_name);
+    let rust_struct_pointer = format!("*const {c_struct_name}");
+    let c_struct_pointer = format!("const struct {c_struct_name} * const");
     let rust_ty = register_rust_type_and_c_type(
         ctx,
         rust_struct_pointer,
@@ -153,8 +153,7 @@ pub struct {struct_with_funcs} {{
     opaque: *const ::std::os::raw::c_void,
     {struct_with_funcs}_deref:
         extern "C" fn(_: *const ::std::os::raw::c_void),
-"#,
-        struct_with_funcs = struct_with_funcs,
+"#
     );
     for (method, f_method) in interface.items.iter().zip(methods_sign) {
         let args = rust_generate_args_with_types(f_method);
@@ -196,7 +195,7 @@ impl {trait_name} for {struct_with_funcs} {{"#,
 
     fn n_arguments_list(n: usize) -> String {
         (0..n)
-            .map(|v| format!("a{}", v))
+            .map(|v| format!("a{v}"))
             .fold(String::new(), |mut acc, x| {
                 if !acc.is_empty() {
                     acc.push_str(", ");
@@ -242,7 +241,7 @@ impl {trait_name} for {struct_with_funcs} {{"#,
             interface.src_id,
             method,
             f_method,
-            (0..n_args).map(|v| format!("a{}", v)),
+            (0..n_args).map(|v| format!("a{v}")),
             "()",
         )?;
         ctx.rust_code.append(&mut conv_deps);
@@ -300,14 +299,13 @@ impl {trait_name} for {struct_with_funcs} {{"#,
     );
 
     writeln!(
-        &mut code,
+        code,
         r#"
 impl Drop for {struct_with_funcs} {{
     fn drop(&mut self) {{
        (self.{struct_with_funcs}_deref)(self.opaque);
     }}
-}}"#,
-        struct_with_funcs = struct_with_funcs
+}}"#
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
@@ -542,7 +540,7 @@ struct C_{interface_name} {{
 
     let mut includes = String::new();
     for inc in req_includes {
-        writeln!(&mut includes, r#"#include {}"#, inc).expect(WRITE_TO_MEM_FAILED_MSG);
+        writeln!(&mut includes, r#"#include {inc}"#).expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     writeln!(
@@ -686,7 +684,7 @@ fn register_reference(
     } else {
         format!("{} &", rust_ty.typename())
     };
-    let conv_code = format!("*{var}", var = FROM_VAR_TEMPLATE,);
+    let conv_code = format!("*{FROM_VAR_TEMPLATE}");
     let conv_code = Rc::new(TypeConvCode::with_params(conv_code, (src_id, span), params));
 
     ctx.conv_map.alloc_foreign_type(ForeignTypeS {

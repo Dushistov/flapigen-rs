@@ -75,7 +75,7 @@ pub(crate) fn panic_on_parse_error(src_reg: &SourceRegistry, main_err: &Diagnost
 
     for (src_id, err) in &main_err.data {
         if src_id.is_none() {
-            eprintln!("Error (without location information): {}", err);
+            eprintln!("Error (without location information): {err}");
             continue;
         }
         let src = &src_reg.src_with_id(*src_id);

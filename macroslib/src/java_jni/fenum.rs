@@ -74,7 +74,7 @@ pub(in crate::java_jni) fn generate_enum(
                 input_to_output: false,
                 intermediate_ty: jint_rty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
-                    format!("        int {out} = {in}.getValue();", out = TO_VAR_TEMPLATE, in = FROM_VAR_TEMPLATE),
+                    format!("        int {TO_VAR_TEMPLATE} = {FROM_VAR_TEMPLATE}.getValue();"),
                     invalid_src_id_span(),
                 )),
             }),
@@ -226,7 +226,7 @@ fn add_conversion_from_enum_to_jobject_for_callbacks(
     for item in &fenum.items {
         let rust_name = &item.rust_name;
         let java_item = item.name.to_string();
-        let enum_sig = format!("L{};", enum_class_name);
+        let enum_sig = format!("L{enum_class_name};");
         let enum_filed_global_var = Ident::new(
             &format!("{}_{}", enum_id_upper, java_item.to_uppercase()),
             Span::call_site(),

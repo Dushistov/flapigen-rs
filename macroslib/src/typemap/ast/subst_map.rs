@@ -30,7 +30,7 @@ impl<'a> TyParamsSubstMap<'a> {
         }
     }
     #[inline]
-    pub(crate) fn as_slice(&self) -> &[TyParamsSubstItem] {
+    pub(crate) fn as_slice(&self) -> &[TyParamsSubstItem<'_>] {
         &self.inner
     }
     #[inline]

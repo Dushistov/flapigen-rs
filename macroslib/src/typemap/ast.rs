@@ -51,9 +51,7 @@ impl UniqueName {
         let value: SmolStr = value.into();
         assert!(
             value.as_str().starts_with(prefix),
-            "{} should starts with {}",
-            value,
-            prefix
+            "{value} should starts with {prefix}"
         );
         Self {
             value,
@@ -361,7 +359,7 @@ impl GenericTypeConv {
         ty: &RustType,
         goal_ty: Option<&RustType>,
         others: OtherRustTypes,
-    ) -> Option<ConversionResult>
+    ) -> Option<ConversionResult<'_>>
     where
         OtherRustTypes: Fn(&str) -> Option<&'a RustType>,
     {
@@ -546,12 +544,12 @@ where
         let requires = &trait_bounds[idx].trait_names;
         let val_name = normalize_type(val);
 
-        others(val_name).map_or(true, |rt| !rt.implements.contains_subset(requires))
+        others(val_name).is_none_or(|rt| !rt.implements.contains_subset(requires))
     };
     !trait_bounds
         .iter()
         .position(|it| it.ty_param.as_ref() == subst_ident)
-        .map_or(false, traits_bound_not_match)
+        .is_some_and(traits_bound_not_match)
 }
 
 /// for example true for Result<T, E> Result<u8, u8>
@@ -911,7 +909,7 @@ pub(crate) struct GenericTraitBound<'a> {
 
 pub(crate) type GenericTraitBoundVec<'a> = SmallVec<[GenericTraitBound<'a>; 10]>;
 
-pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> GenericTraitBoundVec {
+pub(crate) fn get_trait_bounds(generic: &syn::Generics) -> GenericTraitBoundVec<'_> {
     let mut ret = GenericTraitBoundVec::new();
 
     for ty_p in generic.type_params() {
@@ -1031,7 +1029,7 @@ pub(crate) fn check_if_smart_pointer_return_inner_type(
 ) -> Option<Type> {
     let generic_params: syn::Generics = parse_quote! { <T> };
     let from_ty: Type =
-        syn::parse_str(&format!("{}<T>", smart_ptr_name)).expect("smart pointer parse error");
+        syn::parse_str(&format!("{smart_ptr_name}<T>")).expect("smart pointer parse error");
     let to_ty: Type = parse_quote! { T };
 
     GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())

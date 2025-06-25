@@ -59,7 +59,7 @@ pub(in crate::java_jni) fn generate(ctx: &mut JavaContext, class: &ForeignClassI
         .into(),
     );
     ctx.java_type_to_jni_sig_map.insert(
-        format!("{} []", class_name).into(),
+        format!("{class_name} []").into(),
         format!(
             "[L{};",
             java_class_full_name(&ctx.cfg.package_name, &class_name)
@@ -249,9 +249,7 @@ public final class {class_name} {{"#,
                     } else {
                         writeln!(
                             file,
-                            r#"        {func_name}({args});"#,
-                            func_name = func_name,
-                            args = args_for_call_internal,
+                            r#"        {func_name}({args_for_call_internal});"#
                         )
                     }
                     .expect(WRITE_TO_MEM_FAILED_MSG);
@@ -331,7 +329,6 @@ public final class {class_name} {{"#,
                         r#"
         {func_name}({rust_self_name}{args});"#,
                         rust_self_name = JAVA_RUST_SELF_NAME,
-                        func_name = func_name,
                         args = args_for_call_internal,
                     )
                     .expect(WRITE_TO_MEM_FAILED_MSG);
@@ -738,11 +735,9 @@ pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong
     drop(this);
 }}
 "#,
-            jni_destructor_name = jni_destructor_name,
-            unpack_code = unpack_code,
             this_type = this_type_for_method,
         );
-        debug!("we generate and parse code: {}", code);
+        debug!("we generate and parse code: {code}");
         ctx.rust_code.push(
             syn::parse_str(&code).unwrap_or_else(|err| {
                 panic_on_syn_error("java/jni internal desctructor", code, err)
@@ -1058,7 +1053,7 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
     let mut protect_args = Vec::new();
     for (i, (arg, arg_name)) in f_method.input.iter().zip(arg_name_iter).enumerate() {
         let after_conv_arg_name = if let Some(java_conv) = arg.java_converter.as_ref() {
-            let templ = format!("a{}", i);
+            let templ = format!("a{i}");
             let after_conv_arg_name = new_unique_name(&known_names, &templ);
             known_names.insert(after_conv_arg_name.clone());
             let java_code: String = java_conv
@@ -1094,9 +1089,8 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
                     reachability_fence_code.push('\n');
                 }
                 write!(
-                    &mut reachability_fence_code,
-                    "        java.lang.ref.Reference.reachabilityFence({});",
-                    arg_name
+                    reachability_fence_code,
+                    "        java.lang.ref.Reference.reachabilityFence({arg_name});"
                 )
                 .expect(WRITE_TO_MEM_FAILED_MSG);
             }
@@ -1148,7 +1142,7 @@ fn calc_output_conv<'a>(
     let conv_code = conv
         .converter
         .replace(FROM_VAR_TEMPLATE, ret_name)
-        .replace(TO_VAR_TYPE_TEMPLATE, &format!("{} {}", ret_type, conv_ret))
+        .replace(TO_VAR_TYPE_TEMPLATE, &format!("{ret_type} {conv_ret}"))
         .replace(TO_VAR_TEMPLATE, conv_ret);
     let mut conv_code: String = java_code::filter_null_annotation(&conv_code).trim().into();
     if !conv_code.is_empty() && !conv_code.starts_with('\n') {

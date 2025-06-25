@@ -107,7 +107,7 @@ pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
             let var_name = if conv.converter.has_param(TO_VAR_TYPE_TEMPLATE)
                 || conv.converter.has_param(TO_VAR_TEMPLATE)
             {
-                let templ = format!("a{}", i);
+                let templ = format!("a{i}");
                 let var_name = new_unique_name(known_names, &templ);
                 known_names.insert(var_name.clone());
                 Some(var_name)
@@ -379,7 +379,7 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
             ctx.rust_code.push(ctype.into_token_stream());
         }
     }
-    let self_inc = format!("\"{}\"", c_type_header_name);
+    let self_inc = format!("\"{c_type_header_name}\"");
     let common_files = &mut ctx.common_files;
     let file_out: &mut FileWriteCache = file_for_module!(ctx, common_files, c_type_header_name);
 
@@ -535,10 +535,10 @@ extern "C" {
 
     let common_files = &mut ctx.common_files;
     let out: &mut FileWriteCache = file_for_module!(ctx, common_files, c_type_header_name);
-    let self_inc = format!("\"{}\"", c_type_header_name);
+    let self_inc = format!("\"{c_type_header_name}\"");
     for inc in &includes {
         if self_inc != *inc {
-            writeln!(out, "#include {}", inc).expect(WRITE_TO_MEM_FAILED_MSG);
+            writeln!(out, "#include {inc}").expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }
     out.write_all(&fn_decl_out).expect(WRITE_TO_MEM_FAILED_MSG);

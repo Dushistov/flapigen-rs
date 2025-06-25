@@ -544,7 +544,7 @@ fn generate_conversion_for_argument(
         Err(DiagnosticError::new(
             src_id,
             method_span,
-            format!("Unsupported argument type: {}", rust_type),
+            format!("Unsupported argument type: {rust_type}"),
         ))
     }
 }
@@ -692,7 +692,7 @@ fn generate_conversion_for_return(
         Err(DiagnosticError::new(
             src_id,
             method_span,
-            format!("Unsupported return type: {}", rust_type),
+            format!("Unsupported return type: {rust_type}"),
         ))
     }
 }

@@ -99,10 +99,7 @@ pub(in crate::typemap) fn parse(
                     let mut err = DiagnosticError::new(
                         name,
                         item_mod.span(),
-                        format!(
-                            "Should only one {} per types map",
-                            MOD_NAME_WITH_FOREIGN_TYPES
-                        ),
+                        format!("Should only one {MOD_NAME_WITH_FOREIGN_TYPES} per types map"),
                     );
                     err.span_note((name, span), "Previously defined here");
                     return Err(err);
@@ -382,8 +379,7 @@ fn get_swig_code_from_attrs<'b>(
             Err(DiagnosticError::new2(
                 item_span,
                 format!(
-                    "Expect to have {} attribute, and it should be only one",
-                    swig_code_attr_name
+                    "Expect to have {swig_code_attr_name} attribute, and it should be only one"
                 ),
             ))
         } else {
@@ -394,7 +390,7 @@ fn get_swig_code_from_attrs<'b>(
     } else {
         Err(DiagnosticError::new2(
             item_span,
-            format!("No {} attribute", swig_code_attr_name),
+            format!("No {swig_code_attr_name} attribute"),
         ))
     }
 }
@@ -410,7 +406,7 @@ fn handle_into_from_impl(
             return Err(DiagnosticError::new(
                 src_id,
                 item_impl.span(),
-                format!("Expect only {} attribute", SWIG_TO_FOREIGNER_HINT),
+                format!("Expect only {SWIG_TO_FOREIGNER_HINT} attribute"),
             ));
         }
         Some(swig_attrs[SWIG_TO_FOREIGNER_HINT][0].0.clone())
@@ -424,7 +420,7 @@ fn handle_into_from_impl(
             return Err(DiagnosticError::new(
                 src_id,
                 item_impl.span(),
-                format!("Expect only {} attribute", SWIG_FROM_FOREIGNER_HINT),
+                format!("Expect only {SWIG_FROM_FOREIGNER_HINT} attribute"),
             ));
         }
         Some(swig_attrs[SWIG_FROM_FOREIGNER_HINT][0].0.clone())
@@ -514,10 +510,7 @@ fn handle_macro(
         DiagnosticError::new(
             src_id,
             item_macro.span(),
-            format!(
-                "No {} but there are other attr {:?}",
-                SWIG_FROM_ATTR_NAME, swig_attrs
-            ),
+            format!("No {SWIG_FROM_ATTR_NAME} but there are other attr {swig_attrs:?}"),
         )
     })?;
 
@@ -526,10 +519,7 @@ fn handle_macro(
         DiagnosticError::new(
             src_id,
             item_macro.span(),
-            format!(
-                "No {} but there are other attr {:?}",
-                SWIG_TO_ATTR_NAME, swig_attrs
-            ),
+            format!("No {SWIG_TO_ATTR_NAME} but there are other attr {swig_attrs:?}"),
         )
     })?;
     assert!(!to_typename.is_empty());
@@ -650,7 +640,7 @@ fn get_foreigner_hint_for_generic(
             let mut err = DiagnosticError::new(
                 src_id,
                 attrs[1].1,
-                format!("Several {} attributes", attr_name),
+                format!("Several {attr_name} attributes"),
             );
             err.span_note((src_id, attrs[0].1), format!("First {attr_name}"));
             return Err(err);
@@ -661,7 +651,7 @@ fn get_foreigner_hint_for_generic(
             return Err(DiagnosticError::new(
                 src_id,
                 generic.span(),
-                format!("Expect exactly one generic parameter for {}", attr_name),
+                format!("Expect exactly one generic parameter for {attr_name}"),
             ));
         }
         let first_ty_param = first_ty_param.expect("should have value");
