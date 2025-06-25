@@ -97,10 +97,7 @@ impl TypeConvCode {
         }
 
         if params.is_empty() {
-            panic!(
-                "Code: '{}' should contains {} or {}",
-                code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE
-            );
+            panic!("Code: '{code}' should contains {TO_VAR_TEMPLATE} or {FROM_VAR_TEMPLATE}");
         }
 
         TypeConvCode { code, span, params }
@@ -118,10 +115,7 @@ impl TypeConvCode {
 
         assert!(
             params.len() >= 2,
-            "Code: '{}' should contains {} and {}",
-            code,
-            TO_VAR_TEMPLATE,
-            FROM_VAR_TEMPLATE
+            "Code: '{code}' should contains {TO_VAR_TEMPLATE} and {FROM_VAR_TEMPLATE}"
         );
 
         TypeConvCode { code, span, params }
@@ -172,7 +166,7 @@ impl TypeConvCode {
                 TypeConvCodeSubstParam::Name(p)
             };
             let param_val = subst_func(param_id).ok_or_else(|| {
-                DiagnosticError::new2(self.span, format!("Can not substitude parameter {}", p))
+                DiagnosticError::new2(self.span, format!("Can not substitude parameter {p}"))
             })?;
             subst.push(param_val);
         }
@@ -352,7 +346,7 @@ impl PossiblePath {
     fn new(graph_snapshot: TypeGraphSnapshot, path: Vec<EdgeIndex<TypeGraphIdx>>) -> Self {
         let mut new_edges = Vec::with_capacity(path.len());
         for edge in &path {
-            if graph_snapshot.new_edges.iter().any(|x| *x == *edge) {
+            if graph_snapshot.new_edges.contains(edge) {
                 let (from, to) = graph_snapshot
                     .conv_graph
                     .edge_endpoints(*edge)
@@ -582,7 +576,7 @@ impl TypeMap {
         if path.is_empty() && in_var_name != out_var_name {
             return Ok((
                 code_deps,
-                format!("let mut {} = {};", out_var_name, in_var_name),
+                format!("let mut {out_var_name} = {in_var_name};"),
             ));
         }
 
@@ -1083,8 +1077,7 @@ pub(in crate::typemap) fn validate_code_template(sp: SourceIdSpan, code: &str) -
             sp.0,
             sp.1,
             format!(
-                "{} not contains one of {}, {}, {}",
-                code, TO_VAR_TEMPLATE, FROM_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE
+                "{code} not contains one of {TO_VAR_TEMPLATE}, {FROM_VAR_TEMPLATE}, {TO_VAR_TYPE_TEMPLATE}"
             ),
         ))
     }

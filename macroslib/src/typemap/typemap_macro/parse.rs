@@ -158,7 +158,7 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
         }
 
         let main_span =
-            main_span.ok_or_else(|| input.error(format!("{} is empty", FOREIGN_TYPEMAP)))?;
+            main_span.ok_or_else(|| input.error(format!("{FOREIGN_TYPEMAP} is empty")))?;
 
         let rule = TypeMapConvRuleInfo {
             src_id: SourceId::none(),
@@ -177,15 +177,12 @@ impl syn::parse::Parse for TypeMapConvRuleInfo {
         if !rule.generic_aliases.is_empty() && !rule.is_generic() {
             Err(syn::Error::new(
                 rule.generic_aliases[0].alias.span(),
-                format!("there is {}, but r_type is not generic", GENERIC_ALIAS),
+                format!("there is {GENERIC_ALIAS}, but r_type is not generic"),
             ))
         } else if rule.generic_c_types.is_some() && !rule.is_generic() {
             Err(syn::Error::new(
                 rule.generic_c_types.unwrap().types.span(),
-                format!(
-                    "there is generic {}, but r_type is not generic",
-                    DEFINE_C_TYPE
-                ),
+                format!("there is generic {DEFINE_C_TYPE}, but r_type is not generic"),
             ))
         } else {
             Ok(rule)
@@ -250,24 +247,21 @@ fn parse_r_type_rule(
         {
             return Err(syn::Error::new(
                 conv_body.span(),
-                format!(
-                    "no $out or $out_no_type or ${} in conversion code",
-                    var_name
-                ),
+                format!("no $out or $out_no_type or ${var_name} in conversion code"),
             ));
         }
         Some(if code_str.contains(&out_var_no_type) {
             TypeConvCode::new2(
                 code_str
                     .replace(&d_var_name, FROM_VAR_TEMPLATE)
-                    .replace(&out_var_no_type, &format!("let mut {}", TO_VAR_TEMPLATE)),
+                    .replace(&out_var_no_type, &format!("let mut {TO_VAR_TEMPLATE}")),
                 (SourceId::none(), conv_body.span()),
             )
         } else {
             TypeConvCode::new2(
                 code_str.replace(&d_var_name, FROM_VAR_TEMPLATE).replace(
                     &out_var,
-                    &format!("let mut {}: {}", TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE),
+                    &format!("let mut {TO_VAR_TEMPLATE}: {TO_VAR_TYPE_TEMPLATE}"),
                 ),
                 (SourceId::none(), conv_body.span()),
             )
@@ -414,7 +408,7 @@ impl syn::parse::Parse for CItemsList {
 
 fn has_repr_c_attr(attrs: &[syn::Attribute]) -> bool {
     let repr_c_attr: syn::Attribute = parse_quote! { #[repr(C)] };
-    attrs.iter().any(|a| *a == repr_c_attr)
+    attrs.contains(&repr_c_attr)
 }
 
 impl syn::parse::Parse for ForeignCode {
@@ -497,7 +491,7 @@ impl syn::parse::Parse for GenericAliasItem {
                 if n == 0 || n > 2 {
                     return Err(syn::Error::new(
                         mac_span,
-                        format!("{} arguments for {} expect 1 or 2", n, SWIG_I_TYPE),
+                        format!("{n} arguments for {SWIG_I_TYPE} expect 1 or 2"),
                     ));
                 }
                 let type_id = item.0.remove(0);
@@ -598,10 +592,10 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
             let var_name = params.parse::<Ident>()?;
             params.parse::<Token![:]>()?;
             params.parse::<kw::temporary>()?;
-            if temporary_ids.iter().any(|x| *x == var_name) {
+            if temporary_ids.contains(&var_name) {
                 return Err(syn::Error::new(
                     var_name.span(),
-                    format!("temporary already exists with such name: '{}'", var_name),
+                    format!("temporary already exists with such name: '{var_name}'"),
                 ));
             }
             temporary_ids.push(var_name);
@@ -699,7 +693,7 @@ fn parse_f_type_rule(
                 "there is conversion code, but name of input variable not defined here",
             )
         })?;
-        let var_name = format!("${}", var_name);
+        let var_name = format!("${var_name}");
         let code = replace_first_and_other(
             code_str
                 .value()
@@ -718,7 +712,7 @@ fn parse_f_type_rule(
             params.push(TO_VAR_TEMPLATE.into());
         }
         for tmp_id in &temporary_ids {
-            params.push(format!("${}", tmp_id).into());
+            params.push(format!("${tmp_id}").into());
         }
 
         Some(TypeConvCode::with_params(

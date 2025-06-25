@@ -177,10 +177,10 @@ fn register_main_foreign_types(
             )
             .into(),
         );
-        let name_prefix = format!("/*{}*/", out_val_prefix);
+        let name_prefix = format!("/*{out_val_prefix}*/");
         ctx.conv_map.alloc_foreign_type(ForeignTypeS {
             name: ForeignTypeName::new_with_unique_prefix(
-                format!("{}long", name_prefix),
+                format!("{name_prefix}long"),
                 &name_prefix,
                 (class.src_id, class.name.span()),
             ),
@@ -221,7 +221,6 @@ fn register_main_foreign_types(
                         from_var = FROM_VAR_TEMPLATE,
                         ptr_this_type = this_type_for_method,
                         this_type = this_type2,
-                        unpack_code = unpack_code,
                     ),
                     invalid_src_id_span(),
                 )
@@ -263,7 +262,6 @@ fn register_main_foreign_types(
                         to_var = TO_VAR_TEMPLATE,
                         from_var = FROM_VAR_TEMPLATE,
                         this_type = this_type_for_method,
-                        unpack_code = unpack_code,
                     ),
                     invalid_src_id_span(),
                 )
@@ -271,10 +269,10 @@ fn register_main_foreign_types(
             );
         }
 
-        let name_prefix = format!("/*{}*/", in_val_prefix);
+        let name_prefix = format!("/*{in_val_prefix}*/");
         ctx.conv_map.alloc_foreign_type(ForeignTypeS {
             name: ForeignTypeName::new_with_unique_prefix(
-                format!("{}long", name_prefix),
+                format!("{name_prefix}long"),
                 &name_prefix,
                 (class.src_id, class.name.span()),
             ),
@@ -297,10 +295,8 @@ fn register_main_foreign_types(
     );
     if !class.copy_derived() && !class.smart_ptr_copy_derived() {
         writeln!(
-            &mut java_code_in_val_to_long,
-            "        {from_var}.{class_raw_ptr} = 0;",
-            from_var = FROM_VAR_TEMPLATE,
-            class_raw_ptr = JAVA_RUST_SELF_NAME,
+            java_code_in_val_to_long,
+            "        {FROM_VAR_TEMPLATE}.{JAVA_RUST_SELF_NAME} = 0;"
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
@@ -364,10 +360,7 @@ fn register_main_foreign_types(
                 intermediate_ty: jlong_ty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
                     format!(
-                        "        long {out} = {from}.{self_raw_ptr};",
-                        from = FROM_VAR_TEMPLATE,
-                        out = TO_VAR_TEMPLATE,
-                        self_raw_ptr = JAVA_RUST_SELF_NAME,
+                        "        long {TO_VAR_TEMPLATE} = {FROM_VAR_TEMPLATE}.{JAVA_RUST_SELF_NAME};"
                     ),
                     invalid_src_id_span(),
                 )),
@@ -395,10 +388,9 @@ fn register_main_foreign_types(
                 intermediate_ty: jlong_ty.to_idx(),
                 conv_code: Rc::new(TypeConvCode::new(
                     format!(
-                        "        long {out} = {from}.{self_raw_ptr};",
+                        "        long {out} = {from}.{JAVA_RUST_SELF_NAME};",
                         from = FROM_VAR_TEMPLATE,
                         out = TO_VAR_TEMPLATE,
-                        self_raw_ptr = JAVA_RUST_SELF_NAME,
                     ),
                     invalid_src_id_span(),
                 )),
@@ -438,10 +430,9 @@ fn register_main_foreign_types(
                         intermediate_ty: jlong_ty.to_idx(),
                         conv_code: Rc::new(TypeConvCode::new(
                             format!(
-                                "        long {out} = {from}.{self_raw_ptr};",
+                                "        long {out} = {from}.{JAVA_RUST_SELF_NAME};",
                                 from = FROM_VAR_TEMPLATE,
                                 out = TO_VAR_TEMPLATE,
-                                self_raw_ptr = JAVA_RUST_SELF_NAME,
                             ),
                             invalid_src_id_span(),
                         )),
@@ -469,10 +460,9 @@ fn register_main_foreign_types(
                         intermediate_ty: jlong_ty.to_idx(),
                         conv_code: Rc::new(TypeConvCode::new(
                             format!(
-                                "        long {out} = {from}.{self_raw_ptr};",
+                                "        long {out} = {from}.{JAVA_RUST_SELF_NAME};",
                                 from = FROM_VAR_TEMPLATE,
                                 out = TO_VAR_TEMPLATE,
-                                self_raw_ptr = JAVA_RUST_SELF_NAME,
                             ),
                             invalid_src_id_span(),
                         )),

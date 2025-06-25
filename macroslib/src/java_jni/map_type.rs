@@ -204,8 +204,7 @@ fn do_map_type(
             arg_ty_span,
             format!(
                 "Do not know conversion from \
-                 such rust type '{}' to Java type",
-                arg_ty
+                 such rust type '{arg_ty}' to Java type"
             ),
         )),
 
@@ -213,8 +212,7 @@ fn do_map_type(
             arg_ty_span,
             format!(
                 "Do not know conversion from Java type \
-                 to such rust type '{}'",
-                arg_ty
+                 to such rust type '{arg_ty}'"
             ),
         )),
     }
@@ -294,7 +292,7 @@ impl TypeMapConvRuleInfoExpanderHelper for JavaContextForArg<'_, '_> {
             Some(param) => {
                 return Err(DiagnosticError::new2(
                     self.arg_ty_span,
-                    format!("Invalid argument '{}' for swig_f_type", param),
+                    format!("Invalid argument '{param}' for swig_f_type"),
                 ))
             }
         };

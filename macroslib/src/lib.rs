@@ -135,10 +135,7 @@ impl JavaConfig {
     pub fn use_null_annotation(mut self, import_annotation: String) -> JavaConfig {
         let suffix = ".NonNull";
         if !import_annotation.ends_with(suffix) {
-            panic!(
-                "import_annotation({}) should ends with {}",
-                import_annotation, suffix
-            );
+            panic!("import_annotation({import_annotation}) should ends with {suffix}");
         }
         let package = &import_annotation[0..import_annotation.len() - suffix.len()];
         self.null_annotation_package = Some(package.into());
@@ -472,14 +469,11 @@ impl Generator {
     where
         F: Fn(&mut Vec<u8>, &str) + 'static,
     {
-        if KNOWN_CLASS_DERIVES.iter().any(|x| *x == attr_name) {
-            panic!("This '{}' attribute name is reserved", attr_name);
+        if KNOWN_CLASS_DERIVES.contains(&attr_name) {
+            panic!("This '{attr_name}' attribute name is reserved");
         }
         if self.class_ext_handlers.contains_key(attr_name) {
-            panic!(
-                "class attribute callback for name '{}' already registered",
-                attr_name
-            );
+            panic!("class attribute callback for name '{attr_name}' already registered");
         }
         self.class_ext_handlers
             .insert(attr_name.into(), Box::new(cb));
@@ -494,10 +488,7 @@ impl Generator {
         F: Fn(&mut Vec<u8>, &str) + 'static,
     {
         if self.enum_ext_handlers.contains_key(attr_name) {
-            panic!(
-                "enum attribute callback for name '{}' already registered",
-                attr_name
-            );
+            panic!("enum attribute callback for name '{attr_name}' already registered",);
         }
         self.enum_ext_handlers
             .insert(attr_name.into(), Box::new(cb));
@@ -512,10 +503,7 @@ impl Generator {
         F: Fn(&mut Vec<u8>, MethodInfo) + 'static,
     {
         if self.method_ext_handlers.contains_key(attr_name) {
-            panic!(
-                "method attribute callback for name '{}' already registered",
-                attr_name
-            );
+            panic!("method attribute callback for name '{attr_name}' already registered");
         }
         self.method_ext_handlers
             .insert(attr_name.into(), Box::new(cb));
@@ -692,7 +680,7 @@ impl Generator {
             },
         )?;
         for elem in code {
-            writeln!(&mut file, "{}", elem).expect(WRITE_TO_MEM_FAILED_MSG);
+            writeln!(file, "{elem}").expect(WRITE_TO_MEM_FAILED_MSG);
         }
 
         let source_bytes = file.take_content();
@@ -707,7 +695,7 @@ impl Generator {
             let source_bytes = file.take_content();
             let new_cnt =
                 rustfmt_cnt(source_bytes, RustEdition::Edition2018).unwrap_or_else(|err| {
-                    panic!("Error during running of rustfmt: {}", err);
+                    panic!("Error during running of rustfmt: {err}");
                 });
             file.replace_content(new_cnt);
         }
@@ -780,8 +768,7 @@ pub enum RustEdition {
 
 #[doc(hidden)]
 pub fn rustfmt_cnt(source: Vec<u8>, edition: RustEdition) -> io::Result<Vec<u8>> {
-    let rustfmt = which::which("rustfmt")
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))?;
+    let rustfmt = which::which("rustfmt").map_err(|e| io::Error::other(format!("{e}")))?;
 
     let mut cmd = Command::new(&*rustfmt);
     cmd.arg("--edition");
@@ -822,10 +809,7 @@ pub fn rustfmt_cnt(source: Vec<u8>, edition: RustEdition) -> io::Result<Vec<u8>>
         Arc::try_unwrap(src).expect("Internal error: rusftfmt_cnt should only one Arc refernce");
     match status.code() {
         Some(0) => Ok(output),
-        Some(2) => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Rustfmt parsing errors.".to_string(),
-        )),
+        Some(2) => Err(io::Error::other("Rustfmt parsing errors.".to_string())),
         Some(3) => {
             println!("cargo:warning=Rustfmt could not format some lines.");
             Ok(src)

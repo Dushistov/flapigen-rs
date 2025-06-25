@@ -105,7 +105,7 @@ pub(crate) struct ImplementsSet {
 
 impl ImplementsSet {
     pub(crate) fn insert(&mut self, x: SmolStr) {
-        if !self.inner.iter().any(|it| x == *it) {
+        if !self.inner.contains(&x) {
             self.inner.push(x);
         }
     }
@@ -242,7 +242,7 @@ impl ForeignTypesStorage {
                 from_into_rust: None,
             };
             self.add_new_ftype(ftype)
-                .unwrap_or_else(|err| panic!("Internal error in find_or_alloc_ftype: {}", err))
+                .unwrap_or_else(|err| panic!("Internal error in find_or_alloc_ftype: {err}"))
         }
     }
 

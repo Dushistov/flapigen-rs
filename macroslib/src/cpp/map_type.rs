@@ -123,8 +123,7 @@ fn do_map_type(
             arg_ty_span,
             format!(
                 "Do not know conversion from \
-                 such rust type '{}' to C++ type",
-                arg_ty
+                 such rust type '{arg_ty}' to C++ type"
             ),
         )),
 
@@ -132,8 +131,7 @@ fn do_map_type(
             arg_ty_span,
             format!(
                 "Do not know conversion from C++ type \
-                 to such rust type '{}'",
-                arg_ty
+                 to such rust type '{arg_ty}'"
             ),
         )),
     }

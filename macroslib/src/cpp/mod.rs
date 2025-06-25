@@ -476,7 +476,7 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
         return Err(DiagnosticError::new(
             rule.src_id,
             rule.span,
-            format!("rule {:?} is empty", rule),
+            format!("rule {rule:?} is empty"),
         ));
     }
     let all_options = {

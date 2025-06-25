@@ -13,7 +13,7 @@ where
             return new_name.into();
         }
         new_name.clear();
-        write!(&mut new_name, "{}{}", templ, idx).expect("write to String failed, no free mem?");
+        write!(&mut new_name, "{templ}{idx}").expect("write to String failed, no free mem?");
         idx += 1;
         if idx == u64::MAX {
             panic!("it is impossible find name for {templ}");

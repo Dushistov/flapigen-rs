@@ -189,7 +189,6 @@ fn register_rust_ty_conversion_rules(
         "#,
                 to_var = TO_VAR_TEMPLATE,
                 from_var = FROM_VAR_TEMPLATE,
-                this_type_mut_ptr = this_type_mut_ptr,
             ),
             invalid_src_id_span(),
         )
@@ -200,7 +199,7 @@ fn register_rust_ty_conversion_rules(
     conv_map.add_conversion_rule(
         this_type_mut_ptr.to_idx(),
         this_type.to_idx(),
-        TypeConvCode::new(format!("\n{}\n", unpack_code,), invalid_src_id_span()).into(),
+        TypeConvCode::new(format!("\n{unpack_code}\n"), invalid_src_id_span()).into(),
     );
 
     //"class" -> *mut void
@@ -279,7 +278,7 @@ fn register_main_foreign_types(
                 input_to_output: false,
                 intermediate_ty: void_ptr_rust_ty,
                 conv_code: Rc::new(TypeConvCode::new(
-                    format!("{}.release()", FROM_VAR_TEMPLATE),
+                    format!("{FROM_VAR_TEMPLATE}.release()"),
                     invalid_src_id_span(),
                 )),
             }),

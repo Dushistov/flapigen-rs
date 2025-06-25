@@ -371,8 +371,7 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
                     func_type_name_span,
                     format!(
                         "expect 'constructor' or 'method' or \
-                         'static_method' here, got: {}",
-                        func_type_name
+                         'static_method' here, got: {func_type_name}"
                     ),
                 ));
             }
@@ -470,7 +469,7 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
                 Some(x) => x,
                 None => {
                     return Err(
-                        content.error(format!("{}: constructor should return value", class_name))
+                        content.error(format!("{class_name}: constructor should return value"))
                     );
                 }
             };
@@ -638,7 +637,7 @@ pub(crate) fn parse_fn_args(
                     if args_names.contains(name.as_str()) {
                         return Err(syn::Error::new(
                             span,
-                            format!("duplicate argument name '{}'", name),
+                            format!("duplicate argument name '{name}'"),
                         ));
                     }
                     args_names.insert(name.clone());
@@ -663,7 +662,7 @@ pub(crate) fn parse_fn_args(
     {
         if named_arg.name == "_" {
             has_unnamed_args = true;
-            let templ = format!("a{}", i);
+            let templ = format!("a{i}");
             named_arg.name = new_unique_name(&args_names, &templ);
             debug_assert!(!args_names.contains(named_arg.name.as_str()));
             args_names.insert(named_arg.name.clone());

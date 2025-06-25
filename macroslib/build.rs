@@ -89,7 +89,7 @@ fn main() {
             panic!("Can not read {}: {}", exp_tests_list_path.display(), err)
         });
         write!(
-            &mut exp_code,
+            exp_code,
             r##"
 #[test]
 fn test_expectation_{test_name}() {{

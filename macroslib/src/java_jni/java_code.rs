@@ -52,9 +52,9 @@ pub(in crate::java_jni) fn args_with_java_types<'a, NI: Iterator<Item = &'a str>
             _ => "",
         };
         if i == (method.input.len() - 1) {
-            write!(&mut res, "{}{} {}", annotation, type_name, arg_name)
+            write!(res, "{annotation}{type_name} {arg_name}")
         } else {
-            write!(&mut res, "{}{} {}, ", annotation, type_name, arg_name)
+            write!(res, "{annotation}{type_name} {arg_name}, ")
         }
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }

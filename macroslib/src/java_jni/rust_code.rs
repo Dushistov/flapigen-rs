@@ -39,8 +39,8 @@ pub(in crate::java_jni) fn predefined_java_type_to_jni_sig() -> FxHashMap<SmolSt
         "char", "byte", "double", "float", "int", "long", "short", "boolean",
     ] {
         let jni_sig = m.get(*elem).expect("Internal error: no type");
-        let arr_sig = format!("[{}", jni_sig);
-        m.insert(format!("{} []", elem).into(), arr_sig.into());
+        let arr_sig = format!("[{jni_sig}");
+        m.insert(format!("{elem} []").into(), arr_sig.into());
     }
     m
 }
@@ -127,10 +127,7 @@ pub(in crate::java_jni) fn jni_method_signature(
             .trim()
             .into();
         let sig = java_type_to_jni_signature(ctx, &java_type).unwrap_or_else(|| {
-            panic!(
-                "Unknown type `{}`, can not generate JNI signature",
-                java_type
-            )
+            panic!("Unknown type `{java_type}`, can not generate JNI signature")
         });
         let sig = sig.replace('.', "/");
         ret.push_str(&sig);
@@ -153,7 +150,7 @@ pub(in crate::java_jni) fn generate_load_unload_jni_funcs(
     let code = str::from_utf8(generated_code).map_err(|err| {
         DiagnosticError::new2(
             invalid_src_id_span(),
-            format!("Generated code not valid utf-8: {}", err),
+            format!("Generated code not valid utf-8: {err}"),
         )
     })?;
 
