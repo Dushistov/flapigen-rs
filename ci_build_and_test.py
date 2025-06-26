@@ -67,7 +67,7 @@ def build_jar(java_dir: str, java_native_dir: str, use_shell: bool) -> str:
                           cwd=java_dir, shell=use_shell)
 
     jar_dir = str(os.path.join(os.getcwd(), "jni_tests", "java"))
-    purge(java_dir, ".*\.jar$")
+    purge(java_dir, ".*\\.jar$")
     subprocess.check_call(["jar", "cfv", "Test.jar", "com"], cwd=jar_dir, shell=use_shell)
     return jar_dir
 
@@ -91,12 +91,12 @@ def run_jni_tests(use_shell: bool, test_cfg: Set[str]):
             raise Exception("Fatal Error: Unknown cfg %s" % cfg)
 
     java_dir = str(os.path.join(os.getcwd(), "jni_tests", "java", "com", "example"))
-    purge(java_dir, ".*\.class$")
+    purge(java_dir, ".*\\.class$")
     java_native_dir = str(os.path.join(os.getcwd(), "jni_tests", "java", "com", "example", "rust"))
     if not os.path.exists(java_native_dir):
         os.makedirs(java_native_dir)
     else:
-        purge(java_native_dir, ".*\.class$")
+        purge(java_native_dir, ".*\\.class$")
     jar_dir = build_jar(java_dir, java_native_dir, use_shell)
 
     for cfg in test_cfg:
@@ -315,7 +315,7 @@ def main():
         subprocess.check_call(["cmake", "--version"], shell = False)
         build_cpp_example()
         build_cpp_code_with_cmake(test_cfg, os.path.join("cpp_tests", "c++", "build"), [])
-        purge(os.path.join("cpp_tests", "c++", "rust_interface"), ".*\.h.*$")
+        purge(os.path.join("cpp_tests", "c++", "rust_interface"), ".*\\.h.*$")
         build_cpp_code_with_cmake(test_cfg, os.path.join("cpp_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
 
     if ANDROID_TESTS in test_set:
