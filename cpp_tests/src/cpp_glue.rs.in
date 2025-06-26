@@ -50,6 +50,9 @@ impl Foo {
     fn ret_string(&self) -> String {
         self.name.clone()
     }
+    fn expect_str(expect: &str, s: String) {
+        assert_eq!(expect, s);
+    }
 }
 
 fn f_hypot(a: f64, b: f64) -> f64 {
@@ -82,6 +85,7 @@ foreign_class!(class Foo {
     fn Foo::call_me(_: Box<dyn SomeObserver>);
     fn f_hypot(_: f64, _: f64) -> f64; alias fHypot;
     fn Foo::ret_string(&self) -> String;
+    fn Foo::expect_str(expect: &str, s: String);
     foreign_code r#"
 public:
     size_t cpp_func(const std::string &s) const { return s.size(); }
@@ -820,6 +824,12 @@ foreign_class!(class TestPassInterface {
 foreign_callback!(callback ToString {
     self_type ::std::string::ToString;
     toString = ::std::string::ToString::to_string(&self) -> String;
+});
+
+foreign_class!(class TestToStringCallback {
+    fn call_to_string(cb: Box<dyn ::std::string::ToString>) -> String {
+        cb.to_string()
+    }
 });
 
 pub struct RecursiveStruct {

@@ -46,6 +46,7 @@
 #include "rust_interface/TestMultiThreadCallback.hpp"
 #include "rust_interface/Session.hpp"
 #include "rust_interface/WorkWithSlice.hpp"
+#include "rust_interface/TestToStringCallback.hpp"
 
 using namespace rust;
 
@@ -555,6 +556,39 @@ TEST(TestRustStringReturn, smokeTest)
     }
 }
 
+TEST(TestRustStringAppend, smokeTest)
+{
+    RustString rstr;
+    Foo::expect_str("", rstr);
+    rstr.push_str("123");
+    Foo::expect_str("123", rstr);
+    rstr += "567";
+    Foo::expect_str("123567", rstr);
+}
+
+class MyToString final : public ToString {
+public:
+    explicit MyToString(int i) noexcept
+        : i_(i)
+    {
+    }
+    RustString toString() const noexcept override
+    {
+        const auto s = std::to_string(i_);
+        return RustString{ RustString::CppStringViewT{ s } };
+    }
+
+private:
+    int i_;
+};
+
+TEST(TestToStringCallback, smokeTest)
+{
+    std::unique_ptr<ToString> cb{ new MyToString{ 17 } };
+    const auto s = TestToStringCallback::call_to_string(std::move(cb));
+    ASSERT_EQ("17", s.to_std_string());
+}
+
 #if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_OPTIONAL)) || defined(USE_BOOST)
 TEST(TestOptional, smokeTest)
 {
@@ -960,7 +994,7 @@ TEST(Interface, smokeTest)
 
 TEST(RecursiveStruct, smokeTest)
 {
-    RecursiveStruct s{ "aaa", "aaa/bbb", "aaa/ccc" };
+    RecursiveStruct s{ RustString{ "aaa" }, RustString{ "aaa/bbb" }, RustString{ "aaa/ccc" } };
 
     EXPECT_EQ(std::string{ "aaa" }, s.tag());
     ASSERT_EQ(2u, s.childs().size());

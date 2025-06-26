@@ -1,10 +1,6 @@
 r##"#[unsafe(no_mangle)]
-pub extern "C" fn Foo_f(this: *mut Foo, a0: i32, a1: i32, a2: CRustStrView) -> CRustString {
-    let mut a2: &str = unsafe {
-        let slice: &[u8] = ::std::slice::from_raw_parts(a2.data as *const u8, a2.len);
-        ::std::str::from_utf8_unchecked(slice)
-    };
-    let mut a2: String = String::from(a2);
+pub extern "C" fn Foo_f(this: *mut Foo, a0: i32, a1: i32, a2: CRustString) -> CRustString {
+    let mut a2: String = unsafe { String::from_raw_parts(a2.data as *mut u8, a2.len, a2.capacity) };
     let this: &Foo = unsafe { this.as_mut().unwrap() };
     let mut ret: String = Foo::f(this, a0, a1, a2);
     let mut ret: CRustString = CRustString::from_string(ret);
