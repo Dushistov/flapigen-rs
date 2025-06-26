@@ -83,14 +83,11 @@ pub(in crate::cpp) fn generate_interface(
     let tmp_name = "$tmp".into();
     let conv_code = format!(
         r#"
-        {c_struct} {tmp_name} = {interface}::to_c_interface(std::move({var}));
-        {to} = &{tmp_name};
+        {c_struct_name} {tmp_name} = {interface}::to_c_interface(std::move({var}));
+        {TO_VAR_TYPE_TEMPLATE} = &{tmp_name};
 "#,
         var = FROM_VAR_TEMPLATE,
         interface = interface.name,
-        to = TO_VAR_TYPE_TEMPLATE,
-        tmp_name = tmp_name,
-        c_struct = c_struct_name,
     );
     params.push(tmp_name);
     let conv_code = TypeConvCode::with_params(conv_code, invalid_src_id_span(), params);
@@ -158,11 +155,10 @@ pub struct {struct_with_funcs} {{
     for (method, f_method) in interface.items.iter().zip(methods_sign) {
         let args = rust_generate_args_with_types(f_method);
         writeln!(
-            &mut code,
+            code,
             r#"
 {method_name}: extern "C" fn({args}_: *const ::std::os::raw::c_void) -> {ret_type},"#,
             method_name = method.name,
-            args = args,
             ret_type = DisplayToTokens(&f_method.output.base.corresponding_rust_type.ty),
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
@@ -182,7 +178,7 @@ pub struct {struct_with_funcs} {{
     code.clear();
 
     writeln!(
-        &mut code,
+        code,
         r#"
 /// It totally depends on С++ implementation
 /// let's assume it safe
@@ -263,12 +259,10 @@ impl {trait_name} for {struct_with_funcs} {{"#,
                 (real_output_type.normalized_name.to_string(), conv_code)
             }
         };
-        let ret_type = format!(
-            "{}",
-            DisplayToTokens(&f_method.output.base.corresponding_rust_type.ty)
-        );
+        let ret_type =
+            DisplayToTokens(&f_method.output.base.corresponding_rust_type.ty).to_string();
         writeln!(
-            &mut code,
+            code,
             r#"
     #[allow(unused_mut)]
     fn {func_name}({args_with_types}) -> {real_ret_type} {{
@@ -277,18 +271,13 @@ impl {trait_name} for {struct_with_funcs} {{"#,
 {output_conv}
         ret
     }}"#,
-            func_name = func_name,
-            convert_args = convert_args,
             method_name = method.name,
-            args_with_types = args_with_types,
             args = if n_args == 0 {
                 "".to_string()
             } else {
                 n_arguments_list(n_args) + ","
             },
             real_ret_type = real_output_typename,
-            ret_type = ret_type,
-            output_conv = output_conv,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
@@ -439,7 +428,6 @@ struct C_{interface_name} {{
                 method.arg_names_without_self(),
                 true
             ),
-            c_ret_type = c_ret_type,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
@@ -455,15 +443,13 @@ struct C_{interface_name} {{
         };
 
         writeln!(
-            &mut cpp_virtual_methods,
+            cpp_virtual_methods,
             r#"{doc_comments}
     virtual {cpp_ret_type} {method_name}({single_args_with_types}) {const_sig}noexcept = 0;"#,
             method_name = method.name,
             doc_comments = cpp_code::doc_comments_to_c_comments(&method.doc_comments, false),
             single_args_with_types =
                 cpp_code::cpp_generate_args_with_types(f_method, method.arg_names_without_self()),
-            cpp_ret_type = cpp_ret_type,
-            const_sig = const_sig,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
@@ -471,14 +457,13 @@ struct C_{interface_name} {{
             cpp_code::convert_args(f_method, &mut known_names, method.arg_names_without_self())?;
 
         write!(
-            &mut cpp_static_reroute_methods,
+            cpp_static_reroute_methods,
             r#"
     static {c_ret_type} c_{method_name}({single_args_with_types}void *{opaque})
     {{
         assert({opaque} != nullptr);
         auto {p} = static_cast<{const_sig}{interface_name} *>({opaque});
 {conv_args_code}"#,
-            c_ret_type = c_ret_type,
             method_name = method.name,
             single_args_with_types = cpp_code::c_generate_args_with_types(
                 f_method,
@@ -488,14 +473,12 @@ struct C_{interface_name} {{
             opaque = opaque_name,
             p = interface_ptr,
             interface_name = interface.name,
-            conv_args_code = conv_args_code,
-            const_sig = const_sig,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
         if c_ret_type.display() == "void" {
             writeln!(
-                &mut cpp_static_reroute_methods,
+                cpp_static_reroute_methods,
                 r#"
         {p}->{method_name}({input_args});
     }}"#,
@@ -506,7 +489,7 @@ struct C_{interface_name} {{
             .expect(WRITE_TO_MEM_FAILED_MSG);
         } else {
             writeln!(
-                &mut cpp_static_reroute_methods,
+                cpp_static_reroute_methods,
                 r#"
         auto {ret} = {p}->{method_name}({input_args});
         return {cpp_out_conv};
@@ -524,7 +507,7 @@ struct C_{interface_name} {{
             .expect(WRITE_TO_MEM_FAILED_MSG);
         }
         writeln!(
-            &mut cpp_fill_c_interface_struct,
+            cpp_fill_c_interface_struct,
             "        ret.{method_name} = c_{method_name};",
             method_name = method.name,
         )
@@ -540,7 +523,7 @@ struct C_{interface_name} {{
 
     let mut includes = String::new();
     for inc in req_includes {
-        writeln!(&mut includes, r#"#include {inc}"#).expect(WRITE_TO_MEM_FAILED_MSG);
+        writeln!(includes, r#"#include {inc}"#).expect(WRITE_TO_MEM_FAILED_MSG);
     }
 
     writeln!(
@@ -584,7 +567,6 @@ protected:
 }};
 }} // namespace {namespace_name}"##,
         interface_name = interface.name,
-        includes = includes,
         doc_comments = interface_comments,
         c_interface_struct_header = c_interface_struct_header,
         virtual_methods = cpp_virtual_methods,
