@@ -474,6 +474,17 @@ foreign_typemap!(
             ::std::mem::forget(s);
             ret
         }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn crust_string_push_str(x: CRustString, s: CRustStrView) -> CRustString {
+            let mut x = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
+            let addon: &str = unsafe {
+                let slice: &[u8] = ::std::slice::from_raw_parts(s.data as *const u8, s.len);
+                ::std::str::from_utf8_unchecked(slice)
+            };
+            x.push_str(addon);
+            CRustString::from_string(x)
+        }
     );
     foreign_code!(module = "rust_str.h";
                     r##"
@@ -541,10 +552,17 @@ public:
     std::string to_std_string() const { return std::string(data, len); }
     size_t size() const noexcept { return this->len; }
     bool empty() const noexcept { return this->len == 0; }
+    CRustString release() noexcept
+    {
+        CRustString ret{ this->data, this->len, this->capacity };
+        reset(*this);
+        return ret;
+    }
 "##);
     foreign_code!(module = "rust_str.h";
                     option = "CppStrView::Std17";
                     r##"
+    using CppStringViewT = std::string_view;
     std::string_view to_string_view() const { return std::string_view(data, len); }
     bool operator==(const RustString& o) const noexcept {
         return to_string_view() == o.to_string_view();
@@ -553,6 +571,7 @@ public:
     foreign_code!(module = "rust_str.h";
                     option = "CppStrView::Boost";
                     r#"
+    using CppStringViewT = boost::string_view;
     boost::string_view to_boost_string_view() const { return boost::string_view{ data, len }; }
     bool operator==(const RustString& o) const noexcept {
         return to_boost_string_view() == o.to_boost_string_view();
@@ -560,20 +579,38 @@ public:
 "#);
     foreign_code!(module = "rust_str.h";
                     r##"
+    void push_str(CppStringViewT s) noexcept {
+        auto new_cstr = crust_string_push_str(*this, CRustStrView{ s.data(), s.size() });
+        data = new_cstr.data;
+        len = new_cstr.len;
+        capacity = new_cstr.capacity;
+    }
+    explicit RustString(CppStringViewT s) noexcept {
+        reset(*this);
+        push_str(s);
+    }
+    RustString& operator+=(CppStringViewT s) noexcept {
+        push_str(s);
+        return *this;
+    }
 private:
+    //analog of Rust's NonNull::danging, can not use C cast (and/or reinterpret_cast)
+    // in constexpr, so macros
+    #define DANGLING  reinterpret_cast<const char *>(alignof(char))
     void free_mem() noexcept
     {
-        if (data != nullptr) {
+        if (data != DANGLING) {
             crust_string_free(*this);
             reset(*this);
         }
     }
     static void reset(RustString &o) noexcept
     {
-        o.data = nullptr;
+        o.data = DANGLING;
         o.len = 0;
         o.capacity = 0;
     }
+    #undef DANGLING
 };
 } // namespace $RUST_SWIG_USER_NAMESPACE
 #endif // __cplusplus
@@ -583,6 +620,11 @@ private:
         $out = CRustString::from_string($pin);
     };
     ($pin:f_type, req_modules = ["\"rust_str.h\""]) => "RustString" "RustString{$pin}";
+
+    ($pin:r_type) String <= CRustString {
+        $out = unsafe { String::from_raw_parts($pin.data as *mut u8, $pin.len, $pin.capacity) };
+    };
+    ($pin:f_type, req_modules = ["\"rust_str.h\""]) <= "RustString" "$pin.release()";
 );
 
 foreign_typemap!(

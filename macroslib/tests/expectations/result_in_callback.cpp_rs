@@ -2,17 +2,16 @@ r#"impl Foo for C_Foo {
     #[allow(unused_mut)]
     fn unpack(&self, a0: &str) -> Result<String, Error> {
         let mut a0: CRustStrView = CRustStrView::from_str(a0);
-        let ret: CRustResultCRustStrView4232mut3232c_void = (self.unpack)(a0, self.opaque);
+        let ret: CRustResultCRustString4232mut3232c_void = (self.unpack)(a0, self.opaque);
         let mut ret: Result<String, Error> = unsafe {
             if ret.is_ok != 0 {
-                let mut x: &str = unsafe {
-                    let slice: &[u8] = ::std::slice::from_raw_parts(
-                        ret.data.ok.data as *const u8,
+                let mut x: String = unsafe {
+                    String::from_raw_parts(
+                        ret.data.ok.data as *mut u8,
                         ret.data.ok.len,
-                    );
-                    ::std::str::from_utf8_unchecked(slice)
+                        ret.data.ok.capacity,
+                    )
                 };
-                let mut x: String = String::from(x);
                 Ok(x)
             } else {
                 assert!(!ret.data.err.is_null());
