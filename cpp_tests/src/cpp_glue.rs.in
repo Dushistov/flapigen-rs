@@ -819,6 +819,9 @@ foreign_class!(class TestPassInterface {
     fn use_interface(a: Box<Box<dyn Interface>>, b: i32) -> i32 {
         (**a).f(b)
     }
+    fn use_interface_by_ref(a: &dyn Interface, b: i32) -> i32 {
+        a.f(b)
+    }
 });
 
 foreign_callback!(callback ToString {
@@ -829,6 +832,31 @@ foreign_callback!(callback ToString {
 foreign_class!(class TestToStringCallback {
     fn call_to_string(cb: Box<dyn ::std::string::ToString>) -> String {
         cb.to_string()
+    }
+    fn call_to_string_for_ref(cb: &dyn ::std::string::ToString) -> String {
+        cb.to_string()
+    }
+});
+
+trait MutTrait {
+    fn set(&mut self, x: i32);
+    fn get(&self) -> i32;
+}
+
+foreign_callback!(callback MutTrait {
+    self_type MutTrait;
+    set = set(&mut self, x: i32);
+    get = get(&self) -> i32;
+});
+
+foreign_class!(class CallMutTrait {
+    fn call(cb: Box<dyn MutTrait>, x: i32) -> i32 {
+        cb.set(x);
+        cb.get()
+    }
+    fn call_by_mut_ref(cb: &mut dyn MutTrait, x: i32) -> i32 {
+        cb.set(x);
+        cb.get()
     }
 });
 

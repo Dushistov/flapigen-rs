@@ -47,6 +47,7 @@
 #include "rust_interface/Session.hpp"
 #include "rust_interface/WorkWithSlice.hpp"
 #include "rust_interface/TestToStringCallback.hpp"
+#include "rust_interface/CallMutTrait.hpp"
 
 using namespace rust;
 
@@ -585,8 +586,32 @@ private:
 TEST(TestToStringCallback, smokeTest)
 {
     std::unique_ptr<ToString> cb{ new MyToString{ 17 } };
-    const auto s = TestToStringCallback::call_to_string(std::move(cb));
-    ASSERT_EQ("17", s.to_std_string());
+    const auto s1 = TestToStringCallback::call_to_string_for_ref(*cb);
+    ASSERT_EQ("17", s1.to_std_string());
+
+    const auto s2 = TestToStringCallback::call_to_string(std::move(cb));
+    ASSERT_EQ("17", s2.to_std_string());
+}
+
+class NumberMutTrait final : public MutTrait {
+public:
+    explicit NumberMutTrait(int32_t v) noexcept
+        : v_(v)
+    {
+    }
+    void set(int32_t v) noexcept override { v_ = v; }
+    int32_t get() const noexcept override { return v_; }
+
+private:
+    int32_t v_;
+};
+
+TEST(TestCallMutTrait, smokeTest)
+{
+    std::unique_ptr<MutTrait> cb{ new NumberMutTrait{ 42 } };
+    EXPECT_EQ(5, CallMutTrait::call_by_mut_ref(*cb, 5));
+    EXPECT_EQ(5, cb->get());
+    EXPECT_EQ(17, CallMutTrait::call(std::move(cb), 17));
 }
 
 #if (defined(HAS_STDCXX_17) && !defined(NO_HAVE_STD17_OPTIONAL)) || defined(USE_BOOST)
@@ -989,6 +1014,7 @@ TEST(Interface, smokeTest)
     EXPECT_EQ(18, x.f(1));
     x.set(0);
     EXPECT_EQ(1, x.f(1));
+    EXPECT_EQ(17, TestPassInterface::use_interface_by_ref(x, 17));
     EXPECT_EQ(17, TestPassInterface::use_interface(std::move(x), 17));
 }
 

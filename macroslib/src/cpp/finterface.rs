@@ -64,6 +64,16 @@ pub(in crate::cpp) fn generate_interface(
         ctx,
         rust_struct_pointer,
         c_struct_pointer,
+        c_interface_struct_header.clone(),
+        interface.src_id_span(),
+    )?;
+
+    let mut_rust_struct_pointer = format!("*mut {c_struct_name}");
+    let mut_c_struct_pointer = format!("struct {c_struct_name} * const");
+    let mut_rust_ty = register_rust_type_and_c_type(
+        ctx,
+        mut_rust_struct_pointer,
+        mut_c_struct_pointer,
         c_interface_struct_header,
         interface.src_id_span(),
     )?;
@@ -97,7 +107,11 @@ pub(in crate::cpp) fn generate_interface(
             format!("std::unique_ptr<{}>", interface.name),
             interface.src_id_span(),
         ),
-        provided_by_module: vec![cpp_abs_class_header, "<memory>".into(), "<utility>".into()],
+        provided_by_module: vec![
+            cpp_abs_class_header.clone(),
+            "<memory>".into(),
+            "<utility>".into(),
+        ],
         into_from_rust: None,
         from_into_rust: Some(ForeignConversionRule {
             rust_ty: boxed_trait_rust_ty.to_idx(),
@@ -128,6 +142,102 @@ pub(in crate::cpp) fn generate_interface(
         )
         .into(),
     );
+
+    register_dyn_reference_conv(
+        ctx,
+        interface,
+        rust_ty,
+        mut_rust_ty,
+        cpp_abs_class_header,
+        &c_struct_name,
+    )?;
+
+    Ok(())
+}
+
+fn register_dyn_reference_conv(
+    ctx: &mut CppContext<'_>,
+    interface: &ForeignInterface,
+    ptr_struct_with_funcs_rust_ty: RustType,
+    mut_ptr_struct_with_funcs_rust_ty: RustType,
+    cpp_abs_class_header: SmolStr,
+    c_struct_name: &str,
+) -> Result<()> {
+    for const_ref in [false, true] {
+        let rust_trait_type_name = DisplayToTokens(&interface.self_type);
+        let ref_sign = if const_ref { "&" } else { "&mut " };
+        let dyn_ref = if interface.self_type.bounds.len() == 1 {
+            format!("{ref_sign}dyn {rust_trait_type_name}")
+        } else {
+            format!("{ref_sign}(dyn {rust_trait_type_name})")
+        };
+        let dyn_ref_ty: Type =
+            parse_ty_with_given_span(&dyn_ref, interface.name.span()).map_err(|err| {
+                DiagnosticError::from_syn_err(interface.src_id, err).add_span_note(
+                    invalid_src_id_span(),
+                    format!("Trying to create type from '{dyn_ref}'"),
+                )
+            })?;
+
+        let dyn_ref_rust_ty = ctx
+            .conv_map
+            .find_or_alloc_rust_type(&dyn_ref_ty, interface.src_id);
+        let raw_ptr_to_struct_rust_ty = if const_ref {
+            &ptr_struct_with_funcs_rust_ty
+        } else {
+            &mut_ptr_struct_with_funcs_rust_ty
+        };
+        ctx.conv_map.add_conversion_rule(
+            raw_ptr_to_struct_rust_ty.to_idx(),
+            dyn_ref_rust_ty.to_idx(),
+            TypeConvCode::new2(
+                format!(
+                    r#"
+            let {to_var}: {dyn_ref} = unsafe {{ {from_var}.{to_ref_method}().unwrap() }} as {dyn_ref};
+        "#,
+                    to_var = TO_VAR_TEMPLATE,
+                    from_var = FROM_VAR_TEMPLATE,
+                    to_ref_method = if const_ref { "as_ref" } else { "as_mut" },
+                ),
+                invalid_src_id_span(),
+            )
+            .into(),
+        );
+        let mut params = Vec::with_capacity(3);
+        params.push(FROM_VAR_TEMPLATE.into());
+        params.push(TO_VAR_TYPE_TEMPLATE.into());
+        let tmp_name = "$tmp".into();
+        let conv_code = format!(
+            r#"
+        {c_struct_name} {tmp_name} = {interface}::reference_to_c_interface({from_var});
+        {TO_VAR_TYPE_TEMPLATE} = &{tmp_name};
+"#,
+            interface = interface.name,
+            from_var = FROM_VAR_TEMPLATE,
+        );
+        params.push(tmp_name);
+        let conv_code = TypeConvCode::with_params(conv_code, invalid_src_id_span(), params);
+        ctx.conv_map.alloc_foreign_type(ForeignTypeS {
+            name: ForeignTypeName::new(
+                format!(
+                    "{cpp_const}{interface_name}&",
+                    cpp_const = if const_ref { "const " } else { "" },
+                    interface_name = interface.name,
+                ),
+                interface.src_id_span(),
+            ),
+            provided_by_module: vec![cpp_abs_class_header.clone()],
+            into_from_rust: None,
+            from_into_rust: Some(ForeignConversionRule {
+                rust_ty: dyn_ref_rust_ty.to_idx(),
+                intermediate: Some(ForeignConversionIntermediate {
+                    input_to_output: false,
+                    intermediate_ty: raw_ptr_to_struct_rust_ty.to_idx(),
+                    conv_code: Rc::new(conv_code),
+                }),
+            }),
+        })?;
+    }
 
     Ok(())
 }
@@ -558,6 +668,14 @@ public:
     {{
         C_{interface_name} ret;
         ret.opaque = &cpp_interface;
+{cpp_fill_c_interface_struct}
+        ret.C_{interface_name}_deref = [](void *) {{}};
+        return ret;
+    }}
+    static C_{interface_name} reference_to_c_interface(const {interface_name} &cpp_interface) noexcept
+    {{
+        C_{interface_name} ret;
+        ret.opaque = const_cast<void *>(static_cast<const void *>(&cpp_interface));
 {cpp_fill_c_interface_struct}
         ret.C_{interface_name}_deref = [](void *) {{}};
         return ret;

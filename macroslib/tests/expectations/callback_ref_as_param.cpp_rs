@@ -1,0 +1,13 @@
+r##"#[unsafe(no_mangle)]
+pub extern "C" fn TestFooRef_call_const_method(x: *const C_Foo) -> () {
+    let x: &dyn Foo = unsafe { x.as_ref().unwrap() } as &dyn Foo;
+    let mut ret: () = call_const_method(x);
+    ret
+}"##;
+
+r##"#[unsafe(no_mangle)]
+pub extern "C" fn TestFooRef_call_mut_method(x: *mut C_Foo) -> () {
+    let x: &mut dyn Foo = unsafe { x.as_mut().unwrap() } as &mut dyn Foo;
+    let mut ret: () = call_mut_method(x);
+    ret
+}"##;
