@@ -25,6 +25,15 @@ public:
         ret.C_Foo_deref = [](void *) {};
         return ret;
     }
+    static C_Foo reference_to_c_interface(const Foo &cpp_interface) noexcept
+    {
+        C_Foo ret;
+        ret.opaque = const_cast<void *>(static_cast<const void *>(&cpp_interface));
+        ret.f = c_f;
+
+        ret.C_Foo_deref = [](void *) {};
+        return ret;
+    }
 protected:
 
     static void c_Foo_deref(void *opaque)
@@ -74,6 +83,16 @@ public:
         ret.C_Boo_deref = [](void *) {};
         return ret;
     }
+    static C_Boo reference_to_c_interface(const Boo &cpp_interface) noexcept
+    {
+        C_Boo ret;
+        ret.opaque = const_cast<void *>(static_cast<const void *>(&cpp_interface));
+        ret.g = c_g;
+        ret.h = c_h;
+
+        ret.C_Boo_deref = [](void *) {};
+        return ret;
+    }
 protected:
 
     static void c_Boo_deref(void *opaque)
@@ -90,7 +109,7 @@ protected:
         pi->g(*x);
     }
 
-    static void c_h(C_Foo * x, void *opaque)
+    static void c_h(struct C_Foo * const x, void *opaque)
     {
         assert(opaque != nullptr);
         auto pi = static_cast<const Boo *>(opaque);
@@ -100,10 +119,10 @@ protected:
 
 };"#;
 
-"static void static_member(C_Boo * x) noexcept;";
-r#"inline void Class::static_member(C_Boo * x) noexcept
+"static void static_member(struct C_Boo * const x) noexcept;";
+r#"inline void Class::static_member(struct C_Boo * const x) noexcept
     {
 
         Class_static_member(x);
     }"#;
-"void Class_static_member(C_Boo * x);";
+"void Class_static_member(struct C_Boo * const x);";

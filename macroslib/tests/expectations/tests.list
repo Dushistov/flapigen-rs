@@ -69,3 +69,4 @@ callback_in_callback_args
 fenum
 cenum
 c_self_type
+callback_ref_as_param
