@@ -113,7 +113,7 @@ def calc_cmake_generator() -> List[str]:
             platform = os.environ["platform"]
         if platform == "x86":
             platform = "Win32"
-        cmake_generator = ["-G", "Visual Studio 16 2019", "-A", platform]
+        cmake_generator = ["-G", "Visual Studio 17 2022", "-A", platform]
     else:
         cmake_generator = ["-G", "Unix Makefiles"]
     return cmake_generator

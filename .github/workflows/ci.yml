@@ -23,17 +23,17 @@ jobs:
       matrix:
         include:
           - name: i686-pc-windows-msvc (stable)
-            os: windows-2019
+            os: windows-2022
             rust: stable
             target: i686-pc-windows-msvc
             platform: x86
           - name: x86_64-pc-windows-msvc (stable)
-            os: windows-2019
+            os: windows-2022
             rust: stable
             target: x86_64-pc-windows-msvc
             platform: x64
           - name: x86_64-pc-windows-msvc (beta)
-            os: windows-2019
+            os: windows-2022
             rust: beta
             target: x86_64-pc-windows-msvc
             platform: x64
@@ -66,7 +66,7 @@ jobs:
       # existing folder, as deleting it takes about as much time as not doing
       # anything and just updating rust-docs.
       - name: Rename existing rust toolchain (Windows)
-        if: matrix.os == 'windows-2019'
+        if: matrix.os == 'windows-2022'
         run: Rename-Item C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc C:\Users\runneradmin\.rustup\toolchains\stable-x86_64-pc-windows-msvc.old
 
       - name: Install Rust toolchain
@@ -76,25 +76,25 @@ jobs:
           targets: ${{ matrix.target }}
           components: rustfmt
       - uses: actions/setup-python@v5
-        if: matrix.os == 'windows-2019'
+        if: matrix.os == 'windows-2022'
         with:
           python-version: '3.8.0'
           architecture: ${{ matrix.platform || 'x64' }}
       - uses: actions/setup-python@v5
-        if: matrix.os != 'windows-2019'
+        if: matrix.os != 'windows-2022'
         with:
           python-version: '3.7.13'
           architecture: ${{ matrix.platform || 'x64' }}
-      - uses: jwlawson/actions-setup-cmake@v1.4
-        if: matrix.os != 'windows-2019'
+      - uses: jwlawson/actions-setup-cmake@v2
+        if: matrix.os != 'windows-2022'
         with:
           cmake-version: '3.9.6'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
       # visual studio 16 2019 not supported until cmake 3.14
-      - uses: jwlawson/actions-setup-cmake@v1.4
-        if: matrix.os == 'windows-2019'
+      - uses: jwlawson/actions-setup-cmake@v2
+        if: matrix.os == 'windows-2022'
         with:
-          cmake-version: '3.14.7'
+          cmake-version: '3.21.7'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Choose boost version (not ubuntu)
         if: matrix.os != 'ubuntu-22.04'
@@ -122,7 +122,7 @@ jobs:
         if: matrix.os == 'ubuntu-22.04'
         run: sudo apt-get -y update && sudo apt-get install -y valgrind
       - name: Install llvm tools on Windows
-        if: matrix.os == 'windows-2019'
+        if: matrix.os == 'windows-2022'
         run: |
           set -e
           curl https://releases.llvm.org/5.0.2/LLVM-5.0.2-win64.exe -o llvm-installer.exe
@@ -138,7 +138,7 @@ jobs:
           echo "SCCACHE_BUCKET=flapigenamd64macos" >> $GITHUB_ENV
         shell: bash
       - name: install sccache (windows 64bit)
-        if: matrix.os == 'windows-2019'
+        if: matrix.os == 'windows-2022'
         run: |
           set -e
           curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
