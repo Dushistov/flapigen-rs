@@ -47,15 +47,15 @@ jobs:
             rust: beta
             target: x86_64-unknown-linux-gnu
 
-          - name: x86_64-apple-darwin (stable)
-            os: macos-13
+          - name: aarch64-apple-darwin (stable)
+            os: macos-14
             rust: stable
-            target: x86_64-apple-darwin
+            target: aarch64-apple-darwin
 
-          - name: x86_64-apple-darwin (beta)
-            os: macos-13
+          - name: aarch64-apple-darwin (beta)
+            os: macos-14
             rust: beta
-            target: x86_64-apple-darwin
+            target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v3
         with:
@@ -75,18 +75,23 @@ jobs:
           toolchain: ${{ matrix.rust }}
           targets: ${{ matrix.target }}
           components: rustfmt
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: matrix.os == 'windows-2022'
         with:
           python-version: '3.8.0'
           architecture: ${{ matrix.platform || 'x64' }}
-      - uses: actions/setup-python@v5
-        if: matrix.os != 'windows-2022'
+      - uses: actions/setup-python@v6
+        if: matrix.os == 'macos-14'
+        with:
+          python-version: '3.13.0'
+          architecture: ${{ matrix.platform || 'arm64' }}
+      - uses: actions/setup-python@v6
+        if: matrix.os != 'windows-2022' && matrix.os != 'macos-14'
         with:
           python-version: '3.7.13'
           architecture: ${{ matrix.platform || 'x64' }}
       - uses: jwlawson/actions-setup-cmake@v2
-        if: matrix.os != 'windows-2022'
+        if: matrix.os != 'windows-2022' && matrix.os != 'macos-14'
         with:
           cmake-version: '3.9.6'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
@@ -95,6 +100,12 @@ jobs:
         if: matrix.os == 'windows-2022'
         with:
           cmake-version: '3.21.7'
+          github-api-token: ${{ secrets.GITHUB_TOKEN }}
+      # supports of macos/arm64 not supported until 3.19.2
+      - uses: jwlawson/actions-setup-cmake@v2
+        if: matrix.os == 'macos-14'
+        with:
+          cmake-version: '3.19.2'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Choose boost version (not ubuntu)
         if: matrix.os != 'ubuntu-22.04'
@@ -131,11 +142,11 @@ jobs:
           echo "c:\\llvm-binary\\bin" >> $GITHUB_PATH
         shell: bash
       - name: install sccache (macos)
-        if: matrix.os == 'macos-13'
+        if: matrix.os == 'macos-14'
         run: |
           set -e
           brew install sccache
-          echo "SCCACHE_BUCKET=flapigenamd64macos" >> $GITHUB_ENV
+          echo "SCCACHE_BUCKET=flapigenarm64macos" >> $GITHUB_ENV
         shell: bash
       - name: install sccache (windows 64bit)
         if: matrix.os == 'windows-2022'
