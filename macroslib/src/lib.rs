@@ -130,7 +130,7 @@ impl JavaConfig {
     /// Use @NonNull for types where appropriate
     /// # Arguments
     /// * `import_annotation` - import statement for @NonNull,
-    ///                         for example android.support.annotation.NonNull
+    ///   for example android.support.annotation.NonNull
     #[deprecated(note = "Use use_null_annotation_from_package instead")]
     pub fn use_null_annotation(mut self, import_annotation: String) -> JavaConfig {
         let suffix = ".NonNull";
@@ -144,8 +144,7 @@ impl JavaConfig {
     /// Use @NonNull/@Nullable for types where appropriate
     /// # Arguments
     /// * `null_annotation_package` - from which package import annotations like NonNull,
-    ///                         for example for Android Studio
-    ///                         you should pass android.support.annotation
+    ///   for example for Android Studio you should pass android.support.annotation
     pub fn use_null_annotation_from_package(
         mut self,
         null_annotation_package: String,
@@ -174,7 +173,7 @@ impl JavaConfig {
 /// What reachability fence to use
 #[derive(Debug, Clone, Copy)]
 pub enum JavaReachabilityFence {
-    /// java.lang.ref.Reference.reachabilityFence​
+    /// java.lang.ref.Reference.reachabilityFence
     Std,
     /// If Reference.reachabilityFence​ is not available,
     /// generate JNI code to emulate it
