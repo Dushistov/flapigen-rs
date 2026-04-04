@@ -177,9 +177,9 @@ pub(in crate::cpp) fn cpp_list_required_includes(
     let mut includes = Vec::<SmolStr>::with_capacity(methods.len());
     for m in methods {
         for p in &mut m.input {
-            includes.extend(mem::take(&mut p.provided_by_module).into_iter());
+            includes.extend(mem::take(&mut p.provided_by_module));
         }
-        includes.extend(mem::take(&mut m.output.provided_by_module).into_iter());
+        includes.extend(mem::take(&mut m.output.provided_by_module));
     }
 
     // preserve order of includes
@@ -438,9 +438,9 @@ extern "C" {
     let common_files = &mut ctx.common_files;
     let out: &mut FileWriteCache = file_for_module!(ctx, common_files, c_type_header_name);
 
-    write!(
+    writeln!(
         out,
-        "extern const {f_ty} {name};\n",
+        "extern const {f_ty} {name};",
         f_ty = fti.base.name.display(),
         name = static_.ident
     )
