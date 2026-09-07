@@ -141,33 +141,6 @@ jobs:
           echo "LIBCLANG_PATH=C:\\llvm-binary\\bin" >> $GITHUB_ENV
           echo "c:\\llvm-binary\\bin" >> $GITHUB_PATH
         shell: bash
-      - name: install sccache (macos)
-        if: matrix.os == 'macos-14'
-        run: |
-          set -e
-          brew install sccache
-          echo "SCCACHE_BUCKET=flapigenarm64macos" >> $GITHUB_ENV
-        shell: bash
-      - name: install sccache (windows 64bit)
-        if: matrix.os == 'windows-2022'
-        run: |
-          set -e
-          curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc.tar.gz -o sccache.tar.gz
-          7z x sccache.tar.gz
-          7z x sccache.tar
-          echo "`pwd`/sccache-$SCCACHE_VER-x86_64-pc-windows-msvc" >> $GITHUB_PATH
-          echo "SCCACHE_BUCKET=flapigenamd64win" >> $GITHUB_ENV
-        shell: bash
-      - name: install sccache (linux)
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          set -e
-          curl -L https://github.com/mozilla/sccache/releases/download/$SCCACHE_VER/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl.tar.gz -o sccache.tar.gz
-          tar -xzvf sccache.tar.gz
-          chmod 755 "./sccache-$SCCACHE_VER-x86_64-unknown-linux-musl/sccache"
-          echo "`pwd`/sccache-$SCCACHE_VER-x86_64-unknown-linux-musl" >> $GITHUB_PATH
-          echo "SCCACHE_BUCKET=flapigenamd64ubuntu" >> $GITHUB_ENV
-        shell: bash
       - name: Setup platform variable (for windows build)
         run: |
           echo "platform=$platform" >> $GITHUB_ENV
@@ -181,9 +154,15 @@ jobs:
           java-version: '8'
           java-package: jdk
           architecture: x86
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.11
+      - name: Set Rust caching env vars
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
       - name: Check versions
         run: |
-          set -e
+          set -euo pipefail
           rustc --print cfg
           clang --version
           rustc --version
@@ -191,25 +170,18 @@ jobs:
           cmake --version
           javac -version
           python --version
-          sccache --version
+          ${SCCACHE_PATH} --version
           echo "end of versions checking"
         shell: bash
       - name: Run tests
         run: |
-          set -e
+          set -euo pipefail
           cd $GITHUB_WORKSPACE
           cp workspace.Cargo.toml Cargo.toml
           python -c "fin = open('Cargo.toml', 'r'); res = fin.read().replace('debug = true', '').replace('incremental = true', ''); fin.close(); fout = open('Cargo.toml', 'w'); fout.write(res + '\n'); fout.close();"
-          test -z "$SCCACHE_ENDPOINT" || export RUSTC_WRAPPER=`which sccache`
-          echo "SCCACHE_BUCKET: $SCCACHE_BUCKET"
-          test -z "$SCCACHE_ENDPOINT" || sccache --start-server
-          python ci_build_and_test.py --skip-android-tests
-          test -z "$SCCACHE_ENDPOINT" || sccache -s
+          python ci_build_and_test.py --skip-android-tests          
         shell: bash
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.S_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.S_AWS_SECRET_ACCESS_KEY }}
-          SCCACHE_ENDPOINT: ${{ secrets.S_SCCACHE_ENDPOINT }}
           CARGO_BUILD_TARGET: ${{ matrix.target }}
   doc_tests:
     name: Docs (Detect cases where documentation links don't resolve and such)
