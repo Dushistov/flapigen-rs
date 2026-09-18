@@ -149,10 +149,10 @@ $out = QString::fromUtf8($pin.data, $pin.len);
 }
 
 #[test]
-fn test_foreign_typemap_bare_fn() {
+fn test_foreign_typemap_bare_fn_two_args() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
-            generic_alias!(CFnTwoArgsPtr = swig_concat_idents!(c_fn_, swig_i_type!(T1), swig_i_type!(T1), _t));
+            generic_alias!(CFnTwoArgsPtr = swig_concat_idents!(c_fn_, swig_i_type!(T1), swig_i_type!(T2), _t));
             foreign_code!(
                 module = "CFnTwoArgsPtr!().h";
                 r##"

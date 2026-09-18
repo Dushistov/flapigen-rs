@@ -287,7 +287,7 @@ foreign_typemap!(
 typedef void (*CFnTwoArgsPtr!())(swig_f_type!(T1), swig_f_type!(T2));
 "##
     );
-    (r_type) <T1: SwigTypeIsReprC, T2: SwigTypeIsReprC> extern "C" fn(T1, T2);
+    (r_type) <T1: SwigTypeIsReprC, T2: SwigTypeIsReprC> Option<extern "C" fn(T1, T2)>;
     (f_type, req_modules = ["\"CFnTwoArgsPtr!().h\""]) "CFnTwoArgsPtr!()";
 );
 
