@@ -280,6 +280,18 @@ typedef void (*CFnOneArgPtr!())(swig_f_type!(T));
 );
 
 foreign_typemap!(
+    generic_alias!(CFnOneArgAndRetPtr = swig_concat_idents!(c_fn_, swig_i_type!(TArg), _ret_, swig_i_type!(TRet), _t));
+    foreign_code!(
+        module = "CFnOneArgAndRetPtr!().h";
+                    r##"
+        typedef swig_f_type!(TRet) (*CFnOneArgAndRetPtr!())(swig_f_type!(TArg));
+        "##
+    );
+    (r_type) <TArg: SwigTypeIsReprC, TRet: SwigTypeIsReprC> Option<extern "C" fn(TArg) -> TRet>;
+    (f_type, req_modules = ["\"CFnOneArgAndRetPtr!().h\""]) "CFnOneArgAndRetPtr!()";
+);
+
+foreign_typemap!(
     generic_alias!(CFnTwoArgsPtr = swig_concat_idents!(c_fn_, swig_i_type!(T1), swig_i_type!(T2), _t));
     foreign_code!(
         module = "CFnTwoArgsPtr!().h";
