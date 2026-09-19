@@ -535,9 +535,9 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
 fn cache_f_code(
     cached_code: &mut FxHashSet<(SmolStr, String)>,
     f_module_name: &SmolStr,
-    f_code_str: &String,
+    f_code_str: &str,
 ) -> bool {
-    let entry = (f_module_name.clone(), f_code_str.clone());
+    let entry = (f_module_name.clone(), f_code_str.to_string());
     if cached_code.contains(&entry) {
         return true;
     }

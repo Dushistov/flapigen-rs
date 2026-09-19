@@ -213,9 +213,9 @@ impl PythonConfig {
     ) -> Result<TokenStream> {
         let module_name = parse::<syn::Ident>(&self.module_name, SourceId::none())?;
         let module_init =
-            parse::<syn::Ident>(&format!("init{}", &self.module_name), SourceId::none())?;
+            parse::<syn::Ident>(&format!("init{}", self.module_name), SourceId::none())?;
         let module_py_init =
-            parse::<syn::Ident>(&format!("PyInit_{}", &self.module_name), SourceId::none())?;
+            parse::<syn::Ident>(&format!("PyInit_{}", self.module_name), SourceId::none())?;
         let registration_code = quote! {
             mod py_error {
                 cpython::py_exception!(#module_name, Error);
@@ -1019,9 +1019,9 @@ fn if_exported_class_generate_argument_conversion(
     let py_mod_str = py_wrapper_mod_name(&class_name);
     let py_mod: Ident = parse(&py_mod_str, src_id)?;
     let py_type: Type = if reference_allowed {
-        parse(&format!("&super::{}::{}", &py_mod_str, &class_name), src_id)?
+        parse(&format!("&super::{}::{}", py_mod_str, class_name), src_id)?
     } else {
-        parse(&format!("super::{}::{}", &py_mod_str, &class_name), src_id)?
+        parse(&format!("super::{}::{}", py_mod_str, class_name), src_id)?
     };
 
     let rust_instance_code = if reference_allowed {
