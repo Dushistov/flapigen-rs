@@ -181,9 +181,9 @@ impl TypeConvCode {
     }
 }
 
-impl ToString for TypeConvCode {
-    fn to_string(&self) -> String {
-        self.code.clone()
+impl fmt::Display for TypeConvCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.code)
     }
 }
 
