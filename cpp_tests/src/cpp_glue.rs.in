@@ -1095,6 +1095,64 @@ foreign_class!(class TestFuture {
     }
 });
 
+trait AsyncCallbacks<T>: Send {
+    fn is_cancelled(&self) -> bool;
+    fn on_result_ready(self, result: T);
+}
+
+foreign_callback!(callback CancelableCallback {
+    self_type AsyncCallbacks<i32> + Send;
+    isCancelled = AsyncCallbacks::is_cancelled(&self) -> bool;
+    onResultReady = AsyncCallbacks::on_result_ready(self, result: i32);
+});
+
+foreign_typemap!(
+    ($p:r_type) impl AsyncCallbacks<i32> <= C_CancelableCallback {
+        $out_no_type = $p;
+    };
+
+    ($p:f_type, $tmp:temporary, input_to_output,
+     req_modules = ["\"c_CancelableCallback.h\"", "\"../cancelable_future.hpp\""])
+        <= "CancelableFuture<int32_t>"
+        r#"
+        auto $tmp = new CancelableFutureState<int32_t>;
+        auto $p = CancelableFuture<int32_t>($tmp);
+        $out;
+        $out.opaque = $tmp;
+        $out.C_CancelableCallback_deref = [](void *opaque) {
+            auto state = static_cast<CancelableFutureState<int32_t> *>(opaque);
+            state->cancel();
+            delete state;
+        };
+        $out.isCancelled = [](void *opaque) -> char {
+            auto state = static_cast<CancelableFutureState<int32_t> *>(opaque);
+            return state->cancelled.load() ? 1 : 0;
+        };
+        $out.onResultReady = [](int32_t result, void *opaque) {
+            auto state = static_cast<CancelableFutureState<int32_t> *>(opaque);
+            state->promise.set_value(result);
+            delete state;
+        };
+"#;
+);
+
+foreign_class!(class TestCancelableCallback {
+    fn run(will_cancel: bool, callback: impl AsyncCallbacks<i32>) {
+        std::thread::spawn(move || {
+            use std::time::Duration;
+
+            const WAIT_CANCEL_TIMEOUT: Duration = Duration::from_secs(10);
+            let start_time = std::time::Instant::now();
+            while will_cancel && !callback.is_cancelled() && start_time.elapsed() < WAIT_CANCEL_TIMEOUT {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            if !callback.is_cancelled() {
+                callback.on_result_ready(42);
+            }
+        });
+    }
+});
+
 //ANCHOR: method_not_method
 pub struct TestMethodNotMethod;
 

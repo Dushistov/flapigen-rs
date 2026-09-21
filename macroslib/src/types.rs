@@ -236,6 +236,10 @@ impl fmt::Display for SelfTypeVariant {
 }
 
 impl SelfTypeVariant {
+    pub(crate) fn is_consuming(self) -> bool {
+        matches!(self, SelfTypeVariant::Mut | SelfTypeVariant::Default)
+    }
+
     pub(crate) fn is_read_only(self) -> bool {
         match self {
             SelfTypeVariant::RptrMut | SelfTypeVariant::Mut => false,
@@ -280,6 +284,12 @@ impl ForeignInterface {
     }
     pub(crate) fn src_id_span(&self) -> SourceIdSpan {
         (self.src_id, self.name.span())
+    }
+    pub(crate) fn has_consuming_method(&self) -> bool {
+        self.items.iter().any(|method| match method.fn_decl.inputs.first() {
+            Some(FnArg::SelfArg(_, receiver)) => receiver.is_consuming(),
+            Some(FnArg::Default(_)) | None => false,
+        })
     }
 }
 

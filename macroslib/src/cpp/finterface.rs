@@ -338,6 +338,7 @@ impl {trait_name} for {struct_with_funcs} {{"#,
                 acc
             });
         let self_arg = method.fn_decl.inputs[0].as_self_arg(interface.src_id)?;
+        let consuming_self = self_arg.is_consuming();
 
         let args_with_types: String = [self_arg.to_string(), rest_args_with_types].concat();
         assert!(!method.fn_decl.inputs.is_empty());
@@ -371,6 +372,11 @@ impl {trait_name} for {struct_with_funcs} {{"#,
         };
         let ret_type =
             DisplayToTokens(&f_method.output.base.corresponding_rust_type.ty).to_string();
+        let forget_self = if consuming_self {
+            "        ::std::mem::forget(self);\n"
+        } else {
+            ""
+        };
         writeln!(
             code,
             r#"
@@ -378,7 +384,7 @@ impl {trait_name} for {struct_with_funcs} {{"#,
     fn {func_name}({args_with_types}) -> {real_ret_type} {{
 {convert_args}
         let ret: {ret_type} = (self.{method_name})({args}self.opaque);
-{output_conv}
+{forget_self}{output_conv}
         ret
     }}"#,
             method_name = method.name,
@@ -541,10 +547,10 @@ struct C_{interface_name} {{
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
+        let self_variant = method.fn_decl.inputs[0].as_self_arg(interface.src_id)?;
+        let consuming_self = self_variant.is_consuming();
         let const_sig = {
-            let const_method = method.fn_decl.inputs[0]
-                .as_self_arg(interface.src_id)?
-                .is_read_only();
+            let const_method = self_variant.is_read_only() && !consuming_self;
             if const_method {
                 "const "
             } else {
@@ -587,10 +593,15 @@ struct C_{interface_name} {{
         .expect(WRITE_TO_MEM_FAILED_MSG);
 
         if c_ret_type.display() == "void" {
+            let delete_after_call = if consuming_self {
+                format!("\n        delete {interface_ptr};")
+            } else {
+                String::new()
+            };
             writeln!(
                 cpp_static_reroute_methods,
                 r#"
-        {p}->{method_name}({input_args});
+        {p}->{method_name}({input_args});{delete_after_call}
     }}"#,
                 p = interface_ptr,
                 method_name = method.name,
@@ -598,11 +609,16 @@ struct C_{interface_name} {{
             )
             .expect(WRITE_TO_MEM_FAILED_MSG);
         } else {
+            let delete_after_call = if consuming_self {
+                format!("        delete {interface_ptr};\n")
+            } else {
+                String::new()
+            };
             writeln!(
                 cpp_static_reroute_methods,
                 r#"
         auto {ret} = {p}->{method_name}({input_args});
-        return {cpp_out_conv};
+{delete_after_call}        return {cpp_out_conv};
     }}"#,
                 ret = ret_name,
                 method_name = method.name,

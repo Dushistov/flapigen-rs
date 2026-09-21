@@ -6,7 +6,6 @@
 #include <cstdio>
 #include <cstring>
 #include <array>
-#include <functional>
 #include <limits>
 #include <iostream>
 #include <sstream>
@@ -42,6 +41,8 @@
 #include "rust_interface/TestWorkWithReprC.hpp"
 #include "rust_interface/TestFnInline.hpp"
 #include "rust_interface/TestFuture.hpp"
+#include "rust_interface/TestCancelableCallback.hpp"
+#include "rust_interface/CancelableCallback.hpp"
 #include "rust_interface/ThreadSafeObserver.hpp"
 #include "rust_interface/TestMultiThreadCallback.hpp"
 #include "rust_interface/Session.hpp"
@@ -1176,6 +1177,60 @@ TEST(TestFuture, smokeTest)
         EXPECT_EQ("Err", msg.to_std_string());
 #endif
     }
+}
+
+TEST(TestCancelableCallback, direct_c_adapter)
+{
+    {
+        auto future = TestCancelableCallback::run(false);
+        future.wait();
+        EXPECT_EQ(42, future.get());
+    }
+
+    {
+        auto future = TestCancelableCallback::run(true);
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        future.cancel();
+        future.wait();
+        EXPECT_THROW(future.get(), CancelledFuture);
+    }
+}
+
+namespace {
+class VirtualCancelableCallback final : public CancelableCallback {
+public:
+    VirtualCancelableCallback(std::atomic<int> &destructions, std::atomic<int32_t> &result) noexcept
+        : destructions_(destructions)
+        , result_(result)
+    {
+    }
+    ~VirtualCancelableCallback() noexcept override { ++destructions_; }
+
+    bool isCancelled() const noexcept override { return false; }
+    void onResultReady(int32_t result) noexcept override { result_.store(result); }
+
+private:
+    std::atomic<int> &destructions_;
+    std::atomic<int32_t> &result_;
+};
+} // namespace
+
+TEST(TestCancelableCallback, generated_cpp_interface)
+{
+    std::atomic<int> destructions{ 0 };
+    std::atomic<int32_t> result{ 0 };
+    auto callback
+        = std::unique_ptr<CancelableCallback>(new VirtualCancelableCallback(destructions, result));
+    auto c_callback = CancelableCallback::to_c_interface(std::move(callback));
+    c_callback.onResultReady(42, c_callback.opaque);
+    EXPECT_EQ(42, result.load());
+    EXPECT_EQ(1, destructions.load());
+
+    auto cancelled
+        = std::unique_ptr<CancelableCallback>(new VirtualCancelableCallback(destructions, result));
+    auto c_cancelled = CancelableCallback::to_c_interface(std::move(cancelled));
+    c_cancelled.C_CancelableCallback_deref(c_cancelled.opaque);
+    EXPECT_EQ(2, destructions.load());
 }
 
 namespace {
