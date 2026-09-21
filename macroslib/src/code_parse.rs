@@ -780,7 +780,7 @@ impl Parse for ForeignInterfaceParser {
             if !have_self_args {
                 return Err(syn::Error::new(
                     rust_func_name.span(),
-                    "expect &self or &mut self as first argument",
+                    "expect self, &self, or &mut self as first argument",
                 ));
             }
             let fn_args = parse_fn_args(args_in)?.0;
@@ -795,6 +795,28 @@ impl Parse for ForeignInterfaceParser {
                 },
                 doc_comments,
             });
+        }
+
+        let mut consuming_position = items.iter().enumerate().filter_map(|(idx, method)| {
+            method.fn_decl.inputs[0]
+                .as_self_arg(SourceId::none())
+                .ok()
+                .filter(|receiver| receiver.is_consuming())
+                .map(|_| idx)
+        });
+        if let Some(pos) = consuming_position.next() {
+            if pos + 1 != items.len() {
+                return Err(syn::Error::new(
+                    items[pos].name.span(),
+                    "a consuming `self` callback method must be declared last",
+                ));
+            }
+            if let Some(second) = consuming_position.next() {
+                return Err(syn::Error::new(
+                    items[second].name.span(),
+                    "foreign_callback supports at most one consuming `self` method",
+                ));
+            }
         }
 
         let self_type: syn::TypeTraitObject = self_type.ok_or_else(|| {
@@ -906,6 +928,37 @@ mod tests {
             "OnEvent",
             f_interface.0.self_type.into_token_stream().to_string()
         );
+    }
+
+    #[test]
+    fn test_parse_foreign_callback_consuming_method() {
+        let mac: syn::Macro = parse_quote! {
+            foreign_callback!(callback Completion {
+                self_type AsyncCallbacks<i32> + Send;
+                isCancelled = AsyncCallbacks::is_cancelled(&self) -> bool;
+                onResultReady = AsyncCallbacks::on_result_ready(self, result: i32);
+            })
+        };
+        let f_interface: ForeignInterfaceParser = test_parse(mac.tokens);
+        assert!(f_interface.0.has_consuming_method());
+    }
+
+    #[test]
+    fn test_parse_foreign_callback_rejects_nonterminal_consuming_method() {
+        let mac: syn::Macro = parse_quote! {
+            foreign_callback!(callback Completion {
+                self_type AsyncCallbacks<i32>;
+                onResultReady = AsyncCallbacks::on_result_ready(self, result: i32);
+                isCancelled = AsyncCallbacks::is_cancelled(&self) -> bool;
+            })
+        };
+        let err = match syn::parse2::<ForeignInterfaceParser>(mac.tokens) {
+            Ok(_) => panic!("a consuming callback method must be terminal"),
+            Err(err) => err,
+        };
+        assert!(err
+            .to_string()
+            .contains("consuming `self` callback method must be declared last"));
     }
 
     #[test]

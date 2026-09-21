@@ -27,6 +27,13 @@ pub(in crate::java_jni) fn generate_interface(
     ctx: &mut JavaContext,
     interface: &ForeignInterface,
 ) -> Result<()> {
+    if interface.has_consuming_method() {
+        return Err(DiagnosticError::new(
+            interface.src_id,
+            interface.span(),
+            "consuming `self` methods in foreign_callback are currently supported only for C++",
+        ));
+    }
     let f_methods = find_suitable_ftypes_for_interace_methods(ctx, interface)?;
     generate_java_code_for_interface(
         ctx,

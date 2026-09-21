@@ -1,0 +1,32 @@
+r#"impl AsyncCallbacks for C_Completion {
+    #[allow(unused_mut)]
+    fn is_cancelled(&self) -> bool {
+        let ret: ::std::os::raw::c_char = (self.isCancelled)(self.opaque);
+        let mut ret: bool = ret != 0;
+        ret
+    }
+    #[allow(unused_mut)]
+    fn on_result_ready(self, a0: i32) -> () {
+        let ret: () = (self.onResultReady)(a0, self.opaque);
+        ::std::mem::forget(self);
+        ret
+    }
+}"#;
+
+r#"impl Drop for C_Completion {
+    fn drop(&mut self) {
+        (self.C_Completion_deref)(self.opaque);
+    }
+}"#;
+
+r#"#[repr(C)]
+#[derive(Clone)]
+#[allow(non_snake_case)]
+pub struct C_Completion {
+    opaque: *const ::std::os::raw::c_void,
+    C_Completion_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    isCancelled: extern "C" fn(_: *const ::std::os::raw::c_void) -> ::std::os::raw::c_char,
+    onResultReady: extern "C" fn(a0: i32, _: *const ::std::os::raw::c_void) -> (),
+}"#;
+
+
