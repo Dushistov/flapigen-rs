@@ -4,14 +4,13 @@ use std::{convert::TryInto, mem, rc::Rc};
 use log::{debug, error, info};
 use petgraph::graph::NodeIndex;
 use rustc_hash::FxHashMap;
-use smol_str::SmolStr;
 use syn::spanned::Spanned;
 
 use crate::{
     error::{DiagnosticError, Result},
     source_registry::SourceId,
     typemap::{
-        ast::{ForeignTypeName, SpannedSmolStr},
+        ast::{ForeignTypeName, SpannedString},
         ty::{ForeignConversionIntermediate, ForeignTypeS, ForeignTypesStorage},
         typemap_macro::{FTypeLeftRightPair, ModuleName, TypeMapConvRuleInfo},
         TypeConvEdge, TypeMap,
@@ -465,7 +464,7 @@ fn ftype_merge(our: &mut ForeignTypeS, extrn_ft: ForeignTypeS) {
     }
 }
 
-fn convert_req_module_to_provided_by_module(v: Vec<ModuleName>) -> Vec<SmolStr> {
+fn convert_req_module_to_provided_by_module(v: Vec<ModuleName>) -> Vec<String> {
     let mut ret = Vec::with_capacity(v.len());
     for x in v {
         ret.push(x.name);
@@ -524,7 +523,7 @@ fn validate_rule_rewrite(
 
 fn set_unique_prefix(
     ft: &mut ForeignTypeS,
-    unique_prefix: Option<SpannedSmolStr>,
+    unique_prefix: Option<SpannedString>,
     src_id: SourceId,
 ) -> Result<()> {
     let different = match (&unique_prefix, ft.name.unique_prefix()) {

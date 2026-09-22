@@ -3,7 +3,6 @@ use petgraph::Direction;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use rustc_hash::{FxHashMap, FxHashSet};
-use smol_str::SmolStr;
 use std::io::Write;
 use syn::{spanned::Spanned, Type};
 
@@ -143,7 +142,7 @@ public final class {class_name} {{"#,
             }
             MethodVariant::Constructor => java_code::ArgsFormatFlags::INTERNAL,
         };
-        let mut known_names: FxHashSet<SmolStr> =
+        let mut known_names: FxHashSet<String> =
             method.arg_names_without_self().map(|x| x.into()).collect();
         if let MethodVariant::Method(_) = method.variant {
             if known_names.contains(JAVA_RUST_SELF_NAME) {
@@ -614,7 +613,7 @@ May be you need to use `private constructor = empty;` syntax?",
         )?;
         trace!("generate_rust_code jni name: {}", jni_func_name);
 
-        let mut known_names: FxHashSet<SmolStr> =
+        let mut known_names: FxHashSet<String> =
             method.arg_names_without_self().map(|x| x.into()).collect();
         if let MethodVariant::Method(_) = method.variant {
             if known_names.contains("this") {
@@ -1038,7 +1037,7 @@ fn convert_code_for_method<'a, NI: Iterator<Item = &'a str>>(
     cfg: &JavaConfig,
     f_method: &JniForeignMethodSignature,
     arg_name_iter: NI,
-    mut known_names: FxHashSet<SmolStr>,
+    mut known_names: FxHashSet<String>,
     flags: java_code::ArgsFormatFlags,
 ) -> Result<(String, String, String)> {
     use std::fmt::Write;

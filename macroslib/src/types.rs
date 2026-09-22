@@ -1,6 +1,5 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use smol_str::SmolStr;
 use std::fmt;
 use syn::{parse_quote, spanned::Spanned, Type};
 
@@ -125,7 +124,7 @@ impl FnArg {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NamedArg {
-    pub name: SmolStr,
+    pub name: String,
     pub span: Span,
     pub ty: syn::Type,
 }

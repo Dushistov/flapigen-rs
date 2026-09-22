@@ -3,7 +3,6 @@ use heck::ToLowerCamelCase;
 use log::debug;
 use proc_macro2::{Ident, Span, TokenStream};
 use rustc_hash::FxHashSet;
-use smol_str::SmolStr;
 use std::convert::{TryFrom, TryInto};
 use syn::{
     braced, parenthesized,
@@ -595,7 +594,7 @@ pub(crate) fn parse_fn_args(
             "Invalid function argument, should be 'name: type' or '_: type' or 'type'",
         ))
     };
-    let mut args_names = FxHashSet::<SmolStr>::default();
+    let mut args_names = FxHashSet::<String>::default();
     for arg in args {
         use syn::FnArg::*;
         let fn_arg = match arg {
@@ -626,7 +625,7 @@ pub(crate) fn parse_fn_args(
                 },
             ),
             Typed(typed_arg) => {
-                let (name, span): (SmolStr, Span) = match *typed_arg.pat {
+                let (name, span): (String, Span) = match *typed_arg.pat {
                     syn::Pat::Ident(pat_ident) => {
                         (pat_ident.ident.to_string().into(), pat_ident.ident.span())
                     }

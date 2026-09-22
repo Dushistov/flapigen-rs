@@ -7,7 +7,6 @@ use proc_macro2::Span;
 use quote::ToTokens;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
-use smol_str::SmolStr;
 use std::{fmt, ops, rc::Rc};
 use syn::spanned::Spanned;
 
@@ -17,11 +16,11 @@ use super::ast::ForeignTypeName;
 pub(crate) struct RustTypeS {
     pub src_id: SourceId,
     pub ty: syn::Type,
-    pub normalized_name: SmolStr,
+    pub normalized_name: String,
     pub implements: ImplementsSet,
     pub(in crate::typemap) graph_idx: RustTypeIdx,
     /// like normalized_name, but _with_ dyn keyword
-    typename_without_lifetimes: SmolStr,
+    typename_without_lifetimes: String,
 }
 
 impl fmt::Display for RustTypeS {
@@ -37,7 +36,7 @@ impl RustTypeS {
         src_id: SourceId,
     ) -> RustTypeS
     where
-        S: Into<SmolStr>,
+        S: Into<String>,
     {
         let mut ty_lftms = ty.clone();
         strip_lifetimes(&mut ty_lftms);
@@ -100,11 +99,11 @@ pub(crate) type RustType = Rc<RustTypeS>;
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct ImplementsSet {
-    inner: SmallVec<[SmolStr; 5]>,
+    inner: SmallVec<[String; 5]>,
 }
 
 impl ImplementsSet {
-    pub(crate) fn insert(&mut self, x: SmolStr) {
+    pub(crate) fn insert(&mut self, x: String) {
         if !self.inner.contains(&x) {
             self.inner.push(x);
         }
@@ -125,7 +124,7 @@ impl ImplementsSet {
     pub(crate) fn contains_path(&self, path: &syn::Path) -> bool {
         self.inner
             .iter()
-            .any(|id: &SmolStr| path.is_ident(id.as_str()))
+            .any(|id: &String| path.is_ident(id.as_str()))
     }
 }
 
@@ -158,7 +157,7 @@ pub(crate) struct ForeignTypeS {
     /// specify which foreign module provides this type
     /// it is possible that provided by multiplines modules
     /// for example C++ `std::variant<TypeA, TypeB>
-    pub provided_by_module: Vec<SmolStr>,
+    pub provided_by_module: Vec<String>,
     pub into_from_rust: Option<ForeignConversionRule>,
     pub from_into_rust: Option<ForeignConversionRule>,
 }
@@ -191,7 +190,7 @@ pub(crate) struct ForeignType(usize);
 #[derive(Debug)]
 pub(in crate::typemap) struct ForeignTypesStorage {
     ftypes: Vec<ForeignTypeS>,
-    name_to_ftype: FxHashMap<SmolStr, ForeignType>,
+    name_to_ftype: FxHashMap<String, ForeignType>,
 }
 
 impl ForeignTypesStorage {

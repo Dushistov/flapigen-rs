@@ -1,8 +1,7 @@
 use rustc_hash::FxHashSet;
-use smol_str::SmolStr;
 use std::{borrow::Borrow, fmt::Write, hash::Hash};
 
-pub(crate) fn new_unique_name<T>(names: &FxHashSet<T>, templ: &str) -> SmolStr
+pub(crate) fn new_unique_name<T>(names: &FxHashSet<T>, templ: &str) -> String
 where
     T: Borrow<str> + Eq + Hash,
 {

@@ -41,7 +41,6 @@ use std::{io::Write, mem, path::PathBuf, rc::Rc};
 use log::{debug, trace};
 use proc_macro2::TokenStream;
 use rustc_hash::{FxHashMap, FxHashSet};
-use smol_str::SmolStr;
 use strum::IntoEnumIterator;
 use syn::spanned::Spanned;
 
@@ -80,7 +79,7 @@ struct CppConverter {
 #[derive(Debug)]
 struct CppForeignTypeInfo {
     base: ForeignTypeInfo,
-    provided_by_module: Vec<SmolStr>,
+    provided_by_module: Vec<String>,
     input_to_output: bool,
     pub(in crate::cpp) cpp_converter: Option<CppConverter>,
 }
@@ -308,8 +307,8 @@ struct CppContext<'a> {
     conv_map: &'a mut TypeMap,
     target_pointer_width: usize,
     rust_code: &'a mut Vec<TokenStream>,
-    foreign_code_cache: &'a mut FxHashSet<(SmolStr, String)>,
-    common_files: &'a mut FxHashMap<SmolStr, FileWriteCache>,
+    foreign_code_cache: &'a mut FxHashSet<(String, String)>,
+    common_files: &'a mut FxHashMap<String, FileWriteCache>,
     generated_foreign_files: &'a mut FxHashSet<PathBuf>,
     class_ext_handlers: &'a ClassExtHandlers,
     method_ext_handlers: &'a MethodExtHandlers,
@@ -329,8 +328,8 @@ impl LanguageGenerator for CppConfig {
         ext_handlers: ExtHandlers,
     ) -> Result<Vec<TokenStream>> {
         let mut ret = Vec::with_capacity(items.len());
-        let mut files = FxHashMap::<SmolStr, FileWriteCache>::default();
-        let mut foreign_code_cache = FxHashSet::<(SmolStr, String)>::default();
+        let mut files = FxHashMap::<String, FileWriteCache>::default();
+        let mut foreign_code_cache = FxHashSet::<(String, String)>::default();
         let mut generated_foreign_files = FxHashSet::default();
         {
             let mut ctx = CppContext {
@@ -547,8 +546,8 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
 }
 
 fn cache_f_code(
-    cached_code: &mut FxHashSet<(SmolStr, String)>,
-    f_module_name: &SmolStr,
+    cached_code: &mut FxHashSet<(String, String)>,
+    f_module_name: &String,
     f_code_str: &str,
 ) -> bool {
     let entry = (f_module_name.clone(), f_code_str.to_string());

@@ -20,7 +20,6 @@ petgraph = { version = "0.6.0", default-features = false }
 bitflags = "2.5.0"
 smallvec = "1.1.0"
 rustc-hash = "2.1.2"
-smol_str = "0.3.2"
 strum = { version = "0.26.3", default-features = false, features = ["derive"] }
 heck = { version = "0.5.0", default-features = false }
 which = { version = "8.0.2", default-features = false, features = ["real-sys"] }

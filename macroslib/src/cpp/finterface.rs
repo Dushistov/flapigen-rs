@@ -2,7 +2,6 @@ use std::{io::Write, rc::Rc};
 
 use petgraph::Direction;
 use rustc_hash::FxHashSet;
-use smol_str::SmolStr;
 use syn::{spanned::Spanned, Type};
 
 use crate::{
@@ -38,8 +37,7 @@ pub(in crate::cpp) fn generate_interface(
 
     let c_struct_name = format!("C_{}", interface.name);
 
-    let c_interface_struct_header: SmolStr =
-        format!("\"{}\"", c_interface_header(interface)).into();
+    let c_interface_struct_header: String = format!("\"{}\"", c_interface_header(interface)).into();
 
     let struct_with_funcs_rust_ty = register_rust_type_and_c_type(
         ctx,
@@ -81,7 +79,7 @@ pub(in crate::cpp) fn generate_interface(
         interface.src_id_span(),
     )?;
 
-    let cpp_abs_class_header: SmolStr = format!("\"{}\"", cpp_interface_header(interface)).into();
+    let cpp_abs_class_header: String = format!("\"{}\"", cpp_interface_header(interface)).into();
     let boxed_trait_name = format!("Box<dyn {}>", DisplayToTokens(&interface.self_type));
     let boxed_trait_rust_ty: Type =
         parse_ty_with_given_span(&boxed_trait_name, interface.name.span())
@@ -238,7 +236,7 @@ fn register_dyn_reference_conv(
     interface: &ForeignInterface,
     ptr_struct_with_funcs_rust_ty: RustType,
     mut_ptr_struct_with_funcs_rust_ty: RustType,
-    cpp_abs_class_header: SmolStr,
+    cpp_abs_class_header: String,
     c_struct_name: &str,
 ) -> Result<()> {
     for const_ref in [false, true] {
@@ -551,7 +549,7 @@ fn find_suitable_ftypes_for_interace_methods(
 fn cpp_code_generate_interface(
     ctx: &mut CppContext,
     interface: &ForeignInterface,
-    req_includes: &[SmolStr],
+    req_includes: &[String],
     f_methods: &[CppForeignMethodSignature],
 ) -> std::result::Result<(), DiagnosticError> {
     use std::fmt::Write;
@@ -592,7 +590,7 @@ struct C_{interface_name} {{
 
     for (method, f_method) in interface.items.iter().zip(f_methods) {
         let c_ret_type = &f_method.output.base.name;
-        let mut known_names: FxHashSet<SmolStr> =
+        let mut known_names: FxHashSet<String> =
             method.arg_names_without_self().map(|x| x.into()).collect();
         let opaque_name = new_unique_name(&known_names, "opaque");
         known_names.insert(opaque_name.clone());
@@ -810,7 +808,7 @@ fn register_rust_type_and_c_type(
     ctx: &mut CppContext,
     rust_ty_name: String,
     c_type_name: String,
-    header_file: SmolStr,
+    header_file: String,
     ext_span: SourceIdSpan,
 ) -> Result<RustType> {
     let (src_id, span) = ext_span;
@@ -837,7 +835,7 @@ fn register_reference(
     ctx: &mut CppContext,
     rust_ty: RustType,
     const_ref: bool,
-    c_header_name: SmolStr,
+    c_header_name: String,
 ) -> Result<()> {
     let ty = &rust_ty.ty;
     let (src_id, span) = rust_ty.src_id_span();

@@ -15,7 +15,6 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
-use smol_str::SmolStr;
 use syn::{
     parse_quote,
     visit::{visit_lifetime, Visit},
@@ -42,13 +41,13 @@ use crate::{
 /// but do not show user this "uniqueness"
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct UniqueName {
-    value: SmolStr,
+    value: String,
     unique_prefix_len: usize,
 }
 
 impl UniqueName {
-    pub(crate) fn new<S: Into<SmolStr>>(value: S, prefix: &str) -> Self {
-        let value: SmolStr = value.into();
+    pub(crate) fn new<S: Into<String>>(value: S, prefix: &str) -> Self {
+        let value: String = value.into();
         assert!(
             value.as_str().starts_with(prefix),
             "{value} should starts with {prefix}"
@@ -64,7 +63,7 @@ impl UniqueName {
     pub(crate) fn value(&self) -> &str {
         self.value.as_str()
     }
-    pub(crate) fn value_ref(&self) -> &SmolStr {
+    pub(crate) fn value_ref(&self) -> &String {
         &self.value
     }
     pub(crate) fn unique_prefix(&self) -> Option<&str> {
@@ -96,15 +95,6 @@ impl Display for UniqueName {
     }
 }
 
-impl From<SmolStr> for UniqueName {
-    fn from(value: SmolStr) -> Self {
-        Self {
-            value,
-            unique_prefix_len: 0,
-        }
-    }
-}
-
 impl From<String> for UniqueName {
     fn from(value: String) -> Self {
         Self {
@@ -125,7 +115,7 @@ impl<'a> From<&'a str> for UniqueName {
 
 #[derive(Debug)]
 pub(crate) struct TypeName {
-    pub typename: SmolStr,
+    pub typename: String,
 }
 
 impl Display for TypeName {
@@ -135,7 +125,7 @@ impl Display for TypeName {
 }
 
 impl TypeName {
-    pub(crate) fn new<S: Into<SmolStr>>(tn: S) -> Self {
+    pub(crate) fn new<S: Into<String>>(tn: S) -> Self {
         TypeName {
             typename: tn.into(),
         }
@@ -175,7 +165,7 @@ impl ForeignTypeName {
             span,
         }
     }
-    pub(crate) fn new_with_unique_prefix<S: Into<SmolStr>>(
+    pub(crate) fn new_with_unique_prefix<S: Into<String>>(
         tn: S,
         prefix: &str,
         span: SourceIdSpan,
@@ -203,25 +193,25 @@ impl ForeignTypeName {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct SpannedSmolStr {
+pub(crate) struct SpannedString {
     pub sp: Span,
-    pub value: SmolStr,
+    pub value: String,
 }
 
-impl SpannedSmolStr {
+impl SpannedString {
     pub(crate) fn as_str(&self) -> &str {
         self.value.as_str()
     }
 }
 
-impl PartialEq for SpannedSmolStr {
+impl PartialEq for SpannedString {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }
 }
 
-impl PartialEq<SmolStr> for SpannedSmolStr {
-    fn eq(&self, other: &SmolStr) -> bool {
+impl PartialEq<String> for SpannedString {
+    fn eq(&self, other: &String) -> bool {
         self.value == *other
     }
 }
@@ -331,7 +321,7 @@ pub(crate) struct GenericTypeConv {
 #[derive(PartialEq, Debug)]
 pub(crate) struct ConversionResult<'a> {
     pub to_ty: syn::Type,
-    pub to_ty_name: SmolStr,
+    pub to_ty_name: String,
     pub subst_map: TyParamsSubstMap<'a>,
 }
 
