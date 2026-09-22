@@ -850,7 +850,7 @@ fn return_type_match(
     true
 }
 
-pub(in crate::typemap) fn replace_all_types_with(
+pub(in crate) fn replace_all_types_with(
     in_ty: &Type,
     subst_map: &TyParamsSubstMap,
 ) -> Type {

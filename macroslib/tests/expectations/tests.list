@@ -57,6 +57,7 @@ smart_ptr_copy_derived_arc
 null_annotation_java
 callback_with_several_traits
 consuming_callback
+generic_consuming_callback
 reachability_fence_java
 inline_dyn
 fenum_with_comments

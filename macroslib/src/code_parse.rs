@@ -729,6 +729,7 @@ impl Parse for ForeignInterfaceParser {
             return Err(kw_la.error());
         }
         let interface_name = input.parse::<Ident>()?;
+        let generics = input.parse::<syn::Generics>()?;
         debug!("INTERFACE NAME {:?}", interface_name);
 
         let item_parser;
@@ -826,6 +827,7 @@ impl Parse for ForeignInterfaceParser {
         Ok(ForeignInterfaceParser(ForeignInterface {
             src_id: SourceId::none(),
             name: interface_name,
+            generics,
             self_type,
             doc_comments: interface_doc_comments,
             items,
@@ -941,6 +943,29 @@ mod tests {
         };
         let f_interface: ForeignInterfaceParser = test_parse(mac.tokens);
         assert!(f_interface.0.has_consuming_method());
+    }
+
+    #[test]
+    fn test_parse_generic_foreign_callback() {
+        let mac: syn::Macro = parse_quote! {
+            foreign_callback!(callback Completion<T> {
+                self_type AsyncCallbacks<T>;
+                onResultReady = AsyncCallbacks::on_result_ready(self, result: T);
+            })
+        };
+        let f_interface: ForeignInterfaceParser = test_parse(mac.tokens);
+        assert_eq!(1, f_interface.0.generics.params.len());
+        assert_eq!(
+            "T",
+            f_interface
+                .0
+                .generics
+                .params
+                .first()
+                .unwrap()
+                .to_token_stream()
+                .to_string()
+        );
     }
 
     #[test]

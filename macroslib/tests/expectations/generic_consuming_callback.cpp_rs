@@ -1,0 +1,30 @@
+r#"impl AsyncCallbacks<i32> for C_Completioni32 {
+    #[allow(unused_mut)]
+    fn is_cancelled(&self) -> bool {
+        let ret: ::std::os::raw::c_char = (self.isCancelled)(self.opaque);
+        let mut ret: bool = ret != 0;
+        ret
+    }
+    #[allow(unused_mut)]
+    fn on_result_ready(self, a0: i32) -> () {
+        let ret: () = (self.onResultReady)(a0, self.opaque);
+        ::std::mem::forget(self);
+        ret
+    }
+}"#;
+
+r#"impl AsyncCallbacks<String> for C_CompletionCRustString {
+    #[allow(unused_mut)]
+    fn is_cancelled(&self) -> bool {
+        let ret: ::std::os::raw::c_char = (self.isCancelled)(self.opaque);
+        let mut ret: bool = ret != 0;
+        ret
+    }
+    #[allow(unused_mut)]
+    fn on_result_ready(self, a0: String) -> () {
+        let mut a0: CRustString = CRustString::from_string(a0);
+        let ret: () = (self.onResultReady)(a0, self.opaque);
+        ::std::mem::forget(self);
+        ret
+    }
+}"#;

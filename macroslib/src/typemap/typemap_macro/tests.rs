@@ -650,6 +650,9 @@ impl TypeMapConvRuleInfoExpanderHelper for Dummy {
     fn swig_i_type(&mut self, ty: &syn::Type, _opt_arg: Option<&str>) -> Result<syn::Type> {
         Ok(ty.clone())
     }
+    fn swig_callback_i_type(&mut self, _callback: &str, ty: &syn::Type) -> Result<syn::Type> {
+        Ok(ty.clone())
+    }
     fn swig_from_rust_to_i_type(
         &mut self,
         _ty: &syn::Type,

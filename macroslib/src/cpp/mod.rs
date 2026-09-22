@@ -63,7 +63,10 @@ use crate::{
         },
         CItem, CItems, ForeignTypeInfo, TypeConvCode, TypeMapConvRuleInfo,
     },
-    types::{ForeignClassInfo, ForeignMethod, ItemToExpand, MethodAccess, MethodVariant},
+    types::{
+        ForeignClassInfo, ForeignInterface, ForeignMethod, ItemToExpand, MethodAccess,
+        MethodVariant,
+    },
     CppConfig, CppOptional, CppStrView, CppVariant, LanguageGenerator, SourceCode, TypeMap,
     SMART_PTR_COPY_TRAIT, WRITE_TO_MEM_FAILED_MSG,
 };
@@ -311,6 +314,8 @@ struct CppContext<'a> {
     class_ext_handlers: &'a ClassExtHandlers,
     method_ext_handlers: &'a MethodExtHandlers,
     enum_ext_handlers: &'a EnumExtHandlers,
+    generic_interfaces: Vec<ForeignInterface>,
+    generated_generic_interfaces: FxHashSet<String>,
 }
 
 impl LanguageGenerator for CppConfig {
@@ -339,11 +344,18 @@ impl LanguageGenerator for CppConfig {
                 class_ext_handlers: ext_handlers.class_ext_handlers,
                 method_ext_handlers: ext_handlers.method_ext_handlers,
                 enum_ext_handlers: ext_handlers.enum_ext_handlers,
+                generic_interfaces: Vec::new(),
+                generated_generic_interfaces: FxHashSet::default(),
             };
             init(&mut ctx, code)?;
             for item in &items {
                 if let ItemToExpand::Class(ref fclass) = item {
                     self.register_class(ctx.conv_map, fclass)?;
+                }
+                if let ItemToExpand::Interface(interface) = item {
+                    if !interface.generics.params.is_empty() {
+                        ctx.generic_interfaces.push(interface.clone());
+                    }
                 }
             }
             for item in items {
@@ -351,7 +363,9 @@ impl LanguageGenerator for CppConfig {
                     ItemToExpand::Class(fclass) => fclass::generate(&mut ctx, &fclass)?,
                     ItemToExpand::Enum(fenum) => fenum::generate_enum(&mut ctx, &fenum)?,
                     ItemToExpand::Interface(finterface) => {
-                        finterface::generate_interface(&mut ctx, &finterface)?
+                        if finterface.generics.params.is_empty() {
+                            finterface::generate_interface(&mut ctx, &finterface)?
+                        }
                     }
                 }
             }
