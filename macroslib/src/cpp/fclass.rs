@@ -5,7 +5,6 @@ use petgraph::Direction;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use rustc_hash::FxHashSet;
-use smol_str::SmolStr;
 use syn::{spanned::Spanned, Ident, Type};
 
 use crate::{
@@ -70,7 +69,7 @@ May be you need to use `private constructor = empty;` syntax?",
 fn do_generate(
     ctx: &mut CppContext,
     class: &ForeignClassInfo,
-    req_includes: &[SmolStr],
+    req_includes: &[String],
     methods_sign: &[CppForeignMethodSignature],
 ) -> Result<()> {
     use std::fmt::Write;
@@ -218,7 +217,7 @@ May be you need to use `private constructor = empty;` syntax?",
             !method.fn_decl.inputs.is_empty()
         };
 
-        let mut known_names: FxHashSet<SmolStr> =
+        let mut known_names: FxHashSet<String> =
             method.arg_names_without_self().map(|x| x.into()).collect();
         if let MethodVariant::Method(_) = method.variant {
             if known_names.contains("this") {
@@ -1048,7 +1047,7 @@ fn generate_cpp_header_preamble(
     class: &ForeignClassInfo,
     tmp_class_name: &str,
     class_doc_comments: &str,
-    req_includes: &[SmolStr],
+    req_includes: &[String],
     static_only: bool,
     c_class_type: &str,
     c_include_f: &mut FileWriteCache,

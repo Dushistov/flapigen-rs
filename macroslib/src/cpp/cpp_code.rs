@@ -3,7 +3,6 @@ use std::{borrow::Cow, fmt::Write, mem};
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 use rustc_hash::FxHashSet;
-use smol_str::SmolStr;
 use syn::spanned::Spanned;
 
 use crate::{
@@ -94,7 +93,7 @@ pub(in crate::cpp) fn cpp_generate_args_with_types<'a, NI: Iterator<Item = &'a s
 
 pub(in crate::cpp) fn convert_args<'a, NI: Iterator<Item = &'a str>>(
     f_method: &CppForeignMethodSignature,
-    known_names: &mut FxHashSet<SmolStr>,
+    known_names: &mut FxHashSet<String>,
     arg_name_iter: NI,
 ) -> Result<(String, String), DiagnosticError> {
     let mut conv_deps = String::new();
@@ -173,8 +172,8 @@ pub(in crate::cpp) fn c_header_name_for_enum(enum_info: &ForeignEnumInfo) -> Str
 
 pub(in crate::cpp) fn cpp_list_required_includes(
     methods: &mut [CppForeignMethodSignature],
-) -> Vec<SmolStr> {
-    let mut includes = Vec::<SmolStr>::with_capacity(methods.len());
+) -> Vec<String> {
+    let mut includes = Vec::<String>::with_capacity(methods.len());
     for m in methods {
         for p in &mut m.input {
             includes.extend(mem::take(&mut p.provided_by_module));
@@ -197,12 +196,12 @@ pub(in crate::cpp) fn generate_c_type(
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
 
-    fn is_item_defined(ctx: &mut CppContext, module_name: &SmolStr, item: &str) -> bool {
+    fn is_item_defined(ctx: &mut CppContext, module_name: &String, item: &str) -> bool {
         let common_files = &mut ctx.common_files;
         let out: &mut FileWriteCache = file_for_module!(ctx, common_files, module_name);
         out.is_item_defined(item)
     }
-    fn define_item(ctx: &mut CppContext, module_name: &SmolStr, item: String) {
+    fn define_item(ctx: &mut CppContext, module_name: &String, item: String) {
         let common_files = &mut ctx.common_files;
         let out: &mut FileWriteCache = file_for_module!(ctx, common_files, module_name);
         out.define_item(item);
@@ -280,7 +279,7 @@ fn do_generate_c_type(
     ctx: &mut CppContext,
     flags: MergeCItemsFlags,
     src_id: SourceId,
-    c_type_header_name: &SmolStr,
+    c_type_header_name: &String,
     ctype: &dyn CItemDescriptor,
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
@@ -308,7 +307,7 @@ fn test_{name}_layout() {{
     let mut mem_out = Vec::<u8>::new();
     writeln!(mem_out, "{s_id} {{").expect(WRITE_TO_MEM_FAILED_MSG);
 
-    let mut includes = FxHashSet::<SmolStr>::default();
+    let mut includes = FxHashSet::<String>::default();
 
     let mut fields_asserts_code = String::new();
     let fields = &ctype
@@ -415,7 +414,7 @@ fn add_const_forward_decl(
     ctx: &mut CppContext,
     static_: &syn::ItemStatic,
     src_id: SourceId,
-    c_type_header_name: &SmolStr,
+    c_type_header_name: &String,
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
 
@@ -461,7 +460,7 @@ fn add_func_forward_decl(
     ctx: &mut CppContext,
     f: &syn::ItemFn,
     src_id: SourceId,
-    c_type_header_name: &SmolStr,
+    c_type_header_name: &String,
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
     {
@@ -478,7 +477,7 @@ extern "C" {
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
     let mut fn_decl_out = Vec::with_capacity(100);
-    let mut includes = FxHashSet::<SmolStr>::default();
+    let mut includes = FxHashSet::<String>::default();
 
     match f.sig.output {
         syn::ReturnType::Default => {

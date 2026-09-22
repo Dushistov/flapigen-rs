@@ -6,7 +6,6 @@ use log::debug;
 use petgraph::Direction;
 use proc_macro2::{Span, TokenStream};
 use rustc_hash::FxHashSet;
-use smol_str::SmolStr;
 use std::{cell::RefCell, convert::TryInto, fmt::Write, rc::Rc};
 use syn::{
     parse::Parser,
@@ -21,7 +20,7 @@ use crate::{
     typemap::{
         ast::{
             get_trait_bounds, is_second_subst_of_first, normalize_type, parse_ty_with_given_span,
-            DisplayToTokens, GenericTypeConv, SpannedSmolStr, TyParamsSubstMap,
+            DisplayToTokens, GenericTypeConv, SpannedString, TyParamsSubstMap,
         },
         ty::TraitNamesSet,
         TypeConvCode, UniqueName,
@@ -70,15 +69,15 @@ pub(crate) enum CItem {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CItems {
-    pub header_name: SmolStr,
+    pub header_name: String,
     pub items: Vec<CItem>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignCode {
     pub sp: Span,
-    pub module_name: SmolStr,
-    pub cfg_option: Option<SpannedSmolStr>,
+    pub module_name: String,
+    pub cfg_option: Option<SpannedString>,
     pub code: String,
 }
 
@@ -90,7 +89,7 @@ pub(crate) struct GenericAlias {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ModuleName {
-    pub name: SmolStr,
+    pub name: String,
     pub sp: Span,
 }
 
@@ -134,7 +133,7 @@ impl TypeMapConvRuleInfo {
     }
     pub(crate) fn if_simple_rtype_ftype_map(
         &self,
-    ) -> Option<(&Type, &FTypeName, &[ModuleName], Option<&SpannedSmolStr>)> {
+    ) -> Option<(&Type, &FTypeName, &[ModuleName], Option<&SpannedString>)> {
         if self.rtype_right_to_left.is_some()
             || !self.ftype_right_to_left.is_empty()
             || self.ftype_left_to_right.len() > 1
@@ -166,7 +165,7 @@ impl TypeMapConvRuleInfo {
     /// it is possible to merge to `TypeMap` without help of language backend
     pub(crate) fn if_simple_rtype_ftype_map_no_lang_backend(
         &self,
-    ) -> Option<(&Type, &FTypeName, &[ModuleName], Option<&SpannedSmolStr>)> {
+    ) -> Option<(&Type, &FTypeName, &[ModuleName], Option<&SpannedString>)> {
         if !self.f_code.is_empty() || self.c_types.is_some() {
             return None;
         }
@@ -477,10 +476,10 @@ pub(crate) struct RTypeConvRule {
 #[derive(Debug, PartialEq)]
 pub(crate) struct FTypeConvRule {
     pub req_modules: Vec<ModuleName>,
-    pub cfg_option: Option<SpannedSmolStr>,
+    pub cfg_option: Option<SpannedString>,
     pub left_right_ty: FTypeLeftRightPair,
     pub input_to_output: bool,
-    pub unique_prefix: Option<SpannedSmolStr>,
+    pub unique_prefix: Option<SpannedString>,
     pub code: Option<TypeConvCode>,
 }
 
@@ -525,7 +524,7 @@ impl From<LitStr> for FTypeName {
 
 pub(crate) struct ExpandedFType {
     pub name: UniqueName,
-    pub provided_by_module: Vec<SmolStr>,
+    pub provided_by_module: Vec<String>,
 }
 
 pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
@@ -552,7 +551,7 @@ pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
 struct CalcGenericAlias<'a> {
     name: &'a syn::Ident,
     value: syn::Type,
-    req_modules: Vec<SmolStr>,
+    req_modules: Vec<String>,
 }
 
 fn build_generic_aliases<'a>(
@@ -565,7 +564,7 @@ fn build_generic_aliases<'a>(
     for ga in generic_aliases {
         let item: GenericAliasItem = syn::parse2(ga.value.clone())
             .map_err(|err| DiagnosticError::from_syn_err(src_id, err))?;
-        let mut req_modules = Vec::<SmolStr>::new();
+        let mut req_modules = Vec::<String>::new();
         let mut ident = String::new();
         concat_idents(
             src_id,
@@ -620,7 +619,7 @@ fn concat_idents(
     item: GenericAliasItem,
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
-    req_modules: &mut Vec<SmolStr>,
+    req_modules: &mut Vec<String>,
     ident: &mut String,
 ) -> Result<()> {
     match item {
@@ -958,7 +957,7 @@ fn expand_ftype_rule(
                 generic_aliases,
                 &mut provided_by_module,
             )?;
-            Some(SpannedSmolStr {
+            Some(SpannedString {
                 sp: unique_prefix.sp,
                 value: new_unique_prefix.into(),
             })
@@ -985,7 +984,7 @@ fn call_swig_f_type(
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
     generic_aliases: &[CalcGenericAlias],
-) -> Result<Vec<SmolStr>> {
+) -> Result<Vec<String>> {
     let (type_name, opt_param) = match params.len() {
         1 => (params[0], None),
         2 => (params[0], Some(params[1])),
@@ -1053,7 +1052,7 @@ fn expand_str_in_ftype_name_context(
 ) -> Result<String> {
     expand_macroses(input, |id: &str, params: Vec<&str>, out: &mut String| {
         if id == SWIG_F_TYPE {
-            let modules: Vec<SmolStr> =
+            let modules: Vec<String> =
                 call_swig_f_type(ctx_span, params, out, param_map, expander, generic_aliases)?;
             provided_by_module.extend(modules.into_iter().map(|name| ModuleName {
                 name,
@@ -1139,7 +1138,7 @@ fn expand_module_name(
     generic_mod_name: &str,
     ctx_sp: SourceIdSpan,
     aliases: &[CalcGenericAlias],
-) -> Result<SmolStr> {
+) -> Result<String> {
     expand_macroses(
         generic_mod_name,
         |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
@@ -1358,7 +1357,7 @@ fn expand_fcode(
 ) -> Result<Vec<ForeignCode>> {
     let mut ret = Vec::<ForeignCode>::with_capacity(f_code.len());
     for fc in f_code {
-        let module_name: SmolStr =
+        let module_name: String =
             expand_module_name(&fc.module_name, (src_id, fc.sp), generic_aliases)?;
         let code = expand_foreign_code(
             &fc.code,

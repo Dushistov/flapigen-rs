@@ -11,7 +11,6 @@ use log::debug;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use rustc_hash::{FxHashMap, FxHashSet};
-use smol_str::SmolStr;
 use std::{fmt, io::Write, path::PathBuf};
 use syn::{spanned::Spanned, Type};
 
@@ -47,7 +46,7 @@ struct JavaContext<'a> {
     pointer_target_width: usize,
     rust_code: &'a mut Vec<TokenStream>,
     generated_foreign_files: &'a mut FxHashSet<PathBuf>,
-    java_type_to_jni_sig_map: FxHashMap<SmolStr, SmolStr>,
+    java_type_to_jni_sig_map: FxHashMap<String, String>,
     class_ext_handlers: &'a ClassExtHandlers,
     method_ext_handlers: &'a MethodExtHandlers,
 }

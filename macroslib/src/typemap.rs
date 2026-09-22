@@ -15,7 +15,6 @@ use petgraph::{
 use proc_macro2::{Span, TokenStream};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
-use smol_str::SmolStr;
 use syn::{parse_quote, Ident, Type};
 
 use crate::{
@@ -50,7 +49,7 @@ const MAX_TRY_BUILD_PATH_STEPS: usize = 7;
 pub(crate) struct TypeConvCode {
     pub(in crate::typemap) span: SourceIdSpan,
     code: String,
-    params: Vec<SmolStr>,
+    params: Vec<String>,
 }
 
 impl PartialEq for TypeConvCode {
@@ -77,7 +76,7 @@ impl TypeConvCode {
     pub(crate) fn with_params<S: Into<String>>(
         code: S,
         span: SourceIdSpan,
-        params: Vec<SmolStr>,
+        params: Vec<String>,
     ) -> TypeConvCode {
         let code: String = code.into();
         TypeConvCode { code, span, params }
@@ -133,7 +132,7 @@ impl TypeConvCode {
     pub(crate) fn full_span(&self) -> SourceIdSpan {
         self.span
     }
-    pub(crate) fn params(&self) -> &[SmolStr] {
+    pub(crate) fn params(&self) -> &[String] {
         &self.params
     }
 
@@ -222,7 +221,7 @@ pub(crate) type TypesConvGraph = Graph<RustType, TypeConvEdge, petgraph::Directe
 
 pub(crate) type RustTypeIdx = NodeIndex<TypeGraphIdx>;
 
-type RustTypeNameToGraphIdx = FxHashMap<SmolStr, RustTypeIdx>;
+type RustTypeNameToGraphIdx = FxHashMap<String, RustTypeIdx>;
 
 #[derive(Debug)]
 pub(crate) struct TypeMap {
@@ -401,11 +400,7 @@ impl<'a> TypeGraphSnapshot<'a> {
         }
     }
 
-    fn node_for_ty(
-        &mut self,
-        src_id: SourceId,
-        (ty, ty_name): (syn::Type, SmolStr),
-    ) -> RustTypeIdx {
+    fn node_for_ty(&mut self, src_id: SourceId, (ty, ty_name): (syn::Type, String)) -> RustTypeIdx {
         let graph = &mut self.conv_graph;
         let mut new_node = false;
         let idx = if let Some(idx) = self.rust_names_map.get(&ty_name) {
@@ -582,7 +577,7 @@ impl TypeMap {
 
         for (idx, edge) in path.into_iter().enumerate() {
             let (_, target) = self.conv_graph.edge_endpoints(edge).unwrap();
-            let target_typename: SmolStr = self.conv_graph[target].typename().into();
+            let target_typename: String = self.conv_graph[target].typename().into();
             let edge = &mut self.conv_graph[edge];
             if let Some(dep) = edge.dependency.borrow_mut().take() {
                 code_deps.push(dep);
@@ -933,7 +928,7 @@ impl TypeMap {
 
     fn add_node<F: FnOnce() -> RustTypeS>(
         &mut self,
-        key: SmolStr,
+        key: String,
         init_without_graph_idx: F,
     ) -> NodeIndex {
         let rust_names_map = &mut self.rust_names_map;
@@ -986,7 +981,7 @@ impl TypeMap {
         suffix: &str,
         src_id: SourceId,
     ) -> RustType {
-        let name: SmolStr = RustTypeS::make_unique_typename(normalize_type(ty), suffix).into();
+        let name: String = RustTypeS::make_unique_typename(normalize_type(ty), suffix).into();
         let idx = self.add_node(name.clone(), || {
             RustTypeS::new_without_graph_idx(ty.clone(), name, src_id)
         });

@@ -1,6 +1,5 @@
 use quote::quote;
 use rustc_hash::FxHashMap;
-use smol_str::SmolStr;
 use std::{io::Write, str};
 use syn::{parse_quote, visit::Visit};
 
@@ -16,7 +15,7 @@ use crate::{
     WRITE_TO_MEM_FAILED_MSG,
 };
 
-pub(in crate::java_jni) fn predefined_java_type_to_jni_sig() -> FxHashMap<SmolStr, SmolStr> {
+pub(in crate::java_jni) fn predefined_java_type_to_jni_sig() -> FxHashMap<String, String> {
     let mut m = FxHashMap::default();
     m.insert("String".into(), "Ljava.lang.String;".into());
     m.insert("Byte".into(), "Ljava.lang.Byte".into());
@@ -50,11 +49,11 @@ fn java_type_to_jni_signature<'a>(ctx: &'a JavaContext, java_type: &str) -> Opti
         let java_type = filter_null_annotation(java_type);
         ctx.java_type_to_jni_sig_map
             .get(java_type.trim())
-            .map(SmolStr::as_str)
+            .map(String::as_str)
     } else {
         ctx.java_type_to_jni_sig_map
             .get(java_type)
-            .map(SmolStr::as_str)
+            .map(String::as_str)
     }
 }
 

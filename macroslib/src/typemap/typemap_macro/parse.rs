@@ -1,5 +1,4 @@
 use proc_macro2::TokenStream;
-use smol_str::SmolStr;
 use syn::{
     braced, bracketed, parenthesized, parse_quote, spanned::Spanned, token, Ident, LitStr, Token,
     Type,
@@ -14,7 +13,7 @@ use crate::{
     source_registry::SourceId,
     str_replace::replace_first_and_other,
     typemap::{
-        ast::{DisplayToTokens, SpannedSmolStr},
+        ast::{DisplayToTokens, SpannedString},
         TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
     FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE, FOREIGN_TYPEMAP,
@@ -319,7 +318,7 @@ impl syn::parse::Parse for CItems {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
-        let header_name: SmolStr = module_name.value().into();
+        let header_name: String = module_name.value().into();
         input.parse::<Token![;]>()?;
         let citems_list: CItemsList = input.parse()?;
         Ok(CItems {
@@ -417,14 +416,14 @@ impl syn::parse::Parse for ForeignCode {
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
         let sp = module_name.span();
-        let module_name: SmolStr = module_name.value().into();
+        let module_name: String = module_name.value().into();
         input.parse::<Token![;]>()?;
-        let cfg_option: Option<SpannedSmolStr> = if input.peek(kw::option) {
+        let cfg_option: Option<SpannedString> = if input.peek(kw::option) {
             input.parse::<kw::option>()?;
             input.parse::<Token![=]>()?;
             let cfg_option: LitStr = input.parse()?;
             input.parse::<Token![;]>()?;
-            Some(SpannedSmolStr {
+            Some(SpannedString {
                 sp: cfg_option.span(),
                 value: cfg_option.value().into(),
             })
@@ -456,7 +455,7 @@ impl syn::parse::Parse for GenericCItems {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
-        let header_name: SmolStr = module_name.value().into();
+        let header_name: String = module_name.value().into();
         input.parse::<Token![;]>()?;
         let types = input.parse()?;
         Ok(GenericCItems {
@@ -531,15 +530,15 @@ impl syn::parse::Parse for GenericAliasItemVecCommaSeparated {
 }
 
 struct FTypeArmParams {
-    option: Option<SpannedSmolStr>,
+    option: Option<SpannedString>,
     req_modules: Vec<ModuleName>,
     input_to_output: bool,
-    unique_prefix: Option<SpannedSmolStr>,
+    unique_prefix: Option<SpannedString>,
     temporary_ids: Vec<Ident>,
 }
 
 fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Result<FTypeArmParams> {
-    let mut ftype_cfg: Option<SpannedSmolStr> = None;
+    let mut ftype_cfg: Option<SpannedString> = None;
     let mut ftype_req_modules = Vec::<ModuleName>::new();
     let mut input_to_output = false;
     let mut unique_prefix = None;
@@ -572,7 +571,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
             params.parse::<kw::option>()?;
             params.parse::<Token![=]>()?;
             let lit_str = params.parse::<LitStr>()?;
-            ftype_cfg = Some(SpannedSmolStr {
+            ftype_cfg = Some(SpannedString {
                 sp: lit_str.span(),
                 value: lit_str.value().into(),
             });
@@ -583,7 +582,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
             params.parse::<kw::unique_prefix>()?;
             params.parse::<Token![=]>()?;
             let lit_str = params.parse::<LitStr>()?;
-            unique_prefix = Some(SpannedSmolStr {
+            unique_prefix = Some(SpannedString {
                 sp: lit_str.span(),
                 value: lit_str.value().into(),
             });
