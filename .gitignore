@@ -8,4 +8,5 @@ jni_tests/java/com/example/rust
 target/
 /macroslib/target/
 .vscode
-Cargo.lock
+__pycache__/
+.projectile-cache.eld

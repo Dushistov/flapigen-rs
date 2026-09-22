@@ -7,10 +7,19 @@ use flapigen::{JavaConfig, JavaReachabilityFence, LanguageConfig};
 
 fn main() {
     env_logger::init();
+    println!("cargo:rerun-if-env-changed=FLAPIGEN_BENCHMARK");
+    let benchmark = env::var("FLAPIGEN_BENCHMARK").as_deref() == Ok("1");
 
     let out_dir = env::var("OUT_DIR").unwrap();
     let jni_c_headers_rs = Path::new(&out_dir).join("jni_c_header.rs");
-    gen_jni_bindings(&jni_c_headers_rs);
+    if benchmark {
+        assert!(
+            jni_c_headers_rs.is_file(),
+            "FLAPIGEN_BENCHMARK=1 requires cached OUT_DIR/jni_c_header.rs; run the build script without benchmark mode first"
+        );
+    } else {
+        gen_jni_bindings(&jni_c_headers_rs);
+    }
     let have_java_9 = fs::read_to_string(&jni_c_headers_rs)
         .unwrap()
         .contains("JNI_VERSION_9");
@@ -29,7 +38,7 @@ fn main() {
     let test_opt_rsc = Path::new("src").join("test_optional.rs.in");
     let out_src = Path::new(&out_dir).join("java_glue.rs");
     let swig_gen = flapigen::Generator::new(LanguageConfig::JavaConfig(java_cfg))
-        .rustfmt_bindings(true)
+        .rustfmt_bindings(!benchmark)
         .remove_not_generated_files_from_output_directory(true)
         .merge_type_map("chrono_support", include_str!("src/chrono-include.rs"))
         .register_class_attribute_callback("PartialEq", |code, class_name| {

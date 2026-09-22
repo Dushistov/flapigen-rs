@@ -4,6 +4,8 @@ use flapigen::{CppConfig, CppOptional, CppStrView, CppVariant, LanguageConfig};
 
 fn main() {
     env_logger::init();
+    println!("cargo:rerun-if-env-changed=FLAPIGEN_BENCHMARK");
+    let benchmark = env::var("FLAPIGEN_BENCHMARK").as_deref() == Ok("1");
 
     let out_dir = env::var("OUT_DIR").unwrap();
 
@@ -28,7 +30,7 @@ fn main() {
     };
 
     let swig_gen = flapigen::Generator::new(LanguageConfig::CppConfig(cpp_cfg))
-        .rustfmt_bindings(true)
+        .rustfmt_bindings(!benchmark)
         .remove_not_generated_files_from_output_directory(true);
     let src = Path::new("src").join("cpp_glue.rs.in");
     swig_gen.expand(
