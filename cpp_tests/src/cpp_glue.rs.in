@@ -1100,56 +1100,69 @@ trait AsyncCallbacks<T>: Send {
     fn on_result_ready(self, result: T);
 }
 
-foreign_callback!(callback CancelableCallback {
-    self_type AsyncCallbacks<i32> + Send;
+foreign_callback!(callback CancelableCallback<T> {
+    self_type AsyncCallbacks<T> + Send;
     isCancelled = AsyncCallbacks::is_cancelled(&self) -> bool;
-    onResultReady = AsyncCallbacks::on_result_ready(self, result: i32);
+    onResultReady = AsyncCallbacks::on_result_ready(self, result: T);
 });
 
 foreign_typemap!(
-    ($p:r_type) impl AsyncCallbacks<i32> <= C_CancelableCallback {
+    ($p:r_type) <T> impl AsyncCallbacks<T> <= swig_callback_i_type!(CancelableCallback, T) {
         $out_no_type = $p;
     };
 
     ($p:f_type, $tmp:temporary, input_to_output,
-     req_modules = ["\"c_CancelableCallback.h\"", "\"../cancelable_future.hpp\""])
-        <= "CancelableFuture<int32_t>"
+     req_modules = ["\"../cancelable_future.hpp\""])
+        <= "CancelableFuture<swig_f_type!(T, output)>"
         r#"
-        auto $tmp = new CancelableFutureState<int32_t>;
-        auto $p = CancelableFuture<int32_t>($tmp);
+        auto $tmp = new CancelableFutureState<swig_f_type!(T, output)>;
+        auto $p = CancelableFuture<swig_f_type!(T, output)>($tmp);
         $out;
         $out.opaque = $tmp;
-        $out.C_CancelableCallback_deref = [](void *opaque) {
-            auto state = static_cast<CancelableFutureState<int32_t> *>(opaque);
+        $out.swig_callback_i_type!(CancelableCallback, T)_deref = [](void *opaque) {
+            auto state = static_cast<CancelableFutureState<swig_f_type!(T, output)> *>(opaque);
             state->cancel();
             delete state;
         };
         $out.isCancelled = [](void *opaque) -> char {
-            auto state = static_cast<CancelableFutureState<int32_t> *>(opaque);
+            auto state = static_cast<CancelableFutureState<swig_f_type!(T, output)> *>(opaque);
             return state->cancelled.load() ? 1 : 0;
         };
-        $out.onResultReady = [](int32_t result, void *opaque) {
-            auto state = static_cast<CancelableFutureState<int32_t> *>(opaque);
-            state->promise.set_value(result);
+        $out.onResultReady = [](swig_i_type!(T, output) result, void *opaque) {
+            auto state = static_cast<CancelableFutureState<swig_f_type!(T, output)> *>(opaque);
+            auto result_cpp = swig_foreign_from_i_type!(T, result);
+            state->promise.set_value(std::move(result_cpp));
             delete state;
         };
 "#;
 );
 
-foreign_class!(class TestCancelableCallback {
-    fn run(will_cancel: bool, callback: impl AsyncCallbacks<i32>) {
-        std::thread::spawn(move || {
-            use std::time::Duration;
+fn run_background_calc<T: Send + 'static>(
+    will_cancel: bool,
+    success_return: T,
+    callback: impl AsyncCallbacks<T> + 'static,
+) {
+    std::thread::spawn(move || {
+        use std::time::Duration;
 
-            const WAIT_CANCEL_TIMEOUT: Duration = Duration::from_secs(10);
-            let start_time = std::time::Instant::now();
-            while will_cancel && !callback.is_cancelled() && start_time.elapsed() < WAIT_CANCEL_TIMEOUT {
-                std::thread::sleep(Duration::from_millis(20));
-            }
-            if !callback.is_cancelled() {
-                callback.on_result_ready(42);
-            }
-        });
+        const WAIT_CANCEL_TIMEOUT: Duration = Duration::from_secs(10);
+        let start_time = std::time::Instant::now();
+        while will_cancel && !callback.is_cancelled() && start_time.elapsed() < WAIT_CANCEL_TIMEOUT
+        {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if !callback.is_cancelled() {
+            callback.on_result_ready(success_return);
+        }
+    });
+}
+
+foreign_class!(class TestCancelableCallback {
+    fn run_i32(will_cancel: bool, callback: impl AsyncCallbacks<i32>) {
+        run_background_calc(will_cancel, 42, callback)
+    }
+    fn run_string(will_cancel: bool, callback: impl AsyncCallbacks<String>) {
+        run_background_calc(will_cancel, "42".to_string(), callback)
     }
 });
 

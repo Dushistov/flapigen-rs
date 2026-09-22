@@ -168,6 +168,14 @@ impl TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'_, '_> {
         trace!("swig_i_type return {}", f_info.base.corresponding_rust_type);
         Ok(f_info.base.corresponding_rust_type.ty.clone())
     }
+    fn swig_callback_i_type(&mut self, callback: &str, ty: &syn::Type) -> Result<syn::Type> {
+        crate::cpp::finterface::instantiate_generic_interface(
+            self.ctx,
+            callback,
+            ty,
+            self.arg_ty_span,
+        )
+    }
     fn swig_from_rust_to_i_type(
         &mut self,
         ty: &syn::Type,

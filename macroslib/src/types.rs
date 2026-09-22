@@ -270,9 +270,11 @@ pub(crate) struct ForeignEnumItem {
     pub(crate) doc_comments: Vec<String>,
 }
 
+#[derive(Clone)]
 pub(crate) struct ForeignInterface {
     pub(crate) src_id: SourceId,
     pub(crate) name: Ident,
+    pub(crate) generics: syn::Generics,
     pub(crate) self_type: syn::TypeTraitObject,
     pub(crate) doc_comments: Vec<String>,
     pub(crate) items: Vec<ForeignInterfaceMethod>,
@@ -286,13 +288,16 @@ impl ForeignInterface {
         (self.src_id, self.name.span())
     }
     pub(crate) fn has_consuming_method(&self) -> bool {
-        self.items.iter().any(|method| match method.fn_decl.inputs.first() {
-            Some(FnArg::SelfArg(_, receiver)) => receiver.is_consuming(),
-            Some(FnArg::Default(_)) | None => false,
-        })
+        self.items
+            .iter()
+            .any(|method| match method.fn_decl.inputs.first() {
+                Some(FnArg::SelfArg(_, receiver)) => receiver.is_consuming(),
+                Some(FnArg::Default(_)) | None => false,
+            })
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct ForeignInterfaceMethod {
     pub(crate) name: Ident,
     pub(crate) rust_name: syn::Path,

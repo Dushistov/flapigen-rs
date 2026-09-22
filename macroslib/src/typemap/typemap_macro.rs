@@ -9,6 +9,7 @@ use rustc_hash::FxHashSet;
 use smol_str::SmolStr;
 use std::{cell::RefCell, convert::TryInto, fmt::Write, rc::Rc};
 use syn::{
+    parse::Parser,
     spanned::Spanned,
     visit_mut::{visit_type_mut, VisitMut},
     LitStr, Type,
@@ -40,6 +41,7 @@ static SWIG_FROM_I_TYPE_TO_RUST: &str = "swig_from_i_type_to_rust";
 static SWIG_FOREIGN_TO_I_TYPE: &str = "swig_foreign_to_i_type";
 static SWIG_FOREIGN_FROM_I_TYPE: &str = "swig_foreign_from_i_type";
 static SWIG_F_TYPE: &str = "swig_f_type";
+static SWIG_CALLBACK_I_TYPE: &str = "swig_callback_i_type";
 pub(in crate::typemap) static SWIG_SUBST_TYPE: &str = "swig_subst_type";
 
 #[derive(Debug)]
@@ -528,6 +530,7 @@ pub(crate) struct ExpandedFType {
 
 pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
     fn swig_i_type(&mut self, ty: &syn::Type, opt_arg: Option<&str>) -> Result<syn::Type>;
+    fn swig_callback_i_type(&mut self, callback: &str, ty: &syn::Type) -> Result<syn::Type>;
     fn swig_from_rust_to_i_type(
         &mut self,
         ty: &syn::Type,
@@ -839,6 +842,22 @@ fn expand_macro_in_type(
         let ty = find_type_param(param_map, &param, ctx_span)?;
         let i_type = expander.swig_i_type(ty.as_ref(), None)?;
         Ok(Some(i_type))
+    } else if type_macro.mac.path.is_ident(SWIG_CALLBACK_I_TYPE) {
+        let params = syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated
+            .parse2(type_macro.mac.tokens.clone())
+            .map_err(|err| DiagnosticError::from_syn_err(ctx_span.0, err))?;
+        let mut params = params.into_iter();
+        let (Some(callback), Some(ty), None) = (params.next(), params.next(), params.next()) else {
+            return Err(DiagnosticError::new2(
+                ctx_span,
+                "swig_callback_i_type expects a callback name and one type parameter",
+            ));
+        };
+        let ty = find_type_param(param_map, &ty.to_string(), ctx_span)?;
+        Ok(Some(expander.swig_callback_i_type(
+            &callback.to_string(),
+            ty.as_ref(),
+        )?))
     } else {
         let alias_idx = generic_aliases
             .iter()
@@ -1260,6 +1279,17 @@ fn expand_foreign_code(
                     let i_type = expander.swig_i_type(ty.as_ref(), opt_arg)?;
                     let f_type = expander.swig_f_type(&i_type, opt_arg)?;
                     out.push_str(f_type.name.display());
+                }
+                _ if id == SWIG_CALLBACK_I_TYPE => {
+                    if params.len() != 2 {
+                        return Err(DiagnosticError::new2(
+                            ctx_span,
+                            "swig_callback_i_type expects a callback name and one type parameter",
+                        ));
+                    }
+                    let ty = find_type_param(param_map, params[1], ctx_span)?;
+                    let callback_i_type = expander.swig_callback_i_type(params[0], ty.as_ref())?;
+                    out.push_str(normalize_type(&callback_i_type));
                 }
                 _ if id == SWIG_FOREIGN_TO_I_TYPE || id == SWIG_FOREIGN_FROM_I_TYPE => {
                     let (type_name, var_name) = if params.len() == 2 {

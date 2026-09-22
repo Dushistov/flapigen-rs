@@ -14,7 +14,10 @@ use crate::{
     file_cache::FileWriteCache,
     namegen::new_unique_name,
     typemap::{
-        ast::{parse_ty_with_given_span, DisplayToTokens, ForeignTypeName},
+        ast::{
+            parse_ty_with_given_span, replace_all_types_with, DisplayToTokens, ForeignTypeName,
+            TyParamsSubstMap,
+        },
         ty::{ForeignConversionIntermediate, ForeignConversionRule, ForeignTypeS, RustType},
         utils::rust_to_foreign_convert_method_inputs,
         ForeignTypeInfo, TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
@@ -153,6 +156,81 @@ pub(in crate::cpp) fn generate_interface(
     )?;
 
     Ok(())
+}
+
+pub(in crate::cpp) fn instantiate_generic_interface(
+    ctx: &mut CppContext,
+    callback: &str,
+    ty: &Type,
+    span: SourceIdSpan,
+) -> Result<Type> {
+    let template = ctx
+        .generic_interfaces
+        .iter()
+        .find(|interface| interface.name == callback)
+        .cloned()
+        .ok_or_else(|| {
+            DiagnosticError::new2(
+                span,
+                format!("unknown generic foreign_callback '{callback}'"),
+            )
+        })?;
+    if template.generics.params.len() != 1 {
+        return Err(DiagnosticError::new2(
+            span,
+            "generic foreign_callback must have exactly one type parameter",
+        ));
+    }
+    let param = match template.generics.params[0] {
+        syn::GenericParam::Type(ref param) => param.ident.clone(),
+        _ => {
+            return Err(DiagnosticError::new2(
+                span,
+                "generic foreign_callback parameter must be a type parameter",
+            ))
+        }
+    };
+    let rust_ty = ctx.conv_map.find_or_alloc_rust_type(ty, span.0);
+    let i_ty = map_type(ctx, &rust_ty, Direction::Outgoing, span)?
+        .base
+        .corresponding_rust_type
+        .normalized_name
+        .to_string();
+    let mut name = template.name.to_string();
+    name.extend(i_ty.chars().filter(|ch| ch.is_ascii_alphanumeric()));
+    let name = syn::Ident::new(&name, template.name.span());
+    let c_name = format!("C_{name}");
+    let c_ty = parse_ty_with_given_span(&c_name, span.1)
+        .map_err(|err| DiagnosticError::from_syn_err(span.0, err))?;
+    if ctx.generated_generic_interfaces.contains(&c_name) {
+        return Ok(c_ty);
+    }
+    let mut interface = template;
+    let mut substitutions = TyParamsSubstMap::default();
+    substitutions.insert(&param, Some(ty.clone()));
+    let self_type = replace_all_types_with(
+        &Type::TraitObject(interface.self_type.clone()),
+        &substitutions,
+    );
+    interface.self_type = match self_type {
+        Type::TraitObject(self_type) => self_type,
+        _ => unreachable!("replacing a trait object must produce a trait object"),
+    };
+    for method in &mut interface.items {
+        for arg in &mut method.fn_decl.inputs {
+            if let crate::types::FnArg::Default(arg) = arg {
+                arg.ty = replace_all_types_with(&arg.ty, &substitutions);
+            }
+        }
+        if let syn::ReturnType::Type(_, output) = &mut method.fn_decl.output {
+            **output = replace_all_types_with(output, &substitutions);
+        }
+    }
+    interface.name = name;
+    interface.generics = syn::Generics::default();
+    generate_interface(ctx, &interface)?;
+    ctx.generated_generic_interfaces.insert(c_name);
+    Ok(c_ty)
 }
 
 fn register_dyn_reference_conv(
