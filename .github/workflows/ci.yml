@@ -16,6 +16,20 @@ env:
   SCCACHE_REGION: "auto"
 
 jobs:
+  miri:
+    name: Miri (nightly)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: miri, rust-src
+      - name: Run Miri tests
+        run: |
+          ln -s workspace.Cargo.toml Cargo.toml
+          python3 ci_build_and_test.py --miri-only-tests
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:

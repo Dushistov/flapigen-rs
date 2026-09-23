@@ -216,8 +216,10 @@ pub struct CRustString {
 
 #[allow(dead_code)]
 impl CRustString {
-    pub fn from_string(s: String) -> CRustString {
-        let data = s.as_ptr() as *const ::std::os::raw::c_char;
+    pub fn from_string(mut s: String) -> CRustString {
+        // The receiver may mutate or reclaim this allocation with from_raw_parts.
+        // Preserve writable provenance even though the C ABI exposes a const pointer.
+        let data = s.as_mut_ptr() as *const ::std::os::raw::c_char;
         let len = s.len();
         let capacity = s.capacity();
         ::std::mem::forget(s);
