@@ -144,6 +144,26 @@ fn borrowed_slices_remain_owned_by_the_caller() {
     }
 }
 
+#[test]
+fn null_empty_foreign_slices_are_valid_inputs() {
+    assert_eq!(
+        Buffers_sum_tracked(CRustObjectSlice {
+            data: std::ptr::null(),
+            len: 0,
+            step: 0,
+        }),
+        0
+    );
+    assert_eq!(
+        Buffers_increment_tracked(CRustObjectMutSlice {
+            data: std::ptr::null_mut(),
+            len: 0,
+            step: 0,
+        }),
+        0
+    );
+}
+
 #[derive(Default)]
 struct CallbackState {
     calls: AtomicUsize,

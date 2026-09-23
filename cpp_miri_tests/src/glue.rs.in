@@ -66,6 +66,17 @@ impl Buffers {
     fn reverse(value: &mut [u32]) {
         value.reverse();
     }
+
+    fn sum_tracked(value: &[Tracked]) -> i32 {
+        value.iter().map(Tracked::value).sum()
+    }
+
+    fn increment_tracked(value: &mut [Tracked]) -> usize {
+        for item in value.iter_mut() {
+            item.set_value(item.value() + 1);
+        }
+        value.len()
+    }
 }
 
 foreign_class!(class Buffers {
@@ -75,6 +86,8 @@ foreign_class!(class Buffers {
     fn Buffers::take_vec(value: Vec<u32>) -> u32;
     fn Buffers::sum(value: &[u32]) -> u32;
     fn Buffers::reverse(value: &mut [u32]);
+    fn Buffers::sum_tracked(value: &[Tracked]) -> i32;
+    fn Buffers::increment_tracked(value: &mut [Tracked]) -> usize;
 });
 
 trait Observer {

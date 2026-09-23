@@ -833,7 +833,11 @@ foreign_typemap!(
         };
     };
     ($p:r_type) <T: SwigForeignClass> &[T] <= CRustObjectSlice {
-        $out = unsafe { ::std::slice::from_raw_parts($p.data as *const swig_subst_type!(T), $p.len) };
+        $out = if $p.len == 0 {
+            &[]
+        } else {
+            unsafe { ::std::slice::from_raw_parts($p.data as *const swig_subst_type!(T), $p.len) }
+        };
     };
     ($p:f_type, req_modules = ["\"rust_slice.h\""]) => "RustForeignSliceConst<swig_f_type!(&T)>"
         "RustForeignSliceConst<swig_f_type!(&T)>{$p}";
@@ -926,7 +930,11 @@ foreign_typemap!(
         };
     };
     ($p:r_type) <T: SwigForeignClass> &mut [T] <= CRustObjectMutSlice {
-        $out = unsafe { ::std::slice::from_raw_parts_mut($p.data as *mut swig_subst_type!(T), $p.len) };
+        $out = if $p.len == 0 {
+            &mut []
+        } else {
+            unsafe { ::std::slice::from_raw_parts_mut($p.data as *mut swig_subst_type!(T), $p.len) }
+        };
     };
     ($p:f_type, req_modules = ["\"rust_slice_mut.h\""]) => "RustForeignSliceMut<swig_f_type!(&T)>"
         "RustForeignSliceMut<swig_f_type!(&T)>{$p}";
