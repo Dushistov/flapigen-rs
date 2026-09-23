@@ -11,6 +11,7 @@ from typing import List, Set, Optional
 JNI_TESTS = "jni_tests"
 PYTHON_TESTS = "python_tests"
 CPP_TESTS = "cpp_tests"
+MIRI_TESTS = "miri_tests"
 ANDROID_TESTS = "android-example"
 UNIT_TESTS = "unit_tests"
 DOC_TESTS = "doc_tests"
@@ -260,6 +261,12 @@ def run_unit_tests(test_cfg: Set[str], test_set: Set[str]):
         subprocess.check_call(cmd_base)
 
 @show_timing
+def run_miri_tests() -> None:
+    manifest = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "cpp_miri_tests", "Cargo.toml")
+    subprocess.check_call(["cargo", "+nightly", "miri", "test", "--manifest-path", manifest])
+
+@show_timing
 def main():
     print("Starting build and test: %s" % sys.version)
     sys.stdout.flush()
@@ -273,6 +280,8 @@ def main():
             test_set = set([JNI_TESTS])
         elif arg == "--cpp-only-tests":
             test_set = set([CPP_TESTS])
+        elif arg == "--miri-only-tests":
+            test_set = set([MIRI_TESTS])
         elif arg == "--skip-java-tests":
             test_set.remove(JNI_TESTS)
         elif arg == "--skip-python-tests":
@@ -307,6 +316,8 @@ def main():
     print("start tests: %s" % test_set)
     if UNIT_TESTS in test_set:
         run_unit_tests(test_cfg, test_set)
+    if MIRI_TESTS in test_set:
+        run_miri_tests()
     if JNI_TESTS in test_set:
         run_jni_tests(use_shell, test_cfg)
 
