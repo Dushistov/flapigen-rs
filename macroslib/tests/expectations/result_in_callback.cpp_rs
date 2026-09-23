@@ -7,7 +7,7 @@ r#"impl Foo for C_Foo {
             if ret.is_ok != 0 {
                 let mut x: String = unsafe {
                     String::from_raw_parts(
-                        ret.data.ok.data as *mut u8,
+                        ret.data.ok.data.cast(),
                         ret.data.ok.len,
                         ret.data.ok.capacity,
                     )

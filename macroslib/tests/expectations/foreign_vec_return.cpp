@@ -1,3 +1,6 @@
+"struct CRustVecAccess {\n    void * data;";
+"struct CRustForeignVec {\n    void * data;";
+
 "RustForeignVecFoo get_foo_arr() const noexcept;";
 "struct CRustForeignVec Boo_get_foo_arr(const BooOpaque * const self);";
 r#"template<bool OWN_DATA>
