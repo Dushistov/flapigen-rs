@@ -1,3 +1,5 @@
+"struct CRustVecu8 {\n    uint8_t * data;";
+
 "struct CRustResultCRustVecu84232mut3232c_void LocationService_f1(const LocationServiceOpaque * const self);";
 "std::variant<RustVecu8, PosErr> f1() const noexcept;";
 r#"template<bool OWN_DATA>

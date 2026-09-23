@@ -74,7 +74,7 @@ fn vectors_can_be_borrowed_mutated_and_consumed() {
             expected
         );
         Buffers_reverse(CRustSliceMutu32 {
-            data: vector.data.cast_mut(),
+            data: vector.data,
             len: vector.len,
         });
         // SAFETY: this vector is still owned by the test. The previous mutable
@@ -90,6 +90,37 @@ fn vectors_can_be_freed_without_consuming_them_in_a_method() {
     for len in [0, 1, 8] {
         CRustVecu32_free(Buffers_make_vec(len));
     }
+}
+
+#[test]
+fn opaque_vector_access_restores_ownership() {
+    for len in [0, 1, 8] {
+        let values: Vec<u32> = (0..len).collect();
+        let raw = CRustVecAccess::from_vec(values);
+        assert_eq!(
+            CRustVecAccess::to_slice::<u32>(raw),
+            &(0..len).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            CRustVecAccess::to_vec::<u32>(raw),
+            (0..len).collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn foreign_vector_push_remove_and_free() {
+    let mut values = CRustForeignVec::from_vec(vec![Tracked::new(7)]);
+    push_foreign_class_to_vec::<Tracked>(&mut values, Tracked::box_object(Tracked::new(8)));
+    assert_eq!(values.len, 2);
+
+    let removed = remove_foreign_class_from_vec::<Tracked>(&mut values, 0);
+    let removed = Tracked::unbox_object(removed);
+    assert_eq!(removed.value(), 7);
+    drop(removed);
+    assert_eq!(values.len, 1);
+
+    drop_foreign_class_vec::<Tracked>(values);
 }
 
 #[test]
