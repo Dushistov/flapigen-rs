@@ -411,6 +411,14 @@ TEST(TestWorkWithVec, smokeTest)
         validate_create_foo_vec(30, v1);
     }
     {
+        RustForeignSliceConst<FooRef> empty_const;
+        auto v = TestWorkWithVec::clone_foo_slice(std::move(empty_const));
+        EXPECT_TRUE(v.empty());
+
+        RustForeignSliceMut<FooRef> empty_mut;
+        TestWorkWithVec::sort_foo_slice(std::move(empty_mut));
+    }
+    {
         const std::array<int32_t, 5> a{ { -(int32_t(1) << 29), -10, 0, 17, int32_t(1) << 30 } };
         auto v = TestWorkWithVec::test_i32_slice(RustSlice<const int32_t>{ &a[0], a.size() });
         ASSERT_EQ(a.size(), v.size());
