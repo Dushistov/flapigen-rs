@@ -1,0 +1,73 @@
+r#"#[unsafe(no_mangle)]
+pub extern "C" fn EmptyViews_take_slice(value: CRustSliceu32) -> usize {
+    assert!(value.len == 0 || !value.data.is_null());
+    let mut value: &[u32] = if value.len == 0 {
+        &[]
+    } else {
+        unsafe { ::std::slice::from_raw_parts(value.data, value.len) }
+    };
+    let mut ret: usize = take_slice(value);
+    ret
+}"#;
+
+r#"#[unsafe(no_mangle)]
+pub extern "C" fn EmptyViews_take_mut_slice(value: CRustSliceMutu32) -> usize {
+    assert!(value.len == 0 || !value.data.is_null());
+    let mut value: &mut [u32] = if value.len == 0 {
+        &mut []
+    } else {
+        unsafe { ::std::slice::from_raw_parts_mut(value.data, value.len) }
+    };
+    let mut ret: usize = take_mut_slice(value);
+    ret
+}"#;
+
+r#"#[unsafe(no_mangle)]
+pub extern "C" fn EmptyViews_take_str(value: CRustStrView) -> CRustString {
+    let mut value: &str = if value.len == 0 {
+        ""
+    } else {
+        unsafe {
+            let slice: &[u8] = ::std::slice::from_raw_parts(value.data as *const u8, value.len);
+            ::std::str::from_utf8_unchecked(slice)
+        }
+    };
+    let mut ret: String = take_str(value);
+    let mut ret: CRustString = CRustString::from_string(ret);
+    ret
+}"#;
+
+r#"#[unsafe(no_mangle)]
+pub extern "C" fn crust_string_push_str(x: CRustString, s: CRustStrView) -> CRustString {
+    let mut x = unsafe { String::from_raw_parts(x.data.cast(), x.len, x.capacity) };
+    let addon: &str = if s.len == 0 {
+        ""
+    } else {
+        unsafe {
+            let slice: &[u8] = ::std::slice::from_raw_parts(s.data as *const u8, s.len);
+            ::std::str::from_utf8_unchecked(slice)
+        }
+    };
+    x.push_str(addon);
+    CRustString::from_string(x)
+}"#;
+
+r#"impl CRustVecAccess {
+    pub fn from_vec<T>(mut v: Vec<T>) -> Self {
+        let data = v.as_mut_ptr() as *mut ::std::os::raw::c_void;
+        let len = v.len();
+        let capacity = v.capacity();
+        ::std::mem::forget(v);
+        Self { data, len, capacity }
+    }
+    pub fn to_slice<'a, T>(cs: Self) -> &'a [T] {
+        if cs.len == 0 {
+            &[]
+        } else {
+            unsafe { ::std::slice::from_raw_parts(cs.data as *const T, cs.len) }
+        }
+    }
+    pub fn to_vec<T>(cs: Self) -> Vec<T> {
+        unsafe { Vec::from_raw_parts(cs.data.cast(), cs.len, cs.capacity) }
+    }
+}"#;
