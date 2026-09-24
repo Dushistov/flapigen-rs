@@ -164,6 +164,62 @@ fn null_empty_foreign_slices_are_valid_inputs() {
     );
 }
 
+#[test]
+fn null_empty_primitive_slice() {
+    assert_eq!(
+        Buffers_sum(CRustSliceu32 {
+            data: std::ptr::null(),
+            len: 0
+        }),
+        0
+    );
+}
+
+#[test]
+fn null_empty_mutable_primitive_slice() {
+    Buffers_reverse(CRustSliceMutu32 {
+        data: std::ptr::null_mut(),
+        len: 0,
+    });
+}
+
+#[test]
+fn null_empty_string_view() {
+    let string = Buffers_make_string(CRustStrView {
+        data: std::ptr::null(),
+        len: 0,
+    });
+    assert_string(&string, "");
+    crust_string_free(string);
+}
+
+#[test]
+fn null_empty_string_view_append() {
+    for input in ["", "hello"] {
+        let string = Buffers_make_string(CRustStrView::from_str(input));
+        let string = crust_string_push_str(
+            string,
+            CRustStrView {
+                data: std::ptr::null(),
+                len: 0,
+            },
+        );
+        assert_string(&string, input);
+        crust_string_free(string);
+    }
+}
+
+#[test]
+fn null_empty_vector_access_slice() {
+    // Models a default or moved-from RustVecAccess; there is no allocation to reclaim.
+    let descriptor = CRustVecAccess {
+        data: std::ptr::null_mut(),
+        len: 0,
+        capacity: 0,
+    };
+    assert!(CRustVecAccess::to_slice::<u32>(descriptor).is_empty());
+}
+
 #[derive(Default)]
 struct CallbackState {
     calls: AtomicUsize,

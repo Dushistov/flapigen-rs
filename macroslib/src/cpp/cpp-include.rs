@@ -446,9 +446,13 @@ foreign_typemap!(
         $out = CRustStrView::from_str($p);
     };
     ($p:r_type) &str <= CRustStrView {
-        $out = unsafe {
-            let slice: &[u8] = ::std::slice::from_raw_parts($p.data as *const u8, $p.len);
-            ::std::str::from_utf8_unchecked(slice)
+        $out = if $p.len == 0 {
+            ""
+        } else {
+            unsafe {
+                let slice: &[u8] = ::std::slice::from_raw_parts($p.data as *const u8, $p.len);
+                ::std::str::from_utf8_unchecked(slice)
+            }
         };
     };
 
@@ -490,9 +494,13 @@ foreign_typemap!(
         #[unsafe(no_mangle)]
         pub extern "C" fn crust_string_push_str(x: CRustString, s: CRustStrView) -> CRustString {
             let mut x = unsafe { String::from_raw_parts(x.data.cast(), x.len, x.capacity) };
-            let addon: &str = unsafe {
-                let slice: &[u8] = ::std::slice::from_raw_parts(s.data as *const u8, s.len);
-                ::std::str::from_utf8_unchecked(slice)
+            let addon: &str = if s.len == 0 {
+                ""
+            } else {
+                unsafe {
+                    let slice: &[u8] = ::std::slice::from_raw_parts(s.data as *const u8, s.len);
+                    ::std::str::from_utf8_unchecked(slice)
+                }
             };
             x.push_str(addon);
             CRustString::from_string(x)
@@ -899,7 +907,11 @@ impl CRustVecAccess {
         }
     }
     pub fn to_slice<'a, T>(cs: Self) -> &'a [T] {
-        unsafe { ::std::slice::from_raw_parts(cs.data as *const T, cs.len) }
+        if cs.len == 0 {
+            &[]
+        } else {
+            unsafe { ::std::slice::from_raw_parts(cs.data as *const T, cs.len) }
+        }
     }
     pub fn to_vec<T>(cs: Self) -> Vec<T> {
         unsafe { Vec::from_raw_parts(cs.data.cast(), cs.len, cs.capacity) }
@@ -967,7 +979,11 @@ foreign_typemap!(
     };
     ($p:r_type) <T: SwigTypeIsReprC> &[T] <= CRustSlice!() {
         assert!($p.len == 0 || !$p.data.is_null());
-        $out = unsafe { ::std::slice::from_raw_parts($p.data, $p.len) };
+        $out = if $p.len == 0 {
+            &[]
+        } else {
+            unsafe { ::std::slice::from_raw_parts($p.data, $p.len) }
+        };
     };
     ($p:f_type, req_modules = ["\"CRustSlice!().h\""]) => "RustSlice<const swig_f_type!(T)>"
         "RustSlice<const swig_f_type!(T)>{$p.data, $p.len}";
@@ -1000,7 +1016,11 @@ foreign_typemap!(
     };
     ($p:r_type) <T: SwigTypeIsReprC> &mut [T] <= CRustSliceMut!() {
         assert!($p.len == 0 || !$p.data.is_null());
-        $out = unsafe { ::std::slice::from_raw_parts_mut($p.data, $p.len) };
+        $out = if $p.len == 0 {
+            &mut []
+        } else {
+            unsafe { ::std::slice::from_raw_parts_mut($p.data, $p.len) }
+        };
     };
     ($p:f_type, req_modules = ["\"CRustSliceMut!().h\""]) => "RustSlice<swig_f_type!(T)>"
         "RustSlice<swig_f_type!(T)>{$p.data, $p.len}";
