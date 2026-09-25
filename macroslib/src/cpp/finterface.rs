@@ -37,7 +37,7 @@ pub(in crate::cpp) fn generate_interface(
 
     let c_struct_name = format!("C_{}", interface.name);
 
-    let c_interface_struct_header: String = format!("\"{}\"", c_interface_header(interface)).into();
+    let c_interface_struct_header: String = format!("\"{}\"", c_interface_header(interface));
 
     let struct_with_funcs_rust_ty = register_rust_type_and_c_type(
         ctx,
@@ -79,7 +79,7 @@ pub(in crate::cpp) fn generate_interface(
         interface.src_id_span(),
     )?;
 
-    let cpp_abs_class_header: String = format!("\"{}\"", cpp_interface_header(interface)).into();
+    let cpp_abs_class_header: String = format!("\"{}\"", cpp_interface_header(interface));
     let boxed_trait_name = format!("Box<dyn {}>", DisplayToTokens(&interface.self_type));
     let boxed_trait_rust_ty: Type =
         parse_ty_with_given_span(&boxed_trait_name, interface.name.span())

@@ -981,7 +981,7 @@ impl TypeMap {
         suffix: &str,
         src_id: SourceId,
     ) -> RustType {
-        let name: String = RustTypeS::make_unique_typename(normalize_type(ty), suffix).into();
+        let name: String = RustTypeS::make_unique_typename(normalize_type(ty), suffix);
         let idx = self.add_node(name.clone(), || {
             RustTypeS::new_without_graph_idx(ty.clone(), name, src_id)
         });

@@ -39,7 +39,7 @@ pub(in crate::java_jni) fn predefined_java_type_to_jni_sig() -> FxHashMap<String
     ] {
         let jni_sig = m.get(*elem).expect("Internal error: no type");
         let arr_sig = format!("[{jni_sig}");
-        m.insert(format!("{elem} []").into(), arr_sig.into());
+        m.insert(format!("{elem} []"), arr_sig);
     }
     m
 }
