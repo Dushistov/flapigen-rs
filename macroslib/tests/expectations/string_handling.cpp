@@ -1,3 +1,5 @@
+"struct CRustString {\n    char * data;";
+
 "RustString f(int32_t a0, int32_t a1, RustString a2) const noexcept";
 r#"template<bool OWN_DATA>
     inline RustString FooWrapper<OWN_DATA>::f(int32_t a0, int32_t a1, RustString a2) const noexcept

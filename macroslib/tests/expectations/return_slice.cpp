@@ -10,6 +10,9 @@ r#"template<bool OWN_DATA>
 
 "struct CRustObjectSlice Boo_f2(const BooOpaque * const self);";
 "RustForeignSliceConst<FooRef> f2() const noexcept;";
+"extern const uintptr_t RustForeignClassFooElemSize;";
+"static constexpr const uintptr_t &rust_elem_size = RustForeignClassFooElemSize;";
+"constexpr const uintptr_t &FooWrapper<OWN_DATA>::rust_elem_size;";
 r#"template<bool OWN_DATA>
     inline RustForeignSliceConst<FooRef> BooWrapper<OWN_DATA>::f2() const noexcept
     {

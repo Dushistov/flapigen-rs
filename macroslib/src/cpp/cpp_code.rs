@@ -196,12 +196,12 @@ pub(in crate::cpp) fn generate_c_type(
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
 
-    fn is_item_defined(ctx: &mut CppContext, module_name: &String, item: &str) -> bool {
+    fn is_item_defined(ctx: &mut CppContext, module_name: &str, item: &str) -> bool {
         let common_files = &mut ctx.common_files;
         let out: &mut FileWriteCache = file_for_module!(ctx, common_files, module_name);
         out.is_item_defined(item)
     }
-    fn define_item(ctx: &mut CppContext, module_name: &String, item: String) {
+    fn define_item(ctx: &mut CppContext, module_name: &str, item: String) {
         let common_files = &mut ctx.common_files;
         let out: &mut FileWriteCache = file_for_module!(ctx, common_files, module_name);
         out.define_item(item);
@@ -279,7 +279,7 @@ fn do_generate_c_type(
     ctx: &mut CppContext,
     flags: MergeCItemsFlags,
     src_id: SourceId,
-    c_type_header_name: &String,
+    c_type_header_name: &str,
     ctype: &dyn CItemDescriptor,
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
@@ -414,7 +414,7 @@ fn add_const_forward_decl(
     ctx: &mut CppContext,
     static_: &syn::ItemStatic,
     src_id: SourceId,
-    c_type_header_name: &String,
+    c_type_header_name: &str,
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
 
@@ -460,7 +460,7 @@ fn add_func_forward_decl(
     ctx: &mut CppContext,
     f: &syn::ItemFn,
     src_id: SourceId,
-    c_type_header_name: &String,
+    c_type_header_name: &str,
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
     {

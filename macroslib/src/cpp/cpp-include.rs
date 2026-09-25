@@ -209,15 +209,15 @@ foreign_typemap!(
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CRustString {
-    data: *const ::std::os::raw::c_char,
+    data: *mut ::std::os::raw::c_char,
     len: usize,
     capacity: usize,
 }
 
 #[allow(dead_code)]
 impl CRustString {
-    pub fn from_string(s: String) -> CRustString {
-        let data = s.as_ptr() as *const ::std::os::raw::c_char;
+    pub fn from_string(mut s: String) -> CRustString {
+        let data = s.as_mut_ptr() as *mut ::std::os::raw::c_char;
         let len = s.len();
         let capacity = s.capacity();
         ::std::mem::forget(s);
@@ -446,9 +446,13 @@ foreign_typemap!(
         $out = CRustStrView::from_str($p);
     };
     ($p:r_type) &str <= CRustStrView {
-        $out = unsafe {
-            let slice: &[u8] = ::std::slice::from_raw_parts($p.data as *const u8, $p.len);
-            ::std::str::from_utf8_unchecked(slice)
+        $out = if $p.len == 0 {
+            ""
+        } else {
+            unsafe {
+                let slice: &[u8] = ::std::slice::from_raw_parts($p.data as *const u8, $p.len);
+                ::std::str::from_utf8_unchecked(slice)
+            }
         };
     };
 
@@ -468,20 +472,20 @@ foreign_typemap!(
         #[repr(C)]
         #[derive(Clone, Copy)]
         struct CRustString {
-            data: *const ::std::os::raw::c_char,
+            data: *mut ::std::os::raw::c_char,
             len: usize,
             capacity: usize,
         }
 
         #[unsafe(no_mangle)]
         pub extern "C" fn crust_string_free(x: CRustString) {
-            let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
+            let s = unsafe { String::from_raw_parts(x.data.cast(), x.len, x.capacity) };
             drop(s);
         }
 
         #[unsafe(no_mangle)]
         pub extern "C" fn crust_string_clone(x: CRustString) -> CRustString {
-            let s = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
+            let s = unsafe { String::from_raw_parts(x.data.cast(), x.len, x.capacity) };
             let ret = CRustString::from_string(s.clone());
             ::std::mem::forget(s);
             ret
@@ -489,10 +493,14 @@ foreign_typemap!(
 
         #[unsafe(no_mangle)]
         pub extern "C" fn crust_string_push_str(x: CRustString, s: CRustStrView) -> CRustString {
-            let mut x = unsafe { String::from_raw_parts(x.data as *mut u8, x.len, x.capacity) };
-            let addon: &str = unsafe {
-                let slice: &[u8] = ::std::slice::from_raw_parts(s.data as *const u8, s.len);
-                ::std::str::from_utf8_unchecked(slice)
+            let mut x = unsafe { String::from_raw_parts(x.data.cast(), x.len, x.capacity) };
+            let addon: &str = if s.len == 0 {
+                ""
+            } else {
+                unsafe {
+                    let slice: &[u8] = ::std::slice::from_raw_parts(s.data as *const u8, s.len);
+                    ::std::str::from_utf8_unchecked(slice)
+                }
             };
             x.push_str(addon);
             CRustString::from_string(x)
@@ -608,7 +616,7 @@ public:
 private:
     //analog of Rust's NonNull::danging, can not use C cast (and/or reinterpret_cast)
     // in constexpr, so macros
-    #define DANGLING  reinterpret_cast<const char *>(alignof(char))
+    #define DANGLING  reinterpret_cast<char *>(alignof(char))
     void free_mem() noexcept
     {
         if (data != DANGLING) {
@@ -634,7 +642,7 @@ private:
     ($pin:f_type, req_modules = ["\"rust_str.h\""]) => "RustString" "RustString{$pin}";
 
     ($pin:r_type) String <= CRustString {
-        $out = unsafe { String::from_raw_parts($pin.data as *mut u8, $pin.len, $pin.capacity) };
+        $out = unsafe { String::from_raw_parts($pin.data.cast(), $pin.len, $pin.capacity) };
     };
     ($pin:f_type, req_modules = ["\"rust_str.h\""]) <= "RustString" "$pin.release()";
 );
@@ -763,7 +771,6 @@ foreign_typemap!(
 pub struct CRustObjectSlice {
     data: *const ::std::os::raw::c_void,
     len: usize,
-    step: usize,
 }
 
 foreign_typemap!(
@@ -774,7 +781,6 @@ foreign_typemap!(
         pub struct CRustObjectSlice {
             data: *const ::std::os::raw::c_void,
             len: usize,
-            step: usize,
         });
     foreign_code!(module = "rust_slice.h";
                     r##"
@@ -796,7 +802,6 @@ using RustForeignSliceConst = RustForeignSlice<T, CRustObjectSlice>;
 pub struct CRustObjectMutSlice {
     data: *mut ::std::os::raw::c_void,
     len: usize,
-    step: usize,
 }
 
 foreign_typemap!(
@@ -807,7 +812,6 @@ foreign_typemap!(
         pub struct CRustObjectMutSlice {
             data: *mut ::std::os::raw::c_void,
             len: usize,
-            step: usize,
         });
     foreign_code!(module = "rust_slice_mut.h";
                     r##"
@@ -829,11 +833,14 @@ foreign_typemap!(
         $out = CRustObjectSlice {
             data: $p.as_ptr() as *const ::std::os::raw::c_void,
             len: $p.len(),
-            step: ::std::mem::size_of::<swig_subst_type!(T)>(),
         };
     };
     ($p:r_type) <T: SwigForeignClass> &[T] <= CRustObjectSlice {
-        $out = unsafe { ::std::slice::from_raw_parts($p.data as *const swig_subst_type!(T), $p.len) };
+        $out = if $p.len == 0 {
+            &[]
+        } else {
+            unsafe { ::std::slice::from_raw_parts($p.data as *const swig_subst_type!(T), $p.len) }
+        };
     };
     ($p:f_type, req_modules = ["\"rust_slice.h\""]) => "RustForeignSliceConst<swig_f_type!(&T)>"
         "RustForeignSliceConst<swig_f_type!(&T)>{$p}";
@@ -876,7 +883,7 @@ foreign_typemap!(
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CRustVecAccess {
-    data: *const ::std::os::raw::c_void,
+    data: *mut ::std::os::raw::c_void,
     len: usize,
     capacity: usize,
 }
@@ -884,7 +891,7 @@ pub struct CRustVecAccess {
 #[allow(dead_code)]
 impl CRustVecAccess {
     pub fn from_vec<T>(mut v: Vec<T>) -> Self {
-        let data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
+        let data = v.as_mut_ptr() as *mut ::std::os::raw::c_void;
         let len = v.len();
         let capacity = v.capacity();
         ::std::mem::forget(v);
@@ -895,10 +902,14 @@ impl CRustVecAccess {
         }
     }
     pub fn to_slice<'a, T>(cs: Self) -> &'a [T] {
-        unsafe { ::std::slice::from_raw_parts(cs.data as *const T, cs.len) }
+        if cs.len == 0 {
+            &[]
+        } else {
+            unsafe { ::std::slice::from_raw_parts(cs.data as *const T, cs.len) }
+        }
     }
     pub fn to_vec<T>(cs: Self) -> Vec<T> {
-        unsafe { Vec::from_raw_parts(cs.data as *mut T, cs.len, cs.capacity) }
+        unsafe { Vec::from_raw_parts(cs.data.cast(), cs.len, cs.capacity) }
     }
 }
 
@@ -908,7 +919,7 @@ foreign_typemap!(
         #[repr(C)]
         #[derive(Copy, Clone)]
         pub struct CRustVecAccess {
-            data: *const ::std::os::raw::c_void,
+            data: *mut ::std::os::raw::c_void,
             len: usize,
             capacity: usize,
         }
@@ -922,11 +933,14 @@ foreign_typemap!(
         $out = CRustObjectMutSlice {
             data: $p.as_ptr() as *const ::std::os::raw::c_void,
             len: $p.len(),
-            step: ::std::mem::size_of::<swig_subst_type!(T)>(),
         };
     };
     ($p:r_type) <T: SwigForeignClass> &mut [T] <= CRustObjectMutSlice {
-        $out = unsafe { ::std::slice::from_raw_parts_mut($p.data as *mut swig_subst_type!(T), $p.len) };
+        $out = if $p.len == 0 {
+            &mut []
+        } else {
+            unsafe { ::std::slice::from_raw_parts_mut($p.data as *mut swig_subst_type!(T), $p.len) }
+        };
     };
     ($p:f_type, req_modules = ["\"rust_slice_mut.h\""]) => "RustForeignSliceMut<swig_f_type!(&T)>"
         "RustForeignSliceMut<swig_f_type!(&T)>{$p}";
@@ -959,7 +973,11 @@ foreign_typemap!(
     };
     ($p:r_type) <T: SwigTypeIsReprC> &[T] <= CRustSlice!() {
         assert!($p.len == 0 || !$p.data.is_null());
-        $out = unsafe { ::std::slice::from_raw_parts($p.data, $p.len) };
+        $out = if $p.len == 0 {
+            &[]
+        } else {
+            unsafe { ::std::slice::from_raw_parts($p.data, $p.len) }
+        };
     };
     ($p:f_type, req_modules = ["\"CRustSlice!().h\""]) => "RustSlice<const swig_f_type!(T)>"
         "RustSlice<const swig_f_type!(T)>{$p.data, $p.len}";
@@ -992,7 +1010,11 @@ foreign_typemap!(
     };
     ($p:r_type) <T: SwigTypeIsReprC> &mut [T] <= CRustSliceMut!() {
         assert!($p.len == 0 || !$p.data.is_null());
-        $out = unsafe { ::std::slice::from_raw_parts_mut($p.data, $p.len) };
+        $out = if $p.len == 0 {
+            &mut []
+        } else {
+            unsafe { ::std::slice::from_raw_parts_mut($p.data, $p.len) }
+        };
     };
     ($p:f_type, req_modules = ["\"CRustSliceMut!().h\""]) => "RustSlice<swig_f_type!(T)>"
         "RustSlice<swig_f_type!(T)>{$p.data, $p.len}";
@@ -1010,14 +1032,14 @@ foreign_typemap!(
         #[repr(C)]
         #[derive(Copy, Clone)]
         pub struct CRustVec!() {
-            data: *const swig_subst_type!(T),
+            data: *mut swig_subst_type!(T),
             len: usize,
             capacity: usize,
         }
 
         #[unsafe(no_mangle)]
         pub extern "C" fn CRustVecFree!()(v: CRustVec!()) {
-            let v = unsafe { Vec::from_raw_parts(v.data as *mut swig_subst_type!(T), v.len, v.capacity) };
+            let v: Vec<swig_subst_type!(T)> = unsafe { Vec::from_raw_parts(v.data, v.len, v.capacity) };
             drop(v);
         }
     );
@@ -1048,7 +1070,7 @@ using CppRustVec!() = RustVec<CRustVec!(), CRustVecFree!()>;
     ($p:f_type, req_modules = ["\"CRustVecModule!().h\""]) => "CppRustVec!()"
         "CppRustVec!(){$p}";
     ($p:r_type) <T: SwigTypeIsReprC> Vec<T> <= CRustVec!() {
-        $out = unsafe { Vec::from_raw_parts($p.data as *mut swig_subst_type!(T), $p.len, $p.capacity) };
+        $out = unsafe { Vec::from_raw_parts($p.data, $p.len, $p.capacity) };
     };
     ($p:f_type, req_modules = ["\"CRustVecModule!().h\""]) <= "CppRustVec!()"
         "$p.release()";
@@ -1058,7 +1080,7 @@ using CppRustVec!() = RustVec<CRustVec!(), CRustVecFree!()>;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct CRustForeignVec {
-    data: *const ::std::os::raw::c_void,
+    data: *mut ::std::os::raw::c_void,
     len: usize,
     capacity: usize,
 }
@@ -1066,7 +1088,7 @@ pub struct CRustForeignVec {
 #[allow(dead_code)]
 impl CRustForeignVec {
     pub fn from_vec<T: SwigForeignClass>(mut v: Vec<T>) -> CRustForeignVec {
-        let data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
+        let data = v.as_mut_ptr() as *mut ::std::os::raw::c_void;
         let len = v.len();
         let capacity = v.capacity();
         ::std::mem::forget(v);
@@ -1086,9 +1108,9 @@ fn push_foreign_class_to_vec<T: SwigForeignClass>(
 ) {
     assert!(!vec.is_null());
     let vec: &mut CRustForeignVec = unsafe { &mut *vec };
-    let mut v = unsafe { Vec::from_raw_parts(vec.data as *mut T, vec.len, vec.capacity) };
+    let mut v = unsafe { Vec::from_raw_parts(vec.data.cast(), vec.len, vec.capacity) };
     v.push(T::unbox_object(elem));
-    vec.data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
+    vec.data = v.as_mut_ptr() as *mut ::std::os::raw::c_void;
     vec.len = v.len();
     vec.capacity = v.capacity();
     ::std::mem::forget(v);
@@ -1102,9 +1124,9 @@ fn remove_foreign_class_from_vec<T: SwigForeignClass>(
 ) -> *mut ::std::os::raw::c_void {
     assert!(!vec.is_null());
     let vec: &mut CRustForeignVec = unsafe { &mut *vec };
-    let mut v = unsafe { Vec::from_raw_parts(vec.data as *mut T, vec.len, vec.capacity) };
+    let mut v = unsafe { Vec::from_raw_parts(vec.data.cast(), vec.len, vec.capacity) };
     let elem: T = v.remove(index);
-    vec.data = v.as_mut_ptr() as *const ::std::os::raw::c_void;
+    vec.data = v.as_mut_ptr() as *mut ::std::os::raw::c_void;
     vec.len = v.len();
     vec.capacity = v.capacity();
     ::std::mem::forget(v);
@@ -1114,7 +1136,7 @@ fn remove_foreign_class_from_vec<T: SwigForeignClass>(
 #[allow(dead_code)]
 #[inline]
 fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec) {
-    let v = unsafe { Vec::from_raw_parts(v.data as *mut T, v.len, v.capacity) };
+    let v = unsafe { Vec::from_raw_parts(v.data.cast::<T>(), v.len, v.capacity) };
     drop(v);
 }
 
@@ -1124,7 +1146,7 @@ foreign_typemap!(
         #[repr(C)]
         #[derive(Clone, Copy)]
         pub struct CRustForeignVec {
-            data: *const ::std::os::raw::c_void,
+            data: *mut ::std::os::raw::c_void,
             len: usize,
             capacity: usize,
         });
@@ -1178,7 +1200,7 @@ using CForeignVecModule!() = RustForeignVec<swig_f_type!(&T, output), CRustForei
         $out = CRustForeignVec::from_vec($p);
     };
     ($p:r_type) <T: SwigForeignClass> Vec<T> <= CRustForeignVec {
-        $out = unsafe { Vec::from_raw_parts($p.data as *mut swig_subst_type!(T), $p.len, $p.capacity) };
+        $out = unsafe { Vec::from_raw_parts($p.data.cast(), $p.len, $p.capacity) };
     };
     ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) => "CForeignVecModule!()"
         "CForeignVecModule!(){$p}";

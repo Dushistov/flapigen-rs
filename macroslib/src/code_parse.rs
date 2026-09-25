@@ -627,7 +627,7 @@ pub(crate) fn parse_fn_args(
             Typed(typed_arg) => {
                 let (name, span): (String, Span) = match *typed_arg.pat {
                     syn::Pat::Ident(pat_ident) => {
-                        (pat_ident.ident.to_string().into(), pat_ident.ident.span())
+                        (pat_ident.ident.to_string(), pat_ident.ident.span())
                     }
                     syn::Pat::Wild(w) => ("_".into(), w.span()),
                     _ => return invalid_arg(typed_arg.span()),

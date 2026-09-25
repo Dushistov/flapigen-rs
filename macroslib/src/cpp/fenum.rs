@@ -48,9 +48,7 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
 
     let enum_ftype = ForeignTypeS {
         name: ForeignTypeName::new(fenum.name.to_string(), (fenum.src_id, fenum.name.span())),
-        provided_by_module: vec![
-            format!("\"{}\"", cpp_code::cpp_header_name_for_enum(fenum)).into()
-        ],
+        provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name_for_enum(fenum))],
         into_from_rust: Some(ForeignConversionRule {
             rust_ty: enum_rty.to_idx(),
             intermediate: Some(ForeignConversionIntermediate {

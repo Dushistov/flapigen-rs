@@ -1,0 +1,121 @@
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
+
+pub struct Tracked {
+    value: i32,
+    drops: Arc<AtomicUsize>,
+}
+
+impl Tracked {
+    fn new(value: i32) -> Self {
+        Self { value, drops: Arc::new(AtomicUsize::new(0)) }
+    }
+
+    fn value(&self) -> i32 {
+        self.value
+    }
+
+    fn set_value(&mut self, value: i32) {
+        self.value = value;
+    }
+
+    fn take(value: Tracked) -> i32 {
+        value.value
+    }
+}
+
+impl Drop for Tracked {
+    fn drop(&mut self) {
+        self.drops.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+foreign_class!(class Tracked {
+    self_type Tracked;
+    constructor Tracked::new(value: i32) -> Tracked;
+    fn Tracked::value(&self) -> i32;
+    fn Tracked::set_value(&mut self, value: i32);
+    fn Tracked::take(value: Tracked) -> i32;
+});
+
+struct Buffers;
+
+impl Buffers {
+    fn make_string(value: &str) -> String {
+        value.to_owned()
+    }
+
+    fn take_string(value: String) -> usize {
+        value.len()
+    }
+
+    fn make_vec(len: u32) -> Vec<u32> {
+        (0..len).collect()
+    }
+
+    fn take_vec(value: Vec<u32>) -> u32 {
+        value.iter().sum()
+    }
+
+    fn sum(value: &[u32]) -> u32 {
+        value.iter().sum()
+    }
+
+    fn reverse(value: &mut [u32]) {
+        value.reverse();
+    }
+
+    fn sum_tracked(value: &[Tracked]) -> i32 {
+        value.iter().map(Tracked::value).sum()
+    }
+
+    fn increment_tracked(value: &mut [Tracked]) -> usize {
+        for item in value.iter_mut() {
+            item.set_value(item.value() + 1);
+        }
+        value.len()
+    }
+}
+
+foreign_class!(class Buffers {
+    fn Buffers::make_string(value: &str) -> String;
+    fn Buffers::take_string(value: String) -> usize;
+    fn Buffers::make_vec(len: u32) -> Vec<u32>;
+    fn Buffers::take_vec(value: Vec<u32>) -> u32;
+    fn Buffers::sum(value: &[u32]) -> u32;
+    fn Buffers::reverse(value: &mut [u32]);
+    fn Buffers::sum_tracked(value: &[Tracked]) -> i32;
+    fn Buffers::increment_tracked(value: &mut [Tracked]) -> usize;
+});
+
+trait Observer {
+    fn on_value(&mut self, value: i32);
+    fn total(&self) -> i32;
+}
+
+foreign_callback!(callback Observer {
+    self_type Observer;
+    on_value = Observer::on_value(&mut self, value: i32);
+    total = Observer::total(&self) -> i32;
+});
+
+fn notify(mut observer: Box<dyn Observer>) -> i32 {
+    observer.on_value(10);
+    observer.on_value(20);
+    observer.total()
+}
+
+foreign_class!(class Callbacks {
+    fn notify(observer: Box<dyn Observer>) -> i32;
+});
+
+trait Completion {
+    fn finish(self, value: i32);
+}
+
+foreign_callback!(callback Completion {
+    self_type Completion;
+    finish = Completion::finish(self, value: i32);
+});

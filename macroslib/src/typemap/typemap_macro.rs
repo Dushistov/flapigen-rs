@@ -959,7 +959,7 @@ fn expand_ftype_rule(
             )?;
             Some(SpannedString {
                 sp: unique_prefix.sp,
-                value: new_unique_prefix.into(),
+                value: new_unique_prefix,
             })
         } else {
             None
@@ -1159,7 +1159,6 @@ fn expand_module_name(
             }
         },
     )
-    .map(|x| x.into())
 }
 
 fn expand_rust_code(

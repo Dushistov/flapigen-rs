@@ -52,6 +52,15 @@
 
 using namespace rust;
 
+static_assert(sizeof(RustForeignSliceConst<FooRef>) == sizeof(void *) + sizeof(uintptr_t),
+              "foreign slice should store only data and length");
+static_assert(sizeof(RustForeignSliceMut<FooRef>) == sizeof(void *) + sizeof(uintptr_t),
+              "mutable foreign slice should store only data and length");
+static_assert(sizeof(CRustObjectSlice) == sizeof(void *) + sizeof(uintptr_t),
+              "const foreign slice ABI should store only data and length");
+static_assert(sizeof(CRustObjectMutSlice) == sizeof(void *) + sizeof(uintptr_t),
+              "mutable foreign slice ABI should store only data and length");
+
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 static std::atomic<uint32_t> c_simple_cb_counter_without_args{ 0 };
 
@@ -407,8 +416,19 @@ TEST(TestWorkWithVec, smokeTest)
     {
         auto v = TestWorkWithVec::create_foo_vec(30);
         validate_create_foo_vec(30, v);
+        const CRustObjectSlice c_slice = v.as_slice();
+        EXPECT_EQ(v.size(), c_slice.len);
+        EXPECT_NE(nullptr, c_slice.data);
         auto v1 = TestWorkWithVec::clone_foo_slice(v.as_slice());
         validate_create_foo_vec(30, v1);
+    }
+    {
+        RustForeignSliceConst<FooRef> empty_const;
+        auto v = TestWorkWithVec::clone_foo_slice(std::move(empty_const));
+        EXPECT_TRUE(v.empty());
+
+        RustForeignSliceMut<FooRef> empty_mut;
+        TestWorkWithVec::sort_foo_slice(std::move(empty_mut));
     }
     {
         const std::array<int32_t, 5> a{ { -(int32_t(1) << 29), -10, 0, 17, int32_t(1) << 30 } };
@@ -566,6 +586,37 @@ TEST(TestRustStringAppend, smokeTest)
     Foo::expect_str("123", rstr);
     rstr += "567";
     Foo::expect_str("123567", rstr);
+}
+
+TEST(EmptyCppViews, roundTrip)
+{
+    using StringView = RustString::CppStringViewT;
+    StringView empty;
+    ASSERT_EQ(nullptr, empty.data());
+    GetSetStrTest strings;
+    strings.set_str(empty);
+    EXPECT_TRUE(strings.get_str().empty());
+    RustString owned{ empty };
+    EXPECT_TRUE(owned.empty());
+    owned.push_str("hello");
+    owned.push_str(empty);
+    EXPECT_EQ("hello", owned.to_std_string());
+
+    auto empty_vec = TestWorkWithVec::test_i32_slice(RustSlice<const int32_t>{ nullptr, 0 });
+    EXPECT_TRUE(empty_vec.empty());
+    TestWorkWithVec::sort_i32_slice(RustSlice<int32_t>{ nullptr, 0 });
+
+    int32_t values[] = { 2, 1 };
+    RustSlice<const int32_t> original{ values, 2 };
+    auto moved = std::move(original);
+    EXPECT_EQ(2u, TestWorkWithVec::test_i32_slice(std::move(moved)).size());
+    EXPECT_TRUE(TestWorkWithVec::test_i32_slice(std::move(original)).empty());
+    RustSlice<int32_t> mutable_original{ values, 2 };
+    auto mutable_moved = std::move(mutable_original);
+    TestWorkWithVec::sort_i32_slice(std::move(mutable_moved));
+    TestWorkWithVec::sort_i32_slice(std::move(mutable_original));
+    EXPECT_EQ(1, values[0]);
+    EXPECT_EQ(2, values[1]);
 }
 
 class MyToString final : public ToString {

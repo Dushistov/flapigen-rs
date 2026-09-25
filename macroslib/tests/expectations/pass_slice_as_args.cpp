@@ -1,3 +1,12 @@
+r##"struct CRustObjectSlice {
+    /*const*/void * data;
+    uintptr_t len;
+};"##;
+r##"struct CRustObjectMutSlice {
+    void * data;
+    uintptr_t len;
+};"##;
+
 "struct CRustSliceu32 Boo_f1(const BooOpaque * const self, struct CRustObjectMutSlice a0);";
 "RustSlice<const uint32_t> f1(RustForeignSliceMut<FooRef> a0) const noexcept;";
 r#"template<bool OWN_DATA>
