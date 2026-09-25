@@ -17,7 +17,6 @@ public:
     {
         this->data = o.data;
         this->len = o.len;
-        this->step = o.step;
     }
     RustForeignSlice(const RustForeignSlice &) = delete;
     RustForeignSlice &operator=(const RustForeignSlice &) = delete;
@@ -25,14 +24,12 @@ public:
     {
         this->data = o.data;
         this->len = o.len;
-        this->step = o.step;
         o.reset();
     }
     RustForeignSlice &operator=(RustForeignSlice &&o) noexcept
     {
         this->data = o.data;
         this->len = o.len;
-        this->step = o.step;
         o.reset();
         return *this;
     }
@@ -43,32 +40,31 @@ public:
     {
         assert(i < this->len);
         auto p = static_cast<const uint8_t *>(this->data);
-        p += this->step * i;
+        p += ForeignClassRef::rust_elem_size * i;
         auto elem_ptr = static_cast<const CForeignType *>(static_cast<const void *>(p));
         return ForeignClassRef{ elem_ptr };
     }
-    iterator begin() noexcept { return iterator{ this->data, this->step }; }
+    iterator begin() noexcept { return iterator{ this->data, ForeignClassRef::rust_elem_size }; }
 
-    const_iterator begin() const noexcept { return const_iterator{ this->data, this->step }; }
+    const_iterator begin() const noexcept { return const_iterator{ this->data, ForeignClassRef::rust_elem_size }; }
 
     iterator end() noexcept
     {
         auto p = static_cast<const uint8_t *>(this->data);
-        p += this->step * this->len;
-        return iterator{ p, this->step };
+        p += ForeignClassRef::rust_elem_size * this->len;
+        return iterator{ p, ForeignClassRef::rust_elem_size };
     }
 
     const_iterator end() const noexcept
     {
         auto p = static_cast<const uint8_t *>(this->data);
-        p += this->step * this->len;
-        return const_iterator{ p, this->step };
+        p += ForeignClassRef::rust_elem_size * this->len;
+        return const_iterator{ p, ForeignClassRef::rust_elem_size };
     }
 
 private:
-    void reset()
+    void reset() noexcept
     {
-        this->step = 0;
         this->len = 0;
         this->data = nullptr;
     }

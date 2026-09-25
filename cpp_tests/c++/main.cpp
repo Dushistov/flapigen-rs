@@ -52,6 +52,15 @@
 
 using namespace rust;
 
+static_assert(sizeof(RustForeignSliceConst<FooRef>) == sizeof(void *) + sizeof(uintptr_t),
+              "foreign slice should store only data and length");
+static_assert(sizeof(RustForeignSliceMut<FooRef>) == sizeof(void *) + sizeof(uintptr_t),
+              "mutable foreign slice should store only data and length");
+static_assert(sizeof(CRustObjectSlice) == sizeof(void *) + sizeof(uintptr_t),
+              "const foreign slice ABI should store only data and length");
+static_assert(sizeof(CRustObjectMutSlice) == sizeof(void *) + sizeof(uintptr_t),
+              "mutable foreign slice ABI should store only data and length");
+
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 static std::atomic<uint32_t> c_simple_cb_counter_without_args{ 0 };
 
@@ -407,6 +416,9 @@ TEST(TestWorkWithVec, smokeTest)
     {
         auto v = TestWorkWithVec::create_foo_vec(30);
         validate_create_foo_vec(30, v);
+        const CRustObjectSlice c_slice = v.as_slice();
+        EXPECT_EQ(v.size(), c_slice.len);
+        EXPECT_NE(nullptr, c_slice.data);
         auto v1 = TestWorkWithVec::clone_foo_slice(v.as_slice());
         validate_create_foo_vec(30, v1);
     }

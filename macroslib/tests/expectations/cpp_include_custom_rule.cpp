@@ -75,6 +75,7 @@ public:
         }
         return *this;
     }
+    static constexpr const uintptr_t &rust_elem_size = RustForeignClassBtAddrElemSize;
 private:
 
     BtAddrWrapper() noexcept {}
