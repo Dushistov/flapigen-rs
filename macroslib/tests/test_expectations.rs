@@ -697,12 +697,33 @@ fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bo
 }
 
 fn rustfmt_without_errors(rust_code: String) -> String {
+    // rustfmt's Auto newline style can choose CRLF on Windows for a
+    // single-line expectation, while the generated file has LF newlines.
+    let rust_code = rust_code.replace("\r\n", "\n");
     let rust_code2 = rust_code.clone();
     match rustfmt_cnt(rust_code.into_bytes(), RustEdition::Edition2018) {
-        Ok(code) => String::from_utf8(code).expect("not valid utf-8"),
+        Ok(code) => String::from_utf8(code)
+            .expect("not valid utf-8")
+            .replace("\r\n", "\n"),
         Err(err) => {
             warn!("rustfmt failed: {}", err);
             rust_code2
         }
     }
+}
+
+#[test]
+fn test_rust_expectation_matches_generated_item_across_newline_styles() {
+    let pattern = rustfmt_without_errors(
+        "# [ unsafe ( no_mangle ) ] pub static RustForeignClassFooElemSize : usize = :: std :: mem :: size_of ::< Foo > () ;"
+            .into(),
+    );
+    let generated = rustfmt_without_errors(
+        "#[unsafe(no_mangle)]\npub static RustForeignClassFooElemSize: usize = ::std::mem::size_of::<Foo>();\n#[allow(dead_code)]\nfn next_item() {}"
+            .into(),
+    );
+    assert!(generated.contains(&pattern));
+
+    let crlf_pattern = "#[unsafe(no_mangle)]\r\npub static RustForeignClassFooElemSize: usize = ::std::mem::size_of::<Foo>();\r\n";
+    assert!(generated.contains(&rustfmt_without_errors(crlf_pattern.into())));
 }

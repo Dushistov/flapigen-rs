@@ -11,6 +11,7 @@ extern "C" {
 
 
     typedef struct WithSelfTypeOpaque WithSelfTypeOpaque;
+    extern const uintptr_t RustForeignClassWithSelfTypeElemSize;
 
     WithSelfTypeOpaque *WithSelfType_new();
 

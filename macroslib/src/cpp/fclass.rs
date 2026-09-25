@@ -163,6 +163,25 @@ fn do_generate(
                 }
             };
             ctx.rust_code.push(fclass_impl_code);
+            if !plain_class {
+                let elem_size_name = Ident::new(
+                    &format!("RustForeignClass{}ElemSize", class.name),
+                    Span::call_site(),
+                );
+                let mut size_type = class_name.clone();
+                strip_lifetimes(&mut size_type);
+                ctx.rust_code.push(quote! {
+                    #[unsafe(no_mangle)]
+                    pub static #elem_size_name: usize = ::std::mem::size_of::<#size_type>();
+                });
+                writeln!(c_include_f, "    extern const uintptr_t {elem_size_name};")
+                    .expect(WRITE_TO_MEM_FAILED_MSG);
+                writeln!(
+                    cpp_include_f,
+                    "    static constexpr const uintptr_t &rust_elem_size = {elem_size_name};"
+                )
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+            }
             (this_type_for_method, code_box_this)
         } else {
             (dummy_rust_ty, TokenStream::new())
@@ -651,6 +670,13 @@ private:
         )
     }
     .expect(WRITE_TO_MEM_FAILED_MSG);
+    if !plain_class && class.self_desc.is_some() {
+        writeln!(
+            cpp_include_f,
+            "template<bool OWN_DATA>\nconstexpr const uintptr_t &{class_name}<OWN_DATA>::rust_elem_size;"
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+    }
     // Write method implementations.
     if ctx.cfg.separate_impl_headers {
         writeln!(

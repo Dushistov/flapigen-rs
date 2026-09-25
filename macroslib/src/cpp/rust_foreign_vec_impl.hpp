@@ -88,13 +88,13 @@ public:
     RustForeignSlice<ForeignClassRef, CRustObjectSlice> as_slice() const noexcept
     {
         return RustForeignSlice<ForeignClassRef, CRustObjectSlice>{ CRustObjectSlice{
-            this->data, this->len, ELEM_SIZE } };
+            this->data, this->len } };
     }
 
     RustForeignSlice<ForeignClassRef, CRustObjectMutSlice> as_slice_mut() noexcept
     {
         return RustForeignSlice<ForeignClassRef, CRustObjectMutSlice>{ CRustObjectMutSlice{
-            this->data, this->len, ELEM_SIZE } };
+            this->data, this->len } };
     }
 
     void clear() noexcept { free_mem(); }

@@ -1,3 +1,5 @@
+r##"# [ unsafe ( no_mangle ) ] pub static RustForeignClassFooElemSize : usize = :: std :: mem :: size_of ::< Foo > () ;"##;
+
 r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_f1 ( this : * mut Boo , ) -> CRustSliceu32 {
  let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : & [ u32 ] = Boo :: f1 ( this , ) ;
@@ -7,7 +9,7 @@ r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_f1 ( this : * mut Boo , ) -
 r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_f2 ( this : * mut Boo , ) -> CRustObjectSlice {
  let this : & Boo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
  let mut ret : & [ Foo ] = Boo :: f2 ( this , ) ;
- let mut ret : CRustObjectSlice = CRustObjectSlice { data : ret . as_ptr ( ) as * const :: std :: os :: raw :: c_void , len : ret . len ( ) , step : :: std :: mem :: size_of ::< Foo > ( ) , } ;
+ let mut ret : CRustObjectSlice = CRustObjectSlice { data : ret . as_ptr ( ) as * const :: std :: os :: raw :: c_void , len : ret . len ( ) , } ;
  ret }"##;
 
 r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Boo_f3 ( this : * mut Boo , ) -> CRustSliceusize {
