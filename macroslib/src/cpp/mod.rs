@@ -4,9 +4,9 @@ macro_rules! file_for_module {
         let target_pointer_width = $ctx.target_pointer_width;
         let generated_foreign_files = &mut $ctx.generated_foreign_files;
         $common_files
-            .entry($module_name.clone())
+            .entry($module_name.to_owned())
             .or_insert_with(|| {
-                let c_header_path = output_dir.join($module_name.as_str());
+                let c_header_path = output_dir.join($module_name);
                 let mut c_header_f = FileWriteCache::new(&c_header_path, *generated_foreign_files);
                 write!(
                     &mut c_header_f,
@@ -474,7 +474,7 @@ fn register_c_type(
             };
             tmap.alloc_foreign_type(ForeignTypeS {
                 name: ForeignTypeName::new(c_name, (src_id, f_ident.span())),
-                provided_by_module: vec![format!("\"{}\"", c_types.header_name).into()],
+                provided_by_module: vec![format!("\"{}\"", c_types.header_name)],
                 into_from_rust: Some(rule.clone()),
                 from_into_rust: Some(rule),
             })?;
@@ -547,10 +547,10 @@ fn merge_rule(ctx: &mut CppContext, mut rule: TypeMapConvRuleInfo) -> Result<()>
 
 fn cache_f_code(
     cached_code: &mut FxHashSet<(String, String)>,
-    f_module_name: &String,
+    f_module_name: &str,
     f_code_str: &str,
 ) -> bool {
-    let entry = (f_module_name.clone(), f_code_str.to_string());
+    let entry = (f_module_name.to_owned(), f_code_str.to_string());
     if cached_code.contains(&entry) {
         return true;
     }

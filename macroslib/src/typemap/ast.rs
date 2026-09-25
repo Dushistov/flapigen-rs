@@ -98,7 +98,7 @@ impl Display for UniqueName {
 impl From<String> for UniqueName {
     fn from(value: String) -> Self {
         Self {
-            value: value.into(),
+            value,
             unique_prefix_len: 0,
         }
     }
@@ -464,8 +464,7 @@ impl GenericTypeConv {
             None
         };
         let normalized_name =
-            RustTypeS::make_unique_typename_if_need(normalize_type(&to_ty).to_string(), to_suffix)
-                .into();
+            RustTypeS::make_unique_typename_if_need(normalize_type(&to_ty).to_string(), to_suffix);
         Some(ConversionResult {
             to_ty,
             to_ty_name: normalized_name,

@@ -90,7 +90,7 @@ fn register_intermediate_pointer_types(
             format!("{} *", cpp_code::c_class_type(class)),
             (class.src_id, class.name.span()),
         ),
-        provided_by_module: vec![format!("\"{}\"", cpp_code::c_header_name(class)).into()],
+        provided_by_module: vec![format!("\"{}\"", cpp_code::c_header_name(class))],
         into_from_rust: Some(ForeignConversionRule {
             rust_ty: void_ptr_rust_ty,
             intermediate: None,
@@ -107,7 +107,7 @@ fn register_intermediate_pointer_types(
             format!("const {} *", cpp_code::c_class_type(class)),
             (class.src_id, class.name.span()),
         ),
-        provided_by_module: vec![format!("\"{}\"", cpp_code::c_header_name(class)).into()],
+        provided_by_module: vec![format!("\"{}\"", cpp_code::c_header_name(class))],
         into_from_rust: Some(ForeignConversionRule {
             rust_ty: const_void_ptr_rust_ty,
             intermediate: None,
@@ -255,7 +255,7 @@ fn register_main_foreign_types(
     );
     let class_ftype = ForeignTypeS {
         name: ForeignTypeName::new(class.name.to_string(), (class.src_id, class.name.span())),
-        provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+        provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class))],
         into_from_rust: Some(ForeignConversionRule {
             rust_ty: this_type,
             intermediate: Some(ForeignConversionIntermediate {
@@ -291,7 +291,7 @@ fn register_main_foreign_types(
             format!("const {} &", class.name),
             (class.src_id, class.name.span()),
         ),
-        provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+        provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class))],
         from_into_rust: Some(ForeignConversionRule {
             rust_ty: this_type_ref,
             intermediate: Some(ForeignConversionIntermediate {
@@ -319,7 +319,7 @@ fn register_main_foreign_types(
                 format!("{}Ref", class.name),
                 (class.src_id, class.name.span()),
             ),
-            provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+            provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class))],
             into_from_rust: Some(ForeignConversionRule {
                 rust_ty: this_type_ref,
                 intermediate: Some(ForeignConversionIntermediate {
@@ -346,7 +346,7 @@ fn register_main_foreign_types(
             format!("{} &", class.name),
             (class.src_id, class.name.span()),
         ),
-        provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+        provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class))],
         from_into_rust: Some(ForeignConversionRule {
             rust_ty: this_type_mut_ref,
             intermediate: Some(ForeignConversionIntermediate {
@@ -380,7 +380,7 @@ fn register_main_foreign_types(
                     "/**/",
                     (class.src_id, class.name.span()),
                 ),
-                provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+                provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class))],
                 from_into_rust: Some(ForeignConversionRule {
                     rust_ty: self_type_mut_ref.to_idx(),
                     intermediate: Some(ForeignConversionIntermediate {
@@ -412,7 +412,7 @@ fn register_main_foreign_types(
                     "/**/",
                     (class.src_id, class.name.span()),
                 ),
-                provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class)).into()],
+                provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class))],
                 from_into_rust: Some(ForeignConversionRule {
                     rust_ty: self_type_ref.to_idx(),
                     intermediate: Some(ForeignConversionIntermediate {

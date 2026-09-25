@@ -318,7 +318,7 @@ impl syn::parse::Parse for CItems {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
-        let header_name: String = module_name.value().into();
+        let header_name: String = module_name.value();
         input.parse::<Token![;]>()?;
         let citems_list: CItemsList = input.parse()?;
         Ok(CItems {
@@ -416,7 +416,7 @@ impl syn::parse::Parse for ForeignCode {
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
         let sp = module_name.span();
-        let module_name: String = module_name.value().into();
+        let module_name: String = module_name.value();
         input.parse::<Token![;]>()?;
         let cfg_option: Option<SpannedString> = if input.peek(kw::option) {
             input.parse::<kw::option>()?;
@@ -425,7 +425,7 @@ impl syn::parse::Parse for ForeignCode {
             input.parse::<Token![;]>()?;
             Some(SpannedString {
                 sp: cfg_option.span(),
-                value: cfg_option.value().into(),
+                value: cfg_option.value(),
             })
         } else {
             None
@@ -455,7 +455,7 @@ impl syn::parse::Parse for GenericCItems {
         input.parse::<kw::module>()?;
         input.parse::<Token![=]>()?;
         let module_name: LitStr = input.parse()?;
-        let header_name: String = module_name.value().into();
+        let header_name: String = module_name.value();
         input.parse::<Token![;]>()?;
         let types = input.parse()?;
         Ok(GenericCItems {
@@ -555,7 +555,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
             while !modules.is_empty() {
                 let mod_name = modules.parse::<LitStr>()?;
                 ftype_req_modules.push(ModuleName {
-                    name: mod_name.value().into(),
+                    name: mod_name.value(),
                     sp: mod_name.span(),
                 });
                 if modules.peek(Token![,]) {
@@ -573,7 +573,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
             let lit_str = params.parse::<LitStr>()?;
             ftype_cfg = Some(SpannedString {
                 sp: lit_str.span(),
-                value: lit_str.value().into(),
+                value: lit_str.value(),
             });
         } else if la.peek(kw::input_to_output) {
             params.parse::<kw::input_to_output>()?;
@@ -584,7 +584,7 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
             let lit_str = params.parse::<LitStr>()?;
             unique_prefix = Some(SpannedString {
                 sp: lit_str.span(),
-                value: lit_str.value().into(),
+                value: lit_str.value(),
             });
         } else if la.peek(token::Dollar) {
             params.parse::<token::Dollar>()?;
@@ -711,7 +711,7 @@ fn parse_f_type_rule(
             params.push(TO_VAR_TEMPLATE.into());
         }
         for tmp_id in &temporary_ids {
-            params.push(format!("${tmp_id}").into());
+            params.push(format!("${tmp_id}"));
         }
 
         Some(TypeConvCode::with_params(
