@@ -771,7 +771,6 @@ foreign_typemap!(
 pub struct CRustObjectSlice {
     data: *const ::std::os::raw::c_void,
     len: usize,
-    step: usize,
 }
 
 foreign_typemap!(
@@ -782,7 +781,6 @@ foreign_typemap!(
         pub struct CRustObjectSlice {
             data: *const ::std::os::raw::c_void,
             len: usize,
-            step: usize,
         });
     foreign_code!(module = "rust_slice.h";
                     r##"
@@ -804,7 +802,6 @@ using RustForeignSliceConst = RustForeignSlice<T, CRustObjectSlice>;
 pub struct CRustObjectMutSlice {
     data: *mut ::std::os::raw::c_void,
     len: usize,
-    step: usize,
 }
 
 foreign_typemap!(
@@ -815,7 +812,6 @@ foreign_typemap!(
         pub struct CRustObjectMutSlice {
             data: *mut ::std::os::raw::c_void,
             len: usize,
-            step: usize,
         });
     foreign_code!(module = "rust_slice_mut.h";
                     r##"
@@ -837,7 +833,6 @@ foreign_typemap!(
         $out = CRustObjectSlice {
             data: $p.as_ptr() as *const ::std::os::raw::c_void,
             len: $p.len(),
-            step: ::std::mem::size_of::<swig_subst_type!(T)>(),
         };
     };
     ($p:r_type) <T: SwigForeignClass> &[T] <= CRustObjectSlice {
@@ -938,7 +933,6 @@ foreign_typemap!(
         $out = CRustObjectMutSlice {
             data: $p.as_ptr() as *const ::std::os::raw::c_void,
             len: $p.len(),
-            step: ::std::mem::size_of::<swig_subst_type!(T)>(),
         };
     };
     ($p:r_type) <T: SwigForeignClass> &mut [T] <= CRustObjectMutSlice {
