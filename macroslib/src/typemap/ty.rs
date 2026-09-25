@@ -46,7 +46,7 @@ impl RustTypeS {
             implements: ImplementsSet::default(),
             graph_idx: RustTypeIdx::new(0),
             src_id,
-            typename_without_lifetimes: ty_lftms.into_token_stream().to_string().into(),
+            typename_without_lifetimes: ty_lftms.into_token_stream().to_string(),
         }
     }
     #[cfg(test)]

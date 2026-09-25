@@ -50,20 +50,18 @@ pub(in crate::java_jni) fn generate(ctx: &mut JavaContext, class: &ForeignClassI
     let class_name = class.name.to_string();
 
     ctx.java_type_to_jni_sig_map.insert(
-        class_name.clone().into(),
+        class_name.clone(),
         format!(
             "L{};",
             java_class_full_name(&ctx.cfg.package_name, &class_name)
-        )
-        .into(),
+        ),
     );
     ctx.java_type_to_jni_sig_map.insert(
-        format!("{class_name} []").into(),
+        format!("{class_name} []"),
         format!(
             "[L{};",
             java_class_full_name(&ctx.cfg.package_name, &class_name)
-        )
-        .into(),
+        ),
     );
 
     Ok(())
