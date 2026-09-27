@@ -22,7 +22,6 @@ smallvec = "1.1.0"
 rustc-hash = "2.1.2"
 strum = { version = "0.26.3", default-features = false, features = ["derive"] }
 heck = { version = "0.5.0", default-features = false }
-which = { version = "8.0.2", default-features = false, features = ["real-sys"] }
 
 [dev-dependencies]
 env_logger = { version = "0.11.3", default-features = false }

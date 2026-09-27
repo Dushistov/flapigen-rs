@@ -759,9 +759,7 @@ pub enum RustEdition {
 
 #[doc(hidden)]
 pub fn rustfmt_cnt(source: Vec<u8>, edition: RustEdition) -> io::Result<Vec<u8>> {
-    let rustfmt = which::which("rustfmt").map_err(|e| io::Error::other(format!("{e}")))?;
-
-    let mut cmd = Command::new(&*rustfmt);
+    let mut cmd = Command::new("rustfmt");
     cmd.arg("--edition");
     match edition {
         RustEdition::Edition2015 => {
