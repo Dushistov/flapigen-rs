@@ -2,10 +2,8 @@
 
 #include <cassert>
 
-#include "rust_foreign_slice_impl.hpp"
+#include "rust_slice_tmpl.hpp"
 #include "rust_foreign_slice_iter.hpp"
-#include "rust_slice.h"
-#include "rust_slice_mut.h"
 
 namespace RUST_SWIG_USER_NAMESPACE {
 
@@ -85,16 +83,14 @@ public:
         return const_iterator{ p, ELEM_SIZE };
     }
 
-    RustForeignSlice<ForeignClassRef, CRustObjectSlice> as_slice() const noexcept
+    RustSlice<const value_type> as_slice() const noexcept
     {
-        return RustForeignSlice<ForeignClassRef, CRustObjectSlice>{ CRustObjectSlice{
-            this->data, this->len } };
+        return RustSlice<const value_type>{ static_cast<const CForeignType *>(this->data), this->len };
     }
 
-    RustForeignSlice<ForeignClassRef, CRustObjectMutSlice> as_slice_mut() noexcept
+    RustSlice<value_type> as_slice_mut() noexcept
     {
-        return RustForeignSlice<ForeignClassRef, CRustObjectMutSlice>{ CRustObjectMutSlice{
-            this->data, this->len } };
+        return RustSlice<value_type>{ static_cast<CForeignType *>(this->data), this->len };
     }
 
     void clear() noexcept { free_mem(); }

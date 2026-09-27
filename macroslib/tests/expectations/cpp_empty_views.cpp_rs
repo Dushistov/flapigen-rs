@@ -1,10 +1,11 @@
 r#"#[unsafe(no_mangle)]
 pub extern "C" fn EmptyViews_take_slice(value: CRustSliceu32) -> usize {
-    assert!(value.len == 0 || !value.data.is_null());
-    let mut value: &[u32] = if value.len == 0 {
-        &[]
-    } else {
-        unsafe { ::std::slice::from_raw_parts(value.data, value.len) }
+    let mut value: &[u32] = unsafe {
+        (CRustSlice {
+            data: value.data.cast(),
+            len: value.len,
+        })
+        .as_slice::<u32>()
     };
     let mut ret: usize = take_slice(value);
     ret
@@ -12,16 +13,16 @@ pub extern "C" fn EmptyViews_take_slice(value: CRustSliceu32) -> usize {
 
 r#"#[unsafe(no_mangle)]
 pub extern "C" fn EmptyViews_take_mut_slice(value: CRustSliceMutu32) -> usize {
-    assert!(value.len == 0 || !value.data.is_null());
-    let mut value: &mut [u32] = if value.len == 0 {
-        &mut []
-    } else {
-        unsafe { ::std::slice::from_raw_parts_mut(value.data, value.len) }
+    let mut value: &mut [u32] = unsafe {
+        (CRustSliceMut {
+            data: value.data.cast(),
+            len: value.len,
+        })
+        .as_slice_mut::<u32>()
     };
     let mut ret: usize = take_mut_slice(value);
     ret
 }"#;
-
 r#"#[unsafe(no_mangle)]
 pub extern "C" fn EmptyViews_take_str(value: CRustStrView) -> CRustString {
     let mut value: &str = if value.len == 0 {

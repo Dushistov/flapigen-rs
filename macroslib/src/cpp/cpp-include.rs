@@ -267,6 +267,18 @@ foreign_typemap!(
     (f_type) "swig_f_type!(T) *";
 );
 
+// A slice of Rust objects points to their storage, not to C++ wrapper objects.
+// The struct tag supplies an opaque C declaration without including the wrapper header.
+foreign_typemap!(
+    (r_type) <T: SwigForeignClass> *const T;
+    (f_type) "const struct swig_f_type!(T, name_only)Opaque *";
+);
+
+foreign_typemap!(
+    (r_type) <T: SwigForeignClass> *mut T;
+    (f_type) "struct swig_f_type!(T, name_only)Opaque *";
+);
+
 foreign_typemap!(
     generic_alias!(CFnOneArgPtr = swig_concat_idents!(c_fn_, swig_i_type!(T), _t));
     foreign_code!(
@@ -768,115 +780,101 @@ foreign_typemap!(
 #[allow(dead_code)]
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct CRustObjectSlice {
+pub struct CRustSlice {
     data: *const ::std::os::raw::c_void,
     len: usize,
 }
 
-foreign_typemap!(
-    define_c_type!(
-        module = "rust_slice.h";
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub struct CRustObjectSlice {
-            data: *const ::std::os::raw::c_void,
-            len: usize,
-        });
-    foreign_code!(module = "rust_slice.h";
-                    r##"
-#ifdef __cplusplus
-#include "rust_foreign_slice_impl.hpp"
-
-namespace $RUST_SWIG_USER_NAMESPACE {
-template<typename T>
-using RustForeignSliceConst = RustForeignSlice<T, CRustObjectSlice>;
-}
-#endif
-"##);
-    (r_type) CRustObjectSlice;
-    (f_type) "CRustObjectSlice";
-);
-
 #[allow(dead_code)]
-#[repr(C)]
-pub struct CRustObjectMutSlice {
-    data: *mut ::std::os::raw::c_void,
-    len: usize,
-}
+impl CRustSlice {
+    #[inline]
+    pub const fn from_slice<T>(slice: &[T]) -> Self {
+        Self {
+            data: slice.as_ptr().cast(),
+            len: slice.len(),
+        }
+    }
 
-foreign_typemap!(
-    define_c_type!(
-        module = "rust_slice_mut.h";
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub struct CRustObjectMutSlice {
-            data: *mut ::std::os::raw::c_void,
-            len: usize,
-        });
-    foreign_code!(module = "rust_slice_mut.h";
-                    r##"
-#ifdef __cplusplus
-#include "rust_foreign_slice_impl.hpp"
-
-namespace $RUST_SWIG_USER_NAMESPACE {
-template<typename T>
-using RustForeignSliceMut = RustForeignSlice<T, CRustObjectMutSlice>;
-}
-#endif
-"##);
-    (r_type) CRustObjectMutSlice;
-    (f_type) "CRustObjectMutSlice";
-);
-
-foreign_typemap!(
-    ($p:r_type) <T: SwigForeignClass> &[T] => CRustObjectSlice {
-        $out = CRustObjectSlice {
-            data: $p.as_ptr() as *const ::std::os::raw::c_void,
-            len: $p.len(),
-        };
-    };
-    ($p:r_type) <T: SwigForeignClass> &[T] <= CRustObjectSlice {
-        $out = if $p.len == 0 {
+    #[inline]
+    pub const unsafe fn as_slice<'a, T>(self) -> &'a [T] {
+        if self.len == 0 {
             &[]
         } else {
-            unsafe { ::std::slice::from_raw_parts($p.data as *const swig_subst_type!(T), $p.len) }
-        };
-    };
-    ($p:f_type, req_modules = ["\"rust_slice.h\""]) => "RustForeignSliceConst<swig_f_type!(&T)>"
-        "RustForeignSliceConst<swig_f_type!(&T)>{$p}";
-    ($p:f_type, req_modules = ["\"rust_slice.h\""]) <= "RustForeignSliceConst<swig_f_type!(&T, output)>"
-        "$p";
-);
+            assert!(!self.data.is_null());
+            unsafe { ::std::slice::from_raw_parts(self.data.cast(), self.len) }
+        }
+    }
+}
 
 #[allow(dead_code)]
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct CRustSliceAccess {
-    data: *const ::std::os::raw::c_void,
+pub struct CRustSliceMut {
+    data: *mut ::std::os::raw::c_void,
     len: usize,
 }
 
 #[allow(dead_code)]
-impl CRustSliceAccess {
-    pub fn from_slice<T>(sl: &[T]) -> Self {
+impl CRustSliceMut {
+    #[inline]
+    pub const fn from_slice<T>(slice: &mut [T]) -> Self {
         Self {
-            data: sl.as_ptr() as *const ::std::os::raw::c_void,
-            len: sl.len(),
+            data: slice.as_mut_ptr().cast(),
+            len: slice.len(),
+        }
+    }
+
+    #[inline]
+    pub const unsafe fn as_slice_mut<'a, T>(self) -> &'a mut [T] {
+        if self.len == 0 {
+            &mut []
+        } else {
+            assert!(!self.data.is_null());
+            unsafe { ::std::slice::from_raw_parts_mut(self.data.cast(), self.len) }
         }
     }
 }
 
 foreign_typemap!(
+    foreign_code!(module = "rust_slice.h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_slice_tmpl.hpp"
+#endif
+"##);
+);
+
+foreign_typemap!(
+    generic_alias!(CSlice = swig_concat_idents!(CRustSliceForeign, swig_f_type!(T)));
     define_c_type!(
-        module = "rust_slice.h";
+        module = "CSlice!().h";
         #[repr(C)]
         #[derive(Clone, Copy)]
-        pub struct CRustSliceAccess {
-            data: *const ::std::os::raw::c_void,
+        pub struct CSlice!() {
+            data: *const swig_subst_type!(T),
             len: usize,
-        });
-    (r_type) CRustSliceAccess;
-    (f_type) "CRustSliceAccess";
+        }
+    );
+    foreign_code!(module = "CSlice!().h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_slice_tmpl.hpp"
+#include "swig_f_type!(T)_fwd.hpp"
+#endif
+"##);
+    ($p:r_type) <T: SwigForeignClass> &[T] => CSlice!() {
+        $out = CSlice!() {
+            data: $p.as_ptr(),
+            len: $p.len(),
+        };
+    };
+    ($p:r_type) <T: SwigForeignClass> &[T] <= CSlice!() {
+        $out = unsafe { (CRustSlice { data: $p.data.cast(), len: $p.len }).as_slice::<swig_subst_type!(T)>() };
+    };
+    ($p:f_type, req_modules = ["\"CSlice!().h\""]) => "RustSlice<const swig_f_type!(T, output)>"
+        "RustSlice<const swig_f_type!(T, output)>{$p}";
+    ($p:f_type, req_modules = ["\"CSlice!().h\""]) <= "RustSlice<const swig_f_type!(T, output)>"
+        "$p.as_c<CSlice!()>()";
 );
 
 #[allow(dead_code)]
@@ -929,97 +927,100 @@ foreign_typemap!(
 );
 
 foreign_typemap!(
-    ($p:r_type) <T: SwigForeignClass> &mut [T] => CRustObjectMutSlice {
-        $out = CRustObjectMutSlice {
-            data: $p.as_ptr() as *const ::std::os::raw::c_void,
-            len: $p.len(),
-        };
-    };
-    ($p:r_type) <T: SwigForeignClass> &mut [T] <= CRustObjectMutSlice {
-        $out = if $p.len == 0 {
-            &mut []
-        } else {
-            unsafe { ::std::slice::from_raw_parts_mut($p.data as *mut swig_subst_type!(T), $p.len) }
-        };
-    };
-    ($p:f_type, req_modules = ["\"rust_slice_mut.h\""]) => "RustForeignSliceMut<swig_f_type!(&T)>"
-        "RustForeignSliceMut<swig_f_type!(&T)>{$p}";
-    ($p:f_type, req_modules = ["\"rust_slice_mut.h\""]) <= "RustForeignSliceMut<swig_f_type!(&T, output)>"
-        "$p";
-);
-
-foreign_typemap!(
-    generic_alias!(CRustSlice = swig_concat_idents!(CRustSlice, swig_i_type!(T)));
+    generic_alias!(CSliceMut = swig_concat_idents!(CRustSliceMutForeign, swig_f_type!(T)));
     define_c_type!(
-        module = "CRustSlice!().h";
+        module = "CSliceMut!().h";
         #[repr(C)]
         #[derive(Clone, Copy)]
-        pub struct CRustSlice!() {
-            data: *const swig_i_type!(T),
+        pub struct CSliceMut!() {
+            data: *mut swig_subst_type!(T),
             len: usize,
         }
     );
-    foreign_code!(module = "CRustSlice!().h";
+    foreign_code!(module = "CSliceMut!().h";
                     r##"
 #ifdef __cplusplus
 #include "rust_slice_tmpl.hpp"
+#include "swig_f_type!(T)_fwd.hpp"
 #endif
 "##);
-    ($p:r_type) <T: SwigTypeIsReprC> &[T] => CRustSlice!() {
-        $out =  CRustSlice!() {
-            data: $p.as_ptr(),
-            len: $p.len(),
-        };
-    };
-    ($p:r_type) <T: SwigTypeIsReprC> &[T] <= CRustSlice!() {
-        assert!($p.len == 0 || !$p.data.is_null());
-        $out = if $p.len == 0 {
-            &[]
-        } else {
-            unsafe { ::std::slice::from_raw_parts($p.data, $p.len) }
-        };
-    };
-    ($p:f_type, req_modules = ["\"CRustSlice!().h\""]) => "RustSlice<const swig_f_type!(T)>"
-        "RustSlice<const swig_f_type!(T)>{$p.data, $p.len}";
-    ($p:f_type, req_modules = ["\"CRustSlice!().h\""]) <= "RustSlice<const swig_f_type!(T)>"
-        "$p.as_c<swig_f_type!(CRustSlice!())>()";
-);
-
-foreign_typemap!(
-    generic_alias!(CRustSliceMut = swig_concat_idents!(CRustSliceMut, swig_i_type!(T)));
-    define_c_type!(
-        module = "CRustSliceMut!().h";
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub struct CRustSliceMut!() {
-            data: *mut swig_i_type!(T),
-            len: usize,
-        }
-    );
-    foreign_code!(module = "CRustSliceMut!().h";
-                    r##"
-#ifdef __cplusplus
-#include "rust_slice_tmpl.hpp"
-#endif
-"##);
-    ($p:r_type) <T: SwigTypeIsReprC> &mut [T] => CRustSliceMut!() {
-        $out =  CRustSliceMut!() {
+    ($p:r_type) <T: SwigForeignClass> &mut [T] => CSliceMut!() {
+        $out = CSliceMut!() {
             data: $p.as_mut_ptr(),
             len: $p.len(),
         };
     };
-    ($p:r_type) <T: SwigTypeIsReprC> &mut [T] <= CRustSliceMut!() {
-        assert!($p.len == 0 || !$p.data.is_null());
-        $out = if $p.len == 0 {
-            &mut []
-        } else {
-            unsafe { ::std::slice::from_raw_parts_mut($p.data, $p.len) }
+    ($p:r_type) <T: SwigForeignClass> &mut [T] <= CSliceMut!() {
+        $out = unsafe { (CRustSliceMut { data: $p.data.cast(), len: $p.len }).as_slice_mut::<swig_subst_type!(T)>() };
+    };
+    ($p:f_type, req_modules = ["\"CSliceMut!().h\""]) => "RustSlice<swig_f_type!(T, output)>"
+        "RustSlice<swig_f_type!(T, output)>{$p}";
+    ($p:f_type, req_modules = ["\"CSliceMut!().h\""]) <= "RustSlice<swig_f_type!(T, output)>"
+        "$p.as_c<CSliceMut!()>()";
+);
+
+foreign_typemap!(
+    generic_alias!(CSlice = swig_concat_idents!(CRustSlice, swig_i_type!(T)));
+    define_c_type!(
+        module = "CSlice!().h";
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CSlice!() {
+            data: *const swig_subst_type!(T),
+            len: usize,
+        }
+    );
+    foreign_code!(module = "CSlice!().h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_slice_tmpl.hpp"
+#endif
+"##);
+    ($p:r_type) <T: SwigTypeIsReprC> &[T] => CSlice!() {
+        $out = CSlice!() {
+            data: $p.as_ptr(),
+            len: $p.len(),
         };
     };
-    ($p:f_type, req_modules = ["\"CRustSliceMut!().h\""]) => "RustSlice<swig_f_type!(T)>"
-        "RustSlice<swig_f_type!(T)>{$p.data, $p.len}";
-    ($p:f_type, req_modules = ["\"CRustSliceMut!().h\""]) <= "RustSlice<swig_f_type!(T)>"
-        "$p.as_c<swig_f_type!(CRustSliceMut!())>()";
+    ($p:r_type) <T: SwigTypeIsReprC> &[T] <= CSlice!() {
+        $out = unsafe { (CRustSlice { data: $p.data.cast(), len: $p.len }).as_slice::<swig_subst_type!(T)>() };
+    };
+    ($p:f_type, req_modules = ["\"CSlice!().h\""]) => "RustSlice<const swig_f_type!(T)>"
+        "RustSlice<const swig_f_type!(T)>{$p}";
+    ($p:f_type, req_modules = ["\"CSlice!().h\""]) <= "RustSlice<const swig_f_type!(T)>"
+        "$p.as_c<CSlice!()>()";
+);
+
+foreign_typemap!(
+    generic_alias!(CSliceMut = swig_concat_idents!(CRustSliceMut, swig_i_type!(T)));
+    define_c_type!(
+        module = "CSliceMut!().h";
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CSliceMut!() {
+            data: *mut swig_subst_type!(T),
+            len: usize,
+        }
+    );
+    foreign_code!(module = "CSliceMut!().h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_slice_tmpl.hpp"
+#endif
+"##);
+    ($p:r_type) <T: SwigTypeIsReprC> &mut [T] => CSliceMut!() {
+        $out = CSliceMut!() {
+            data: $p.as_mut_ptr(),
+            len: $p.len(),
+        };
+    };
+    ($p:r_type) <T: SwigTypeIsReprC> &mut [T] <= CSliceMut!() {
+        $out = unsafe { (CRustSliceMut { data: $p.data.cast(), len: $p.len }).as_slice_mut::<swig_subst_type!(T)>() };
+    };
+    ($p:f_type, req_modules = ["\"CSliceMut!().h\""]) => "RustSlice<swig_f_type!(T)>"
+        "RustSlice<swig_f_type!(T)>{$p}";
+    ($p:f_type, req_modules = ["\"CSliceMut!().h\""]) <= "RustSlice<swig_f_type!(T)>"
+        "$p.as_c<CSliceMut!()>()";
 );
 
 foreign_typemap!(

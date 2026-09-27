@@ -1,0 +1,28 @@
+r#"pub extern "C" fn Mix_foreign_first(this: *mut Mix) -> CRustSliceForeignFoo {"#;
+r#"pub extern "C" fn Mix_foreign_other(this: *mut Mix) -> CRustSliceForeignBar {"#;
+r#"pub extern "C" fn Mix_native_second(this: *mut Mix) -> CRustSliceu32 {"#;
+r#"pub extern "C" fn Mix_native_other(this: *mut Mix) -> CRustSliceu64 {"#;
+r#"values: CRustSliceMutForeignFoo"#;
+r#"values: CRustSliceMutForeignBar"#;
+r#"values: CRustSliceMutu32"#;
+r#"values: CRustSliceMutu64"#;
+r#".as_slice_mut::<Foo>()"#;
+r#".as_slice_mut::<Bar>()"#;
+r#".as_slice_mut::<u32>()"#;
+r#".as_slice_mut::<u64>()"#;
+r#"pub struct CRustSliceForeignFoo {
+    data: *const Foo,
+    len: usize,
+}"#;
+r#"pub struct CRustSliceMutForeignBar {
+    data: *mut Bar,
+    len: usize,
+}"#;
+r#"pub struct CRustSliceu32 {
+    data: *const u32,
+    len: usize,
+}"#;
+r#"pub struct CRustSliceMutu64 {
+    data: *mut u64,
+    len: usize,
+}"#;

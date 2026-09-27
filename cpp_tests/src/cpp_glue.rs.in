@@ -53,6 +53,9 @@ impl Foo {
     fn expect_str(expect: &str, s: String) {
         assert_eq!(expect, s);
     }
+    fn count_slice(values: &[Foo]) -> usize {
+        values.len()
+    }
 }
 
 fn f_hypot(a: f64, b: f64) -> f64 {
@@ -86,6 +89,7 @@ foreign_class!(class Foo {
     fn f_hypot(_: f64, _: f64) -> f64; alias fHypot;
     fn Foo::ret_string(&self) -> String;
     fn Foo::expect_str(expect: &str, s: String);
+    fn Foo::count_slice(values: &[Foo]) -> usize;
     foreign_code r#"
 public:
     size_t cpp_func(const std::string &s) const { return s.size(); }
@@ -1249,6 +1253,18 @@ pub struct WorkWithSlice {
     d: Vec<Arc<FooArc>>,
 }
 
+pub struct ZeroSized;
+
+impl ZeroSized {
+    fn value(&self) -> i32 { 19 }
+}
+
+foreign_class!(class ZeroSized {
+    self_type ZeroSized;
+    private constructor = empty;
+    fn ZeroSized::value(&self) -> i32;
+});
+
 impl WorkWithSlice {
     fn new(beg: i32, end: i32) -> Self {
         let mut d = Vec::with_capacity((end - beg) as usize);
@@ -1266,14 +1282,36 @@ impl WorkWithSlice {
     fn vec(&self) -> Vec<Arc<FooArc>> {
         self.d.clone()
     }
+    fn sum_slice(values: &[Arc<FooArc>]) -> i32 {
+        values.iter().map(|v| v.val()).sum()
+    }
+    fn zero_sized_slice() -> &'static [ZeroSized] {
+        static VALUES: [ZeroSized; 3] = [ZeroSized, ZeroSized, ZeroSized];
+        &VALUES
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CRustSliceArcFooArc {
+    data: *const ::std::os::raw::c_void,
+    len: usize,
 }
 
 foreign_typemap!(
     define_c_type!(
         module = "foo_arc_slice_access.h";
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustSliceArcFooArc {
+            data: *const ::std::os::raw::c_void,
+            len: usize,
+        }
         #[no_mangle]
-        pub extern "C" fn foo_arc_access(sl: CRustSliceAccess, idx: usize) -> *const ::std::os::raw::c_void {
-            let slice: &[Arc<FooArc>] = unsafe { ::std::slice::from_raw_parts(sl.data as *const Arc<FooArc>, sl.len) };
+        pub extern "C" fn foo_arc_access(sl: CRustSliceArcFooArc, idx: usize) -> *const ::std::os::raw::c_void {
+            let slice: &[Arc<FooArc>] = unsafe {
+                (CRustSlice { data: sl.data, len: sl.len }).as_slice()
+            };
             let elem_ref: &FooArc = &slice[idx];
             elem_ref as *const FooArc as *const ::std::os::raw::c_void
         }
@@ -1282,26 +1320,32 @@ foreign_typemap!(
                     r##"
 #ifdef __cplusplus
 #include "foo_arc_slice_access.h"
-#include "rust_slice_access.hpp"
+#include "rust_slice_tmpl.hpp"
 #include "FooArc.hpp"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
 struct FooArcAccess {
-       using ReturnType = FooArcRef;
-       static FooArcRef index(CRustSliceAccess slice, size_t idx) noexcept {
-           auto p = static_cast<const FooArcOpaque *>(foo_arc_access(slice, idx));
+       // The elements are Arc<FooArc>, not FooArcOpaque objects.
+       using storage_type = void;
+       static FooArcRef index(internal::SliceStorage<const void *> slice, size_t idx) noexcept {
+           auto p = static_cast<const FooArcOpaque *>(
+               foo_arc_access(CRustSliceArcFooArc{slice.data, slice.len}, idx));
            return FooArcRef{ p };
        }
 };
-using RustFooArcConstSlice = RustSliceAccess<FooArcAccess>;
 }
 #endif
 "##);
-    ($p:r_type) &[Arc<FooArc>] => CRustSliceAccess {
-        $out = CRustSliceAccess::from_slice($p);
+    ($p:r_type) &[Arc<FooArc>] => CRustSliceArcFooArc {
+        $out = CRustSliceArcFooArc { data: $p.as_ptr().cast(), len: $p.len() };
     };
-    ($p:f_type, req_modules = ["\"rust_slice.h\""]) => "RustFooArcConstSlice"
-        "RustFooArcConstSlice{$p}";
+    ($p:r_type) &[Arc<FooArc>] <= CRustSliceArcFooArc {
+        $out = unsafe { (CRustSlice { data: $p.data, len: $p.len }).as_slice::<Arc<FooArc>>() };
+    };
+    ($p:f_type, req_modules = ["\"rust_slice.h\""]) => "RustSlice<const FooArc, FooArcAccess>"
+        "RustSlice<const FooArc, FooArcAccess>{$p}";
+    ($p:f_type, req_modules = ["\"rust_slice.h\""]) <= "RustSlice<const FooArc, FooArcAccess>"
+        "$p.as_c<CRustSliceArcFooArc>()";
 );
 
 foreign_typemap!(
@@ -1353,4 +1397,6 @@ foreign_class!(class WorkWithSlice {
     constructor WorkWithSlice::new(beg: i32, end: i32) -> WorkWithSlice;
     fn WorkWithSlice::slice(&self) -> &[Arc<FooArc>];
     fn WorkWithSlice::vec(&self) -> Vec<Arc<FooArc>>;
+    fn WorkWithSlice::sum_slice(values: &[Arc<FooArc>]) -> i32;
+    fn WorkWithSlice::zero_sized_slice() -> &'static [ZeroSized];
 });

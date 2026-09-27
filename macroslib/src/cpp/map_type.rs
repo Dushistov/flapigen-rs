@@ -23,7 +23,7 @@ pub(in crate::cpp) fn map_type(
     arg_ty_span: SourceIdSpan,
 ) -> Result<CppForeignTypeInfo> {
     debug!("map_type: arg_ty {}, direction {:?}", arg_ty, direction);
-    let ftype = do_map_type(ctx, arg_ty, direction, arg_ty_span)?;
+    let ftype = do_map_type(ctx, arg_ty, direction, arg_ty_span, false)?;
     CppForeignTypeInfo::try_new(ctx, direction, ftype)
 }
 
@@ -32,16 +32,19 @@ fn do_map_type(
     arg_ty: &RustType,
     direction: Direction,
     arg_ty_span: SourceIdSpan,
+    prefer_generic: bool,
 ) -> Result<ForeignType> {
     debug!("do_map_type: arg_ty {}, direction {:?}", arg_ty, direction);
-    if let Some(ftype) = ctx.conv_map.map_through_conversion_to_foreign(
-        arg_ty.to_idx(),
-        direction,
-        MapToForeignFlag::FastSearch,
-        arg_ty_span,
-        calc_this_type_for_method,
-    ) {
-        return Ok(ftype);
+    if !prefer_generic {
+        if let Some(ftype) = ctx.conv_map.map_through_conversion_to_foreign(
+            arg_ty.to_idx(),
+            direction,
+            MapToForeignFlag::FastSearch,
+            arg_ty_span,
+            calc_this_type_for_method,
+        ) {
+            return Ok(ftype);
+        }
     }
 
     let idx_subst_map: Option<(Rc<_>, TyParamsSubstList)> =
@@ -228,7 +231,14 @@ impl TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'_, '_> {
             .conv_map
             .find_or_alloc_rust_type(ty, self.arg_ty_span.0);
 
-        let direction = self.arg_direction(param1)?;
+        // Opaque pointer fields need the class name, but including its wrapper can
+        // make the slice descriptor and class headers depend on each other.
+        let name_only = param1 == Some("name_only");
+        let direction = if name_only {
+            self.direction
+        } else {
+            self.arg_direction(param1)?
+        };
         let f_info = map_type(self.ctx, &rust_ty, direction, self.arg_ty_span)?;
         let fname = if let Some(ref cpp_conv) = f_info.cpp_converter {
             &cpp_conv.typename
@@ -240,7 +250,11 @@ impl TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'_, '_> {
                 fname.value().replace("struct ", "").replace("union ", ""),
                 fname.unique_prefix().unwrap_or(""),
             ),
-            provided_by_module: f_info.provided_by_module.clone(),
+            provided_by_module: if name_only {
+                vec![]
+            } else {
+                f_info.provided_by_module.clone()
+            },
         })
     }
     fn swig_foreign_to_i_type(&mut self, ty: &syn::Type, var_name: &str) -> Result<String> {
@@ -315,12 +329,19 @@ pub(in crate::cpp) fn map_repr_c_type(
     arg_ty_span: SourceIdSpan,
 ) -> Result<CppForeignTypeInfo> {
     debug!("map_repr_c_type: rty {}", rty);
-    let fti = map_type(
+    let mut fti = map_type(
         ctx,
         rty,
         Direction::Incoming, /*not important*/
         arg_ty_span,
     )?;
+
+    if fti.cpp_converter.is_some() || fti.base.corresponding_rust_type.to_idx() != rty.to_idx() {
+        // A class pointer may first resolve through its erased object-handle rule.
+        // A repr(C) field needs the direct pointer rule instead.
+        let direct_ftype = do_map_type(ctx, rty, Direction::Incoming, arg_ty_span, true)?;
+        fti = CppForeignTypeInfo::try_new(ctx, Direction::Incoming, direct_ftype)?;
+    }
 
     if fti.cpp_converter.is_some() || fti.base.corresponding_rust_type.to_idx() != rty.to_idx() {
         return Err(DiagnosticError::new2(

@@ -625,3 +625,151 @@ fn init(ctx: &mut CppContext, code: &[SourceCode]) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::typemap::ast::DisplayToTokens;
+    use crate::typemap::MapToForeignFlag;
+    use crate::{Generator, LanguageConfig};
+    use petgraph::Direction;
+    use syn::parse_quote;
+
+    #[test]
+    fn slice_conversion_graph_keeps_element_types_separate() {
+        let output_dir = tempfile::tempdir().unwrap();
+        let config = CppConfig::new(output_dir.path().to_path_buf(), "test".into());
+        let mut generator =
+            Generator::new(LanguageConfig::CppConfig(config)).with_pointer_target_width(64);
+        let src_id = generator.src_reg.register(SourceCode {
+            id_of_code: "slice_conversion_graph.rs".into(),
+            code: r#"
+foreign_class!(class Foo {
+    self_type Foo;
+    constructor Foo::new() -> Foo;
+});
+foreign_class!(class Bar {
+    self_type Bar;
+    constructor Bar::new() -> Bar;
+});
+foreign_class!(class Slices {
+    self_type Slices;
+    constructor Slices::new() -> Slices;
+    fn Slices::foo_out(&self) -> &[Foo];
+    fn Slices::bar_out(&self) -> &[Bar];
+    fn Slices::foo_in(&self, value: &[Foo]);
+    fn Slices::bar_in(&self, value: &[Bar]);
+    fn Slices::u32_out(&self) -> &[u32];
+    fn Slices::u64_out(&self) -> &[u64];
+    fn Slices::u32_in(&self, value: &[u32]);
+    fn Slices::u64_in(&self, value: &[u64]);
+});
+"#
+            .into(),
+        });
+        generator
+            .expand_str(&[src_id], output_dir.path().join("glue.rs"))
+            .unwrap();
+
+        // Check that the fixture really instantiated both directions for
+        // every slice type before testing for an unintended cross-type path.
+        for slice in [
+            parse_quote!(&[Foo]),
+            parse_quote!(&[Bar]),
+            parse_quote!(&[u32]),
+            parse_quote!(&[u64]),
+        ] {
+            let slice_idx = generator
+                .conv_map
+                .find_or_alloc_rust_type(&slice, SourceId::none())
+                .to_idx();
+            for direction in [Direction::Outgoing, Direction::Incoming] {
+                let foreign_idx = generator
+                    .conv_map
+                    .map_through_conversion_to_foreign(
+                        slice_idx,
+                        direction,
+                        MapToForeignFlag::FastSearch,
+                        invalid_src_id_span(),
+                        |_, _| None,
+                    )
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "missing {direction:?} mapping for {}",
+                            DisplayToTokens(&slice)
+                        )
+                    });
+                let abi_idx = match direction {
+                    Direction::Outgoing => {
+                        generator.conv_map[foreign_idx]
+                            .into_from_rust
+                            .as_ref()
+                            .unwrap()
+                            .rust_ty
+                    }
+                    Direction::Incoming => {
+                        generator.conv_map[foreign_idx]
+                            .from_into_rust
+                            .as_ref()
+                            .unwrap()
+                            .rust_ty
+                    }
+                };
+                let (from_idx, to_idx) = match direction {
+                    Direction::Outgoing => (slice_idx, abi_idx),
+                    Direction::Incoming => (abi_idx, slice_idx),
+                };
+                assert!(
+                    generator
+                        .conv_map
+                        .convert_rust_types(
+                            from_idx,
+                            to_idx,
+                            "from",
+                            "to",
+                            "()",
+                            invalid_src_id_span(),
+                        )
+                        .is_ok(),
+                    "missing {direction:?} conversion for {} through {}",
+                    DisplayToTokens(&slice),
+                    generator.conv_map[abi_idx],
+                );
+            }
+        }
+
+        // A shared CRustSlice intermediate would connect each pair here,
+        // even though the element types differ.
+        for (from, to) in [
+            (parse_quote!(&[Foo]), parse_quote!(&[Bar])),
+            (parse_quote!(&[Bar]), parse_quote!(&[Foo])),
+            (parse_quote!(&[u32]), parse_quote!(&[u64])),
+            (parse_quote!(&[u64]), parse_quote!(&[u32])),
+        ] {
+            let from_idx = generator
+                .conv_map
+                .find_or_alloc_rust_type(&from, SourceId::none())
+                .to_idx();
+            let to_idx = generator
+                .conv_map
+                .find_or_alloc_rust_type(&to, SourceId::none())
+                .to_idx();
+            assert!(
+                generator
+                    .conv_map
+                    .convert_rust_types(
+                        from_idx,
+                        to_idx,
+                        "from",
+                        "to",
+                        "()",
+                        invalid_src_id_span(),
+                    )
+                    .is_err(),
+                "unexpected conversion from {} to {}",
+                DisplayToTokens(&from),
+                DisplayToTokens(&to),
+            );
+        }
+    }
+}
