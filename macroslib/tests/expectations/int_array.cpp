@@ -5,5 +5,5 @@ r#"template<bool OWN_DATA>
     {
 
         struct CRustSlicei32 ret = Utils_f(a0.as_c<CRustSlicei32>());
-        return RustSlice<const int32_t>{ret.data, ret.len};
+        return RustSlice<const int32_t>{ret};
     }"#;

@@ -26,6 +26,7 @@ template<bool OWN_DATA>
 class BtAddrWrapper {
 public:
     using value_type = BtAddrWrapper<true>;
+    using SliceRef = BtAddrWrapper<false>;
     friend class BtAddrWrapper<true>;
     friend class BtAddrWrapper<false>;
 

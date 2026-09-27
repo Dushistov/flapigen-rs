@@ -68,13 +68,13 @@ fn vectors_can_be_borrowed_mutated_and_consumed() {
         let expected: u32 = (0..len).sum();
         assert_eq!(
             Buffers_sum(CRustSliceu32 {
-                data: vector.data,
+                data: vector.data.cast(),
                 len: vector.len
             }),
             expected
         );
         Buffers_reverse(CRustSliceMutu32 {
-            data: vector.data,
+            data: vector.data.cast(),
             len: vector.len,
         });
         // SAFETY: this vector is still owned by the test. The previous mutable
@@ -128,13 +128,13 @@ fn borrowed_slices_remain_owned_by_the_caller() {
     for len in [0, 1, 8] {
         let mut values: Vec<u32> = (0..len).collect();
         Buffers_reverse(CRustSliceMutu32 {
-            data: values.as_mut_ptr(),
+            data: values.as_mut_ptr().cast(),
             len: values.len(),
         });
         assert_eq!(values, (0..len).rev().collect::<Vec<_>>());
         assert_eq!(
             Buffers_sum(CRustSliceu32 {
-                data: values.as_ptr(),
+                data: values.as_ptr().cast(),
                 len: values.len()
             }),
             (0..len).sum()
@@ -145,16 +145,39 @@ fn borrowed_slices_remain_owned_by_the_caller() {
 }
 
 #[test]
+fn slice_helper_preserves_borrow_and_empty_inputs() {
+    let values = vec![Arc::new(Tracked::new(5)), Arc::new(Tracked::new(8))];
+    let descriptor = CRustSlice::from_slice(&values);
+    // SAFETY: the descriptor came from values, which remain alive and unchanged.
+    let borrowed: &[Arc<Tracked>] = unsafe { descriptor.as_slice() };
+    assert!(Arc::ptr_eq(&borrowed[0], &values[0]));
+    assert_eq!(borrowed.iter().map(|v| v.value()).sum::<i32>(), 13);
+    assert_eq!(Arc::strong_count(&values[0]), 1);
+
+    let empty = CRustSlice {
+        data: std::ptr::null(),
+        len: 0,
+    };
+    // SAFETY: an empty slice does not inspect the descriptor's pointer.
+    assert!(unsafe { empty.as_slice::<Arc<Tracked>>() }.is_empty());
+
+    let mut zero_sized = [(); 3];
+    let descriptor = CRustSliceMut::from_slice(&mut zero_sized);
+    // SAFETY: the exclusive borrow of zero_sized lasts through this assertion.
+    assert_eq!(unsafe { descriptor.as_slice_mut::<()>() }.len(), 3);
+}
+
+#[test]
 fn null_empty_foreign_slices_are_valid_inputs() {
     assert_eq!(
-        Buffers_sum_tracked(CRustObjectSlice {
+        Buffers_sum_tracked(CRustSliceForeignTracked {
             data: std::ptr::null(),
             len: 0,
         }),
         0
     );
     assert_eq!(
-        Buffers_increment_tracked(CRustObjectMutSlice {
+        Buffers_increment_tracked(CRustSliceMutForeignTracked {
             data: std::ptr::null_mut(),
             len: 0,
         }),

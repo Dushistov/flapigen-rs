@@ -5,20 +5,21 @@ r#"template<bool OWN_DATA>
     {
 
         struct CRustSliceu32 ret = Boo_f1(this->self_);
-        return RustSlice<const uint32_t>{ret.data, ret.len};
+        return RustSlice<const uint32_t>{ret};
     }"#;
 
-"struct CRustObjectSlice Boo_f2(const BooOpaque * const self);";
-"RustForeignSliceConst<FooRef> f2() const noexcept;";
+"struct CRustSliceForeignFoo Boo_f2(const BooOpaque * const self);";
+"RustSlice<const Foo> f2() const noexcept;";
 "extern const uintptr_t RustForeignClassFooElemSize;";
 "static constexpr const uintptr_t &rust_elem_size = RustForeignClassFooElemSize;";
+"using SliceRef = FooWrapper<false>;";
 "constexpr const uintptr_t &FooWrapper<OWN_DATA>::rust_elem_size;";
 r#"template<bool OWN_DATA>
-    inline RustForeignSliceConst<FooRef> BooWrapper<OWN_DATA>::f2() const noexcept
+    inline RustSlice<const Foo> BooWrapper<OWN_DATA>::f2() const noexcept
     {
 
-        struct CRustObjectSlice ret = Boo_f2(this->self_);
-        return RustForeignSliceConst<FooRef>{ret};
+        struct CRustSliceForeignFoo ret = Boo_f2(this->self_);
+        return RustSlice<const Foo>{ret};
     }"#;
 
 "RustSlice<const uintptr_t> f3() const noexcept;";
@@ -28,7 +29,7 @@ r#"template<bool OWN_DATA>
     {
 
         struct CRustSliceusize ret = Boo_f3(this->self_);
-        return RustSlice<const uintptr_t>{ret.data, ret.len};
+        return RustSlice<const uintptr_t>{ret};
     }"#;
 
 "RustSlice<uintptr_t> f4() const noexcept;";
@@ -38,5 +39,5 @@ r#"template<bool OWN_DATA>
     {
 
         struct CRustSliceMutusize ret = Boo_f4(this->self_);
-        return RustSlice<uintptr_t>{ret.data, ret.len};
+        return RustSlice<uintptr_t>{ret};
     }"#;

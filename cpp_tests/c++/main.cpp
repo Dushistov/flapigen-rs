@@ -12,6 +12,7 @@
 #include <thread>
 #include <chrono>
 #include <mutex>
+#include <type_traits>
 #include <gtest/gtest.h>
 
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
@@ -52,14 +53,48 @@
 
 using namespace rust;
 
-static_assert(sizeof(RustForeignSliceConst<FooRef>) == sizeof(void *) + sizeof(uintptr_t),
+static_assert(sizeof(RustSlice<const Foo>) == sizeof(void *) + sizeof(uintptr_t),
               "foreign slice should store only data and length");
-static_assert(sizeof(RustForeignSliceMut<FooRef>) == sizeof(void *) + sizeof(uintptr_t),
+static_assert(sizeof(RustSlice<Foo>) == sizeof(void *) + sizeof(uintptr_t),
               "mutable foreign slice should store only data and length");
-static_assert(sizeof(CRustObjectSlice) == sizeof(void *) + sizeof(uintptr_t),
+static_assert(sizeof(RustSlice<const uint32_t>) == sizeof(void *) + sizeof(uintptr_t),
+              "native slice should store only data and length");
+static_assert(sizeof(CRustSliceForeignFoo) == sizeof(void *) + sizeof(uintptr_t),
               "const foreign slice ABI should store only data and length");
-static_assert(sizeof(CRustObjectMutSlice) == sizeof(void *) + sizeof(uintptr_t),
+static_assert(sizeof(CRustSliceMutForeignFoo) == sizeof(void *) + sizeof(uintptr_t),
               "mutable foreign slice ABI should store only data and length");
+static_assert(std::is_same<decltype(std::declval<CRustSliceu32>().data), const uint32_t *>::value,
+              "native descriptor data must have the element pointer type");
+static_assert(std::is_same<decltype(std::declval<CRustSliceMuti32>().data), int32_t *>::value,
+              "mutable native descriptor data must have the element pointer type");
+static_assert(std::is_same<decltype(std::declval<CRustSliceForeignFoo>().data), const FooOpaque *>::value,
+              "foreign descriptor data must use its opaque element pointer type");
+static_assert(std::is_same<decltype(std::declval<CRustSliceMutForeignFoo>().data), FooOpaque *>::value,
+              "foreign descriptor data must use its opaque element pointer type");
+static_assert(std::is_same<decltype(std::declval<RustSlice<const Foo>>().as_c<CRustSliceForeignFoo>()),
+                           CRustSliceForeignFoo>::value,
+              "const slices must use the const descriptor");
+static_assert(std::is_same<decltype(std::declval<RustSlice<Foo>>().as_c<CRustSliceMutForeignFoo>()),
+                           CRustSliceMutForeignFoo>::value,
+              "mutable slices must use the mutable descriptor");
+static_assert(std::is_same<decltype(std::declval<RustSlice<const uint32_t>>().as_c<CRustSliceu32>()),
+                           CRustSliceu32>::value,
+              "native slices must use their element descriptor");
+static_assert(std::is_same<decltype(std::declval<RustSlice<const uintptr_t>>().as_c<CRustSliceusize>()),
+                           CRustSliceusize>::value,
+              "usize slices must use their own descriptor even when uintptr_t aliases uint32_t");
+static_assert(std::is_same<decltype(std::declval<RustSlice<const FooArc, FooArcAccess>>()
+                                        .as_c<CRustSliceArcFooArc>()),
+                           CRustSliceArcFooArc>::value,
+              "custom slice access must use its descriptor");
+static_assert(std::is_constructible<RustSlice<const Foo>, CRustSliceForeignFoo>::value,
+              "foreign slices accept their matching descriptor");
+static_assert(!std::is_constructible<RustSlice<const Foo>, CRustSliceu32>::value,
+              "foreign slices reject another element descriptor");
+static_assert(!std::is_constructible<RustSlice<Foo>, CRustSliceForeignFoo>::value,
+              "mutable slices reject read-only descriptors");
+static_assert(!std::is_constructible<RustSlice<Foo>, Foo *, size_t>::value,
+              "C++ wrapper arrays are not Rust foreign-object slices");
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 static std::atomic<uint32_t> c_simple_cb_counter_without_args{ 0 };
@@ -416,18 +451,19 @@ TEST(TestWorkWithVec, smokeTest)
     {
         auto v = TestWorkWithVec::create_foo_vec(30);
         validate_create_foo_vec(30, v);
-        const CRustObjectSlice c_slice = v.as_slice();
+        const CRustSliceForeignFoo c_slice = v.as_slice().as_c<CRustSliceForeignFoo>();
         EXPECT_EQ(v.size(), c_slice.len);
         EXPECT_NE(nullptr, c_slice.data);
+        EXPECT_EQ(v.size(), Foo::count_slice(v.as_slice()));
         auto v1 = TestWorkWithVec::clone_foo_slice(v.as_slice());
         validate_create_foo_vec(30, v1);
     }
     {
-        RustForeignSliceConst<FooRef> empty_const;
+        RustSlice<const Foo> empty_const;
         auto v = TestWorkWithVec::clone_foo_slice(std::move(empty_const));
         EXPECT_TRUE(v.empty());
 
-        RustForeignSliceMut<FooRef> empty_mut;
+        RustSlice<Foo> empty_mut;
         TestWorkWithVec::sort_foo_slice(std::move(empty_mut));
     }
     {
@@ -1360,16 +1396,32 @@ TEST(SmartPtrCopy, smokeTest)
 
 TEST(WorkWithSlice, smokeTest)
 {
+    const auto zeros = WorkWithSlice::zero_sized_slice();
+    ASSERT_EQ(3u, zeros.size());
+    EXPECT_EQ(3, zeros.end() - zeros.begin());
+    for (const auto &element : zeros) {
+        EXPECT_EQ(19, element.value());
+    }
+
     for (const size_t size : { 0, 1, 17, 500 }) {
         WorkWithSlice obj(0, size);
         const auto sl = obj.slice();
         ASSERT_EQ(size, sl.size());
+        const auto expected_sum = size == 0 ? 0 : static_cast<int32_t>(size * (size - 1) / 2);
+        EXPECT_EQ(expected_sum, WorkWithSlice::sum_slice(obj.slice()));
+        EXPECT_EQ(static_cast<ptrdiff_t>(size), sl.end() - sl.begin());
         for (size_t i = 0; i < sl.size(); ++i) {
             std::stringstream fmt;
             fmt << "Arc<FooArc> " << i;
             ASSERT_EQ(fmt.str(), sl[i].s());
             ASSERT_EQ(int32_t(i), sl[i].val());
         }
+        size_t iter_count = 0;
+        for (const auto &elem : sl) {
+            EXPECT_EQ(static_cast<int32_t>(iter_count), elem.val());
+            ++iter_count;
+        }
+        EXPECT_EQ(size, iter_count);
 
         const auto v = obj.vec();
         ASSERT_EQ(size, v.size());
