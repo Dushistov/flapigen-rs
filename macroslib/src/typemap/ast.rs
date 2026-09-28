@@ -839,10 +839,7 @@ fn return_type_match(
     true
 }
 
-pub(in crate) fn replace_all_types_with(
-    in_ty: &Type,
-    subst_map: &TyParamsSubstMap,
-) -> Type {
+pub(crate) fn replace_all_types_with(in_ty: &Type, subst_map: &TyParamsSubstMap) -> Type {
     struct ReplaceTypes<'a, 'b> {
         subst_map: &'a TyParamsSubstMap<'b>,
     }
