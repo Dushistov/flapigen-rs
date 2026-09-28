@@ -1185,7 +1185,7 @@ public:"#,
     }}
     explicit operator SelfType() const noexcept {{ return self_; }}
     {class_name}<false> as_rref() const noexcept {{ return {class_name}<false>{{ self_ }}; }}
-    const {class_name}<true> &as_cref() const noexcept {{ return reinterpret_cast<const {class_name}<true> &>(*this); }}"#,            
+    const {class_name}<true> &as_cref() const noexcept {{ return reinterpret_cast<const {class_name}<true> &>(*this); }}"#,
                 class_name = tmp_class_name,
             )
         } else {
@@ -1314,7 +1314,6 @@ fn generate_copy_stuff(
                     class.span(),
                     format!(
                         "class marked as {SMART_PTR_COPY_TRAIT} should have at least one constructor"
-                        
                     ),
                 )
             })?;
