@@ -1,4 +1,5 @@
-r##"impl<'a> SwigForeignClass for Rc<RefCell<Foo<'a>>> {
+@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jcla","before":"_env: *mut JNIEnv,\n    _: jclass,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n) {\n}\n","file":"test.rs","kind":"between"}
+impl<'a> SwigForeignClass for Rc<RefCell<Foo<'a>>> {
     type PointedType = RefCell<Foo<'a>>;
     fn jni_class() -> jclass {
         swig_jni_find_class!(FOREIGN_CLASS_FOO, "org/example/Foo")
@@ -24,4 +25,6 @@ r##"impl<'a> SwigForeignClass for Rc<RefCell<Foo<'a>>> {
         let x: *mut RefCell<Foo> = unsafe { jlong_to_pointer::<RefCell<Foo>>(x).as_mut().unwrap() };
         ::std::ptr::NonNull::<Self::PointedType>::new(x).unwrap()
     }
-}"##;
+}
+
+@@end

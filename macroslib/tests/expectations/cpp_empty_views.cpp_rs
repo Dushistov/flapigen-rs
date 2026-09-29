@@ -1,4 +1,5 @@
-r#"#[unsafe(no_mangle)]
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(n","before":"len: usize,\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn EmptyViews_take_slice(value: CRustSliceu32) -> usize {
     let mut value: &[u32] = unsafe {
         (CRustSlice {
@@ -9,9 +10,12 @@ pub extern "C" fn EmptyViews_take_slice(value: CRustSliceu32) -> usize {
     };
     let mut ret: usize = take_slice(value);
     ret
-}"#;
+}
 
-r#"#[unsafe(no_mangle)]
+@@end
+
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(n","before":"    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn EmptyViews_take_mut_slice(value: CRustSliceMutu32) -> usize {
     let mut value: &mut [u32] = unsafe {
         (CRustSliceMut {
@@ -22,8 +26,12 @@ pub extern "C" fn EmptyViews_take_mut_slice(value: CRustSliceMutu32) -> usize {
     };
     let mut ret: usize = take_mut_slice(value);
     ret
-}"#;
-r#"#[unsafe(no_mangle)]
+}
+
+@@end
+
+@@expect {"before":"  .as_slice_mut::<u32>()\n    };\n    let mut ret: usize = take_mut_slice(value);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn EmptyViews_take_str(value: CRustStrView) -> CRustString {
     let mut value: &str = if value.len == 0 {
         ""
@@ -36,9 +44,12 @@ pub extern "C" fn EmptyViews_take_str(value: CRustStrView) -> CRustString {
     let mut ret: String = take_str(value);
     let mut ret: CRustString = CRustString::from_string(ret);
     ret
-}"#;
+}
 
-r#"#[unsafe(no_mangle)]
+@@end
+
+@@expect {"after":"#[allow(non_snake_case)]","before":"::std::mem::forget(s);\n    ret\n}\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn crust_string_push_str(x: CRustString, s: CRustStrView) -> CRustString {
     let mut x = unsafe { String::from_raw_parts(x.data.cast(), x.len, x.capacity) };
     let addon: &str = if s.len == 0 {
@@ -51,15 +62,22 @@ pub extern "C" fn crust_string_push_str(x: CRustString, s: CRustStrView) -> CRus
     };
     x.push_str(addon);
     CRustString::from_string(x)
-}"#;
+}
 
-r#"impl CRustVecAccess {
+@@end
+
+@@expect {"after":"#[allow(dead_code)]\n#[repr(C)]\n#[derive(Copy, Clone)]\npub struct CRustForeignVec","before":"data: *mut ::std::os::raw::c_void,\n    len: usize,\n    capacity: usize,\n}\n#[allow(dead_code)]\n","file":"test.rs","kind":"between"}
+impl CRustVecAccess {
     pub fn from_vec<T>(mut v: Vec<T>) -> Self {
         let data = v.as_mut_ptr() as *mut ::std::os::raw::c_void;
         let len = v.len();
         let capacity = v.capacity();
         ::std::mem::forget(v);
-        Self { data, len, capacity }
+        Self {
+            data,
+            len,
+            capacity,
+        }
     }
     pub fn to_slice<'a, T>(cs: Self) -> &'a [T] {
         if cs.len == 0 {
@@ -71,4 +89,6 @@ r#"impl CRustVecAccess {
     pub fn to_vec<T>(cs: Self) -> Vec<T> {
         unsafe { Vec::from_raw_parts(cs.data.cast(), cs.len, cs.capacity) }
     }
-}"#;
+}
+
+@@end

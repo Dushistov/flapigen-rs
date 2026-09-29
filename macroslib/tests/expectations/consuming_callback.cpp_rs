@@ -1,4 +1,5 @@
-r#"impl AsyncCallbacks for C_Completion {
+@@expect {"after":"impl Drop fo","before":"unsafe impl Send for C_Completion {}\n","file":"test.rs","kind":"between"}
+impl AsyncCallbacks for C_Completion {
     #[allow(unused_mut)]
     fn is_cancelled(&self) -> bool {
         let ret: ::std::os::raw::c_char = (self.isCancelled)(self.opaque);
@@ -11,15 +12,21 @@ r#"impl AsyncCallbacks for C_Completion {
         ::std::mem::forget(self);
         ret
     }
-}"#;
+}
 
-r#"impl Drop for C_Completion {
+@@end
+
+@@expect {"before":"ret\n    }\n}\n","file":"test.rs","kind":"between"}
+impl Drop for C_Completion {
     fn drop(&mut self) {
         (self.C_Completion_deref)(self.opaque);
     }
-}"#;
+}
 
-r#"#[repr(C)]
+@@end
+
+@@expect {"after":"#[doc = \" It totally depends on С++ implementation\"]\n#[doc = \" let's assume it s","before":"- ((&user_s as *const CRustForeignVec) as usize);\n    assert_eq!(offset_our, offset_user);\n}\n","file":"test.rs","kind":"between"}
+#[repr(C)]
 #[derive(Clone)]
 #[allow(non_snake_case)]
 pub struct C_Completion {
@@ -27,6 +34,6 @@ pub struct C_Completion {
     C_Completion_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
     isCancelled: extern "C" fn(_: *const ::std::os::raw::c_void) -> ::std::os::raw::c_char,
     onResultReady: extern "C" fn(a0: i32, _: *const ::std::os::raw::c_void) -> (),
-}"#;
+}
 
-
+@@end

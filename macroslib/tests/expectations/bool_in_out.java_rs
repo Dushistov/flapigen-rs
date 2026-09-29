@@ -1,4 +1,5 @@
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"#[allow(non_snake_case, ","before":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Foo_do_1f1(
     env: *mut JNIEnv,
     _: jclass,
@@ -10,26 +11,35 @@ pub extern "C" fn Java_org_example_Foo_do_1f1(
     let mut ret: bool = f1(this, a0);
     let mut ret: jboolean = if ret { 1 as jboolean } else { 0 as jboolean };
     ret
-}"##;
+}
 
-r##"#[unsafe(no_mangle)]
+@@end
+
+@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(n","before":"    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Foo_f2(env: *mut JNIEnv, _: jclass, a0: jboolean) -> jboolean {
     let mut a0: bool = a0 != 0;
     let mut ret: bool = f2(a0);
     let mut ret: jboolean = if ret { 1 as jboolean } else { 0 as jboolean };
     ret
-}"##;
+}
 
+@@end
 
-r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Java_org_example_Foo_init ( env : * mut JNIEnv , _ : jclass , a0 : jboolean , ) -> jlong {
- let mut a0 : bool = a0 != 0;
- let this : Foo = Foo :: new ( a0 ) ;
- let this : Box < Foo > = Box :: new ( this ) ;
- let this : * mut Foo = Box :: into_raw ( this ) ;
- this as jlong
-}"##;
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(n","before":"::std::ptr::NonNull::<Self::PointedType>::new(x).unwrap()\n    }\n}\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
+pub extern "C" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jclass, a0: jboolean) -> jlong {
+    let mut a0: bool = a0 != 0;
+    let this: Foo = Foo::new(a0);
+    let this: Box<Foo> = Box::new(this);
+    let this: *mut Foo = Box::into_raw(this);
+    this as jlong
+}
 
-r##"impl SomeTrait for JavaCallback {
+@@end
+
+@@expect {"after":"static mut J","before":"drop(this);\n}\n","file":"test.rs","kind":"between"}
+impl SomeTrait for JavaCallback {
     #[allow(unused_mut)]
     fn on_state_changed1(&self, a0: i32, a1: bool) {
         swig_assert_eq_size!(::std::os::raw::c_uint, u32);
@@ -57,4 +67,6 @@ r##"impl SomeTrait for JavaCallback {
             };
         }
     }
-}"##;
+}
+
+@@end

@@ -1,4 +1,5 @@
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Moo_do_1delete(env: *mut JNIEnv, ","before":"jni_throw_exception(env, &msg);\n            return <jlong>::jni_invalid_value();\n        }\n    };\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Moo_do_1getBoo(
     env: *mut JNIEnv,
     _: jclass,
@@ -8,4 +9,5 @@ pub extern "C" fn Java_org_example_Moo_do_1getBoo(
     let mut ret: Rc<RefCell<Boo>> = TestPathAndResult::get_boo(this);
     let ret: jlong = <Rc<RefCell<Boo>>>::box_object(ret);
     ret
-}"##;
+}
+@@end

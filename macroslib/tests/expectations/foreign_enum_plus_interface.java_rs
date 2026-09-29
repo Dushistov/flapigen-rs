@@ -1,4 +1,5 @@
-r##"impl ControlStateChange for JavaCallback {
+@@expect {"after":"static mut J","before":"ret\n    }\n}\n","file":"test.rs","kind":"between"}
+impl ControlStateChange for JavaCallback {
     #[allow(unused_mut)]
     fn on_state_changed(&self, a0: ControlItem, a1: bool) {
         swig_assert_eq_size!(::std::os::raw::c_uint, u32);
@@ -26,4 +27,6 @@ r##"impl ControlStateChange for JavaCallback {
             };
         }
     }
-}"##;
+}
+
+@@end

@@ -1,28 +1,75 @@
-r#"pub extern "C" fn Mix_foreign_first(this: *mut Mix) -> CRustSliceForeignFoo {"#;
-r#"pub extern "C" fn Mix_foreign_other(this: *mut Mix) -> CRustSliceForeignBar {"#;
-r#"pub extern "C" fn Mix_native_second(this: *mut Mix) -> CRustSliceu32 {"#;
-r#"pub extern "C" fn Mix_native_other(this: *mut Mix) -> CRustSliceu64 {"#;
-r#"values: CRustSliceMutForeignFoo"#;
-r#"values: CRustSliceMutForeignBar"#;
-r#"values: CRustSliceMutu32"#;
-r#"values: CRustSliceMutu64"#;
-r#".as_slice_mut::<Foo>()"#;
-r#".as_slice_mut::<Bar>()"#;
-r#".as_slice_mut::<u32>()"#;
-r#".as_slice_mut::<u64>()"#;
-r#"pub struct CRustSliceForeignFoo {
+@@expect {"after":"\n    let this: &Mix = unsafe { this.as_mut().unwrap() };\n    let mut ret: &[Foo] = Mix::foreign_first(this);\n    let mut ret: CRustSliceForeignFoo = CRustSliceF","before":"let mut ret: *const ::std::os::raw::c_void = Mix::raw_ptr(this);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\n","file":"test.rs","kind":"between"}
+pub extern "C" fn Mix_foreign_first(this: *mut Mix) -> CRustSliceForeignFoo {
+@@end
+
+@@expect {"after":"\n    let this: &Mix = unsafe { this.as_mut().unwrap() };\n    let mut ret: &[Bar] = Mix::foreign_other(this);\n    let mut ret: CRustSliceForeignBar = CRustSliceF","before":"        data: ret.as_ptr(),\n        len: ret.len(),\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\n","file":"test.rs","kind":"between"}
+pub extern "C" fn Mix_foreign_other(this: *mut Mix) -> CRustSliceForeignBar {
+@@end
+
+@@expect {"after":"\n    let this: &Mix = unsafe { this.as_mut().unwrap() };\n    let mut ret: &[u32] = Mix::native_second(this);\n    let mut ret: CRustSliceu32 = CRustSliceu32 {\n        data: ret.as_ptr(),\n        len: ret.len(),\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npu","before":"let this: &Mix = unsafe { this.as_mut().unwrap() };\n    let mut ret: &[Bar] = Mix::foreign_other(this);\n    let mut ret: CRustSliceForeignBar = CRustSliceForeignBar {\n        data: ret.as_ptr(),\n        len: ret.len(),\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\n","file":"test.rs","kind":"between"}
+pub extern "C" fn Mix_native_second(this: *mut Mix) -> CRustSliceu32 {
+@@end
+
+@@expect {"after":"\n    let this: &Mix = unsafe { this.as_mut().unwrap() };\n    let mut ret: &[u64] = Mix::native_other(this);\n    let mut ret: CRustSliceu64 = CRustSliceu64 {\n        data: ret.as_ptr(),\n        len: ret.len(),\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub","before":"pub extern \"C\" fn Mix_native_second(this: *mut Mix) -> CRustSliceu32 {\n    let this: &Mix = unsafe { this.as_mut().unwrap() };\n    let mut ret: &[u32] = Mix::native_second(this);\n    let mut ret: CRustSliceu32 = CRustSliceu32 {\n        data: ret.as_ptr(),\n        len: ret.len(),\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\n","file":"test.rs","kind":"between"}
+pub extern "C" fn Mix_native_other(this: *mut Mix) -> CRustSliceu64 {
+@@end
+
+@@expect {"after":") -> () {\n    let mut va","before":"#[unsafe(no_mangle)]\npub extern \"C\" fn Mix_mut_foreign(this: *mut Mix, ","file":"test.rs","kind":"between"}
+values: CRustSliceMutForeignFoo
+@@end
+
+@@expect {"after":") -> () {\n    let mut va","before":"#[unsafe(no_mangle)]\npub extern \"C\" fn Mix_mut_foreign_other(this: *mut Mix, ","file":"test.rs","kind":"between"}
+values: CRustSliceMutForeignBar
+@@end
+
+@@expect {"after":") -> () {\n    let mut va","before":"#[unsafe(no_mangle)]\npub extern \"C\" fn Mix_mut_native(this: *mut Mix, ","file":"test.rs","kind":"between"}
+values: CRustSliceMutu32
+@@end
+
+@@expect {"after":") -> () {\n    let mut va","before":"#[unsafe(no_mangle)]\npub extern \"C\" fn Mix_mut_native_other(this: *mut Mix, ","file":"test.rs","kind":"between"}
+values: CRustSliceMutu64
+@@end
+
+@@expect {"after":"\n    };\n    let this: &Mix = unsafe { this.as_mut().unwrap() };\n    let mut ret: () = Mix::mut_foreign(this, values);\n    ret\n}\n#[allow(non_snake_case, unused_v","before":"#[unsafe(no_mangle)]\npub extern \"C\" fn Mix_mut_foreign(this: *mut Mix, values: CRustSliceMutForeignFoo) -> () {\n    let mut values: &mut [Foo] = unsafe {\n        (CRustSliceMut {\n            data: values.data.cast(),\n            len: values.len,\n        })\n        ","file":"test.rs","kind":"between"}
+.as_slice_mut::<Foo>()
+@@end
+
+@@expect {"after":"\n    };\n    let this: &Mix = unsafe { this.as_mut().unwrap() };\n    let mut ret: () = Mix::mut_foreign_other(this, values);\n    ret\n}\n#[allow(non_snake_case, un","before":"#[unsafe(no_mangle)]\npub extern \"C\" fn Mix_mut_foreign_other(this: *mut Mix, values: CRustSliceMutForeignBar) -> () {\n    let mut values: &mut [Bar] = unsafe {\n        (CRustSliceMut {\n            data: values.data.cast(),\n            len: values.len,\n        })\n        ","file":"test.rs","kind":"between"}
+.as_slice_mut::<Bar>()
+@@end
+
+@@expect {"after":"\n    };\n    let this: &Mix = unsafe { this.as_mut().unwrap() };\n    let mut ret: () = Mix::mut_native(this, values);\n    ret\n}\n#[allow(non_snake_case, unused_va","before":"#[unsafe(no_mangle)]\npub extern \"C\" fn Mix_mut_native(this: *mut Mix, values: CRustSliceMutu32) -> () {\n    let mut values: &mut [u32] = unsafe {\n        (CRustSliceMut {\n            data: values.data.cast(),\n            len: values.len,\n        })\n        ","file":"test.rs","kind":"between"}
+.as_slice_mut::<u32>()
+@@end
+
+@@expect {"after":"\n    };\n    let this: &Mix = unsafe { this.as_mut().unwrap() };\n    let mut ret: () = Mix::mut_native_other(this, values);\n    ret\n}\n#[allow(unused_variables, u","before":"#[unsafe(no_mangle)]\npub extern \"C\" fn Mix_mut_native_other(this: *mut Mix, values: CRustSliceMutu64) -> () {\n    let mut values: &mut [u64] = unsafe {\n        (CRustSliceMut {\n            data: values.data.cast(),\n            len: values.len,\n        })\n        ","file":"test.rs","kind":"between"}
+.as_slice_mut::<u64>()
+@@end
+
+@@expect {"after":"\n#[repr(C)]\n#[derive(Clone, Copy)]\npub s","before":"drop(this);\n}\n#[repr(C)]\n#[derive(Clone, Copy)]\n","file":"test.rs","kind":"between"}
+pub struct CRustSliceForeignFoo {
     data: *const Foo,
     len: usize,
-}"#;
-r#"pub struct CRustSliceMutForeignBar {
+}
+@@end
+
+@@expect {"after":"\n#[repr(C)]\n#[derive(Clone, Copy)]\npub struct CRustSliceMutu32 {\n    data: *mut ","before":"pub struct CRustSliceMutForeignFoo {\n    data: *mut Foo,\n    len: usize,\n}\n#[repr(C)]\n#[derive(Clone, Copy)]\n","file":"test.rs","kind":"between"}
+pub struct CRustSliceMutForeignBar {
     data: *mut Bar,
     len: usize,
-}"#;
-r#"pub struct CRustSliceu32 {
+}
+@@end
+
+@@expect {"after":"\n#[repr(C)]\n#[derive(Clone, Copy)]\npub struct CRustSliceu64 {\n    data: *const u","before":"pub struct CRustSliceForeignBar {\n    data: *const Bar,\n    len: usize,\n}\n#[repr(C)]\n#[derive(Clone, Copy)]\n","file":"test.rs","kind":"between"}
+pub struct CRustSliceu32 {
     data: *const u32,
     len: usize,
-}"#;
-r#"pub struct CRustSliceMutu64 {
+}
+@@end
+
+@@expect {"after":"\nimpl SwigForeignClass for Mix {\n    fn c_class_name() -> *const ::std::os::raw:","before":"pub struct CRustSliceMutu32 {\n    data: *mut u32,\n    len: usize,\n}\n#[repr(C)]\n#[derive(Clone, Copy)]\n","file":"test.rs","kind":"between"}
+pub struct CRustSliceMutu64 {
     data: *mut u64,
     len: usize,
-}"#;
+}
+@@end

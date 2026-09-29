@@ -1,4 +1,5 @@
-r#"/**
+@@expect {"after":" {\n        m","before":"import android.support.annotation.NonNull;\n","file":"Foo.java","kind":"between"}
+/**
  * Class comment description for Foo.
  */
 public final class Foo {
@@ -12,4 +13,5 @@ public final class Foo {
      * @param id - some number
      * @param desc - more information
      */
-    public Foo(int id, @NonNull String desc)"#;
+    public Foo(int id, @NonNull String desc)
+@@end

@@ -1,4 +1,5 @@
-r#"
+@@expect {"before":"    uintptr_t capacity;\n};\n\n#ifdef __cplusplus\n} // extern \"C\" {\n#endif\n","file":"rust_vec_u8.h","kind":"between"}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,5 +18,4 @@ using RustVecu8 = RustVec<CRustVecu8, CRustVecu8_free>;
 
 #endif
 
->>> end of file: "rust_vec_u8.h" <<<
-"#;
+@@end

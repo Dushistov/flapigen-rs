@@ -1,4 +1,5 @@
-r#"void f1(const Foo & a0) const noexcept;
+@@expect {"after":"\n\nprivate:\n ","before":"            std::abort();\n        }\n    }\n\n    ","file":"TestPassObjectsAsParams.hpp","kind":"between"}
+void f1(const Foo & a0) const noexcept;
 
     void f2(Foo a0) const noexcept;
 
@@ -6,9 +7,11 @@ r#"void f1(const Foo & a0) const noexcept;
 
     void f4(const Foo & a0) const noexcept;
 
-    void f5(Foo & a0) const noexcept;"#;
+    void f5(Foo & a0) const noexcept;
+@@end
 
-r#"template<bool OWN_DATA>
+@@expect {"after":"\n\n} // names","before":"constexpr const uintptr_t &TestPassObjectsAsParamsWrapper<OWN_DATA>::rust_elem_size;\n\n\n    ","file":"TestPassObjectsAsParams.hpp","kind":"between"}
+template<bool OWN_DATA>
     inline void TestPassObjectsAsParamsWrapper<OWN_DATA>::f1(const Foo & a0) const noexcept
     {
 
@@ -41,9 +44,11 @@ r#"template<bool OWN_DATA>
     {
 
         TestPassObjectsAsParams_f5(this->self_, static_cast<FooOpaque *>(a0));
-    }"#;
+    }
+@@end
 
-r#"void TestPassObjectsAsParams_f1(const TestPassObjectsAsParamsOpaque * const self, const FooOpaque * a0);
+@@expect {"after":"\n\n    void TestPassObjectsAsParams_delet","before":"TestPassObjectsAsParamsOpaque *TestPassObjectsAsParams_default();\n\n    ","file":"c_TestPassObjectsAsParams.h","kind":"between"}
+void TestPassObjectsAsParams_f1(const TestPassObjectsAsParamsOpaque * const self, const FooOpaque * a0);
 
     void TestPassObjectsAsParams_f2(const TestPassObjectsAsParamsOpaque * const self, FooOpaque * a0);
 
@@ -51,4 +56,5 @@ r#"void TestPassObjectsAsParams_f1(const TestPassObjectsAsParamsOpaque * const s
 
     void TestPassObjectsAsParams_f4(const TestPassObjectsAsParamsOpaque * const self, const FooOpaque * a0);
 
-    void TestPassObjectsAsParams_f5(const TestPassObjectsAsParamsOpaque * const self, FooOpaque * a0);"#;
+    void TestPassObjectsAsParams_f5(const TestPassObjectsAsParamsOpaque * const self, FooOpaque * a0);
+@@end

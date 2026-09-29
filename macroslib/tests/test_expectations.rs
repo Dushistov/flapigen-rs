@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     ffi::OsString,
     fs, panic,
     path::{Path, PathBuf},
@@ -6,8 +7,9 @@ use std::{
 
 use flapigen::{rustfmt_cnt, CppConfig, Generator, JavaConfig, LanguageConfig, RustEdition};
 use log::warn;
-use syn::Token;
 use tempfile::tempdir;
+
+mod expectation_snapshot;
 
 include!(concat!(env!("OUT_DIR"), "/test_expectations.rs"));
 
@@ -400,8 +402,8 @@ enum MyEnum {
         code.splice(new_line_pos..new_line_pos, addon.iter().copied());
 
         let needle = format!("class {}Wrapper {{", class_name);
-        let class_pos = find_subsequence(&code, needle.as_bytes()).unwrap();
-        let end_pos = class_pos + needle.as_bytes().len();
+        let class_pos = find_subsequence(code, needle.as_bytes()).unwrap();
+        let end_pos = class_pos + needle.len();
         let new_code = format!(
             r#"class {}Wrapper : public QObject {{
     Q_OBJECT"#,
@@ -421,13 +423,13 @@ enum MyEnum {
             flapigen::MethodVariant::Method(_) => format!("void {}(", ctx.method_name),
             flapigen::MethodVariant::StaticMethod => format!("static void {}(", ctx.method_name),
         };
-        let pos = find_subsequence(&code, needle.as_bytes()).unwrap();
+        let pos = find_subsequence(code, needle.as_bytes()).unwrap();
         code.splice(pos..pos, b"Q_INVOKABLE ".iter().copied());
     })
     .register_enum_attribute_callback("EnumClass", |code, ctx| {
         println!("EnumClass callback, ctx {}", ctx);
         let needle = format!("enum {}", ctx);
-        let pos = find_subsequence(&code, needle.as_bytes()).unwrap();
+        let pos = find_subsequence(code, needle.as_bytes()).unwrap();
         code.splice((pos + 5)..(pos + 5), b"class ".iter().copied());
     });
     let rust_code_path = tmp_dir.path().join("test.rs");
@@ -474,66 +476,10 @@ enum ForeignLang {
     Cpp,
 }
 
-#[derive(Clone)]
 struct CodePair {
     rust_code: String,
     foreign_code: String,
-}
-
-struct PrintTestInfo {
-    code_pair: CodePair,
-    test_name: String,
-    lang: ForeignLang,
-    print_on_drop: bool,
-    foreign_code_search_pattern: String,
-    rust_pat: String,
-}
-
-impl PrintTestInfo {
-    fn new(code_pair: CodePair, test_name: String, lang: ForeignLang) -> Self {
-        PrintTestInfo {
-            code_pair,
-            test_name,
-            lang,
-            print_on_drop: true,
-            foreign_code_search_pattern: String::new(),
-            rust_pat: String::new(),
-        }
-    }
-    fn success(&mut self) {
-        self.print_on_drop = false;
-    }
-}
-
-impl Drop for PrintTestInfo {
-    fn drop(&mut self) {
-        if self.print_on_drop {
-            if !self.foreign_code_search_pattern.is_empty() {
-                println!(
-                    "{} / {:?}: search foreign pat '{}'",
-                    self.test_name, self.lang, self.foreign_code_search_pattern
-                );
-            }
-
-            if !self.rust_pat.is_empty() {
-                println!(
-                    "{} / {:?}: search rust pat '{}'",
-                    self.test_name, self.lang, self.rust_pat,
-                );
-            }
-
-            println!(
-                "{} / {:?}: flapigen generated such foreign_code: {}",
-                self.test_name, self.lang, self.code_pair.foreign_code
-            );
-            println!(
-                "{} / {:?}: flapigen generated such rust_code: {}",
-                self.test_name,
-                self.lang,
-                rustfmt_without_errors(self.code_pair.rust_code.clone()),
-            );
-        }
-    }
+    foreign_files: BTreeMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -555,32 +501,39 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<syn::Error> for Error {
-    fn from(x: syn::Error) -> Self {
-        Error {
-            msg: format!("syn: {}", x),
-        }
-    }
-}
-
 impl std::error::Error for Error {}
 
 fn collect_code_in_dir(dir_with_code: &Path, exts: &[&str]) -> Result<String, Error> {
+    let files = collect_files_in_dir(dir_with_code, exts)?;
     let mut code = String::new();
+    for (name, content) in files {
+        code.push_str(format!("<<< generated file: {name:?} >>>\n").as_str());
+        code.push_str(&content);
+        code.push('\n');
+        code.push_str(format!(">>> end of file: {name:?} <<<\n").as_str());
+    }
+    Ok(code)
+}
+
+fn collect_files_in_dir(
+    dir_with_code: &Path,
+    exts: &[&str],
+) -> Result<BTreeMap<String, String>, Error> {
+    let mut files = BTreeMap::new();
     for path in fs::read_dir(dir_with_code)? {
         let path = path?;
         if path.file_type()?.is_file()
             && exts
                 .iter()
-                .any(|ext| path.path().to_str().map_or(false, |x| x.ends_with(ext)))
+                .any(|ext| path.path().to_str().is_some_and(|x| x.ends_with(ext)))
         {
-            code.push_str(format!("<<< generated file: {:?} >>>\n", path.file_name()).as_str());
-            code.push_str(&fs::read_to_string(path.path())?);
-            code.push('\n');
-            code.push_str(format!(">>> end of file: {:?} <<<\n", path.file_name()).as_str());
+            files.insert(
+                path.file_name().to_string_lossy().into_owned(),
+                fs::read_to_string(path.path())?.replace("\r\n", "\n"),
+            );
         }
     }
-    Ok(code)
+    Ok(files)
 }
 
 enum Source<'a> {
@@ -621,32 +574,21 @@ fn parse_code(test_name: &str, rust_src: Source, lang: ForeignLang) -> Result<Co
     }
 
     let rust_code = fs::read_to_string(rust_code_path)?;
-    let foreign_code = collect_code_in_dir(tmp_dir.path(), ext_list)?;
+    let foreign_files = collect_files_in_dir(tmp_dir.path(), ext_list)?;
+    let mut foreign_code = String::new();
+    for (name, content) in &foreign_files {
+        foreign_code.push_str(&format!("<<< generated file: {name:?} >>>\n"));
+        foreign_code.push_str(content);
+        foreign_code.push('\n');
+        foreign_code.push_str(&format!(">>> end of file: {name:?} <<<\n"));
+    }
     tmp_dir.close()?;
 
     Ok(CodePair {
         rust_code,
         foreign_code,
+        foreign_files,
     })
-}
-
-struct ExpectationPatterns(Vec<String>);
-
-impl syn::parse::Parse for ExpectationPatterns {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let lit_vec: syn::punctuated::Punctuated<syn::LitStr, Token![;]> =
-            syn::punctuated::Punctuated::parse_terminated(input)?;
-        Ok(ExpectationPatterns(
-            lit_vec.into_iter().map(|v| v.value()).collect(),
-        ))
-    }
-}
-
-fn parse_code_expectation(exp_path: &Path) -> Result<Vec<String>, Error> {
-    let patterns_str = fs::read_to_string(exp_path)?;
-    let pats: ExpectationPatterns = syn::parse_str(&patterns_str)?;
-
-    Ok(pats.0)
 }
 
 fn new_path(main_path: &Path, ext: &str) -> PathBuf {
@@ -662,38 +604,26 @@ fn check_expectation(test_name: &str, test_case: &Path, lang: ForeignLang) -> bo
         ForeignLang::Java => (".java", ".java_rs"),
     };
     let main_expectation = new_path(test_case, main_ext);
-    if main_expectation.exists() {
-        let code_pair =
-            parse_code(&test_name, Source::Path(&test_case), lang).expect("parse_code failed");
-        let pats = parse_code_expectation(&main_expectation).expect("parsing of patterns failed");
-
-        let mut print_test_info = PrintTestInfo::new(code_pair.clone(), test_name.into(), lang);
-        for pat in pats {
-            print_test_info.foreign_code_search_pattern = pat.clone();
-            assert!(code_pair.foreign_code.contains(&pat));
-        }
-        print_test_info.foreign_code_search_pattern.clear();
-
-        let rust_cpp_expectation = new_path(&test_case, rust_ext);
-        if rust_cpp_expectation.exists() {
-            let pats =
-                parse_code_expectation(&rust_cpp_expectation).expect("parsing of patterns failed");
-            let pats: Vec<String> = pats
-                .into_iter()
-                .map(|v| rustfmt_without_errors(v))
-                .collect();
-            let rust_code = rustfmt_without_errors(code_pair.rust_code);
-            for pat in pats {
-                print_test_info.rust_pat = pat.clone();
-                assert!(rust_code.contains(&pat));
-            }
-            print_test_info.rust_pat.clear();
-        }
-        print_test_info.success();
-        true
-    } else {
-        false
+    if !main_expectation.exists() {
+        return false;
     }
+
+    let code_pair =
+        parse_code(test_name, Source::Path(test_case), lang).expect("parse_code failed");
+    expectation_snapshot::check(&main_expectation, &code_pair.foreign_files)
+        .unwrap_or_else(|err| panic!("{err}"));
+
+    let rust_expectation = new_path(test_case, rust_ext);
+    if rust_expectation.exists() {
+        let mut rust_files = BTreeMap::new();
+        rust_files.insert(
+            "test.rs".to_owned(),
+            rustfmt_without_errors(code_pair.rust_code),
+        );
+        expectation_snapshot::check(&rust_expectation, &rust_files)
+            .unwrap_or_else(|err| panic!("{err}"));
+    }
+    true
 }
 
 fn rustfmt_without_errors(rust_code: String) -> String {

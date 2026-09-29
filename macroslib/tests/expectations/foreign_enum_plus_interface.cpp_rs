@@ -1,2 +1,4 @@
-r#"onSessionUpdate:
-        extern "C" fn(a0: u32, a1: ::std::os::raw::c_char, _: *const ::std::os::raw::c_void) -> (),"#;
+@@expect {"after":"\n}\nimpl<T: S","before":"C_ControlStateObserver_deref: extern \"C\" fn(_: *const ::std::os::raw::c_void),\n    ","file":"test.rs","kind":"between"}
+onSessionUpdate:
+        extern "C" fn(a0: u32, a1: ::std::os::raw::c_char, _: *const ::std::os::raw::c_void) -> (),
+@@end

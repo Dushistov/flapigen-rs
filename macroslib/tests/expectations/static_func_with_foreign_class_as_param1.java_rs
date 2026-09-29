@@ -1,6 +1,15 @@
-r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Java_org_example_Foo_do_1static_1foo ( env : * mut JNIEnv , _ : jclass , a0 : jlong , ) -> ( ) {
- let a0 : & RefCell < Boo > = unsafe { jlong_to_pointer ::< RefCell < Boo >> ( a0 ) . as_mut ( ) . unwrap ( ) } ;
- let mut a0 : Ref < Boo > = a0.borrow();
- let mut a0 : & Boo = &a0;
- let mut ret : ( ) = static_foo ( a0 ) ;
- ret }"##;
+@@expect {"after":"static mut JAVA_UTIL_OPT","before":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
+pub extern "C" fn Java_org_example_Foo_do_1static_1foo(
+    env: *mut JNIEnv,
+    _: jclass,
+    a0: jlong,
+) -> () {
+    let a0: &RefCell<Boo> = unsafe { jlong_to_pointer::<RefCell<Boo>>(a0).as_mut().unwrap() };
+    let mut a0: Ref<Boo> = a0.borrow();
+    let mut a0: &Boo = &a0;
+    let mut ret: () = static_foo(a0);
+    ret
+}
+
+@@end

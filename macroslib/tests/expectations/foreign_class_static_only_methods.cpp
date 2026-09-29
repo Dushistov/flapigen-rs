@@ -1,4 +1,5 @@
-r##"namespace org_examples {
+@@expect {"after":" // namespac","before":"#include \"c_Utils.h\"\n\n","file":"Utils.hpp","kind":"between"}
+namespace org_examples {
 
 template<bool>
 class UtilsWrapper;
@@ -26,4 +27,5 @@ public:
         return ret;
     }
 
-}"##;
+}
+@@end

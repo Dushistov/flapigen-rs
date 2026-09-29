@@ -1,4 +1,5 @@
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Foo_do_1f8(\n    env: *mut JNIEnv,","before":"let this: &Foo = unsafe { jlong_to_pointer::<Foo>(this).as_mut().unwrap() };\n    let mut ret: () = Foo::f6(this, boo);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Foo_do_1f7(
     env: *mut JNIEnv,
     _: jclass,
@@ -15,4 +16,5 @@ pub extern "C" fn Java_org_example_Foo_do_1f7(
     let this: &Foo = unsafe { jlong_to_pointer::<Foo>(this).as_mut().unwrap() };
     let mut ret: () = Foo::f7(this, a0);
     ret
-}"##;
+}
+@@end

@@ -1,20 +1,25 @@
-r#"class Completioni32 {
+@@expect {"after":"\n\n\n    stati","before":"namespace org_examples {\n\n","file":"Completioni32.hpp","kind":"between"}
+class Completioni32 {
 public:
     virtual ~Completioni32() noexcept {}
 
     virtual bool isCancelled() const noexcept = 0;
 
-    virtual void onResultReady(int32_t result) noexcept = 0;"#;
+    virtual void onResultReady(int32_t result) noexcept = 0;
+@@end
 
-r#"class CompletionCRustString {
+@@expect {"after":"\n\n\n    stati","before":"namespace org_examples {\n\n","file":"CompletionCRustString.hpp","kind":"between"}
+class CompletionCRustString {
 public:
     virtual ~CompletionCRustString() noexcept {}
 
     virtual bool isCancelled() const noexcept = 0;
 
-    virtual void onResultReady(RustString result) noexcept = 0;"#;
+    virtual void onResultReady(RustString result) noexcept = 0;
+@@end
 
-r#"struct C_Completioni32 {
+@@expect {"after":"\n","before":"#pragma once\n\n","file":"c_Completioni32.h","greedy_match":true,"kind":"between"}
+struct C_Completioni32 {
     void *opaque;
     //! call by Rust side when callback not need anymore
     void (*C_Completioni32_deref)(void *opaque);
@@ -23,9 +28,11 @@ r#"struct C_Completioni32 {
 
     void (*onResultReady)(int32_t result, void *opaque);
 
-};"#;
+};
+@@end
 
-r#"struct C_CompletionCRustString {
+@@expect {"after":"\n","before":"#pragma once\n\n","file":"c_CompletionCRustString.h","greedy_match":true,"kind":"between"}
+struct C_CompletionCRustString {
     void *opaque;
     //! call by Rust side when callback not need anymore
     void (*C_CompletionCRustString_deref)(void *opaque);
@@ -34,4 +41,5 @@ r#"struct C_CompletionCRustString {
 
     void (*onResultReady)(struct CRustString result, void *opaque);
 
-};"#;
+};
+@@end

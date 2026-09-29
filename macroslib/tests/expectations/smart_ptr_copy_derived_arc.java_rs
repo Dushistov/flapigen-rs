@@ -1,4 +1,5 @@
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_NavigationService_do_1delete(\n   ","before":"let this: Arc<Mutex<NavigationService>> = init();\n    let this: *const Mutex<NavigationService> = Arc::into_raw(this);\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_NavigationService_do_1subscribeOnUpdates(
     env: *mut JNIEnv,
     _: jclass,
@@ -24,9 +25,11 @@ pub extern "C" fn Java_org_example_NavigationService_do_1subscribeOnUpdates(
     let mut this: &mut NavigationService = &mut this;
     let mut ret: () = subscribeOnUpdates(this, session);
     ret
-}"##;
+}
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Session_do_1delete(env: *mut JNIE","before":"let this: Arc<Mutex<Session>> = session_init();\n    let this: *const Mutex<Session> = Arc::into_raw(this);\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Session_do_1setFoo(
     env: *mut JNIEnv,
     _: jclass,
@@ -41,4 +44,5 @@ pub extern "C" fn Java_org_example_Session_do_1setFoo(
     let mut this: &mut Session = &mut this;
     let mut ret: () = setFoo(this, a0);
     ret
-}"##;
+}
+@@end

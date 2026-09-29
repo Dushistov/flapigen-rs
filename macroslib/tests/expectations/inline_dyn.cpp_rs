@@ -1,4 +1,5 @@
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(unused_variable","before":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn MapBitmapGenerator_already_rendered_bitmap(
     this: *mut Box<dyn MapBitmapGenerator>,
 ) -> CRustOption4232mut3232c_void {
@@ -24,4 +25,5 @@ pub extern "C" fn MapBitmapGenerator_already_rendered_bitmap(
         },
     };
     ret
-}"##;
+}
+@@end
