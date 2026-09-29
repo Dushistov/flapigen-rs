@@ -1,7 +1,12 @@
-r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Foo_f ( a : * const MapRect , ) -> ( ) {
- assert ! ( ! a . is_null ( ) ) ;
- let map_rect : & MapRect = unsafe { &* a } ;
- let points_arr : [ MapPoint ; 4 ] = map_rect . into ( ) ;
- let mut a : MapRectRef = & points_arr ;
- let mut ret : ( ) = f ( a ) ;
- ret }"##;
+@@expect {"before":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
+pub extern "C" fn Foo_f(a: *const MapRect) -> () {
+    assert!(!a.is_null());
+    let map_rect: &MapRect = unsafe { &*a };
+    let points_arr: [MapPoint; 4] = map_rect.into();
+    let mut a: MapRectRef = &points_arr;
+    let mut ret: () = f(a);
+    ret
+}
+
+@@end

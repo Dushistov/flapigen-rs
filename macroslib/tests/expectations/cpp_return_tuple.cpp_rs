@@ -1,12 +1,21 @@
-r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Foo_f ( this : * mut Foo , ) -> CRustPair4232mut3232c_void4232mut3232c_void {
- let this : & Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
- let mut ret : ( One , Two ) = Foo :: f ( this , ) ;
- let p0 : * mut :: std :: os :: raw :: c_void = < One >:: box_object ( ret . 0 ) ;
- let p1 : * mut :: std :: os :: raw :: c_void = < Two >:: box_object ( ret . 1 ) ;
- let mut ret : CRustPair4232mut3232c_void4232mut3232c_void = CRustPair4232mut3232c_void4232mut3232c_void { first : p0 , second : p1 , } ;
- ret }"##;
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(n","before":"pub static RustForeignClassFooElemSize: usize = ::std::mem::size_of::<Foo>();\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
+pub extern "C" fn Foo_f(this: *mut Foo) -> CRustPair4232mut3232c_void4232mut3232c_void {
+    let this: &Foo = unsafe { this.as_mut().unwrap() };
+    let mut ret: (One, Two) = Foo::f(this);
+    let p0: *mut ::std::os::raw::c_void = <One>::box_object(ret.0);
+    let p1: *mut ::std::os::raw::c_void = <Two>::box_object(ret.1);
+    let mut ret: CRustPair4232mut3232c_void4232mut3232c_void =
+        CRustPair4232mut3232c_void4232mut3232c_void {
+            first: p0,
+            second: p1,
+        };
+    ret
+}
 
-r##"
+@@end
+
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(n","before":"    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
 pub extern "C" fn Foo_g(this: *mut Foo) -> CRustPairi32i32 {
     let this: &Foo = unsafe { this.as_mut().unwrap() };
@@ -19,18 +28,20 @@ pub extern "C" fn Foo_g(this: *mut Foo) -> CRustPairi32i32 {
     };
     ret
 }
-"##;
 
-r##"
+@@end
+
+@@expect {"after":"#[repr(C)]\n#","before":"second: *mut ::std::os::raw::c_void,\n}\n","file":"test.rs","greedy_match":true,"kind":"between"}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CRustPairi32i32 {
     first: i32,
     second: i32,
 }
-"##;
 
-r##"
+@@end
+
+@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Foo_delete(this: *mut Foo) {\n    let this: Box<Foo>","before":"let mut ret: CRustPairi32i32 = CRustPairi32i32 {\n        first: p0,\n        second: p1,\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
 pub extern "C" fn Foo_h(this: *mut Foo) -> CRustPairCRustStrViewCRustStrView {
     let this: &Foo = unsafe { this.as_mut().unwrap() };
@@ -43,13 +54,15 @@ pub extern "C" fn Foo_h(this: *mut Foo) -> CRustPairCRustStrViewCRustStrView {
     };
     ret
 }
-"##;
 
-r##"
+@@end
+
+@@expect {"after":"impl SwigFor","before":"second: i32,\n}\n","file":"test.rs","kind":"between"}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CRustPairCRustStrViewCRustStrView {
     first: CRustStrView,
     second: CRustStrView,
 }
-"##;
+
+@@end

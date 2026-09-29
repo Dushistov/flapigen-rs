@@ -1,4 +1,5 @@
-r#"impl SwigFrom<jobject> for Box<dyn SomeTrait> {
+@@expect {"after":"#[allow(non_snake_case, ","before":"this as jlong\n}\n#[doc(hidden)]\n","file":"test.rs","kind":"between"}
+impl SwigFrom<jobject> for Box<dyn SomeTrait> {
     fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {
         let mut cb = JavaCallback::new(this, env);
         cb.methods.reserve(1);
@@ -19,9 +20,12 @@ r#"impl SwigFrom<jobject> for Box<dyn SomeTrait> {
         cb.methods.push(method_id);
         Box::new(cb)
     }
-}"#;
+}
 
-r#"impl SomeTrait for JavaCallback {
+@@end
+
+@@expect {"after":"impl SwigForeignClass for Foo {\n    type PointedType = Foo;\n    fn jni_class() -> jclass {\n        swig_jni_find_class!(\n            FOREIGN_CLASS_CLASSWITHCALL","before":"_env: *mut JNIEnv,\n    _: jclass,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n) {\n}\n","file":"test.rs","kind":"between"}
+impl SomeTrait for JavaCallback {
     #[allow(unused_mut)]
     fn on_state_changed(&self, a0: &str) {
         swig_assert_eq_size!(::std::os::raw::c_uint, u32);
@@ -42,4 +46,6 @@ r#"impl SomeTrait for JavaCallback {
             };
         }
     }
-}"#;
+}
+
+@@end

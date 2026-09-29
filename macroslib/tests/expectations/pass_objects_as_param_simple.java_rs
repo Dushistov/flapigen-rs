@@ -1,4 +1,5 @@
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_TestPassObjectsAsParams_do_1f2(\n  ","before":"let this: Box<TestPassObjectsAsParams> = Box::new(this);\n    let this: *mut TestPassObjectsAsParams = Box::into_raw(this);\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f1(
     env: *mut JNIEnv,
     _: jclass,
@@ -13,10 +14,12 @@ pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f1(
     };
     let mut ret: () = TestPassObjectsAsParams::f1(this, a0);
     ret
-}"##;
+}
 
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_TestPassObjectsAsParams_do_1f3(\n  ","before":"  .unwrap()\n    };\n    let mut ret: () = TestPassObjectsAsParams::f1(this, a0);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f2(
     env: *mut JNIEnv,
     _: jclass,
@@ -33,10 +36,12 @@ pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f2(
     };
     let mut ret: () = TestPassObjectsAsParams::f2(this, a0);
     ret
-}"##;
+}
 
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_TestPassObjectsAsParams_do_1f3_1a(","before":"  .unwrap()\n    };\n    let mut ret: () = TestPassObjectsAsParams::f2(this, a0);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f3(
     env: *mut JNIEnv,
     _: jclass,
@@ -51,10 +56,12 @@ pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f3(
     };
     let mut ret: () = TestPassObjectsAsParams::f3(this, a0);
     ret
-}"##;
+}
 
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_TestPassObjectsAsParams_do_1f4(\n  ","before":"  .unwrap()\n    };\n    let mut ret: () = TestPassObjectsAsParams::f3(this, a0);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f3_1a(
     env: *mut JNIEnv,
     _: jclass,
@@ -69,10 +76,12 @@ pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f3_1a(
     };
     let mut ret: () = TestPassObjectsAsParams::f3_a(this, a0);
     ret
-}"##;
+}
 
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_TestPassObjectsAsParams_do_1f5(\n  ","before":".unwrap()\n    };\n    let mut ret: () = TestPassObjectsAsParams::f3_a(this, a0);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f4(
     env: *mut JNIEnv,
     _: jclass,
@@ -81,10 +90,12 @@ pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f4(
     let a0: &Foo = unsafe { jlong_to_pointer::<Foo>(a0).as_mut().unwrap() };
     let mut ret: () = TestPassObjectsAsParams::f4(a0);
     ret
-}"##;
+}
 
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_TestPassObjectsAsParams_do_1delete","before":"let a0: &Foo = unsafe { jlong_to_pointer::<Foo>(a0).as_mut().unwrap() };\n    let mut ret: () = TestPassObjectsAsParams::f4(a0);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f5(
     env: *mut JNIEnv,
     _: jclass,
@@ -95,4 +106,6 @@ pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f5(
     let a0: Foo = *a0;
     let mut ret: () = TestPassObjectsAsParams::f5(a0);
     ret
-}"##;
+}
+
+@@end

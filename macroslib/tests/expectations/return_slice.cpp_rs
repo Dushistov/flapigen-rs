@@ -1,7 +1,10 @@
-r#"#[unsafe(no_mangle)]
-pub static RustForeignClassFooElemSize: usize = ::std::mem::size_of::<Foo>();"#;
+@@expect {"after":"\n#[allow(unused_variables, unused_mut, n","before":"     let p: Foo = *p;\n        p\n    }\n}\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
+pub static RustForeignClassFooElemSize: usize = ::std::mem::size_of::<Foo>();
+@@end
 
-r#"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Boo_f2(this: *mut Boo) -> CRustSliceForeignFoo {\n ","before":"    let this: *mut Boo = Box::into_raw(this);\n    this as *const ::std::os::raw::c_void\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Boo_f1(this: *mut Boo) -> CRustSliceu32 {
     let this: &Boo = unsafe { this.as_mut().unwrap() };
     let mut ret: &[u32] = Boo::f1(this);
@@ -10,9 +13,11 @@ pub extern "C" fn Boo_f1(this: *mut Boo) -> CRustSliceu32 {
         len: ret.len(),
     };
     ret
-}"#;
+}
+@@end
 
-r#"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Boo_f3(this: *mut Boo) -> CRustSliceusize {\n    le","before":"let mut ret: CRustSliceu32 = CRustSliceu32 {\n        data: ret.as_ptr(),\n        len: ret.len(),\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Boo_f2(this: *mut Boo) -> CRustSliceForeignFoo {
     let this: &Boo = unsafe { this.as_mut().unwrap() };
     let mut ret: &[Foo] = Boo::f2(this);
@@ -21,9 +26,11 @@ pub extern "C" fn Boo_f2(this: *mut Boo) -> CRustSliceForeignFoo {
         len: ret.len(),
     };
     ret
-}"#;
+}
+@@end
 
-r#"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Boo_f4(this: *mut Boo) -> CRustSliceMutusize {\n   ","before":"let mut ret: CRustSliceForeignFoo = CRustSliceForeignFoo {\n        data: ret.as_ptr(),\n        len: ret.len(),\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Boo_f3(this: *mut Boo) -> CRustSliceusize {
     let this: &Boo = unsafe { this.as_mut().unwrap() };
     let mut ret: &[usize] = Boo::f3(this);
@@ -32,9 +39,11 @@ pub extern "C" fn Boo_f3(this: *mut Boo) -> CRustSliceusize {
         len: ret.len(),
     };
     ret
-}"#;
+}
+@@end
 
-r#"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Boo_delete(this: *mut Boo) {\n    let this: Box<Boo","before":"let mut ret: CRustSliceusize = CRustSliceusize {\n        data: ret.as_ptr(),\n        len: ret.len(),\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Boo_f4(this: *mut Boo) -> CRustSliceMutusize {
     let this: &Boo = unsafe { this.as_mut().unwrap() };
     let mut ret: &mut [usize] = Boo::f4(this);
@@ -43,4 +52,5 @@ pub extern "C" fn Boo_f4(this: *mut Boo) -> CRustSliceMutusize {
         len: ret.len(),
     };
     ret
-}"#;
+}
+@@end

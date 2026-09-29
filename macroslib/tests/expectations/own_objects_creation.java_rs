@@ -1,13 +1,16 @@
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Foo_do_1f(\n    env: *mut JNIEnv,\n","before":"let x: *mut Foo = unsafe { jlong_to_pointer::<Foo>(x).as_mut().unwrap() };\n        ::std::ptr::NonNull::<Self::PointedType>::new(x).unwrap()\n    }\n}\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jclass, a0: jint) -> jlong {
     let mut a0: i32 = a0;
     let this: Foo = Foo::new(a0);
     let this: Box<Foo> = Box::new(this);
     let this: *mut Foo = Box::into_raw(this);
     this as jlong
-}"##;
+}
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Foo_do_1delete(env: *mut JNIEnv, ","before":"let this: Box<Foo> = Box::new(this);\n    let this: *mut Foo = Box::into_raw(this);\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Foo_do_1f(
     env: *mut JNIEnv,
     _: jclass,
@@ -21,9 +24,11 @@ pub extern "C" fn Java_org_example_Foo_do_1f(
     let mut ret: i32 = Foo::f(this, a0, a1);
     let mut ret: jint = ret;
     ret
-}"##;
+}
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Boo_do_1factory_1method(env: *mut JNIEnv, _: jclass) -> jlong {\n    let mut ret: Result<Boo, String> = Boo::factory_method();\n    let mut ret: jlong = match ret {\n        Ok(x) => {\n           ","before":"let x: Boo = *x;\n        x\n    }\n    fn to_pointer(x: jlong) -> ::std::ptr::NonNull<Self::PointedType> {\n        let x: *mut Boo = unsafe { jlong_to_pointer::<Boo>(x).as_mut().unwrap() };\n        ::std::ptr::NonNull::<Self::PointedType>::new(x).unwrap()\n    }\n}\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_init(
     env: *mut JNIEnv,
     _: jclass,
@@ -45,9 +50,11 @@ pub extern "C" fn Java_org_example_Boo_init(
         }
     };
     this as jlong
-}"##;
+}
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Boo_do_1boo_1as_1arg(\n    env: *m","before":"jni_throw_exception(env, &msg);\n            return <jlong>::jni_invalid_value();\n        }\n    };\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1factory_1method(env: *mut JNIEnv, _: jclass) -> jlong {
     let mut ret: Result<Boo, String> = Boo::factory_method();
     let mut ret: jlong = match ret {
@@ -61,9 +68,11 @@ pub extern "C" fn Java_org_example_Boo_do_1factory_1method(env: *mut JNIEnv, _: 
         }
     };
     ret
-}"##;
+}
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(","before":"    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1boo_1as_1arg(
     env: *mut JNIEnv,
     _: jclass,
@@ -77,9 +86,11 @@ pub extern "C" fn Java_org_example_Boo_do_1boo_1as_1arg(
     let mut ret: i32 = Boo::boo_as_arg(this, a0);
     let mut ret: jint = ret;
     ret
-}"##;
+}
+@@end
 
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Boo_do_1delete(env: *mut JNIEnv, ","before":"let this: &Boo = unsafe { jlong_to_pointer::<Boo>(this).as_mut().unwrap() };\n    let mut ret: i32 = Boo::boo_as_arg(this, a0);\n    let mut ret: jint = ret;\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1get_1one_1foo(
     env: *mut JNIEnv,
     _: jclass,
@@ -89,4 +100,5 @@ pub extern "C" fn Java_org_example_Boo_do_1get_1one_1foo(
     let mut ret: Foo = Boo::get_one_foo(this);
     let ret: jlong = <Foo>::box_object(ret);
     ret
-}"##;
+}
+@@end

@@ -1,5 +1,11 @@
-r#"# [ unsafe ( no_mangle ) ] pub extern "C" fn Foo_f ( this : * mut RefCell < Foo >, a0 : i32 , ) -> ( ) {
- let this : & RefCell < Foo > = unsafe { this . as_mut ( ) . unwrap ( ) } ;
- let mut this : Ref < Foo > = this.borrow();
- let mut this : & Foo = & this;
- let mut ret : ( ) = Foo :: f ( this , a0 ) ; ret }"#;
+@@expect {"after":"#[allow(unused_variables","before":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
+pub extern "C" fn Foo_f(this: *mut RefCell<Foo>, a0: i32) -> () {
+    let this: &RefCell<Foo> = unsafe { this.as_mut().unwrap() };
+    let mut this: Ref<Foo> = this.borrow();
+    let mut this: &Foo = &this;
+    let mut ret: () = Foo::f(this, a0);
+    ret
+}
+
+@@end

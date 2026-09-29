@@ -1,6 +1,13 @@
-r##"# [ unsafe ( no_mangle ) ]
- pub extern "C" fn TestFuture_call_fn ( f : CFnOncei32 , ) -> ( ) {
- let mut f = | x | { ; f . cb ( x , f . ctx ) ; } ;
- let mut ret : ( ) = { f ( 5 ) ; } ;
- ret
- }"##;
+@@expect {"after":"#[allow(non_","before":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
+pub extern "C" fn TestFuture_call_fn(f: CFnOncei32) -> () {
+    let mut f = |x| {
+        f.cb(x, f.ctx);
+    };
+    let mut ret: () = {
+        f(5);
+    };
+    ret
+}
+
+@@end

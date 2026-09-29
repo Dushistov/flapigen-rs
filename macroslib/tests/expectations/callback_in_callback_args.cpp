@@ -1,4 +1,5 @@
-r#"class Foo {
+@@expect {"after":"\n} // namesp","before":"namespace org_examples {\n\n","file":"Foo.hpp","kind":"between"}
+class Foo {
 public:
     virtual ~Foo() noexcept {}
 
@@ -50,9 +51,11 @@ protected:
         pi->f();
     }
 
-};"#;
+};
+@@end
 
-r#"class Boo {
+@@expect {"after":"\n} // namesp","before":"namespace org_examples {\n\n","file":"Boo.hpp","kind":"between"}
+class Boo {
 public:
     virtual ~Boo() noexcept {}
 
@@ -117,12 +120,21 @@ protected:
         pi->h(*x);
     }
 
-};"#;
+};
+@@end
 
-"static void static_member(struct C_Boo * const x) noexcept;";
-r#"inline void Class::static_member(struct C_Boo * const x) noexcept
+@@expect {"after":"\n\n};\n\n\n    i","before":"public:\n\n    ","file":"Class.hpp","kind":"between"}
+static void static_member(struct C_Boo * const x) noexcept;
+@@end
+
+@@expect {"after":"\n\n} // names","before":"static void static_member(struct C_Boo * const x) noexcept;\n\n};\n\n\n    ","file":"Class.hpp","kind":"between"}
+inline void Class::static_member(struct C_Boo * const x) noexcept
     {
 
         Class_static_member(x);
-    }"#;
-"void Class_static_member(struct C_Boo * const x);";
+    }
+@@end
+
+@@expect {"after":"\n\n#ifdef __c","before":"extern \"C\" {\n#endif\n\n    ","file":"c_Class.h","kind":"between"}
+void Class_static_member(struct C_Boo * const x);
+@@end

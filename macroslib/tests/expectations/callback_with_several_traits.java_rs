@@ -1,4 +1,5 @@
-r##"impl OnEvent for JavaCallback {
+@@expect {"after":"#[doc(hidden)]\nimpl SwigFrom<jobject> for Box<dyn OnEvent + Send> {\n    fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {\n        let mut cb = JavaCallbac","before":"_env: *mut JNIEnv,\n    _: jclass,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n) {\n}\n","file":"test.rs","kind":"between"}
+impl OnEvent for JavaCallback {
     #[allow(unused_mut)]
     fn something_change(&self, a0: i32, a1: &str) {
         swig_assert_eq_size!(::std::os::raw::c_uint, u32);
@@ -20,9 +21,12 @@ r##"impl OnEvent for JavaCallback {
             };
         }
     }
-}"##;
+}
 
-r##"#[doc(hidden)]
+@@end
+
+@@expect {"after":"#[allow(non_snake_case, ","before":"   };\n        }\n    }\n}\n","file":"test.rs","kind":"between"}
+#[doc(hidden)]
 impl SwigFrom<jobject> for Box<dyn OnEvent + Send> {
     fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {
         let mut cb = JavaCallback::new(this, env);
@@ -44,4 +48,6 @@ impl SwigFrom<jobject> for Box<dyn OnEvent + Send> {
         cb.methods.push(method_id);
         Box::new(cb)
     }
-}"##;
+}
+
+@@end

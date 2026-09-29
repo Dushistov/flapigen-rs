@@ -1,4 +1,5 @@
-r##"#[unsafe(no_mangle)]
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Foo_f5(x: CRustOptionf64, y: CRustOptionusize) -> (","before":"let this: &mut Foo = unsafe { this.as_mut().unwrap() };\n    let mut ret: () = Foo::f3(this, a0);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Foo_f4(this: *mut Foo, x: CRustOptionusize) -> () {
     let mut x: Option<usize> = if x.is_some != 0 {
         let mut ret = unsafe { x.val.data };
@@ -9,9 +10,12 @@ pub extern "C" fn Foo_f4(this: *mut Foo, x: CRustOptionusize) -> () {
     let this: &Foo = unsafe { this.as_mut().unwrap() };
     let mut ret: () = Foo::f4(this, x);
     ret
-}"##;
+}
 
-r##"#[unsafe(no_mangle)]
+@@end
+
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Foo_f6(x: CRustOptionCRustStrView) -> () {\n    let ","before":"let this: &Foo = unsafe { this.as_mut().unwrap() };\n    let mut ret: () = Foo::f4(this, x);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Foo_f5(x: CRustOptionf64, y: CRustOptionusize) -> () {
     let mut x: Option<f64> = if x.is_some != 0 {
         let mut ret = unsafe { x.val.data };
@@ -27,9 +31,12 @@ pub extern "C" fn Foo_f5(x: CRustOptionf64, y: CRustOptionusize) -> () {
     };
     let mut ret: () = Foo::f5(x, y);
     ret
-}"##;
+}
 
-r##"#[unsafe(no_mangle)]
+@@end
+
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Foo_f7(x: CRustClassOptBoo) -> () {\n    let mut x: ","before":"Some(ret)\n    } else {\n        None\n    };\n    let mut ret: () = Foo::f5(x, y);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Foo_f6(x: CRustOptionCRustStrView) -> () {
     let mut x: Option<&str> = if x.is_some != 0 {
         let mut ret: &str = if unsafe { x.val.data }.len == 0 {
@@ -49,18 +56,28 @@ pub extern "C" fn Foo_f6(x: CRustOptionCRustStrView) -> () {
     };
     let mut ret: () = Foo::f6(x);
     ret
-}"##;
+}
 
+@@end
 
-r##"# [ unsafe ( no_mangle ) ] pub extern "C" fn Foo_f3 ( this : * mut Foo , a0 : CRustOptionu32 , ) -> ( ) {
- let mut a0 : Option < ControlItem > = if a0 . is_some != 0 {
- let mut ret : ControlItem = < ControlItem >:: swig_from ( unsafe { a0 . val . data } ) ;
- Some ( ret ) } else { None } ;
- let this : & mut Foo = unsafe { this . as_mut ( ) . unwrap ( ) } ;
- let mut ret : ( ) = Foo :: f3 ( this , a0 ) ;
- ret }"##;
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Foo_f4(this: *mut Foo, x: CRustOptionusize) -> () {","before":"let this: &mut Foo = unsafe { this.as_mut().unwrap() };\n    let mut ret: () = Foo::f2(this, a0);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
+pub extern "C" fn Foo_f3(this: *mut Foo, a0: CRustOptionu32) -> () {
+    let mut a0: Option<ControlItem> = if a0.is_some != 0 {
+        let mut ret: ControlItem = <ControlItem>::swig_from(unsafe { a0.val.data });
+        Some(ret)
+    } else {
+        None
+    };
+    let this: &mut Foo = unsafe { this.as_mut().unwrap() };
+    let mut ret: () = Foo::f3(this, a0);
+    ret
+}
 
-r##"#[unsafe(no_mangle)]
+@@end
+
+@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Foo_delete(this: *mut Foo) {\n    let this: Box<Foo>","before":"   Some(ret)\n    } else {\n        None\n    };\n    let mut ret: () = Foo::f6(x);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Foo_f7(x: CRustClassOptBoo) -> () {
     let mut x: Option<&Boo> = if !x.p.is_null() {
         assert!(!x.p.is_null());
@@ -71,4 +88,6 @@ pub extern "C" fn Foo_f7(x: CRustClassOptBoo) -> () {
     };
     let mut ret: () = Foo::f7(x);
     ret
-}"##;
+}
+
+@@end

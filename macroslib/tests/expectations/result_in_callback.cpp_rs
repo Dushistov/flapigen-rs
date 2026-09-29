@@ -1,4 +1,5 @@
-r#"impl Foo for C_Foo {
+@@expect {"after":"\nimpl Drop f","before":"unsafe impl Send for C_Foo {}\n","file":"test.rs","kind":"between"}
+impl Foo for C_Foo {
     #[allow(unused_mut)]
     fn unpack(&self, a0: &str) -> Result<String, Error> {
         let mut a0: CRustStrView = CRustStrView::from_str(a0);
@@ -39,4 +40,5 @@ r#"impl Foo for C_Foo {
         };
         ret
     }
-}"#;
+}
+@@end

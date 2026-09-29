@@ -1,4 +1,5 @@
-r#"inline std::optional<QString> RelativePath::toString() const noexcept
+@@expect {"after":"\n\n} // names","before":") : std::optional</*&str*/QString>();\n    }\n\n    ","file":"RelativePath.hpp","kind":"between"}
+inline std::optional<QString> RelativePath::toString() const noexcept
     {
 
         struct CRustOptionCRustString ret = RelativePath_toString(this->self_);
@@ -9,13 +10,16 @@ r#"inline std::optional<QString> RelativePath::toString() const noexcept
              return qs;
           }(ret.val.data)
 ) : std::optional<QString>();
-    }"#;
+    }
+@@end
 
-r#"inline std::optional</*&str*/QString> RelativePath::getOtherInfo() const noexcept
+@@expect {"after":"\n\n    inline","before":"SelfType self_;\n};\n\n\n    ","file":"RelativePath.hpp","kind":"between"}
+inline std::optional</*&str*/QString> RelativePath::getOtherInfo() const noexcept
     {
 
         struct CRustOptionCRustStrView ret = RelativePath_getOtherInfo(this->self_);
         return (ret.is_some != 0) ? std::optional</*&str*/QString>(
           QString::fromUtf8(ret.val.data.data, static_cast<int>(ret.val.data.len))
 ) : std::optional</*&str*/QString>();
-    }"#;
+    }
+@@end

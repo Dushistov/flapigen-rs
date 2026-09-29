@@ -1,10 +1,16 @@
-r#"//This is class Foo
+@@expect {"after":"\npublic:\n    using value","before":"using FooRef = FooWrapper<false>;\n\n","file":"Foo.hpp","kind":"between"}
+//This is class Foo
 template<bool OWN_DATA>
-class FooWrapper {"#;
+class FooWrapper {
+@@end
 
-r#"//Some documentation comment
-    FooWrapper(int32_t a0, std::string_view a1) noexcept"#;
+@@expect {"after":"\n    {\n\n    ","before":"static constexpr const uintptr_t &rust_elem_size = RustForeignClassFooElemSize;\n    ","file":"Foo.hpp","kind":"between"}
+//Some documentation comment
+    FooWrapper(int32_t a0, std::string_view a1) noexcept
+@@end
 
-r#"//1 Some documentation comment
+@@expect {"after":"\n\nprivate:\n ","before":"            std::abort();\n        }\n    }\n    ","file":"Foo.hpp","kind":"between"}
+//1 Some documentation comment
     //2 Some documentation comment
-    int32_t f(int32_t a0, int32_t a1) const noexcept;"#;
+    int32_t f(int32_t a0, int32_t a1) const noexcept;
+@@end

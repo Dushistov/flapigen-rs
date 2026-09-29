@@ -1,4 +1,5 @@
-r##"impl SomeTrait for JavaCallback {
+@@expect {"after":"static mut JAVA_UTIL_OPTIONAL_LONG: jclass = ::std::ptr::null_mut();\nstatic mut JAVA_UTIL_OPTIONAL_LONG_OF: jmethodID = ::std::ptr::null_mut();\nstatic mut JAVA_","before":"_env: *mut JNIEnv,\n    _: jclass,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n) {\n}\n","file":"test.rs","kind":"between"}
+impl SomeTrait for JavaCallback {
     #[allow(unused_mut)]
     fn on_state_changed1(&self, a0: i32, a1: bool) {
         swig_assert_eq_size!(::std::os::raw::c_uint, u32);
@@ -58,4 +59,6 @@ r##"impl SomeTrait for JavaCallback {
         let mut ret: bool = ret != 0;
         ret
     }
-}"##;
+}
+
+@@end

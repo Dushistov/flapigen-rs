@@ -1,4 +1,5 @@
-r#"class SomeObserver {
+@@expect {"after":"\n\n    static","before":"namespace org_examples {\n\n","file":"SomeObserver.hpp","kind":"between"}
+class SomeObserver {
 public:
     virtual ~SomeObserver() noexcept {}
 
@@ -9,9 +10,11 @@ public:
     virtual void onStateChangedFoo(Foo foo) const noexcept = 0;
 
     virtual float getTextSize() const noexcept = 0;
-"#;
 
-r#"    static void c_SomeObserver_deref(void *opaque)
+@@end
+
+@@expect {"after":"\n\n};\n} // na","before":"protected:\n\n","file":"SomeObserver.hpp","kind":"between"}
+    static void c_SomeObserver_deref(void *opaque)
     {
         auto p = static_cast<SomeObserver *>(opaque);
         delete p;
@@ -48,9 +51,11 @@ r#"    static void c_SomeObserver_deref(void *opaque)
 
         auto ret = pi->getTextSize();
         return ret;
-    }"#;
+    }
+@@end
 
-r#"struct C_SomeObserver {
+@@expect {"after":"\n","before":"#pragma once\n\n","file":"c_SomeObserver.h","greedy_match":true,"kind":"between"}
+struct C_SomeObserver {
     void *opaque;
     //! call by Rust side when callback not need anymore
     void (*C_SomeObserver_deref)(void *opaque);
@@ -63,11 +68,15 @@ r#"struct C_SomeObserver {
 
     float (*getTextSize)(void *opaque);
 
-};"#;
+};
+@@end
 
-"void f1(std::unique_ptr<SomeObserver> cb) noexcept;";
+@@expect {"after":"\n\nprivate:\n ","before":"            std::abort();\n        }\n    }\n\n    ","file":"ClassWithCallbacks.hpp","kind":"between"}
+void f1(std::unique_ptr<SomeObserver> cb) noexcept;
+@@end
 
-r#"template<bool OWN_DATA>
+@@expect {"after":"\n\n} // names","before":"constexpr const uintptr_t &ClassWithCallbacksWrapper<OWN_DATA>::rust_elem_size;\n\n\n    ","file":"ClassWithCallbacks.hpp","kind":"between"}
+template<bool OWN_DATA>
     inline void ClassWithCallbacksWrapper<OWN_DATA>::f1(std::unique_ptr<SomeObserver> cb) noexcept
     {
 
@@ -75,8 +84,9 @@ r#"template<bool OWN_DATA>
         const struct C_SomeObserver * const a0 = &tmp;
 
         ClassWithCallbacks_f1(this->self_, std::move(a0));
-    }"#;
+    }
+@@end
 
-"void ClassWithCallbacks_f1(ClassWithCallbacksOpaque * const self, const struct C_SomeObserver * const cb);";
-
-
+@@expect {"after":"\n\n    void C","before":"ClassWithCallbacksOpaque *ClassWithCallbacks_default();\n\n    ","file":"c_ClassWithCallbacks.h","kind":"between"}
+void ClassWithCallbacks_f1(ClassWithCallbacksOpaque * const self, const struct C_SomeObserver * const cb);
+@@end

@@ -1,15 +1,28 @@
-"public Foo(int a0)";
-"public final int f(int a0, int a1)";
-"public Boo(int a0, long a1)";
-r#"public Boo(@NonNull Foo f) {
+@@expect {"after":" {\n        m","before":"public final class Foo {\n\n    ","file":"Foo.java","kind":"between"}
+public Foo(int a0)
+@@end
+
+@@expect {"after":" {\n        i","before":"private static native long init(int a0);\n\n    ","file":"Foo.java","kind":"between"}
+public final int f(int a0, int a1)
+@@end
+
+@@expect {"after":" {\n        m","before":"public final class Boo {\n\n    ","file":"Boo.java","kind":"between"}
+public Boo(int a0, long a1)
+@@end
+
+@@expect {"after":"\n\n    public","before":"private static native long init(int a0, long a1);\n\n    ","file":"Boo.java","kind":"between"}
+public Boo(@NonNull Foo f) {
         long a0 = f.mNativeObj;
         f.mNativeObj = 0;
 
         mNativeObj = init(a0);
         JNIReachabilityFence.reachabilityFence1(f);
     }
-    private static native long init(long f);"#;
-r#"public final long f(@NonNull Foo foo) {
+    private static native long init(long f);
+@@end
+
+@@expect {"after":"\n    private","before":"private static native long init(long f);\n\n    ","file":"Boo.java","kind":"between"}
+public final long f(@NonNull Foo foo) {
         long a0 = foo.mNativeObj;
         foo.mNativeObj = 0;
 
@@ -18,8 +31,11 @@ r#"public final long f(@NonNull Foo foo) {
         JNIReachabilityFence.reachabilityFence1(foo);
 
         return ret;
-    }"#;
-r#"public static int f2(double a0, @NonNull Foo foo) {
+    }
+@@end
+
+@@expect {"after":"\n\n    public","before":"private static native long do_f(long self, long foo);\n\n    ","file":"Boo.java","kind":"between"}
+public static int f2(double a0, @NonNull Foo foo) {
         long a1 = foo.mNativeObj;
         foo.mNativeObj = 0;
 
@@ -29,4 +45,5 @@ r#"public static int f2(double a0, @NonNull Foo foo) {
 
         return ret;
     }
-    private static native int do_f2(double a0, long foo);"#;
+    private static native int do_f2(double a0, long foo);
+@@end

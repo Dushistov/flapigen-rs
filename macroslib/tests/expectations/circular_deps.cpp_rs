@@ -1,12 +1,19 @@
-r#"pub extern "C" fn A_a ( b : * const :: std :: os :: raw :: c_void , ) -> ( ) {
- assert ! ( ! b . is_null ( ) ) ;
- let b : & B = unsafe { &* ( b as * const B ) } ;
- let mut ret : ( ) = A :: a ( b ) ;
- ret
- }"#;
-r#"pub extern "C" fn B_b ( a : * const :: std :: os :: raw :: c_void , ) -> ( ) {
- assert ! ( ! a . is_null ( ) ) ;
- let a : & A = unsafe { &* ( a as * const A ) } ;
- let mut ret : ( ) = B :: b ( a ) ;
- ret
- }"#;
+@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn A_delete(this: *mut A) {\n    let this: Box<A> = uns","before":"let this: *mut A = Box::into_raw(this);\n    this as *const ::std::os::raw::c_void\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\n","file":"test.rs","kind":"between"}
+pub extern "C" fn A_a(b: *const ::std::os::raw::c_void) -> () {
+    assert!(!b.is_null());
+    let b: &B = unsafe { &*(b as *const B) };
+    let mut ret: () = A::a(b);
+    ret
+}
+
+@@end
+
+@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn B_delete(this: *mut B) {\n    let this: Box<B> = uns","before":"let this: *mut B = Box::into_raw(this);\n    this as *const ::std::os::raw::c_void\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\n","file":"test.rs","kind":"between"}
+pub extern "C" fn B_b(a: *const ::std::os::raw::c_void) -> () {
+    assert!(!a.is_null());
+    let a: &A = unsafe { &*(a as *const A) };
+    let mut ret: () = B::b(a);
+    ret
+}
+
+@@end

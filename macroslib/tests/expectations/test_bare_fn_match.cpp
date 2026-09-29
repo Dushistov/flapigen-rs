@@ -1,11 +1,20 @@
-"typedef void (*c_fn_i324232mut3232c_void_t)(int32_t, void *);";
-r#"struct CFnOncei32 {
+@@expect {"after":"\n","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n            \n","file":"c_fn_i324232mut3232c_void_t.h","kind":"between"}
+typedef void (*c_fn_i324232mut3232c_void_t)(int32_t, void *);
+@@end
+
+@@expect {"after":"\n\n#ifdef __c","before":"extern \"C\" {\n#endif\n","file":"CFnOncei32.h","kind":"between"}
+struct CFnOncei32 {
     c_fn_i324232mut3232c_void_t cb;
     void * ctx;
-};"#;
+};
+@@end
 
-"static std::future<int32_t> call_fn() noexcept;";
-r#"template<bool OWN_DATA>
+@@expect {"after":"\n\n    static","before":"friend class TestFutureWrapper<false>;\n\n    ","file":"TestFuture.hpp","kind":"between"}
+static std::future<int32_t> call_fn() noexcept;
+@@end
+
+@@expect {"after":"\n\n    templa","before":"static std::future<std::variant<int32_t, RustString>> call_fn2() noexcept;\n\n};\n\n\n    ","file":"TestFuture.hpp","kind":"between"}
+template<bool OWN_DATA>
     inline std::future<int32_t> TestFutureWrapper<OWN_DATA>::call_fn() noexcept
     {
 
@@ -23,12 +32,19 @@ r#"template<bool OWN_DATA>
         TestFuture_call_fn(std::move(a0));
         return f;
 
-    }"#;
+    }
+@@end
 
-"typedef void (*c_fn_CRustResulti32CRustString4232mut3232c_void_t)(CRustResulti32CRustString, void *);";
-"static std::future<std::variant<int32_t, RustString>> call_fn2() noexcept;";
+@@expect {"after":"\n","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n            \n","file":"c_fn_CRustResulti32CRustString4232mut3232c_void_t.h","kind":"between"}
+typedef void (*c_fn_CRustResulti32CRustString4232mut3232c_void_t)(CRustResulti32CRustString, void *);
+@@end
 
-r#"template<bool OWN_DATA>
+@@expect {"after":"\n\n};\n\n\n    t","before":"static std::future<int32_t> call_fn() noexcept;\n\n    ","file":"TestFuture.hpp","kind":"between"}
+static std::future<std::variant<int32_t, RustString>> call_fn2() noexcept;
+@@end
+
+@@expect {"after":"\n\n} // names","before":"\n    }\n\n    ","file":"TestFuture.hpp","kind":"between"}
+template<bool OWN_DATA>
     inline std::future<std::variant<int32_t, RustString>> TestFutureWrapper<OWN_DATA>::call_fn2() noexcept
     {
 
@@ -48,4 +64,5 @@ r#"template<bool OWN_DATA>
         TestFuture_call_fn2(std::move(a0));
         return f;
 
-    }"#;
+    }
+@@end

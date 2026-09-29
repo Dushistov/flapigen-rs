@@ -1,4 +1,5 @@
-r#"impl AsyncCallbacks<i32> for C_Completioni32 {
+@@expect {"after":"impl Drop fo","before":"unsafe impl Send for C_Completioni32 {}\n","file":"test.rs","kind":"between"}
+impl AsyncCallbacks<i32> for C_Completioni32 {
     #[allow(unused_mut)]
     fn is_cancelled(&self) -> bool {
         let ret: ::std::os::raw::c_char = (self.isCancelled)(self.opaque);
@@ -11,9 +12,12 @@ r#"impl AsyncCallbacks<i32> for C_Completioni32 {
         ::std::mem::forget(self);
         ret
     }
-}"#;
+}
 
-r#"impl AsyncCallbacks<String> for C_CompletionCRustString {
+@@end
+
+@@expect {"after":"impl Drop fo","before":"unsafe impl Send for C_CompletionCRustString {}\n","file":"test.rs","kind":"between"}
+impl AsyncCallbacks<String> for C_CompletionCRustString {
     #[allow(unused_mut)]
     fn is_cancelled(&self) -> bool {
         let ret: ::std::os::raw::c_char = (self.isCancelled)(self.opaque);
@@ -27,4 +31,6 @@ r#"impl AsyncCallbacks<String> for C_CompletionCRustString {
         ::std::mem::forget(self);
         ret
     }
-}"#;
+}
+
+@@end

@@ -1,17 +1,23 @@
-r##"#[unsafe(no_mangle)]
+@@expect {"before":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+#[unsafe(no_mangle)]
 pub extern "C" fn Test_f(a0: *const C_MyObserver) -> () {
     assert!(!a0.is_null());
     let a0: &C_MyObserver = unsafe { a0.as_ref().unwrap() };
     let mut a0: Box<dyn OnEvent + Send> = Box::new(a0.clone());
     let mut ret: () = f(a0);
     ret
-}"##;
+}
 
-r#"impl OnEvent for C_MyObserver {
+@@end
+
+@@expect {"after":"impl Drop fo","before":"unsafe impl Send for C_MyObserver {}\n","file":"test.rs","kind":"between"}
+impl OnEvent for C_MyObserver {
     #[allow(unused_mut)]
     fn something_change(&self, a0: i32, a1: &str) -> () {
         let mut a1: CRustStrView = CRustStrView::from_str(a1);
         let ret: () = (self.onStateChanged)(a0, a1, self.opaque);
         ret
     }
-}"#;
+}
+
+@@end
