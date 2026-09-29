@@ -9,6 +9,7 @@
 #include <limits>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 #include <chrono>
 #include <mutex>
@@ -95,6 +96,11 @@ static_assert(!std::is_constructible<RustSlice<Foo>, CRustSliceForeignFoo>::valu
               "mutable slices reject read-only descriptors");
 static_assert(!std::is_constructible<RustSlice<Foo>, Foo *, size_t>::value,
               "C++ wrapper arrays are not Rust foreign-object slices");
+static_assert(std::is_same<decltype(std::declval<RustSlice<int32_t> &>().at(0)), int32_t &>::value,
+              "mutable slice at() must return a mutable reference");
+static_assert(std::is_same<decltype(std::declval<const RustSlice<int32_t> &>().at(0)),
+                           const int32_t &>::value,
+              "const slice at() must match const operator[]");
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 static std::atomic<uint32_t> c_simple_cb_counter_without_args{ 0 };
@@ -1392,6 +1398,42 @@ TEST(SmartPtrCopy, smokeTest)
               static_cast<const SessionOpaque *>(session));
     EXPECT_EQ(static_cast<const SessionOpaque *>(session2),
               static_cast<const SessionOpaque *>(session3));
+}
+
+TEST(RustSlice, atChecksBounds)
+{
+    int32_t values[] = { 7, 9 };
+    RustSlice<int32_t> mutable_native{ values, 2 };
+    EXPECT_EQ(7, mutable_native.at(0));
+    mutable_native.at(1) = 10;
+    const auto &const_native = mutable_native;
+    EXPECT_EQ(10, const_native.at(1));
+    EXPECT_THROW(mutable_native.at(2), std::out_of_range);
+    EXPECT_THROW(const_native.at(std::numeric_limits<size_t>::max()), std::out_of_range);
+
+    const RustSlice<const int32_t> read_only_native{ values, 2 };
+    EXPECT_EQ(7, read_only_native.at(0));
+    EXPECT_EQ(10, read_only_native.at(1));
+    EXPECT_THROW(read_only_native.at(2), std::out_of_range);
+
+    RustSlice<const int32_t> empty_native;
+    EXPECT_THROW(empty_native.at(0), std::out_of_range);
+
+    auto vec = TestWorkWithVec::create_foo_vec(2);
+    auto mutable_foreign = vec.as_slice_mut();
+    EXPECT_EQ(0, mutable_foreign.at(0).f(0, 0));
+    EXPECT_EQ(1, mutable_foreign.at(1).f(0, 0));
+    EXPECT_THROW(mutable_foreign.at(2), std::out_of_range);
+    const auto foreign = vec.as_slice();
+    EXPECT_EQ(0, foreign.at(0).f(0, 0));
+    EXPECT_EQ(1, foreign.at(1).f(0, 0));
+    EXPECT_THROW(foreign.at(2), std::out_of_range);
+
+    WorkWithSlice obj(0, 2);
+    const auto custom = obj.slice();
+    EXPECT_EQ(0, custom.at(0).val());
+    EXPECT_EQ(1, custom.at(1).val());
+    EXPECT_THROW(custom.at(2), std::out_of_range);
 }
 
 TEST(WorkWithSlice, smokeTest)
