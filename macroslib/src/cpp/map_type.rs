@@ -32,10 +32,10 @@ fn do_map_type(
     arg_ty: &RustType,
     direction: Direction,
     arg_ty_span: SourceIdSpan,
-    prefer_generic: bool,
+    instantiate_generic_first: bool,
 ) -> Result<ForeignType> {
     debug!("do_map_type: arg_ty {}, direction {:?}", arg_ty, direction);
-    if !prefer_generic {
+    if !instantiate_generic_first {
         if let Some(ftype) = ctx.conv_map.map_through_conversion_to_foreign(
             arg_ty.to_idx(),
             direction,
@@ -335,14 +335,13 @@ pub(in crate::cpp) fn map_repr_c_type(
         Direction::Incoming, /*not important*/
         arg_ty_span,
     )?;
-
     if fti.cpp_converter.is_some() || fti.base.corresponding_rust_type.to_idx() != rty.to_idx() {
-        // A class pointer may first resolve through its erased object-handle rule.
-        // A repr(C) field needs the direct pointer rule instead.
+        // A class pointer can resolve through its erased `*mut c_void` handle.
+        // C fields must instead instantiate the direct `*mut Foo` pointer rule:
+        // its pointee is opaque, but the pointer itself has a C ABI.
         let direct_ftype = do_map_type(ctx, rty, Direction::Incoming, arg_ty_span, true)?;
         fti = CppForeignTypeInfo::try_new(ctx, Direction::Incoming, direct_ftype)?;
     }
-
     if fti.cpp_converter.is_some() || fti.base.corresponding_rust_type.to_idx() != rty.to_idx() {
         return Err(DiagnosticError::new2(
             arg_ty_span,
