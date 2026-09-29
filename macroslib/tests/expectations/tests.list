@@ -3,6 +3,7 @@ bool_in_out
 circular_deps
 class_with_dummy_constructor
 cpp_code_cache
+cpp_issue_309_option_refs
 cpp_include_custom_rule
 cpp_include_return_only_result_vec
 cpp_qdate_typemap
