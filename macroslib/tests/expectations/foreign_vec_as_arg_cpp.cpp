@@ -21,7 +21,7 @@ void setAlternateBoarding(RustForeignVecBoo p) noexcept
 @@end
 
 @@expect {"after":"\n\n    void F","before":"struct CRustSliceForeignBoo FooImpl_alternateBoarding(const FooImplOpaque * const self);\n\n    ","file":"c_FooImpl.h","kind":"between"}
-void FooImpl_setAlternateBoarding(FooImplOpaque * const self, struct CRustForeignVec p);
+void FooImpl_setAlternateBoarding(FooImplOpaque * const self, struct CRustForeignVecBoo p);
 @@end
 
 @@expect {"after":"\n\n} // namespace org_exa","before":"return RustSlice<const Boo>{ret};\n    }\n\n    ","file":"FooImpl.hpp","kind":"between"}

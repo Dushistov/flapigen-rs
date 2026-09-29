@@ -384,20 +384,8 @@ impl Generator {
                     code: include_str!("cpp/rust_vec_impl.hpp").into(),
                 });
                 foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_foreign_vec_impl.hpp".into(),
-                    code: include_str!("cpp/rust_foreign_vec_impl.hpp").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_foreign_slice_iter.hpp".into(),
-                    code: include_str!("cpp/rust_foreign_slice_iter.hpp").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_slice_tmpl.hpp".into(),
                     code: include_str!("cpp/rust_slice_tmpl.hpp").into(),
-                });
-                foreign_lang_helpers.push(SourceCode {
-                    id_of_code: "rust_vec_access.hpp".into(),
-                    code: include_str!("cpp/rust_vec_access.hpp").into(),
                 });
             }
             LanguageConfig::PythonConfig(..) => {

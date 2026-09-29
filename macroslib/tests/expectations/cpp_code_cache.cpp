@@ -13,7 +13,7 @@ void CRustVecu8_free(struct CRustVecu8 v);
 #include "rust_vec_impl.hpp"
 
 namespace org_examples {
-using RustVecu8 = RustVec<CRustVecu8, CRustVecu8_free>;
+using RustVecu8 = RustVec<CRustVecu8, internal::NativeVecPolicy<CRustVecu8, CRustVecu8_free>>;
 }
 
 #endif

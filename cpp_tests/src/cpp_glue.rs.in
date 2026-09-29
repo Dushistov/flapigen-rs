@@ -1081,7 +1081,7 @@ foreign_typemap!(
 "#;
 );
 
-unsafe impl Send for CFnOnceCRustResultCRustForeignVecCRustString {}
+unsafe impl Send for CFnOnceCRustResultCRustForeignVecFooCRustString {}
 
 foreign_class!(class TestFuture {
     fn call_fn(f: impl FnOnce(Foo)) {
@@ -1348,18 +1348,42 @@ struct FooArcAccess {
         "$p.as_c<CRustSliceArcFooArc>()";
 );
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CRustVecArcFooArc {
+    data: *mut ::std::os::raw::c_void,
+    len: usize,
+    capacity: usize,
+}
+
 foreign_typemap!(
     define_c_type!(
         module = "foo_arc_vec_access.h";
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustVecArcFooArc {
+            data: *mut ::std::os::raw::c_void,
+            len: usize,
+            capacity: usize,
+        }
         #[no_mangle]
-        pub extern "C" fn foo_arc_vec_access(sl: CRustVecAccess, idx: usize) -> *const ::std::os::raw::c_void {
-            let v = CRustVecAccess::to_slice::<Arc<FooArc>>(sl);
+        pub extern "C" fn foo_arc_vec_new() -> CRustVecArcFooArc {
+            let raw = CRustVecAccess::from_vec(Vec::<Arc<FooArc>>::new());
+            CRustVecArcFooArc { data: raw.data, len: raw.len, capacity: raw.capacity }
+        }
+        #[no_mangle]
+        pub extern "C" fn foo_arc_vec_access(sl: CRustVecArcFooArc, idx: usize) -> *const ::std::os::raw::c_void {
+            let v = CRustVecAccess::to_slice::<Arc<FooArc>>(CRustVecAccess {
+                data: sl.data, len: sl.len, capacity: sl.capacity,
+            });
             let elem_ref: &FooArc = &v[idx];
             elem_ref as *const FooArc as *const ::std::os::raw::c_void
         }
         #[no_mangle]
-        pub extern "C" fn foo_arc_vec_drop(sl: CRustVecAccess) {
-            let v = CRustVecAccess::to_vec::<Arc<FooArc>>(sl);
+        pub extern "C" fn foo_arc_vec_drop(sl: CRustVecArcFooArc) {
+            let v = CRustVecAccess::to_vec::<Arc<FooArc>>(CRustVecAccess {
+                data: sl.data, len: sl.len, capacity: sl.capacity,
+            });
             drop(v);
         }
     );
@@ -1368,25 +1392,34 @@ foreign_typemap!(
 #pragma once
 
 #include "foo_arc_vec_access.h"
-#include "rust_vec_access.hpp"
+#include "rust_vec_impl.hpp"
 #include "FooArc.hpp"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
-struct FooArcVecAccess {
-       using ElemType = FooArcRef;
-       static FooArcRef index(CRustVecAccess cs, size_t idx) noexcept {
+struct FooArcVecPolicy {
+       using value_type = FooArcRef;
+       using reference = FooArcRef;
+       using iterator = internal::SliceIterator<CRustVecArcFooArc, FooArcVecPolicy>;
+       using const_iterator = iterator;
+       static CRustVecArcFooArc empty() noexcept { return foo_arc_vec_new(); }
+       static FooArcRef index(CRustVecArcFooArc cs, size_t idx) noexcept {
            auto p = static_cast<const FooArcOpaque *>(foo_arc_vec_access(cs, idx));
            return FooArcRef{ p };
        }
-       static void free(CRustVecAccess cs) noexcept {
+       static void free(CRustVecArcFooArc cs) noexcept {
            foo_arc_vec_drop(cs);
        }
+       static iterator begin(CRustVecArcFooArc cs) noexcept { return iterator{cs, 0}; }
+       static const_iterator cbegin(CRustVecArcFooArc cs) noexcept { return begin(cs); }
+       static iterator end(CRustVecArcFooArc cs) noexcept { return iterator{cs, cs.len}; }
+       static const_iterator cend(CRustVecArcFooArc cs) noexcept { return end(cs); }
 };
-using RustVecFooArc = RustVecAccess<FooArcVecAccess, CRustVecAccess>;
+using RustVecFooArc = RustVec<CRustVecArcFooArc, FooArcVecPolicy>;
 }
 "##);
-    ($p:r_type) Vec<Arc<FooArc>> => CRustVecAccess {
-        $out = CRustVecAccess::from_vec($p);
+    ($p:r_type) Vec<Arc<FooArc>> => CRustVecArcFooArc {
+        let raw = CRustVecAccess::from_vec($p);
+        $out = CRustVecArcFooArc { data: raw.data, len: raw.len, capacity: raw.capacity };
     };
     ($p:f_type, req_modules = ["\"rust_vec_foo_arc.hpp\""]) => "RustVecFooArc"
         "RustVecFooArc{$p}";

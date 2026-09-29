@@ -59,6 +59,14 @@ impl Buffers {
         value.iter().sum()
     }
 
+    fn make_tracked_vec(len: u32) -> Vec<Tracked> {
+        (0..len).map(|value| Tracked::new(value as i32)).collect()
+    }
+
+    fn take_tracked_vec(value: Vec<Tracked>) -> i32 {
+        value.iter().map(Tracked::value).sum()
+    }
+
     fn sum(value: &[u32]) -> u32 {
         value.iter().sum()
     }
@@ -84,6 +92,8 @@ foreign_class!(class Buffers {
     fn Buffers::take_string(value: String) -> usize;
     fn Buffers::make_vec(len: u32) -> Vec<u32>;
     fn Buffers::take_vec(value: Vec<u32>) -> u32;
+    fn Buffers::make_tracked_vec(len: u32) -> Vec<Tracked>;
+    fn Buffers::take_tracked_vec(value: Vec<Tracked>) -> i32;
     fn Buffers::sum(value: &[u32]) -> u32;
     fn Buffers::reverse(value: &mut [u32]);
     fn Buffers::sum_tracked(value: &[Tracked]) -> i32;

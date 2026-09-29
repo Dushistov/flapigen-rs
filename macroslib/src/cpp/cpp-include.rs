@@ -912,21 +912,6 @@ impl CRustVecAccess {
 }
 
 foreign_typemap!(
-    define_c_type!(
-        module = "rust_vec.h";
-        #[repr(C)]
-        #[derive(Copy, Clone)]
-        pub struct CRustVecAccess {
-            data: *mut ::std::os::raw::c_void,
-            len: usize,
-            capacity: usize,
-        }
-    );
-    (r_type) CRustVecAccess;
-    (f_type) "CRustVecAccess";
-);
-
-foreign_typemap!(
     generic_alias!(CSliceMut = swig_concat_idents!(CRustSliceMutForeign, swig_f_type!(T)));
     define_c_type!(
         module = "CSliceMut!().h";
@@ -1051,7 +1036,7 @@ foreign_typemap!(
 #include "rust_vec_impl.hpp"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
-using CppRustVec!() = RustVec<CRustVec!(), CRustVecFree!()>;
+using CppRustVec!() = RustVec<CRustVec!(), internal::NativeVecPolicy<CRustVec!(), CRustVecFree!()>>;
 }
 
 #endif
@@ -1142,65 +1127,89 @@ fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec) {
 }
 
 foreign_typemap!(
-    define_c_type!(
-        module = "rust_vec.h";
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub struct CRustForeignVec {
-            data: *mut ::std::os::raw::c_void,
-            len: usize,
-            capacity: usize,
-        });
-    (r_type) CRustForeignVec;
-    (f_type) "CRustForeignVec";
-);
-
-foreign_typemap!(
     generic_alias!(CForeignVecModule = swig_concat_idents!(RustForeignVec, swig_f_type!(T)));
+    generic_alias!(CForeignVec = swig_concat_idents!(CRustForeignVec, swig_f_type!(T)));
+    generic_alias!(CForeignVecNew = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _new));
     generic_alias!(CForeignVecFree = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _free));
     generic_alias!(CForeignVecPush = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _push));
     generic_alias!(CForeignVecRemove = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _remove));
-    generic_alias!(CForeignVecElemSize = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _ELEM_SIZE));
 
     define_c_type!(
         module = "CForeignVecModule!().h";
-        #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CForeignVec!() {
+            data: *mut ::std::os::raw::c_void,
+            len: usize,
+            capacity: usize,
+        }
+
         #[unsafe(no_mangle)]
-        pub extern "C" fn CForeignVecFree!()(v: CRustForeignVec) {
-            drop_foreign_class_vec::<swig_subst_type!(T)>(v);
+        pub extern "C" fn CForeignVecNew!()() -> CForeignVec!() {
+            let mut v = Vec::<swig_subst_type!(T)>::new();
+            CForeignVec!() {
+                data: v.as_mut_ptr().cast(),
+                len: 0,
+                capacity: 0,
+            }
         }
 
         #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
         #[unsafe(no_mangle)]
-        pub extern "C" fn CForeignVecPush!()(v: *mut CRustForeignVec, e: *mut ::std::os::raw::c_void) {
-            push_foreign_class_to_vec::<swig_subst_type!(T)>(v, e);
+        pub extern "C" fn CForeignVecFree!()(v: CForeignVec!()) {
+            drop_foreign_class_vec::<swig_subst_type!(T)>(CRustForeignVec {
+                data: v.data.cast(), len: v.len, capacity: v.capacity,
+            });
         }
 
         #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
         #[unsafe(no_mangle)]
-        pub extern "C" fn CForeignVecRemove!()(v: *mut CRustForeignVec, idx: usize) -> *mut ::std::os::raw::c_void {
-            remove_foreign_class_from_vec::<swig_subst_type!(T)>(v, idx)
+        pub extern "C" fn CForeignVecPush!()(v: *mut CForeignVec!(), e: *mut ::std::os::raw::c_void) {
+            let v = unsafe { &mut *v };
+            let mut raw = CRustForeignVec {
+                data: v.data.cast(), len: v.len, capacity: v.capacity,
+            };
+            push_foreign_class_to_vec::<swig_subst_type!(T)>(&mut raw, e);
+            v.data = raw.data.cast();
+            v.len = raw.len;
+            v.capacity = raw.capacity;
         }
+
+        #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
         #[unsafe(no_mangle)]
-        pub static CForeignVecElemSize!() : usize = ::std::mem::size_of::<swig_subst_type!(T)>();
+        pub extern "C" fn CForeignVecRemove!()(v: *mut CForeignVec!(), idx: usize) -> *mut ::std::os::raw::c_void {
+            let v = unsafe { &mut *v };
+            let mut raw = CRustForeignVec {
+                data: v.data.cast(), len: v.len, capacity: v.capacity,
+            };
+            let elem = remove_foreign_class_from_vec::<swig_subst_type!(T)>(&mut raw, idx);
+            v.data = raw.data.cast();
+            v.len = raw.len;
+            v.capacity = raw.capacity;
+            elem
+        }
     );
 
     foreign_code!(module = "CForeignVecModule!().h";
                     r##"
 #ifdef __cplusplus
 
-#include "rust_foreign_vec_impl.hpp"
+#include "rust_vec_impl.hpp"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
-using CForeignVecModule!() = RustForeignVec<swig_f_type!(&T, output), CRustForeignVec, CForeignVecFree!(), CForeignVecPush!(), CForeignVecRemove!(), CForeignVecElemSize!()>;
+using CForeignVecModule!() = RustVec<CForeignVec!(), internal::ForeignVecPolicy<swig_f_type!(&T, output), CForeignVec!(), CForeignVecNew!(), CForeignVecFree!(), CForeignVecPush!(), CForeignVecRemove!()>>;
 }
 #endif
 "##);
 
-    ($p:r_type) <T: SwigForeignClass> Vec<T> => CRustForeignVec {
-        $out = CRustForeignVec::from_vec($p);
+    ($p:r_type) <T: SwigForeignClass> Vec<T> => CForeignVec!() {
+        let mut v: Vec<swig_subst_type!(T)> = $p;
+        $out = CForeignVec!() {
+            data: v.as_mut_ptr().cast(), len: v.len(), capacity: v.capacity(),
+        };
+        ::std::mem::forget(v);
     };
-    ($p:r_type) <T: SwigForeignClass> Vec<T> <= CRustForeignVec {
+    ($p:r_type) <T: SwigForeignClass> Vec<T> <= CForeignVec!() {
         $out = unsafe { Vec::from_raw_parts($p.data.cast(), $p.len, $p.capacity) };
     };
     ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) => "CForeignVecModule!()"

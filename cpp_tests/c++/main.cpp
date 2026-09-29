@@ -8,6 +8,7 @@
 #include <array>
 #include <limits>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -1434,6 +1435,43 @@ TEST(RustSlice, atChecksBounds)
     EXPECT_EQ(0, custom.at(0).val());
     EXPECT_EQ(1, custom.at(1).val());
     EXPECT_THROW(custom.at(2), std::out_of_range);
+}
+
+TEST(RustVec, unifiedAccessAndOwnership)
+{
+    TestWorkWithVec source{ "abc" };
+    RustVecu32 native{ source.get_vec_u32() };
+    ASSERT_EQ(4u, native.size());
+    EXPECT_EQ(0u, native.at(0));
+    EXPECT_THROW(native.at(native.size()), std::out_of_range);
+    EXPECT_EQ(native.size(), static_cast<size_t>(std::distance(native.begin(), native.end())));
+    auto native_owned = native.release();
+    EXPECT_TRUE(native.empty());
+    CRustVecu32_free(native_owned);
+    native.clear();
+
+    auto foreign = TestWorkWithVec::create_foo_vec(2);
+    EXPECT_EQ(0, foreign.at(0).f(0, 0));
+    EXPECT_EQ(1, foreign.at(1).f(0, 0));
+    EXPECT_THROW(foreign.at(2), std::out_of_range);
+    auto moved_foreign = std::move(foreign);
+    EXPECT_TRUE(foreign.empty());
+    EXPECT_EQ(2u, moved_foreign.as_slice().size());
+    moved_foreign.clear();
+    EXPECT_TRUE(moved_foreign.empty());
+    moved_foreign.push(Foo{ 9, "nine" });
+    EXPECT_EQ(9, moved_foreign.remove(0).f(0, 0));
+
+    WorkWithSlice custom_source(0, 2);
+    auto custom = custom_source.vec();
+    EXPECT_EQ(0, custom.at(0).val());
+    EXPECT_EQ(1, custom.at(1).val());
+    EXPECT_THROW(custom.at(2), std::out_of_range);
+    auto moved_custom = std::move(custom);
+    EXPECT_TRUE(custom.empty());
+    EXPECT_EQ(2u, moved_custom.size());
+    moved_custom.clear();
+    EXPECT_TRUE(moved_custom.empty());
 }
 
 TEST(WorkWithSlice, smokeTest)
