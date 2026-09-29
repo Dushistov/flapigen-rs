@@ -16,18 +16,41 @@ pub struct CRustForeignVec {
 
 @@end
 
+@@expect {"file":"test.rs","kind":"item","name":"Boo_get_boo_arr","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn Boo_get_boo_arr(this: *mut Boo) -> CRustForeignVecBoo {
+    let this: &Boo = unsafe { this.as_mut().unwrap() };
+    let mut ret: Vec<Boo> = Boo::get_boo_arr(this);
+    let mut v: Vec<Boo> = ret;
+    let mut ret: CRustForeignVecBoo = CRustForeignVecBoo {
+        data: v.as_mut_ptr().cast(),
+        len: v.len(),
+        capacity: v.capacity(),
+    };
+    ::std::mem::forget(v);
+    ret
+}
+@@end
+
 @@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Boo_get_foo_with_err(this: *mut Boo) -> CRustResult","before":"    let this: *mut Boo = Box::into_raw(this);\n    this as *const ::std::os::raw::c_void\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
-pub extern "C" fn Boo_get_foo_arr(this: *mut Boo) -> CRustForeignVec {
+pub extern "C" fn Boo_get_foo_arr(this: *mut Boo) -> CRustForeignVecFoo {
     let this: &Boo = unsafe { this.as_mut().unwrap() };
     let mut ret: Vec<Foo> = Boo::get_foo_arr(this);
-    let mut ret: CRustForeignVec = CRustForeignVec::from_vec(ret);
+    let mut v: Vec<Foo> = ret;
+    let mut ret: CRustForeignVecFoo = CRustForeignVecFoo {
+        data: v.as_mut_ptr().cast(),
+        len: v.len(),
+        capacity: v.capacity(),
+    };
+    ::std::mem::forget(v);
     ret
 }
 
 @@end
 
-@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(n","before":"    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Boo_get_foo_arr_with_err","before":"    ::std::mem::forget(v);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
 pub extern "C" fn Boo_get_foo_with_err(this: *mut Boo) -> CRustResult4232mut3232c_voidCRustString {
     let this: &Boo = unsafe { this.as_mut().unwrap() };
@@ -53,25 +76,31 @@ pub extern "C" fn Boo_get_foo_with_err(this: *mut Boo) -> CRustResult4232mut3232
 
 @@end
 
-@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Boo_delete(this: *mut Boo) {\n    let this: Box<Boo>","before":"data: CRustResultUnion4232mut3232c_voidCRustString { err },\n                is_ok: 0,\n            }\n        }\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Boo_get_boo_arr","before":"data: CRustResultUnion4232mut3232c_voidCRustString { err },\n                is_ok: 0,\n            }\n        }\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
 pub extern "C" fn Boo_get_foo_arr_with_err(
     this: *mut Boo,
-) -> CRustResultCRustForeignVecCRustString {
+) -> CRustResultCRustForeignVecFooCRustString {
     let this: &Boo = unsafe { this.as_mut().unwrap() };
     let mut ret: Result<Vec<Foo>, String> = Boo::get_foo_arr_with_err(this);
-    let mut ret: CRustResultCRustForeignVecCRustString = match ret {
+    let mut ret: CRustResultCRustForeignVecFooCRustString = match ret {
         Ok(mut x) => {
-            let mut ok: CRustForeignVec = CRustForeignVec::from_vec(x);
-            CRustResultCRustForeignVecCRustString {
-                data: CRustResultUnionCRustForeignVecCRustString { ok },
+            let mut v: Vec<Foo> = x;
+            let mut ok: CRustForeignVecFoo = CRustForeignVecFoo {
+                data: v.as_mut_ptr().cast(),
+                len: v.len(),
+                capacity: v.capacity(),
+            };
+            ::std::mem::forget(v);
+            CRustResultCRustForeignVecFooCRustString {
+                data: CRustResultUnionCRustForeignVecFooCRustString { ok },
                 is_ok: 1,
             }
         }
         Err(err) => {
             let mut err: CRustString = CRustString::from_string(err);
-            CRustResultCRustForeignVecCRustString {
-                data: CRustResultUnionCRustForeignVecCRustString { err },
+            CRustResultCRustForeignVecFooCRustString {
+                data: CRustResultUnionCRustForeignVecFooCRustString { err },
                 is_ok: 0,
             }
         }

@@ -13,7 +13,7 @@ pub extern "C" fn FooImpl_alternateBoarding(this: *mut Foo) -> CRustSliceForeign
 
 @@expect {"after":"\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(","before":"    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
-pub extern "C" fn FooImpl_setAlternateBoarding(this: *mut Foo, p: CRustForeignVec) -> () {
+pub extern "C" fn FooImpl_setAlternateBoarding(this: *mut Foo, p: CRustForeignVecBoo) -> () {
     let mut p: Vec<Boo> = unsafe { Vec::from_raw_parts(p.data.cast(), p.len, p.capacity) };
     let this: &mut Foo = unsafe { this.as_mut().unwrap() };
     let mut ret: () = Foo::set_alternate_boarding(this, p);

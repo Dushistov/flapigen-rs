@@ -25,7 +25,7 @@ impl Drop for C_Completion {
 
 @@end
 
-@@expect {"after":"#[doc = \" It totally depends on С++ implementation\"]\n#[doc = \" let's assume it s","before":"- ((&user_s as *const CRustForeignVec) as usize);\n    assert_eq!(offset_our, offset_user);\n}\n","file":"test.rs","kind":"between"}
+@@expect {"after":"#[doc = \" It totally depends on С++ implementation\"]\n#[doc = \" let's assume it s","before":"    CRustString::from_string(x)\n}\n","file":"test.rs","kind":"between"}
 #[repr(C)]
 #[derive(Clone)]
 #[allow(non_snake_case)]

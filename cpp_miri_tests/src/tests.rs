@@ -124,6 +124,25 @@ fn foreign_vector_push_remove_and_free() {
 }
 
 #[test]
+fn generated_foreign_vector_descriptor_preserves_ownership() {
+    let mut values = RustForeignVecTracked_new();
+    assert_eq!(values.len, 0);
+    assert!(!values.data.is_null());
+
+    RustForeignVecTracked_push(&mut values, Tracked::box_object(Tracked::new(7)));
+    RustForeignVecTracked_push(&mut values, Tracked::box_object(Tracked::new(8)));
+    assert_eq!(values.len, 2);
+
+    let removed = RustForeignVecTracked_remove(&mut values, 0);
+    assert_eq!(Tracked::unbox_object(removed).value(), 7);
+    assert_eq!(values.len, 1);
+    RustForeignVecTracked_free(values);
+
+    let values = Buffers_make_tracked_vec(3);
+    assert_eq!(Buffers_take_tracked_vec(values), 3);
+}
+
+#[test]
 fn borrowed_slices_remain_owned_by_the_caller() {
     for len in [0, 1, 8] {
         let mut values: Vec<u32> = (0..len).collect();
