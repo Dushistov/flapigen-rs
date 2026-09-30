@@ -1495,6 +1495,10 @@ TEST(WorkWithSlice, smokeTest)
             fmt << "Arc<FooArc> " << i;
             ASSERT_EQ(fmt.str(), sl[i].s());
             ASSERT_EQ(int32_t(i), sl[i].val());
+            const auto children = sl[i].childs();
+            ASSERT_EQ(1u, children.size());
+            EXPECT_EQ(static_cast<int32_t>(i * 2), children.at(0).val());
+            EXPECT_EQ("child", children.at(0).s());
         }
         size_t iter_count = 0;
         for (const auto &elem : sl) {

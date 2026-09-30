@@ -1229,6 +1229,7 @@ foreign_class!(
 pub struct FooArc {
     val: i32,
     s: String,
+    childs: Vec<Arc<FooArc>>,
 }
 
 impl FooArc {
@@ -1238,15 +1239,19 @@ impl FooArc {
     fn s(&self) -> &str {
         &self.s
     }
+    fn childs(&self) -> &[Arc<FooArc>] {
+        &self.childs
+    }
 }
 
 foreign_class!(class FooArc {
     self_type FooArc;
     constructor new(val: i32, s: String) -> Arc<FooArc> {
-        Arc::new(FooArc { val, s })
+        Arc::new(FooArc { val, s, childs: vec![] })
     }
     fn FooArc::val(&self) -> i32;
     fn FooArc::s(&self) -> &str;
+    fn FooArc::childs(&self) -> &[Arc<FooArc>];
 });
 
 pub struct WorkWithSlice {
@@ -1256,7 +1261,9 @@ pub struct WorkWithSlice {
 pub struct ZeroSized;
 
 impl ZeroSized {
-    fn value(&self) -> i32 { 19 }
+    fn value(&self) -> i32 {
+        19
+    }
 }
 
 foreign_class!(class ZeroSized {
@@ -1272,6 +1279,11 @@ impl WorkWithSlice {
             d.push(Arc::new(FooArc {
                 val: i,
                 s: format!("Arc<FooArc> {}", i),
+                childs: vec![Arc::new(FooArc {
+                    val: i * 2,
+                    s: "child".into(),
+                    childs: vec![],
+                })],
             }));
         }
         Self { d }
@@ -1321,16 +1333,19 @@ foreign_typemap!(
 #ifdef __cplusplus
 #include "foo_arc_slice_access.h"
 #include "rust_slice_tmpl.hpp"
-#include "FooArc.hpp"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
+// rust_slice.h can be included while FooArc.hpp is still being parsed.
+template<bool> class FooArcWrapper;
 struct FooArcAccess {
        // The elements are Arc<FooArc>, not FooArcOpaque objects.
        using storage_type = void;
-       static FooArcRef index(internal::SliceStorage<const void *> slice, size_t idx) noexcept {
-           auto p = static_cast<const FooArcOpaque *>(
+       // Delay use of FooArcWrapper's definition until the slice is indexed.
+       template<typename Ref = FooArcWrapper<false>>
+       static Ref index(internal::SliceStorage<const void *> slice, size_t idx) noexcept {
+           auto p = static_cast<const typename Ref::CForeignType *>(
                foo_arc_access(CRustSliceArcFooArc{slice.data, slice.len}, idx));
-           return FooArcRef{ p };
+           return Ref{ p };
        }
 };
 }
