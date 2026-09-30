@@ -30,6 +30,24 @@ jobs:
           ln -s workspace.Cargo.toml Cargo.toml
           python3 ci_build_and_test.py --miri-only-tests
 
+  cpp_sanitizers:
+    name: C++ ASan + UBSan
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt
+      - name: Install C++ test dependencies
+        run: sudo apt-get -y update && sudo apt-get install -y clang libboost-dev
+      - name: Run C++ sanitizer tests
+        run: |
+          ln -s workspace.Cargo.toml Cargo.toml
+          python3 ci_build_and_test.py --cpp-sanitizer-tests
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
