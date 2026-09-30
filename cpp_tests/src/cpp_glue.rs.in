@@ -1226,6 +1226,42 @@ foreign_class!(
 );
 //ANCHOR_END: inline_method_self
 
+pub struct StringSliceStore {
+    refs: Vec<&'static str>,
+    strings: Vec<String>,
+    boxed: Vec<Box<str>>,
+}
+
+impl StringSliceStore {
+    fn new(empty: bool) -> Self {
+        if empty {
+            return Self { refs: Vec::new(), strings: Vec::new(), boxed: Vec::new() };
+        }
+        let refs = vec!["", "a\0b", "Привет"];
+        let strings = refs.iter().map(|value| (*value).to_owned()).collect();
+        let boxed = refs.iter().map(|value| Box::<str>::from(*value)).collect();
+        Self { refs, strings, boxed }
+    }
+
+    fn refs(&self) -> &[&str] { &self.refs }
+    fn strings(&self) -> &[String] { &self.strings }
+    fn boxed(&self) -> &[Box<str>] { &self.boxed }
+    fn same_refs(&self, values: &[&str]) -> bool { self.refs == values }
+    fn same_strings(&self, values: &[String]) -> bool { self.strings == values }
+    fn same_boxed(&self, values: &[Box<str>]) -> bool { self.boxed == values }
+}
+
+foreign_class!(class StringSliceStore {
+    self_type StringSliceStore;
+    constructor StringSliceStore::new(empty: bool) -> StringSliceStore;
+    fn StringSliceStore::refs(&self) -> &[&str];
+    fn StringSliceStore::strings(&self) -> &[String];
+    fn StringSliceStore::boxed(&self) -> &[Box<str>];
+    fn StringSliceStore::same_refs(&self, values: &[&str]) -> bool;
+    fn StringSliceStore::same_strings(&self, values: &[String]) -> bool;
+    fn StringSliceStore::same_boxed(&self, values: &[Box<str>]) -> bool;
+});
+
 pub struct FooArc {
     val: i32,
     s: String,

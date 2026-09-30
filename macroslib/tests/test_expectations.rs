@@ -14,6 +14,27 @@ mod expectation_snapshot;
 include!(concat!(env!("OUT_DIR"), "/test_expectations.rs"));
 
 #[test]
+fn test_expectation_return_string_slices_boost() {
+    let tmp_dir = tempdir().expect("Can not create tmp directory");
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/expectations/return_string_slices.rs");
+    let expectation = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/expectations/return_string_slices_boost.cpp");
+    let generator = Generator::new(LanguageConfig::CppConfig(
+        CppConfig::new(tmp_dir.path().into(), "org_examples".into()).use_boost(),
+    ))
+    .with_pointer_target_width(64);
+    generator.expand(
+        "return_string_slices_boost",
+        &fixture,
+        &tmp_dir.path().join("test.rs"),
+    );
+    let files = collect_files_in_dir(tmp_dir.path(), &[".h", ".hpp"])
+        .expect("Could not read generated C++ headers");
+    expectation_snapshot::check(&expectation, &files).expect("Boost string slice output changed");
+}
+
+#[test]
 fn test_expectations_class_with_methods_without_constructor() {
     let _ = env_logger::try_init();
 
