@@ -76,3 +76,4 @@ c_self_type
 callback_ref_as_param
 pass_c_function_as_param
 cpp_empty_views
+return_string_slices

@@ -50,6 +50,7 @@
 #include "rust_interface/TestMultiThreadCallback.hpp"
 #include "rust_interface/Session.hpp"
 #include "rust_interface/WorkWithSlice.hpp"
+#include "rust_interface/StringSliceStore.hpp"
 #include "rust_interface/TestToStringCallback.hpp"
 #include "rust_interface/CallMutTrait.hpp"
 
@@ -97,6 +98,15 @@ static_assert(!std::is_constructible<RustSlice<Foo>, CRustSliceForeignFoo>::valu
               "mutable slices reject read-only descriptors");
 static_assert(!std::is_constructible<RustSlice<Foo>, Foo *, size_t>::value,
               "C++ wrapper arrays are not Rust foreign-object slices");
+using StrRefSlice = decltype(std::declval<StringSliceStore &>().refs());
+using StringSlice = decltype(std::declval<StringSliceStore &>().strings());
+using BoxStrSlice = decltype(std::declval<StringSliceStore &>().boxed());
+static_assert(!std::is_constructible<StrRefSlice, CRustSliceString>::value,
+              "str-reference slices reject String descriptors");
+static_assert(!std::is_constructible<StringSlice, CRustSliceBoxStr>::value,
+              "String slices reject boxed-str descriptors");
+static_assert(!std::is_constructible<BoxStrSlice, CRustSliceStrRef>::value,
+              "boxed-str slices reject str-reference descriptors");
 static_assert(std::is_same<decltype(std::declval<RustSlice<int32_t> &>().at(0)), int32_t &>::value,
               "mutable slice at() must return a mutable reference");
 static_assert(std::is_same<decltype(std::declval<const RustSlice<int32_t> &>().at(0)),
@@ -1516,6 +1526,56 @@ TEST(WorkWithSlice, smokeTest)
             ASSERT_EQ(int32_t(i), sl[i].val());
         }
     }
+}
+
+template <typename Slice> static void expect_string_slice(const Slice &slice)
+{
+    const std::string expected[] = { "", std::string("a\0b", 3), "Привет" };
+    ASSERT_EQ(3u, slice.size());
+    EXPECT_EQ(3, slice.end() - slice.begin());
+    for (size_t i = 0; i < slice.size(); ++i) {
+        const auto value = slice.at(i);
+        const std::string actual = value.empty() ? std::string{} : std::string(value.data(), value.size());
+        EXPECT_EQ(expected[i], actual);
+    }
+    size_t count = 0;
+    for (const auto value : slice) {
+        EXPECT_EQ(expected[count].size(), value.size());
+        ++count;
+    }
+    EXPECT_EQ(3u, count);
+    EXPECT_THROW(slice.at(slice.size()), std::out_of_range);
+}
+
+TEST(StringSliceStore, borrowedStrings)
+{
+    StringSliceStore store(false);
+    expect_string_slice(store.refs());
+    expect_string_slice(store.strings());
+    expect_string_slice(store.boxed());
+    EXPECT_TRUE(store.same_refs(store.refs()));
+    EXPECT_TRUE(store.same_strings(store.strings()));
+    EXPECT_TRUE(store.same_boxed(store.boxed()));
+
+    StringSliceStore empty(true);
+    const auto refs = empty.refs();
+    const auto strings = empty.strings();
+    const auto boxed = empty.boxed();
+    EXPECT_TRUE(refs.empty());
+    EXPECT_TRUE(strings.empty());
+    EXPECT_TRUE(boxed.empty());
+    EXPECT_TRUE(empty.same_refs(empty.refs()));
+    EXPECT_TRUE(empty.same_strings(empty.strings()));
+    EXPECT_TRUE(empty.same_boxed(empty.boxed()));
+    EXPECT_TRUE(empty.same_refs(StrRefSlice{}));
+    EXPECT_TRUE(empty.same_strings(StringSlice{}));
+    EXPECT_TRUE(empty.same_boxed(BoxStrSlice{}));
+    EXPECT_FALSE(store.same_refs(empty.refs()));
+    EXPECT_FALSE(store.same_strings(empty.strings()));
+    EXPECT_FALSE(store.same_boxed(empty.boxed()));
+    EXPECT_THROW(refs.at(0), std::out_of_range);
+    EXPECT_THROW(strings.at(0), std::out_of_range);
+    EXPECT_THROW(boxed.at(0), std::out_of_range);
 }
 
 int main(int argc, char *argv[])

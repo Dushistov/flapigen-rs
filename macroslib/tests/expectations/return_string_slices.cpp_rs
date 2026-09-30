@@ -1,0 +1,146 @@
+@@expect {"file":"test.rs","kind":"item","name":"crust_slice_str_ref_get","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn crust_slice_str_ref_get(slice: CRustSliceStrRef, index: usize) -> CRustStrView {
+    let values = unsafe {
+        (CRustSlice {
+            data: slice.data.cast(),
+            len: slice.len,
+        })
+        .as_slice::<&str>()
+    };
+    CRustStrView::from_str(values[index])
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"StringSlices_same_refs","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn StringSlices_same_refs(
+    this: *mut StringSlices,
+    values: CRustSliceStrRef,
+) -> ::std::os::raw::c_char {
+    let mut values: &[&str] = unsafe {
+        (CRustSlice {
+            data: values.data.cast(),
+            len: values.len,
+        })
+        .as_slice::<&str>()
+    };
+    let this: &StringSlices = unsafe { this.as_mut().unwrap() };
+    let mut ret: bool = StringSlices::same_refs(this, values);
+    let mut ret: ::std::os::raw::c_char = if ret { 1 } else { 0 };
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"StringSlices_same_strings","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn StringSlices_same_strings(
+    this: *mut StringSlices,
+    values: CRustSliceString,
+) -> ::std::os::raw::c_char {
+    let mut values: &[String] = unsafe {
+        (CRustSlice {
+            data: values.data.cast(),
+            len: values.len,
+        })
+        .as_slice::<String>()
+    };
+    let this: &StringSlices = unsafe { this.as_mut().unwrap() };
+    let mut ret: bool = StringSlices::same_strings(this, values);
+    let mut ret: ::std::os::raw::c_char = if ret { 1 } else { 0 };
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"StringSlices_same_boxed","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn StringSlices_same_boxed(
+    this: *mut StringSlices,
+    values: CRustSliceBoxStr,
+) -> ::std::os::raw::c_char {
+    let mut values: &[Box<str>] = unsafe {
+        (CRustSlice {
+            data: values.data.cast(),
+            len: values.len,
+        })
+        .as_slice::<Box<str>>()
+    };
+    let this: &StringSlices = unsafe { this.as_mut().unwrap() };
+    let mut ret: bool = StringSlices::same_boxed(this, values);
+    let mut ret: ::std::os::raw::c_char = if ret { 1 } else { 0 };
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"crust_slice_string_get","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn crust_slice_string_get(slice: CRustSliceString, index: usize) -> CRustStrView {
+    let values = unsafe {
+        (CRustSlice {
+            data: slice.data.cast(),
+            len: slice.len,
+        })
+        .as_slice::<String>()
+    };
+    CRustStrView::from_str(values[index].as_str())
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"crust_slice_box_str_get","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn crust_slice_box_str_get(slice: CRustSliceBoxStr, index: usize) -> CRustStrView {
+    let values = unsafe {
+        (CRustSlice {
+            data: slice.data.cast(),
+            len: slice.len,
+        })
+        .as_slice::<Box<str>>()
+    };
+    CRustStrView::from_str(values[index].as_ref())
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"StringSlices_refs","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn StringSlices_refs(this: *mut StringSlices) -> CRustSliceStrRef {
+    let this: &StringSlices = unsafe { this.as_mut().unwrap() };
+    let mut ret: &[&str] = StringSlices::refs(this);
+    let mut ret: CRustSliceStrRef = CRustSliceStrRef {
+        data: ret.as_ptr().cast(),
+        len: ret.len(),
+    };
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"StringSlices_strings","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn StringSlices_strings(this: *mut StringSlices) -> CRustSliceString {
+    let this: &StringSlices = unsafe { this.as_mut().unwrap() };
+    let mut ret: &[String] = StringSlices::strings(this);
+    let mut ret: CRustSliceString = CRustSliceString {
+        data: ret.as_ptr().cast(),
+        len: ret.len(),
+    };
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"StringSlices_boxed","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn StringSlices_boxed(this: *mut StringSlices) -> CRustSliceBoxStr {
+    let this: &StringSlices = unsafe { this.as_mut().unwrap() };
+    let mut ret: &[Box<str>] = StringSlices::boxed(this);
+    let mut ret: CRustSliceBoxStr = CRustSliceBoxStr {
+        data: ret.as_ptr().cast(),
+        len: ret.len(),
+    };
+    ret
+}
+@@end

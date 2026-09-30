@@ -139,6 +139,42 @@ impl CRustStrView {
     }
 }
 
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustSliceStrRefElem { _unused: u8 }
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CRustSliceStrRef {
+    data: *const CRustSliceStrRefElem,
+    len: usize,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustSliceStringElem { _unused: u8 }
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CRustSliceString {
+    data: *const CRustSliceStringElem,
+    len: usize,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustSliceBoxStrElem { _unused: u8 }
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CRustSliceBoxStr {
+    data: *const CRustSliceBoxStrElem,
+    len: usize,
+}
+
 foreign_typemap!(
     ($p:r_type) <T> Arc<Mutex<T>> => &Mutex<T> {
         $out = & $p;
@@ -477,6 +513,132 @@ foreign_typemap!(
         "std::string_view{ $p.data, $p.len }";
     ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_str.h\"", "<string_view>"]) <= "std::string_view"
         "CRustStrView{ $p.data(), $p.size() }";
+);
+
+foreign_typemap!(
+    foreign_code!(module = "rust_string_slice.h";
+                    r##"
+typedef struct CRustSliceStrRefElem CRustSliceStrRefElem;
+typedef struct CRustSliceStringElem CRustSliceStringElem;
+typedef struct CRustSliceBoxStrElem CRustSliceBoxStrElem;
+
+#ifdef __cplusplus
+#include "rust_slice_tmpl.hpp"
+#include "rust_str.h"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+namespace internal {
+template <typename View, typename Descriptor, typename Element,
+          CRustStrView (*Get)(Descriptor, uintptr_t)>
+struct StringSliceAccess {
+    using storage_type = Element;
+
+    static View index(SliceStorage<const Element *> slice, size_t i) noexcept
+    {
+        const auto str = Get(Descriptor{ slice.data, slice.len }, i);
+        return str.len == 0 ? View{} : View{ str.data, str.len };
+    }
+};
+} // namespace internal
+} // namespace $RUST_SWIG_USER_NAMESPACE
+#endif
+"##);
+);
+
+foreign_typemap!(
+    define_c_type!(module = "rust_string_slice.h";
+        #[repr(C)]
+        pub struct CRustSliceStrRefElem { _unused: u8 }
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustSliceStrRef {
+            data: *const CRustSliceStrRefElem,
+            len: usize,
+        }
+        #[unsafe(no_mangle)]
+        pub extern "C" fn crust_slice_str_ref_get(slice: CRustSliceStrRef, index: usize) -> CRustStrView {
+            let values = unsafe { (CRustSlice { data: slice.data.cast(), len: slice.len }).as_slice::<&str>() };
+            CRustStrView::from_str(values[index])
+        }
+    );
+    ($p:r_type) &[&str] => CRustSliceStrRef {
+        $out = CRustSliceStrRef { data: $p.as_ptr().cast(), len: $p.len() };
+    };
+    ($p:r_type) &[&str] <= CRustSliceStrRef {
+        $out = unsafe { (CRustSlice { data: $p.data.cast(), len: $p.len }).as_slice::<&str>() };
+    };
+    ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_string_slice.h\""]) => "RustSlice<const std::string_view, internal::StringSliceAccess<std::string_view, CRustSliceStrRef, CRustSliceStrRefElem, crust_slice_str_ref_get>>"
+        "RustSlice<const std::string_view, internal::StringSliceAccess<std::string_view, CRustSliceStrRef, CRustSliceStrRefElem, crust_slice_str_ref_get>>{$p}";
+    ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_string_slice.h\""]) <= "RustSlice<const std::string_view, internal::StringSliceAccess<std::string_view, CRustSliceStrRef, CRustSliceStrRefElem, crust_slice_str_ref_get>>"
+        "$p.as_c<CRustSliceStrRef>()";
+    ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_string_slice.h\""]) => "RustSlice<const boost::string_view, internal::StringSliceAccess<boost::string_view, CRustSliceStrRef, CRustSliceStrRefElem, crust_slice_str_ref_get>>"
+        "RustSlice<const boost::string_view, internal::StringSliceAccess<boost::string_view, CRustSliceStrRef, CRustSliceStrRefElem, crust_slice_str_ref_get>>{$p}";
+    ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_string_slice.h\""]) <= "RustSlice<const boost::string_view, internal::StringSliceAccess<boost::string_view, CRustSliceStrRef, CRustSliceStrRefElem, crust_slice_str_ref_get>>"
+        "$p.as_c<CRustSliceStrRef>()";
+);
+
+foreign_typemap!(
+    define_c_type!(module = "rust_string_slice.h";
+        #[repr(C)]
+        pub struct CRustSliceStringElem { _unused: u8 }
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustSliceString {
+            data: *const CRustSliceStringElem,
+            len: usize,
+        }
+        #[unsafe(no_mangle)]
+        pub extern "C" fn crust_slice_string_get(slice: CRustSliceString, index: usize) -> CRustStrView {
+            let values = unsafe { (CRustSlice { data: slice.data.cast(), len: slice.len }).as_slice::<String>() };
+            CRustStrView::from_str(values[index].as_str())
+        }
+    );
+    ($p:r_type) &[String] => CRustSliceString {
+        $out = CRustSliceString { data: $p.as_ptr().cast(), len: $p.len() };
+    };
+    ($p:r_type) &[String] <= CRustSliceString {
+        $out = unsafe { (CRustSlice { data: $p.data.cast(), len: $p.len }).as_slice::<String>() };
+    };
+    ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_string_slice.h\""]) => "RustSlice<const std::string_view, internal::StringSliceAccess<std::string_view, CRustSliceString, CRustSliceStringElem, crust_slice_string_get>>"
+        "RustSlice<const std::string_view, internal::StringSliceAccess<std::string_view, CRustSliceString, CRustSliceStringElem, crust_slice_string_get>>{$p}";
+    ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_string_slice.h\""]) <= "RustSlice<const std::string_view, internal::StringSliceAccess<std::string_view, CRustSliceString, CRustSliceStringElem, crust_slice_string_get>>"
+        "$p.as_c<CRustSliceString>()";
+    ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_string_slice.h\""]) => "RustSlice<const boost::string_view, internal::StringSliceAccess<boost::string_view, CRustSliceString, CRustSliceStringElem, crust_slice_string_get>>"
+        "RustSlice<const boost::string_view, internal::StringSliceAccess<boost::string_view, CRustSliceString, CRustSliceStringElem, crust_slice_string_get>>{$p}";
+    ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_string_slice.h\""]) <= "RustSlice<const boost::string_view, internal::StringSliceAccess<boost::string_view, CRustSliceString, CRustSliceStringElem, crust_slice_string_get>>"
+        "$p.as_c<CRustSliceString>()";
+);
+
+foreign_typemap!(
+    define_c_type!(module = "rust_string_slice.h";
+        #[repr(C)]
+        pub struct CRustSliceBoxStrElem { _unused: u8 }
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustSliceBoxStr {
+            data: *const CRustSliceBoxStrElem,
+            len: usize,
+        }
+        #[unsafe(no_mangle)]
+        pub extern "C" fn crust_slice_box_str_get(slice: CRustSliceBoxStr, index: usize) -> CRustStrView {
+            let values = unsafe { (CRustSlice { data: slice.data.cast(), len: slice.len }).as_slice::<Box<str>>() };
+            CRustStrView::from_str(values[index].as_ref())
+        }
+    );
+    ($p:r_type) &[Box<str>] => CRustSliceBoxStr {
+        $out = CRustSliceBoxStr { data: $p.as_ptr().cast(), len: $p.len() };
+    };
+    ($p:r_type) &[Box<str>] <= CRustSliceBoxStr {
+        $out = unsafe { (CRustSlice { data: $p.data.cast(), len: $p.len }).as_slice::<Box<str>>() };
+    };
+    ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_string_slice.h\""]) => "RustSlice<const std::string_view, internal::StringSliceAccess<std::string_view, CRustSliceBoxStr, CRustSliceBoxStrElem, crust_slice_box_str_get>>"
+        "RustSlice<const std::string_view, internal::StringSliceAccess<std::string_view, CRustSliceBoxStr, CRustSliceBoxStrElem, crust_slice_box_str_get>>{$p}";
+    ($p:f_type, option = "CppStrView::Std17", req_modules = ["\"rust_string_slice.h\""]) <= "RustSlice<const std::string_view, internal::StringSliceAccess<std::string_view, CRustSliceBoxStr, CRustSliceBoxStrElem, crust_slice_box_str_get>>"
+        "$p.as_c<CRustSliceBoxStr>()";
+    ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_string_slice.h\""]) => "RustSlice<const boost::string_view, internal::StringSliceAccess<boost::string_view, CRustSliceBoxStr, CRustSliceBoxStrElem, crust_slice_box_str_get>>"
+        "RustSlice<const boost::string_view, internal::StringSliceAccess<boost::string_view, CRustSliceBoxStr, CRustSliceBoxStrElem, crust_slice_box_str_get>>{$p}";
+    ($p:f_type, option = "CppStrView::Boost", req_modules = ["\"rust_string_slice.h\""]) <= "RustSlice<const boost::string_view, internal::StringSliceAccess<boost::string_view, CRustSliceBoxStr, CRustSliceBoxStrElem, crust_slice_box_str_get>>"
+        "$p.as_c<CRustSliceBoxStr>()";
 );
 
 foreign_typemap!(
