@@ -61,6 +61,31 @@ fn strings_grow_and_transfer_back_to_rust() {
 }
 
 #[test]
+fn string_vectors_transfer_ownership_and_elements() {
+    let mut values = Buffers_make_string_vec();
+    assert_eq!(values.len, 3);
+    let first = crust_vec_string_get(values, 0);
+    assert_eq!(first.len, 0);
+    let third = crust_vec_string_get(values, 2);
+    // SAFETY: values owns the strings and is unchanged during this read.
+    let bytes = unsafe { std::slice::from_raw_parts(third.data.cast::<u8>(), third.len) };
+    assert_eq!(bytes, "Привет".as_bytes());
+
+    let removed = crust_vec_string_remove(&mut values, 1);
+    assert_string(&removed, "a\0b");
+    crust_string_free(removed);
+    crust_vec_string_push(&mut values, CRustString::from_string("added".into()));
+    assert_eq!(Buffers_take_string_vec(values), "Привет".len() + "added".len());
+
+    let mut empty = crust_vec_string_new();
+    assert_eq!(empty.len, 0);
+    crust_vec_string_push(&mut empty, CRustString::from_string(String::new()));
+    assert_eq!(crust_vec_string_get(empty, 0).len, 0);
+    crust_vec_string_free(empty);
+    crust_vec_string_free(crust_vec_string_new());
+}
+
+#[test]
 fn vectors_can_be_borrowed_mutated_and_consumed() {
     for len in [0, 1, 8] {
         let vector = Buffers_make_vec(len);

@@ -1262,6 +1262,26 @@ foreign_class!(class StringSliceStore {
     fn StringSliceStore::same_boxed(&self, values: &[Box<str>]) -> bool;
 });
 
+pub struct StringVecStore;
+
+impl StringVecStore {
+    fn new() -> Self { Self }
+    fn strings(&self) -> Vec<String> {
+        vec![String::new(), "a\0b".into(), "Привет".into()]
+    }
+    fn append(&self, mut values: Vec<String>) -> Vec<String> {
+        values.push("from Rust".into());
+        values
+    }
+}
+
+foreign_class!(class StringVecStore {
+    self_type StringVecStore;
+    constructor StringVecStore::new() -> StringVecStore;
+    fn StringVecStore::strings(&self) -> Vec<String>;
+    fn StringVecStore::append(&self, values: Vec<String>) -> Vec<String>;
+});
+
 pub struct FooArc {
     val: i32,
     s: String,

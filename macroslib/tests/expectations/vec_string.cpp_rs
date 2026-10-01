@@ -1,0 +1,46 @@
+@@expect {"file":"test.rs","kind":"item","name":"StringVecs_strings","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn StringVecs_strings(this: *mut StringVecs) -> CRustVecString {
+    let this: &StringVecs = unsafe { this.as_mut().unwrap() };
+    let mut ret: Vec<String> = StringVecs::strings(this);
+    let mut ret: CRustVecString = CRustVecString::from_vec(ret);
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"StringVecs_append","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn StringVecs_append(
+    this: *mut StringVecs,
+    values: CRustVecString,
+) -> CRustVecString {
+    let mut values: Vec<String> = unsafe { values.into_vec() };
+    let this: &StringVecs = unsafe { this.as_mut().unwrap() };
+    let mut ret: Vec<String> = StringVecs::append(this, values);
+    let mut ret: CRustVecString = CRustVecString::from_vec(ret);
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"crust_vec_string_push","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn crust_vec_string_push(value: *mut CRustVecString, item: CRustString) {
+    let value = unsafe { &mut *value };
+    let mut values = unsafe { (*value).into_vec() };
+    values.push(unsafe { String::from_raw_parts(item.data.cast(), item.len, item.capacity) });
+    *value = CRustVecString::from_vec(values);
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"crust_vec_string_remove","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn crust_vec_string_remove(value: *mut CRustVecString, index: usize) -> CRustString {
+    let value = unsafe { &mut *value };
+    let mut values = unsafe { (*value).into_vec() };
+    let item = values.remove(index);
+    *value = CRustVecString::from_vec(values);
+    CRustString::from_string(item)
+}
+@@end
