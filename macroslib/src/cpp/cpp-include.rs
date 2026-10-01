@@ -175,6 +175,36 @@ pub struct CRustSliceBoxStr {
     len: usize,
 }
 
+#[allow(dead_code)]
+#[repr(C)]
+pub struct CRustVecStringElem { _unused: u8 }
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CRustVecString {
+    data: *mut CRustVecStringElem,
+    len: usize,
+    capacity: usize,
+}
+
+#[allow(dead_code)]
+impl CRustVecString {
+    fn from_vec(mut value: Vec<String>) -> Self {
+        let result = Self {
+            data: value.as_mut_ptr().cast(),
+            len: value.len(),
+            capacity: value.capacity(),
+        };
+        ::std::mem::forget(value);
+        result
+    }
+
+    unsafe fn into_vec(self) -> Vec<String> {
+        unsafe { Vec::from_raw_parts(self.data.cast(), self.len, self.capacity) }
+    }
+}
+
 foreign_typemap!(
     ($p:r_type) <T> Arc<Mutex<T>> => &Mutex<T> {
         $out = & $p;
@@ -1221,6 +1251,129 @@ using CppRustVec!() = RustVec<CRustVec!(), internal::NativeVecPolicy<CRustVec!()
         $out = unsafe { Vec::from_raw_parts($p.data, $p.len, $p.capacity) };
     };
     ($p:f_type, req_modules = ["\"CRustVecModule!().h\""]) <= "CppRustVec!()"
+        "$p.release()";
+);
+
+foreign_typemap!(
+    foreign_code!(module = "rust_vec_string.h";
+                    r##"
+#include "rust_str.h"
+typedef struct CRustVecStringElem CRustVecStringElem;
+typedef struct CRustVecString CRustVecString;
+"##);
+);
+
+foreign_typemap!(
+    define_c_type!(module = "rust_vec_string.h";
+        #[repr(C)]
+        pub struct CRustVecStringElem { _unused: u8 }
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustVecString {
+            data: *mut CRustVecStringElem,
+            len: usize,
+            capacity: usize,
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn crust_vec_string_new() -> CRustVecString {
+            CRustVecString::from_vec(Vec::new())
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn crust_vec_string_free(value: CRustVecString) {
+            drop(unsafe { value.into_vec() });
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn crust_vec_string_get(value: CRustVecString, index: usize) -> CRustStrView {
+            let values = unsafe { (CRustSlice { data: value.data.cast(), len: value.len }).as_slice::<String>() };
+            CRustStrView::from_str(values[index].as_str())
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn crust_vec_string_push(value: *mut CRustVecString, item: CRustString) {
+            let value = unsafe { &mut *value };
+            let mut values = unsafe { (*value).into_vec() };
+            values.push(unsafe { String::from_raw_parts(item.data.cast(), item.len, item.capacity) });
+            *value = CRustVecString::from_vec(values);
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn crust_vec_string_remove(value: *mut CRustVecString, index: usize) -> CRustString {
+            let value = unsafe { &mut *value };
+            let mut values = unsafe { (*value).into_vec() };
+            let item = values.remove(index);
+            *value = CRustVecString::from_vec(values);
+            CRustString::from_string(item)
+        }
+    );
+    foreign_code!(module = "rust_vec_string.h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_vec_impl.hpp"
+#include "rust_str.h"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+namespace internal {
+template <typename View> struct StringVecPolicy {
+    using value_type = RustString;
+    using reference = View;
+    using iterator = SliceIterator<CRustVecString, StringVecPolicy<View>>;
+    using const_iterator = iterator;
+
+    static CRustVecString empty() noexcept { return crust_vec_string_new(); }
+    static void free(CRustVecString vec) noexcept { crust_vec_string_free(vec); }
+    static View index(CRustVecString vec, size_t i) noexcept
+    {
+        const auto str = crust_vec_string_get(vec, i);
+        return str.len == 0 ? View{} : View{ str.data, str.len };
+    }
+    static iterator begin(CRustVecString vec) noexcept { return iterator{ vec, 0 }; }
+    static const_iterator cbegin(CRustVecString vec) noexcept { return begin(vec); }
+    static iterator end(CRustVecString vec) noexcept { return iterator{ vec, vec.len }; }
+    static const_iterator cend(CRustVecString vec) noexcept { return end(vec); }
+    static void push(CRustVecString &vec, RustString value) noexcept
+    {
+        crust_vec_string_push(&vec, value.release());
+    }
+    static RustString remove(CRustVecString &vec, size_t i) noexcept
+    {
+        assert(i < vec.len);
+        return RustString{ crust_vec_string_remove(&vec, i) };
+    }
+};
+} // namespace internal
+} // namespace $RUST_SWIG_USER_NAMESPACE
+#endif
+"##);
+    foreign_code!(module = "rust_vec_string.h";
+                    option = "CppStrView::Std17";
+                    r##"
+#ifdef __cplusplus
+namespace $RUST_SWIG_USER_NAMESPACE {
+using RustVecString = RustVec<CRustVecString, internal::StringVecPolicy<std::string_view>>;
+}
+#endif
+"##);
+    foreign_code!(module = "rust_vec_string.h";
+                    option = "CppStrView::Boost";
+                    r##"
+#ifdef __cplusplus
+namespace $RUST_SWIG_USER_NAMESPACE {
+using RustVecString = RustVec<CRustVecString, internal::StringVecPolicy<boost::string_view>>;
+}
+#endif
+"##);
+    ($p:r_type) Vec<String> => CRustVecString {
+        $out = CRustVecString::from_vec($p);
+    };
+    ($p:r_type) Vec<String> <= CRustVecString {
+        $out = unsafe { $p.into_vec() };
+    };
+    ($p:f_type, req_modules = ["\"rust_vec_string.h\""]) => "RustVecString"
+        "RustVecString{$p}";
+    ($p:f_type, req_modules = ["\"rust_vec_string.h\""]) <= "RustVecString"
         "$p.release()";
 );
 

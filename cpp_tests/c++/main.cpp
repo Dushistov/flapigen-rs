@@ -51,6 +51,7 @@
 #include "rust_interface/Session.hpp"
 #include "rust_interface/WorkWithSlice.hpp"
 #include "rust_interface/StringSliceStore.hpp"
+#include "rust_interface/StringVecStore.hpp"
 #include "rust_interface/TestToStringCallback.hpp"
 #include "rust_interface/CallMutTrait.hpp"
 
@@ -1576,6 +1577,41 @@ TEST(StringSliceStore, borrowedStrings)
     EXPECT_THROW(refs.at(0), std::out_of_range);
     EXPECT_THROW(strings.at(0), std::out_of_range);
     EXPECT_THROW(boxed.at(0), std::out_of_range);
+}
+
+TEST(StringVecStore, ownedStrings)
+{
+    StringVecStore store;
+    auto values = store.strings();
+    expect_string_slice(values);
+    auto removed = values.remove(0);
+    EXPECT_TRUE(removed.empty());
+    EXPECT_EQ(2u, values.size());
+    values.push(RustString{ RustString::CppStringViewT{ "tail" } });
+    EXPECT_EQ("tail", std::string(values.at(2).data(), values.at(2).size()));
+
+    auto returned = store.append(std::move(values));
+    EXPECT_EQ(4u, returned.size());
+    EXPECT_EQ(std::string("a\0b", 3),
+              std::string(returned.at(0).data(), returned.at(0).size()));
+    EXPECT_EQ("Привет", std::string(returned.at(1).data(), returned.at(1).size()));
+    EXPECT_EQ("tail", std::string(returned.at(2).data(), returned.at(2).size()));
+    EXPECT_EQ("from Rust", std::string(returned.at(3).data(), returned.at(3).size()));
+
+    RustVecString empty;
+    EXPECT_TRUE(empty.empty());
+    auto from_empty = store.append(std::move(empty));
+    EXPECT_EQ(1u, from_empty.size());
+    EXPECT_EQ("from Rust", std::string(from_empty.at(0).data(), from_empty.at(0).size()));
+    EXPECT_THROW(from_empty.at(1), std::out_of_range);
+
+    RustVecString scratch;
+    scratch.push(RustString{ RustString::CppStringViewT{ "payload" } });
+    EXPECT_EQ("payload", scratch.remove(0).to_std_string());
+    EXPECT_TRUE(scratch.empty());
+    scratch.push(RustString{ RustString::CppStringViewT{ "discard" } });
+    scratch.clear();
+    EXPECT_TRUE(scratch.empty());
 }
 
 int main(int argc, char *argv[])

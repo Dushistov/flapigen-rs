@@ -51,6 +51,14 @@ impl Buffers {
         value.len()
     }
 
+    fn make_string_vec() -> Vec<String> {
+        vec![String::new(), "a\0b".into(), "Привет".into()]
+    }
+
+    fn take_string_vec(value: Vec<String>) -> usize {
+        value.iter().map(String::len).sum()
+    }
+
     fn make_vec(len: u32) -> Vec<u32> {
         (0..len).collect()
     }
@@ -90,6 +98,8 @@ impl Buffers {
 foreign_class!(class Buffers {
     fn Buffers::make_string(value: &str) -> String;
     fn Buffers::take_string(value: String) -> usize;
+    fn Buffers::make_string_vec() -> Vec<String>;
+    fn Buffers::take_string_vec(value: Vec<String>) -> usize;
     fn Buffers::make_vec(len: u32) -> Vec<u32>;
     fn Buffers::take_vec(value: Vec<u32>) -> u32;
     fn Buffers::make_tracked_vec(len: u32) -> Vec<Tracked>;
