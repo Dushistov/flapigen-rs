@@ -11,6 +11,7 @@ from typing import List, Set, Optional
 JNI_TESTS = "jni_tests"
 PYTHON_TESTS = "python_tests"
 CPP_TESTS = "cpp_tests"
+CPP_SANITIZER_TESTS = "cpp_sanitizer_tests"
 MIRI_TESTS = "miri_tests"
 ANDROID_TESTS = "android-example"
 UNIT_TESTS = "unit_tests"
@@ -156,7 +157,8 @@ def build_cpp_example():
 
 
 @show_timing
-def build_cpp_code_with_cmake(test_cfg: Set[str], cmake_build_dir: str, addon_params):
+def build_cpp_code_with_cmake(test_cfg: Set[str], cmake_build_dir: str, addon_params,
+                              run_valgrind: bool = True, test_env=None):
     cmake_args = ["cmake"]
     cmake_args.extend(calc_cmake_generator())
     cmake_args.extend(addon_params)
@@ -193,8 +195,8 @@ def build_cpp_code_with_cmake(test_cfg: Set[str], cmake_build_dir: str, addon_pa
             subprocess.check_call(cur_cmake_args + [".."], cwd = str(cur_cmake_build_dir))
 
             subprocess.check_call(["cmake", "--build", "."], cwd = str(cur_cmake_build_dir))
-            subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cur_cmake_build_dir))
-            if sys.platform == "linux" or sys.platform == "linux2":
+            subprocess.check_call(["ctest", "--output-on-failure"], cwd = str(cur_cmake_build_dir), env=test_env)
+            if run_valgrind and (sys.platform == "linux" or sys.platform == "linux2"):
                 subprocess.check_call(["valgrind", "--error-exitcode=1", "--leak-check=full",
                                        "--show-leak-kinds=all", "--errors-for-leak-kinds=all",
                                        "--suppressions=../../valgrind.supp",
@@ -280,6 +282,8 @@ def main():
             test_set = set([JNI_TESTS])
         elif arg == "--cpp-only-tests":
             test_set = set([CPP_TESTS])
+        elif arg == "--cpp-sanitizer-tests":
+            test_set = set([CPP_SANITIZER_TESTS])
         elif arg == "--miri-only-tests":
             test_set = set([MIRI_TESTS])
         elif arg == "--skip-java-tests":
@@ -328,6 +332,22 @@ def main():
         build_cpp_code_with_cmake(test_cfg, os.path.join("cpp_tests", "c++", "build"), [])
         purge(os.path.join("cpp_tests", "c++", "rust_interface"), ".*\\.h.*$")
         build_cpp_code_with_cmake(test_cfg, os.path.join("cpp_tests", "c++", "build_with_boost"), ["-DUSE_BOOST:BOOL=ON"])
+
+    if CPP_SANITIZER_TESTS in test_set:
+        if sys.platform not in ("linux", "linux2"):
+            sys.exit("C++ sanitizer tests currently require Linux")
+        if shutil.which("clang++") is None:
+            sys.exit("C++ sanitizer tests require clang++ in PATH")
+        # The Rust static library is linked normally; these flags instrument C++ code only.
+        sanitizer_flags = "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -g"
+        cmake_params = ["-DCMAKE_CXX_COMPILER=clang++",
+                        "-DCMAKE_CXX_FLAGS:String=" + sanitizer_flags,
+                        "-DCMAKE_EXE_LINKER_FLAGS:String=-fsanitize=address,undefined"]
+        sanitizer_env = os.environ.copy()
+        sanitizer_env["ASAN_OPTIONS"] = "detect_leaks=1:halt_on_error=1"
+        sanitizer_env["UBSAN_OPTIONS"] = "halt_on_error=1:print_stacktrace=1"
+        build_cpp_code_with_cmake({DEBUG}, os.path.join("cpp_tests", "c++", "build_sanitizers"),
+                                  cmake_params, run_valgrind=False, test_env=sanitizer_env)
 
     if ANDROID_TESTS in test_set:
         build_for_android(is_windows)

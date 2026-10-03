@@ -48,7 +48,7 @@ pub extern "C" fn EmptyViews_take_str(value: CRustStrView) -> CRustString {
 
 @@end
 
-@@expect {"after":"#[allow(non_snake_case)]","before":"::std::mem::forget(s);\n    ret\n}\n","file":"test.rs","kind":"between"}
+@@expect {"file":"test.rs","kind":"item","name":"crust_string_push_str","form":"definition"}
 #[unsafe(no_mangle)]
 pub extern "C" fn crust_string_push_str(x: CRustString, s: CRustStrView) -> CRustString {
     let mut x = unsafe { String::from_raw_parts(x.data.cast(), x.len, x.capacity) };
@@ -63,32 +63,4 @@ pub extern "C" fn crust_string_push_str(x: CRustString, s: CRustStrView) -> CRus
     x.push_str(addon);
     CRustString::from_string(x)
 }
-
-@@end
-
-@@expect {"after":"#[allow(dead_code)]\n#[repr(C)]\n#[derive(Copy, Clone)]\npub struct CRustForeignVec","before":"data: *mut ::std::os::raw::c_void,\n    len: usize,\n    capacity: usize,\n}\n#[allow(dead_code)]\n","file":"test.rs","kind":"between"}
-impl CRustVecAccess {
-    pub fn from_vec<T>(mut v: Vec<T>) -> Self {
-        let data = v.as_mut_ptr() as *mut ::std::os::raw::c_void;
-        let len = v.len();
-        let capacity = v.capacity();
-        ::std::mem::forget(v);
-        Self {
-            data,
-            len,
-            capacity,
-        }
-    }
-    pub fn to_slice<'a, T>(cs: Self) -> &'a [T] {
-        if cs.len == 0 {
-            &[]
-        } else {
-            unsafe { ::std::slice::from_raw_parts(cs.data as *const T, cs.len) }
-        }
-    }
-    pub fn to_vec<T>(cs: Self) -> Vec<T> {
-        unsafe { Vec::from_raw_parts(cs.data.cast(), cs.len, cs.capacity) }
-    }
-}
-
 @@end

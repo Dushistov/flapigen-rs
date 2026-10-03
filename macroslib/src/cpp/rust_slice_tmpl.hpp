@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 
@@ -225,6 +226,20 @@ public:
     const_reference operator[](size_t i) const noexcept
     {
         assert(i < size());
+        return Access::index(as_const_storage(), i);
+    }
+    reference at(size_t i)
+    {
+        if (i >= size()) {
+            throw std::out_of_range("RustSlice::at");
+        }
+        return Access::index(slice_, i);
+    }
+    const_reference at(size_t i) const
+    {
+        if (i >= size()) {
+            throw std::out_of_range("RustSlice::at");
+        }
         return Access::index(as_const_storage(), i);
     }
     iterator begin() noexcept { return MutableIterator::at(slice_, 0); }

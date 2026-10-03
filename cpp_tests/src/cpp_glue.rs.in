@@ -1081,7 +1081,7 @@ foreign_typemap!(
 "#;
 );
 
-unsafe impl Send for CFnOnceCRustResultCRustForeignVecCRustString {}
+unsafe impl Send for CFnOnceCRustResultCRustForeignVecFooCRustString {}
 
 foreign_class!(class TestFuture {
     fn call_fn(f: impl FnOnce(Foo)) {
@@ -1226,9 +1226,66 @@ foreign_class!(
 );
 //ANCHOR_END: inline_method_self
 
+pub struct StringSliceStore {
+    refs: Vec<&'static str>,
+    strings: Vec<String>,
+    boxed: Vec<Box<str>>,
+}
+
+impl StringSliceStore {
+    fn new(empty: bool) -> Self {
+        if empty {
+            return Self { refs: Vec::new(), strings: Vec::new(), boxed: Vec::new() };
+        }
+        let refs = vec!["", "a\0b", "Привет"];
+        let strings = refs.iter().map(|value| (*value).to_owned()).collect();
+        let boxed = refs.iter().map(|value| Box::<str>::from(*value)).collect();
+        Self { refs, strings, boxed }
+    }
+
+    fn refs(&self) -> &[&str] { &self.refs }
+    fn strings(&self) -> &[String] { &self.strings }
+    fn boxed(&self) -> &[Box<str>] { &self.boxed }
+    fn same_refs(&self, values: &[&str]) -> bool { self.refs == values }
+    fn same_strings(&self, values: &[String]) -> bool { self.strings == values }
+    fn same_boxed(&self, values: &[Box<str>]) -> bool { self.boxed == values }
+}
+
+foreign_class!(class StringSliceStore {
+    self_type StringSliceStore;
+    constructor StringSliceStore::new(empty: bool) -> StringSliceStore;
+    fn StringSliceStore::refs(&self) -> &[&str];
+    fn StringSliceStore::strings(&self) -> &[String];
+    fn StringSliceStore::boxed(&self) -> &[Box<str>];
+    fn StringSliceStore::same_refs(&self, values: &[&str]) -> bool;
+    fn StringSliceStore::same_strings(&self, values: &[String]) -> bool;
+    fn StringSliceStore::same_boxed(&self, values: &[Box<str>]) -> bool;
+});
+
+pub struct StringVecStore;
+
+impl StringVecStore {
+    fn new() -> Self { Self }
+    fn strings(&self) -> Vec<String> {
+        vec![String::new(), "a\0b".into(), "Привет".into()]
+    }
+    fn append(&self, mut values: Vec<String>) -> Vec<String> {
+        values.push("from Rust".into());
+        values
+    }
+}
+
+foreign_class!(class StringVecStore {
+    self_type StringVecStore;
+    constructor StringVecStore::new() -> StringVecStore;
+    fn StringVecStore::strings(&self) -> Vec<String>;
+    fn StringVecStore::append(&self, values: Vec<String>) -> Vec<String>;
+});
+
 pub struct FooArc {
     val: i32,
     s: String,
+    childs: Vec<Arc<FooArc>>,
 }
 
 impl FooArc {
@@ -1238,15 +1295,19 @@ impl FooArc {
     fn s(&self) -> &str {
         &self.s
     }
+    fn childs(&self) -> &[Arc<FooArc>] {
+        &self.childs
+    }
 }
 
 foreign_class!(class FooArc {
     self_type FooArc;
     constructor new(val: i32, s: String) -> Arc<FooArc> {
-        Arc::new(FooArc { val, s })
+        Arc::new(FooArc { val, s, childs: vec![] })
     }
     fn FooArc::val(&self) -> i32;
     fn FooArc::s(&self) -> &str;
+    fn FooArc::childs(&self) -> &[Arc<FooArc>];
 });
 
 pub struct WorkWithSlice {
@@ -1256,7 +1317,9 @@ pub struct WorkWithSlice {
 pub struct ZeroSized;
 
 impl ZeroSized {
-    fn value(&self) -> i32 { 19 }
+    fn value(&self) -> i32 {
+        19
+    }
 }
 
 foreign_class!(class ZeroSized {
@@ -1272,6 +1335,11 @@ impl WorkWithSlice {
             d.push(Arc::new(FooArc {
                 val: i,
                 s: format!("Arc<FooArc> {}", i),
+                childs: vec![Arc::new(FooArc {
+                    val: i * 2,
+                    s: "child".into(),
+                    childs: vec![],
+                })],
             }));
         }
         Self { d }
@@ -1321,16 +1389,19 @@ foreign_typemap!(
 #ifdef __cplusplus
 #include "foo_arc_slice_access.h"
 #include "rust_slice_tmpl.hpp"
-#include "FooArc.hpp"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
+// rust_slice.h can be included while FooArc.hpp is still being parsed.
+template<bool> class FooArcWrapper;
 struct FooArcAccess {
        // The elements are Arc<FooArc>, not FooArcOpaque objects.
        using storage_type = void;
-       static FooArcRef index(internal::SliceStorage<const void *> slice, size_t idx) noexcept {
-           auto p = static_cast<const FooArcOpaque *>(
+       // Delay use of FooArcWrapper's definition until the slice is indexed.
+       template<typename Ref = FooArcWrapper<false>>
+       static Ref index(internal::SliceStorage<const void *> slice, size_t idx) noexcept {
+           auto p = static_cast<const typename Ref::CForeignType *>(
                foo_arc_access(CRustSliceArcFooArc{slice.data, slice.len}, idx));
-           return FooArcRef{ p };
+           return Ref{ p };
        }
 };
 }
@@ -1348,18 +1419,42 @@ struct FooArcAccess {
         "$p.as_c<CRustSliceArcFooArc>()";
 );
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CRustVecArcFooArc {
+    data: *mut ::std::os::raw::c_void,
+    len: usize,
+    capacity: usize,
+}
+
 foreign_typemap!(
     define_c_type!(
         module = "foo_arc_vec_access.h";
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRustVecArcFooArc {
+            data: *mut ::std::os::raw::c_void,
+            len: usize,
+            capacity: usize,
+        }
         #[no_mangle]
-        pub extern "C" fn foo_arc_vec_access(sl: CRustVecAccess, idx: usize) -> *const ::std::os::raw::c_void {
-            let v = CRustVecAccess::to_slice::<Arc<FooArc>>(sl);
+        pub extern "C" fn foo_arc_vec_new() -> CRustVecArcFooArc {
+            let raw = CRustVecAccess::from_vec(Vec::<Arc<FooArc>>::new());
+            CRustVecArcFooArc { data: raw.data, len: raw.len, capacity: raw.capacity }
+        }
+        #[no_mangle]
+        pub extern "C" fn foo_arc_vec_access(sl: CRustVecArcFooArc, idx: usize) -> *const ::std::os::raw::c_void {
+            let v = CRustVecAccess::to_slice::<Arc<FooArc>>(CRustVecAccess {
+                data: sl.data, len: sl.len, capacity: sl.capacity,
+            });
             let elem_ref: &FooArc = &v[idx];
             elem_ref as *const FooArc as *const ::std::os::raw::c_void
         }
         #[no_mangle]
-        pub extern "C" fn foo_arc_vec_drop(sl: CRustVecAccess) {
-            let v = CRustVecAccess::to_vec::<Arc<FooArc>>(sl);
+        pub extern "C" fn foo_arc_vec_drop(sl: CRustVecArcFooArc) {
+            let v = CRustVecAccess::to_vec::<Arc<FooArc>>(CRustVecAccess {
+                data: sl.data, len: sl.len, capacity: sl.capacity,
+            });
             drop(v);
         }
     );
@@ -1368,25 +1463,34 @@ foreign_typemap!(
 #pragma once
 
 #include "foo_arc_vec_access.h"
-#include "rust_vec_access.hpp"
+#include "rust_vec_impl.hpp"
 #include "FooArc.hpp"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
-struct FooArcVecAccess {
-       using ElemType = FooArcRef;
-       static FooArcRef index(CRustVecAccess cs, size_t idx) noexcept {
+struct FooArcVecPolicy {
+       using value_type = FooArcRef;
+       using reference = FooArcRef;
+       using iterator = internal::SliceIterator<CRustVecArcFooArc, FooArcVecPolicy>;
+       using const_iterator = iterator;
+       static CRustVecArcFooArc empty() noexcept { return foo_arc_vec_new(); }
+       static FooArcRef index(CRustVecArcFooArc cs, size_t idx) noexcept {
            auto p = static_cast<const FooArcOpaque *>(foo_arc_vec_access(cs, idx));
            return FooArcRef{ p };
        }
-       static void free(CRustVecAccess cs) noexcept {
+       static void free(CRustVecArcFooArc cs) noexcept {
            foo_arc_vec_drop(cs);
        }
+       static iterator begin(CRustVecArcFooArc cs) noexcept { return iterator{cs, 0}; }
+       static const_iterator cbegin(CRustVecArcFooArc cs) noexcept { return begin(cs); }
+       static iterator end(CRustVecArcFooArc cs) noexcept { return iterator{cs, cs.len}; }
+       static const_iterator cend(CRustVecArcFooArc cs) noexcept { return end(cs); }
 };
-using RustVecFooArc = RustVecAccess<FooArcVecAccess, CRustVecAccess>;
+using RustVecFooArc = RustVec<CRustVecArcFooArc, FooArcVecPolicy>;
 }
 "##);
-    ($p:r_type) Vec<Arc<FooArc>> => CRustVecAccess {
-        $out = CRustVecAccess::from_vec($p);
+    ($p:r_type) Vec<Arc<FooArc>> => CRustVecArcFooArc {
+        let raw = CRustVecAccess::from_vec($p);
+        $out = CRustVecArcFooArc { data: raw.data, len: raw.len, capacity: raw.capacity };
     };
     ($p:f_type, req_modules = ["\"rust_vec_foo_arc.hpp\""]) => "RustVecFooArc"
         "RustVecFooArc{$p}";

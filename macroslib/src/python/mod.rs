@@ -459,10 +459,7 @@ fn generate_conversion_for_argument(
         reference_allowed,
     )? {
         Ok((ty, conversion))
-    } else if rust_type
-        .implements
-        .contains_path(&parse(ENUM_TRAIT_NAME, src_id)?)
-    {
+    } else if rust_type.implements_path(&parse(ENUM_TRAIT_NAME, src_id)?) {
         let enum_py_mod: Ident = parse(&py_wrapper_mod_name(&rust_type.normalized_name), src_id)?;
         Ok((
             parse_type!(u32),
@@ -573,10 +570,7 @@ fn generate_conversion_for_return(
         src_id,
     )? {
         Ok((ty, conversion))
-    } else if rust_type
-        .implements
-        .contains_path(&parse(ENUM_TRAIT_NAME, src_id)?)
-    {
+    } else if rust_type.implements_path(&parse(ENUM_TRAIT_NAME, src_id)?) {
         Ok((
             parse_type!(u32),
             quote! {
@@ -766,10 +760,10 @@ fn smart_pointer(
     conv_map: &mut TypeMap,
     src_id: SourceId,
 ) -> SmartPointerInfo {
-    if let Some(inner_ty) = ast::check_if_smart_pointer_return_inner_type(rust_type, "Arc") {
+    if let Some(inner_ty) = ast::check_if_smart_pointer_return_inner_type(&rust_type.ty, "Arc") {
         let rust_inner_ty = conv_map.find_or_alloc_rust_type(&inner_ty, src_id);
         if let Some(inner_inner_ty) =
-            ast::check_if_smart_pointer_return_inner_type(&rust_inner_ty, "Mutex")
+            ast::check_if_smart_pointer_return_inner_type(&rust_inner_ty.ty, "Mutex")
         {
             SmartPointerInfo::new(
                 PointerType::ArcMutex,
@@ -778,13 +772,16 @@ fn smart_pointer(
         } else {
             SmartPointerInfo::new(PointerType::Arc, rust_inner_ty)
         }
-    } else if let Some(inner_ty) = ast::check_if_smart_pointer_return_inner_type(rust_type, "Mutex")
+    } else if let Some(inner_ty) =
+        ast::check_if_smart_pointer_return_inner_type(&rust_type.ty, "Mutex")
     {
         SmartPointerInfo::new(
             PointerType::Mutex,
             conv_map.find_or_alloc_rust_type(&inner_ty, src_id),
         )
-    } else if let Some(inner_ty) = ast::check_if_smart_pointer_return_inner_type(rust_type, "Box") {
+    } else if let Some(inner_ty) =
+        ast::check_if_smart_pointer_return_inner_type(&rust_type.ty, "Box")
+    {
         SmartPointerInfo::new(
             PointerType::Box,
             conv_map.find_or_alloc_rust_type(&inner_ty, src_id),

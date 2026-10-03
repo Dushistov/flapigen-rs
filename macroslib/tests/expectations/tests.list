@@ -3,6 +3,7 @@ bool_in_out
 circular_deps
 class_with_dummy_constructor
 cpp_code_cache
+cpp_issue_309_option_refs
 cpp_include_custom_rule
 cpp_include_return_only_result_vec
 cpp_qdate_typemap
@@ -30,6 +31,7 @@ own_objects_creation
 pass_foreign_trait_cpp
 pass_objects_as_param
 pass_objects_as_param_simple
+preallocated_foreign_class
 pass_slice_as_args
 references
 return_foreign_class1
@@ -75,3 +77,6 @@ c_self_type
 callback_ref_as_param
 pass_c_function_as_param
 cpp_empty_views
+return_string_slices
+vec_string
+direct_foreign_slices

@@ -7,7 +7,7 @@ use proc_macro2::Span;
 use quote::ToTokens;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
-use std::{fmt, ops, rc::Rc};
+use std::{cell::RefCell, fmt, ops, rc::Rc};
 use syn::spanned::Spanned;
 
 use super::ast::ForeignTypeName;
@@ -17,7 +17,8 @@ pub(crate) struct RustTypeS {
     pub src_id: SourceId,
     pub ty: syn::Type,
     pub normalized_name: String,
-    pub implements: ImplementsSet,
+    /// Trait registration must remain visible through previously returned RustType clones.
+    implements: Rc<RefCell<ImplementsSet>>,
     pub(in crate::typemap) graph_idx: RustTypeIdx,
     /// like normalized_name, but _with_ dyn keyword
     typename_without_lifetimes: String,
@@ -43,22 +44,35 @@ impl RustTypeS {
         RustTypeS {
             ty,
             normalized_name: norm_name.into(),
-            implements: ImplementsSet::default(),
+            implements: Rc::new(RefCell::new(ImplementsSet::default())),
             graph_idx: RustTypeIdx::new(0),
             src_id,
             typename_without_lifetimes: ty_lftms.into_token_stream().to_string(),
         }
     }
     #[cfg(test)]
-    pub(in crate::typemap) fn implements(mut self, trait_name: &str) -> RustTypeS {
-        self.implements.insert(trait_name.into());
+    pub(in crate::typemap) fn implements(self, trait_name: &str) -> RustTypeS {
+        self.add_implements(&[trait_name]);
         self
+    }
+    pub(crate) fn add_implements(&self, traits_name: &[&str]) {
+        let mut implements = self.implements.borrow_mut();
+        for trait_name in traits_name {
+            implements.insert((*trait_name).into());
+        }
+    }
+    pub(crate) fn implements_subset(&self, subset: &TraitNamesSet<'_>) -> bool {
+        self.implements.borrow().contains_subset(subset)
+    }
+    pub(crate) fn implements_path(&self, path: &syn::Path) -> bool {
+        self.implements.borrow().contains_path(path)
     }
     pub(in crate::typemap) fn merge(&mut self, other: &RustTypeS) {
         self.ty = other.ty.clone();
         self.normalized_name = other.normalized_name.clone();
         self.typename_without_lifetimes = other.typename_without_lifetimes.clone();
-        self.implements.insert_set(&other.implements);
+        let other_implements = other.implements.borrow().clone();
+        self.implements.borrow_mut().insert_set(&other_implements);
     }
     pub(crate) fn src_id_span(&self) -> (SourceId, Span) {
         (self.src_id, self.ty.span())

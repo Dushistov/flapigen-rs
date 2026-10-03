@@ -43,6 +43,7 @@ use proc_macro2::TokenStream;
 use rustc_hash::{FxHashMap, FxHashSet};
 use strum::IntoEnumIterator;
 use syn::spanned::Spanned;
+use syn::Type;
 
 use crate::{
     cpp::{map_class_self_type::register_typemap_for_self_type, map_type::map_type},
@@ -257,6 +258,14 @@ impl CppConfig {
                 class.src_id,
             );
 
+            if let Some(element) = direct_slice_element_type(self_desc) {
+                conv_map.find_or_alloc_rust_type_that_implements(
+                    element,
+                    &["SwigForeignClassDirectAccess"],
+                    class.src_id,
+                );
+            }
+
             if class.smart_ptr_copy_derived() {
                 if class.copy_derived() {
                     println!(
@@ -264,8 +273,8 @@ impl CppConfig {
                         class.name, SMART_PTR_COPY_TRAIT
                     );
                 }
-                if check_if_smart_pointer_return_inner_type(&this_type, "Rc").is_none()
-                    && check_if_smart_pointer_return_inner_type(&this_type, "Arc").is_none()
+                if check_if_smart_pointer_return_inner_type(&this_type.ty, "Rc").is_none()
+                    && check_if_smart_pointer_return_inner_type(&this_type.ty, "Arc").is_none()
                 {
                     return Err(DiagnosticError::new(
                         class.src_id,
@@ -299,6 +308,25 @@ impl CppConfig {
         }
         conv_map.find_or_alloc_rust_type(&class.self_type_as_ty(), class.src_id);
         Ok(())
+    }
+}
+
+// A C++ wrapper points directly at T when the constructor returns its self_type.
+// Smart-pointer self types have an indirect layout and cannot use T's stride.
+fn direct_slice_element_type(desc: &crate::types::SelfTypeDesc) -> Option<&Type> {
+    use crate::typemap::ast::normalize_type;
+
+    let self_ty = &desc.self_type;
+    if check_if_smart_pointer_return_inner_type(self_ty, "Box").is_some()
+        || check_if_smart_pointer_return_inner_type(self_ty, "Rc").is_some()
+        || check_if_smart_pointer_return_inner_type(self_ty, "Arc").is_some()
+    {
+        return None;
+    }
+    if normalize_type(&desc.constructor_ret_type) == normalize_type(self_ty) {
+        Some(self_ty)
+    } else {
+        None
     }
 }
 
@@ -634,6 +662,91 @@ mod tests {
     use crate::{Generator, LanguageConfig};
     use petgraph::Direction;
     use syn::parse_quote;
+
+    #[test]
+    fn slices_of_arc_and_rc_foreign_objects_require_explicit_typemaps() {
+        let mut unexpectedly_accepted = Vec::new();
+        for smart_pointer in ["Arc", "Rc"] {
+            for method in [
+                format!("fn Holder::get(&self) -> &[{smart_pointer}<Node>];"),
+                format!("fn Holder::take(&self, values: &[{smart_pointer}<Node>]);"),
+            ] {
+                let output_dir = tempfile::tempdir().unwrap();
+                let config = CppConfig::new(output_dir.path().to_path_buf(), "test".into());
+                let mut generator =
+                    Generator::new(LanguageConfig::CppConfig(config)).with_pointer_target_width(64);
+                let code = format!(
+                    "foreign_class!(class Node {{\n\
+                     self_type Node;\n\
+                     constructor Node::new() -> {smart_pointer}<Node>;\n\
+                     }});\n\
+                     foreign_class!(class Holder {{\n\
+                     self_type Holder;\n\
+                     constructor Holder::new() -> Holder;\n\
+                     {method}\n\
+                     }});"
+                );
+                let src_id = generator.src_reg.register(SourceCode {
+                    id_of_code: "arc_rc_slice_without_typemap.rs".into(),
+                    code,
+                });
+                match generator.expand_str(&[src_id], output_dir.path().join("glue.rs")) {
+                    Ok(()) => unexpectedly_accepted.push(method),
+                    Err(error) => {
+                        let message = error.to_string();
+                        assert!(
+                            message.contains("Do not know conversion")
+                                && message.contains(smart_pointer)
+                                && message.contains("Node"),
+                            "unexpected error for {method}: {error}"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(
+            unexpectedly_accepted.is_empty(),
+            "slices accepted without an explicit typemap: {unexpectedly_accepted:?}"
+        );
+    }
+
+    #[test]
+    fn indirect_foreign_class_slices_are_not_direct_mapped() {
+        for (constructor_type, slice_type) in [
+            ("Arc<Node>", "Node"),
+            ("Rc<Node>", "Node"),
+            ("Box<Box<Node>>", "Node"),
+            ("Node", "Box<Node>"),
+            ("Box<Box<Node>>", "Box<Node>"),
+        ] {
+            let output_dir = tempfile::tempdir().unwrap();
+            let config = CppConfig::new(output_dir.path().to_path_buf(), "test".into());
+            let mut generator =
+                Generator::new(LanguageConfig::CppConfig(config)).with_pointer_target_width(64);
+            let code = format!(
+                "foreign_class!(class Node {{\n\
+                 self_type Node;\n\
+                 constructor Node::new() -> {constructor_type};\n\
+                 }});\n\
+                 foreign_class!(class Holder {{\n\
+                 self_type Holder;\n\
+                 constructor Holder::new() -> Holder;\n\
+                 fn Holder::slice(&self) -> &[{slice_type}];\n\
+                 }});"
+            );
+            let src_id = generator.src_reg.register(SourceCode {
+                id_of_code: "indirect_slice.rs".into(),
+                code,
+            });
+            let error = generator
+                .expand_str(&[src_id], output_dir.path().join("glue.rs"))
+                .expect_err("indirect slice must not use direct storage");
+            assert!(
+                error.to_string().contains("conversion"),
+                "unexpected error for constructor {constructor_type} and &[{slice_type}]: {error}"
+            );
+        }
+    }
 
     #[test]
     fn slice_conversion_graph_keeps_element_types_separate() {

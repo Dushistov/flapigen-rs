@@ -8,7 +8,9 @@
 #include <array>
 #include <limits>
 #include <iostream>
+#include <iterator>
 #include <sstream>
+#include <stdexcept>
 #include <thread>
 #include <chrono>
 #include <mutex>
@@ -48,6 +50,8 @@
 #include "rust_interface/TestMultiThreadCallback.hpp"
 #include "rust_interface/Session.hpp"
 #include "rust_interface/WorkWithSlice.hpp"
+#include "rust_interface/StringSliceStore.hpp"
+#include "rust_interface/StringVecStore.hpp"
 #include "rust_interface/TestToStringCallback.hpp"
 #include "rust_interface/CallMutTrait.hpp"
 
@@ -95,6 +99,20 @@ static_assert(!std::is_constructible<RustSlice<Foo>, CRustSliceForeignFoo>::valu
               "mutable slices reject read-only descriptors");
 static_assert(!std::is_constructible<RustSlice<Foo>, Foo *, size_t>::value,
               "C++ wrapper arrays are not Rust foreign-object slices");
+using StrRefSlice = decltype(std::declval<StringSliceStore &>().refs());
+using StringSlice = decltype(std::declval<StringSliceStore &>().strings());
+using BoxStrSlice = decltype(std::declval<StringSliceStore &>().boxed());
+static_assert(!std::is_constructible<StrRefSlice, CRustSliceString>::value,
+              "str-reference slices reject String descriptors");
+static_assert(!std::is_constructible<StringSlice, CRustSliceBoxStr>::value,
+              "String slices reject boxed-str descriptors");
+static_assert(!std::is_constructible<BoxStrSlice, CRustSliceStrRef>::value,
+              "boxed-str slices reject str-reference descriptors");
+static_assert(std::is_same<decltype(std::declval<RustSlice<int32_t> &>().at(0)), int32_t &>::value,
+              "mutable slice at() must return a mutable reference");
+static_assert(std::is_same<decltype(std::declval<const RustSlice<int32_t> &>().at(0)),
+                           const int32_t &>::value,
+              "const slice at() must match const operator[]");
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 static std::atomic<uint32_t> c_simple_cb_counter_without_args{ 0 };
@@ -1394,6 +1412,79 @@ TEST(SmartPtrCopy, smokeTest)
               static_cast<const SessionOpaque *>(session3));
 }
 
+TEST(RustSlice, atChecksBounds)
+{
+    int32_t values[] = { 7, 9 };
+    RustSlice<int32_t> mutable_native{ values, 2 };
+    EXPECT_EQ(7, mutable_native.at(0));
+    mutable_native.at(1) = 10;
+    const auto &const_native = mutable_native;
+    EXPECT_EQ(10, const_native.at(1));
+    EXPECT_THROW(mutable_native.at(2), std::out_of_range);
+    EXPECT_THROW(const_native.at(std::numeric_limits<size_t>::max()), std::out_of_range);
+
+    const RustSlice<const int32_t> read_only_native{ values, 2 };
+    EXPECT_EQ(7, read_only_native.at(0));
+    EXPECT_EQ(10, read_only_native.at(1));
+    EXPECT_THROW(read_only_native.at(2), std::out_of_range);
+
+    RustSlice<const int32_t> empty_native;
+    EXPECT_THROW(empty_native.at(0), std::out_of_range);
+
+    auto vec = TestWorkWithVec::create_foo_vec(2);
+    auto mutable_foreign = vec.as_slice_mut();
+    EXPECT_EQ(0, mutable_foreign.at(0).f(0, 0));
+    EXPECT_EQ(1, mutable_foreign.at(1).f(0, 0));
+    EXPECT_THROW(mutable_foreign.at(2), std::out_of_range);
+    const auto foreign = vec.as_slice();
+    EXPECT_EQ(0, foreign.at(0).f(0, 0));
+    EXPECT_EQ(1, foreign.at(1).f(0, 0));
+    EXPECT_THROW(foreign.at(2), std::out_of_range);
+
+    WorkWithSlice obj(0, 2);
+    const auto custom = obj.slice();
+    EXPECT_EQ(0, custom.at(0).val());
+    EXPECT_EQ(1, custom.at(1).val());
+    EXPECT_THROW(custom.at(2), std::out_of_range);
+}
+
+TEST(RustVec, unifiedAccessAndOwnership)
+{
+    TestWorkWithVec source{ "abc" };
+    RustVecu32 native{ source.get_vec_u32() };
+    ASSERT_EQ(4u, native.size());
+    EXPECT_EQ(0u, native.at(0));
+    EXPECT_THROW(native.at(native.size()), std::out_of_range);
+    EXPECT_EQ(native.size(), static_cast<size_t>(std::distance(native.begin(), native.end())));
+    auto native_owned = native.release();
+    EXPECT_TRUE(native.empty());
+    CRustVecu32_free(native_owned);
+    native.clear();
+
+    auto foreign = TestWorkWithVec::create_foo_vec(2);
+    EXPECT_EQ(0, foreign.at(0).f(0, 0));
+    EXPECT_EQ(1, foreign.at(1).f(0, 0));
+    EXPECT_THROW(foreign.at(2), std::out_of_range);
+    auto moved_foreign = std::move(foreign);
+    EXPECT_TRUE(foreign.empty());
+    EXPECT_EQ(2u, moved_foreign.as_slice().size());
+    moved_foreign.clear();
+    EXPECT_TRUE(moved_foreign.empty());
+    moved_foreign.push(Foo{ 9, "nine" });
+    EXPECT_EQ(9, moved_foreign.remove(0).f(0, 0));
+
+    WorkWithSlice custom_source(0, 2);
+    auto custom = custom_source.vec();
+    EXPECT_EQ(0, custom.at(0).val());
+    EXPECT_EQ(1, custom.at(1).val());
+    EXPECT_THROW(custom.at(2), std::out_of_range);
+    auto moved_custom = std::move(custom);
+    EXPECT_TRUE(custom.empty());
+    EXPECT_EQ(2u, moved_custom.size());
+    moved_custom.clear();
+    EXPECT_TRUE(moved_custom.empty());
+}
+
 TEST(WorkWithSlice, smokeTest)
 {
     const auto zeros = WorkWithSlice::zero_sized_slice();
@@ -1415,6 +1506,10 @@ TEST(WorkWithSlice, smokeTest)
             fmt << "Arc<FooArc> " << i;
             ASSERT_EQ(fmt.str(), sl[i].s());
             ASSERT_EQ(int32_t(i), sl[i].val());
+            const auto children = sl[i].childs();
+            ASSERT_EQ(1u, children.size());
+            EXPECT_EQ(static_cast<int32_t>(i * 2), children.at(0).val());
+            EXPECT_EQ("child", children.at(0).s());
         }
         size_t iter_count = 0;
         for (const auto &elem : sl) {
@@ -1432,6 +1527,91 @@ TEST(WorkWithSlice, smokeTest)
             ASSERT_EQ(int32_t(i), sl[i].val());
         }
     }
+}
+
+template <typename Slice> static void expect_string_slice(const Slice &slice)
+{
+    const std::string expected[] = { "", std::string("a\0b", 3), "Привет" };
+    ASSERT_EQ(3u, slice.size());
+    EXPECT_EQ(3, slice.end() - slice.begin());
+    for (size_t i = 0; i < slice.size(); ++i) {
+        const auto value = slice.at(i);
+        const std::string actual = value.empty() ? std::string{} : std::string(value.data(), value.size());
+        EXPECT_EQ(expected[i], actual);
+    }
+    size_t count = 0;
+    for (const auto value : slice) {
+        EXPECT_EQ(expected[count].size(), value.size());
+        ++count;
+    }
+    EXPECT_EQ(3u, count);
+    EXPECT_THROW(slice.at(slice.size()), std::out_of_range);
+}
+
+TEST(StringSliceStore, borrowedStrings)
+{
+    StringSliceStore store(false);
+    expect_string_slice(store.refs());
+    expect_string_slice(store.strings());
+    expect_string_slice(store.boxed());
+    EXPECT_TRUE(store.same_refs(store.refs()));
+    EXPECT_TRUE(store.same_strings(store.strings()));
+    EXPECT_TRUE(store.same_boxed(store.boxed()));
+
+    StringSliceStore empty(true);
+    const auto refs = empty.refs();
+    const auto strings = empty.strings();
+    const auto boxed = empty.boxed();
+    EXPECT_TRUE(refs.empty());
+    EXPECT_TRUE(strings.empty());
+    EXPECT_TRUE(boxed.empty());
+    EXPECT_TRUE(empty.same_refs(empty.refs()));
+    EXPECT_TRUE(empty.same_strings(empty.strings()));
+    EXPECT_TRUE(empty.same_boxed(empty.boxed()));
+    EXPECT_TRUE(empty.same_refs(StrRefSlice{}));
+    EXPECT_TRUE(empty.same_strings(StringSlice{}));
+    EXPECT_TRUE(empty.same_boxed(BoxStrSlice{}));
+    EXPECT_FALSE(store.same_refs(empty.refs()));
+    EXPECT_FALSE(store.same_strings(empty.strings()));
+    EXPECT_FALSE(store.same_boxed(empty.boxed()));
+    EXPECT_THROW(refs.at(0), std::out_of_range);
+    EXPECT_THROW(strings.at(0), std::out_of_range);
+    EXPECT_THROW(boxed.at(0), std::out_of_range);
+}
+
+TEST(StringVecStore, ownedStrings)
+{
+    StringVecStore store;
+    auto values = store.strings();
+    expect_string_slice(values);
+    auto removed = values.remove(0);
+    EXPECT_TRUE(removed.empty());
+    EXPECT_EQ(2u, values.size());
+    values.push(RustString{ RustString::CppStringViewT{ "tail" } });
+    EXPECT_EQ("tail", std::string(values.at(2).data(), values.at(2).size()));
+
+    auto returned = store.append(std::move(values));
+    EXPECT_EQ(4u, returned.size());
+    EXPECT_EQ(std::string("a\0b", 3),
+              std::string(returned.at(0).data(), returned.at(0).size()));
+    EXPECT_EQ("Привет", std::string(returned.at(1).data(), returned.at(1).size()));
+    EXPECT_EQ("tail", std::string(returned.at(2).data(), returned.at(2).size()));
+    EXPECT_EQ("from Rust", std::string(returned.at(3).data(), returned.at(3).size()));
+
+    RustVecString empty;
+    EXPECT_TRUE(empty.empty());
+    auto from_empty = store.append(std::move(empty));
+    EXPECT_EQ(1u, from_empty.size());
+    EXPECT_EQ("from Rust", std::string(from_empty.at(0).data(), from_empty.at(0).size()));
+    EXPECT_THROW(from_empty.at(1), std::out_of_range);
+
+    RustVecString scratch;
+    scratch.push(RustString{ RustString::CppStringViewT{ "payload" } });
+    EXPECT_EQ("payload", scratch.remove(0).to_std_string());
+    EXPECT_TRUE(scratch.empty());
+    scratch.push(RustString{ RustString::CppStringViewT{ "discard" } });
+    scratch.clear();
+    EXPECT_TRUE(scratch.empty());
 }
 
 int main(int argc, char *argv[])
