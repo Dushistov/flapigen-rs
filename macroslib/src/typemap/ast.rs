@@ -533,7 +533,7 @@ where
         let requires = &trait_bounds[idx].trait_names;
         let val_name = normalize_type(val);
 
-        others(val_name).is_none_or(|rt| !rt.implements.contains_subset(requires))
+        others(val_name).is_none_or(|rt| !rt.implements_subset(requires))
     };
     !trait_bounds
         .iter()

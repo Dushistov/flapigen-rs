@@ -309,7 +309,7 @@ fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet
                 {
                     return false;
                 }
-            } else if !rty.implements.contains_path(tname) {
+            } else if !rty.implements_path(tname) {
                 return false;
             }
         }

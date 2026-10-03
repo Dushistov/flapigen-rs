@@ -739,7 +739,7 @@ impl TypeMap {
                 for graph_idx in self.rust_names_map.values() {
                     for trait_bound in &trait_bounds {
                         let rust_ty = &self.conv_graph[*graph_idx];
-                        if rust_ty.implements.contains_subset(&trait_bound.trait_names) {
+                        if rust_ty.implements_subset(&trait_bound.trait_names) {
                             if let Some(class) = self.find_foreigner_class_with_such_this_type(
                                 &rust_ty.ty,
                                 &calc_this_type_for_method,
@@ -966,12 +966,11 @@ impl TypeMap {
     ) -> RustType {
         let name = normalize_type(ty);
         let idx = self.add_node(name.into(), || {
-            let mut ty = RustTypeS::new_without_graph_idx(ty.clone(), name, src_id);
-            for tn in traits_name {
-                ty.implements.insert((*tn).into());
-            }
-            ty
+            RustTypeS::new_without_graph_idx(ty.clone(), name, src_id)
         });
+        // A type can enter the graph before its foreign class is registered.
+        // Its trait set is shared with RustType clones returned earlier.
+        self.conv_graph[idx].add_implements(traits_name);
         self.conv_graph[idx].clone()
     }
 
@@ -1246,6 +1245,26 @@ fn try_build_path(
 mod tests {
     use super::*;
     use crate::{source_registry::SourceRegistry, types::SelfTypeDesc, SourceCode};
+
+    #[test]
+    fn registering_traits_updates_existing_rust_type_clones() {
+        let mut types_map = TypeMap::default();
+        let ty = parse_type! { Foo };
+        let early = types_map.find_or_alloc_rust_type(&ty, SourceId::none());
+        let other_clone = early.clone();
+        let trait_path: syn::Path = parse_quote! { SwigForeignClass };
+
+        assert!(!early.implements_path(&trait_path));
+        let registered = types_map.find_or_alloc_rust_type_that_implements(
+            &ty,
+            &["SwigForeignClass"],
+            SourceId::none(),
+        );
+
+        assert!(Rc::ptr_eq(&early, &registered));
+        assert!(early.implements_path(&trait_path));
+        assert!(other_clone.implements_path(&trait_path));
+    }
 
     #[test]
     fn test_try_build_path() {

@@ -459,10 +459,7 @@ fn generate_conversion_for_argument(
         reference_allowed,
     )? {
         Ok((ty, conversion))
-    } else if rust_type
-        .implements
-        .contains_path(&parse(ENUM_TRAIT_NAME, src_id)?)
-    {
+    } else if rust_type.implements_path(&parse(ENUM_TRAIT_NAME, src_id)?) {
         let enum_py_mod: Ident = parse(&py_wrapper_mod_name(&rust_type.normalized_name), src_id)?;
         Ok((
             parse_type!(u32),
@@ -573,10 +570,7 @@ fn generate_conversion_for_return(
         src_id,
     )? {
         Ok((ty, conversion))
-    } else if rust_type
-        .implements
-        .contains_path(&parse(ENUM_TRAIT_NAME, src_id)?)
-    {
+    } else if rust_type.implements_path(&parse(ENUM_TRAIT_NAME, src_id)?) {
         Ok((
             parse_type!(u32),
             quote! {

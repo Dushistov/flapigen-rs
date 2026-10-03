@@ -221,7 +221,7 @@ fn do_map_type(
 fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet) -> bool {
     if let Some(rty) = tmap.ty_to_rust_type_checked(ty) {
         for tname in traits.iter() {
-            if !rty.implements.contains_path(tname) {
+            if !rty.implements_path(tname) {
                 return false;
             }
         }
