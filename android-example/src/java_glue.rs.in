@@ -1,11 +1,21 @@
-use crate::Session;
+use crate::{Session, SessionStore};
 use jni_sys::*;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 // ANCHOR: api
-foreign_class!(class Session {
+// ANCHOR: smart_ptr_copy_java_binding
+foreign_class!(#[derive(SmartPtrCopy)] class Session {
     self_type Session;
-    constructor Session::new() -> Session;
+    constructor Session::new() -> Arc<Mutex<Session>>;
     fn Session::add_and1(&self, val: i32) -> i32;
+    fn Session::set_base(&mut self, base: i32);
     fn Session::greet(to: &str) -> String;
 });
+
+foreign_class!(class SessionStore {
+    self_type SessionStore;
+    constructor SessionStore::new(session: Arc<Mutex<Session>>) -> SessionStore;
+    fn SessionStore::saved_base(&self) -> i32;
+});
+// ANCHOR_END: smart_ptr_copy_java_binding
 // ANCHOR_END: api

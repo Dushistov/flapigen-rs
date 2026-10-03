@@ -1,5 +1,7 @@
-use super::{f2, Foo};
+use super::{f2, Foo, SharedCounter};
+use std::{cell::{Ref, RefCell, RefMut}, rc::Rc};
 
+// ANCHOR: basic_cpp_class
 foreign_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -> Foo;
@@ -7,3 +9,16 @@ foreign_class!(class Foo {
     fn Foo::f(&self, _: i32, _: i32) -> i32;
     fn f2(_: i32) -> i32;
 });
+// ANCHOR_END: basic_cpp_class
+
+// ANCHOR: smart_ptr_copy_cpp_binding
+foreign_class!(
+    #[derive(SmartPtrCopy)]
+    class SharedCounter {
+        self_type SharedCounter;
+        constructor SharedCounter::new() -> Rc<RefCell<SharedCounter>>;
+        fn SharedCounter::increment(&mut self);
+        fn SharedCounter::value(&self) -> i32;
+    }
+);
+// ANCHOR_END: smart_ptr_copy_cpp_binding

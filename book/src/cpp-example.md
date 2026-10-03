@@ -39,7 +39,7 @@ Described as class:
 
 ```rust,no_run,noplaypen
 // src/cpp_glue.rs.in
-{{#include ../../cpp-example/rust-part/src/cpp_glue.rs.in}}
+{{#include ../../cpp-example/rust-part/src/cpp_glue.rs.in:basic_cpp_class}}
 ```
 
 Usage from C++:
