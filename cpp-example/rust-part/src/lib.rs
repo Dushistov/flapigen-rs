@@ -47,6 +47,22 @@ impl SharedCounter {
 }
 // ANCHOR_END: shared_counter_rust
 
+// ANCHOR: plain_class_rust
+pub struct ScoreAdjustment {
+    bonus: i32,
+}
+
+impl ScoreAdjustment {
+    fn new(bonus: i32) -> Self {
+        Self { bonus }
+    }
+
+    fn apply(&self, base: i32) -> i32 {
+        base + self.bonus
+    }
+}
+// ANCHOR_END: plain_class_rust
+
 #[cfg(test)]
 mod tests {
     use super::*;
