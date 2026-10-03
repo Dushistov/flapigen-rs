@@ -430,23 +430,33 @@ fn check_with_action(
         actual.push(body.to_owned());
     }
     let actual = render_sections(&sections, &actual);
-    let assertion = snapbox::Assert::new().action(action);
-    assertion
-        .try_eq(
-            Some(&"Generated code"),
-            Data::text(actual),
-            Data::read_from(path, Some(DataFormat::Text)).raw(),
-        )
-        .map_err(|err| {
-            if mismatched_files.is_empty() {
-                mismatched_files.extend(sections.iter().map(|section| section.selector.file()));
-            }
-            let files_dump = mismatched_files
-                .iter()
-                .map(|file| generated_file_dump(file, files))
-                .collect::<String>();
-            format!("{err}{files_dump}")
-        })?;
+    let actual = Data::text(actual);
+    // Snapbox's overwrite action writes directly to stderr, bypassing the test harness's
+    // output capture. Verify first, then write the snapshot ourselves when blessing.
+    let comparison = snapbox::Assert::new().action(Action::Verify).try_eq(
+        Some(&"Generated code"),
+        actual.clone(),
+        Data::read_from(path, Some(DataFormat::Text)).raw(),
+    );
+    if action == Action::Overwrite {
+        if let Err(diff) = comparison {
+            actual
+                .write_to_path(path)
+                .map_err(|err| format!("{diff}Update failed: {err}"))?;
+            eprintln!("Fixing: {diff}");
+        }
+        return Ok(());
+    }
+    comparison.map_err(|err| {
+        if mismatched_files.is_empty() {
+            mismatched_files.extend(sections.iter().map(|section| section.selector.file()));
+        }
+        let files_dump = mismatched_files
+            .iter()
+            .map(|file| generated_file_dump(file, files))
+            .collect::<String>();
+        format!("{err}{files_dump}")
+    })?;
     Ok(())
 }
 
