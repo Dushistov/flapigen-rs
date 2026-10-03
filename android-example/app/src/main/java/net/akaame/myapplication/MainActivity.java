@@ -32,8 +32,15 @@ public class MainActivity extends AppCompatActivity {
         tv_greet.setText(Session.greet("{Your Name Here}"));
 
         final TextView tv_number = (TextView) findViewById(R.id.numberLabel);
-        final int res = MyApplication.get().getSession().add_and1(2);
-        tv_number.setText(getString(R.string.rust_add1_text, res));
+        // ANCHOR: smart_ptr_copy_java_use
+        Session session = MyApplication.get().getSession();
+        final int res = session.add_and1(2);
+        SessionStore store = new SessionStore(session); // Rust retains an Arc clone
+        session.set_base(7); // the Java wrapper remains usable
+        final int sharedBase = store.saved_base();
+        tv_number.setText(getString(R.string.rust_results_text, res, sharedBase));
+        store.delete();
+        // ANCHOR_END: smart_ptr_copy_java_use
     }
 
     @Override

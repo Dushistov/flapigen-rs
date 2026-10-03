@@ -27,6 +27,26 @@ fn f2(a: i32) -> i32 {
     a * 2
 }
 
+// ANCHOR: shared_counter_rust
+pub struct SharedCounter {
+    value: i32,
+}
+
+impl SharedCounter {
+    fn new() -> std::rc::Rc<std::cell::RefCell<Self>> {
+        std::rc::Rc::new(std::cell::RefCell::new(Self { value: 0 }))
+    }
+
+    fn increment(&mut self) {
+        self.value += 1;
+    }
+
+    fn value(&self) -> i32 {
+        self.value
+    }
+}
+// ANCHOR_END: shared_counter_rust
+
 #[cfg(test)]
 mod tests {
     use super::*;

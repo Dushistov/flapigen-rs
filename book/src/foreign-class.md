@@ -5,7 +5,7 @@
 The basic example is:
 
 ```rust,no_run,noplaypen
-{{#include ../../cpp-example/rust-part/src/cpp_glue.rs.in}}
+{{#include ../../cpp-example/rust-part/src/cpp_glue.rs.in:basic_cpp_class}}
 ```
 
 Here `Foo` may be **struct** or **enum** or a more complex type (see below).
@@ -123,3 +123,49 @@ Usage of derives changes generated code in various ways.
 For example, you can use `Clone,Copy` to force the generation of a copy constructor
 and `operator=` in C++ case.
 You can also use `camelCaseAliases` to change names of all methods to camel case.
+
+### `SmartPtrCopy`
+
+You can use `#[derive(SmartPtrCopy)]` when a foreign class's constructor returns
+`Rc<...>` or `Arc<...>`. Flapigen clones the smart pointer when another owner
+needs the value; it does not clone the Rust object inside it.
+
+In C++, it generates a copy constructor and copy assignment operator. The
+[C++ example](./cpp-example.md) has a counter backed by `Rc<RefCell<_>>`:
+
+```rust,no_run,noplaypen
+{{#include ../../cpp-example/rust-part/src/lib.rs:shared_counter_rust}}
+```
+
+```rust,no_run,noplaypen
+{{#include ../../cpp-example/rust-part/src/cpp_glue.rs.in:smart_ptr_copy_cpp_binding}}
+```
+
+```cpp,no_run,noplaypen
+{{#include ../../cpp-example/cpp-part/main.cpp:smart_ptr_copy_cpp_use}}
+```
+
+`counter`, `second_handle`, and `assigned` are three C++ handles to the same
+Rust counter. Incrementing through either copy changes the value read through
+`counter`.
+
+In Java, passing a wrapper by value to Rust clones its smart pointer, so the
+Java wrapper remains usable and Rust can retain the shared value. The
+[Android example](./java-android-example.md) stores an `Arc<Mutex<Session>>` in
+another Rust object:
+
+```rust,no_run,noplaypen
+{{#include ../../android-example/src/lib.rs:smart_ptr_copy_java_rust}}
+```
+
+```rust,no_run,noplaypen
+{{#include ../../android-example/src/java_glue.rs.in:smart_ptr_copy_java_binding}}
+```
+
+```java,no_run,noplaypen
+{{#include ../../android-example/app/src/main/java/net/akaame/myapplication/MainActivity.java:smart_ptr_copy_java_use}}
+```
+
+The store observes changes made through the original `Session`. This derive
+does not add a Java copy constructor; its effect is on ownership when the
+wrapper is passed to Rust.

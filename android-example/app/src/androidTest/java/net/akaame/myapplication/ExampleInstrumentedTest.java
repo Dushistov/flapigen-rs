@@ -36,5 +36,11 @@ public class ExampleInstrumentedTest {
     public void testSession() {
         Session session = new Session();
         assertEquals(5, session.add_and1(2));
+        SessionStore store = new SessionStore(session);
+        session.set_base(11);
+        assertEquals(11, store.saved_base());
+        assertEquals(14, session.add_and1(2));
+        store.delete();
+        session.delete();
     }
 }
