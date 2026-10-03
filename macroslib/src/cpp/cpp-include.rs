@@ -336,12 +336,12 @@ foreign_typemap!(
 // A slice of Rust objects points to their storage, not to C++ wrapper objects.
 // The struct tag supplies an opaque C declaration without including the wrapper header.
 foreign_typemap!(
-    (r_type) <T: SwigForeignClass> *const T;
+    (r_type) <T: SwigForeignClassDirectAccess> *const T;
     (f_type) "const struct swig_f_type!(T, name_only)Opaque *";
 );
 
 foreign_typemap!(
-    (r_type) <T: SwigForeignClass> *mut T;
+    (r_type) <T: SwigForeignClassDirectAccess> *mut T;
     (f_type) "struct swig_f_type!(T, name_only)Opaque *";
 );
 
@@ -1054,13 +1054,13 @@ foreign_typemap!(
 #include "swig_f_type!(T)_fwd.hpp"
 #endif
 "##);
-    ($p:r_type) <T: SwigForeignClass> &[T] => CSlice!() {
+    ($p:r_type) <T: SwigForeignClassDirectAccess> &[T] => CSlice!() {
         $out = CSlice!() {
             data: $p.as_ptr(),
             len: $p.len(),
         };
     };
-    ($p:r_type) <T: SwigForeignClass> &[T] <= CSlice!() {
+    ($p:r_type) <T: SwigForeignClassDirectAccess> &[T] <= CSlice!() {
         $out = unsafe { (CRustSlice { data: $p.data.cast(), len: $p.len }).as_slice::<swig_subst_type!(T)>() };
     };
     ($p:f_type, req_modules = ["\"CSlice!().h\""]) => "RustSlice<const swig_f_type!(T, output)>"
@@ -1121,13 +1121,13 @@ foreign_typemap!(
 #include "swig_f_type!(T)_fwd.hpp"
 #endif
 "##);
-    ($p:r_type) <T: SwigForeignClass> &mut [T] => CSliceMut!() {
+    ($p:r_type) <T: SwigForeignClassDirectAccess> &mut [T] => CSliceMut!() {
         $out = CSliceMut!() {
             data: $p.as_mut_ptr(),
             len: $p.len(),
         };
     };
-    ($p:r_type) <T: SwigForeignClass> &mut [T] <= CSliceMut!() {
+    ($p:r_type) <T: SwigForeignClassDirectAccess> &mut [T] <= CSliceMut!() {
         $out = unsafe { (CRustSliceMut { data: $p.data.cast(), len: $p.len }).as_slice_mut::<swig_subst_type!(T)>() };
     };
     ($p:f_type, req_modules = ["\"CSliceMut!().h\""]) => "RustSlice<swig_f_type!(T, output)>"

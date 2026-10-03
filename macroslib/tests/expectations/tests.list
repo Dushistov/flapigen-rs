@@ -79,3 +79,4 @@ pass_c_function_as_param
 cpp_empty_views
 return_string_slices
 vec_string
+direct_foreign_slices

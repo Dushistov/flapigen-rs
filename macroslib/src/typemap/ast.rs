@@ -306,6 +306,11 @@ pub(crate) fn normalize_type(ty: &syn::Type) -> &'static str {
     with_normalize_type_cache(|cache| cache.insert(ty, type_str))
 }
 
+pub(crate) fn is_box_of_type(candidate: &Type, inner_type: &Type) -> bool {
+    check_if_smart_pointer_return_inner_type(candidate, "Box")
+        .is_some_and(|inner| normalize_type(&inner) == normalize_type(inner_type))
+}
+
 #[derive(Debug)]
 pub(crate) struct GenericTypeConv {
     pub src_id: SourceId,
@@ -1010,17 +1015,29 @@ pub(crate) fn if_ty_result_return_ok_type(ty: &Type) -> Option<Type> {
 }
 
 pub(crate) fn check_if_smart_pointer_return_inner_type(
-    ty: &RustType,
+    ty: &Type,
     smart_ptr_name: &str,
 ) -> Option<Type> {
-    let generic_params: syn::Generics = parse_quote! { <T> };
-    let from_ty: Type =
-        syn::parse_str(&format!("{smart_ptr_name}<T>")).expect("smart pointer parse error");
-    let to_ty: Type = parse_quote! { T };
-
-    GenericTypeConv::new(from_ty, to_ty, generic_params, TypeConvCode::invalid())
-        .is_conv_possible(ty, None, |_| None)
-        .map(|x| x.to_ty)
+    let Type::Path(path) = ty else {
+        return None;
+    };
+    if path.qself.is_some() {
+        return None;
+    }
+    let segment = path.path.segments.last()?;
+    if segment.ident != smart_ptr_name {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &segment.arguments else {
+        return None;
+    };
+    if args.args.len() != 1 {
+        return None;
+    }
+    match &args.args[0] {
+        syn::GenericArgument::Type(inner) => Some(inner.clone()),
+        _ => None,
+    }
 }
 
 pub(crate) fn list_lifetimes(ty: &Type) -> Vec<&syn::Lifetime> {

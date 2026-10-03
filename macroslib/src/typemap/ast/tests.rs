@@ -353,8 +353,8 @@ fn test_work_with_result() {
 
 #[test]
 fn test_work_with_rc() {
-    let ty = check_if_smart_pointer_return_inner_type(&str_to_rust_ty("Rc<RefCell<bool>>"), "Rc")
-        .unwrap();
+    let ty =
+        check_if_smart_pointer_return_inner_type(&str_to_ty("Rc<RefCell<bool>>"), "Rc").unwrap();
     assert_eq!("RefCell < bool >", normalize_type(&ty));
 
     let generic_params: syn::Generics = parse_quote! { <T> };
