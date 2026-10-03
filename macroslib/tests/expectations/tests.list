@@ -31,6 +31,7 @@ own_objects_creation
 pass_foreign_trait_cpp
 pass_objects_as_param
 pass_objects_as_param_simple
+preallocated_foreign_class
 pass_slice_as_args
 references
 return_foreign_class1
