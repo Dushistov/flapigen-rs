@@ -144,8 +144,8 @@ impl JavaConfig {
                         class.name, SMART_PTR_COPY_TRAIT
                     );
                 }
-                if check_if_smart_pointer_return_inner_type(&this_type, "Rc").is_none()
-                    && check_if_smart_pointer_return_inner_type(&this_type, "Arc").is_none()
+                if check_if_smart_pointer_return_inner_type(&this_type.ty, "Rc").is_none()
+                    && check_if_smart_pointer_return_inner_type(&this_type.ty, "Arc").is_none()
                 {
                     return Err(DiagnosticError::new(
                         class.src_id,

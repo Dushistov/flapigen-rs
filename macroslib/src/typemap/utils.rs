@@ -227,7 +227,7 @@ pub(crate) fn validate_cfg_options(
 
 pub(crate) fn boxed_type(tmap: &mut TypeMap, from: &RustType) -> RustType {
     for smart_pointer in &["Box", "Rc", "Arc"] {
-        if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, smart_pointer) {
+        if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(&from.ty, smart_pointer) {
             let inner_ty: RustType = tmap.find_or_alloc_rust_type(&inner_ty, from.src_id);
             return inner_ty;
         }
@@ -243,7 +243,7 @@ pub(crate) fn convert_to_heap_pointer(
     let var_name = Ident::new(var_name, Span::call_site());
 
     for smart_pointer in &["Box", "Rc", "Arc"] {
-        if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(from, smart_pointer) {
+        if let Some(inner_ty) = check_if_smart_pointer_return_inner_type(&from.ty, smart_pointer) {
             let inner_ty: RustType = tmap.find_or_alloc_rust_type(&inner_ty, from.src_id);
             let inner_ty_norm: Type = inner_ty.to_type_without_lifetimes();
             let smart_pointer_ty: Type = syn::parse_str(smart_pointer).unwrap_or_else(|err| {
@@ -276,7 +276,7 @@ pub(crate) fn unpack_from_heap_pointer(
     unbox_if_boxed: bool,
 ) -> String {
     for smart_pointer in &["Box", "Rc", "Arc"] {
-        if check_if_smart_pointer_return_inner_type(from, smart_pointer).is_some() {
+        if check_if_smart_pointer_return_inner_type(&from.ty, smart_pointer).is_some() {
             return format!(
                 r#"
     let {var_name}: {rc_type}  = unsafe {{ {smart_pointer}::from_raw({var_name}) }};

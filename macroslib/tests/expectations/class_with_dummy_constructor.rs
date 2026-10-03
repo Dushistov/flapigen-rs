@@ -6,6 +6,6 @@ foreigner_class!(class Foo {
 
 foreigner_class!(class Boo {
    self_type OtherType;
-   private constructor = empty -> Box<OtherType>;
+   private constructor = empty;
    method OtherType::f(&self);
 });

@@ -18,7 +18,7 @@ use crate::{
     namegen::new_unique_name,
     source_registry::SourceId,
     typemap::{
-        ast::{normalize_type, DisplayToTokens},
+        ast::{is_box_of_type, normalize_type, DisplayToTokens},
         MacroArgs,
     },
     types::{
@@ -190,7 +190,7 @@ fn parse_doc_comments(input: ParseStream) -> syn::Result<Vec<String>> {
     Ok(doc_comments)
 }
 
-fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<ForeignClassInfo> {
+fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<ForeignClassInfo> {
     let Attrs {
         doc_comments: class_doc_comments,
         mut derive_list,
@@ -523,10 +523,23 @@ fn do_parse_foreigner_class(_lang: Language, input: ParseStream) -> syn::Result<
     }
 
     let self_desc = match (rust_self_type, constructor_ret_type) {
-        (Some(self_type), Some(constructor_ret_type)) => Some(SelfTypeDesc {
-            self_type,
-            constructor_ret_type,
-        }),
+        (Some(self_type), Some(constructor_ret_type)) => {
+            if lang == Language::Cpp && is_box_of_type(&constructor_ret_type, &self_type) {
+                return Err(syn::Error::new(
+                    constructor_ret_type.span(),
+                    format!(
+                        "C++ foreign_class constructor must return {} instead of Box<{}>; flapigen boxes self_type automatically. Change the Rust constructor to return {} too",
+                        DisplayToTokens(&self_type),
+                        DisplayToTokens(&self_type),
+                        DisplayToTokens(&self_type),
+                    ),
+                ));
+            }
+            Some(SelfTypeDesc {
+                self_type,
+                constructor_ret_type,
+            })
+        }
         (None, None) => None,
         (Some(_), None) => {
             return Err(syn::Error::new(
@@ -839,6 +852,32 @@ mod tests {
     use super::*;
     use crate::error::panic_on_syn_error;
     use quote::ToTokens;
+
+    #[test]
+    fn cpp_constructor_rejects_box_of_self_type() {
+        for constructor in [
+            "constructor Node::new() -> Box<Node>;",
+            "private constructor = empty -> Box<Node>;",
+            "constructor Node::new() -> std::boxed::Box<Node>;",
+        ] {
+            let source = format!(
+                "class Node {{ self_type Node; {constructor} fn Node::value(&self) -> i32; }}"
+            );
+            let error = syn::parse_str::<CppClass>(&source)
+                .err()
+                .expect("Box<self_type> should fail during C++ class parsing");
+            let message = error.to_string();
+            assert!(message.contains("flapigen boxes self_type automatically"));
+            assert!(message.contains("return Node instead of Box<Node>"));
+        }
+
+        let nested =
+            "class Node { self_type Node; private constructor = empty -> Box<Box<Node>>; }";
+        assert!(syn::parse_str::<CppClass>(nested).is_ok());
+
+        let python = "class Node { self_type Node; constructor Node::new() -> Box<Node>; }";
+        assert!(syn::parse_str::<PythonClass>(python).is_ok());
+    }
 
     #[test]
     fn test_do_parse_foreigner_class() {
