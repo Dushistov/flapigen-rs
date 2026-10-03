@@ -1,4 +1,4 @@
-use super::{f2, Foo, SharedCounter};
+use super::{f2, Foo, ScoreAdjustment, SharedCounter};
 use std::{cell::{Ref, RefCell, RefMut}, rc::Rc};
 
 // ANCHOR: basic_cpp_class
@@ -22,3 +22,14 @@ foreign_class!(
     }
 );
 // ANCHOR_END: smart_ptr_copy_cpp_binding
+
+// ANCHOR: plain_class_binding
+foreign_class!(
+    #[derive(PlainClass)]
+    class ScoreAdjustment {
+        self_type ScoreAdjustment;
+        constructor ScoreAdjustment::new(bonus: i32) -> ScoreAdjustment;
+        fn ScoreAdjustment::apply(&self, base: i32) -> i32;
+    }
+);
+// ANCHOR_END: plain_class_binding

@@ -48,3 +48,42 @@ Usage from C++:
 // main.cpp
 {{#include ../../cpp-example/cpp-part/main.cpp:call_rust}}
 ```
+
+## A plain C++ class
+
+By default, flapigen generates two C++ variants for a `foreign_class!`: an
+owning class and a non-owning reference class. If you don't want to deal with two variants and
+the need to convert one into the other in various cases, `#[derive(PlainClass)]` generates just
+one C++ class. The tradeoff is that you cannot return a Rust reference to that
+type (`&ScoreAdjustment` or `&mut ScoreAdjustment`) to C++; return an owned
+value instead. The single class can also be forward-declared as
+`class ScoreAdjustment;` in a handwritten C++ header.
+
+The Rust type and its binding are:
+
+```rust,no_run,noplaypen
+{{#include ../../cpp-example/rust-part/src/lib.rs:plain_class_rust}}
+```
+
+```rust,no_run,noplaypen
+{{#include ../../cpp-example/rust-part/src/cpp_glue.rs.in:plain_class_binding}}
+```
+
+The C++ helper header can now declare a function using the generated class:
+
+```cpp,no_run,noplaypen
+{{#include ../../cpp-example/cpp-part/score_report.hpp:plain_class_forward_declaration}}
+```
+
+The C++ implementation includes `ScoreAdjustment.hpp` before calling its
+method:
+
+```cpp,no_run,noplaypen
+{{#include ../../cpp-example/cpp-part/main.cpp:plain_class_cpp_implementation}}
+```
+
+The executable uses the helper like this:
+
+```cpp,no_run,noplaypen
+{{#include ../../cpp-example/cpp-part/main.cpp:plain_class_cpp_use}}
+```
