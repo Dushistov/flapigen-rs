@@ -721,6 +721,10 @@ impl TestReferences {
         &self.foo
     }
 
+    fn get_mut_foo_ref(&mut self) -> &mut Foo {
+        &mut self.foo
+    }
+
     fn update_foo(&mut self, foo: &Foo) {
         self.foo = foo.clone();
     }
@@ -742,6 +746,7 @@ foreign_class!(class TestReferences {
     self_type TestReferences;
     constructor TestReferences::new(foo_data: i32, foo_name: &str) -> TestReferences;
     fn TestReferences::get_foo_ref(&self) -> &Foo;
+    fn TestReferences::get_mut_foo_ref(&mut self) -> &mut Foo;
     fn TestReferences::update_foo(&mut self, foo: &Foo);
     fn TestReferences::update_mut_foo(&mut self, foo: &mut Foo);
     fn TestReferences::check_rc_pass1(x: &CheckPrimitiveTypesClass) -> i32;

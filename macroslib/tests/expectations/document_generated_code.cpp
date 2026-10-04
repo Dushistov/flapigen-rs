@@ -1,7 +1,15 @@
 @@expect {"after":"\npublic:\n    using value","before":"using FooRef = FooWrapper<false>;\n\n","file":"Foo.hpp","kind":"between"}
+template<bool>
+struct FooWrapperCopyControl {};
+template<>
+struct FooWrapperCopyControl<true> {
+    FooWrapperCopyControl() = default;
+    FooWrapperCopyControl(const FooWrapperCopyControl&) = delete;
+    FooWrapperCopyControl& operator=(const FooWrapperCopyControl&) = delete;
+};
 //This is class Foo
 template<bool OWN_DATA>
-class FooWrapper {
+class FooWrapper : private FooWrapperCopyControl<OWN_DATA> {
 @@end
 
 @@expect {"after":"\n    {\n\n    ","before":"static constexpr const uintptr_t &rust_elem_size = RustForeignClassFooElemSize;\n    ","file":"Foo.hpp","kind":"between"}

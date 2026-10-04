@@ -49,6 +49,27 @@ Usage from C++:
 {{#include ../../cpp-example/cpp-part/main.cpp:call_rust}}
 ```
 
+## Borrowed foreign classes
+
+For a regular `foreign_class!`, Rust `&Foo` arguments and return values use
+`FooRef` by value in C++. A `Foo` or `const Foo&` converts implicitly to
+`FooRef`, so either an owning object or an existing borrowed view can be passed
+to a generated method. For example, the [C++ test fixture](https://github.com/Dushistov/flapigen-rs/blob/master/cpp_tests/c%2B%2B/main.cpp)
+uses `TestReferences` and `Foo`:
+
+```cpp
+TestReferences source{1, "source"};
+TestReferences target{2, "target"};
+FooRef view = source.get_foo_ref();
+target.update_foo(view);
+const Foo owned{3, "owned"};
+target.update_foo(owned);
+```
+
+Copying a `FooRef` copies only its pointer. Keep the Rust object alive while
+using the view. Rust `&mut Foo` arguments still take `Foo&` in C++; a returned
+`&mut Foo` currently becomes a read-only `FooRef`.
+
 ## A plain C++ class
 
 By default, flapigen generates two C++ variants for a `foreign_class!`: an

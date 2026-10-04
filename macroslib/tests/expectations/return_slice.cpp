@@ -28,7 +28,7 @@ RustSlice<const Foo> f2() const noexcept;
 extern const uintptr_t RustForeignClassFooElemSize;
 @@end
 
-@@expect {"after":"\n\n    FooWrapper(int32_t a0) noexcept\n  ","before":"FooWrapper &operator=(const FooWrapper&) = delete;\n    ","file":"Foo.hpp","kind":"between"}
+@@expect {"after":"\n\n    FooWrapper(int32_t a0) noexcept\n  ","before":"FooWrapper &operator=(const FooWrapper&) = default;\n    ","file":"Foo.hpp","kind":"between"}
 static constexpr const uintptr_t &rust_elem_size = RustForeignClassFooElemSize;
 @@end
 
