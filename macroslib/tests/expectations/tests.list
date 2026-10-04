@@ -82,3 +82,4 @@ cpp_empty_views
 return_string_slices
 vec_string
 direct_foreign_slices
+indirect_foreign_slices

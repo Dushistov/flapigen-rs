@@ -1,0 +1,69 @@
+@@expect {"file":"test.rs","kind":"item","name":"CRustSliceForeignIndirectArcNode_get","form":"definition"}
+#[allow(non_snake_case)]
+#[unsafe(no_mangle)]
+pub extern "C" fn CRustSliceForeignIndirectArcNode_get(
+    slice: CRustSliceForeignIndirectArcNode,
+    idx: usize,
+) -> *const ::std::os::raw::c_void {
+    let slice: &[Arc<ArcNode>] = unsafe {
+        (CRustSlice {
+            data: slice.data.cast(),
+            len: slice.len,
+        })
+        .as_slice()
+    };
+    let elem_ref = &*slice[idx];
+    elem_ref as *const _ as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"CRustSliceForeignIndirectRcNode_get","form":"definition"}
+#[allow(non_snake_case)]
+#[unsafe(no_mangle)]
+pub extern "C" fn CRustSliceForeignIndirectRcNode_get(
+    slice: CRustSliceForeignIndirectRcNode,
+    idx: usize,
+) -> *const ::std::os::raw::c_void {
+    let slice: &[Rc<RefCell<RcNode>>] = unsafe {
+        (CRustSlice {
+            data: slice.data.cast(),
+            len: slice.len,
+        })
+        .as_slice()
+    };
+    let elem_ref = &*slice[idx];
+    elem_ref as *const _ as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"IndirectSliceHost_arcs","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn IndirectSliceHost_arcs(
+    this: *mut IndirectSliceHost,
+) -> CRustSliceForeignIndirectArcNode {
+    let this: &IndirectSliceHost = unsafe { this.as_mut().unwrap() };
+    let mut ret: &[Arc<ArcNode>] = IndirectSliceHost::arcs(this);
+    let mut ret: CRustSliceForeignIndirectArcNode = CRustSliceForeignIndirectArcNode {
+        data: ret.as_ptr().cast(),
+        len: ret.len(),
+    };
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"IndirectSliceHost_take_rcs","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn IndirectSliceHost_take_rcs(values: CRustSliceForeignIndirectRcNode) -> usize {
+    let mut values: &[Rc<RefCell<RcNode>>] = unsafe {
+        (CRustSlice {
+            data: values.data.cast(),
+            len: values.len,
+        })
+        .as_slice::<Rc<RefCell<RcNode>>>()
+    };
+    let mut ret: usize = IndirectSliceHost::take_rcs(values);
+    ret
+}
+@@end

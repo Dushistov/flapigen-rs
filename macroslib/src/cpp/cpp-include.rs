@@ -1069,6 +1069,69 @@ foreign_typemap!(
         "$p.as_c<CSlice!()>()";
 );
 
+// Arc<T> and Rc<T> elements are pointers to T, not inline T objects. The
+// accessor dereferences the smart pointer in Rust before constructing a C++
+// borrowed wrapper. Each class gets its own C descriptor to keep unrelated
+// slice conversions separate in the typemap graph.
+foreign_typemap!(
+    generic_alias!(CSlice = swig_concat_idents!(CRustSliceForeignIndirect, swig_f_type!(T)));
+    generic_alias!(CSliceElem = swig_concat_idents!(CRustSliceForeignIndirect, swig_f_type!(T), Elem));
+    generic_alias!(CSliceAccess = swig_concat_idents!(swig_f_type!(T), Access));
+    generic_alias!(CSliceGet = swig_concat_idents!(CRustSliceForeignIndirect, swig_f_type!(T), _get));
+    define_c_type!(
+        module = "CSlice!().h";
+        #[repr(C)]
+        pub struct CSliceElem!() { _unused: u8 }
+
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CSlice!() {
+            data: *const CSliceElem!(),
+            len: usize,
+        }
+
+        #[allow(non_snake_case)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn CSliceGet!()(slice: CSlice!(), idx: usize) -> *const ::std::os::raw::c_void {
+            let slice: &[swig_subst_type!(T)] = unsafe {
+                (CRustSlice { data: slice.data.cast(), len: slice.len }).as_slice()
+            };
+            let elem_ref = &*slice[idx];
+            elem_ref as *const _ as *const ::std::os::raw::c_void
+        }
+    );
+    foreign_code!(module = "CSlice!().h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_slice_tmpl.hpp"
+#include "swig_f_type!(T)_fwd.hpp"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+template<bool> class swig_f_type!(T)Wrapper;
+struct CSliceAccess!() {
+    using storage_type = CSliceElem!();
+    template<typename Ref = swig_f_type!(T)Wrapper<false>>
+    static Ref index(internal::SliceStorage<const storage_type *> slice, size_t idx) noexcept {
+        auto p = static_cast<const typename Ref::CForeignType *>(
+            CSliceGet!()(CSlice!(){slice.data, slice.len}, idx));
+        return Ref{p};
+    }
+};
+}
+#endif
+"##);
+    ($p:r_type) <T: SwigForeignClassIndirectAccess> &[T] => CSlice!() {
+        $out = CSlice!() { data: $p.as_ptr().cast(), len: $p.len() };
+    };
+    ($p:r_type) <T: SwigForeignClassIndirectAccess> &[T] <= CSlice!() {
+        $out = unsafe { (CRustSlice { data: $p.data.cast(), len: $p.len }).as_slice::<swig_subst_type!(T)>() };
+    };
+    ($p:f_type, req_modules = ["\"CSlice!().h\""]) => "RustSlice<const swig_f_type!(T, output), CSliceAccess!()>"
+        "RustSlice<const swig_f_type!(T, output), CSliceAccess!()>{$p}";
+    ($p:f_type, req_modules = ["\"CSlice!().h\""]) <= "RustSlice<const swig_f_type!(T, output), CSliceAccess!()>"
+        "$p.as_c<CSlice!()>()";
+);
+
 #[allow(dead_code)]
 #[repr(C)]
 #[derive(Copy, Clone)]
