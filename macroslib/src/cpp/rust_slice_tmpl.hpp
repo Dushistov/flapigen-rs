@@ -30,7 +30,7 @@ namespace internal {
     };
 
     template <typename T> struct ForeignSliceAccess {
-        using reference = typename T::SliceRef;
+        using reference = typename T::ref_type;
         using storage_type = typename T::CForeignType;
 
         static reference index(SliceStorage<const storage_type *> slice, size_t i) noexcept
@@ -50,7 +50,7 @@ namespace internal {
     template <typename T, typename Enable = void> struct SliceAccess : NativeSliceAccess<T> {};
 
     template <typename T>
-    struct SliceAccess<T, VoidT<typename T::SliceRef>> : ForeignSliceAccess<T> {};
+    struct SliceAccess<T, VoidT<typename T::ref_type>> : ForeignSliceAccess<T> {};
 
     template <typename Descriptor, typename Access> class SliceIterator {
     public:

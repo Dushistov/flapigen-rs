@@ -1108,10 +1108,10 @@ struct {tmp_class_name}CopyControl<true> {{
         } else {
             String::new()
         };
-        let slice_ref_alias = if static_only {
+        let ref_type_alias = if static_only {
             String::new()
         } else {
-            format!("    using SliceRef = {tmp_class_name}<false>;\n")
+            format!("    using ref_type = {tmp_class_name}<false>;\n")
         };
         writeln!(
             cpp_include_f,
@@ -1142,7 +1142,7 @@ template<bool OWN_DATA>
 class {class_name}{copy_base} {{
 public:
     using value_type = {class_name}<true>;
-{slice_ref_alias}    friend class {class_name}<true>;
+{ref_type_alias}    friend class {class_name}<true>;
     friend class {class_name}<false>;"#,
             includes = includes,
             class_name = tmp_class_name,
