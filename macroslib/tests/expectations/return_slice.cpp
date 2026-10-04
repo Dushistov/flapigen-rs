@@ -33,7 +33,7 @@ static constexpr const uintptr_t &rust_elem_size = RustForeignClassFooElemSize;
 @@end
 
 @@expect {"after":"\n    friend ","before":"using value_type = FooWrapper<true>;\n    ","file":"Foo.hpp","kind":"between"}
-using SliceRef = FooWrapper<false>;
+using ref_type = FooWrapper<false>;
 @@end
 
 @@expect {"after":"\n\n\n    template<bool OWN_DATA>\n    inlin","before":"SelfType self_;\n};\ntemplate<bool OWN_DATA>\n","file":"Foo.hpp","kind":"between"}
