@@ -1,0 +1,48 @@
+@@expect {"file":"test.rs","kind":"item","name":"Foo_get","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn Foo_get(this: *mut Foo) -> *const ::std::os::raw::c_void {
+    let this: &Foo = unsafe { this.as_mut().unwrap() };
+    let mut ret: &Foo = Foo::get(this);
+    compile_error ! ("cannot return a reference to `Foo` from a C++ PlainClass; remove `PlainClass` or define a custom outgoing `foreign_typemap!` for the reference");
+    let ret: *const ::std::os::raw::c_void = (ret as *const Foo) as *const ::std::os::raw::c_void;
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"Foo_get_mut","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn Foo_get_mut(this: *mut Foo) -> *const ::std::os::raw::c_void {
+    let this: &mut Foo = unsafe { this.as_mut().unwrap() };
+    let mut ret: &mut Foo = Foo::get_mut(this);
+    let mut ret: &Foo = ret;
+    compile_error ! ("cannot return a reference to `Foo` from a C++ PlainClass; remove `PlainClass` or define a custom outgoing `foreign_typemap!` for the reference");
+    let ret: *const ::std::os::raw::c_void = (ret as *const Foo) as *const ::std::os::raw::c_void;
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"Foo_read_other","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn Foo_read_other(this: *mut Foo, other: *const ::std::os::raw::c_void) -> () {
+    assert!(!other.is_null());
+    let other: &Foo = unsafe { &*(other as *const Foo) };
+    let this: &Foo = unsafe { this.as_mut().unwrap() };
+    let mut ret: () = Foo::read_other(this, other);
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"Foo_update_other","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn Foo_update_other(this: *mut Foo, other: *mut ::std::os::raw::c_void) -> () {
+    assert!(!other.is_null());
+    let other: &mut Foo = unsafe { &mut *(other as *mut Foo) };
+    let this: &mut Foo = unsafe { this.as_mut().unwrap() };
+    let mut ret: () = Foo::update_other(this, other);
+    ret
+}
+@@end

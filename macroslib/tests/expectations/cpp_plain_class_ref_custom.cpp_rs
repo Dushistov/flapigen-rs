@@ -1,0 +1,22 @@
+@@expect {"file":"test.rs","kind":"item","name":"Foo_get","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn Foo_get(this: *mut Foo) -> *const ::std::os::raw::c_void {
+    let this: &Foo = unsafe { this.as_mut().unwrap() };
+    let mut ret: &Foo = Foo::get(this);
+    let mut ret: *const ::std::os::raw::c_void =
+        (ret as *const Foo).cast::<::std::os::raw::c_void>();
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"Foo_get_mut","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn Foo_get_mut(this: *mut Foo) -> *mut ::std::os::raw::c_void {
+    let this: &mut Foo = unsafe { this.as_mut().unwrap() };
+    let mut ret: &mut Foo = Foo::get_mut(this);
+    let mut ret: *mut ::std::os::raw::c_void = (ret as *mut Foo).cast::<::std::os::raw::c_void>();
+    ret
+}
+@@end

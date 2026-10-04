@@ -65,6 +65,8 @@ reachability_fence_java
 inline_dyn
 fenum_with_comments
 cpp_plain_class
+cpp_plain_class_ref_error
+cpp_plain_class_ref_custom
 access
 import_null_annotation_java
 parse_errors
