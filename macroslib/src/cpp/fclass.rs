@@ -1086,6 +1086,28 @@ fn generate_cpp_header_preamble(
     }
     let plain_class = need_plain_class(class);
     if !plain_class {
+        let no_owner_copy =
+            !static_only && !class.copy_derived() && !class.smart_ptr_copy_derived();
+        let copy_control = if no_owner_copy {
+            format!(
+                r#"template<bool>
+struct {tmp_class_name}CopyControl {{}};
+template<>
+struct {tmp_class_name}CopyControl<true> {{
+    {tmp_class_name}CopyControl() = default;
+    {tmp_class_name}CopyControl(const {tmp_class_name}CopyControl&) = delete;
+    {tmp_class_name}CopyControl& operator=(const {tmp_class_name}CopyControl&) = delete;
+}};
+"#
+            )
+        } else {
+            String::new()
+        };
+        let copy_base = if no_owner_copy {
+            format!(" : private {tmp_class_name}CopyControl<OWN_DATA>")
+        } else {
+            String::new()
+        };
         let slice_ref_alias = if static_only {
             String::new()
         } else {
@@ -1115,9 +1137,9 @@ class {class_name};
 using {class_dot_name} = {class_name}<true>;
 using {class_dot_name}Ref = {class_name}<false>;
 
-{doc_comments}
+{copy_control}{doc_comments}
 template<bool OWN_DATA>
-class {class_name} {{
+class {class_name}{copy_base} {{
 public:
     using value_type = {class_name}<true>;
 {slice_ref_alias}    friend class {class_name}<true>;
@@ -1127,6 +1149,8 @@ public:
             class_dot_name = class.name,
             namespace = ctx.cfg.namespace_name,
             doc_comments = class_doc_comments,
+            copy_control = copy_control,
+            copy_base = copy_base,
         )
     } else {
         writeln!(
@@ -1177,15 +1201,15 @@ public:"#,
         return *this;
     }}
     explicit {class_name}(SelfType o) noexcept: self_(o) {{}}
+    template<bool B = OWN_DATA, typename std::enable_if<!B, int>::type = 0>
+    {class_name}(const {class_name}<true> &o) noexcept: self_(o.self_) {{}}
     {c_class_type} *release() noexcept
     {{
         {c_class_type} *ret = self_;
         self_ = nullptr;
         return ret;
     }}
-    explicit operator SelfType() const noexcept {{ return self_; }}
-    {class_name}<false> as_rref() const noexcept {{ return {class_name}<false>{{ self_ }}; }}
-    const {class_name}<true> &as_cref() const noexcept {{ return reinterpret_cast<const {class_name}<true> &>(*this); }}"#,
+    explicit operator SelfType() const noexcept {{ return self_; }}"#,
                 class_name = tmp_class_name,
             )
         } else {
@@ -1271,38 +1295,7 @@ fn generate_copy_stuff(
             })?;
         let c_clone_func = c_func_name(class, &class.methods[pos]);
 
-        writeln!(
-            cpp_include_f,
-            r#"
-    {class_name}(const {class_name}& o) noexcept {{
-         {own_data_static_assert}
-         if (o.self_ != nullptr) {{
-             self_ = {c_clone_func}(o.self_);
-         }} else {{
-             self_ = nullptr;
-         }}
-    }}
-    {class_name} &operator=(const {class_name}& o) noexcept {{
-        {own_data_static_assert}
-        if (this != &o) {{
-            free_mem(this->self_);
-            if (o.self_ != nullptr) {{
-                self_ = {c_clone_func}(o.self_);
-            }} else {{
-                self_ = nullptr;
-            }}
-        }}
-        return *this;
-    }}"#,
-            own_data_static_assert = if !plain_class {
-                "static_assert(OWN_DATA, \"copy possible only if class own data\");"
-            } else {
-                ""
-            },
-            c_clone_func = c_clone_func,
-            class_name = tmp_class_name
-        )
-        .expect(WRITE_TO_MEM_FAILED_MSG);
+        write_cpp_copy_methods(cpp_include_f, &tmp_class_name, &c_clone_func, plain_class);
     } else if class.smart_ptr_copy_derived() {
         let this_type = class
             .self_desc
@@ -1347,6 +1340,35 @@ fn generate_copy_stuff(
             func_name = clone_fn_name,
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
+        write_cpp_copy_methods(
+            cpp_include_f,
+            &tmp_class_name,
+            &clone_fn_name.to_string(),
+            plain_class,
+        );
+    } else {
+        let copy_impl = if plain_class {
+            format!(
+                "    {tmp_class_name}(const {tmp_class_name}&) = delete;\n    {tmp_class_name} &operator=(const {tmp_class_name}&) = delete;"
+            )
+        } else {
+            format!(
+                "    {tmp_class_name}(const {tmp_class_name}&) = default;\n    {tmp_class_name} &operator=(const {tmp_class_name}&) = default;"
+            )
+        };
+        writeln!(cpp_include_f, "\n{copy_impl}").expect(WRITE_TO_MEM_FAILED_MSG);
+    }
+    Ok(())
+}
+
+fn write_cpp_copy_methods(
+    cpp_include_f: &mut FileWriteCache,
+    class_name: &str,
+    c_clone_func: &str,
+    plain_class: bool,
+) {
+    if plain_class {
+        let own_data_static_assert = "";
         writeln!(
             cpp_include_f,
             r#"
@@ -1369,27 +1391,42 @@ fn generate_copy_stuff(
             }}
         }}
         return *this;
-    }}"#,
-            own_data_static_assert = if !plain_class {
-                "static_assert(OWN_DATA, \"copy possible only if class own data\");"
-            } else {
-                ""
-            },
-            c_clone_func = clone_fn_name,
-            class_name = tmp_class_name
+    }}"#
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     } else {
         writeln!(
             cpp_include_f,
             r#"
-    {class_name}(const {class_name}&) = delete;
-    {class_name} &operator=(const {class_name}&) = delete;"#,
-            class_name = tmp_class_name
+    {class_name}(const {class_name}& o) noexcept {{
+         if (o.self_ != nullptr) {{
+             if (OWN_DATA) {{
+                 self_ = {c_clone_func}(o.self_);
+             }} else {{
+                 self_ = o.self_;
+             }}
+         }} else {{
+             self_ = nullptr;
+         }}
+    }}
+    {class_name} &operator=(const {class_name}& o) noexcept {{
+        if (this != &o) {{
+            free_mem(this->self_);
+            if (o.self_ != nullptr) {{
+                if (OWN_DATA) {{
+                    self_ = {c_clone_func}(o.self_);
+                }} else {{
+                    self_ = o.self_;
+                }}
+            }} else {{
+                self_ = nullptr;
+            }}
+        }}
+        return *this;
+    }}"#
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
-    Ok(())
 }
 
 #[inline]

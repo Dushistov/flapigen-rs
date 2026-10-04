@@ -1,4 +1,5 @@
-@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn TestReferences_update_foo(\n    this: *mut TestRefer","before":"let this: *mut TestReferences = Box::into_raw(this);\n    this as *const ::std::os::raw::c_void\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"file":"test.rs","kind":"item","name":"TestReferences_get_foo_ref","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
 #[unsafe(no_mangle)]
 pub extern "C" fn TestReferences_get_foo_ref(
     this: *mut TestReferences,
@@ -8,10 +9,24 @@ pub extern "C" fn TestReferences_get_foo_ref(
     let ret: *const ::std::os::raw::c_void = (ret as *const Foo) as *const ::std::os::raw::c_void;
     ret
 }
-
 @@end
 
-@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(n","before":"    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"file":"test.rs","kind":"item","name":"TestReferences_get_mut_foo_ref","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn TestReferences_get_mut_foo_ref(
+    this: *mut TestReferences,
+) -> *const ::std::os::raw::c_void {
+    let this: &mut TestReferences = unsafe { this.as_mut().unwrap() };
+    let mut ret: &mut Foo = TestReferences::get_mut_foo_ref(this);
+    let mut ret: &Foo = ret;
+    let ret: *const ::std::os::raw::c_void = (ret as *const Foo) as *const ::std::os::raw::c_void;
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"TestReferences_update_foo","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
 #[unsafe(no_mangle)]
 pub extern "C" fn TestReferences_update_foo(
     this: *mut TestReferences,
@@ -23,10 +38,10 @@ pub extern "C" fn TestReferences_update_foo(
     let mut ret: () = TestReferences::update_foo(this, foo);
     ret
 }
-
 @@end
 
-@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn TestReferences_delete(this: *mut TestReferences) {\n","before":"let this: &mut TestReferences = unsafe { this.as_mut().unwrap() };\n    let mut ret: () = TestReferences::update_foo(this, foo);\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"file":"test.rs","kind":"item","name":"TestReferences_update_mut_foo","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
 #[unsafe(no_mangle)]
 pub extern "C" fn TestReferences_update_mut_foo(
     this: *mut TestReferences,
@@ -38,5 +53,4 @@ pub extern "C" fn TestReferences_update_mut_foo(
     let mut ret: () = TestReferences::update_mut_foo(this, foo);
     ret
 }
-
 @@end

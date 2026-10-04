@@ -47,6 +47,8 @@ public:
         return *this;
     }
     explicit BtAddrWrapper(SelfType o) noexcept: self_(o) {}
+    template<bool B = OWN_DATA, typename std::enable_if<!B, int>::type = 0>
+    BtAddrWrapper(const BtAddrWrapper<true> &o) noexcept: self_(o.self_) {}
     BtAddrOpaque *release() noexcept
     {
         BtAddrOpaque *ret = self_;
@@ -54,23 +56,27 @@ public:
         return ret;
     }
     explicit operator SelfType() const noexcept { return self_; }
-    BtAddrWrapper<false> as_rref() const noexcept { return BtAddrWrapper<false>{ self_ }; }
-    const BtAddrWrapper<true> &as_cref() const noexcept { return reinterpret_cast<const BtAddrWrapper<true> &>(*this); }
 
     BtAddrWrapper(const BtAddrWrapper& o) noexcept {
-         static_assert(OWN_DATA, "copy possible only if class own data");
          if (o.self_ != nullptr) {
-             self_ = BtAddr_clone(o.self_);
+             if (OWN_DATA) {
+                 self_ = BtAddr_clone(o.self_);
+             } else {
+                 self_ = o.self_;
+             }
          } else {
              self_ = nullptr;
          }
     }
     BtAddrWrapper &operator=(const BtAddrWrapper& o) noexcept {
-        static_assert(OWN_DATA, "copy possible only if class own data");
         if (this != &o) {
             free_mem(this->self_);
             if (o.self_ != nullptr) {
-                self_ = BtAddr_clone(o.self_);
+                if (OWN_DATA) {
+                    self_ = BtAddr_clone(o.self_);
+                } else {
+                    self_ = o.self_;
+                }
             } else {
                 self_ = nullptr;
             }

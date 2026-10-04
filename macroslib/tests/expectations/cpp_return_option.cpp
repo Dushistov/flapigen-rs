@@ -28,9 +28,17 @@ class FooWrapper;
 using Foo = FooWrapper<true>;
 using FooRef = FooWrapper<false>;
 
+template<bool>
+struct FooWrapperCopyControl {};
+template<>
+struct FooWrapperCopyControl<true> {
+    FooWrapperCopyControl() = default;
+    FooWrapperCopyControl(const FooWrapperCopyControl&) = delete;
+    FooWrapperCopyControl& operator=(const FooWrapperCopyControl&) = delete;
+};
 
 template<bool OWN_DATA>
-class FooWrapper {
+class FooWrapper : private FooWrapperCopyControl<OWN_DATA> {
 @@end
 
 @@expect {"after":" const noexcept;\n\n    st","before":"std::abort();\n        }\n    }\n\n    ","file":"Foo.hpp","kind":"between"}

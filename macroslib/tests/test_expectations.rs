@@ -324,7 +324,7 @@ foreign_class!(class Moo {
             .contains("void Moo_update_boo(MooOpaque * const self, const BooOpaque * boo);"));
         assert!(cpp_code
             .foreign_code
-            .contains("void update_boo(const Boo & boo)"));
+            .contains("void update_boo(BooRef boo)"));
     }
 }
 
@@ -422,15 +422,15 @@ enum MyEnum {
 "##;
         code.splice(new_line_pos..new_line_pos, addon.iter().copied());
 
-        let needle = format!("class {}Wrapper {{", class_name);
+        let needle = format!("class {}Wrapper : ", class_name);
         let class_pos = find_subsequence(code, needle.as_bytes()).unwrap();
         let end_pos = class_pos + needle.len();
-        let new_code = format!(
-            r#"class {}Wrapper : public QObject {{
-    Q_OBJECT"#,
-            class_name
+        code.splice(end_pos..end_pos, b"public QObject, ".iter().copied());
+        let brace_pos = class_pos + code[class_pos..].iter().position(|x| *x == b'{').unwrap();
+        code.splice(
+            brace_pos + 1..brace_pos + 1,
+            b"\n    Q_OBJECT".iter().copied(),
         );
-        code.splice(class_pos..end_pos, new_code.as_bytes().iter().copied());
     })
     .register_method_attribute_callback("Q_INVOKABLE", |code, ctx| {
         println!(
@@ -468,7 +468,7 @@ enum MyEnum {
     ));
     assert!(foreign_code.contains(
         r#"
-class MyObjWrapper : public QObject {
+class MyObjWrapper : public QObject, private MyObjWrapperCopyControl<OWN_DATA> {
     Q_OBJECT
 "#
     ));

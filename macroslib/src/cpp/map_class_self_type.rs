@@ -306,9 +306,14 @@ fn register_main_foreign_types(
     };
     conv_map.alloc_foreign_type(class_ftype)?;
 
-    let class_ftype_ref_in = ForeignTypeS {
+    let is_plain_class = need_plain_class(class);
+    let class_ftype_ref = ForeignTypeS {
         name: ForeignTypeName::new(
-            format!("const {} &", class.name),
+            if is_plain_class {
+                format!("const {} &", class.name)
+            } else {
+                format!("{}Ref", class.name)
+            },
             (class.src_id, class.name.span()),
         ),
         provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class))],
@@ -327,20 +332,10 @@ fn register_main_foreign_types(
                 )),
             }),
         }),
-        into_from_rust: None,
-    };
-    conv_map.alloc_foreign_type(class_ftype_ref_in)?;
-
-    let is_plain_class = need_plain_class(class);
-
-    if !is_plain_class {
-        let class_ftype_ref_out = ForeignTypeS {
-            name: ForeignTypeName::new(
-                format!("{}Ref", class.name),
-                (class.src_id, class.name.span()),
-            ),
-            provided_by_module: vec![format!("\"{}\"", cpp_code::cpp_header_name(class))],
-            into_from_rust: Some(ForeignConversionRule {
+        into_from_rust: if is_plain_class {
+            None
+        } else {
+            Some(ForeignConversionRule {
                 rust_ty: this_type_ref,
                 intermediate: Some(ForeignConversionIntermediate {
                     input_to_output: false,
@@ -355,11 +350,10 @@ fn register_main_foreign_types(
                         invalid_src_id_span(),
                     )),
                 }),
-            }),
-            from_into_rust: None,
-        };
-        conv_map.alloc_foreign_type(class_ftype_ref_out)?;
-    }
+            })
+        },
+    };
+    conv_map.alloc_foreign_type(class_ftype_ref)?;
 
     let class_ftype_mut_ref_in = ForeignTypeS {
         name: ForeignTypeName::new(

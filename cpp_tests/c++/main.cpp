@@ -57,6 +57,23 @@
 
 using namespace rust;
 
+static_assert(std::is_convertible<const Foo &, FooRef>::value,
+              "an owning class must implicitly convert to its borrowed view");
+static_assert(std::is_copy_constructible<FooRef>::value,
+              "a borrowed view must be cheap to copy");
+static_assert(std::is_copy_assignable<FooRef>::value,
+              "a borrowed view must support pointer-copy assignment");
+static_assert(!std::is_copy_constructible<Foo>::value,
+              "a class without Copy must remain non-copyable when it owns data");
+static_assert(std::is_copy_constructible<TestCopyRef>::value,
+              "borrowed views of Copy classes must copy without cloning");
+static_assert(std::is_copy_constructible<SessionRef>::value,
+              "borrowed views of SmartPtrCopy classes must copy without cloning");
+static_assert(sizeof(FooRef) == sizeof(void *) && sizeof(Foo) == sizeof(void *),
+              "foreign class wrappers must remain pointer-sized");
+static_assert(std::is_same<decltype(std::declval<TestReferences &>().get_mut_foo_ref()), FooRef>::value,
+              "mutable Rust reference output remains a read-only borrowed view");
+
 static_assert(sizeof(RustSlice<const Foo>) == sizeof(void *) + sizeof(uintptr_t),
               "foreign slice should store only data and length");
 static_assert(sizeof(RustSlice<Foo>) == sizeof(void *) + sizeof(uintptr_t),
@@ -1078,10 +1095,24 @@ TEST(TestReferences, smokeTest)
     EXPECT_EQ(std::string("bugaga"), foo.getName());
 
     Foo new_foo(100, "100");
-    tr.update_foo(new_foo);
+    const Foo &const_new_foo = new_foo;
+    tr.update_foo(const_new_foo);
     foo = tr.get_foo_ref();
     EXPECT_EQ(102, foo.f(1, 1));
     EXPECT_EQ(std::string("100"), foo.getName());
+
+    TestReferences source(300, "300");
+    FooRef source_ref = source.get_foo_ref();
+    FooRef source_ref_copy = source_ref;
+    FooRef source_ref_assigned = tr.get_foo_ref();
+    source_ref_assigned = source_ref;
+    tr.update_foo(source_ref_copy);
+    EXPECT_EQ(std::string("300"), tr.get_foo_ref().getName());
+    EXPECT_EQ(std::string("300"), source_ref.getName());
+    EXPECT_EQ(std::string("300"), source_ref_assigned.getName());
+
+    auto mut_ref = tr.get_mut_foo_ref();
+    EXPECT_EQ(std::string("300"), mut_ref.getName());
 
     Foo foo2(200, "200");
     tr.update_mut_foo(foo2);
@@ -1175,6 +1206,12 @@ TEST(TestCopy, smokeTest)
 {
     TestCopy tst1{ "aaaaB" };
     EXPECT_EQ(std::string("aaaaB"), tst1.get());
+    const TestCopy &const_tst1 = tst1;
+    TestCopyRef borrowed = const_tst1;
+    TestCopyRef borrowed_copy = borrowed;
+    EXPECT_EQ(static_cast<const TestCopyOpaque *>(borrowed),
+              static_cast<const TestCopyOpaque *>(borrowed_copy));
+    EXPECT_EQ(std::string("aaaaB"), borrowed_copy.get());
     TestCopy tst2(tst1);
 
     EXPECT_EQ(std::string("aaaaB"), tst1.get());
@@ -1391,6 +1428,11 @@ TEST(TestMultiThreadCallback, smokeTest)
 TEST(SmartPtrCopy, smokeTest)
 {
     Session session{ "Session" };
+    SessionRef borrowed = session;
+    SessionRef borrowed_copy = borrowed;
+    EXPECT_EQ(static_cast<const SessionOpaque *>(borrowed),
+              static_cast<const SessionOpaque *>(borrowed_copy));
+    EXPECT_EQ("Session", borrowed_copy.name());
     EXPECT_EQ("Session", session.name());
     Session session2{ session };
     EXPECT_EQ("Session", session.name());
