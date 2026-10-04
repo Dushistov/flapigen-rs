@@ -23,7 +23,29 @@ pub(in crate::cpp) fn map_type(
     arg_ty_span: SourceIdSpan,
 ) -> Result<CppForeignTypeInfo> {
     debug!("map_type: arg_ty {}, direction {:?}", arg_ty, direction);
-    let ftype = do_map_type(ctx, arg_ty, direction, arg_ty_span, false)?;
+    let ftype = do_map_type(ctx, arg_ty, direction, arg_ty_span, false).map_err(|err| {
+        if let Type::Reference(reference) = &arg_ty.ty {
+            if let Type::Slice(slice) = reference.elem.as_ref() {
+                if ctx
+                    .conv_map
+                    .ty_to_rust_type_checked(&slice.elem)
+                    .is_some_and(|element| {
+                        element.implements_path(
+                            &syn::parse_quote!(SwigForeignClassPlainIndirectAccess),
+                        )
+                    })
+                {
+                    return DiagnosticError::new2(
+                        arg_ty_span,
+                        format!(
+                            "cannot map '{arg_ty}' for a PlainClass: its Arc/Rc-backed class has no borrowed C++ wrapper; remove PlainClass or define a custom foreign_typemap!"
+                        ),
+                    );
+                }
+            }
+        }
+        err
+    })?;
     CppForeignTypeInfo::try_new(ctx, direction, ftype)
 }
 

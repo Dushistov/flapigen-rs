@@ -49,6 +49,7 @@
 #include "rust_interface/ThreadSafeObserver.hpp"
 #include "rust_interface/TestMultiThreadCallback.hpp"
 #include "rust_interface/Session.hpp"
+#include "rust_interface/FooRc.hpp"
 #include "rust_interface/WorkWithSlice.hpp"
 #include "rust_interface/StringSliceStore.hpp"
 #include "rust_interface/StringVecStore.hpp"
@@ -105,9 +106,12 @@ static_assert(std::is_same<decltype(std::declval<RustSlice<const uintptr_t>>().a
                            CRustSliceusize>::value,
               "usize slices must use their own descriptor even when uintptr_t aliases uint32_t");
 static_assert(std::is_same<decltype(std::declval<RustSlice<const FooArc, FooArcAccess>>()
-                                        .as_c<CRustSliceArcFooArc>()),
-                           CRustSliceArcFooArc>::value,
+                                        .as_c<CRustSliceForeignIndirectFooArc>()),
+                           CRustSliceForeignIndirectFooArc>::value,
               "custom slice access must use its descriptor");
+static_assert(!std::is_constructible<RustSlice<const FooArc, FooArcAccess>,
+                                     CRustSliceForeignIndirectFooRc>::value,
+              "Arc and Rc-backed classes must keep distinct slice descriptors");
 static_assert(std::is_constructible<RustSlice<const Foo>, CRustSliceForeignFoo>::value,
               "foreign slices accept their matching descriptor");
 static_assert(!std::is_constructible<RustSlice<const Foo>, CRustSliceu32>::value,
@@ -1542,6 +1546,20 @@ TEST(WorkWithSlice, smokeTest)
         ASSERT_EQ(size, sl.size());
         const auto expected_sum = size == 0 ? 0 : static_cast<int32_t>(size * (size - 1) / 2);
         EXPECT_EQ(expected_sum, WorkWithSlice::sum_slice(obj.slice()));
+        const auto rc_slice = obj.rc_slice();
+        ASSERT_EQ(size, rc_slice.size());
+        EXPECT_EQ(expected_sum, WorkWithSlice::sum_rc_slice(obj.rc_slice()));
+        EXPECT_EQ(static_cast<ptrdiff_t>(size), rc_slice.end() - rc_slice.begin());
+        for (size_t i = 0; i < rc_slice.size(); ++i) {
+            EXPECT_EQ(static_cast<int32_t>(i), rc_slice.at(i).val());
+        }
+        EXPECT_THROW(rc_slice.at(size), std::out_of_range);
+        size_t rc_count = 0;
+        for (const auto &element : rc_slice) {
+            EXPECT_EQ(static_cast<int32_t>(rc_count), element.val());
+            ++rc_count;
+        }
+        EXPECT_EQ(size, rc_count);
         EXPECT_EQ(static_cast<ptrdiff_t>(size), sl.end() - sl.begin());
         for (size_t i = 0; i < sl.size(); ++i) {
             std::stringstream fmt;
