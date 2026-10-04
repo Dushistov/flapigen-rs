@@ -219,13 +219,21 @@ fn register_rust_ty_conversion_rules(
         .into(),
     );
 
-    //&"class" -> *const void
-    conv_map.add_conversion_rule(
-        this_type_ref,
-        const_void_ptr_rust_ty,
-        TypeConvCode::new(
+    // &"class" -> *const void. PlainClass has no non-owning C++ wrapper,
+    // so the default outgoing conversion must fail rather than exposing an
+    // unusable opaque pointer. An explicit user typemap for &T can replace it.
+    let plain_class_error = if need_plain_class(class) {
+        format!(
+            "compile_error!(\"cannot return a reference to `{}` from a C++ PlainClass; remove `PlainClass` or define a custom outgoing `foreign_typemap!` for the reference\");\n",
+            class.name,
+        )
+    } else {
+        String::new()
+    };
+    let ref_to_const_void_rule = TypeConvCode::new(
             format!(
-                "let {to_var}: {ptr_type} = ({from_var} as *const {this_type}) as {ptr_type};",
+                "{plain_class_error}let {to_var}: {ptr_type} = ({from_var} as *const {this_type}) as {ptr_type};",
+                plain_class_error = plain_class_error,
                 to_var = TO_VAR_TEMPLATE,
                 ptr_type = conv_map[const_void_ptr_rust_ty].typename(),
                 this_type = conv_map[this_type_inner],
@@ -233,8 +241,20 @@ fn register_rust_ty_conversion_rules(
             ),
             invalid_src_id_span(),
         )
-        .into(),
-    );
+        .into();
+    if need_plain_class(class) {
+        conv_map.add_conversion_rule_if_absent(
+            this_type_ref,
+            const_void_ptr_rust_ty,
+            ref_to_const_void_rule,
+        );
+    } else {
+        conv_map.add_conversion_rule(
+            this_type_ref,
+            const_void_ptr_rust_ty,
+            ref_to_const_void_rule,
+        );
+    }
 
     Ok(())
 }

@@ -54,9 +54,12 @@ Usage from C++:
 By default, flapigen generates two C++ variants for a `foreign_class!`: an
 owning class and a non-owning reference class. If you don't want to deal with two variants and
 the need to convert one into the other in various cases, `#[derive(PlainClass)]` generates just
-one C++ class. The tradeoff is that you cannot return a Rust reference to that
-type (`&ScoreAdjustment` or `&mut ScoreAdjustment`) to C++; return an owned
-value instead. The single class can also be forward-declared as
+one C++ class. By default, returning a Rust reference to that type
+(`&ScoreAdjustment` or `&mut ScoreAdjustment`) gives a compile error because
+there is no C++ reference wrapper. Return an owned value instead, or define an
+explicit outgoing `foreign_typemap!` for a custom borrowed C++ view. The C++
+caller must keep the Rust referent alive while using such a view. The single
+class can also be forward-declared as
 `class ScoreAdjustment;` in a handwritten C++ header.
 
 The Rust type and its binding are:

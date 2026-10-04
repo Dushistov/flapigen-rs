@@ -538,6 +538,17 @@ impl TypeMap {
         self.conv_graph.update_edge(from, to, rule);
     }
 
+    pub(crate) fn add_conversion_rule_if_absent(
+        &mut self,
+        from: RustTypeIdx,
+        to: RustTypeIdx,
+        rule: TypeConvEdge,
+    ) {
+        if self.conv_graph.find_edge(from, to).is_none() {
+            self.add_conversion_rule(from, to, rule);
+        }
+    }
+
     fn find_or_build_path(
         &mut self,
         from: RustTypeIdx,
