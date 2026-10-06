@@ -1,4 +1,4 @@
-@@expect {"after":"#[allow(dead_code)]\nimpl CRustVecAccess {\n    pub fn from_vec<T>(mut v: Vec<T>) ","before":"unsafe { ::std::slice::from_raw_parts_mut(self.data.cast(), self.len) }\n        }\n    }\n}\n#[allow(dead_code)]\n#[repr(C)]\n#[derive(Copy, Clone)]\n","file":"test.rs","kind":"between"}
+@@expect {"after":"#[allow(dead_code)]\nimpl CRustVecAccess {\n    pub fn from_vec<T>(mut v: Vec<T>) ","before":"unsafe { Vec::from_raw_parts(self.data.cast(), self.len, self.capacity) }\n    }\n}\n#[allow(dead_code)]\n#[repr(C)]\n#[derive(Copy, Clone)]\n","file":"test.rs","kind":"between"}
 pub struct CRustVecAccess {
     data: *mut ::std::os::raw::c_void,
     len: usize,

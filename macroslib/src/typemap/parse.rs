@@ -1185,5 +1185,19 @@ macro_rules! jni_unpack_return {
             FxHashMap::default(),
         )
         .unwrap();
+        parse(
+            SourceId::none(),
+            include_str!("../cpp/cpp-slice.rs"),
+            64,
+            FxHashMap::default(),
+        )
+        .unwrap();
+        parse(
+            SourceId::none(),
+            include_str!("../cpp/cpp-vec.rs"),
+            64,
+            FxHashMap::default(),
+        )
+        .unwrap();
     }
 }

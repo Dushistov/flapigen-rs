@@ -36,8 +36,8 @@ mod finterface;
 mod map_class_self_type;
 mod map_type;
 
-// Trait names recognized by C++ typemap rules in cpp-include.rs. Some access
-// traits are conversion-graph markers rather than generated Rust trait impls.
+// Trait names recognized by the built-in C++ typemaps. Some access traits are
+// conversion-graph markers rather than generated Rust trait impls.
 const SWIG_FOREIGN_CLASS_TRAIT: &str = "SwigForeignClass";
 const SWIG_FOREIGN_ENUM_TRAIT: &str = "SwigForeignEnum";
 const SWIG_TYPE_IS_REPR_C_TRAIT: &str = "SwigTypeIsReprC";
