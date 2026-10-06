@@ -36,6 +36,17 @@ mod finterface;
 mod map_class_self_type;
 mod map_type;
 
+// Trait names recognized by C++ typemap rules in cpp-include.rs. Some access
+// traits are conversion-graph markers rather than generated Rust trait impls.
+const SWIG_FOREIGN_CLASS_TRAIT: &str = "SwigForeignClass";
+const SWIG_FOREIGN_ENUM_TRAIT: &str = "SwigForeignEnum";
+const SWIG_TYPE_IS_REPR_C_TRAIT: &str = "SwigTypeIsReprC";
+const SWIG_FOREIGN_CLASS_DIRECT_ACCESS_TRAIT: &str = "SwigForeignClassDirectAccess";
+const SWIG_FOREIGN_CLASS_INDIRECT_ACCESS_TRAIT: &str = "SwigForeignClassIndirectAccess";
+const SWIG_FOREIGN_CLASS_PLAIN_INDIRECT_ACCESS_TRAIT: &str = "SwigForeignClassPlainIndirectAccess";
+const SWIG_FOREIGN_CLASS_DIRECT_VEC_ACCESS_TRAIT: &str = "SwigForeignClassDirectVecAccess";
+const SWIG_FOREIGN_CLASS_PLAIN_VEC_ACCESS_TRAIT: &str = "SwigForeignClassPlainVecAccess";
+
 use std::{io::Write, mem, path::PathBuf, rc::Rc};
 
 use log::{debug, trace};
@@ -237,7 +248,7 @@ impl CppConfig {
         if let Some(self_desc) = class.self_desc.as_ref() {
             let constructor_ret_type = &self_desc.constructor_ret_type;
             let this_type_for_method = constructor_ret_type;
-            let mut traits = vec!["SwigForeignClass"];
+            let mut traits = vec![SWIG_FOREIGN_CLASS_TRAIT];
             if class.clone_derived() {
                 traits.push("Clone");
             }
@@ -261,7 +272,7 @@ impl CppConfig {
             if fclass::need_plain_class(class) {
                 conv_map.find_or_alloc_rust_type_that_implements(
                     constructor_ret_type,
-                    &["SwigForeignClassPlainVecAccess"],
+                    &[SWIG_FOREIGN_CLASS_PLAIN_VEC_ACCESS_TRAIT],
                     class.src_id,
                 );
             }
@@ -269,13 +280,13 @@ impl CppConfig {
             if let Some(element) = direct_slice_element_type(self_desc) {
                 conv_map.find_or_alloc_rust_type_that_implements(
                     element,
-                    &["SwigForeignClassDirectAccess"],
+                    &[SWIG_FOREIGN_CLASS_DIRECT_ACCESS_TRAIT],
                     class.src_id,
                 );
                 if !fclass::need_plain_class(class) {
                     conv_map.find_or_alloc_rust_type_that_implements(
                         element,
-                        &["SwigForeignClassDirectVecAccess"],
+                        &[SWIG_FOREIGN_CLASS_DIRECT_VEC_ACCESS_TRAIT],
                         class.src_id,
                     );
                 }
@@ -285,9 +296,9 @@ impl CppConfig {
                 || check_if_smart_pointer_return_inner_type(constructor_ret_type, "Arc").is_some()
             {
                 let slice_access = if fclass::need_plain_class(class) {
-                    "SwigForeignClassPlainIndirectAccess"
+                    SWIG_FOREIGN_CLASS_PLAIN_INDIRECT_ACCESS_TRAIT
                 } else {
-                    "SwigForeignClassIndirectAccess"
+                    SWIG_FOREIGN_CLASS_INDIRECT_ACCESS_TRAIT
                 };
                 conv_map.find_or_alloc_rust_type_that_implements(
                     constructor_ret_type,

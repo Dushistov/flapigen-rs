@@ -4,7 +4,7 @@ use std::{io::Write, rc::Rc};
 use syn::Type;
 
 use crate::{
-    cpp::{cpp_code, CppContext},
+    cpp::{cpp_code, CppContext, SWIG_FOREIGN_ENUM_TRAIT},
     error::{invalid_src_id_span, DiagnosticError, Result},
     extension::extend_foreign_enum,
     file_cache::FileWriteCache,
@@ -32,7 +32,7 @@ pub(in crate::cpp) fn generate_enum(ctx: &mut CppContext, fenum: &ForeignEnumInf
         .map_err(|err| DiagnosticError::from_syn_err(fenum.src_id, err))?;
     let enum_rty = ctx.conv_map.find_or_alloc_rust_type_that_implements(
         &enum_ti,
-        &["SwigForeignEnum"],
+        &[SWIG_FOREIGN_ENUM_TRAIT],
         fenum.src_id,
     );
 
