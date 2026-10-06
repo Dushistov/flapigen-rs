@@ -1505,6 +1505,86 @@ fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec) {
 }
 
 foreign_typemap!(
+    generic_alias!(CForeignVecModule = swig_concat_idents!(RustVec, swig_f_type!(T)));
+    generic_alias!(CForeignVec = swig_concat_idents!(CRustForeignVec, swig_f_type!(T)));
+    generic_alias!(CForeignVecNew = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _new));
+    generic_alias!(CForeignVecFree = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _free));
+    generic_alias!(CForeignVecPush = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _push));
+    generic_alias!(CForeignVecRemove = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _remove));
+    generic_alias!(CIndirectSlice = swig_concat_idents!(CRustSliceForeignIndirect, swig_f_type!(T)));
+    generic_alias!(CIndirectSliceAccess = swig_concat_idents!(swig_f_type!(T), Access));
+
+    define_c_type!(
+        module = "CForeignVecModule!().h";
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CForeignVec!() {
+            data: *mut ::std::os::raw::c_void,
+            len: usize,
+            capacity: usize,
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn CForeignVecNew!()() -> CForeignVec!() {
+            let raw = CRustForeignVec::from_vec(Vec::<swig_subst_type!(T)>::new());
+            CForeignVec!() { data: raw.data, len: raw.len, capacity: raw.capacity }
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn CForeignVecFree!()(v: CForeignVec!()) {
+            drop_foreign_class_vec::<swig_subst_type!(T)>(CRustForeignVec {
+                data: v.data, len: v.len, capacity: v.capacity,
+            });
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn CForeignVecPush!()(v: *mut CForeignVec!(), e: *mut ::std::os::raw::c_void) {
+            let v = unsafe { &mut *v };
+            let mut raw = CRustForeignVec { data: v.data, len: v.len, capacity: v.capacity };
+            push_foreign_class_to_vec::<swig_subst_type!(T)>(&mut raw, e);
+            v.data = raw.data;
+            v.len = raw.len;
+            v.capacity = raw.capacity;
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn CForeignVecRemove!()(v: *mut CForeignVec!(), idx: usize) -> *mut ::std::os::raw::c_void {
+            let v = unsafe { &mut *v };
+            let mut raw = CRustForeignVec { data: v.data, len: v.len, capacity: v.capacity };
+            let elem = remove_foreign_class_from_vec::<swig_subst_type!(T)>(&mut raw, idx);
+            v.data = raw.data;
+            v.len = raw.len;
+            v.capacity = raw.capacity;
+            elem
+        }
+    );
+
+    foreign_code!(module = "CForeignVecModule!().h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_vec_impl.hpp"
+#include "CIndirectSlice!().h"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+using CForeignVecModule!() = RustVec<CForeignVec!(), internal::IndirectForeignVecPolicy<swig_f_type!(&[T], output), CIndirectSliceAccess!(), CForeignVec!(), CForeignVecNew!(), CForeignVecFree!(), CForeignVecPush!(), CForeignVecRemove!()>>;
+}
+#endif
+"##);
+
+    ($p:r_type) <T: SwigForeignClassIndirectAccess> Vec<T> => CForeignVec!() {
+        let raw = CRustForeignVec::from_vec($p);
+        $out = CForeignVec!() { data: raw.data, len: raw.len, capacity: raw.capacity };
+    };
+    ($p:r_type) <T: SwigForeignClassIndirectAccess> Vec<T> <= CForeignVec!() {
+        $out = unsafe { Vec::from_raw_parts($p.data.cast(), $p.len, $p.capacity) };
+    };
+    ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) => "CForeignVecModule!()"
+        "CForeignVecModule!(){$p}";
+    ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) <= "CForeignVecModule!()"
+        "$p.release()";
+);
+
+foreign_typemap!(
     generic_alias!(CForeignVecModule = swig_concat_idents!(RustForeignVec, swig_f_type!(T)));
     generic_alias!(CForeignVec = swig_concat_idents!(CRustForeignVec, swig_f_type!(T)));
     generic_alias!(CForeignVecNew = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _new));
@@ -1580,14 +1660,14 @@ using CForeignVecModule!() = RustVec<CForeignVec!(), internal::ForeignVecPolicy<
 #endif
 "##);
 
-    ($p:r_type) <T: SwigForeignClass> Vec<T> => CForeignVec!() {
+    ($p:r_type) <T: SwigForeignClassDirectVecAccess> Vec<T> => CForeignVec!() {
         let mut v: Vec<swig_subst_type!(T)> = $p;
         $out = CForeignVec!() {
             data: v.as_mut_ptr().cast(), len: v.len(), capacity: v.capacity(),
         };
         ::std::mem::forget(v);
     };
-    ($p:r_type) <T: SwigForeignClass> Vec<T> <= CForeignVec!() {
+    ($p:r_type) <T: SwigForeignClassDirectVecAccess> Vec<T> <= CForeignVec!() {
         $out = unsafe { Vec::from_raw_parts($p.data.cast(), $p.len, $p.capacity) };
     };
     ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) => "CForeignVecModule!()"

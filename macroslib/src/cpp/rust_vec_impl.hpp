@@ -77,6 +77,37 @@ namespace internal {
         }
     };
 
+    template <typename Slice, typename Access, typename Descriptor,
+              Descriptor (*New)(), void (*Free)(Descriptor),
+              void (*Push)(Descriptor *, void *), void *(*Remove)(Descriptor *, uintptr_t)>
+    struct IndirectForeignVecPolicy {
+        using value_type = typename Slice::value_type;
+        using reference = typename Slice::reference;
+        using iterator = SliceIterator<Descriptor, IndirectForeignVecPolicy>;
+        using const_iterator = iterator;
+
+        static Descriptor empty() noexcept { return New(); }
+        static void free(Descriptor vec) noexcept { Free(vec); }
+        static Slice as_slice(Descriptor vec) noexcept
+        {
+            return Slice{ static_cast<const typename Access::storage_type *>(vec.data), vec.len };
+        }
+        static reference index(Descriptor vec, size_t i) noexcept { return as_slice(vec)[i]; }
+        static iterator begin(Descriptor vec) noexcept { return iterator{ vec, 0 }; }
+        static const_iterator cbegin(Descriptor vec) noexcept { return begin(vec); }
+        static iterator end(Descriptor vec) noexcept { return iterator{ vec, vec.len }; }
+        static const_iterator cend(Descriptor vec) noexcept { return end(vec); }
+        static void push(Descriptor &vec, value_type value) noexcept
+        {
+            Push(&vec, value.release());
+        }
+        static value_type remove(Descriptor &vec, size_t i) noexcept
+        {
+            assert(i < vec.len);
+            return value_type{ static_cast<typename value_type::CForeignType *>(Remove(&vec, i)) };
+        }
+    };
+
 } // namespace internal
 
 template <typename Descriptor, typename Policy>

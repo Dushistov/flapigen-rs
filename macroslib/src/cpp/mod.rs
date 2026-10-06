@@ -258,12 +258,27 @@ impl CppConfig {
                 class.src_id,
             );
 
+            if fclass::need_plain_class(class) {
+                conv_map.find_or_alloc_rust_type_that_implements(
+                    constructor_ret_type,
+                    &["SwigForeignClassPlainVecAccess"],
+                    class.src_id,
+                );
+            }
+
             if let Some(element) = direct_slice_element_type(self_desc) {
                 conv_map.find_or_alloc_rust_type_that_implements(
                     element,
                     &["SwigForeignClassDirectAccess"],
                     class.src_id,
                 );
+                if !fclass::need_plain_class(class) {
+                    conv_map.find_or_alloc_rust_type_that_implements(
+                        element,
+                        &["SwigForeignClassDirectVecAccess"],
+                        class.src_id,
+                    );
+                }
             }
 
             if check_if_smart_pointer_return_inner_type(constructor_ret_type, "Rc").is_some()
@@ -787,6 +802,72 @@ mod tests {
                 "unexpected error for constructor {constructor_type} and &[{slice_type}]: {error}"
             );
         }
+    }
+
+    #[test]
+    fn unsupported_foreign_class_vectors_do_not_use_inline_access() {
+        for (constructor_type, element_type) in [
+            ("Box<Box<Node>>", "Box<Box<Node>>"),
+            ("Arc<Node>", "Node"),
+            ("Rc<Node>", "Node"),
+            ("Node", "Arc<Node>"),
+        ] {
+            let output_dir = tempfile::tempdir().unwrap();
+            let config = CppConfig::new(output_dir.path().to_path_buf(), "test".into());
+            let mut generator =
+                Generator::new(LanguageConfig::CppConfig(config)).with_pointer_target_width(64);
+            let code = format!(
+                "foreign_class!(class Node {{
+                    self_type Node;
+                    constructor Node::new() -> {constructor_type};
+                }});
+                foreign_class!(class Holder {{
+                    self_type Holder;
+                    constructor Holder::new() -> Holder;
+                    fn Holder::values(&self) -> Vec<{element_type}>;
+                }});"
+            );
+            let src_id = generator.src_reg.register(SourceCode {
+                id_of_code: "unsupported_foreign_vec.rs".into(),
+                code,
+            });
+            let error = generator
+                .expand_str(&[src_id], output_dir.path().join("glue.rs"))
+                .expect_err("unsupported vector must not use the inline class policy");
+            assert!(
+                error.to_string().contains("conversion"),
+                "unexpected error for Vec<{element_type}>: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn plain_class_vector_explains_missing_borrowed_wrapper() {
+        let output_dir = tempfile::tempdir().unwrap();
+        let config = CppConfig::new(output_dir.path().to_path_buf(), "test".into());
+        let mut generator =
+            Generator::new(LanguageConfig::CppConfig(config)).with_pointer_target_width(64);
+        let src_id = generator.src_reg.register(SourceCode {
+            id_of_code: "plain_foreign_vec.rs".into(),
+            code: "foreign_class!(#[derive(PlainClass)] class Node {
+                self_type Node;
+                constructor Node::new() -> Arc<Node>;
+            });
+            foreign_class!(class Holder {
+                self_type Holder;
+                constructor Holder::new() -> Holder;
+                fn Holder::values(&self) -> Vec<Arc<Node>>;
+            });"
+            .into(),
+        });
+        let error = generator
+            .expand_str(&[src_id], output_dir.path().join("glue.rs"))
+            .expect_err("PlainClass cannot produce borrowed vector elements");
+        assert!(
+            error.to_string().contains("PlainClass")
+                && error.to_string().contains("borrowed wrapper"),
+            "{error}"
+        );
     }
 
     #[test]
