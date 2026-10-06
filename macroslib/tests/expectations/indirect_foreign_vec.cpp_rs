@@ -1,0 +1,84 @@
+@@expect {"file":"test.rs","kind":"item","name":"RustForeignVecArcNode_new","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn RustForeignVecArcNode_new() -> CRustForeignVecArcNode {
+    let raw = CRustForeignVec::from_vec(Vec::<Arc<ArcNode>>::new());
+    CRustForeignVecArcNode {
+        data: raw.data,
+        len: raw.len,
+        capacity: raw.capacity,
+    }
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"RustForeignVecArcNode_push","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn RustForeignVecArcNode_push(
+    v: *mut CRustForeignVecArcNode,
+    e: *mut ::std::os::raw::c_void,
+) {
+    let v = unsafe { &mut *v };
+    let mut raw = CRustForeignVec {
+        data: v.data,
+        len: v.len,
+        capacity: v.capacity,
+    };
+    push_foreign_class_to_vec::<Arc<ArcNode>>(&mut raw, e);
+    v.data = raw.data;
+    v.len = raw.len;
+    v.capacity = raw.capacity;
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"RustForeignVecRcNode_remove","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn RustForeignVecRcNode_remove(
+    v: *mut CRustForeignVecRcNode,
+    idx: usize,
+) -> *mut ::std::os::raw::c_void {
+    let v = unsafe { &mut *v };
+    let mut raw = CRustForeignVec {
+        data: v.data,
+        len: v.len,
+        capacity: v.capacity,
+    };
+    let elem = remove_foreign_class_from_vec::<Rc<RefCell<RcNode>>>(&mut raw, idx);
+    v.data = raw.data;
+    v.len = raw.len;
+    v.capacity = raw.capacity;
+    elem
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"VecHost_echo_arcs","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn VecHost_echo_arcs(values: CRustForeignVecArcNode) -> CRustForeignVecArcNode {
+    let mut values: Vec<Arc<ArcNode>> =
+        unsafe { Vec::from_raw_parts(values.data.cast(), values.len, values.capacity) };
+    let mut ret: Vec<Arc<ArcNode>> = VecHost::echo_arcs(values);
+    let raw = CRustForeignVec::from_vec(ret);
+    let mut ret: CRustForeignVecArcNode = CRustForeignVecArcNode {
+        data: raw.data,
+        len: raw.len,
+        capacity: raw.capacity,
+    };
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"VecHost_echo_rcs","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn VecHost_echo_rcs(values: CRustForeignVecRcNode) -> CRustForeignVecRcNode {
+    let mut values: Vec<Rc<RefCell<RcNode>>> =
+        unsafe { Vec::from_raw_parts(values.data.cast(), values.len, values.capacity) };
+    let mut ret: Vec<Rc<RefCell<RcNode>>> = VecHost::echo_rcs(values);
+    let raw = CRustForeignVec::from_vec(ret);
+    let mut ret: CRustForeignVecRcNode = CRustForeignVecRcNode {
+        data: raw.data,
+        len: raw.len,
+        capacity: raw.capacity,
+    };
+    ret
+}
+@@end

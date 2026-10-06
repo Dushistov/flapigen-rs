@@ -8,7 +8,10 @@ use crate::{
     cpp::{merge_c_types, merge_rule, CppContext, CppForeignTypeInfo, MergeCItemsFlags},
     error::{DiagnosticError, Result, SourceIdSpan},
     typemap::{
-        ast::{DisplayToTokens, TyParamsSubstList, UniqueName},
+        ast::{
+            check_if_smart_pointer_return_inner_type, DisplayToTokens, TyParamsSubstList,
+            UniqueName,
+        },
         ty::{ForeignType, RustType, TraitNamesSet},
         ExpandedFType, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
     },
@@ -24,6 +27,22 @@ pub(in crate::cpp) fn map_type(
 ) -> Result<CppForeignTypeInfo> {
     debug!("map_type: arg_ty {}, direction {:?}", arg_ty, direction);
     let ftype = do_map_type(ctx, arg_ty, direction, arg_ty_span, false).map_err(|err| {
+        if let Some(element_ty) = check_if_smart_pointer_return_inner_type(&arg_ty.ty, "Vec") {
+            if ctx
+                .conv_map
+                .ty_to_rust_type_checked(&element_ty)
+                .is_some_and(|element| {
+                    element.implements_path(&syn::parse_quote!(SwigForeignClassPlainVecAccess))
+                })
+            {
+                return DiagnosticError::new2(
+                    arg_ty_span,
+                    format!(
+                        "cannot map '{arg_ty}' for a PlainClass: its C++ class has no borrowed wrapper for vector elements; remove PlainClass or define a custom foreign_typemap!"
+                    ),
+                );
+            }
+        }
         if let Type::Reference(reference) = &arg_ty.ty {
             if let Type::Slice(slice) = reference.elem.as_ref() {
                 if ctx

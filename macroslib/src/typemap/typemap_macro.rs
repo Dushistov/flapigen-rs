@@ -20,7 +20,8 @@ use crate::{
     typemap::{
         ast::{
             get_trait_bounds, is_second_subst_of_first, normalize_type, parse_ty_with_given_span,
-            DisplayToTokens, GenericTypeConv, SpannedString, TyParamsSubstMap,
+            replace_all_types_with, DisplayToTokens, GenericTypeConv, SpannedString,
+            TyParamsSubstMap,
         },
         ty::TraitNamesSet,
         TypeConvCode, UniqueName,
@@ -1116,17 +1117,9 @@ fn find_type_param<'b>(
         DiagnosticError::new2(param_span, format!("unknown type parameter '{param}'"))
             .add_span_note(invalid_src_id_span(), err)
     })?;
-    if let Type::Reference(ty_ref) = compound_ty {
-        let param = DisplayToTokens(&ty_ref.elem).to_string();
-        if let Some(Some(ty)) = param_map.get(&param) {
-            let new_ty = Type::Reference(syn::TypeReference {
-                and_token: ty_ref.and_token,
-                lifetime: ty_ref.lifetime,
-                mutability: ty_ref.mutability,
-                elem: Box::new(ty.clone()),
-            });
-            return Ok(TyValueOrRef::Value(new_ty));
-        }
+    let substituted = replace_all_types_with(&compound_ty, param_map);
+    if normalize_type(&substituted) != normalize_type(&compound_ty) {
+        return Ok(TyValueOrRef::Value(substituted));
     }
     Err(DiagnosticError::new2(
         param_span,

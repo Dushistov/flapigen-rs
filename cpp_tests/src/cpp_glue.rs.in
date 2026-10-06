@@ -1303,6 +1303,9 @@ impl FooArc {
     fn childs(&self) -> &[Arc<FooArc>] {
         &self.childs
     }
+    fn child_vec(&self) -> Vec<Arc<FooArc>> {
+        self.childs.clone()
+    }
 }
 
 foreign_class!(class FooArc {
@@ -1313,6 +1316,7 @@ foreign_class!(class FooArc {
     fn FooArc::val(&self) -> i32;
     fn FooArc::s(&self) -> &str;
     fn FooArc::childs(&self) -> &[Arc<FooArc>];
+    fn FooArc::child_vec(&self) -> Vec<Arc<FooArc>>;
 });
 
 pub struct FooRc {
@@ -1331,6 +1335,28 @@ foreign_class!(class FooRc {
         Rc::new(RefCell::new(FooRc { val }))
     }
     fn FooRc::val(&self) -> i32;
+});
+
+pub struct VecOnlyArc {
+    val: i32,
+}
+
+impl VecOnlyArc {
+    fn values(&self) -> Vec<Arc<VecOnlyArc>> {
+        vec![Arc::new(VecOnlyArc { val: self.val + 1 })]
+    }
+    fn val(&self) -> i32 {
+        self.val
+    }
+}
+
+foreign_class!(class VecOnlyArc {
+    self_type VecOnlyArc;
+    constructor new(val: i32) -> Arc<VecOnlyArc> {
+        Arc::new(VecOnlyArc { val })
+    }
+    fn VecOnlyArc::values(&self) -> Vec<Arc<VecOnlyArc>>;
+    fn VecOnlyArc::val(&self) -> i32;
 });
 
 pub struct WorkWithSlice {
@@ -1376,6 +1402,15 @@ impl WorkWithSlice {
     fn vec(&self) -> Vec<Arc<FooArc>> {
         self.d.clone()
     }
+    fn rc_vec(&self) -> Vec<Rc<RefCell<FooRc>>> {
+        self.rc.clone()
+    }
+    fn echo_vec(values: Vec<Arc<FooArc>>) -> Vec<Arc<FooArc>> {
+        values
+    }
+    fn echo_rc_vec(values: Vec<Rc<RefCell<FooRc>>>) -> Vec<Rc<RefCell<FooRc>>> {
+        values
+    }
     fn sum_slice(values: &[Arc<FooArc>]) -> i32 {
         values.iter().map(|v| v.val()).sum()
     }
@@ -1385,96 +1420,30 @@ impl WorkWithSlice {
     fn sum_rc_slice(values: &[Rc<RefCell<FooRc>>]) -> i32 {
         values.iter().map(|v| v.borrow().val()).sum()
     }
+    fn arc_strong_count(&self, idx: usize) -> usize {
+        Arc::strong_count(&self.d[idx])
+    }
+    fn rc_strong_count(&self, idx: usize) -> usize {
+        Rc::strong_count(&self.rc[idx])
+    }
     fn zero_sized_slice() -> &'static [ZeroSized] {
         static VALUES: [ZeroSized; 3] = [ZeroSized, ZeroSized, ZeroSized];
         &VALUES
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct CRustVecArcFooArc {
-    data: *mut ::std::os::raw::c_void,
-    len: usize,
-    capacity: usize,
-}
-
-foreign_typemap!(
-    define_c_type!(
-        module = "foo_arc_vec_access.h";
-        #[repr(C)]
-        #[derive(Clone, Copy)]
-        pub struct CRustVecArcFooArc {
-            data: *mut ::std::os::raw::c_void,
-            len: usize,
-            capacity: usize,
-        }
-        #[no_mangle]
-        pub extern "C" fn foo_arc_vec_new() -> CRustVecArcFooArc {
-            let raw = CRustVecAccess::from_vec(Vec::<Arc<FooArc>>::new());
-            CRustVecArcFooArc { data: raw.data, len: raw.len, capacity: raw.capacity }
-        }
-        #[no_mangle]
-        pub extern "C" fn foo_arc_vec_access(sl: CRustVecArcFooArc, idx: usize) -> *const ::std::os::raw::c_void {
-            let v = CRustVecAccess::to_slice::<Arc<FooArc>>(CRustVecAccess {
-                data: sl.data, len: sl.len, capacity: sl.capacity,
-            });
-            let elem_ref: &FooArc = &v[idx];
-            elem_ref as *const FooArc as *const ::std::os::raw::c_void
-        }
-        #[no_mangle]
-        pub extern "C" fn foo_arc_vec_drop(sl: CRustVecArcFooArc) {
-            let v = CRustVecAccess::to_vec::<Arc<FooArc>>(CRustVecAccess {
-                data: sl.data, len: sl.len, capacity: sl.capacity,
-            });
-            drop(v);
-        }
-    );
-    foreign_code!(module = "rust_vec_foo_arc.hpp";
-                    r##"
-#pragma once
-
-#include "foo_arc_vec_access.h"
-#include "rust_vec_impl.hpp"
-#include "FooArc.hpp"
-
-namespace $RUST_SWIG_USER_NAMESPACE {
-struct FooArcVecPolicy {
-       using value_type = FooArcRef;
-       using reference = FooArcRef;
-       using iterator = internal::SliceIterator<CRustVecArcFooArc, FooArcVecPolicy>;
-       using const_iterator = iterator;
-       static CRustVecArcFooArc empty() noexcept { return foo_arc_vec_new(); }
-       static FooArcRef index(CRustVecArcFooArc cs, size_t idx) noexcept {
-           auto p = static_cast<const FooArcOpaque *>(foo_arc_vec_access(cs, idx));
-           return FooArcRef{ p };
-       }
-       static void free(CRustVecArcFooArc cs) noexcept {
-           foo_arc_vec_drop(cs);
-       }
-       static iterator begin(CRustVecArcFooArc cs) noexcept { return iterator{cs, 0}; }
-       static const_iterator cbegin(CRustVecArcFooArc cs) noexcept { return begin(cs); }
-       static iterator end(CRustVecArcFooArc cs) noexcept { return iterator{cs, cs.len}; }
-       static const_iterator cend(CRustVecArcFooArc cs) noexcept { return end(cs); }
-};
-using RustVecFooArc = RustVec<CRustVecArcFooArc, FooArcVecPolicy>;
-}
-"##);
-    ($p:r_type) Vec<Arc<FooArc>> => CRustVecArcFooArc {
-        let raw = CRustVecAccess::from_vec($p);
-        $out = CRustVecArcFooArc { data: raw.data, len: raw.len, capacity: raw.capacity };
-    };
-    ($p:f_type, req_modules = ["\"rust_vec_foo_arc.hpp\""]) => "RustVecFooArc"
-        "RustVecFooArc{$p}";
-);
-
 foreign_class!(class WorkWithSlice {
     self_type WorkWithSlice;
     constructor WorkWithSlice::new(beg: i32, end: i32) -> WorkWithSlice;
     fn WorkWithSlice::slice(&self) -> &[Arc<FooArc>];
     fn WorkWithSlice::vec(&self) -> Vec<Arc<FooArc>>;
+    fn WorkWithSlice::rc_vec(&self) -> Vec<Rc<RefCell<FooRc>>>;
+    fn WorkWithSlice::echo_vec(values: Vec<Arc<FooArc>>) -> Vec<Arc<FooArc>>;
+    fn WorkWithSlice::echo_rc_vec(values: Vec<Rc<RefCell<FooRc>>>) -> Vec<Rc<RefCell<FooRc>>>;
     fn WorkWithSlice::sum_slice(values: &[Arc<FooArc>]) -> i32;
     fn WorkWithSlice::rc_slice(&self) -> &[Rc<RefCell<FooRc>>];
     fn WorkWithSlice::sum_rc_slice(values: &[Rc<RefCell<FooRc>>]) -> i32;
+    fn WorkWithSlice::arc_strong_count(&self, idx: usize) -> usize;
+    fn WorkWithSlice::rc_strong_count(&self, idx: usize) -> usize;
     fn WorkWithSlice::zero_sized_slice() -> &'static [ZeroSized];
 });

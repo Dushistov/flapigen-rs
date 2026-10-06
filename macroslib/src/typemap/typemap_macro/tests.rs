@@ -7,6 +7,25 @@ use quote::quote;
 use syn::parse_quote;
 
 #[test]
+fn compound_foreign_type_parameter_substitutes_nested_type() {
+    let param: syn::Ident = parse_quote!(T);
+    let mut substitutions = TyParamsSubstMap::default();
+    substitutions.insert(&param, Some(parse_quote!(Arc<Foo>)));
+
+    let slice = find_type_param(&substitutions, "&[T]", invalid_src_id_span()).unwrap();
+    assert_eq!(
+        normalize_type(slice.as_ref()),
+        normalize_type(&parse_quote!(&[Arc<Foo>]))
+    );
+
+    let reference = find_type_param(&substitutions, "&T", invalid_src_id_span()).unwrap();
+    assert_eq!(
+        normalize_type(reference.as_ref()),
+        normalize_type(&parse_quote!(&Arc<Foo>))
+    );
+}
+
+#[test]
 fn test_foreign_typemap_qdatetime() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(

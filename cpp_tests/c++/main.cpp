@@ -50,6 +50,7 @@
 #include "rust_interface/TestMultiThreadCallback.hpp"
 #include "rust_interface/Session.hpp"
 #include "rust_interface/FooRc.hpp"
+#include "rust_interface/VecOnlyArc.hpp"
 #include "rust_interface/WorkWithSlice.hpp"
 #include "rust_interface/StringSliceStore.hpp"
 #include "rust_interface/StringVecStore.hpp"
@@ -112,6 +113,19 @@ static_assert(std::is_same<decltype(std::declval<RustSlice<const FooArc, FooArcA
 static_assert(!std::is_constructible<RustSlice<const FooArc, FooArcAccess>,
                                      CRustSliceForeignIndirectFooRc>::value,
               "Arc and Rc-backed classes must keep distinct slice descriptors");
+static_assert(std::is_same<decltype(std::declval<RustVecFooArc &>().as_slice()),
+                           RustSlice<const FooArc, FooArcAccess>>::value,
+              "Arc-backed vectors must reuse their slice mapping");
+static_assert(std::is_same<decltype(std::declval<RustVecFooRc &>().as_slice()),
+                           RustSlice<const FooRc, FooRcAccess>>::value,
+              "Rc-backed vectors must reuse their slice mapping");
+template <typename T>
+static auto has_mutable_slice(int) -> decltype(std::declval<T &>().as_slice_mut(), std::true_type{});
+template <typename T> static std::false_type has_mutable_slice(...);
+static_assert(!decltype(has_mutable_slice<RustVecFooArc>(0))::value,
+              "Arc-backed vectors cannot expose mutable slices");
+static_assert(!decltype(has_mutable_slice<RustVecFooRc>(0))::value,
+              "Rc-backed vectors cannot expose mutable slices");
 static_assert(std::is_constructible<RustSlice<const Foo>, CRustSliceForeignFoo>::value,
               "foreign slices accept their matching descriptor");
 static_assert(!std::is_constructible<RustSlice<const Foo>, CRustSliceu32>::value,
@@ -1529,6 +1543,73 @@ TEST(RustVec, unifiedAccessAndOwnership)
     EXPECT_EQ(2u, moved_custom.size());
     moved_custom.clear();
     EXPECT_TRUE(moved_custom.empty());
+}
+
+TEST(RustVec, indirectForeignClassOwnership)
+{
+    WorkWithSlice source(0, 2);
+    EXPECT_EQ(1u, source.arc_strong_count(0));
+    EXPECT_EQ(1u, source.rc_strong_count(0));
+
+    {
+        auto arcs = source.vec();
+        EXPECT_EQ(2u, source.arc_strong_count(0));
+        EXPECT_EQ(2u, arcs.size());
+        EXPECT_EQ(1, arcs.at(1).val());
+        EXPECT_THROW(arcs.at(2), std::out_of_range);
+        EXPECT_EQ(1, WorkWithSlice::sum_slice(arcs.as_slice()));
+        EXPECT_EQ(2, std::distance(arcs.begin(), arcs.end()));
+        arcs.push(FooArc{ 9, RustString{ RustString::CppStringViewT{ "nine" } } });
+        EXPECT_EQ(9, arcs.at(2).val());
+        auto added = arcs.remove(2);
+        EXPECT_EQ(9, added.val());
+        auto moved = WorkWithSlice::echo_vec(std::move(arcs));
+        EXPECT_TRUE(arcs.empty());
+        EXPECT_EQ(2u, source.arc_strong_count(0));
+        EXPECT_EQ(1, WorkWithSlice::sum_slice(moved.as_slice()));
+        auto first = moved.remove(0);
+        EXPECT_EQ(0, first.val());
+        EXPECT_EQ(2u, source.arc_strong_count(0));
+        moved.clear();
+        EXPECT_TRUE(moved.empty());
+        EXPECT_EQ(1u, source.arc_strong_count(1));
+        auto child_vec = source.slice().at(1).child_vec();
+        ASSERT_EQ(1u, child_vec.size());
+        EXPECT_EQ(2, child_vec.at(0).val());
+    }
+    EXPECT_EQ(1u, source.arc_strong_count(0));
+
+    {
+        auto rcs = source.rc_vec();
+        EXPECT_EQ(2u, source.rc_strong_count(0));
+        EXPECT_EQ(1, rcs.at(1).val());
+        EXPECT_THROW(rcs.at(2), std::out_of_range);
+        EXPECT_EQ(1, WorkWithSlice::sum_rc_slice(rcs.as_slice()));
+        EXPECT_EQ(2, std::distance(rcs.begin(), rcs.end()));
+        rcs.push(FooRc{ 9 });
+        EXPECT_EQ(9, rcs.at(2).val());
+        EXPECT_EQ(9, rcs.remove(2).val());
+        auto moved = WorkWithSlice::echo_rc_vec(std::move(rcs));
+        EXPECT_TRUE(rcs.empty());
+        EXPECT_EQ(2u, source.rc_strong_count(0));
+        EXPECT_EQ(1, WorkWithSlice::sum_rc_slice(moved.as_slice()));
+        moved.clear();
+        EXPECT_TRUE(moved.empty());
+    }
+    EXPECT_EQ(1u, source.rc_strong_count(0));
+
+    RustVecFooArc empty_arcs;
+    EXPECT_TRUE(empty_arcs.empty());
+    EXPECT_TRUE(empty_arcs.as_slice().empty());
+    EXPECT_THROW(empty_arcs.at(0), std::out_of_range);
+    RustVecFooRc empty_rcs;
+    EXPECT_TRUE(empty_rcs.empty());
+    EXPECT_TRUE(empty_rcs.as_slice().empty());
+    EXPECT_THROW(empty_rcs.at(0), std::out_of_range);
+
+    VecOnlyArc vec_only{ 7 };
+    auto only_vec = vec_only.values();
+    EXPECT_EQ(8, only_vec.as_slice().at(0).val());
 }
 
 TEST(WorkWithSlice, smokeTest)
