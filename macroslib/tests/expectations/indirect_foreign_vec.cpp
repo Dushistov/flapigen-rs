@@ -14,8 +14,20 @@ static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
 #ifdef __cplusplus
 extern "C" {
 #endif
+struct CRustForeignVecArcNodeElem {
+    uint8_t _unused;
+};
+
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 struct CRustForeignVecArcNode {
-    void * data;
+    CRustForeignVecArcNodeElem * data;
     uintptr_t len;
     uintptr_t capacity;
 };
@@ -84,8 +96,20 @@ static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
 #ifdef __cplusplus
 extern "C" {
 #endif
+struct CRustForeignVecRcNodeElem {
+    uint8_t _unused;
+};
+
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 struct CRustForeignVecRcNode {
-    void * data;
+    CRustForeignVecRcNodeElem * data;
     uintptr_t len;
     uintptr_t capacity;
 };

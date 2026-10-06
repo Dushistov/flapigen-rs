@@ -306,6 +306,7 @@ fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec) {
 foreign_typemap!(
     generic_alias!(CForeignVecModule = swig_concat_idents!(RustVec, swig_f_type!(T)));
     generic_alias!(CForeignVec = swig_concat_idents!(CRustForeignVec, swig_f_type!(T)));
+    generic_alias!(CForeignVecElem = swig_concat_idents!(CRustForeignVec, swig_f_type!(T), Elem));
     generic_alias!(CForeignVecNew = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _new));
     generic_alias!(CForeignVecFree = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _free));
     generic_alias!(CForeignVecPush = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _push));
@@ -316,9 +317,12 @@ foreign_typemap!(
     define_c_type!(
         module = "CForeignVecModule!().h";
         #[repr(C)]
+        pub struct CForeignVecElem!() { _unused: u8 }
+
+        #[repr(C)]
         #[derive(Clone, Copy)]
         pub struct CForeignVec!() {
-            data: *mut ::std::os::raw::c_void,
+            data: *mut CForeignVecElem!(),
             len: usize,
             capacity: usize,
         }
@@ -326,22 +330,22 @@ foreign_typemap!(
         #[unsafe(no_mangle)]
         pub extern "C" fn CForeignVecNew!()() -> CForeignVec!() {
             let raw = CRustForeignVec::from_vec(Vec::<swig_subst_type!(T)>::new());
-            CForeignVec!() { data: raw.data, len: raw.len, capacity: raw.capacity }
+            CForeignVec!() { data: raw.data.cast(), len: raw.len, capacity: raw.capacity }
         }
 
         #[unsafe(no_mangle)]
         pub extern "C" fn CForeignVecFree!()(v: CForeignVec!()) {
             drop_foreign_class_vec::<swig_subst_type!(T)>(CRustForeignVec {
-                data: v.data, len: v.len, capacity: v.capacity,
+                data: v.data.cast(), len: v.len, capacity: v.capacity,
             });
         }
 
         #[unsafe(no_mangle)]
         pub extern "C" fn CForeignVecPush!()(v: *mut CForeignVec!(), e: *mut ::std::os::raw::c_void) {
             let v = unsafe { &mut *v };
-            let mut raw = CRustForeignVec { data: v.data, len: v.len, capacity: v.capacity };
+            let mut raw = CRustForeignVec { data: v.data.cast(), len: v.len, capacity: v.capacity };
             push_foreign_class_to_vec::<swig_subst_type!(T)>(&mut raw, e);
-            v.data = raw.data;
+            v.data = raw.data.cast();
             v.len = raw.len;
             v.capacity = raw.capacity;
         }
@@ -349,9 +353,9 @@ foreign_typemap!(
         #[unsafe(no_mangle)]
         pub extern "C" fn CForeignVecRemove!()(v: *mut CForeignVec!(), idx: usize) -> *mut ::std::os::raw::c_void {
             let v = unsafe { &mut *v };
-            let mut raw = CRustForeignVec { data: v.data, len: v.len, capacity: v.capacity };
+            let mut raw = CRustForeignVec { data: v.data.cast(), len: v.len, capacity: v.capacity };
             let elem = remove_foreign_class_from_vec::<swig_subst_type!(T)>(&mut raw, idx);
-            v.data = raw.data;
+            v.data = raw.data.cast();
             v.len = raw.len;
             v.capacity = raw.capacity;
             elem
@@ -372,7 +376,7 @@ using CForeignVecModule!() = RustVec<CForeignVec!(), internal::IndirectForeignVe
 
     ($p:r_type) <T: SwigForeignClassIndirectAccess> Vec<T> => CForeignVec!() {
         let raw = CRustForeignVec::from_vec($p);
-        $out = CForeignVec!() { data: raw.data, len: raw.len, capacity: raw.capacity };
+        $out = CForeignVec!() { data: raw.data.cast(), len: raw.len, capacity: raw.capacity };
     };
     ($p:r_type) <T: SwigForeignClassIndirectAccess> Vec<T> <= CForeignVec!() {
         $out = unsafe { Vec::from_raw_parts($p.data.cast(), $p.len, $p.capacity) };
@@ -383,9 +387,12 @@ using CForeignVecModule!() = RustVec<CForeignVec!(), internal::IndirectForeignVe
         "$p.release()";
 );
 
+// A class's constructor return type can contain lifetimes. Keep the C
+// descriptor's element type opaque so the descriptor itself stays lifetime-free.
 foreign_typemap!(
     generic_alias!(CForeignVecModule = swig_concat_idents!(RustForeignVec, swig_f_type!(T)));
     generic_alias!(CForeignVec = swig_concat_idents!(CRustForeignVec, swig_f_type!(T)));
+    generic_alias!(CForeignVecElem = swig_concat_idents!(CRustForeignVec, swig_f_type!(T), Elem));
     generic_alias!(CForeignVecNew = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _new));
     generic_alias!(CForeignVecFree = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _free));
     generic_alias!(CForeignVecPush = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _push));
@@ -394,9 +401,12 @@ foreign_typemap!(
     define_c_type!(
         module = "CForeignVecModule!().h";
         #[repr(C)]
+        pub struct CForeignVecElem!() { _unused: u8 }
+
+        #[repr(C)]
         #[derive(Clone, Copy)]
         pub struct CForeignVec!() {
-            data: *mut ::std::os::raw::c_void,
+            data: *mut CForeignVecElem!(),
             len: usize,
             capacity: usize,
         }
@@ -474,4 +484,3 @@ using CForeignVecModule!() = RustVec<CForeignVec!(), internal::ForeignVecPolicy<
     ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) <= "CForeignVecModule!()"
         "$p.release()";
 );
-

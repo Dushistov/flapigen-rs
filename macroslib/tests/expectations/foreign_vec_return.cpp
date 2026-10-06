@@ -1,6 +1,18 @@
 @@expect {"after":"\n    uintptr_t len;\n    uintptr_t capacity;\n};\n\n#ifdef __cplusplus\n} // extern \"","before":"\"our conversion usize <-> uintptr_t is wrong\");\n#endif\n            #include <stdint.h>\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n","file":"RustForeignVecFoo.h","kind":"between"}
+struct CRustForeignVecFooElem {
+    uint8_t _unused;
+};
+
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 struct CRustForeignVecFoo {
-    void * data;
+    CRustForeignVecFooElem * data;
 @@end
 
 @@expect {"file":"RustForeignVecBoo.h","kind":"file"}
@@ -19,8 +31,20 @@ static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
 #ifdef __cplusplus
 extern "C" {
 #endif
+struct CRustForeignVecBooElem {
+    uint8_t _unused;
+};
+
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 struct CRustForeignVecBoo {
-    void * data;
+    CRustForeignVecBooElem * data;
     uintptr_t len;
     uintptr_t capacity;
 };
