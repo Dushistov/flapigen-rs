@@ -5,7 +5,11 @@ use petgraph::Direction;
 use syn::Type;
 
 use crate::{
-    cpp::{merge_c_types, merge_rule, CppContext, CppForeignTypeInfo, MergeCItemsFlags},
+    cpp::{
+        merge_c_types, merge_rule, CppContext, CppForeignTypeInfo, MergeCItemsFlags,
+        SWIG_FOREIGN_CLASS_PLAIN_INDIRECT_ACCESS_TRAIT, SWIG_FOREIGN_CLASS_PLAIN_VEC_ACCESS_TRAIT,
+        SWIG_TYPE_IS_REPR_C_TRAIT,
+    },
     error::{DiagnosticError, Result, SourceIdSpan},
     typemap::{
         ast::{
@@ -32,7 +36,7 @@ pub(in crate::cpp) fn map_type(
                 .conv_map
                 .ty_to_rust_type_checked(&element_ty)
                 .is_some_and(|element| {
-                    element.implements_path(&syn::parse_quote!(SwigForeignClassPlainVecAccess))
+                    implements_marker_trait(&element, SWIG_FOREIGN_CLASS_PLAIN_VEC_ACCESS_TRAIT)
                 })
             {
                 return DiagnosticError::new2(
@@ -49,8 +53,9 @@ pub(in crate::cpp) fn map_type(
                     .conv_map
                     .ty_to_rust_type_checked(&slice.elem)
                     .is_some_and(|element| {
-                        element.implements_path(
-                            &syn::parse_quote!(SwigForeignClassPlainIndirectAccess),
+                        implements_marker_trait(
+                            &element,
+                            SWIG_FOREIGN_CLASS_PLAIN_INDIRECT_ACCESS_TRAIT,
                         )
                     })
                 {
@@ -340,10 +345,15 @@ pub(in crate::cpp) fn calc_this_type_for_method(
         .map(|x| x.constructor_ret_type.clone())
 }
 
+fn implements_marker_trait(rty: &RustType, marker: &str) -> bool {
+    let path = syn::parse_str(marker).expect("C++ marker trait name must be a valid Rust path");
+    rty.implements_path(&path)
+}
+
 fn is_ty_implement_traits(tmap: &TypeMap, ty: &syn::Type, traits: &TraitNamesSet) -> bool {
     if let Some(rty) = tmap.ty_to_rust_type_checked(ty) {
         for tname in traits.iter() {
-            if tname.is_ident("SwigTypeIsReprC") {
+            if tname.is_ident(SWIG_TYPE_IS_REPR_C_TRAIT) {
                 if tmap
                     .find_foreign_type_related_to_rust_ty(rty.to_idx())
                     .is_none()
