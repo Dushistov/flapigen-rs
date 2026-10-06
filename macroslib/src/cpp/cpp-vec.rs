@@ -1,6 +1,8 @@
 #[allow(dead_code)]
 #[repr(C)]
-pub struct CRustVecStringElem { _unused: u8 }
+pub struct CRustVecStringElem {
+    _unused: u8,
+}
 
 #[allow(dead_code)]
 #[repr(C)]
@@ -240,18 +242,17 @@ using RustVecString = RustVec<CRustVecString, internal::StringVecPolicy<boost::s
 );
 
 #[allow(dead_code)]
-#[repr(C)]
 #[derive(Copy, Clone)]
-pub struct CRustForeignVec {
-    data: *mut ::std::os::raw::c_void,
+pub struct CRustForeignVec<T> {
+    data: *mut T,
     len: usize,
     capacity: usize,
 }
 
 #[allow(dead_code)]
-impl CRustForeignVec {
-    pub fn from_vec<T: SwigForeignClass>(mut v: Vec<T>) -> CRustForeignVec {
-        let data = v.as_mut_ptr() as *mut ::std::os::raw::c_void;
+impl<T> CRustForeignVec<T> {
+    pub fn from_vec(mut v: Vec<T>) -> Self {
+        let data = v.as_mut_ptr();
         let len = v.len();
         let capacity = v.capacity();
         ::std::mem::forget(v);
@@ -266,14 +267,14 @@ impl CRustForeignVec {
 #[allow(dead_code)]
 #[inline]
 fn push_foreign_class_to_vec<T: SwigForeignClass>(
-    vec: *mut CRustForeignVec,
+    vec: *mut CRustForeignVec<T>,
     elem: *mut ::std::os::raw::c_void,
 ) {
     assert!(!vec.is_null());
-    let vec: &mut CRustForeignVec = unsafe { &mut *vec };
-    let mut v = unsafe { Vec::from_raw_parts(vec.data.cast(), vec.len, vec.capacity) };
+    let vec: &mut CRustForeignVec<T> = unsafe { &mut *vec };
+    let mut v = unsafe { Vec::from_raw_parts(vec.data, vec.len, vec.capacity) };
     v.push(T::unbox_object(elem));
-    vec.data = v.as_mut_ptr() as *mut ::std::os::raw::c_void;
+    vec.data = v.as_mut_ptr();
     vec.len = v.len();
     vec.capacity = v.capacity();
     ::std::mem::forget(v);
@@ -282,14 +283,14 @@ fn push_foreign_class_to_vec<T: SwigForeignClass>(
 #[allow(dead_code)]
 #[inline]
 fn remove_foreign_class_from_vec<T: SwigForeignClass>(
-    vec: *mut CRustForeignVec,
+    vec: *mut CRustForeignVec<T>,
     index: usize,
 ) -> *mut ::std::os::raw::c_void {
     assert!(!vec.is_null());
-    let vec: &mut CRustForeignVec = unsafe { &mut *vec };
-    let mut v = unsafe { Vec::from_raw_parts(vec.data.cast(), vec.len, vec.capacity) };
+    let vec: &mut CRustForeignVec<T> = unsafe { &mut *vec };
+    let mut v = unsafe { Vec::from_raw_parts(vec.data, vec.len, vec.capacity) };
     let elem: T = v.remove(index);
-    vec.data = v.as_mut_ptr() as *mut ::std::os::raw::c_void;
+    vec.data = v.as_mut_ptr();
     vec.len = v.len();
     vec.capacity = v.capacity();
     ::std::mem::forget(v);
@@ -298,8 +299,8 @@ fn remove_foreign_class_from_vec<T: SwigForeignClass>(
 
 #[allow(dead_code)]
 #[inline]
-fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec) {
-    let v = unsafe { Vec::from_raw_parts(v.data.cast::<T>(), v.len, v.capacity) };
+fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec<T>) {
+    let v = unsafe { Vec::from_raw_parts(v.data, v.len, v.capacity) };
     drop(v);
 }
 
