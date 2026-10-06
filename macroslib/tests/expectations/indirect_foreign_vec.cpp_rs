@@ -3,7 +3,7 @@
 pub extern "C" fn RustForeignVecArcNode_new() -> CRustForeignVecArcNode {
     let raw = CRustForeignVec::from_vec(Vec::<Arc<ArcNode>>::new());
     CRustForeignVecArcNode {
-        data: raw.data,
+        data: raw.data.cast(),
         len: raw.len,
         capacity: raw.capacity,
     }
@@ -18,12 +18,12 @@ pub extern "C" fn RustForeignVecArcNode_push(
 ) {
     let v = unsafe { &mut *v };
     let mut raw = CRustForeignVec {
-        data: v.data,
+        data: v.data.cast(),
         len: v.len,
         capacity: v.capacity,
     };
     push_foreign_class_to_vec::<Arc<ArcNode>>(&mut raw, e);
-    v.data = raw.data;
+    v.data = raw.data.cast();
     v.len = raw.len;
     v.capacity = raw.capacity;
 }
@@ -37,12 +37,12 @@ pub extern "C" fn RustForeignVecRcNode_remove(
 ) -> *mut ::std::os::raw::c_void {
     let v = unsafe { &mut *v };
     let mut raw = CRustForeignVec {
-        data: v.data,
+        data: v.data.cast(),
         len: v.len,
         capacity: v.capacity,
     };
     let elem = remove_foreign_class_from_vec::<Rc<RefCell<RcNode>>>(&mut raw, idx);
-    v.data = raw.data;
+    v.data = raw.data.cast();
     v.len = raw.len;
     v.capacity = raw.capacity;
     elem
@@ -58,7 +58,7 @@ pub extern "C" fn VecHost_echo_arcs(values: CRustForeignVecArcNode) -> CRustFore
     let mut ret: Vec<Arc<ArcNode>> = VecHost::echo_arcs(values);
     let raw = CRustForeignVec::from_vec(ret);
     let mut ret: CRustForeignVecArcNode = CRustForeignVecArcNode {
-        data: raw.data,
+        data: raw.data.cast(),
         len: raw.len,
         capacity: raw.capacity,
     };
@@ -75,7 +75,7 @@ pub extern "C" fn VecHost_echo_rcs(values: CRustForeignVecRcNode) -> CRustForeig
     let mut ret: Vec<Rc<RefCell<RcNode>>> = VecHost::echo_rcs(values);
     let raw = CRustForeignVec::from_vec(ret);
     let mut ret: CRustForeignVecRcNode = CRustForeignVecRcNode {
-        data: raw.data,
+        data: raw.data.cast(),
         len: raw.len,
         capacity: raw.capacity,
     };

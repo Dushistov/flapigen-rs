@@ -52,7 +52,8 @@ namespace internal {
         static reference index(Descriptor vec, size_t i) noexcept
         {
             return ForeignSliceAccess<value_type>::index(
-                SliceStorage<const CForeignType *>{ static_cast<const CForeignType *>(vec.data), vec.len }, i);
+                SliceStorage<const CForeignType *>{
+                    static_cast<const CForeignType *>(static_cast<const void *>(vec.data)), vec.len }, i);
         }
         static iterator begin(Descriptor vec) noexcept { return iterator{ vec, 0 }; }
         static const_iterator cbegin(Descriptor vec) noexcept { return begin(vec); }
@@ -60,11 +61,13 @@ namespace internal {
         static const_iterator cend(Descriptor vec) noexcept { return end(vec); }
         static RustSlice<const value_type> as_slice(Descriptor vec) noexcept
         {
-            return RustSlice<const value_type>{ static_cast<const CForeignType *>(vec.data), vec.len };
+            return RustSlice<const value_type>{
+                static_cast<const CForeignType *>(static_cast<const void *>(vec.data)), vec.len };
         }
         static RustSlice<value_type> as_slice_mut(Descriptor vec) noexcept
         {
-            return RustSlice<value_type>{ static_cast<CForeignType *>(vec.data), vec.len };
+            return RustSlice<value_type>{
+                static_cast<CForeignType *>(static_cast<void *>(vec.data)), vec.len };
         }
         static void push(Descriptor &vec, value_type value) noexcept
         {
@@ -90,7 +93,8 @@ namespace internal {
         static void free(Descriptor vec) noexcept { Free(vec); }
         static Slice as_slice(Descriptor vec) noexcept
         {
-            return Slice{ static_cast<const typename Access::storage_type *>(vec.data), vec.len };
+            return Slice{ static_cast<const typename Access::storage_type *>(
+                              static_cast<const void *>(vec.data)), vec.len };
         }
         static reference index(Descriptor vec, size_t i) noexcept { return as_slice(vec)[i]; }
         static iterator begin(Descriptor vec) noexcept { return iterator{ vec, 0 }; }
