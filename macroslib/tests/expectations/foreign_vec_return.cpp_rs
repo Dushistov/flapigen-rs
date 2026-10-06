@@ -7,9 +7,9 @@ pub struct CRustVecAccess {
 
 @@end
 
-@@expect {"after":"#[allow(dead_code)]\nimpl CRustForeignVec {\n    pub fn from_vec<T: SwigForeignCla","before":"unsafe { Vec::from_raw_parts(cs.data.cast(), cs.len, cs.capacity) }\n    }\n}\n#[allow(dead_code)]\n#[repr(C)]\n#[derive(Copy, Clone)]\n","file":"test.rs","kind":"between"}
-pub struct CRustForeignVec {
-    data: *mut ::std::os::raw::c_void,
+@@expect {"after":"#[allow(dead_code)]\nimpl<T> CRustForeignVec<T> {\n    pub fn from_vec(mut v: Vec<T>)","before":"unsafe { Vec::from_raw_parts(cs.data.cast(), cs.len, cs.capacity) }\n    }\n}\n#[allow(dead_code)]\n#[derive(Copy, Clone)]\n","file":"test.rs","kind":"between"}
+pub struct CRustForeignVec<T> {
+    data: *mut T,
     len: usize,
     capacity: usize,
 }
