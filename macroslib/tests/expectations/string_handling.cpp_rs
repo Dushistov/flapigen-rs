@@ -7,7 +7,7 @@ pub struct CRustString {
 
 @@end
 
-@@expect {"after":"#[allow(dead_code)]\n#[repr(C)]\n#[derive(Clone, Copy)]\npub struct CRustSlice {\n  ","before":"data: *mut ::std::os::raw::c_char,\n    len: usize,\n    capacity: usize,\n}\n#[allow(dead_code)]\n","file":"test.rs","kind":"between"}
+@@expect {"after":"#[allow(dead_code)]\n#[repr(C)]\npub struct CRustSliceStrRefElem","before":"data: *mut ::std::os::raw::c_char,\n    len: usize,\n    capacity: usize,\n}\n#[allow(dead_code)]\n","file":"test.rs","kind":"between"}
 impl CRustString {
     pub fn from_string(mut s: String) -> CRustString {
         let data = s.as_mut_ptr() as *mut ::std::os::raw::c_char;

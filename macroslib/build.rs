@@ -37,6 +37,8 @@ fn main() {
     for include_path in &[
         Path::new("src/java_jni/jni-include.rs"),
         Path::new("src/cpp/cpp-include.rs"),
+        Path::new("src/cpp/cpp-slice.rs"),
+        Path::new("src/cpp/cpp-vec.rs"),
     ] {
         let src_cnt_tail = std::fs::read_to_string(include_path)
             .unwrap_or_else(|err| panic!("Error during read {}: {}", include_path.display(), err));

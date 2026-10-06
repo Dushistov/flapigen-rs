@@ -375,9 +375,18 @@ impl Generator {
                 );
             }
             LanguageConfig::CppConfig(..) => {
+                // Merge common rules before the slice and vector mappings that use them.
                 conv_map_source.push(src_reg.register(SourceCode {
                     id_of_code: "cpp-include.rs".into(),
                     code: include_str!("cpp/cpp-include.rs").into(),
+                }));
+                conv_map_source.push(src_reg.register(SourceCode {
+                    id_of_code: "cpp-slice.rs".into(),
+                    code: include_str!("cpp/cpp-slice.rs").into(),
+                }));
+                conv_map_source.push(src_reg.register(SourceCode {
+                    id_of_code: "cpp-vec.rs".into(),
+                    code: include_str!("cpp/cpp-vec.rs").into(),
                 }));
                 foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_vec_impl.hpp".into(),
