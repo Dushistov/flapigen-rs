@@ -112,6 +112,42 @@ namespace internal {
         }
     };
 
+    template <typename RowVec, typename RowSlice, typename Descriptor,
+              typename RowDescriptor, typename SliceDescriptor,
+              Descriptor (*New)(), void (*Free)(Descriptor),
+              SliceDescriptor (*Get)(Descriptor, uintptr_t),
+              void (*Push)(Descriptor *, RowDescriptor),
+              RowDescriptor (*Remove)(Descriptor *, uintptr_t)>
+    struct NestedForeignVecPolicy {
+        using value_type = RowVec;
+        using reference = RowSlice;
+        using iterator = SliceIterator<Descriptor, NestedForeignVecPolicy>;
+        using const_iterator = iterator;
+
+        static Descriptor empty() noexcept { return New(); }
+        static void free(Descriptor vec) noexcept { Free(vec); }
+        static reference index(Descriptor vec, size_t i) noexcept
+        {
+            const auto row = Get(vec, i);
+            using CForeignType = typename value_type::value_type::CForeignType;
+            return reference{
+                static_cast<const CForeignType *>(static_cast<const void *>(row.data)), row.len };
+        }
+        static iterator begin(Descriptor vec) noexcept { return iterator{ vec, 0 }; }
+        static const_iterator cbegin(Descriptor vec) noexcept { return begin(vec); }
+        static iterator end(Descriptor vec) noexcept { return iterator{ vec, vec.len }; }
+        static const_iterator cend(Descriptor vec) noexcept { return end(vec); }
+        static void push(Descriptor &vec, value_type value) noexcept
+        {
+            Push(&vec, value.release());
+        }
+        static value_type remove(Descriptor &vec, size_t i) noexcept
+        {
+            assert(i < vec.len);
+            return value_type{ Remove(&vec, i) };
+        }
+    };
+
 } // namespace internal
 
 template <typename Descriptor, typename Policy>

@@ -882,6 +882,44 @@ mod tests {
     }
 
     #[test]
+    fn nested_foreign_vectors_reject_non_direct_classes() {
+        for (class_attribute, constructor_type, element_type) in [
+            ("#[derive(PlainClass)]", "Node", "Node"),
+            ("", "Arc<Node>", "Arc<Node>"),
+            ("", "Rc<Node>", "Rc<Node>"),
+        ] {
+            let output_dir = tempfile::tempdir().unwrap();
+            let config = CppConfig::new(output_dir.path().to_path_buf(), "test".into());
+            let mut generator =
+                Generator::new(LanguageConfig::CppConfig(config)).with_pointer_target_width(64);
+            let code = format!(
+                "foreign_class!({class_attribute} class Node {{
+                    self_type Node;
+                    constructor Node::new() -> {constructor_type};
+                }});
+                foreign_class!(class Holder {{
+                    self_type Holder;
+                    constructor Holder::new() -> Holder;
+                    fn Holder::values() -> Vec<Vec<{element_type}>>;
+                }});"
+            );
+            let src_id = generator.src_reg.register(SourceCode {
+                id_of_code: "unsupported_nested_foreign_vec.rs".into(),
+                code,
+            });
+            let error = generator
+                .expand_str(&[src_id], output_dir.path().join("glue.rs"))
+                .expect_err("unsupported nested foreign vector should fail");
+            assert!(
+                error
+                    .to_string()
+                    .contains("nested foreign-class vectors require"),
+                "unexpected error for Vec<Vec<{element_type}>>: {error}"
+            );
+        }
+    }
+
+    #[test]
     fn slice_conversion_graph_keeps_element_types_separate() {
         let output_dir = tempfile::tempdir().unwrap();
         let config = CppConfig::new(output_dir.path().to_path_buf(), "test".into());

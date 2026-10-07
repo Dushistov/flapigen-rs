@@ -17,6 +17,7 @@
 #include <type_traits>
 #include <gtest/gtest.h>
 
+#include "rust_interface/RustVecVecFoo.h"
 #include "rust_interface/CheckPrimitiveTypesClass.hpp"
 #include "rust_interface/Foo.hpp"
 #include "rust_interface/SomeObserver.hpp"
@@ -126,6 +127,11 @@ static_assert(!decltype(has_mutable_slice<RustVecFooArc>(0))::value,
               "Arc-backed vectors cannot expose mutable slices");
 static_assert(!decltype(has_mutable_slice<RustVecFooRc>(0))::value,
               "Rc-backed vectors cannot expose mutable slices");
+static_assert(std::is_same<decltype(std::declval<const RustVecVecFoo &>()[0]),
+                           RustSlice<const Foo>>::value,
+              "nested foreign vectors expose read-only row views");
+static_assert(!decltype(has_mutable_slice<RustVecVecFoo>(0))::value,
+              "nested foreign vectors cannot expose a slice of Rust Vec objects");
 static_assert(std::is_constructible<RustSlice<const Foo>, CRustSliceForeignFoo>::value,
               "foreign slices accept their matching descriptor");
 static_assert(!std::is_constructible<RustSlice<const Foo>, CRustSliceu32>::value,
@@ -576,6 +582,45 @@ TEST(TestWorkWithVec, workWithEmptyVecs)
     EXPECT_EQ(std::string("ABC"), vec_foo[0].getName());
     EXPECT_EQ(18, vec_foo[1].f(0, 0));
     EXPECT_EQ(std::string("DEBUG"), vec_foo[1].getName());
+}
+
+TEST(TestWorkWithVec, nestedForeignVectors)
+{
+    auto rows = TestWorkWithVec::create_foo_rows();
+    ASSERT_EQ(2u, rows.size());
+    EXPECT_TRUE(rows.at(0).empty());
+    ASSERT_EQ(2u, rows[1].size());
+    EXPECT_EQ(1, rows[1][0].f(0, 0));
+
+    RustVecVecFoo input;
+    RustForeignVecFoo row;
+    row.push(Foo{ 7, "seven" });
+    input.push(std::move(row));
+    auto echoed = TestWorkWithVec::echo_foo_rows(std::move(input));
+    ASSERT_EQ(1u, echoed.size());
+    EXPECT_EQ(7, echoed[0][0].f(0, 0));
+    auto owned_row = echoed.remove(0);
+    EXPECT_TRUE(echoed.empty());
+    EXPECT_EQ(7, owned_row[0].f(0, 0));
+
+    size_t row_count = 0;
+    for (auto borrowed_row : rows) {
+        row_count += borrowed_row.size();
+    }
+    EXPECT_EQ(2u, row_count);
+
+    echoed.push(std::move(owned_row));
+    echoed.clear();
+    EXPECT_TRUE(echoed.empty());
+
+    RustVecVecFoo empty;
+    auto empty_echo = TestWorkWithVec::echo_foo_rows(std::move(empty));
+    EXPECT_TRUE(empty_echo.empty());
+
+    auto lifetime_rows = TestWorkWithVec::test_lifetime_rows();
+    ASSERT_EQ(1u, lifetime_rows.size());
+    ASSERT_EQ(1u, lifetime_rows[0].size());
+    EXPECT_EQ(5, lifetime_rows[0][0].get_data());
 }
 
 TEST(TestWorkWithVec, assign)

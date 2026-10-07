@@ -339,6 +339,13 @@ impl TestWorkWithVec {
         }
         v
     }
+    fn create_foo_rows() -> Vec<Vec<Foo>> {
+        vec![vec![], vec![Foo::new(1, "one"), Foo::new(2, "two")]]
+    }
+
+    fn echo_foo_rows(rows: Vec<Vec<Foo>>) -> Vec<Vec<Foo>> {
+        rows
+    }
     fn sort_foo_slice(v: &mut [Foo]) {
         v.sort_by(|ref x, ref y| x.data.cmp(&y.data))
     }
@@ -367,6 +374,9 @@ impl TestWorkWithVec {
         }
         ret
     }
+    fn test_lifetime_rows<'a>() -> Vec<Vec<TestObjectLifetime<'a>>> {
+        vec![vec![create_test_obj_with_lifetime()]]
+    }
 }
 
 foreign_class!(class TestWorkWithVec {
@@ -381,6 +391,8 @@ foreign_class!(class TestWorkWithVec {
     fn TestWorkWithVec::get_vec_foo(&self) -> Vec<Foo>;
     fn TestWorkWithVec::get_slice_foo(&self) -> &[Foo];
     fn TestWorkWithVec::create_foo_vec(n: usize) -> Vec<Foo>;
+    fn TestWorkWithVec::create_foo_rows() -> Vec<Vec<Foo>>;
+    fn TestWorkWithVec::echo_foo_rows(rows: Vec<Vec<Foo>>) -> Vec<Vec<Foo>>;
     fn TestWorkWithVec::sort_foo_slice(v: &mut [Foo]);
     fn TestWorkWithVec::return_usize_slice(&self) -> &[usize];
     fn TestWorkWithVec::return_usize_vec(&self) -> Vec<usize>;
@@ -388,6 +400,7 @@ foreign_class!(class TestWorkWithVec {
     fn TestWorkWithVec::test_i32_slice(a: &[i32]) -> Vec<i32>;
     fn TestWorkWithVec::set_vec_foo(&mut self, v: Vec<Foo>);
     fn TestWorkWithVec::test_lifetime_objs<'a>(n: usize) -> Vec<TestObjectLifetime<'a>>;
+    fn TestWorkWithVec::test_lifetime_rows<'a>() -> Vec<Vec<TestObjectLifetime<'a>>>;
     fn sort_i32_slice(arr: &mut [i32]) {
         arr.sort();
     }

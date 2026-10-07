@@ -59,11 +59,11 @@ void RustForeignVecArcNode_push(CRustForeignVecArcNode * v, void * e);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stdint.h>
 void * RustForeignVecArcNode_remove(CRustForeignVecArcNode * v, uintptr_t idx);
 #ifdef __cplusplus
 } // extern "C" {
@@ -141,11 +141,11 @@ void RustForeignVecRcNode_push(CRustForeignVecRcNode * v, void * e);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stdint.h>
 void * RustForeignVecRcNode_remove(CRustForeignVecRcNode * v, uintptr_t idx);
 #ifdef __cplusplus
 } // extern "C" {
@@ -198,11 +198,11 @@ struct CRustSliceForeignIndirectArcNode {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stdint.h>
 const void * CRustSliceForeignIndirectArcNode_get(struct CRustSliceForeignIndirectArcNode slice, uintptr_t idx);
 #ifdef __cplusplus
 } // extern "C" {

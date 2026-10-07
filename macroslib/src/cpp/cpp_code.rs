@@ -463,19 +463,6 @@ fn add_func_forward_decl(
     c_type_header_name: &str,
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
-    {
-        let common_files = &mut ctx.common_files;
-        let out: &mut FileWriteCache = file_for_module!(ctx, common_files, c_type_header_name);
-
-        out.write_all(
-            br##"
-#ifdef __cplusplus
-extern "C" {
-#endif
-"##,
-        )
-        .expect(WRITE_TO_MEM_FAILED_MSG);
-    }
     let mut fn_decl_out = Vec::with_capacity(100);
     let mut includes = FxHashSet::<String>::default();
 
@@ -540,6 +527,14 @@ extern "C" {
             writeln!(out, "#include {inc}").expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }
+    out.write_all(
+        br##"
+#ifdef __cplusplus
+extern "C" {
+#endif
+"##,
+    )
+    .expect(WRITE_TO_MEM_FAILED_MSG);
     out.write_all(&fn_decl_out).expect(WRITE_TO_MEM_FAILED_MSG);
 
     out.write_all(

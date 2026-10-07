@@ -75,7 +75,10 @@ fn string_vectors_transfer_ownership_and_elements() {
     assert_string(&removed, "a\0b");
     crust_string_free(removed);
     crust_vec_string_push(&mut values, CRustString::from_string("added".into()));
-    assert_eq!(Buffers_take_string_vec(values), "Привет".len() + "added".len());
+    assert_eq!(
+        Buffers_take_string_vec(values),
+        "Привет".len() + "added".len()
+    );
 
     let mut empty = crust_vec_string_new();
     assert_eq!(empty.len, 0);
@@ -146,6 +149,54 @@ fn foreign_vector_push_remove_and_free() {
     assert_eq!(values.len, 1);
 
     drop_foreign_class_vec::<Tracked>(values);
+}
+
+#[test]
+fn nested_foreign_vector_rows_transfer_and_drop_once() {
+    let drops = Arc::new(AtomicUsize::new(0));
+    let mut rows = RustVecVecTracked_new();
+
+    let row = CRustForeignVec::from_vec(vec![Tracked {
+        value: 7,
+        drops: Arc::clone(&drops),
+    }]);
+    RustVecVecTracked_push(
+        &mut rows,
+        CRustForeignVecTracked {
+            data: row.data.cast(),
+            len: row.len,
+            capacity: row.capacity,
+        },
+    );
+    let empty = CRustForeignVec::from_vec(Vec::<Tracked>::new());
+    RustVecVecTracked_push(
+        &mut rows,
+        CRustForeignVecTracked {
+            data: empty.data.cast(),
+            len: empty.len,
+            capacity: empty.capacity,
+        },
+    );
+
+    let mut rows = Buffers_echo_tracked_rows(rows);
+    assert_eq!(rows.len, 2);
+    let view = RustVecVecTracked_get(rows, 0);
+    let borrowed = unsafe {
+        (CRustSlice {
+            data: view.data.cast(),
+            len: view.len,
+        })
+        .as_slice::<Tracked>()
+    };
+    assert_eq!(borrowed[0].value(), 7);
+    assert_eq!(RustVecVecTracked_get(rows, 1).len, 0);
+
+    let removed = RustVecVecTracked_remove(&mut rows, 0);
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+    RustVecVecTracked_free(rows);
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+    RustForeignVecTracked_free(removed);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
 }
 
 #[test]

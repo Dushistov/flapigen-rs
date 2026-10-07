@@ -55,31 +55,31 @@ void crust_vec_string_free(struct CRustVecString value);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
+#include <stdint.h>
+#include "rust_str.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stdint.h>
-#include "rust_str.h"
 struct CRustStrView crust_vec_string_get(struct CRustVecString value, uintptr_t index);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
+#include "rust_str.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "rust_str.h"
 void crust_vec_string_push(CRustVecString * value, struct CRustString item);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
+#include <stdint.h>
+#include "rust_str.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stdint.h>
-#include "rust_str.h"
 struct CRustString crust_vec_string_remove(CRustVecString * value, uintptr_t index);
 #ifdef __cplusplus
 } // extern "C" {
