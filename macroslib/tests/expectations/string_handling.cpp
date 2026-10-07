@@ -1,4 +1,4 @@
-@@expect {"after":"\n    uintptr_t len;\n    uintptr_t capacity;\n};\n\n#ifdef __cplusplus\n} // extern \"","before":"} // extern \"C\" {\n#endif\n#include <stdint.h>\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n","file":"rust_str.h","kind":"between"}
+@@expect {"after":"\n    uintptr_t len;\n    uintptr_t capacity;\n};\n\n#ifdef __cplusplus\n} // extern \"","before":"struct CRustStrView {\n    const char * data;\n    uintptr_t len;\n};\n\n#ifdef __cplusplus\n} // extern \"C\" {\n#endif\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n","file":"rust_str.h","kind":"between"}
 struct CRustString {
     char * data;
 @@end

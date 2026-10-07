@@ -1,4 +1,4 @@
-@@expect {"after":"\n","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n            \n","file":"c_fn_i324232mut3232c_void_t.h","kind":"between"}
+@@expect {"after":"\n","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n\n","file":"c_fn_i324232mut3232c_void_t.h","kind":"between"}
 typedef void (*c_fn_i324232mut3232c_void_t)(int32_t, void *);
 @@end
 
@@ -35,7 +35,7 @@ template<bool OWN_DATA>
     }
 @@end
 
-@@expect {"after":"\n","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n            \n","file":"c_fn_CRustResulti32CRustString4232mut3232c_void_t.h","kind":"between"}
+@@expect {"after":"\n","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n\n","file":"c_fn_CRustResulti32CRustString4232mut3232c_void_t.h","kind":"between"}
 typedef void (*c_fn_CRustResulti32CRustString4232mut3232c_void_t)(CRustResulti32CRustString, void *);
 @@end
 

@@ -393,7 +393,9 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
 
     for inc in includes {
         if self_inc != inc {
-            writeln!(file_out, "#include {inc}").expect(WRITE_TO_MEM_FAILED_MSG);
+            file_out
+                .write_include_once(&inc)
+                .expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }
     file_out
@@ -533,7 +535,7 @@ fn add_func_forward_decl(
     let self_inc = format!("\"{c_type_header_name}\"");
     for inc in includes {
         if self_inc != inc {
-            writeln!(out, "#include {inc}").expect(WRITE_TO_MEM_FAILED_MSG);
+            out.write_include_once(&inc).expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }
     out.write_all(

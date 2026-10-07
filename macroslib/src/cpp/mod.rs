@@ -14,13 +14,20 @@ macro_rules! file_for_module {
 #pragma once
 
 //for (u)intX_t types
-#include <stdint.h>
-
+"##,
+                )
+                .expect("write to memory failed, no free mem?");
+                c_header_f
+                    .write_include_once("<stdint.h>")
+                    .expect("write to memory failed, no free mem?");
+                write!(
+                    &mut c_header_f,
+                    r##"
 #ifdef __cplusplus
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * {sizeof_usize},
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            "##,
+"##,
                     sizeof_usize = target_pointer_width / 8,
                 )
                 .expect("write to memory failed, no free mem?");
