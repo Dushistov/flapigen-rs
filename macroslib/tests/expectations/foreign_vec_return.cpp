@@ -76,11 +76,11 @@ void RustForeignVecBoo_push(CRustForeignVecBoo * v, void * e);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stdint.h>
 void * RustForeignVecBoo_remove(CRustForeignVecBoo * v, uintptr_t idx);
 #ifdef __cplusplus
 } // extern "C" {
@@ -88,6 +88,7 @@ void * RustForeignVecBoo_remove(CRustForeignVecBoo * v, uintptr_t idx);
 
 #ifdef __cplusplus
 
+#include "Boo_fwd.hpp"
 #include "rust_vec_impl.hpp"
 
 namespace org_examples {

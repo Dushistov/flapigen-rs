@@ -501,7 +501,7 @@ impl syn::parse::Parse for GenericAliasItem {
                 };
                 Ok(GenericAliasItem::SwigIType((type_id, opt_arg)))
             } else if mac.path.is_ident(SWIG_F_TYPE) {
-                let item: syn::Ident = syn::parse2(mac.tokens)?;
+                let item: syn::Type = syn::parse2(mac.tokens)?;
                 Ok(GenericAliasItem::SwigFType(item))
             } else {
                 Err(syn::Error::new(

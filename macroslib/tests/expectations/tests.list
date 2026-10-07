@@ -84,3 +84,4 @@ vec_string
 direct_foreign_slices
 indirect_foreign_slices
 indirect_foreign_vec
+nested_foreign_vec

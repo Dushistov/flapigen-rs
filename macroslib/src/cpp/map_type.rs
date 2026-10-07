@@ -7,7 +7,8 @@ use syn::Type;
 use crate::{
     cpp::{
         merge_c_types, merge_rule, CppContext, CppForeignTypeInfo, MergeCItemsFlags,
-        SWIG_FOREIGN_CLASS_PLAIN_INDIRECT_ACCESS_TRAIT, SWIG_FOREIGN_CLASS_PLAIN_VEC_ACCESS_TRAIT,
+        SWIG_FOREIGN_CLASS_DIRECT_VEC_ACCESS_TRAIT, SWIG_FOREIGN_CLASS_PLAIN_INDIRECT_ACCESS_TRAIT,
+        SWIG_FOREIGN_CLASS_PLAIN_VEC_ACCESS_TRAIT, SWIG_FOREIGN_CLASS_TRAIT,
         SWIG_TYPE_IS_REPR_C_TRAIT,
     },
     error::{DiagnosticError, Result, SourceIdSpan},
@@ -31,6 +32,28 @@ pub(in crate::cpp) fn map_type(
 ) -> Result<CppForeignTypeInfo> {
     debug!("map_type: arg_ty {}, direction {:?}", arg_ty, direction);
     let ftype = do_map_type(ctx, arg_ty, direction, arg_ty_span, false).map_err(|err| {
+        if let Some(inner_vec_ty) = check_if_smart_pointer_return_inner_type(&arg_ty.ty, "Vec") {
+            if let Some(element_ty) = check_if_smart_pointer_return_inner_type(&inner_vec_ty, "Vec") {
+                if ctx
+                    .conv_map
+                    .ty_to_rust_type_checked(&element_ty)
+                    .is_some_and(|element| {
+                        implements_marker_trait(&element, SWIG_FOREIGN_CLASS_TRAIT)
+                            && !implements_marker_trait(
+                                &element,
+                                SWIG_FOREIGN_CLASS_DIRECT_VEC_ACCESS_TRAIT,
+                            )
+                    })
+                {
+                    return DiagnosticError::new2(
+                        arg_ty_span,
+                        format!(
+                            "cannot map '{arg_ty}' in C++: nested foreign-class vectors require a non-PlainClass whose constructor returns the class itself"
+                        ),
+                    );
+                }
+            }
+        }
         if let Some(element_ty) = check_if_smart_pointer_return_inner_type(&arg_ty.ty, "Vec") {
             if ctx
                 .conv_map

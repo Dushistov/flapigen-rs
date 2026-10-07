@@ -26,6 +26,32 @@ fn compound_foreign_type_parameter_substitutes_nested_type() {
 }
 
 #[test]
+fn generic_alias_resolves_compound_foreign_types() {
+    let param: syn::Ident = parse_quote!(T);
+    let mut substitutions = TyParamsSubstMap::default();
+    substitutions.insert(&param, Some(parse_quote!(i32)));
+    let aliases = vec![
+        GenericAlias {
+            alias: parse_quote!(InnerVec),
+            value: quote!(swig_f_type!(Vec<T>)),
+        },
+        GenericAlias {
+            alias: parse_quote!(InnerSlice),
+            value: quote!(swig_f_type!(&[T])),
+        },
+    ];
+    let expanded = build_generic_aliases(
+        invalid_src_id_span().0,
+        &aliases,
+        &substitutions,
+        &mut Dummy,
+    )
+    .unwrap();
+    assert_eq!(normalize_type(&expanded[0].value), "RustVecI32");
+    assert_eq!(normalize_type(&expanded[1].value), "RustSliceI32");
+}
+
+#[test]
 fn test_foreign_typemap_qdatetime() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(
@@ -698,6 +724,10 @@ impl TypeMapConvRuleInfoExpanderHelper for Dummy {
                 "float"
             } else if *ty == parse_type!(CRustPairi32f32) {
                 "CRustPairi32f32"
+            } else if *ty == parse_type!(Vec<i32>) {
+                "RustVecI32"
+            } else if *ty == parse_type!(&[i32]) {
+                "RustSliceI32"
             } else {
                 panic!("swig_f_type: Unknown type: {}", DisplayToTokens(ty));
             }

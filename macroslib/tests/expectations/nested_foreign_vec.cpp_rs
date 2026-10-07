@@ -1,0 +1,69 @@
+@@expect {"file":"test.rs","kind":"item","name":"RustVecVecRowFoo_get","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn RustVecVecRowFoo_get(
+    v: CRustVecVecRowFoo,
+    idx: usize,
+) -> CRustVecVecRowFooRowSlice {
+    let rows: &[Vec<RowFoo>] = unsafe { ::std::slice::from_raw_parts(v.data.cast(), v.len) };
+    let row = &rows[idx];
+    CRustVecVecRowFooRowSlice {
+        data: row.as_ptr().cast(),
+        len: row.len(),
+    }
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"RustVecVecRowFoo_push","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn RustVecVecRowFoo_push(v: *mut CRustVecVecRowFoo, row: CRustForeignVecRowFoo) {
+    let v = unsafe { &mut *v };
+    let mut rows: Vec<Vec<RowFoo>> =
+        unsafe { Vec::from_raw_parts(v.data.cast(), v.len, v.capacity) };
+    let row: Vec<RowFoo> = unsafe { Vec::from_raw_parts(row.data.cast(), row.len, row.capacity) };
+    rows.push(row);
+    let raw = CRustForeignVec::from_vec(rows);
+    v.data = raw.data.cast();
+    v.len = raw.len;
+    v.capacity = raw.capacity;
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"RustVecVecRowFoo_remove","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn RustVecVecRowFoo_remove(
+    v: *mut CRustVecVecRowFoo,
+    idx: usize,
+) -> CRustForeignVecRowFoo {
+    let v = unsafe { &mut *v };
+    let mut rows: Vec<Vec<RowFoo>> =
+        unsafe { Vec::from_raw_parts(v.data.cast(), v.len, v.capacity) };
+    let row = rows.remove(idx);
+    let raw = CRustForeignVec::from_vec(rows);
+    v.data = raw.data.cast();
+    v.len = raw.len;
+    v.capacity = raw.capacity;
+    let row = CRustForeignVec::from_vec(row);
+    CRustForeignVecRowFoo {
+        data: row.data.cast(),
+        len: row.len,
+        capacity: row.capacity,
+    }
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"NestedVecHost_echo_foos","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn NestedVecHost_echo_foos(rows: CRustVecVecRowFoo) -> CRustVecVecRowFoo {
+    let mut rows: Vec<Vec<RowFoo>> =
+        unsafe { Vec::from_raw_parts(rows.data.cast(), rows.len, rows.capacity) };
+    let mut ret: Vec<Vec<RowFoo>> = NestedVecHost::echo_foos(rows);
+    let raw = CRustForeignVec::from_vec(ret);
+    let mut ret: CRustVecVecRowFoo = CRustVecVecRowFoo {
+        data: raw.data.cast(),
+        len: raw.len,
+        capacity: raw.capacity,
+    };
+    ret
+}
+@@end

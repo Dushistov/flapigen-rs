@@ -612,7 +612,7 @@ enum GenericAliasItem {
     Concat(Vec<GenericAliasItem>),
     Ident(syn::Ident),
     SwigIType((syn::Ident, Option<syn::Ident>)),
-    SwigFType(syn::Ident),
+    SwigFType(syn::Type),
 }
 
 fn concat_idents(
@@ -637,8 +637,12 @@ fn concat_idents(
             )?;
             ident.push_str(&DisplayToTokens(&i_type).to_string());
         }
-        GenericAliasItem::SwigFType(id) => {
-            let ty = find_type_param(param_map, &id.to_string(), (src_id, id.span()))?;
+        GenericAliasItem::SwigFType(ty) => {
+            let ty = find_type_param(
+                param_map,
+                &DisplayToTokens(&ty).to_string(),
+                (src_id, ty.span()),
+            )?;
             let mut f_type = expander.swig_f_type(ty.as_ref(), None)?;
             req_modules.append(&mut f_type.provided_by_module);
             ident.push_str(f_type.name.display());

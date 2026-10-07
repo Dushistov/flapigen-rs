@@ -94,11 +94,11 @@ struct CRustSliceForeignIndirectArcNode {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stdint.h>
 const void * CRustSliceForeignIndirectArcNode_get(struct CRustSliceForeignIndirectArcNode slice, uintptr_t idx);
 #ifdef __cplusplus
 } // extern "C" {
@@ -160,11 +160,11 @@ struct CRustSliceForeignIndirectRcNode {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stdint.h>
 const void * CRustSliceForeignIndirectRcNode_get(struct CRustSliceForeignIndirectRcNode slice, uintptr_t idx);
 #ifdef __cplusplus
 } // extern "C" {
@@ -226,11 +226,11 @@ struct CRustSliceForeignIndirectOtherArcNode {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stdint.h>
 const void * CRustSliceForeignIndirectOtherArcNode_get(struct CRustSliceForeignIndirectOtherArcNode slice, uintptr_t idx);
 #ifdef __cplusplus
 } // extern "C" {

@@ -462,6 +462,7 @@ foreign_typemap!(
                     r##"
 #ifdef __cplusplus
 
+#include "swig_f_type!(T)_fwd.hpp"
 #include "rust_vec_impl.hpp"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
@@ -483,5 +484,129 @@ using CForeignVecModule!() = RustVec<CForeignVec!(), internal::ForeignVecPolicy<
     ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) => "CForeignVecModule!()"
         "CForeignVecModule!(){$p}";
     ($p:f_type, req_modules = ["\"CForeignVecModule!().h\""]) <= "CForeignVecModule!()"
+        "$p.release()";
+);
+
+// The outer allocation contains Rust Vec<T> values. C++ never indexes this
+// allocation directly: it gets a borrowed slice for each row from Rust.
+foreign_typemap!(
+    generic_alias!(COuterVecModule = swig_concat_idents!(RustVecVec, swig_f_type!(T)));
+    generic_alias!(COuterVec = swig_concat_idents!(CRustVecVec, swig_f_type!(T)));
+    generic_alias!(COuterVecElem = swig_concat_idents!(CRustVecVec, swig_f_type!(T), Elem));
+    generic_alias!(COuterRowSlice = swig_concat_idents!(CRustVecVec, swig_f_type!(T), RowSlice));
+    generic_alias!(COuterRowElem = swig_concat_idents!(CRustVecVec, swig_f_type!(T), RowElem));
+    generic_alias!(COuterVecNew = swig_concat_idents!(RustVecVec, swig_f_type!(T), _new));
+    generic_alias!(COuterVecFree = swig_concat_idents!(RustVecVec, swig_f_type!(T), _free));
+    generic_alias!(COuterVecGet = swig_concat_idents!(RustVecVec, swig_f_type!(T), _get));
+    generic_alias!(COuterVecPush = swig_concat_idents!(RustVecVec, swig_f_type!(T), _push));
+    generic_alias!(COuterVecRemove = swig_concat_idents!(RustVecVec, swig_f_type!(T), _remove));
+    generic_alias!(CInnerVec = swig_concat_idents!(CRustForeignVec, swig_f_type!(T)));
+    generic_alias!(CInnerVecModule = swig_concat_idents!(RustForeignVec, swig_f_type!(T)));
+    // Resolve the inner vector typemap before define_c_type! uses its C struct.
+    generic_alias!(InnerVecDependency = swig_f_type!(Vec<T>));
+
+    define_c_type!(
+        module = "COuterVecModule!().h";
+        #[repr(C)]
+        pub struct COuterVecElem!() { _unused: u8 }
+
+        #[repr(C)]
+        pub struct COuterRowElem!() { _unused: u8 }
+
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct COuterRowSlice!() {
+            data: *const COuterRowElem!(),
+            len: usize,
+        }
+
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct COuterVec!() {
+            data: *mut COuterVecElem!(),
+            len: usize,
+            capacity: usize,
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn COuterVecNew!()() -> COuterVec!() {
+            let raw = CRustForeignVec::from_vec(Vec::<Vec<swig_subst_type!(T)>>::new());
+            COuterVec!() { data: raw.data.cast(), len: raw.len, capacity: raw.capacity }
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn COuterVecFree!()(v: COuterVec!()) {
+            let rows: Vec<Vec<swig_subst_type!(T)>> = unsafe {
+                Vec::from_raw_parts(v.data.cast(), v.len, v.capacity)
+            };
+            drop(rows);
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn COuterVecGet!()(v: COuterVec!(), idx: usize) -> COuterRowSlice!() {
+            let rows: &[Vec<swig_subst_type!(T)>] = unsafe {
+                ::std::slice::from_raw_parts(v.data.cast(), v.len)
+            };
+            let row = &rows[idx];
+            COuterRowSlice!() { data: row.as_ptr().cast(), len: row.len() }
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn COuterVecPush!()(v: *mut COuterVec!(), row: CInnerVec!()) {
+            let v = unsafe { &mut *v };
+            let mut rows: Vec<Vec<swig_subst_type!(T)>> = unsafe {
+                Vec::from_raw_parts(v.data.cast(), v.len, v.capacity)
+            };
+            let row: Vec<swig_subst_type!(T)> = unsafe {
+                Vec::from_raw_parts(row.data.cast(), row.len, row.capacity)
+            };
+            rows.push(row);
+            let raw = CRustForeignVec::from_vec(rows);
+            v.data = raw.data.cast();
+            v.len = raw.len;
+            v.capacity = raw.capacity;
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn COuterVecRemove!()(v: *mut COuterVec!(), idx: usize) -> CInnerVec!() {
+            let v = unsafe { &mut *v };
+            let mut rows: Vec<Vec<swig_subst_type!(T)>> = unsafe {
+                Vec::from_raw_parts(v.data.cast(), v.len, v.capacity)
+            };
+            let row = rows.remove(idx);
+            let raw = CRustForeignVec::from_vec(rows);
+            v.data = raw.data.cast();
+            v.len = raw.len;
+            v.capacity = raw.capacity;
+            let row = CRustForeignVec::from_vec(row);
+            CInnerVec!() { data: row.data.cast(), len: row.len, capacity: row.capacity }
+        }
+    );
+
+    foreign_code!(module = "COuterVecModule!().h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_vec_impl.hpp"
+#include "CInnerVecModule!().h"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+using COuterVecModule!() = RustVec<COuterVec!(), internal::NestedForeignVecPolicy<
+    swig_f_type!(Vec<T>, output), RustSlice<const swig_f_type!(T, output)>,
+    COuterVec!(), CInnerVec!(), COuterRowSlice!(),
+    COuterVecNew!(), COuterVecFree!(), COuterVecGet!(), COuterVecPush!(), COuterVecRemove!()>>;
+}
+#endif
+"##);
+
+    ($p:r_type) <T: SwigForeignClassDirectVecAccess> Vec<Vec<T>> => COuterVec!() {
+        let raw = CRustForeignVec::from_vec($p);
+        $out = COuterVec!() { data: raw.data.cast(), len: raw.len, capacity: raw.capacity };
+    };
+    ($p:r_type) <T: SwigForeignClassDirectVecAccess> Vec<Vec<T>> <= COuterVec!() {
+        $out = unsafe { Vec::from_raw_parts($p.data.cast(), $p.len, $p.capacity) };
+    };
+    ($p:f_type, req_modules = ["\"COuterVecModule!().h\""]) => "COuterVecModule!()"
+        "COuterVecModule!(){$p}";
+    ($p:f_type, req_modules = ["\"COuterVecModule!().h\""]) <= "COuterVecModule!()"
         "$p.release()";
 );
