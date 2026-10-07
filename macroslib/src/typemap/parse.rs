@@ -1187,14 +1187,14 @@ macro_rules! jni_unpack_return {
         .unwrap();
         parse(
             SourceId::none(),
-            include_str!("../cpp/cpp-slice.rs"),
+            include_str!("../cpp/cpp-include-slice.rs"),
             64,
             FxHashMap::default(),
         )
         .unwrap();
         parse(
             SourceId::none(),
-            include_str!("../cpp/cpp-vec.rs"),
+            include_str!("../cpp/cpp-include-vec.rs"),
             64,
             FxHashMap::default(),
         )
