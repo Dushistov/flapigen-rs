@@ -8,8 +8,8 @@ mod jni {
 
 mod cpp {
     include!(concat!(env!("OUT_DIR"), "/cpp-include.rs"));
-    include!(concat!(env!("OUT_DIR"), "/cpp-slice.rs"));
-    include!(concat!(env!("OUT_DIR"), "/cpp-vec.rs"));
+    include!(concat!(env!("OUT_DIR"), "/cpp-include-slice.rs"));
+    include!(concat!(env!("OUT_DIR"), "/cpp-include-vec.rs"));
 }
 
 #[test]

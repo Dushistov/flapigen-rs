@@ -381,12 +381,12 @@ impl Generator {
                     code: include_str!("cpp/cpp-include.rs").into(),
                 }));
                 conv_map_source.push(src_reg.register(SourceCode {
-                    id_of_code: "cpp-slice.rs".into(),
-                    code: include_str!("cpp/cpp-slice.rs").into(),
+                    id_of_code: "cpp-include-slice.rs".into(),
+                    code: include_str!("cpp/cpp-include-slice.rs").into(),
                 }));
                 conv_map_source.push(src_reg.register(SourceCode {
-                    id_of_code: "cpp-vec.rs".into(),
-                    code: include_str!("cpp/cpp-vec.rs").into(),
+                    id_of_code: "cpp-include-vec.rs".into(),
+                    code: include_str!("cpp/cpp-include-vec.rs").into(),
                 }));
                 foreign_lang_helpers.push(SourceCode {
                     id_of_code: "rust_vec_impl.hpp".into(),
