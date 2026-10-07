@@ -9,7 +9,6 @@
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,7 +20,6 @@ struct CRustVecVecRowFooElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,7 +31,6 @@ struct CRustVecVecRowFooRowElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,7 +43,6 @@ struct CRustVecVecRowFooRowSlice {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,7 +72,6 @@ void RustVecVecRowFoo_free(struct CRustVecVecRowFoo v);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -94,8 +89,6 @@ void RustVecVecRowFoo_push(CRustVecVecRowFoo * v, struct CRustForeignVecRowFoo r
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include "RustForeignVecRowFoo.h"
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -130,7 +123,6 @@ using RustVecVecRowFoo = RustVec<CRustVecVecRowFoo, internal::NestedForeignVecPo
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -142,7 +134,6 @@ struct CRustVecVecRowBarElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -154,7 +145,6 @@ struct CRustVecVecRowBarRowElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -167,7 +157,6 @@ struct CRustVecVecRowBarRowSlice {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -197,7 +186,6 @@ void RustVecVecRowBar_free(struct CRustVecVecRowBar v);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -215,8 +203,6 @@ void RustVecVecRowBar_push(CRustVecVecRowBar * v, struct CRustForeignVecRowBar r
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include "RustForeignVecRowBar.h"
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {

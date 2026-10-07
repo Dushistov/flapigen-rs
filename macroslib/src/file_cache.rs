@@ -74,6 +74,18 @@ impl FileWriteCache {
     pub fn is_item_defined(&self, item: &str) -> bool {
         self.already_defined_items.contains(item)
     }
+
+    /// Write a generator-managed include before its first use in this file.
+    /// Literal code snippets are intentionally left untouched.
+    #[allow(dead_code)] // This file is also included by build.rs, which does not emit headers.
+    pub fn write_include_once(&mut self, include: &str) -> io::Result<()> {
+        let directive = format!("#include {include}");
+        if !self.is_item_defined(&directive) {
+            writeln!(self, "{directive}")?;
+            self.define_item(directive);
+        }
+        Ok(())
+    }
 }
 
 impl io::Write for FileWriteCache {

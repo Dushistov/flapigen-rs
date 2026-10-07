@@ -48,7 +48,6 @@ template<bool OWN_DATA>
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -80,7 +79,6 @@ struct CRustSliceForeignBoxNode {
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {

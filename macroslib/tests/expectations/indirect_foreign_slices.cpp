@@ -69,7 +69,6 @@ template<bool OWN_DATA>
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -81,7 +80,6 @@ struct CRustSliceForeignIndirectArcNodeElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -94,7 +92,6 @@ struct CRustSliceForeignIndirectArcNode {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -135,7 +132,6 @@ struct ArcNodeAccess {
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -147,7 +143,6 @@ struct CRustSliceForeignIndirectRcNodeElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -160,7 +155,6 @@ struct CRustSliceForeignIndirectRcNode {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -201,7 +195,6 @@ struct RcNodeAccess {
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -213,7 +206,6 @@ struct CRustSliceForeignIndirectOtherArcNodeElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -226,7 +218,6 @@ struct CRustSliceForeignIndirectOtherArcNode {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {

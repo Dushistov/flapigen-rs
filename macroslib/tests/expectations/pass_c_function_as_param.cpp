@@ -2,7 +2,7 @@
 static void f1(c_fn_32c_int4232mut3232c_void_t cb) noexcept;
 @@end
 
-@@expect {"after":"\n","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n            \n","file":"c_fn_32c_int4232mut3232c_void_t.h","kind":"between"}
+@@expect {"after":"\n","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n\n","file":"c_fn_32c_int4232mut3232c_void_t.h","kind":"between"}
 typedef void (*c_fn_32c_int4232mut3232c_void_t)(int, void *);
 @@end
 
@@ -10,7 +10,7 @@ typedef void (*c_fn_32c_int4232mut3232c_void_t)(int, void *);
 static void f2(c_fn_4232mut3232c_void_t cb) noexcept;
 @@end
 
-@@expect {"after":"\n","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n            \n","file":"c_fn_4232mut3232c_void_t.h","kind":"between"}
+@@expect {"after":"\n","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n\n","file":"c_fn_4232mut3232c_void_t.h","kind":"between"}
 typedef void (*c_fn_4232mut3232c_void_t)(void *);
 @@end
 
@@ -18,6 +18,6 @@ typedef void (*c_fn_4232mut3232c_void_t)(void *);
 static void f3(c_fn_4232mut3232c_void_ret_32c_char_t cb) noexcept;
 @@end
 
-@@expect {"after":"\n        ","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n            \n        ","file":"c_fn_4232mut3232c_void_ret_32c_char_t.h","kind":"between"}
+@@expect {"after":"\n        ","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n\n        ","file":"c_fn_4232mut3232c_void_ret_32c_char_t.h","kind":"between"}
 typedef char (*c_fn_4232mut3232c_void_ret_32c_char_t)(void *);
 @@end

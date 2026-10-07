@@ -121,7 +121,6 @@ using CppRustVec!() = RustVec<CRustVec!(), internal::NativeVecPolicy<CRustVec!()
 foreign_typemap!(
     foreign_code!(module = "rust_vec_string.h";
                     r##"
-#include "rust_str.h"
 typedef struct CRustVecStringElem CRustVecStringElem;
 typedef struct CRustVecString CRustVecString;
 "##);
@@ -176,7 +175,6 @@ foreign_typemap!(
                     r##"
 #ifdef __cplusplus
 #include "rust_vec_impl.hpp"
-#include "rust_str.h"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
 namespace internal {

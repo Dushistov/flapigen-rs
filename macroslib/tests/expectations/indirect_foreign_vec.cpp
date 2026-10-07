@@ -9,7 +9,6 @@
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,7 +20,6 @@ struct CRustForeignVecArcNodeElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,7 +57,6 @@ void RustForeignVecArcNode_push(CRustForeignVecArcNode * v, void * e);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -91,7 +88,6 @@ using RustVecArcNode = RustVec<CRustForeignVecArcNode, internal::IndirectForeign
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -103,7 +99,6 @@ struct CRustForeignVecRcNodeElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -141,7 +136,6 @@ void RustForeignVecRcNode_push(CRustForeignVecRcNode * v, void * e);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -173,7 +167,6 @@ using RustVecRcNode = RustVec<CRustForeignVecRcNode, internal::IndirectForeignVe
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -185,7 +178,6 @@ struct CRustSliceForeignIndirectArcNodeElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -198,7 +190,6 @@ struct CRustSliceForeignIndirectArcNode {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {

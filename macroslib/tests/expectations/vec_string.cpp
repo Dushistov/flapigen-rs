@@ -9,11 +9,9 @@
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            
-#include "rust_str.h"
+
 typedef struct CRustVecStringElem CRustVecStringElem;
 typedef struct CRustVecString CRustVecString;
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,7 +23,6 @@ struct CRustVecStringElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -56,7 +53,6 @@ void crust_vec_string_free(struct CRustVecString value);
 } // extern "C" {
 #endif
 #include "rust_str.h"
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,7 +61,6 @@ struct CRustStrView crust_vec_string_get(struct CRustVecString value, uintptr_t 
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include "rust_str.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -74,8 +69,6 @@ void crust_vec_string_push(CRustVecString * value, struct CRustString item);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include "rust_str.h"
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,7 +80,6 @@ struct CRustString crust_vec_string_remove(CRustVecString * value, uintptr_t ind
 
 #ifdef __cplusplus
 #include "rust_vec_impl.hpp"
-#include "rust_str.h"
 
 namespace org_examples {
 namespace internal {

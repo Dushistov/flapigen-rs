@@ -8,7 +8,7 @@ public:
     virtual std::optional<Error> remove() const noexcept = 0;
 @@end
 
-@@expect {"after":"\n\n#ifdef __cplusplus\n} // extern \"C\" {\n#endif\n#include <stdint.h>\n\n#ifdef __cplu","before":"\"our conversion usize <-> uintptr_t is wrong\");\n#endif\n            #include <stdint.h>\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n","file":"rust_void_ok_result4232mut3232c_void.h","kind":"between"}
+@@expect {"after":"\n\n#ifdef __cplusplus\n} // extern \"C\" {\n#endif\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nstruct CRustVoidOkResult4232mut3232c_void","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n","file":"rust_void_ok_result4232mut3232c_void.h","kind":"between"}
 union CRustVoidOkResultUnion4232mut3232c_void {
     uint8_t ok;
     void * err;

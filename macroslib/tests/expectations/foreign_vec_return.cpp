@@ -1,4 +1,4 @@
-@@expect {"after":"\n    uintptr_t len;\n    uintptr_t capacity;\n};\n\n#ifdef __cplusplus\n} // extern \"","before":"\"our conversion usize <-> uintptr_t is wrong\");\n#endif\n            #include <stdint.h>\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n","file":"RustForeignVecFoo.h","kind":"between"}
+@@expect {"after":"\n    uintptr_t len;\n    uintptr_t capacity;\n};\n\n#ifdef __cplusplus\n} // extern \"","before":"static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,\n   \"our conversion usize <-> uintptr_t is wrong\");\n#endif\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n","file":"RustForeignVecFoo.h","kind":"between"}
 struct CRustForeignVecFooElem {
     uint8_t _unused;
 };
@@ -6,7 +6,6 @@ struct CRustForeignVecFooElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,7 +25,6 @@ struct CRustForeignVecFoo {
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * 8,
    "our conversion usize <-> uintptr_t is wrong");
 #endif
-            #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,7 +36,6 @@ struct CRustForeignVecBooElem {
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,7 +73,6 @@ void RustForeignVecBoo_push(CRustForeignVecBoo * v, void * e);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
