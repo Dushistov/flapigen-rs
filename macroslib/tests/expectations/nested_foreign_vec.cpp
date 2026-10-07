@@ -94,8 +94,8 @@ void RustVecVecRowFoo_push(CRustVecVecRowFoo * v, struct CRustForeignVecRowFoo r
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 #include "RustForeignVecRowFoo.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
