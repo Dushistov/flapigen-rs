@@ -114,18 +114,18 @@ static_assert(std::is_same<decltype(std::declval<RustSlice<const FooArc, FooArcA
 static_assert(!std::is_constructible<RustSlice<const FooArc, FooArcAccess>,
                                      CRustSliceForeignIndirectFooRc>::value,
               "Arc and Rc-backed classes must keep distinct slice descriptors");
-static_assert(std::is_same<decltype(std::declval<RustVecFooArc &>().as_slice()),
+static_assert(std::is_same<decltype(std::declval<RustForeignVecFooArc &>().as_slice()),
                            RustSlice<const FooArc, FooArcAccess>>::value,
               "Arc-backed vectors must reuse their slice mapping");
-static_assert(std::is_same<decltype(std::declval<RustVecFooRc &>().as_slice()),
+static_assert(std::is_same<decltype(std::declval<RustForeignVecFooRc &>().as_slice()),
                            RustSlice<const FooRc, FooRcAccess>>::value,
               "Rc-backed vectors must reuse their slice mapping");
 template <typename T>
 static auto has_mutable_slice(int) -> decltype(std::declval<T &>().as_slice_mut(), std::true_type{});
 template <typename T> static std::false_type has_mutable_slice(...);
-static_assert(!decltype(has_mutable_slice<RustVecFooArc>(0))::value,
+static_assert(!decltype(has_mutable_slice<RustForeignVecFooArc>(0))::value,
               "Arc-backed vectors cannot expose mutable slices");
-static_assert(!decltype(has_mutable_slice<RustVecFooRc>(0))::value,
+static_assert(!decltype(has_mutable_slice<RustForeignVecFooRc>(0))::value,
               "Rc-backed vectors cannot expose mutable slices");
 static_assert(std::is_same<decltype(std::declval<const RustVecVecFoo &>()[0]),
                            RustSlice<const Foo>>::value,
@@ -1643,11 +1643,11 @@ TEST(RustVec, indirectForeignClassOwnership)
     }
     EXPECT_EQ(1u, source.rc_strong_count(0));
 
-    RustVecFooArc empty_arcs;
+    RustForeignVecFooArc empty_arcs;
     EXPECT_TRUE(empty_arcs.empty());
     EXPECT_TRUE(empty_arcs.as_slice().empty());
     EXPECT_THROW(empty_arcs.at(0), std::out_of_range);
-    RustVecFooRc empty_rcs;
+    RustForeignVecFooRc empty_rcs;
     EXPECT_TRUE(empty_rcs.empty());
     EXPECT_TRUE(empty_rcs.as_slice().empty());
     EXPECT_THROW(empty_rcs.at(0), std::out_of_range);
