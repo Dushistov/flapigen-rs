@@ -303,7 +303,7 @@ fn drop_foreign_class_vec<T: SwigForeignClass>(v: CRustForeignVec<T>) {
 }
 
 foreign_typemap!(
-    generic_alias!(CForeignVecModule = swig_concat_idents!(RustVec, swig_f_type!(T)));
+    generic_alias!(CForeignVecModule = swig_concat_idents!(RustForeignVec, swig_f_type!(T)));
     generic_alias!(CForeignVec = swig_concat_idents!(CRustForeignVec, swig_f_type!(T)));
     generic_alias!(CForeignVecElem = swig_concat_idents!(CRustForeignVec, swig_f_type!(T), Elem));
     generic_alias!(CForeignVecNew = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _new));
