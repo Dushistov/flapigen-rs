@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Write, mem};
+use std::{borrow::Cow, collections::BTreeSet, fmt::Write, mem};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
@@ -316,7 +316,7 @@ fn test_{name}_layout() {{
     let mut mem_out = Vec::<u8>::new();
     writeln!(mem_out, "{s_id} {{").expect(WRITE_TO_MEM_FAILED_MSG);
 
-    let mut includes = FxHashSet::<String>::default();
+    let mut includes = BTreeSet::<String>::new();
 
     let mut fields_asserts_code = String::new();
     let fields = &ctype
@@ -391,8 +391,8 @@ fn check_{struct_name}_{field_name}_type_fn(s: &{struct_name}) -> &{field_type} 
     let common_files = &mut ctx.common_files;
     let file_out: &mut FileWriteCache = file_for_module!(ctx, common_files, c_type_header_name);
 
-    for inc in &includes {
-        if self_inc != *inc {
+    for inc in includes {
+        if self_inc != inc {
             writeln!(file_out, "#include {inc}").expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }
@@ -473,7 +473,7 @@ fn add_func_forward_decl(
 ) -> Result<(), DiagnosticError> {
     use std::io::Write;
     let mut fn_decl_out = Vec::with_capacity(100);
-    let mut includes = FxHashSet::<String>::default();
+    let mut includes = BTreeSet::<String>::new();
 
     match f.sig.output {
         syn::ReturnType::Default => {
@@ -531,8 +531,8 @@ fn add_func_forward_decl(
     let common_files = &mut ctx.common_files;
     let out: &mut FileWriteCache = file_for_module!(ctx, common_files, c_type_header_name);
     let self_inc = format!("\"{c_type_header_name}\"");
-    for inc in &includes {
-        if self_inc != *inc {
+    for inc in includes {
+        if self_inc != inc {
             writeln!(out, "#include {inc}").expect(WRITE_TO_MEM_FAILED_MSG);
         }
     }

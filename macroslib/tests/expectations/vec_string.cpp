@@ -55,8 +55,8 @@ void crust_vec_string_free(struct CRustVecString value);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 #include "rust_str.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -74,8 +74,8 @@ void crust_vec_string_push(CRustVecString * value, struct CRustString item);
 #ifdef __cplusplus
 } // extern "C" {
 #endif
-#include <stdint.h>
 #include "rust_str.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
