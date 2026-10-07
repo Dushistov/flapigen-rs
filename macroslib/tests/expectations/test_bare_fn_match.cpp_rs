@@ -1,3 +1,18 @@
+@@expect {"file":"test.rs","kind":"item","name":"unsafe impl Send for CFnOncei32","form":"definition"}
+unsafe impl Send for CFnOncei32 {}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"impl Default for CFnOncei32","form":"definition"}
+impl Default for CFnOncei32 {
+    fn default() -> Self {
+        Self {
+            cb: None,
+            ctx: ::std::ptr::null_mut(),
+        }
+    }
+}
+@@end
+
 @@expect {"after":"#[allow(non_","before":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
 pub extern "C" fn TestFuture_call_fn(f: CFnOncei32) -> () {

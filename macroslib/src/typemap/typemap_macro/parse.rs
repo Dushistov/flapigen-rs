@@ -393,11 +393,45 @@ impl syn::parse::Parse for CItemsList {
 
                     types.push(CItem::Static(s));
                 }
+                syn::Item::Impl(impl_item) => {
+                    let valid_trait = matches!(&impl_item.trait_, Some((None, _, _)));
+                    let valid_type = matches!(
+                        impl_item.self_ty.as_ref(),
+                        Type::Path(path)
+                            if path.qself.is_none()
+                                && path.path.get_ident().is_some()
+                    );
+                    if !valid_trait || !valid_type {
+                        return Err(syn::Error::new(
+                            impl_item.span(),
+                            "expected a trait impl for a descriptor defined in this define_c_type!",
+                        ));
+                    }
+                    types.push(CItem::TraitImpl(impl_item));
+                }
                 _ => {
                     return Err(syn::Error::new(
                         item.span(),
-                        "Expect struct or union or function or static here",
+                        "Expect struct, union, function, static, or trait impl here",
                     ))
+                }
+            }
+        }
+        for item in &types {
+            if let CItem::TraitImpl(impl_item) = item {
+                let Type::Path(path) = impl_item.self_ty.as_ref() else {
+                    unreachable!();
+                };
+                let ident = path.path.get_ident().expect("validated above");
+                if !types.iter().any(|item| match item {
+                    CItem::Struct(s) => s.ident == *ident,
+                    CItem::Union(u) => u.ident == *ident,
+                    _ => false,
+                }) {
+                    return Err(syn::Error::new(
+                        ident.span(),
+                        "trait impl must target a struct or union in this define_c_type!",
+                    ));
                 }
             }
         }

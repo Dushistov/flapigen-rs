@@ -52,6 +52,43 @@ fn generic_alias_resolves_compound_foreign_types() {
 }
 
 #[test]
+fn define_c_type_accepts_trait_impls_for_its_descriptor() {
+    let items: CItems = syn::parse2(quote! {
+        module = "callback.h";
+        #[repr(C)]
+        struct Callback { ctx: *mut ::std::os::raw::c_void }
+        unsafe impl Send for Callback {}
+        impl Default for Callback {
+            fn default() -> Self {
+                Self { ctx: ::std::ptr::null_mut() }
+            }
+        }
+    })
+    .unwrap();
+    assert!(matches!(
+        items.items.as_slice(),
+        [CItem::Struct(_), CItem::TraitImpl(_), CItem::TraitImpl(_)]
+    ));
+}
+
+#[test]
+fn define_c_type_rejects_unrelated_impls() {
+    for code in [
+        quote!(impl Callback { fn method() {} }),
+        quote!(impl Default for Other { fn default() -> Self { Self {} } }),
+        quote!(impl !Send for Callback {}),
+    ] {
+        let input = quote! {
+            module = "callback.h";
+            #[repr(C)]
+            struct Callback { ctx: *mut ::std::os::raw::c_void }
+            #code
+        };
+        assert!(syn::parse2::<CItems>(input).is_err());
+    }
+}
+
+#[test]
 fn test_foreign_typemap_qdatetime() {
     let rule = macro_to_conv_rule(parse_quote! {
         foreign_typemap!(

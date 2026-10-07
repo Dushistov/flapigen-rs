@@ -232,6 +232,15 @@ pub(in crate::cpp) fn generate_c_type(
                 define_item(ctx, module_name, s_id);
                 continue;
             }
+            CItem::TraitImpl(ref impl_item) => {
+                let impl_id = format!("trait impl {}", impl_item.to_token_stream());
+                if is_item_defined(ctx, module_name, &impl_id) {
+                    continue;
+                }
+                ctx.rust_code.push(impl_item.into_token_stream());
+                define_item(ctx, module_name, impl_id);
+                continue;
+            }
         };
         do_generate_c_type(ctx, flags, src_id, &c_types.header_name, ctype)?;
     }

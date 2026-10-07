@@ -39,3 +39,20 @@ to `Vec<T>` if type `T` implements the traits `SwigForeignClass + Clone`.
 ```rust,no_run,noplaypen
 {{#include ../../macroslib/src/java_jni/jni-include.rs:foreign_typemap_generic_example}}
 ```
+
+## Special extensions for C++
+
+A C++ typemap can use `define_c_type!(module = "name.h"; ...);` to add C ABI
+declarations to the generated header and their Rust definitions to the generated Rust code.
+Inside the block you can define `#[repr(C)]` structs or unions (with named
+fields), `extern "C"` functions marked `#[unsafe(no_mangle)]`, and static variables marked
+in the same way. Also you can implement a Rust traits, including an `unsafe impl`, for a struct or union
+declared in the same block. Trait implementations are emitted only in the Rust
+code; they add no C code.
+
+Also it is possible to turning an input Rust parameter into the C++ return value.
+
+Add `input_to_output` to an incoming `(f_type)` rule, as in
+`($p:f_type, input_to_output) <= "CppType"`, and in generated  C++ code input parameter
+becomes return value.
+This is useful for example, for converted `FnOnce` Rust input parameter to C++ `QFuture` return value.
