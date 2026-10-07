@@ -1073,9 +1073,12 @@ foreign_typemap!(
         pub struct CFnOnce!() {
             cb: Option<extern "C" fn(swig_i_type!(T, output), *mut ::std::os::raw::c_void)>,
             ctx: *mut ::std::os::raw::c_void,
-        });
+        }
+        // SAFETY: the promise context is transferred to, and completed on, one thread.
+        unsafe impl Send for CFnOnce!() {}
+    );
 
-    ($p:r_type) <T> impl FnOnce(T) <= CFnOnce!()
+    ($p:r_type) <T> impl FnOnce(T) + Send + 'static <= CFnOnce!()
     {
         $out_no_type = move |x| {
             let _ = & $p;
@@ -1099,14 +1102,12 @@ foreign_typemap!(
 "#;
 );
 
-unsafe impl Send for CFnOnceCRustResultCRustForeignVecFooCRustString {}
-
 foreign_class!(class TestFuture {
-    fn call_fn(f: impl FnOnce(Foo)) {
+    fn call_fn(f: impl FnOnce(Foo) + Send + 'static) {
         f(Foo::new(-1, "from callback"));
     }
 
-    fn call_fn2(is_ok: bool, f: impl FnOnce(Result<Vec<Foo>, String>)) {
+    fn call_fn2(is_ok: bool, f: impl FnOnce(Result<Vec<Foo>, String>) + Send + 'static) {
         std::thread::spawn(move || {
         if is_ok {
             f(Ok(vec![Foo::new(-1, "from callback")]));

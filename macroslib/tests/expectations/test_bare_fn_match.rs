@@ -6,9 +6,17 @@ foreign_typemap!(
         struct CFnOnce!() {
             cb: Option<extern "C" fn(swig_i_type!(T, output), *mut ::std::os::raw::c_void)>,
             ctx: *mut ::std::os::raw::c_void,
-        });
+        }
+        // SAFETY: the callback context may be transferred to the callback thread.
+        unsafe impl Send for CFnOnce!() {}
+        impl Default for CFnOnce!() {
+            fn default() -> Self {
+                Self { cb: None, ctx: ::std::ptr::null_mut() }
+            }
+        }
+    );
 
-    ($p:r_type) <T> impl FnOnce(T) <= CFnOnce!()
+    ($p:r_type) <T> impl FnOnce(T) + Send + 'static <= CFnOnce!()
     {
         $out_no_type = |x| {
             swig_from_rust_to_i_type!(T, x, x);
@@ -32,10 +40,10 @@ foreign_typemap!(
 );
 
 foreigner_class!(class TestFuture {
-    fn call_fn(f: impl FnOnce(i32)) {
+    fn call_fn(f: impl FnOnce(i32) + Send + 'static) {
         f(5);
     }
-    fn call_fn2(f: impl FnOnce(Result<i32, String>)) {
+    fn call_fn2(f: impl FnOnce(Result<i32, String>) + Send + 'static) {
         f(5);
     }
 });
