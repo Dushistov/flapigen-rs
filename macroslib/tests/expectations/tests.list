@@ -1,5 +1,6 @@
 bool_in_out_interface
 bool_in_out
+basic_foreign_class
 circular_deps
 class_with_dummy_constructor
 cpp_code_cache

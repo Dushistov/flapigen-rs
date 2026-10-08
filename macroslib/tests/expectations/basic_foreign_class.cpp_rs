@@ -1,0 +1,91 @@
+@@expect {"file":"test.rs","kind":"item","name":"BasicBox_new","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn BasicBox_new(value: i32) -> *const ::std::os::raw::c_void {
+    let this: BasicBox = BasicBox::new(value);
+    let this: Box<BasicBox> = Box::new(this);
+    let this: *mut BasicBox = Box::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"BasicBox_delete","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn BasicBox_delete(this: *mut BasicBox) {
+    let this: Box<BasicBox> = unsafe { Box::from_raw(this) };
+    drop(this);
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"BasicBox_value","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn BasicBox_value(this: *mut BasicBox) -> i32 {
+    let this: &BasicBox = unsafe { this.as_mut().unwrap() };
+    let mut ret: i32 = BasicBox::value(this);
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"BasicRc_new","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn BasicRc_new(value: i32) -> *const ::std::os::raw::c_void {
+    let this: Rc<RefCell<BasicRc>> = BasicRc::new(value);
+    let this: *const RefCell<BasicRc> = Rc::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"BasicRc_delete","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn BasicRc_delete(this: *mut RefCell<BasicRc>) {
+    let this: Rc<RefCell<BasicRc>> = unsafe { Rc::from_raw(this) };
+    drop(this);
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"BasicRc_value","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn BasicRc_value(this: *mut RefCell<BasicRc>) -> i32 {
+    let this: &RefCell<BasicRc> = unsafe { this.as_mut().unwrap() };
+    let mut this: Ref<BasicRc> = this.borrow();
+    let mut this: &BasicRc = &this;
+    let mut ret: i32 = BasicRc::value(this);
+    ret
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"BasicArc_new","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn BasicArc_new(value: i32) -> *const ::std::os::raw::c_void {
+    let this: Arc<Mutex<BasicArc>> = BasicArc::new(value);
+    let this: *const Mutex<BasicArc> = Arc::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"BasicArc_delete","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn BasicArc_delete(this: *mut Mutex<BasicArc>) {
+    let this: Arc<Mutex<BasicArc>> = unsafe { Arc::from_raw(this) };
+    drop(this);
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"BasicArc_value","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn BasicArc_value(this: *mut Mutex<BasicArc>) -> i32 {
+    let this: &Mutex<BasicArc> = unsafe { this.as_mut().unwrap() };
+    let mut this: MutexGuard<BasicArc> = this.lock().unwrap();
+    let mut this: &BasicArc = &this;
+    let mut ret: i32 = BasicArc::value(this);
+    ret
+}
+@@end
