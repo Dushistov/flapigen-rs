@@ -1,0 +1,71 @@
+@@expect {"file":"test.rs","kind":"item","name":"DefaultOwned_default","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn DefaultOwned_default() -> *const ::std::os::raw::c_void {
+    let this: Box<DefaultOwned> = Box::<DefaultOwned>::default();
+    let this: *mut DefaultOwned = Box::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"ArcOwned_default","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn ArcOwned_default() -> *const ::std::os::raw::c_void {
+    let this: Arc<ArcOwned> = Arc::default();
+    let this: *const ArcOwned = Arc::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"RcOwned_default","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn RcOwned_default() -> *const ::std::os::raw::c_void {
+    let this: Rc<RcOwned> = Rc::default();
+    let this: *const RcOwned = Rc::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"CustomOwned_new","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn CustomOwned_new() -> *const ::std::os::raw::c_void {
+    let this: CustomOwned = CustomOwned::new();
+    let this: Box<CustomOwned> = Box::new(this);
+    let this: *mut CustomOwned = Box::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"FactoryOwned_default","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn FactoryOwned_default() -> *const ::std::os::raw::c_void {
+    let this: FactoryOwned = Factory::default();
+    let this: Box<FactoryOwned> = Box::new(this);
+    let this: *mut FactoryOwned = Box::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"ArcShorthand_default","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn ArcShorthand_default() -> *const ::std::os::raw::c_void {
+    let this: Arc<ArcShorthand> = ::std::sync::Arc::<ArcShorthand>::default();
+    let this: *const ArcShorthand = Arc::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"RcShorthand_default","form":"definition"}
+#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn RcShorthand_default() -> *const ::std::os::raw::c_void {
+    let this: Rc<RcShorthand> = ::std::rc::Rc::<RcShorthand>::default();
+    let this: *const RcShorthand = Rc::into_raw(this);
+    this as *const ::std::os::raw::c_void
+}
+@@end

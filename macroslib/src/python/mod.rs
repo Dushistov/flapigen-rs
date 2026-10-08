@@ -342,15 +342,23 @@ fn generate_method_code(
     } else {
         TokenStream::new()
     };
+    let default_call = class.self_desc.as_ref().and_then(|self_desc| {
+        method
+            .self_default_constructor_kind(&self_desc.self_type, &self_desc.constructor_ret_type)
+            .and_then(|kind| kind.smart_pointer_default_call(&self_desc.self_type))
+    });
+    let rust_call = default_call.unwrap_or_else(|| {
+        quote! {
+            #method_rust_path(#( #args_conversions ),*)
+        }
+    });
     let (return_type, rust_call_with_return_conversion) = generate_conversion_for_return(
         &conv_map
             .find_or_alloc_rust_type(&extract_return_type(&method.fn_decl.output), class.src_id),
         method.span(),
         class.src_id,
         conv_map,
-        quote! {
-            #method_rust_path(#( #args_conversions ),*)
-        },
+        rust_call,
     )?;
     let docstring = if !method_name.to_string().starts_with("__") {
         parse::<TokenStream>(

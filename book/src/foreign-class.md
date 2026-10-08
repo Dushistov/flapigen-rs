@@ -84,6 +84,10 @@ while you want to use snake case style in Rust.
 Constructors are Rust methods that mapped to constructors in terms of the "foreign" language.
 Also constructors, more precisely, the return type of constructors can be used to
 ask `flapigen` to simplify calls of methods, see the self_type section for more details.
+
+If you define constructor that uses `default` function, like `constructor Foo::default() -> Arc<Foo>;`,
+then we generate call to `Arc::<Foo>::default()`.
+
 Sometimes you need a constructor, but you don't want allow the user to construct objects,
 then you can use an empty constructor:
 

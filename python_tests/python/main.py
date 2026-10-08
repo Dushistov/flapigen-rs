@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from flapigen_test_python import TestStaticClass, TestEnum, TestClass, TestArc, TestArcMutex, TestBox, Error as TestError
+from flapigen_test_python import TestStaticClass, TestEnum, TestClass, TestArc, TestArcDefault, TestArcMutex, TestBox, Error as TestError
 
 def test_static_methods():
     assert TestStaticClass.hello() == "Hello from rust"
@@ -61,6 +61,9 @@ def test_arc():
     assert TestArc.to_string_arc(arc) == "0"
     assert TestArc.to_string_ref_arc(arc) == "0"
 
+def test_arc_default():
+    assert TestArcDefault().value() == 0
+
 def test_arc_mutex():
     arc = TestArcMutex()
     assert str(arc) == "0"
@@ -80,6 +83,7 @@ test_options()
 test_arrays()
 test_results()
 test_arc()
+test_arc_default()
 test_arc_mutex()
 test_box()
 
