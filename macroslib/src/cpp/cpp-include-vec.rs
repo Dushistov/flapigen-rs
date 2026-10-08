@@ -310,6 +310,7 @@ foreign_typemap!(
     generic_alias!(CForeignVecFree = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _free));
     generic_alias!(CForeignVecPush = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _push));
     generic_alias!(CForeignVecRemove = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _remove));
+    generic_alias!(CForeignVecCloneAt = swig_concat_idents!(RustForeignVec, swig_f_type!(T), _clone_at));
     generic_alias!(CIndirectSlice = swig_concat_idents!(CRustSliceForeignIndirect, swig_f_type!(T)));
     generic_alias!(CIndirectSliceAccess = swig_concat_idents!(swig_f_type!(T), Access));
 
@@ -359,6 +360,14 @@ foreign_typemap!(
             v.capacity = raw.capacity;
             elem
         }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn CForeignVecCloneAt!()(v: CForeignVec!(), idx: usize) -> *mut ::std::os::raw::c_void {
+            let slice: &[swig_subst_type!(T)] = unsafe {
+                (CRustSlice { data: v.data.cast(), len: v.len }).as_slice()
+            };
+            SwigForeignClass::box_object(slice[idx].clone())
+        }
     );
 
     foreign_code!(module = "CForeignVecModule!().h";
@@ -368,7 +377,7 @@ foreign_typemap!(
 #include "CIndirectSlice!().h"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
-using CForeignVecModule!() = RustVec<CForeignVec!(), internal::IndirectForeignVecPolicy<swig_f_type!(&[T], output), CIndirectSliceAccess!(), CForeignVec!(), CForeignVecNew!(), CForeignVecFree!(), CForeignVecPush!(), CForeignVecRemove!()>>;
+using CForeignVecModule!() = RustVec<CForeignVec!(), internal::IndirectForeignVecPolicy<swig_f_type!(&[T], output), CIndirectSliceAccess!(), CForeignVec!(), CForeignVecNew!(), CForeignVecFree!(), CForeignVecPush!(), CForeignVecRemove!(), CForeignVecCloneAt!()>>;
 }
 #endif
 "##);
