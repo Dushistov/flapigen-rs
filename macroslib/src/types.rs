@@ -347,6 +347,7 @@ pub(crate) struct ForeignInterface {
     pub(crate) name: Ident,
     pub(crate) generics: syn::Generics,
     pub(crate) self_type: syn::TypeTraitObject,
+    pub(crate) inherited_auto_traits: Vec<Ident>,
     pub(crate) doc_comments: Vec<String>,
     pub(crate) items: Vec<ForeignInterfaceMethod>,
 }

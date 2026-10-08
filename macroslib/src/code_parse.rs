@@ -748,6 +748,7 @@ impl Parse for ForeignInterfaceParser {
         braced!(item_parser in input);
 
         let mut self_type = None;
+        let mut inherited_auto_traits = Vec::new();
         let mut items = vec![];
 
         while !item_parser.is_empty() {
@@ -774,6 +775,23 @@ impl Parse for ForeignInterfaceParser {
                         }
                         Lifetime(_) => {}
                         _ => unimplemented!(),
+                    }
+                }
+                if item_parser.peek(Token![:]) {
+                    item_parser.parse::<Token![:]>()?;
+                    loop {
+                        let bound: Ident = item_parser.parse()?;
+                        if bound != "Send" && bound != "Sync" {
+                            return Err(syn::Error::new(
+                                bound.span(),
+                                "Supported only Send or Sync after `self_type ...:`",
+                            ));
+                        }
+                        inherited_auto_traits.push(bound);
+                        if !item_parser.peek(Token![+]) {
+                            break;
+                        }
+                        item_parser.parse::<Token![+]>()?;
                     }
                 }
                 self_type = Some(traits);
@@ -841,6 +859,7 @@ impl Parse for ForeignInterfaceParser {
             name: interface_name,
             generics,
             self_type,
+            inherited_auto_traits,
             doc_comments: interface_doc_comments,
             items,
         }))
@@ -1055,6 +1074,31 @@ mod tests {
         assert_eq!(
             "some_mod :: other_mod :: OnEvent + Send",
             f_interface.0.self_type.into_token_stream().to_string()
+        );
+    }
+
+    #[test]
+    fn test_parse_foreign_callback_inherited_auto_traits() {
+        let mac: syn::Macro = parse_quote! {
+            foreign_callback!(callback Completion<T> {
+                self_type AsyncCallbacks<T>: Send + Sync;
+                onResultReady = AsyncCallbacks::on_result_ready(self, result: T);
+            })
+        };
+        let f_interface: ForeignInterfaceParser = test_parse(mac.tokens);
+        assert_eq!(
+            "AsyncCallbacks < T >",
+            f_interface.0.self_type.into_token_stream().to_string()
+        );
+        assert_eq!(
+            ["Send", "Sync"],
+            f_interface
+                .0
+                .inherited_auto_traits
+                .iter()
+                .map(Ident::to_string)
+                .collect::<Vec<_>>()
+                .as_slice()
         );
     }
 

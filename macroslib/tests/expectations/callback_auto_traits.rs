@@ -20,7 +20,7 @@ foreign_callback!(callback LocalCallback {
 });
 
 foreign_callback!(callback SendCallback {
-    self_type SendEvent + Send;
+    self_type SendEvent: Send;
     onEvent = SendEvent::on_event(&self);
 });
 
@@ -30,6 +30,6 @@ foreign_callback!(callback SyncCallback {
 });
 
 foreign_callback!(callback BothCallback {
-    self_type BothEvent + Sync + Send;
+    self_type BothEvent: Sync + Send;
     onEvent = BothEvent::on_event(&self);
 });

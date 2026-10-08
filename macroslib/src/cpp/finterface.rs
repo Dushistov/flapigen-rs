@@ -365,9 +365,13 @@ pub struct {struct_with_funcs} {{
 
     let mut auto_trait_impls = String::new();
     for trait_name in ["Send", "Sync"] {
-        let requested = interface.self_type.bounds.iter().skip(1).any(|bound| {
-            matches!(bound, syn::TypeParamBound::Trait(trait_bound) if trait_bound.path.is_ident(trait_name))
-        });
+        let requested = interface
+            .inherited_auto_traits
+            .iter()
+            .any(|bound| bound == trait_name)
+            || interface.self_type.bounds.iter().skip(1).any(|bound| {
+                matches!(bound, syn::TypeParamBound::Trait(trait_bound) if trait_bound.path.is_ident(trait_name))
+            });
         if requested {
             let action = match trait_name {
                 "Send" => "moving the opaque callback between threads",
