@@ -26,7 +26,10 @@ use crate::{
         },
         ForeignTypeInfo, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
-    types::{ForeignClassInfo, ForeignMethod, MethodAccess, MethodVariant, SelfTypeVariant},
+    types::{
+        ForeignClassInfo, ForeignMethod, MethodAccess, MethodVariant, SelfDefaultConstructorKind,
+        SelfTypeVariant,
+    },
     JavaConfig, JavaReachabilityFence, CLONE_TRAIT, COPY_TRAIT, SMART_PTR_COPY_TRAIT,
     WRITE_TO_MEM_FAILED_MSG,
 };
@@ -910,6 +913,34 @@ fn generate_constructor(
     )?;
     ctx.rust_code.append(&mut deps_this);
     let empty_box_this = TokenStream::new();
+    let self_type = mc.class.self_type_as_ty();
+    let default_kind = mc
+        .method
+        .self_default_constructor_kind(&self_type, &construct_ret_type.ty);
+    let use_box_default = !return_result && default_kind == Some(SelfDefaultConstructorKind::Bare);
+    let (call, real_output_typename, convert_this, box_this) = if use_box_default {
+        let ty = &construct_ret_type;
+        (
+            format!("Box::<{ty}>::default()"),
+            format!("Box<{ty}>"),
+            String::new(),
+            format!("let this: *mut {ty} = Box::into_raw(this);"),
+        )
+    } else {
+        (
+            default_kind
+                .and_then(|kind| kind.smart_pointer_default_call(&self_type))
+                .map(|call| call.to_string())
+                .unwrap_or_else(|| mc.method.generate_code_to_call_rust_func()),
+            mc.real_output_typename.to_owned(),
+            convert_this,
+            if return_result {
+                empty_box_this.to_string()
+            } else {
+                code_box_this.to_string()
+            },
+        )
+    };
     let code = format!(
         r#"
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
@@ -923,16 +954,7 @@ pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> 
 }}
 "#,
         func_name = mc.jni_func_name,
-        convert_this = convert_this,
         decl_func_args = mc.decl_func_args,
-        convert_input_code = convert_input_code,
-        box_this = if return_result {
-            &empty_box_this
-        } else {
-            code_box_this
-        },
-        real_output_typename = mc.real_output_typename,
-        call = mc.method.generate_code_to_call_rust_func(),
     );
 
     ctx.rust_code.push(

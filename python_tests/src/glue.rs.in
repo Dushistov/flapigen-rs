@@ -208,6 +208,25 @@ foreign_class!(
     }
 );
 
+#[derive(Default)]
+pub struct TestArcDefault {
+    value: i32,
+}
+
+impl TestArcDefault {
+    pub fn value(&self) -> i32 {
+        self.value
+    }
+}
+
+foreign_class!(
+    class TestArcDefault {
+        self_type TestArcDefault;
+        constructor TestArcDefault::default() -> Arc<TestArcDefault>;
+        fn TestArcDefault::value(&self) -> i32;
+    }
+);
+
 pub struct TestArcMutex {
     i: i32,
 }

@@ -85,3 +85,4 @@ direct_foreign_slices
 indirect_foreign_slices
 indirect_foreign_vec
 nested_foreign_vec
+default_constructor_allocation

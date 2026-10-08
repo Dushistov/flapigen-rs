@@ -6,7 +6,7 @@ use syn::{parse_quote, spanned::Spanned, Type};
 use crate::{
     error::{DiagnosticError, Result, SourceIdSpan},
     source_registry::SourceId,
-    typemap::ast::DisplayToTokens,
+    typemap::ast::{check_if_smart_pointer_return_inner_type, normalize_type, DisplayToTokens},
     SMART_PTR_COPY_TRAIT,
 };
 
@@ -135,6 +135,23 @@ pub(crate) struct FnDecl {
     pub(crate) output: syn::ReturnType,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SelfDefaultConstructorKind {
+    Bare,
+    Arc,
+    Rc,
+}
+
+impl SelfDefaultConstructorKind {
+    pub(crate) fn smart_pointer_default_call(self, self_type: &Type) -> Option<TokenStream> {
+        match self {
+            Self::Bare => None,
+            Self::Arc => Some(quote!(::std::sync::Arc::<#self_type>::default())),
+            Self::Rc => Some(quote!(::std::rc::Rc::<#self_type>::default())),
+        }
+    }
+}
+
 impl ForeignMethod {
     pub(crate) fn short_name(&self) -> String {
         if let Some(ref name) = self.name_alias {
@@ -153,6 +170,61 @@ impl ForeignMethod {
 
     pub(crate) fn is_dummy_constructor(&self) -> bool {
         self.rust_id.segments.is_empty()
+    }
+
+    pub(crate) fn self_default_constructor_kind(
+        &self,
+        self_type: &Type,
+        constructor_return_type: &Type,
+    ) -> Option<SelfDefaultConstructorKind> {
+        if self.variant != MethodVariant::Constructor
+            || self.inline_block.is_some()
+            || !self.fn_decl.inputs.is_empty()
+        {
+            return None;
+        }
+
+        let Type::Path(self_type_path) = self_type else {
+            return None;
+        };
+        if self_type_path.qself.is_some()
+            || self_type_path.path.leading_colon.is_some() != self.rust_id.leading_colon.is_some()
+            || self.rust_id.segments.len() != self_type_path.path.segments.len() + 1
+            || !self.rust_id.segments.last().is_some_and(|segment| {
+                segment.ident == "default" && matches!(segment.arguments, syn::PathArguments::None)
+            })
+        {
+            return None;
+        }
+
+        let calls_self_default = self_type_path
+            .path
+            .segments
+            .iter()
+            .zip(self.rust_id.segments.iter())
+            .all(|(self_segment, constructor_segment)| {
+                self_segment.ident == constructor_segment.ident
+                    && matches!(self_segment.arguments, syn::PathArguments::None)
+                    && matches!(constructor_segment.arguments, syn::PathArguments::None)
+            });
+        if !calls_self_default {
+            return None;
+        }
+
+        if normalize_type(self_type) == normalize_type(constructor_return_type) {
+            return Some(SelfDefaultConstructorKind::Bare);
+        }
+        for (pointer_name, kind) in [
+            ("Arc", SelfDefaultConstructorKind::Arc),
+            ("Rc", SelfDefaultConstructorKind::Rc),
+        ] {
+            if check_if_smart_pointer_return_inner_type(constructor_return_type, pointer_name)
+                .is_some_and(|inner| normalize_type(&inner) == normalize_type(self_type))
+            {
+                return Some(kind);
+            }
+        }
+        None
     }
 
     pub(crate) fn arg_names_without_self(&self) -> impl Iterator<Item = &str> {
