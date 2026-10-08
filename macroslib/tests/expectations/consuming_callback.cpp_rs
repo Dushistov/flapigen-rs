@@ -25,12 +25,14 @@ impl Drop for C_Completion {
 
 @@end
 
-@@expect {"file":"test.rs","kind":"between","before":"#[repr(C)]\n#[derive(Clone)]\n#[allow(non_snake_case)]\n","after":"#[doc = \" It totally depends on С++ implementation\"]"}
+@@expect {"file":"test.rs","kind":"between","before":"#[repr(C)]\n#[derive(Clone)]\n#[allow(non_snake_case)]\n","after":"impl AsyncCallbacks for C_Completion {"}
 pub struct C_Completion {
     opaque: *const ::std::os::raw::c_void,
     C_Completion_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
     isCancelled: extern "C" fn(_: *const ::std::os::raw::c_void) -> ::std::os::raw::c_char,
     onResultReady: extern "C" fn(a0: i32, _: *const ::std::os::raw::c_void) -> (),
 }
+#[doc = " SAFETY: `self_type` requires `Send`; safety of moving the opaque callback between threads depends entirely on the C++ implementation."]
+unsafe impl Send for C_Completion {}
 
 @@end

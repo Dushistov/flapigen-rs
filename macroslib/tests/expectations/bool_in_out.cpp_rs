@@ -31,7 +31,7 @@ pub extern "C" fn Foo_f2(a0: ::std::os::raw::c_char) -> ::std::os::raw::c_char {
 
 @@end
 
-@@expect {"after":"\n}\n#[doc = \"","before":"C_SomeObserver_deref: extern \"C\" fn(_: *const ::std::os::raw::c_void),\n    ","file":"test.rs","kind":"between"}
+@@expect {"after":"\n}\nimpl SomeTrait for C_SomeObserver {","before":"C_SomeObserver_deref: extern \"C\" fn(_: *const ::std::os::raw::c_void),\n    ","file":"test.rs","kind":"between"}
 onStateChanged1:
         extern "C" fn(a0: i32, a1: ::std::os::raw::c_char, _: *const ::std::os::raw::c_void) -> (),
 @@end

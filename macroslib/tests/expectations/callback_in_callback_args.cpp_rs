@@ -1,4 +1,4 @@
-@@expect {"after":"\n#[doc = \" I","before":"(self.C_Foo_deref)(self.opaque);\n    }\n}\n","file":"test.rs","kind":"between"}
+@@expect {"after":"impl Boo for C_Boo {","before":"impl Drop for C_Foo {\n    fn drop(&mut self) {\n        (self.C_Foo_deref)(self.opaque);\n    }\n}\n","file":"test.rs","kind":"between"}
 #[repr(C)]
 #[derive(Clone)]
 #[allow(non_snake_case)]
@@ -8,9 +8,10 @@ pub struct C_Boo {
     g: extern "C" fn(a0: *const C_Foo, _: *const ::std::os::raw::c_void) -> (),
     h: extern "C" fn(a0: *mut C_Foo, _: *const ::std::os::raw::c_void) -> (),
 }
+
 @@end
 
-@@expect {"after":"\nimpl Drop f","before":"unsafe impl Send for C_Boo {}\n","file":"test.rs","kind":"between"}
+@@expect {"file":"test.rs","kind":"item","name":"impl Boo for C_Boo","form":"definition"}
 impl Boo for C_Boo {
     #[allow(unused_mut)]
     fn g(&self, a0: &C_Foo) -> () {

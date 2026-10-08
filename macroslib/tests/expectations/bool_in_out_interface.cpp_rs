@@ -3,7 +3,7 @@ onStateChanged1:
         extern "C" fn(a0: i32, a1: ::std::os::raw::c_char, _: *const ::std::os::raw::c_void) -> (),
 @@end
 
-@@expect {"after":"\n}\n#[doc = \"","before":"extern \"C\" fn(a0: i32, a1: ::std::os::raw::c_char, _: *const ::std::os::raw::c_void) -> (),\n    ","file":"test.rs","kind":"between"}
+@@expect {"after":"\n}\nimpl SomeTrait for C_SomeObserver {","before":"extern \"C\" fn(a0: i32, a1: ::std::os::raw::c_char, _: *const ::std::os::raw::c_void) -> (),\n    ","file":"test.rs","kind":"between"}
 onStateChanged2: extern "C" fn(
         a0: ::std::os::raw::c_char,
         a1: f64,

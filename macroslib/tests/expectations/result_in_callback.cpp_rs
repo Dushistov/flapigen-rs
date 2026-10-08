@@ -1,4 +1,4 @@
-@@expect {"after":"\nimpl Drop f","before":"unsafe impl Send for C_Foo {}\n","file":"test.rs","kind":"between"}
+@@expect {"file":"test.rs","kind":"item","name":"impl Foo for C_Foo","form":"definition"}
 impl Foo for C_Foo {
     #[allow(unused_mut)]
     fn unpack(&self, a0: &str) -> Result<String, Error> {

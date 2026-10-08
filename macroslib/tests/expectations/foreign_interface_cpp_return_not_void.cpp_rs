@@ -1,4 +1,4 @@
-@@expect {"after":"#[doc = \" It totally depends on С++ impl","before":"#[derive(Clone)]\n#[allow(non_snake_case)]\n","file":"test.rs","kind":"between"}
+@@expect {"after":"impl SomeTrait for C_SomeObserver {","before":"#[derive(Clone)]\n#[allow(non_snake_case)]\n","file":"test.rs","kind":"between"}
 pub struct C_SomeObserver {
     opaque: *const ::std::os::raw::c_void,
     C_SomeObserver_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
