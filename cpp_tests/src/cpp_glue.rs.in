@@ -1124,7 +1124,7 @@ trait AsyncCallbacks<T>: Send {
 }
 
 foreign_callback!(callback CancelableCallback<T> {
-    self_type AsyncCallbacks<T> + Send;
+    self_type AsyncCallbacks<T>: Send;
     isCancelled = AsyncCallbacks::is_cancelled(&self) -> bool;
     onResultReady = AsyncCallbacks::on_result_ready(self, result: T);
 });
@@ -1221,6 +1221,21 @@ foreign_class!(class TestMultiThreadCallback {
         std::thread::spawn(move || {
             cb.something_change_in_other_thread(42, "15".into());
         });
+    }
+});
+
+trait SyncOnlyEvent {
+    fn value(&self) -> i32;
+}
+
+foreign_callback!(callback SyncOnlyObserver {
+    self_type SyncOnlyEvent + Sync;
+    value = SyncOnlyEvent::value(&self) -> i32;
+});
+
+foreign_class!(class TestSyncOnlyCallback {
+    fn read(cb: Box<dyn SyncOnlyEvent + Sync>) -> i32 {
+        cb.value()
     }
 });
 

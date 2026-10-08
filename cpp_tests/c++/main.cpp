@@ -49,6 +49,7 @@
 #include "rust_interface/CancelableCallbacki32.hpp"
 #include "rust_interface/ThreadSafeObserver.hpp"
 #include "rust_interface/TestMultiThreadCallback.hpp"
+#include "rust_interface/TestSyncOnlyCallback.hpp"
 #include "rust_interface/Session.hpp"
 #include "rust_interface/FooRc.hpp"
 #include "rust_interface/VecOnlyArc.hpp"
@@ -1495,6 +1496,19 @@ TEST(TestMultiThreadCallback, smokeTest)
     EXPECT_TRUE(state->called);
     EXPECT_EQ(42, state->x);
     EXPECT_EQ("15", state->s.to_std_string());
+}
+
+namespace {
+class SyncOnlyObserverImpl final : public SyncOnlyObserver {
+public:
+    int32_t value() const noexcept override { return 42; }
+};
+} // namespace
+
+TEST(CallbackAutoTraits, explicitSyncBound)
+{
+    std::unique_ptr<SyncOnlyObserver> callback{ new SyncOnlyObserverImpl };
+    EXPECT_EQ(42, TestSyncOnlyCallback::read(std::move(callback)));
 }
 
 TEST(SmartPtrCopy, smokeTest)
