@@ -218,8 +218,6 @@ impl Foo {
 }</code></pre>
 <p>Described as class:</p>
 <pre><code class="language-rust no_run noplaypen">// src/cpp_glue.rs.in
-use super::{f2, Foo};
-
 foreign_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -&gt; Foo;
@@ -231,6 +229,73 @@ foreign_class!(class Foo {
 <pre><code class="language-c++ no_run noplaypen">// main.cpp
     Foo foo(5);
     int res = foo.f(1, 2);
+</code></pre>
+<h2 id="borrowed-foreign-classes"><a class="header" href="#borrowed-foreign-classes">Borrowed foreign classes</a></h2>
+<p>For a regular <code>foreign_class!</code>, Rust <code>&amp;Foo</code> arguments and return values use
+<code>FooRef</code> by value in C++. A <code>Foo</code> or <code>const Foo&amp;</code> converts implicitly to
+<code>FooRef</code>, so either an owning object or an existing borrowed view can be passed
+to a generated method. For example, the <a href="https://github.com/Dushistov/flapigen-rs/blob/master/cpp_tests/c%2B%2B/main.cpp">C++ test fixture</a>
+uses <code>TestReferences</code> and <code>Foo</code>:</p>
+<pre><code class="language-cpp">TestReferences source{1, "source"};
+TestReferences target{2, "target"};
+FooRef view = source.get_foo_ref();
+target.update_foo(view);
+const Foo owned{3, "owned"};
+target.update_foo(owned);
+</code></pre>
+<p>Copying a <code>FooRef</code> copies only its pointer. Keep the Rust object alive while
+using the view. Rust <code>&amp;mut Foo</code> arguments still take <code>Foo&amp;</code> in C++; a returned
+<code>&amp;mut Foo</code> currently becomes a read-only <code>FooRef</code>.</p>
+<h2 id="a-plain-c-class"><a class="header" href="#a-plain-c-class">A plain C++ class</a></h2>
+<p>By default, flapigen generates two C++ variants for a <code>foreign_class!</code>: an
+owning class and a non-owning reference class. If you don't want to deal with two variants and
+the need to convert one into the other in various cases, <code>#[derive(PlainClass)]</code> generates just
+one C++ class. By default, returning a Rust reference to that type
+(<code>&amp;ScoreAdjustment</code> or <code>&amp;mut ScoreAdjustment</code>) gives a compile error because
+there is no C++ reference wrapper. Return an owned value instead, or define an
+explicit outgoing <code>foreign_typemap!</code> for a custom borrowed C++ view. The C++
+caller must keep the Rust referent alive while using such a view. The single
+class can also be forward-declared as
+<code>class ScoreAdjustment;</code> in a handwritten C++ header.</p>
+<p>The Rust type and its binding are:</p>
+<pre><code class="language-rust no_run noplaypen">pub struct ScoreAdjustment {
+    bonus: i32,
+}
+
+impl ScoreAdjustment {
+    fn new(bonus: i32) -&gt; Self {
+        Self { bonus }
+    }
+
+    fn apply(&amp;self, base: i32) -&gt; i32 {
+        base + self.bonus
+    }
+}</code></pre>
+<pre><code class="language-rust no_run noplaypen">foreign_class!(
+    #[derive(PlainClass)]
+    class ScoreAdjustment {
+        self_type ScoreAdjustment;
+        constructor ScoreAdjustment::new(bonus: i32) -&gt; ScoreAdjustment;
+        fn ScoreAdjustment::apply(&amp;self, base: i32) -&gt; i32;
+    }
+);</code></pre>
+<p>The C++ helper header can now declare a function using the generated class:</p>
+<pre><code class="language-cpp no_run noplaypen">namespace rust { class ScoreAdjustment; }
+
+int adjusted_score(const rust::ScoreAdjustment&amp; adjustment, int base);
+</code></pre>
+<p>The C++ implementation includes <code>ScoreAdjustment.hpp</code> before calling its
+method:</p>
+<pre><code class="language-cpp no_run noplaypen">int adjusted_score(const ScoreAdjustment&amp; adjustment, int base)
+{
+    return adjustment.apply(base);
+}
+</code></pre>
+<p>The executable uses the helper like this:</p>
+<pre><code class="language-cpp no_run noplaypen">    ScoreAdjustment adjustment(3);
+    if (adjusted_score(adjustment, 5) != 8) {
+        return EXIT_FAILURE;
+    }
 </code></pre>
 
                     </main>

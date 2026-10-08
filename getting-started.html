@@ -225,15 +225,41 @@ Rust file:</p>
 <p>You can find a detailed description of code generation in the <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">suitable Cargo book section</a>.</p>
 <p>Then you should create a file for the "foreign" language API description.
 For example:</p>
-<pre><code class="language-rust no_run noplaypen">use super::{f2, Foo};
+<pre><code class="language-rust no_run noplaypen">use super::{f2, Foo, ScoreAdjustment, SharedCounter};
+use std::{cell::{Ref, RefCell, RefMut}, rc::Rc};
 
+// ANCHOR: basic_cpp_class
 foreign_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -&gt; Foo;
     fn Foo::set_field(&amp;mut self, _: i32);
     fn Foo::f(&amp;self, _: i32, _: i32) -&gt; i32;
     fn f2(_: i32) -&gt; i32;
-});</code></pre>
+});
+// ANCHOR_END: basic_cpp_class
+
+// ANCHOR: smart_ptr_copy_cpp_binding
+foreign_class!(
+    #[derive(SmartPtrCopy)]
+    class SharedCounter {
+        self_type SharedCounter;
+        constructor SharedCounter::new() -&gt; Rc&lt;RefCell&lt;SharedCounter&gt;&gt;;
+        fn SharedCounter::increment(&amp;mut self);
+        fn SharedCounter::value(&amp;self) -&gt; i32;
+    }
+);
+// ANCHOR_END: smart_ptr_copy_cpp_binding
+
+// ANCHOR: plain_class_binding
+foreign_class!(
+    #[derive(PlainClass)]
+    class ScoreAdjustment {
+        self_type ScoreAdjustment;
+        constructor ScoreAdjustment::new(bonus: i32) -&gt; ScoreAdjustment;
+        fn ScoreAdjustment::apply(&amp;self, base: i32) -&gt; i32;
+    }
+);
+// ANCHOR_END: plain_class_binding</code></pre>
 <p>And connect the generated code with your crate exactly how as in the <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">Cargo book</a> :</p>
 <pre><code class="language-rust no_run noplaypen">// src/lib.rs
 mod cpp_glue;

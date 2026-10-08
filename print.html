@@ -237,15 +237,41 @@ Rust file:</p>
 <p>You can find a detailed description of code generation in the <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">suitable Cargo book section</a>.</p>
 <p>Then you should create a file for the "foreign" language API description.
 For example:</p>
-<pre><code class="language-rust no_run noplaypen">use super::{f2, Foo};
+<pre><code class="language-rust no_run noplaypen">use super::{f2, Foo, ScoreAdjustment, SharedCounter};
+use std::{cell::{Ref, RefCell, RefMut}, rc::Rc};
 
+// ANCHOR: basic_cpp_class
 foreign_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -&gt; Foo;
     fn Foo::set_field(&amp;mut self, _: i32);
     fn Foo::f(&amp;self, _: i32, _: i32) -&gt; i32;
     fn f2(_: i32) -&gt; i32;
-});</code></pre>
+});
+// ANCHOR_END: basic_cpp_class
+
+// ANCHOR: smart_ptr_copy_cpp_binding
+foreign_class!(
+    #[derive(SmartPtrCopy)]
+    class SharedCounter {
+        self_type SharedCounter;
+        constructor SharedCounter::new() -&gt; Rc&lt;RefCell&lt;SharedCounter&gt;&gt;;
+        fn SharedCounter::increment(&amp;mut self);
+        fn SharedCounter::value(&amp;self) -&gt; i32;
+    }
+);
+// ANCHOR_END: smart_ptr_copy_cpp_binding
+
+// ANCHOR: plain_class_binding
+foreign_class!(
+    #[derive(PlainClass)]
+    class ScoreAdjustment {
+        self_type ScoreAdjustment;
+        constructor ScoreAdjustment::new(bonus: i32) -&gt; ScoreAdjustment;
+        fn ScoreAdjustment::apply(&amp;self, base: i32) -&gt; i32;
+    }
+);
+// ANCHOR_END: plain_class_binding</code></pre>
 <p>And connect the generated code with your crate exactly how as in the <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html#case-study-code-generation">Cargo book</a> :</p>
 <pre><code class="language-rust no_run noplaypen">// src/lib.rs
 mod cpp_glue;
@@ -298,8 +324,6 @@ impl Foo {
 }</code></pre>
 <p>Described as class:</p>
 <pre><code class="language-rust no_run noplaypen">// src/cpp_glue.rs.in
-use super::{f2, Foo};
-
 foreign_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -&gt; Foo;
@@ -311,6 +335,73 @@ foreign_class!(class Foo {
 <pre><code class="language-c++ no_run noplaypen">// main.cpp
     Foo foo(5);
     int res = foo.f(1, 2);
+</code></pre>
+<h2 id="borrowed-foreign-classes"><a class="header" href="#borrowed-foreign-classes">Borrowed foreign classes</a></h2>
+<p>For a regular <code>foreign_class!</code>, Rust <code>&amp;Foo</code> arguments and return values use
+<code>FooRef</code> by value in C++. A <code>Foo</code> or <code>const Foo&amp;</code> converts implicitly to
+<code>FooRef</code>, so either an owning object or an existing borrowed view can be passed
+to a generated method. For example, the <a href="https://github.com/Dushistov/flapigen-rs/blob/master/cpp_tests/c%2B%2B/main.cpp">C++ test fixture</a>
+uses <code>TestReferences</code> and <code>Foo</code>:</p>
+<pre><code class="language-cpp">TestReferences source{1, "source"};
+TestReferences target{2, "target"};
+FooRef view = source.get_foo_ref();
+target.update_foo(view);
+const Foo owned{3, "owned"};
+target.update_foo(owned);
+</code></pre>
+<p>Copying a <code>FooRef</code> copies only its pointer. Keep the Rust object alive while
+using the view. Rust <code>&amp;mut Foo</code> arguments still take <code>Foo&amp;</code> in C++; a returned
+<code>&amp;mut Foo</code> currently becomes a read-only <code>FooRef</code>.</p>
+<h2 id="a-plain-c-class"><a class="header" href="#a-plain-c-class">A plain C++ class</a></h2>
+<p>By default, flapigen generates two C++ variants for a <code>foreign_class!</code>: an
+owning class and a non-owning reference class. If you don't want to deal with two variants and
+the need to convert one into the other in various cases, <code>#[derive(PlainClass)]</code> generates just
+one C++ class. By default, returning a Rust reference to that type
+(<code>&amp;ScoreAdjustment</code> or <code>&amp;mut ScoreAdjustment</code>) gives a compile error because
+there is no C++ reference wrapper. Return an owned value instead, or define an
+explicit outgoing <code>foreign_typemap!</code> for a custom borrowed C++ view. The C++
+caller must keep the Rust referent alive while using such a view. The single
+class can also be forward-declared as
+<code>class ScoreAdjustment;</code> in a handwritten C++ header.</p>
+<p>The Rust type and its binding are:</p>
+<pre><code class="language-rust no_run noplaypen">pub struct ScoreAdjustment {
+    bonus: i32,
+}
+
+impl ScoreAdjustment {
+    fn new(bonus: i32) -&gt; Self {
+        Self { bonus }
+    }
+
+    fn apply(&amp;self, base: i32) -&gt; i32 {
+        base + self.bonus
+    }
+}</code></pre>
+<pre><code class="language-rust no_run noplaypen">foreign_class!(
+    #[derive(PlainClass)]
+    class ScoreAdjustment {
+        self_type ScoreAdjustment;
+        constructor ScoreAdjustment::new(bonus: i32) -&gt; ScoreAdjustment;
+        fn ScoreAdjustment::apply(&amp;self, base: i32) -&gt; i32;
+    }
+);</code></pre>
+<p>The C++ helper header can now declare a function using the generated class:</p>
+<pre><code class="language-cpp no_run noplaypen">namespace rust { class ScoreAdjustment; }
+
+int adjusted_score(const rust::ScoreAdjustment&amp; adjustment, int base);
+</code></pre>
+<p>The C++ implementation includes <code>ScoreAdjustment.hpp</code> before calling its
+method:</p>
+<pre><code class="language-cpp no_run noplaypen">int adjusted_score(const ScoreAdjustment&amp; adjustment, int base)
+{
+    return adjustment.apply(base);
+}
+</code></pre>
+<p>The executable uses the helper like this:</p>
+<pre><code class="language-cpp no_run noplaypen">    ScoreAdjustment adjustment(3);
+    if (adjusted_score(adjustment, 5) != 8) {
+        return EXIT_FAILURE;
+    }
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="javaandroid"><a class="header" href="#javaandroid">Java/Android</a></h1>
 <p><a href="https://github.com/Dushistov/flapigen-rs/tree/master/android-example">This example</a> shows off how to use rust to build a native library from Android
@@ -342,7 +433,7 @@ struct Session {
 }
 
 impl Session {
-    pub fn new() -&gt; Session {
+    pub fn new() -&gt; Arc&lt;Mutex&lt;Session&gt;&gt; {
         #[cfg(target_os = "android")]
         android_logger::init_once(
             android_logger::Config::default()
@@ -351,11 +442,15 @@ impl Session {
         );
         log_panics::init(); // log panics rather than printing them
         info!("init log system - done");
-        Session { a: 2 }
+        Arc::new(Mutex::new(Session { a: 2 }))
     }
 
     pub fn add_and1(&amp;self, val: i32) -&gt; i32 {
         self.a + val + 1
+    }
+
+    pub fn set_base(&amp;mut self, base: i32) {
+        self.a = base;
     }
 
     // Greeting with full, no-runtime-cost support for newlines and UTF-8
@@ -365,11 +460,18 @@ impl Session {
 }</code></pre>
 <p>And the file <code>src/java_glue.rs.in</code> contains descriptions for flapigen to export this API to Java:</p>
 <pre><code class="language-rust no_run noplaypen">// src/java_glue.rs.in
-foreign_class!(class Session {
+foreign_class!(#[derive(SmartPtrCopy)] class Session {
     self_type Session;
-    constructor Session::new() -&gt; Session;
+    constructor Session::new() -&gt; Arc&lt;Mutex&lt;Session&gt;&gt;;
     fn Session::add_and1(&amp;self, val: i32) -&gt; i32;
+    fn Session::set_base(&amp;mut self, base: i32);
     fn Session::greet(to: &amp;str) -&gt; String;
+});
+
+foreign_class!(class SessionStore {
+    self_type SessionStore;
+    constructor SessionStore::new(session: Arc&lt;Mutex&lt;Session&gt;&gt;) -&gt; SessionStore;
+    fn SessionStore::saved_base(&amp;self) -&gt; i32;
 });</code></pre>
 <p>Then the <code>app/build.gradle</code> contains rules to invoke <code>cargo</code> to build a shared library from Rust code,
 and then build it into apk:</p>
@@ -465,9 +567,7 @@ And of course it is possible to extend or rewrite existing type conversions rule
 <div style="break-before: page; page-break-before: always;"></div><h1 id="foreign_class"><a class="header" href="#foreign_class">foreign_class!</a></h1>
 <p><code>foreign_class!</code> is the way to describe an entity that will be visible for the "foreign language" as a class.</p>
 <p>The basic example is:</p>
-<pre><code class="language-rust no_run noplaypen">use super::{f2, Foo};
-
-foreign_class!(class Foo {
+<pre><code class="language-rust no_run noplaypen">foreign_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -&gt; Foo;
     fn Foo::set_field(&amp;mut self, _: i32);
@@ -586,8 +686,10 @@ while you want to use snake case style in Rust.</p>
 <h2 id="constructors"><a class="header" href="#constructors">Constructors</a></h2>
 <p>Constructors are Rust methods that mapped to constructors in terms of the "foreign" language.
 Also constructors, more precisely, the return type of constructors can be used to
-ask <code>flapigen</code> to simplify calls of methods, see the self_type section for more details.
-Sometimes you need a constructor, but you don't want allow the user to construct objects,
+ask <code>flapigen</code> to simplify calls of methods, see the self_type section for more details.</p>
+<p>If you define constructor that uses <code>default</code> function, like <code>constructor Foo::default() -&gt; Arc&lt;Foo&gt;;</code>,
+then we generate call to <code>Arc::&lt;Foo&gt;::default()</code>.</p>
+<p>Sometimes you need a constructor, but you don't want allow the user to construct objects,
 then you can use an empty constructor:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(
     class GamepadId {
@@ -641,6 +743,92 @@ class Foo {
 For example, you can use <code>Clone,Copy</code> to force the generation of a copy constructor
 and <code>operator=</code> in C++ case.
 You can also use <code>camelCaseAliases</code> to change names of all methods to camel case.</p>
+<h3 id="smartptrcopy"><a class="header" href="#smartptrcopy"><code>SmartPtrCopy</code></a></h3>
+<p>You can use <code>#[derive(SmartPtrCopy)]</code> when a foreign class's constructor returns
+<code>Rc&lt;...&gt;</code> or <code>Arc&lt;...&gt;</code>. Flapigen clones the smart pointer when another owner
+needs the value; it does not clone the Rust object inside it.</p>
+<p>In C++, it generates a copy constructor and copy assignment operator. The
+<a href="./cpp-example.html">C++ example</a> has a counter backed by <code>Rc&lt;RefCell&lt;_&gt;&gt;</code>:</p>
+<pre><code class="language-rust no_run noplaypen">pub struct SharedCounter {
+    value: i32,
+}
+
+impl SharedCounter {
+    fn new() -&gt; std::rc::Rc&lt;std::cell::RefCell&lt;Self&gt;&gt; {
+        std::rc::Rc::new(std::cell::RefCell::new(Self { value: 0 }))
+    }
+
+    fn increment(&amp;mut self) {
+        self.value += 1;
+    }
+
+    fn value(&amp;self) -&gt; i32 {
+        self.value
+    }
+}</code></pre>
+<pre><code class="language-rust no_run noplaypen">foreign_class!(
+    #[derive(SmartPtrCopy)]
+    class SharedCounter {
+        self_type SharedCounter;
+        constructor SharedCounter::new() -&gt; Rc&lt;RefCell&lt;SharedCounter&gt;&gt;;
+        fn SharedCounter::increment(&amp;mut self);
+        fn SharedCounter::value(&amp;self) -&gt; i32;
+    }
+);</code></pre>
+<pre><code class="language-cpp no_run noplaypen">    SharedCounter counter;
+    SharedCounter second_handle = counter; // clones Rc, not SharedCounter
+    second_handle.increment();
+    SharedCounter assigned;
+    assigned = counter;
+    assigned.increment();
+    if (counter.value() != 2 || second_handle.value() != 2) {
+        return EXIT_FAILURE;
+    }
+</code></pre>
+<p><code>counter</code>, <code>second_handle</code>, and <code>assigned</code> are three C++ handles to the same
+Rust counter. Incrementing through either copy changes the value read through
+<code>counter</code>.</p>
+<p>In Java, passing a wrapper by value to Rust clones its smart pointer, so the
+Java wrapper remains usable and Rust can retain the shared value. The
+<a href="./java-android-example.html">Android example</a> stores an <code>Arc&lt;Mutex&lt;Session&gt;&gt;</code> in
+another Rust object:</p>
+<pre><code class="language-rust no_run noplaypen">struct SessionStore {
+    session: Arc&lt;Mutex&lt;Session&gt;&gt;,
+}
+
+impl SessionStore {
+    fn new(session: Arc&lt;Mutex&lt;Session&gt;&gt;) -&gt; Self {
+        Self { session }
+    }
+
+    fn saved_base(&amp;self) -&gt; i32 {
+        self.session.lock().unwrap().a
+    }
+}</code></pre>
+<pre><code class="language-rust no_run noplaypen">foreign_class!(#[derive(SmartPtrCopy)] class Session {
+    self_type Session;
+    constructor Session::new() -&gt; Arc&lt;Mutex&lt;Session&gt;&gt;;
+    fn Session::add_and1(&amp;self, val: i32) -&gt; i32;
+    fn Session::set_base(&amp;mut self, base: i32);
+    fn Session::greet(to: &amp;str) -&gt; String;
+});
+
+foreign_class!(class SessionStore {
+    self_type SessionStore;
+    constructor SessionStore::new(session: Arc&lt;Mutex&lt;Session&gt;&gt;) -&gt; SessionStore;
+    fn SessionStore::saved_base(&amp;self) -&gt; i32;
+});</code></pre>
+<pre><code class="language-java no_run noplaypen">        Session session = MyApplication.get().getSession();
+        final int res = session.add_and1(2);
+        SessionStore store = new SessionStore(session); // Rust retains an Arc clone
+        session.set_base(7); // the Java wrapper remains usable
+        final int sharedBase = store.saved_base();
+        tv_number.setText(getString(R.string.rust_results_text, res, sharedBase));
+        store.delete();
+</code></pre>
+<p>The store observes changes made through the original <code>Session</code>. This derive
+does not add a Java copy constructor; its effect is on ownership when the
+wrapper is passed to Rust.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="foreign_enum"><a class="header" href="#foreign_enum">foreign_enum!</a></h1>
 <p>Through the usage of the <code>foreign_enum!</code> macro you can "export" <code>enum</code>s (<code>C</code> like enum) to a foreign language:</p>
 <pre><code class="language-rust no_run noplaypen">#[derive(Clone, Copy)]
@@ -729,6 +917,19 @@ to <code>Vec&lt;T&gt;</code> if type <code>T</code> implements the traits <code>
     ($p:f_type, option = "NullAnnotations")
                   &lt;= "@NonNull swig_f_type!(T, NoNullAnnotations) []";
 );</code></pre>
+<h2 id="special-extensions-for-c"><a class="header" href="#special-extensions-for-c">Special extensions for C++</a></h2>
+<p>A C++ typemap can use <code>define_c_type!(module = "name.h"; ...);</code> to add C ABI
+declarations to the generated header and their Rust definitions to the generated Rust code.
+Inside the block you can define <code>#[repr(C)]</code> structs or unions (with named
+fields), <code>extern "C"</code> functions marked <code>#[unsafe(no_mangle)]</code>, and static variables marked
+in the same way. Also you can implement a Rust traits, including an <code>unsafe impl</code>, for a struct or union
+declared in the same block. Trait implementations are emitted only in the Rust
+code; they add no C code.</p>
+<p>Also it is possible to turning an input Rust parameter into the C++ return value.</p>
+<p>Add <code>input_to_output</code> to an incoming <code>(f_type)</code> rule, as in
+<code>($p:f_type, input_to_output) &lt;= "CppType"</code>, and in generated  C++ code input parameter
+becomes return value.
+This is useful for example, for converted <code>FnOnce</code> Rust input parameter to C++ <code>QFuture</code> return value.</p>
 
                     </main>
 

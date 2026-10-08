@@ -176,9 +176,7 @@
                         <h1 id="foreign_class"><a class="header" href="#foreign_class">foreign_class!</a></h1>
 <p><code>foreign_class!</code> is the way to describe an entity that will be visible for the "foreign language" as a class.</p>
 <p>The basic example is:</p>
-<pre><code class="language-rust no_run noplaypen">use super::{f2, Foo};
-
-foreign_class!(class Foo {
+<pre><code class="language-rust no_run noplaypen">foreign_class!(class Foo {
     self_type Foo;
     constructor Foo::new(_: i32) -&gt; Foo;
     fn Foo::set_field(&amp;mut self, _: i32);
@@ -297,8 +295,10 @@ while you want to use snake case style in Rust.</p>
 <h2 id="constructors"><a class="header" href="#constructors">Constructors</a></h2>
 <p>Constructors are Rust methods that mapped to constructors in terms of the "foreign" language.
 Also constructors, more precisely, the return type of constructors can be used to
-ask <code>flapigen</code> to simplify calls of methods, see the self_type section for more details.
-Sometimes you need a constructor, but you don't want allow the user to construct objects,
+ask <code>flapigen</code> to simplify calls of methods, see the self_type section for more details.</p>
+<p>If you define constructor that uses <code>default</code> function, like <code>constructor Foo::default() -&gt; Arc&lt;Foo&gt;;</code>,
+then we generate call to <code>Arc::&lt;Foo&gt;::default()</code>.</p>
+<p>Sometimes you need a constructor, but you don't want allow the user to construct objects,
 then you can use an empty constructor:</p>
 <pre><code class="language-rust no_run noplaypen">foreign_class!(
     class GamepadId {
@@ -352,6 +352,92 @@ class Foo {
 For example, you can use <code>Clone,Copy</code> to force the generation of a copy constructor
 and <code>operator=</code> in C++ case.
 You can also use <code>camelCaseAliases</code> to change names of all methods to camel case.</p>
+<h3 id="smartptrcopy"><a class="header" href="#smartptrcopy"><code>SmartPtrCopy</code></a></h3>
+<p>You can use <code>#[derive(SmartPtrCopy)]</code> when a foreign class's constructor returns
+<code>Rc&lt;...&gt;</code> or <code>Arc&lt;...&gt;</code>. Flapigen clones the smart pointer when another owner
+needs the value; it does not clone the Rust object inside it.</p>
+<p>In C++, it generates a copy constructor and copy assignment operator. The
+<a href="./cpp-example.html">C++ example</a> has a counter backed by <code>Rc&lt;RefCell&lt;_&gt;&gt;</code>:</p>
+<pre><code class="language-rust no_run noplaypen">pub struct SharedCounter {
+    value: i32,
+}
+
+impl SharedCounter {
+    fn new() -&gt; std::rc::Rc&lt;std::cell::RefCell&lt;Self&gt;&gt; {
+        std::rc::Rc::new(std::cell::RefCell::new(Self { value: 0 }))
+    }
+
+    fn increment(&amp;mut self) {
+        self.value += 1;
+    }
+
+    fn value(&amp;self) -&gt; i32 {
+        self.value
+    }
+}</code></pre>
+<pre><code class="language-rust no_run noplaypen">foreign_class!(
+    #[derive(SmartPtrCopy)]
+    class SharedCounter {
+        self_type SharedCounter;
+        constructor SharedCounter::new() -&gt; Rc&lt;RefCell&lt;SharedCounter&gt;&gt;;
+        fn SharedCounter::increment(&amp;mut self);
+        fn SharedCounter::value(&amp;self) -&gt; i32;
+    }
+);</code></pre>
+<pre><code class="language-cpp no_run noplaypen">    SharedCounter counter;
+    SharedCounter second_handle = counter; // clones Rc, not SharedCounter
+    second_handle.increment();
+    SharedCounter assigned;
+    assigned = counter;
+    assigned.increment();
+    if (counter.value() != 2 || second_handle.value() != 2) {
+        return EXIT_FAILURE;
+    }
+</code></pre>
+<p><code>counter</code>, <code>second_handle</code>, and <code>assigned</code> are three C++ handles to the same
+Rust counter. Incrementing through either copy changes the value read through
+<code>counter</code>.</p>
+<p>In Java, passing a wrapper by value to Rust clones its smart pointer, so the
+Java wrapper remains usable and Rust can retain the shared value. The
+<a href="./java-android-example.html">Android example</a> stores an <code>Arc&lt;Mutex&lt;Session&gt;&gt;</code> in
+another Rust object:</p>
+<pre><code class="language-rust no_run noplaypen">struct SessionStore {
+    session: Arc&lt;Mutex&lt;Session&gt;&gt;,
+}
+
+impl SessionStore {
+    fn new(session: Arc&lt;Mutex&lt;Session&gt;&gt;) -&gt; Self {
+        Self { session }
+    }
+
+    fn saved_base(&amp;self) -&gt; i32 {
+        self.session.lock().unwrap().a
+    }
+}</code></pre>
+<pre><code class="language-rust no_run noplaypen">foreign_class!(#[derive(SmartPtrCopy)] class Session {
+    self_type Session;
+    constructor Session::new() -&gt; Arc&lt;Mutex&lt;Session&gt;&gt;;
+    fn Session::add_and1(&amp;self, val: i32) -&gt; i32;
+    fn Session::set_base(&amp;mut self, base: i32);
+    fn Session::greet(to: &amp;str) -&gt; String;
+});
+
+foreign_class!(class SessionStore {
+    self_type SessionStore;
+    constructor SessionStore::new(session: Arc&lt;Mutex&lt;Session&gt;&gt;) -&gt; SessionStore;
+    fn SessionStore::saved_base(&amp;self) -&gt; i32;
+});</code></pre>
+<pre><code class="language-java no_run noplaypen">        Session session = MyApplication.get().getSession();
+        final int res = session.add_and1(2);
+        SessionStore store = new SessionStore(session); // Rust retains an Arc clone
+        session.set_base(7); // the Java wrapper remains usable
+        final int sharedBase = store.saved_base();
+        tv_number.setText(getString(R.string.rust_results_text, res, sharedBase));
+        store.delete();
+</code></pre>
+<p>The store observes changes made through the original <code>Session</code>. This derive
+does not add a Java copy constructor; its effect is on ownership when the
+wrapper is passed to Rust.</p>
 
                     </main>
 

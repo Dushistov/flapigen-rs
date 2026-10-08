@@ -203,7 +203,7 @@ struct Session {
 }
 
 impl Session {
-    pub fn new() -&gt; Session {
+    pub fn new() -&gt; Arc&lt;Mutex&lt;Session&gt;&gt; {
         #[cfg(target_os = "android")]
         android_logger::init_once(
             android_logger::Config::default()
@@ -212,11 +212,15 @@ impl Session {
         );
         log_panics::init(); // log panics rather than printing them
         info!("init log system - done");
-        Session { a: 2 }
+        Arc::new(Mutex::new(Session { a: 2 }))
     }
 
     pub fn add_and1(&amp;self, val: i32) -&gt; i32 {
         self.a + val + 1
+    }
+
+    pub fn set_base(&amp;mut self, base: i32) {
+        self.a = base;
     }
 
     // Greeting with full, no-runtime-cost support for newlines and UTF-8
@@ -226,11 +230,18 @@ impl Session {
 }</code></pre>
 <p>And the file <code>src/java_glue.rs.in</code> contains descriptions for flapigen to export this API to Java:</p>
 <pre><code class="language-rust no_run noplaypen">// src/java_glue.rs.in
-foreign_class!(class Session {
+foreign_class!(#[derive(SmartPtrCopy)] class Session {
     self_type Session;
-    constructor Session::new() -&gt; Session;
+    constructor Session::new() -&gt; Arc&lt;Mutex&lt;Session&gt;&gt;;
     fn Session::add_and1(&amp;self, val: i32) -&gt; i32;
+    fn Session::set_base(&amp;mut self, base: i32);
     fn Session::greet(to: &amp;str) -&gt; String;
+});
+
+foreign_class!(class SessionStore {
+    self_type SessionStore;
+    constructor SessionStore::new(session: Arc&lt;Mutex&lt;Session&gt;&gt;) -&gt; SessionStore;
+    fn SessionStore::saved_base(&amp;self) -&gt; i32;
 });</code></pre>
 <p>Then the <code>app/build.gradle</code> contains rules to invoke <code>cargo</code> to build a shared library from Rust code,
 and then build it into apk:</p>

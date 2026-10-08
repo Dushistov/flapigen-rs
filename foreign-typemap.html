@@ -217,6 +217,19 @@ to <code>Vec&lt;T&gt;</code> if type <code>T</code> implements the traits <code>
     ($p:f_type, option = "NullAnnotations")
                   &lt;= "@NonNull swig_f_type!(T, NoNullAnnotations) []";
 );</code></pre>
+<h2 id="special-extensions-for-c"><a class="header" href="#special-extensions-for-c">Special extensions for C++</a></h2>
+<p>A C++ typemap can use <code>define_c_type!(module = "name.h"; ...);</code> to add C ABI
+declarations to the generated header and their Rust definitions to the generated Rust code.
+Inside the block you can define <code>#[repr(C)]</code> structs or unions (with named
+fields), <code>extern "C"</code> functions marked <code>#[unsafe(no_mangle)]</code>, and static variables marked
+in the same way. Also you can implement a Rust traits, including an <code>unsafe impl</code>, for a struct or union
+declared in the same block. Trait implementations are emitted only in the Rust
+code; they add no C code.</p>
+<p>Also it is possible to turning an input Rust parameter into the C++ return value.</p>
+<p>Add <code>input_to_output</code> to an incoming <code>(f_type)</code> rule, as in
+<code>($p:f_type, input_to_output) &lt;= "CppType"</code>, and in generated  C++ code input parameter
+becomes return value.
+This is useful for example, for converted <code>FnOnce</code> Rust input parameter to C++ <code>QFuture</code> return value.</p>
 
                     </main>
 
