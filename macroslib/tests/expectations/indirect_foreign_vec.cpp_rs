@@ -10,6 +10,40 @@ pub extern "C" fn RustForeignVecArcNode_new() -> CRustForeignVecArcNode {
 }
 @@end
 
+@@expect {"file":"test.rs","kind":"item","name":"RustForeignVecArcNode_clone_at","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn RustForeignVecArcNode_clone_at(
+    v: CRustForeignVecArcNode,
+    idx: usize,
+) -> *mut ::std::os::raw::c_void {
+    let slice: &[Arc<ArcNode>] = unsafe {
+        (CRustSlice {
+            data: v.data.cast(),
+            len: v.len,
+        })
+        .as_slice()
+    };
+    SwigForeignClass::box_object(slice[idx].clone())
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"RustForeignVecRcNode_clone_at","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn RustForeignVecRcNode_clone_at(
+    v: CRustForeignVecRcNode,
+    idx: usize,
+) -> *mut ::std::os::raw::c_void {
+    let slice: &[Rc<RefCell<RcNode>>] = unsafe {
+        (CRustSlice {
+            data: v.data.cast(),
+            len: v.len,
+        })
+        .as_slice()
+    };
+    SwigForeignClass::box_object(slice[idx].clone())
+}
+@@end
+
 @@expect {"file":"test.rs","kind":"item","name":"RustForeignVecArcNode_push","form":"definition"}
 #[unsafe(no_mangle)]
 pub extern "C" fn RustForeignVecArcNode_push(

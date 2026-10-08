@@ -1322,7 +1322,7 @@ impl FooArc {
     }
 }
 
-foreign_class!(class FooArc {
+foreign_class!(#[derive(SmartPtrCopy)] class FooArc {
     self_type FooArc;
     constructor new(val: i32, s: String) -> Arc<FooArc> {
         Arc::new(FooArc { val, s, childs: vec![] })
@@ -1343,7 +1343,7 @@ impl FooRc {
     }
 }
 
-foreign_class!(class FooRc {
+foreign_class!(#[derive(SmartPtrCopy)] class FooRc {
     self_type FooRc;
     constructor new(val: i32) -> Rc<RefCell<FooRc>> {
         Rc::new(RefCell::new(FooRc { val }))
@@ -1428,11 +1428,17 @@ impl WorkWithSlice {
     fn sum_slice(values: &[Arc<FooArc>]) -> i32 {
         values.iter().map(|v| v.val()).sum()
     }
+    fn accept_arc(value: Arc<FooArc>) -> i32 {
+        value.val()
+    }
     fn rc_slice(&self) -> &[Rc<RefCell<FooRc>>] {
         &self.rc
     }
     fn sum_rc_slice(values: &[Rc<RefCell<FooRc>>]) -> i32 {
         values.iter().map(|v| v.borrow().val()).sum()
+    }
+    fn accept_rc(value: Rc<RefCell<FooRc>>) -> i32 {
+        value.borrow().val()
     }
     fn arc_strong_count(&self, idx: usize) -> usize {
         Arc::strong_count(&self.d[idx])
@@ -1455,8 +1461,10 @@ foreign_class!(class WorkWithSlice {
     fn WorkWithSlice::echo_vec(values: Vec<Arc<FooArc>>) -> Vec<Arc<FooArc>>;
     fn WorkWithSlice::echo_rc_vec(values: Vec<Rc<RefCell<FooRc>>>) -> Vec<Rc<RefCell<FooRc>>>;
     fn WorkWithSlice::sum_slice(values: &[Arc<FooArc>]) -> i32;
+    fn WorkWithSlice::accept_arc(value: Arc<FooArc>) -> i32;
     fn WorkWithSlice::rc_slice(&self) -> &[Rc<RefCell<FooRc>>];
     fn WorkWithSlice::sum_rc_slice(values: &[Rc<RefCell<FooRc>>]) -> i32;
+    fn WorkWithSlice::accept_rc(value: Rc<RefCell<FooRc>>) -> i32;
     fn WorkWithSlice::arc_strong_count(&self, idx: usize) -> usize;
     fn WorkWithSlice::rc_strong_count(&self, idx: usize) -> usize;
     fn WorkWithSlice::zero_sized_slice() -> &'static [ZeroSized];

@@ -67,11 +67,19 @@ void * RustForeignVecArcNode_remove(CRustForeignVecArcNode * v, uintptr_t idx);
 #endif
 
 #ifdef __cplusplus
+extern "C" {
+#endif
+void * RustForeignVecArcNode_clone_at(struct CRustForeignVecArcNode v, uintptr_t idx);
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+
+#ifdef __cplusplus
 #include "rust_vec_impl.hpp"
 #include "CRustSliceForeignIndirectArcNode.h"
 
 namespace org_examples {
-using RustForeignVecArcNode = RustVec<CRustForeignVecArcNode, internal::IndirectForeignVecPolicy<RustSlice<const ArcNode, ArcNodeAccess>, ArcNodeAccess, CRustForeignVecArcNode, RustForeignVecArcNode_new, RustForeignVecArcNode_free, RustForeignVecArcNode_push, RustForeignVecArcNode_remove>>;
+using RustForeignVecArcNode = RustVec<CRustForeignVecArcNode, internal::IndirectForeignVecPolicy<RustSlice<const ArcNode, ArcNodeAccess>, ArcNodeAccess, CRustForeignVecArcNode, RustForeignVecArcNode_new, RustForeignVecArcNode_free, RustForeignVecArcNode_push, RustForeignVecArcNode_remove, RustForeignVecArcNode_clone_at>>;
 }
 #endif
 
@@ -146,11 +154,19 @@ void * RustForeignVecRcNode_remove(CRustForeignVecRcNode * v, uintptr_t idx);
 #endif
 
 #ifdef __cplusplus
+extern "C" {
+#endif
+void * RustForeignVecRcNode_clone_at(struct CRustForeignVecRcNode v, uintptr_t idx);
+#ifdef __cplusplus
+} // extern "C" {
+#endif
+
+#ifdef __cplusplus
 #include "rust_vec_impl.hpp"
 #include "CRustSliceForeignIndirectRcNode.h"
 
 namespace org_examples {
-using RustForeignVecRcNode = RustVec<CRustForeignVecRcNode, internal::IndirectForeignVecPolicy<RustSlice<const RcNode, RcNodeAccess>, RcNodeAccess, CRustForeignVecRcNode, RustForeignVecRcNode_new, RustForeignVecRcNode_free, RustForeignVecRcNode_push, RustForeignVecRcNode_remove>>;
+using RustForeignVecRcNode = RustVec<CRustForeignVecRcNode, internal::IndirectForeignVecPolicy<RustSlice<const RcNode, RcNodeAccess>, RcNodeAccess, CRustForeignVecRcNode, RustForeignVecRcNode_new, RustForeignVecRcNode_free, RustForeignVecRcNode_push, RustForeignVecRcNode_remove, RustForeignVecRcNode_clone_at>>;
 }
 #endif
 

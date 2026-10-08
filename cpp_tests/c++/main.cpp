@@ -120,6 +120,15 @@ static_assert(std::is_same<decltype(std::declval<RustForeignVecFooArc &>().as_sl
 static_assert(std::is_same<decltype(std::declval<RustForeignVecFooRc &>().as_slice()),
                            RustSlice<const FooRc, FooRcAccess>>::value,
               "Rc-backed vectors must reuse their slice mapping");
+static_assert(std::is_convertible<decltype(std::declval<RustForeignVecFooArc &>()[0]), FooArc>::value,
+              "Arc-backed vector elements can be cloned into owning classes");
+static_assert(std::is_convertible<decltype(std::declval<RustForeignVecFooRc &>()[0]), FooRc>::value,
+              "Rc-backed vector elements can be cloned into owning classes");
+static_assert(!std::is_convertible<FooArcRef, FooArc>::value,
+              "a standalone borrowed view cannot recover the stored Arc");
+static_assert(!std::is_convertible<decltype(std::declval<RustForeignVecVecOnlyArc &>()[0]),
+                                   VecOnlyArc>::value,
+              "an indexed value is not an implicit owner when SmartPtrCopy is absent");
 template <typename T>
 static auto has_mutable_slice(int) -> decltype(std::declval<T &>().as_slice_mut(), std::true_type{});
 template <typename T> static std::false_type has_mutable_slice(...);
@@ -1603,6 +1612,20 @@ TEST(RustVec, indirectForeignClassOwnership)
         EXPECT_EQ(1, arcs.at(1).val());
         EXPECT_THROW(arcs.at(2), std::out_of_range);
         EXPECT_EQ(1, WorkWithSlice::sum_slice(arcs.as_slice()));
+        {
+            auto copied = arcs.clone_at(0);
+            EXPECT_EQ(0, copied.val());
+            EXPECT_EQ(3u, source.arc_strong_count(0));
+        }
+        EXPECT_EQ(2u, source.arc_strong_count(0));
+        FooArcRef borrowed = arcs[0];
+        EXPECT_EQ(0, borrowed.val());
+        EXPECT_EQ(0, WorkWithSlice::accept_arc(arcs.clone_at(0)));
+        EXPECT_EQ(0, WorkWithSlice::accept_arc(arcs[0]));
+        EXPECT_EQ(0, WorkWithSlice::accept_arc(arcs.at(0)));
+        EXPECT_EQ(0, WorkWithSlice::accept_arc(*arcs.begin()));
+        EXPECT_EQ(2u, source.arc_strong_count(0));
+        EXPECT_THROW(arcs.clone_at(2), std::out_of_range);
         EXPECT_EQ(2, std::distance(arcs.begin(), arcs.end()));
         arcs.push(FooArc{ 9, RustString{ RustString::CppStringViewT{ "nine" } } });
         EXPECT_EQ(9, arcs.at(2).val());
@@ -1630,6 +1653,20 @@ TEST(RustVec, indirectForeignClassOwnership)
         EXPECT_EQ(1, rcs.at(1).val());
         EXPECT_THROW(rcs.at(2), std::out_of_range);
         EXPECT_EQ(1, WorkWithSlice::sum_rc_slice(rcs.as_slice()));
+        {
+            auto copied = rcs.clone_at(0);
+            EXPECT_EQ(0, copied.val());
+            EXPECT_EQ(3u, source.rc_strong_count(0));
+        }
+        EXPECT_EQ(2u, source.rc_strong_count(0));
+        FooRcRef borrowed = rcs[0];
+        EXPECT_EQ(0, borrowed.val());
+        EXPECT_EQ(0, WorkWithSlice::accept_rc(rcs.clone_at(0)));
+        EXPECT_EQ(0, WorkWithSlice::accept_rc(rcs[0]));
+        EXPECT_EQ(0, WorkWithSlice::accept_rc(rcs.at(0)));
+        EXPECT_EQ(0, WorkWithSlice::accept_rc(*rcs.begin()));
+        EXPECT_EQ(2u, source.rc_strong_count(0));
+        EXPECT_THROW(rcs.clone_at(2), std::out_of_range);
         EXPECT_EQ(2, std::distance(rcs.begin(), rcs.end()));
         rcs.push(FooRc{ 9 });
         EXPECT_EQ(9, rcs.at(2).val());

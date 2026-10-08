@@ -80,12 +80,37 @@ namespace internal {
         }
     };
 
+    template <typename Borrowed, typename Value, typename Descriptor,
+              void *(*CloneAt)(Descriptor, uintptr_t)>
+    class IndirectForeignVecReference final : public Borrowed {
+    public:
+        IndirectForeignVecReference(Borrowed borrowed, Descriptor vec, size_t index) noexcept
+            : Borrowed(std::move(borrowed))
+            , vec_(vec)
+            , index_(index)
+        {
+        }
+
+        template <typename V = Value,
+                  typename std::enable_if<std::is_copy_constructible<V>::value, int>::type = 0>
+        operator V() const noexcept
+        {
+            return V{ static_cast<typename V::CForeignType *>(CloneAt(vec_, index_)) };
+        }
+
+    private:
+        Descriptor vec_;
+        size_t index_;
+    };
+
     template <typename Slice, typename Access, typename Descriptor,
               Descriptor (*New)(), void (*Free)(Descriptor),
-              void (*Push)(Descriptor *, void *), void *(*Remove)(Descriptor *, uintptr_t)>
+              void (*Push)(Descriptor *, void *), void *(*Remove)(Descriptor *, uintptr_t),
+              void *(*CloneAt)(Descriptor, uintptr_t)>
     struct IndirectForeignVecPolicy {
         using value_type = typename Slice::value_type;
-        using reference = typename Slice::reference;
+        using reference = IndirectForeignVecReference<typename Slice::reference, value_type,
+                                                      Descriptor, CloneAt>;
         using iterator = SliceIterator<Descriptor, IndirectForeignVecPolicy>;
         using const_iterator = iterator;
 
@@ -96,7 +121,10 @@ namespace internal {
             return Slice{ static_cast<const typename Access::storage_type *>(
                               static_cast<const void *>(vec.data)), vec.len };
         }
-        static reference index(Descriptor vec, size_t i) noexcept { return as_slice(vec)[i]; }
+        static reference index(Descriptor vec, size_t i) noexcept
+        {
+            return reference{ as_slice(vec)[i], vec, i };
+        }
         static iterator begin(Descriptor vec) noexcept { return iterator{ vec, 0 }; }
         static const_iterator cbegin(Descriptor vec) noexcept { return begin(vec); }
         static iterator end(Descriptor vec) noexcept { return iterator{ vec, vec.len }; }
@@ -109,6 +137,11 @@ namespace internal {
         {
             assert(i < vec.len);
             return value_type{ static_cast<typename value_type::CForeignType *>(Remove(&vec, i)) };
+        }
+        static value_type clone_at(Descriptor vec, size_t i) noexcept
+        {
+            assert(i < vec.len);
+            return value_type{ static_cast<typename value_type::CForeignType *>(CloneAt(vec, i)) };
         }
     };
 
@@ -186,6 +219,14 @@ public:
             throw std::out_of_range("RustVec::at");
         }
         return Policy::index(vec_, i);
+    }
+    template <typename P = Policy>
+    auto clone_at(size_t i) const -> decltype(P::clone_at(std::declval<Descriptor>(), i))
+    {
+        if (i >= size()) {
+            throw std::out_of_range("RustVec::clone_at");
+        }
+        return P::clone_at(vec_, i);
     }
     iterator begin() noexcept { return Policy::begin(vec_); }
     const_iterator begin() const noexcept { return Policy::cbegin(vec_); }
