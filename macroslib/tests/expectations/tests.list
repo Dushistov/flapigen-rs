@@ -74,6 +74,7 @@ parse_errors
 result_in_callback
 cpp_ret_opt_qstring
 callback_in_callback_args
+callback_auto_traits
 fenum
 cenum
 c_self_type

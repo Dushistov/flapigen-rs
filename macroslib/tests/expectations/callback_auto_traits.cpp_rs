@@ -1,0 +1,87 @@
+@@expect {"file":"test.rs","kind":"item","name":"pub struct C_LocalCallback","form":"definition"}
+#[repr(C)]
+#[derive(Clone)]
+#[allow(non_snake_case)]
+pub struct C_LocalCallback {
+    opaque: *const ::std::os::raw::c_void,
+    C_LocalCallback_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    onEvent: extern "C" fn(_: *const ::std::os::raw::c_void) -> (),
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"pub struct C_SendCallback","form":"definition"}
+#[repr(C)]
+#[derive(Clone)]
+#[allow(non_snake_case)]
+pub struct C_SendCallback {
+    opaque: *const ::std::os::raw::c_void,
+    C_SendCallback_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    onEvent: extern "C" fn(_: *const ::std::os::raw::c_void) -> (),
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"pub struct C_SyncCallback","form":"definition"}
+#[repr(C)]
+#[derive(Clone)]
+#[allow(non_snake_case)]
+pub struct C_SyncCallback {
+    opaque: *const ::std::os::raw::c_void,
+    C_SyncCallback_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    onEvent: extern "C" fn(_: *const ::std::os::raw::c_void) -> (),
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"pub struct C_BothCallback","form":"definition"}
+#[repr(C)]
+#[derive(Clone)]
+#[allow(non_snake_case)]
+pub struct C_BothCallback {
+    opaque: *const ::std::os::raw::c_void,
+    C_BothCallback_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    onEvent: extern "C" fn(_: *const ::std::os::raw::c_void) -> (),
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"between","before":"pub struct C_LocalCallback {","after":"impl LocalEvent for C_LocalCallback {"}
+
+    opaque: *const ::std::os::raw::c_void,
+    C_LocalCallback_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    onEvent: extern "C" fn(_: *const ::std::os::raw::c_void) -> (),
+}
+
+@@end
+
+@@expect {"file":"test.rs","kind":"between","before":"pub struct C_SendCallback {","after":"impl SendEvent for C_SendCallback {"}
+
+    opaque: *const ::std::os::raw::c_void,
+    C_SendCallback_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    onEvent: extern "C" fn(_: *const ::std::os::raw::c_void) -> (),
+}
+#[doc = " SAFETY: `self_type` requires `Send`; safety of moving the opaque callback between threads depends entirely on the C++ implementation."]
+unsafe impl Send for C_SendCallback {}
+
+@@end
+
+@@expect {"file":"test.rs","kind":"between","before":"pub struct C_SyncCallback {","after":"impl SyncEvent for C_SyncCallback {"}
+
+    opaque: *const ::std::os::raw::c_void,
+    C_SyncCallback_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    onEvent: extern "C" fn(_: *const ::std::os::raw::c_void) -> (),
+}
+#[doc = " SAFETY: `self_type` requires `Sync`; safety of sharing the opaque callback between threads depends entirely on the C++ implementation."]
+unsafe impl Sync for C_SyncCallback {}
+
+@@end
+
+@@expect {"file":"test.rs","kind":"between","before":"pub struct C_BothCallback {","after":"impl BothEvent for C_BothCallback {"}
+
+    opaque: *const ::std::os::raw::c_void,
+    C_BothCallback_deref: extern "C" fn(_: *const ::std::os::raw::c_void),
+    onEvent: extern "C" fn(_: *const ::std::os::raw::c_void) -> (),
+}
+#[doc = " SAFETY: `self_type` requires `Send`; safety of moving the opaque callback between threads depends entirely on the C++ implementation."]
+unsafe impl Send for C_BothCallback {}
+#[doc = " SAFETY: `self_type` requires `Sync`; safety of sharing the opaque callback between threads depends entirely on the C++ implementation."]
+unsafe impl Sync for C_BothCallback {}
+
+@@end

@@ -363,15 +363,31 @@ pub struct {struct_with_funcs} {{
 
     code.clear();
 
+    let mut auto_trait_impls = String::new();
+    for trait_name in ["Send", "Sync"] {
+        let requested = interface.self_type.bounds.iter().skip(1).any(|bound| {
+            matches!(bound, syn::TypeParamBound::Trait(trait_bound) if trait_bound.path.is_ident(trait_name))
+        });
+        if requested {
+            let action = match trait_name {
+                "Send" => "moving the opaque callback between threads",
+                "Sync" => "sharing the opaque callback between threads",
+                _ => unreachable!(),
+            };
+            writeln!(
+                auto_trait_impls,
+                "/// SAFETY: `self_type` requires `{trait_name}`; safety of {action} depends entirely on the C++ implementation.\nunsafe impl {trait_name} for {struct_with_funcs} {{}}"
+            )
+            .expect(WRITE_TO_MEM_FAILED_MSG);
+        }
+    }
+
     writeln!(
         code,
         r#"
-/// It totally depends on С++ implementation
-/// let's assume it safe
-unsafe impl Send for {struct_with_funcs} {{}}
+{auto_trait_impls}
 impl {trait_name} for {struct_with_funcs} {{"#,
         trait_name = DisplayToTokens(&interface.self_type.bounds[0]),
-        struct_with_funcs = struct_with_funcs,
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);
 
