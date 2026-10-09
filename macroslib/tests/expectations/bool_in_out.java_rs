@@ -33,7 +33,7 @@ pub extern "C" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jclass, a0: jbo
     let this: Foo = Foo::new(a0);
     let this: Box<Foo> = Box::new(this);
     let this: *mut Foo = Box::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 
 @@end

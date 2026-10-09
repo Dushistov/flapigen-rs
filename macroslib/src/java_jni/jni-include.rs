@@ -103,14 +103,16 @@ macro_rules! swig_assert_eq_size {
     };
 }
 
-#[cfg(target_pointer_width = "32")]
-pub fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    (val as u32) as *mut T
+/// JNI stores native handles as `jlong`, so the pointer's provenance must be
+/// exposed before it crosses the integer boundary.
+#[allow(dead_code)]
+pub fn pointer_to_jlong<T>(ptr: *const T) -> jlong {
+    ptr.expose_provenance() as jlong
 }
 
-#[cfg(target_pointer_width = "64")]
-pub fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    val as *mut T
+/// Reconstitute a handle previously produced by `pointer_to_jlong`.
+pub const fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+    ::std::ptr::with_exposed_provenance_mut(val as usize)
 }
 
 foreign_typemap!(

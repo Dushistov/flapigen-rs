@@ -5,11 +5,11 @@ pub extern "C" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jclass, a0: jin
     let this: Foo = Foo::new(a0);
     let this: Box<Foo> = Box::new(this);
     let this: *mut Foo = Box::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 @@end
 
-@@expect {"after":"\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Foo_do_1delete(env: *mut JNIEnv, ","before":"let this: Box<Foo> = Box::new(this);\n    let this: *mut Foo = Box::into_raw(this);\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"after":"\n#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Foo_do_1delete(env: *mut JNIEnv, ","before":"let this: Box<Foo> = Box::new(this);\n    let this: *mut Foo = Box::into_raw(this);\n    pointer_to_jlong(this)\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Foo_do_1f(
     env: *mut JNIEnv,
@@ -49,11 +49,11 @@ pub extern "C" fn Java_org_example_Boo_init(
             return <jlong>::jni_invalid_value();
         }
     };
-    this as jlong
+    this
 }
 @@end
 
-@@expect {"after":"\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Boo_do_1boo_1as_1arg(\n    env: *m","before":"jni_throw_exception(env, &msg);\n            return <jlong>::jni_invalid_value();\n        }\n    };\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"after":"\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Boo_do_1boo_1as_1arg(\n    env: *m","before":"jni_throw_exception(env, &msg);\n            return <jlong>::jni_invalid_value();\n        }\n    };\n    this\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_do_1factory_1method(env: *mut JNIEnv, _: jclass) -> jlong {
     let mut ret: Result<Boo, String> = Boo::factory_method();
