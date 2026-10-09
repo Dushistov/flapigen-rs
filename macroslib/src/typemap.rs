@@ -474,16 +474,6 @@ impl TypeMap {
         ret
     }
 
-    pub(crate) fn add_foreign(
-        &mut self,
-        corresponding_rty: RustType,
-        foreign_name: ForeignTypeName,
-    ) -> Result<ForeignType> {
-        trace!("add_foreign: {} / {}", foreign_name, corresponding_rty);
-        self.ftypes_storage
-            .alloc_new(foreign_name, corresponding_rty.graph_idx)
-    }
-
     pub(crate) fn add_foreign_rust_ty_idx(
         &mut self,
         foreign_name: ForeignTypeName,
@@ -1276,6 +1266,54 @@ mod tests {
         assert!(Rc::ptr_eq(&early, &registered));
         assert!(early.implements_path(&trait_path));
         assert!(other_clone.implements_path(&trait_path));
+    }
+
+    #[test]
+    fn jni_object_mappings_keep_distinct_intermediate_types() {
+        let mut types_map = TypeMap::default();
+        let mut src_reg = SourceRegistry::default();
+        let src_id = src_reg.register(SourceCode {
+            id_of_code: "jni-include.rs".into(),
+            code: include_str!("java_jni/jni-include.rs").into(),
+        });
+        types_map.merge(src_id, src_reg.src(src_id), 64).unwrap();
+
+        let object_ty = types_map
+            .ftypes_storage
+            .iter_enumerate()
+            .find(|(_, ftype)| ftype.name.value() == "Object")
+            .unwrap()
+            .1
+            .into_from_rust
+            .as_ref()
+            .unwrap()
+            .rust_ty;
+        let object_array_ty = types_map
+            .ftypes_storage
+            .iter_enumerate()
+            .find(|(_, ftype)| ftype.name.value() == "Object []")
+            .unwrap()
+            .1
+            .into_from_rust
+            .as_ref()
+            .unwrap()
+            .rust_ty;
+
+        assert_eq!(
+            types_map[object_ty].normalized_name,
+            normalize_type(&parse_type! { internal_aliases::JObject })
+        );
+        assert_eq!(
+            types_map[object_array_ty].normalized_name,
+            normalize_type(&parse_type! { internal_aliases::JObjectArray })
+        );
+        assert_ne!(object_ty, object_array_ty);
+        assert_ne!(
+            object_ty,
+            types_map
+                .find_or_alloc_rust_type(&parse_type! { jobject }, SourceId::none())
+                .to_idx()
+        );
     }
 
     #[test]

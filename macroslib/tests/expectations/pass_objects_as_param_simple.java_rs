@@ -1,4 +1,4 @@
-@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_TestPassObjectsAsParams_do_1f2(\n  ","before":"let this: *mut TestPassObjectsAsParams = Box::into_raw(this);\n    this as jlong\n}\n","file":"test.rs","kind":"between"}
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_TestPassObjectsAsParams_do_1f2(\n  ","before":"let this: *mut TestPassObjectsAsParams = Box::into_raw(this);\n    pointer_to_jlong(this)\n}\n","file":"test.rs","kind":"between"}
 #[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f1(

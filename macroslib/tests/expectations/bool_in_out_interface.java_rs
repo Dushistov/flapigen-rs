@@ -1,9 +1,9 @@
 @@expect {"after":"static mut JAVA_UTIL_OPTIONAL_LONG: jclass = ::std::ptr::null_mut();\nstatic mut JAVA_UTIL_OPTIONAL_LONG_OF: jmethodID = ::std::ptr::null_mut();\nstatic mut JAVA_","before":"_env: *mut JNIEnv,\n    _: jclass,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n) {\n}\n","file":"test.rs","kind":"between"}
+#[allow(dead_code)]
+type SwigJniCallbackSomeObserverObject = jobject;
 impl SomeTrait for JavaCallback {
     #[allow(unused_mut)]
     fn on_state_changed1(&self, a0: i32, a1: bool) {
-        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
-        swig_assert_eq_size!(::std::os::raw::c_int, i32);
         let env = self.get_jni_env();
         if let Some(env) = env.env {
             let mut a0: jint = a0;
@@ -29,8 +29,6 @@ impl SomeTrait for JavaCallback {
     }
     #[allow(unused_mut)]
     fn on_state_changed2(&self, a0: bool, a1: f64) -> bool {
-        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
-        swig_assert_eq_size!(::std::os::raw::c_int, i32);
         let env = self.get_jni_env();
         let env = env.env.expect(concat!(
             "Can not get env for ",

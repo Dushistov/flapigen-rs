@@ -14,7 +14,7 @@ impl SwigForeignClass for Rc<RefCell<Boo>> {
     }
     fn box_object(this: Self) -> jlong {
         let this: *const RefCell<Boo> = Rc::into_raw(this);
-        this as jlong
+        pointer_to_jlong(this)
     }
     fn unbox_object(x: jlong) -> Self {
         let x: *mut RefCell<Boo> = unsafe { jlong_to_pointer::<RefCell<Boo>>(x).as_mut().unwrap() };

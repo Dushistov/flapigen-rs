@@ -14,9 +14,7 @@ use crate::{
     file_cache::FileWriteCache,
     source_registry::SourceId,
     typemap::{
-        ast::{DisplayToTokens, ForeignTypeName},
-        ty::RustType,
-        utils::rust_to_foreign_convert_method_inputs,
+        ast::DisplayToTokens, ty::RustType, utils::rust_to_foreign_convert_method_inputs,
         ForeignTypeInfo,
     },
     types::ForeignInterface,
@@ -44,15 +42,6 @@ pub(in crate::java_jni) fn generate_interface(
     .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;
     generate_rust_code_for_interface(ctx, interface, &f_methods)?;
 
-    let my_jobj_ti = ctx.conv_map.find_or_alloc_rust_type_with_suffix(
-        &parse_type! { jobject },
-        &interface.name.to_string(),
-        SourceId::none(),
-    );
-    ctx.conv_map.add_foreign(
-        my_jobj_ti,
-        ForeignTypeName::from_ident(&interface.name, interface.src_id),
-    )?;
     Ok(())
 }
 
@@ -195,18 +184,27 @@ fn generate_rust_code_for_interface(
 ) -> Result<()> {
     use std::fmt::Write;
 
+    let callback_jobject = Ident::new(
+        &format!("SwigJniCallback{}Object", interface.name),
+        Span::call_site(),
+    );
+    ctx.rust_code.push(quote! {
+        #[allow(dead_code)]
+        type #callback_jobject = jobject;
+    });
+
     let mut new_conv_code = format!(
         r#"
-#[swig_from_foreigner_hint = "{interface_name}"]
-impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
-    fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {{
-        let mut cb = JavaCallback::new(this, env);
+foreign_typemap!(
+    ($p:r_type) Box<dyn {trait_name}> <= {callback_jobject} {{
+        let mut cb = JavaCallback::new($p, env);
         cb.methods.reserve({methods_len});
         let class = unsafe {{ (**env).GetObjectClass.unwrap()(env, cb.this) }};
         assert!(!class.is_null(), "GetObjectClass return null class for {interface_name}");
 "#,
         interface_name = interface.name,
         trait_name = DisplayToTokens(&interface.self_type),
+        callback_jobject = callback_jobject,
         methods_len = interface.items.len(),
     );
     for (method, f_method) in interface.items.iter().zip(methods_sign) {
@@ -224,13 +222,17 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
         )
         .unwrap();
     }
-    new_conv_code.push_str(
+    write!(
+        &mut new_conv_code,
         r#"
-        Box::new(cb)
-    }
-}
+        $out = Box::new(cb);
+    }};
+    ($p:f_type) <= "{}";
+);
 "#,
-    );
+        interface.name,
+    )
+    .unwrap();
     ctx.conv_map
         .merge(SourceId::none(), &new_conv_code, ctx.pointer_target_width)?;
 
@@ -270,7 +272,7 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
         );
         assert!(!method.fn_decl.inputs.is_empty());
         let n_args = method.fn_decl.inputs.len() - 1;
-        let (args, type_size_asserts) = convert_args_for_variadic_function_call(f_method);
+        let args = convert_args_for_variadic_function_call(f_method);
 
         let (mut conv_deps, convert_args_code) = rust_to_foreign_convert_method_inputs(
             ctx.conv_map,
@@ -292,7 +294,6 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
             syn::ReturnType::Default => trait_impl_funcs.push(quote! {
                 #[allow(unused_mut)]
                 fn #func_name(#(#args_with_types),*) {
-                    #type_size_asserts
                     let env = self.get_jni_env();
                     if let Some(env) = env.env {
                         #convert_args
@@ -343,7 +344,6 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
                 trait_impl_funcs.push(quote! {
                     #[allow(unused_mut)]
                     fn #func_name(#(#args_with_types),*) -> #ret_ty {
-                        #type_size_asserts
                         let env = self.get_jni_env();
                         let env = env.env.expect(concat!("Can not get env for ", stringify!(#func_name)));
 
@@ -391,10 +391,10 @@ static JNI_FOR_VARIADIC_C_FUNC_CALL: LazyLock<FxHashMap<&'static str, &'static s
 // we need automatic type conversion, see
 // http://en.cppreference.com/w/c/language/conversion#Default_argument_promotions
 // for more details.
-// return arg with conversion plus asserts
+// Return arguments with their C variadic promotions applied.
 fn convert_args_for_variadic_function_call(
     f_method: &JniForeignMethodSignature,
-) -> (Vec<TokenStream>, TokenStream) {
+) -> Vec<TokenStream> {
     let mut ret = Vec::with_capacity(f_method.input.len());
     for (i, arg) in f_method.input.iter().enumerate() {
         let arg_name = Ident::new(&format!("a{i}"), Span::call_site());
@@ -416,9 +416,5 @@ fn convert_args_for_variadic_function_call(
             ret.push(quote!(#arg_name));
         }
     }
-    let check_sizes = quote! {
-        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
-        swig_assert_eq_size!(::std::os::raw::c_int, i32);
-    };
-    (ret, check_sizes)
+    ret
 }

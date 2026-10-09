@@ -1,35 +1,40 @@
-@@expect {"after":"#[allow(non_snake_case, ","before":"this as jlong\n}\n#[doc(hidden)]\n","file":"test.rs","kind":"between"}
-impl SwigFrom<jobject> for Box<dyn SomeTrait> {
-    fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {
-        let mut cb = JavaCallback::new(this, env);
-        cb.methods.reserve(1);
-        let class = unsafe { (**env).GetObjectClass.unwrap()(env, cb.this) };
-        assert!(
-            !class.is_null(),
-            "GetObjectClass return null class for SomeObserver"
-        );
-        let method_id: jmethodID = unsafe {
-            (**env).GetMethodID.unwrap()(
-                env,
-                class,
-                swig_c_str!("onStateChanged"),
-                swig_c_str!("(Ljava/lang/String;)V"),
-            )
-        };
-        assert!(!method_id.is_null(), "Can not find onStateChanged id");
-        cb.methods.push(method_id);
-        Box::new(cb)
-    }
+@@expect {"file":"test.rs","kind":"item","name":"Java_org_example_ClassWithCallbacks_do_1f1","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn Java_org_example_ClassWithCallbacks_do_1f1(
+    env: *mut JNIEnv,
+    _: jclass,
+    this: jlong,
+    cb: SwigJniCallbackSomeObserverObject,
+) -> () {
+    let mut cb = JavaCallback::new(cb, env);
+    cb.methods.reserve(1);
+    let class = unsafe { (**env).GetObjectClass.unwrap()(env, cb.this) };
+    assert!(
+        !class.is_null(),
+        "GetObjectClass return null class for SomeObserver"
+    );
+    let method_id: jmethodID = unsafe {
+        (**env).GetMethodID.unwrap()(
+            env,
+            class,
+            swig_c_str!("onStateChanged"),
+            swig_c_str!("(Ljava/lang/String;)V"),
+        )
+    };
+    assert!(!method_id.is_null(), "Can not find onStateChanged id");
+    cb.methods.push(method_id);
+    let mut cb: Box<dyn SomeTrait> = Box::new(cb);
+    let this: &mut Foo = unsafe { jlong_to_pointer::<Foo>(this).as_mut().unwrap() };
+    let mut ret: () = f1(this, cb);
+    ret
 }
-
 @@end
 
-@@expect {"after":"impl SwigForeignClass for Foo {\n    type PointedType = Foo;\n    fn jni_class() -> jclass {\n        swig_jni_find_class!(\n            FOREIGN_CLASS_CLASSWITHCALL","before":"_env: *mut JNIEnv,\n    _: jclass,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n) {\n}\n","file":"test.rs","kind":"between"}
+@@expect {"after":"impl SwigForeignClass for Foo {\n    type PointedType = Foo;\n    fn jni_class() -> jclass {\n        swig_jni_find_class!(\n            FOREIGN_CLASS_CLASSWITHCALL","before":"type SwigJniCallbackSomeObserverObject = jobject;\n","file":"test.rs","kind":"between"}
 impl SomeTrait for JavaCallback {
     #[allow(unused_mut)]
     fn on_state_changed(&self, a0: &str) {
-        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
-        swig_assert_eq_size!(::std::os::raw::c_int, i32);
         let env = self.get_jni_env();
         if let Some(env) = env.env {
             let mut a0: jstring = from_std_str_jstring(a0, env);

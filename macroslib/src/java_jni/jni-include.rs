@@ -1,13 +1,8 @@
-mod swig_foreign_types_map {
-    #![swig_foreigner_type = "Object"]
-    #![swig_rust_type_not_unique = "jobject"]
-    #![swig_foreigner_type = "Object []"]
-    #![swig_rust_type_not_unique = "jobjectArray"]
-}
-
 #[allow(dead_code)]
 mod internal_aliases {
     use super::*;
+    pub type JObject = jobject;
+    pub type JObjectArray = jobjectArray;
     pub type JStringOptStr = jstring;
     pub type JOptionalInt = jobject;
     pub type JInteger = jobject;
@@ -27,8 +22,25 @@ mod internal_aliases {
     pub type JStringObjectsArray = jobjectArray;
 }
 
+foreign_typemap!(
+    (r_type) internal_aliases::JObject;
+    (f_type) "Object";
+);
+
+foreign_typemap!(
+    (r_type) internal_aliases::JObjectArray;
+    (f_type) "Object []";
+);
+
 /// Default JNI_VERSION
 const SWIG_JNI_VERSION: jint = JNI_VERSION_1_6 as jint;
+
+// Generated callbacks pass promoted arguments to variadic JNI functions.
+// Their integer arguments assume the C ABI uses 32-bit int and unsigned int.
+const _: () = {
+    assert!(::std::mem::size_of::<::std::os::raw::c_uint>() == ::std::mem::size_of::<u32>());
+    assert!(::std::mem::size_of::<::std::os::raw::c_int>() == ::std::mem::size_of::<i32>());
+};
 
 /// Marker for what to cache in JNI_OnLoad
 #[allow(unused_macros)]
@@ -77,18 +89,6 @@ macro_rules! swig_jni_get_static_field_id {
     };
 }
 
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_into(env);"]
-trait SwigInto<T> {
-    fn swig_into(self, env: *mut JNIEnv) -> T;
-}
-
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var}, env);"]
-trait SwigFrom<T> {
-    fn swig_from(_: T, env: *mut JNIEnv) -> Self;
-}
-
 #[allow(unused_macros)]
 macro_rules! swig_c_str {
     ($lit:expr) => {
@@ -96,21 +96,16 @@ macro_rules! swig_c_str {
     };
 }
 
-#[allow(unused_macros)]
-macro_rules! swig_assert_eq_size {
-    ($x:ty, $($xs:ty),+ $(,)*) => {
-        $(let _ = ::std::mem::transmute::<$x, $xs>;)+
-    };
+/// JNI stores native handles as `jlong`, so the pointer's provenance must be
+/// exposed before it crosses the integer boundary.
+#[allow(dead_code)]
+pub fn pointer_to_jlong<T>(ptr: *const T) -> jlong {
+    ptr.expose_provenance() as jlong
 }
 
-#[cfg(target_pointer_width = "32")]
-pub fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    (val as u32) as *mut T
-}
-
-#[cfg(target_pointer_width = "64")]
-pub fn jlong_to_pointer<T>(val: jlong) -> *mut T {
-    val as *mut T
+/// Reconstitute a handle previously produced by `pointer_to_jlong`.
+pub const fn jlong_to_pointer<T>(val: jlong) -> *mut T {
+    ::std::ptr::with_exposed_provenance_mut(val as usize)
 }
 
 foreign_typemap!(
@@ -1077,33 +1072,32 @@ foreign_typemap!(
 );
 
 #[cfg(target_pointer_width = "32")]
-impl SwigFrom<isize> for jint {
-    fn swig_from(x: isize, _: *mut JNIEnv) -> Self {
-        x as jint
-    }
-}
+foreign_typemap!(
+    ($p:r_type) isize => jint {
+        $out = $p as jint;
+    };
+);
 
 #[cfg(target_pointer_width = "64")]
-impl SwigFrom<isize> for jlong {
-    fn swig_from(x: isize, _: *mut JNIEnv) -> Self {
-        x as jlong
-    }
-}
+foreign_typemap!(
+    ($p:r_type) isize => jlong {
+        $out = $p as jlong;
+    };
+);
 
 #[cfg(target_pointer_width = "32")]
-impl SwigFrom<usize> for jlong {
-    fn swig_from(x: usize, _: *mut JNIEnv) -> Self {
-        x as jlong
-    }
-}
+foreign_typemap!(
+    ($p:r_type) usize => jlong {
+        $out = $p as jlong;
+    };
+);
 
 #[cfg(target_pointer_width = "64")]
-impl SwigFrom<usize> for jlong {
-    fn swig_from(x: usize, _: *mut JNIEnv) -> Self {
-        let x = x as u64;
-        u64_to_jlong_checked(x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) usize => jlong {
+        $out = u64_to_jlong_checked($p as u64);
+    };
+);
 
 foreign_typemap!(
     ($p:r_type) &str => String {

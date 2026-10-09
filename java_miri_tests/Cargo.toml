@@ -1,0 +1,12 @@
+[package]
+name = "java_miri_tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+jni-sys = "0.3.0"
+log = "0.4.6"
+
+[build-dependencies]
+flapigen = { path = "../macroslib" }
