@@ -598,6 +598,7 @@ TEST(TestWorkWithVec, nestedForeignVectors)
 {
     auto rows = TestWorkWithVec::create_foo_rows();
     ASSERT_EQ(2u, rows.size());
+    EXPECT_EQ(2u, TestWorkWithVec::count_foo_rows(rows.as_slice()));
     EXPECT_TRUE(rows.at(0).empty());
     ASSERT_EQ(2u, rows[1].size());
     EXPECT_EQ(1, rows[1][0].f(0, 0));
@@ -624,6 +625,7 @@ TEST(TestWorkWithVec, nestedForeignVectors)
     EXPECT_TRUE(echoed.empty());
 
     RustVecVecFoo empty;
+    EXPECT_EQ(0u, TestWorkWithVec::count_foo_rows(empty.as_slice()));
     auto empty_echo = TestWorkWithVec::echo_foo_rows(std::move(empty));
     EXPECT_TRUE(empty_echo.empty());
 
@@ -1329,10 +1331,18 @@ TEST(GetSetStrTest, smokeTest)
 
 TEST(TestWorkWithReprC, smokeTest)
 {
+    static_assert(std::is_same<decltype(std::declval<RustVecVec2 &>().as_slice()),
+                               RustSlice<const Vec2>>::value,
+                  "Vec<Vec2>::as_slice() must match &[Vec2]");
+    static_assert(std::is_same<decltype(std::declval<RustVecVec2 &>().as_slice_mut()),
+                               RustSlice<Vec2>>::value,
+                  "Vec<Vec2>::as_slice_mut() must match &mut [Vec2]");
     auto v = TestWorkWithReprC::inc_vec2({ 1.75f, 1e5f });
 
     EXPECT_NEAR(1.75f + 1.1f, v.x, std::numeric_limits<float>::epsilon());
     EXPECT_NEAR(1e5f + 1.f, v.y, std::numeric_limits<float>::epsilon());
+    auto v_v = TestWorkWithReprC::return_vec(10);
+    TestWorkWithReprC::accept_slice(v_v.as_slice());
 }
 
 TEST(TestFnInline, smokeTest)
@@ -1821,6 +1831,8 @@ TEST(StringVecStore, ownedStrings)
     StringVecStore store;
     auto values = store.strings();
     expect_string_slice(values);
+    StringSliceStore borrowed(false);
+    EXPECT_TRUE(borrowed.same_strings(values.as_slice()));
     auto removed = values.remove(0);
     EXPECT_TRUE(removed.empty());
     EXPECT_EQ(2u, values.size());
@@ -1837,6 +1849,8 @@ TEST(StringVecStore, ownedStrings)
 
     RustVecString empty;
     EXPECT_TRUE(empty.empty());
+    StringSliceStore empty_borrowed(true);
+    EXPECT_TRUE(empty_borrowed.same_strings(empty.as_slice()));
     auto from_empty = store.append(std::move(empty));
     EXPECT_EQ(1u, from_empty.size());
     EXPECT_EQ("from Rust", std::string(from_empty.at(0).data(), from_empty.at(0).size()));

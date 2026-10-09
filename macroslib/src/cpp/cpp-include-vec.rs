@@ -175,6 +175,7 @@ foreign_typemap!(
                     r##"
 #ifdef __cplusplus
 #include "rust_vec_impl.hpp"
+#include "rust_string_slice.h"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
 namespace internal {
@@ -183,9 +184,17 @@ template <typename View> struct StringVecPolicy {
     using reference = View;
     using iterator = SliceIterator<CRustVecString, StringVecPolicy<View>>;
     using const_iterator = iterator;
+    using SliceAccess = StringSliceAccess<View, CRustSliceString, CRustSliceStringElem,
+                                          crust_slice_string_get>;
+    using Slice = RustSlice<const View, SliceAccess>;
 
     static CRustVecString empty() noexcept { return crust_vec_string_new(); }
     static void free(CRustVecString vec) noexcept { crust_vec_string_free(vec); }
+    static Slice as_slice(CRustVecString vec) noexcept
+    {
+        return Slice{ static_cast<const CRustSliceStringElem *>(
+                          static_cast<const void *>(vec.data)), vec.len };
+    }
     static View index(CRustVecString vec, size_t i) noexcept
     {
         const auto str = crust_vec_string_get(vec, i);
@@ -509,6 +518,7 @@ foreign_typemap!(
     generic_alias!(COuterVecRemove = swig_concat_idents!(RustVecVec, swig_f_type!(T), _remove));
     generic_alias!(CInnerVec = swig_concat_idents!(CRustForeignVec, swig_f_type!(T)));
     generic_alias!(CInnerVecModule = swig_concat_idents!(RustForeignVec, swig_f_type!(T)));
+    generic_alias!(COuterSliceModule = swig_concat_idents!(CRustSliceVecForeign, swig_f_type!(T)));
     // Resolve the inner vector typemap before define_c_type! uses its C struct.
     generic_alias!(InnerVecDependency = swig_f_type!(Vec<T>));
 
@@ -595,10 +605,12 @@ foreign_typemap!(
 #ifdef __cplusplus
 #include "rust_vec_impl.hpp"
 #include "CInnerVecModule!().h"
+#include "COuterSliceModule!().h"
 
 namespace $RUST_SWIG_USER_NAMESPACE {
 using COuterVecModule!() = RustVec<COuterVec!(), internal::NestedForeignVecPolicy<
     swig_f_type!(Vec<T>, output), RustSlice<const swig_f_type!(T, output)>,
+    swig_f_type!(&[Vec<T>], output),
     COuterVec!(), CInnerVec!(), COuterRowSlice!(),
     COuterVecNew!(), COuterVecFree!(), COuterVecGet!(), COuterVecPush!(), COuterVecRemove!()>>;
 }

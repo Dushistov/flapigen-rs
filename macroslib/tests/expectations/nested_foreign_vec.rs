@@ -15,5 +15,6 @@ foreign_class!(class NestedVecHost {
     constructor NestedVecHost::new() -> NestedVecHost;
     fn NestedVecHost::make_foos() -> Vec<Vec<RowFoo>>;
     fn NestedVecHost::echo_foos(rows: Vec<Vec<RowFoo>>) -> Vec<Vec<RowFoo>>;
+    fn NestedVecHost::count_foos(rows: &[Vec<RowFoo>]) -> usize;
     fn NestedVecHost::echo_bars(rows: Vec<Vec<RowBar>>) -> Vec<Vec<RowBar>>;
 });

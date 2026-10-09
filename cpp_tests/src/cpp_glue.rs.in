@@ -346,6 +346,9 @@ impl TestWorkWithVec {
     fn echo_foo_rows(rows: Vec<Vec<Foo>>) -> Vec<Vec<Foo>> {
         rows
     }
+    fn count_foo_rows(rows: &[Vec<Foo>]) -> usize {
+        rows.iter().map(Vec::len).sum()
+    }
     fn sort_foo_slice(v: &mut [Foo]) {
         v.sort_by(|ref x, ref y| x.data.cmp(&y.data))
     }
@@ -393,6 +396,7 @@ foreign_class!(class TestWorkWithVec {
     fn TestWorkWithVec::create_foo_vec(n: usize) -> Vec<Foo>;
     fn TestWorkWithVec::create_foo_rows() -> Vec<Vec<Foo>>;
     fn TestWorkWithVec::echo_foo_rows(rows: Vec<Vec<Foo>>) -> Vec<Vec<Foo>>;
+    fn TestWorkWithVec::count_foo_rows(rows: &[Vec<Foo>]) -> usize;
     fn TestWorkWithVec::sort_foo_slice(v: &mut [Foo]);
     fn TestWorkWithVec::return_usize_slice(&self) -> &[usize];
     fn TestWorkWithVec::return_usize_vec(&self) -> Vec<usize>;
@@ -1055,6 +1059,19 @@ fn inc_vec2(v: Vec2) -> Vec2 {
 
 foreign_class!(class TestWorkWithReprC {
     fn inc_vec2(v: Vec2) -> Vec2;
+    fn return_vec(n: usize) -> Vec<Vec2> {
+        let mut ret = Vec::with_capacity(n);
+        for i in 0..n {
+            ret.push(Vec2 { x: i as f32, y: i as f32 });
+        }
+        ret
+    }
+    fn accept_slice(s: &[Vec2]) {
+        for (i, v) in s.iter().enumerate() {
+            assert_eq!(v.x as usize, i);
+            assert_eq!(v.y as usize, i);
+        }
+    }
 });
 
 // ANCHOR: inline_method
@@ -1269,20 +1286,40 @@ pub struct StringSliceStore {
 impl StringSliceStore {
     fn new(empty: bool) -> Self {
         if empty {
-            return Self { refs: Vec::new(), strings: Vec::new(), boxed: Vec::new() };
+            return Self {
+                refs: Vec::new(),
+                strings: Vec::new(),
+                boxed: Vec::new(),
+            };
         }
         let refs = vec!["", "a\0b", "Привет"];
         let strings = refs.iter().map(|value| (*value).to_owned()).collect();
         let boxed = refs.iter().map(|value| Box::<str>::from(*value)).collect();
-        Self { refs, strings, boxed }
+        Self {
+            refs,
+            strings,
+            boxed,
+        }
     }
 
-    fn refs(&self) -> &[&str] { &self.refs }
-    fn strings(&self) -> &[String] { &self.strings }
-    fn boxed(&self) -> &[Box<str>] { &self.boxed }
-    fn same_refs(&self, values: &[&str]) -> bool { self.refs == values }
-    fn same_strings(&self, values: &[String]) -> bool { self.strings == values }
-    fn same_boxed(&self, values: &[Box<str>]) -> bool { self.boxed == values }
+    fn refs(&self) -> &[&str] {
+        &self.refs
+    }
+    fn strings(&self) -> &[String] {
+        &self.strings
+    }
+    fn boxed(&self) -> &[Box<str>] {
+        &self.boxed
+    }
+    fn same_refs(&self, values: &[&str]) -> bool {
+        self.refs == values
+    }
+    fn same_strings(&self, values: &[String]) -> bool {
+        self.strings == values
+    }
+    fn same_boxed(&self, values: &[Box<str>]) -> bool {
+        self.boxed == values
+    }
 }
 
 foreign_class!(class StringSliceStore {
@@ -1299,7 +1336,9 @@ foreign_class!(class StringSliceStore {
 pub struct StringVecStore;
 
 impl StringVecStore {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
     fn strings(&self) -> Vec<String> {
         vec![String::new(), "a\0b".into(), "Привет".into()]
     }

@@ -420,3 +420,75 @@ foreign_typemap!(
         "$p.as_c<CSliceMut!()>()";
 );
 
+// A slice of Vec<T> contains Rust Vec descriptors, not C++ RustVec objects.
+// Fetch each borrowed row through Rust while keeping the outer slice typed.
+foreign_typemap!(
+    generic_alias!(CSlice = swig_concat_idents!(CRustSliceVecForeign, swig_f_type!(T)));
+    generic_alias!(CppSlice = swig_concat_idents!(RustSliceVecForeign, swig_f_type!(T)));
+    generic_alias!(CSliceElem = swig_concat_idents!(CRustSliceVecForeign, swig_f_type!(T), Elem));
+    generic_alias!(CRowSlice = swig_concat_idents!(CRustSliceVecForeign, swig_f_type!(T), RowSlice));
+    generic_alias!(CRowElem = swig_concat_idents!(CRustSliceVecForeign, swig_f_type!(T), RowElem));
+    generic_alias!(CSliceGet = swig_concat_idents!(CRustSliceVecForeign, swig_f_type!(T), _get));
+    generic_alias!(CInnerVecModule = swig_concat_idents!(RustForeignVec, swig_f_type!(T)));
+    generic_alias!(InnerVecDependency = swig_f_type!(Vec<T>));
+
+    define_c_type!(
+        module = "CSlice!().h";
+        #[repr(C)]
+        pub struct CSliceElem!() { _unused: u8 }
+
+        #[repr(C)]
+        pub struct CRowElem!() { _unused: u8 }
+
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CRowSlice!() {
+            data: *const CRowElem!(),
+            len: usize,
+        }
+
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        pub struct CSlice!() {
+            data: *const CSliceElem!(),
+            len: usize,
+        }
+
+        #[unsafe(no_mangle)]
+        pub extern "C" fn CSliceGet!()(slice: CSlice!(), index: usize) -> CRowSlice!() {
+            let rows = unsafe {
+                (CRustSlice { data: slice.data.cast(), len: slice.len })
+                    .as_slice::<Vec<swig_subst_type!(T)>>()
+            };
+            let row = &rows[index];
+            CRowSlice!() { data: row.as_ptr().cast(), len: row.len() }
+        }
+    );
+    foreign_code!(module = "CSlice!().h";
+                    r##"
+#ifdef __cplusplus
+#include "rust_vec_impl.hpp"
+#include "CInnerVecModule!().h"
+
+namespace $RUST_SWIG_USER_NAMESPACE {
+using CppSlice!() = RustSlice<const swig_f_type!(Vec<T>, output),
+    internal::NestedForeignVecSliceAccess<
+        RustSlice<const swig_f_type!(T, output)>,
+        CSlice!(), CSliceElem!(), CRowSlice!(), CSliceGet!()>>;
+}
+#endif
+"##);
+    ($p:r_type) <T: SwigForeignClassDirectVecAccess> &[Vec<T>] => CSlice!() {
+        $out = CSlice!() { data: $p.as_ptr().cast(), len: $p.len() };
+    };
+    ($p:r_type) <T: SwigForeignClassDirectVecAccess> &[Vec<T>] <= CSlice!() {
+        $out = unsafe {
+            (CRustSlice { data: $p.data.cast(), len: $p.len })
+                .as_slice::<Vec<swig_subst_type!(T)>>()
+        };
+    };
+    ($p:f_type, req_modules = ["\"CSlice!().h\""]) => "CppSlice!()"
+        "CppSlice!(){$p}";
+    ($p:f_type, req_modules = ["\"CSlice!().h\""]) <= "CppSlice!()"
+        "$p.as_c<CSlice!()>()";
+);
