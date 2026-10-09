@@ -1,3 +1,40 @@
+@@expect {"file":"test.rs","kind":"item","name":"CRustSliceVecForeignRowFoo_get","form":"definition"}
+#[unsafe(no_mangle)]
+pub extern "C" fn CRustSliceVecForeignRowFoo_get(
+    slice: CRustSliceVecForeignRowFoo,
+    index: usize,
+) -> CRustSliceVecForeignRowFooRowSlice {
+    let rows = unsafe {
+        (CRustSlice {
+            data: slice.data.cast(),
+            len: slice.len,
+        })
+        .as_slice::<Vec<RowFoo>>()
+    };
+    let row = &rows[index];
+    CRustSliceVecForeignRowFooRowSlice {
+        data: row.as_ptr().cast(),
+        len: row.len(),
+    }
+}
+@@end
+
+@@expect {"file":"test.rs","kind":"item","name":"NestedVecHost_count_foos","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn NestedVecHost_count_foos(rows: CRustSliceVecForeignRowFoo) -> usize {
+    let mut rows: &[Vec<RowFoo>] = unsafe {
+        (CRustSlice {
+            data: rows.data.cast(),
+            len: rows.len,
+        })
+        .as_slice::<Vec<RowFoo>>()
+    };
+    let mut ret: usize = NestedVecHost::count_foos(rows);
+    ret
+}
+@@end
+
 @@expect {"file":"test.rs","kind":"item","name":"RustVecVecRowFoo_get","form":"definition"}
 #[unsafe(no_mangle)]
 pub extern "C" fn RustVecVecRowFoo_get(

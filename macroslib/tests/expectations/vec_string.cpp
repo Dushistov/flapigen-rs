@@ -80,6 +80,7 @@ struct CRustString crust_vec_string_remove(CRustVecString * value, uintptr_t ind
 
 #ifdef __cplusplus
 #include "rust_vec_impl.hpp"
+#include "rust_string_slice.h"
 
 namespace org_examples {
 namespace internal {
@@ -88,9 +89,17 @@ template <typename View> struct StringVecPolicy {
     using reference = View;
     using iterator = SliceIterator<CRustVecString, StringVecPolicy<View>>;
     using const_iterator = iterator;
+    using SliceAccess = StringSliceAccess<View, CRustSliceString, CRustSliceStringElem,
+                                          crust_slice_string_get>;
+    using Slice = RustSlice<const View, SliceAccess>;
 
     static CRustVecString empty() noexcept { return crust_vec_string_new(); }
     static void free(CRustVecString vec) noexcept { crust_vec_string_free(vec); }
+    static Slice as_slice(CRustVecString vec) noexcept
+    {
+        return Slice{ static_cast<const CRustSliceStringElem *>(
+                          static_cast<const void *>(vec.data)), vec.len };
+    }
     static View index(CRustVecString vec, size_t i) noexcept
     {
         const auto str = crust_vec_string_get(vec, i);

@@ -179,6 +179,7 @@ class RustSlice final {
 
 public:
     using value_type = Element;
+    using storage_type = StorageElement;
     using reference = decltype(Access::index(std::declval<Storage>(), size_t{}));
     using const_reference = decltype(Access::index(std::declval<ConstStorage>(), size_t{}));
     using iterator = typename MutableIterator::type;

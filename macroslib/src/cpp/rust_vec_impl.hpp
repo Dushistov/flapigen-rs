@@ -35,6 +35,14 @@ namespace internal {
             return vec.len == 0 ? vec.data : vec.data + vec.len;
         }
         static const_iterator cend(Descriptor vec) noexcept { return end(vec); }
+        static RustSlice<const value_type> as_slice(Descriptor vec) noexcept
+        {
+            return RustSlice<const value_type>{ vec.data, vec.len };
+        }
+        static RustSlice<value_type> as_slice_mut(Descriptor vec) noexcept
+        {
+            return RustSlice<value_type>{ vec.data, vec.len };
+        }
     };
 
     template <typename ForeignClassRef, typename Descriptor,
@@ -145,7 +153,20 @@ namespace internal {
         }
     };
 
-    template <typename RowVec, typename RowSlice, typename Descriptor,
+    template <typename RowSlice, typename Descriptor, typename Element,
+              typename RowDescriptor, RowDescriptor (*Get)(Descriptor, uintptr_t)>
+    struct NestedForeignVecSliceAccess {
+        using storage_type = Element;
+
+        static RowSlice index(SliceStorage<const Element *> slice, size_t i) noexcept
+        {
+            const auto row = Get(Descriptor{ slice.data, slice.len }, i);
+            return RowSlice{ static_cast<const typename RowSlice::storage_type *>(
+                                 static_cast<const void *>(row.data)), row.len };
+        }
+    };
+
+    template <typename RowVec, typename RowSlice, typename OuterSlice, typename Descriptor,
               typename RowDescriptor, typename SliceDescriptor,
               Descriptor (*New)(), void (*Free)(Descriptor),
               SliceDescriptor (*Get)(Descriptor, uintptr_t),
@@ -159,6 +180,11 @@ namespace internal {
 
         static Descriptor empty() noexcept { return New(); }
         static void free(Descriptor vec) noexcept { Free(vec); }
+        static OuterSlice as_slice(Descriptor vec) noexcept
+        {
+            return OuterSlice{ static_cast<const typename OuterSlice::storage_type *>(
+                                   static_cast<const void *>(vec.data)), vec.len };
+        }
         static reference index(Descriptor vec, size_t i) noexcept
         {
             const auto row = Get(vec, i);
