@@ -1,8 +1,8 @@
-@@expect {"after":"\n\n};\n\n\n    t","before":"friend class FooWrapper<false>;\n\n    ","file":"Foo.hpp","kind":"between"}
+@@expect {"file":"Foo.hpp","kind":"item","name":"static_foo","form":"declaration"}
 static void static_foo(const Boo & a0) noexcept;
 @@end
 
-@@expect {"after":"\n\n} // names","before":"static void static_foo(const Boo & a0) noexcept;\n\n};\n\n\n    ","file":"Foo.hpp","kind":"between"}
+@@expect {"file":"Foo.hpp","kind":"between","before":"namespace org_examples {\n\n\n    ","after":"\n\n} // namespace org_examples"}
 template<bool OWN_DATA>
     inline void FooWrapper<OWN_DATA>::static_foo(const Boo & a0) noexcept
     {

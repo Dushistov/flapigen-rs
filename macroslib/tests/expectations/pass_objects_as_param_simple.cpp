@@ -50,8 +50,9 @@ static void f4(FooRef a0) noexcept
 static void f5(Foo a0) noexcept
 @@end
 
-@@expect {"after":"\n\n    template<bool OWN_DATA>\n    inline","before":"constexpr const uintptr_t &TestPassObjectsAsParamsWrapper<OWN_DATA>::rust_elem_size;\n\n\n    template<bool OWN_DATA>\n    ","file":"TestPassObjectsAsParams.hpp","kind":"between"}
-inline void TestPassObjectsAsParamsWrapper<OWN_DATA>::f1(FooRef a0) const noexcept
+@@expect {"file":"TestPassObjectsAsParams.hpp","kind":"item","name":"TestPassObjectsAsParamsWrapper<OWN_DATA>::f1","form":"definition"}
+template<bool OWN_DATA>
+    inline void TestPassObjectsAsParamsWrapper<OWN_DATA>::f1(FooRef a0) const noexcept
     {
 
         TestPassObjectsAsParams_f1(this->self_, static_cast<const FooOpaque *>(a0));

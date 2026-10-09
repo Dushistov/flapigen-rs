@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::BTreeSet, rc::Rc};
 
 use log::{debug, trace, warn};
 use petgraph::Direction;
@@ -18,7 +18,8 @@ use crate::{
             UniqueName,
         },
         ty::{ForeignType, RustType, TraitNamesSet},
-        ExpandedFType, MapToForeignFlag, TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
+        ExpandedFType, ForeignCodeExpandContext, MapToForeignFlag,
+        TypeMapConvRuleInfoExpanderHelper, FROM_VAR_TEMPLATE,
     },
     types::ForeignClassInfo,
     TypeMap,
@@ -215,6 +216,32 @@ struct CppContextForArg<'a, 'b> {
     direction: Direction,
 }
 
+struct CppForeignCodeContext {
+    module_name: String,
+    required_modules: BTreeSet<String>,
+}
+
+impl ForeignCodeExpandContext for CppForeignCodeContext {
+    fn swig_f_type(&mut self, f_type: &ExpandedFType) {
+        self.required_modules
+            .extend(f_type.provided_by_module.iter().cloned());
+    }
+
+    fn finish(mut self: Box<Self>, code: String) -> String {
+        self.required_modules
+            .remove(&format!("\"{}\"", self.module_name));
+        self.required_modules.remove("<stdint.h>");
+        let mut result = String::new();
+        for module in self.required_modules {
+            result.push_str("#include ");
+            result.push_str(&module);
+            result.push('\n');
+        }
+        result.push_str(&code);
+        result
+    }
+}
+
 impl CppContextForArg<'_, '_> {
     fn arg_direction(&self, param1: Option<&str>) -> Result<Direction> {
         match param1 {
@@ -230,6 +257,22 @@ impl CppContextForArg<'_, '_> {
 }
 
 impl TypeMapConvRuleInfoExpanderHelper for CppContextForArg<'_, '_> {
+    fn foreign_code_context(
+        &self,
+        module_name: &str,
+        code: &str,
+    ) -> Option<Box<dyn ForeignCodeExpandContext>> {
+        // Explicit includes control their own order: slice and vector headers
+        // define the C descriptor before including C++ wrappers.
+        if !module_name.ends_with(".h") || code.contains("#include") {
+            return None;
+        }
+        Some(Box::new(CppForeignCodeContext {
+            module_name: module_name.to_owned(),
+            required_modules: BTreeSet::new(),
+        }))
+    }
+
     fn swig_i_type(&mut self, ty: &syn::Type, opt_arg: Option<&str>) -> Result<syn::Type> {
         let rust_ty = self
             .ctx

@@ -19,6 +19,8 @@ public:
 @@end
 
 @@expect {"after":"\n","before":"#pragma once\n\n","file":"c_Completioni32.h","greedy_match":true,"kind":"between"}
+#include <stdint.h>
+
 struct C_Completioni32 {
     void *opaque;
     //! call by Rust side when callback not need anymore
@@ -32,6 +34,9 @@ struct C_Completioni32 {
 @@end
 
 @@expect {"after":"\n","before":"#pragma once\n\n","file":"c_CompletionCRustString.h","greedy_match":true,"kind":"between"}
+#include <stdint.h>
+#include "rust_str.h"
+
 struct C_CompletionCRustString {
     void *opaque;
     //! call by Rust side when callback not need anymore

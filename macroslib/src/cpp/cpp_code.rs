@@ -188,6 +188,62 @@ pub(in crate::cpp) fn cpp_list_required_includes(
     includes
 }
 
+pub(in crate::cpp) struct CAbiHeaderDependencies {
+    pub includes: BTreeSet<String>,
+    pub opaque_types: BTreeSet<String>,
+    pub struct_types: BTreeSet<String>,
+}
+
+pub(in crate::cpp) fn c_abi_header_dependencies(
+    methods: &[CppForeignMethodSignature],
+    forward_signature_structs: bool,
+) -> CAbiHeaderDependencies {
+    let mut includes = BTreeSet::new();
+    let mut opaque_types = BTreeSet::new();
+    let mut struct_types = BTreeSet::new();
+    for ty in methods
+        .iter()
+        .flat_map(|method| method.input.iter().chain(std::iter::once(&method.output)))
+    {
+        let name = ty.base.name.display();
+        let tokens: Vec<_> = name
+            .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+            .filter(|token| !token.is_empty())
+            .collect();
+        let mut can_forward = false;
+        for pair in tokens.windows(2) {
+            if pair[0] == "struct" {
+                struct_types.insert(pair[1].to_owned());
+                can_forward = true;
+            }
+        }
+        for token in tokens {
+            if token.ends_with("Opaque") && token.len() > const { "Opaque".len() } {
+                opaque_types.insert(token.to_owned());
+                can_forward = true;
+            }
+        }
+        if !forward_signature_structs || !can_forward {
+            for module in &ty.provided_by_module {
+                if module.ends_with(".h\"") || module.ends_with(".h>") {
+                    includes.insert(module.clone());
+                }
+            }
+        }
+    }
+    // Opaque pointers need only a forward declaration. Including their class
+    // headers here can introduce a cycle between generated C headers.
+    for opaque in &opaque_types {
+        let class = opaque.strip_suffix("Opaque").unwrap();
+        includes.remove(&format!("\"c_{class}.h\""));
+    }
+    CAbiHeaderDependencies {
+        includes,
+        opaque_types,
+        struct_types,
+    }
+}
+
 pub(in crate::cpp) fn generate_c_type(
     ctx: &mut CppContext,
     c_types: &CItems,

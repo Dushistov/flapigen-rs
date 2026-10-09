@@ -34,7 +34,8 @@ use crate::{
 use ast::ConversionResult;
 
 pub(crate) use typemap_macro::{
-    CItem, CItems, ExpandedFType, MacroArgs, TypeMapConvRuleInfo, TypeMapConvRuleInfoExpanderHelper,
+    CItem, CItems, ExpandedFType, ForeignCodeExpandContext, MacroArgs, TypeMapConvRuleInfo,
+    TypeMapConvRuleInfoExpanderHelper,
 };
 
 use self::ast::UniqueName;

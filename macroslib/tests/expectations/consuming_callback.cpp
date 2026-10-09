@@ -9,6 +9,8 @@ public:
 @@end
 
 @@expect {"after":"\n","before":"#pragma once\n\n","file":"c_Completion.h","greedy_match":true,"kind":"between"}
+#include <stdint.h>
+
 struct C_Completion {
     void *opaque;
     //! call by Rust side when callback not need anymore

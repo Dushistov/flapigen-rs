@@ -529,7 +529,22 @@ pub(crate) struct ExpandedFType {
     pub provided_by_module: Vec<String>,
 }
 
+/// Lets a language backend handle dependencies discovered while expanding
+/// swig_f_type! in a foreign_code! block.
+pub(crate) trait ForeignCodeExpandContext {
+    fn swig_f_type(&mut self, f_type: &ExpandedFType);
+    fn finish(self: Box<Self>, code: String) -> String;
+}
+
 pub(crate) trait TypeMapConvRuleInfoExpanderHelper {
+    fn foreign_code_context(
+        &self,
+        _module_name: &str,
+        _code: &str,
+    ) -> Option<Box<dyn ForeignCodeExpandContext>> {
+        None
+    }
+
     fn swig_i_type(&mut self, ty: &syn::Type, opt_arg: Option<&str>) -> Result<syn::Type>;
     fn swig_callback_i_type(&mut self, callback: &str, ty: &syn::Type) -> Result<syn::Type>;
     fn swig_from_rust_to_i_type(
@@ -990,6 +1005,7 @@ fn call_swig_f_type(
     param_map: &TyParamsSubstMap,
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
     generic_aliases: &[CalcGenericAlias],
+    context: Option<&mut dyn ForeignCodeExpandContext>,
 ) -> Result<Vec<String>> {
     let (type_name, opt_param) = match params.len() {
         1 => (params[0], None),
@@ -1019,6 +1035,9 @@ fn call_swig_f_type(
     };
 
     let f_type = expander.swig_f_type(ty.as_ref(), opt_param)?;
+    if let Some(context) = context {
+        context.swig_f_type(&f_type);
+    }
     out.push_str(f_type.name.value());
     Ok(f_type.provided_by_module)
 }
@@ -1058,8 +1077,15 @@ fn expand_str_in_ftype_name_context(
 ) -> Result<String> {
     expand_macroses(input, |id: &str, params: Vec<&str>, out: &mut String| {
         if id == SWIG_F_TYPE {
-            let modules: Vec<String> =
-                call_swig_f_type(ctx_span, params, out, param_map, expander, generic_aliases)?;
+            let modules: Vec<String> = call_swig_f_type(
+                ctx_span,
+                params,
+                out,
+                param_map,
+                expander,
+                generic_aliases,
+                None,
+            )?;
             provided_by_module.extend(modules.into_iter().map(|name| ModuleName {
                 name,
                 sp: Span::call_site(),
@@ -1248,13 +1274,24 @@ fn expand_foreign_code(
     expander: &mut dyn TypeMapConvRuleInfoExpanderHelper,
     generic_aliases: &[CalcGenericAlias],
     ctx_span: SourceIdSpan,
+    mut context: Option<&mut Box<dyn ForeignCodeExpandContext>>,
 ) -> Result<String> {
     expand_macroses(
         code,
         |id: &str, params: Vec<&str>, out: &mut String| -> Result<()> {
             match id {
                 _ if id == SWIG_F_TYPE => {
-                    call_swig_f_type(ctx_span, params, out, param_map, expander, generic_aliases)?;
+                    call_swig_f_type(
+                        ctx_span,
+                        params,
+                        out,
+                        param_map,
+                        expander,
+                        generic_aliases,
+                        context
+                            .as_mut()
+                            .map(|context| context.as_mut() as &mut dyn ForeignCodeExpandContext),
+                    )?;
                 }
                 _ if id == SWIG_I_TYPE => {
                     let (param, opt_arg) = match params.len() {
@@ -1337,6 +1374,7 @@ fn expand_foreign_type_conv_code(
         expander,
         generic_aliases,
         ctx_span,
+        None,
     )?;
     Ok(TypeConvCode::with_params(
         ret_code,
@@ -1356,13 +1394,19 @@ fn expand_fcode(
     for fc in f_code {
         let module_name: String =
             expand_module_name(&fc.module_name, (src_id, fc.sp), generic_aliases)?;
+        let mut context = expander.foreign_code_context(&module_name, &fc.code);
         let code = expand_foreign_code(
             &fc.code,
             param_map,
             expander,
             generic_aliases,
             (src_id, fc.sp),
+            context.as_mut(),
         )?;
+        let code = match context {
+            Some(context) => context.finish(code),
+            None => code,
+        };
         ret.push(ForeignCode {
             sp: fc.sp,
             module_name,

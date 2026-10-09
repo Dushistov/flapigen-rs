@@ -7,6 +7,8 @@ virtual void onStateChangedWithoutArgs() const noexcept = 0;
 @@end
 
 @@expect {"after":"\n","before":"#pragma once\n\n","file":"c_SomeObserver.h","greedy_match":true,"kind":"between"}
+#include <stdint.h>
+
 struct C_SomeObserver {
     void *opaque;
     //! call by Rust side when callback not need anymore
