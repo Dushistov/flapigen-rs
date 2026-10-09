@@ -39,6 +39,8 @@ pub extern "C" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jclass, a0: jbo
 @@end
 
 @@expect {"after":"static mut J","before":"drop(this);\n}\n","file":"test.rs","kind":"between"}
+#[allow(dead_code)]
+type SwigJniCallbackSomeObserverObject = jobject;
 impl SomeTrait for JavaCallback {
     #[allow(unused_mut)]
     fn on_state_changed1(&self, a0: i32, a1: bool) {

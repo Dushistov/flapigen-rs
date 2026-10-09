@@ -14,6 +14,57 @@ mod expectation_snapshot;
 include!(concat!(env!("OUT_DIR"), "/test_expectations.rs"));
 
 #[test]
+fn java_pointer_width_typemaps() {
+    let source = r#"
+foreign_class!(class WidthProbe {
+    self_type WidthProbe;
+    constructor WidthProbe::new() -> WidthProbe;
+    fn WidthProbe::signed(&self) -> isize;
+    fn WidthProbe::unsigned(&self) -> usize;
+});
+"#;
+
+    for (width, signed_java_type, signed_conversion, unsigned_conversion) in [
+        (
+            32,
+            "int",
+            "let mut ret: jint = ret as jint;",
+            "let mut ret: jlong = ret as jlong;",
+        ),
+        (
+            64,
+            "long",
+            "let mut ret: jlong = ret as jlong;",
+            "let mut ret: jlong = u64_to_jlong_checked(ret as u64);",
+        ),
+    ] {
+        let output = parse_code_with_pointer_target_width(
+            "java_pointer_width_typemaps",
+            Source::Str(source),
+            ForeignLang::Java,
+            width,
+        )
+        .unwrap();
+        let java = output.foreign_files.get("WidthProbe.java").unwrap();
+        assert!(
+            java.contains(&format!("public final {signed_java_type} signed()")),
+            "{java}"
+        );
+        assert!(java.contains("public final long unsigned()"), "{java}");
+
+        let rust = rustfmt_without_errors(output.rust_code);
+        assert!(
+            rust.contains(signed_conversion),
+            "missing {signed_conversion} for {width}-bit target"
+        );
+        assert!(
+            rust.contains(unsigned_conversion),
+            "missing {unsigned_conversion} for {width}-bit target"
+        );
+    }
+}
+
+#[test]
 fn test_expectation_return_string_slices_boost() {
     let tmp_dir = tempdir().expect("Can not create tmp directory");
     let fixture =
@@ -563,6 +614,15 @@ enum Source<'a> {
 }
 
 fn parse_code(test_name: &str, rust_src: Source, lang: ForeignLang) -> Result<CodePair, Error> {
+    parse_code_with_pointer_target_width(test_name, rust_src, lang, 64)
+}
+
+fn parse_code_with_pointer_target_width(
+    test_name: &str,
+    rust_src: Source,
+    lang: ForeignLang,
+    pointer_target_width: usize,
+) -> Result<CodePair, Error> {
     let tmp_dir = tempdir().expect("Can not create tmp directory");
     let (swig_gen, ext_list): (Generator, &[&'static str]) = match lang {
         ForeignLang::Java => {
@@ -570,7 +630,7 @@ fn parse_code(test_name: &str, rust_src: Source, lang: ForeignLang) -> Result<Co
                 JavaConfig::new(tmp_dir.path().into(), "org.example".into())
                     .use_null_annotation_from_package("android.support.annotation".into()),
             ))
-            .with_pointer_target_width(64);
+            .with_pointer_target_width(pointer_target_width);
 
             (swig_gen, &[".java"])
         }
@@ -579,7 +639,7 @@ fn parse_code(test_name: &str, rust_src: Source, lang: ForeignLang) -> Result<Co
                 tmp_dir.path().into(),
                 "org_examples".into(),
             )))
-            .with_pointer_target_width(64);
+            .with_pointer_target_width(pointer_target_width);
             (swig_gen, &[".h", ".hpp"])
         }
     };

@@ -6,7 +6,9 @@ const _: () = {
 
 @@end
 
-@@expect {"after":"#[doc(hidden)]\nimpl SwigFrom<jobject> for Box<dyn OnEvent + Send> {\n    fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {\n        let mut cb = JavaCallbac","before":"_env: *mut JNIEnv,\n    _: jclass,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n) {\n}\n","file":"test.rs","kind":"between"}
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Test_f(","before":"_env: *mut JNIEnv,\n    _: jclass,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n    _: jobject,\n) {\n}\n","file":"test.rs","kind":"between"}
+#[allow(dead_code)]
+type SwigJniCallbackMyObserverObject = jobject;
 impl OnEvent for JavaCallback {
     #[allow(unused_mut)]
     fn something_change(&self, a0: i32, a1: &str) {
@@ -31,29 +33,33 @@ impl OnEvent for JavaCallback {
 
 @@end
 
-@@expect {"after":"#[allow(non_snake_case, ","before":"   };\n        }\n    }\n}\n","file":"test.rs","kind":"between"}
-#[doc(hidden)]
-impl SwigFrom<jobject> for Box<dyn OnEvent + Send> {
-    fn swig_from(this: jobject, env: *mut JNIEnv) -> Self {
-        let mut cb = JavaCallback::new(this, env);
-        cb.methods.reserve(1);
-        let class = unsafe { (**env).GetObjectClass.unwrap()(env, cb.this) };
-        assert!(
-            !class.is_null(),
-            "GetObjectClass return null class for MyObserver"
-        );
-        let method_id: jmethodID = unsafe {
-            (**env).GetMethodID.unwrap()(
-                env,
-                class,
-                swig_c_str!("onStateChanged"),
-                swig_c_str!("(ILjava/lang/String;)V"),
-            )
-        };
-        assert!(!method_id.is_null(), "Can not find onStateChanged id");
-        cb.methods.push(method_id);
-        Box::new(cb)
-    }
+@@expect {"file":"test.rs","kind":"item","name":"Java_org_example_Test_f","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
+#[unsafe(no_mangle)]
+pub extern "C" fn Java_org_example_Test_f(
+    env: *mut JNIEnv,
+    _: jclass,
+    a0: SwigJniCallbackMyObserverObject,
+) -> () {
+    let mut cb = JavaCallback::new(a0, env);
+    cb.methods.reserve(1);
+    let class = unsafe { (**env).GetObjectClass.unwrap()(env, cb.this) };
+    assert!(
+        !class.is_null(),
+        "GetObjectClass return null class for MyObserver"
+    );
+    let method_id: jmethodID = unsafe {
+        (**env).GetMethodID.unwrap()(
+            env,
+            class,
+            swig_c_str!("onStateChanged"),
+            swig_c_str!("(ILjava/lang/String;)V"),
+        )
+    };
+    assert!(!method_id.is_null(), "Can not find onStateChanged id");
+    cb.methods.push(method_id);
+    let mut a0: Box<dyn OnEvent + Send> = Box::new(cb);
+    let mut ret: () = f(a0);
+    ret
 }
-
 @@end

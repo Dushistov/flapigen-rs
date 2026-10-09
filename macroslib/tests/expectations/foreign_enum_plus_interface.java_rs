@@ -1,10 +1,42 @@
-@@expect {"after":"static mut J","before":"ret\n    }\n}\n","file":"test.rs","kind":"between"}
+@@expect {"after":"static mut J","before":"type SwigJniCallbackControlStateObserverObject = jobject;\n","file":"test.rs","kind":"between"}
 impl ControlStateChange for JavaCallback {
     #[allow(unused_mut)]
     fn on_state_changed(&self, a0: ControlItem, a1: bool) {
         let env = self.get_jni_env();
         if let Some(env) = env.env {
-            let mut a0: jobject = <jobject>::swig_from(a0, env);
+            let cls: jclass =
+                swig_jni_find_class!(FOREIGN_ENUM_CONTROLITEM, "org/example/ControlItem");
+            assert!(!cls.is_null());
+            let static_field_id: jfieldID = match a0 {
+                ControlItem::GnssWorking => {
+                    let field = swig_jni_get_static_field_id!(
+                        FOREIGN_ENUM_CONTROLITEM_GNSS,
+                        FOREIGN_ENUM_CONTROLITEM,
+                        "GNSS",
+                        "Lorg/example/ControlItem;"
+                    );
+                    assert!(!field.is_null());
+                    field
+                }
+                ControlItem::AndroidGPSOn => {
+                    let field = swig_jni_get_static_field_id!(
+                        FOREIGN_ENUM_CONTROLITEM_GPS_PROVIDER,
+                        FOREIGN_ENUM_CONTROLITEM,
+                        "GPS_PROVIDER",
+                        "Lorg/example/ControlItem;"
+                    );
+                    assert!(!field.is_null());
+                    field
+                }
+            };
+            assert!(!static_field_id.is_null());
+            let ret: jobject =
+                unsafe { (**env).GetStaticObjectField.unwrap()(env, cls, static_field_id) };
+            assert!(
+                !ret.is_null(),
+                concat!("Can get value of item in ", "org/example/ControlItem")
+            );
+            let mut a0: jobject = ret;
             let mut a1: jboolean = if a1 { 1 as jboolean } else { 0 as jboolean };
             unsafe {
                 (**env).CallVoidMethod.unwrap()(

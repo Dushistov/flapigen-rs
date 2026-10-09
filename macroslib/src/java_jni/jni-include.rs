@@ -1,13 +1,8 @@
-mod swig_foreign_types_map {
-    #![swig_foreigner_type = "Object"]
-    #![swig_rust_type_not_unique = "jobject"]
-    #![swig_foreigner_type = "Object []"]
-    #![swig_rust_type_not_unique = "jobjectArray"]
-}
-
 #[allow(dead_code)]
 mod internal_aliases {
     use super::*;
+    pub type JObject = jobject;
+    pub type JObjectArray = jobjectArray;
     pub type JStringOptStr = jstring;
     pub type JOptionalInt = jobject;
     pub type JInteger = jobject;
@@ -26,6 +21,16 @@ mod internal_aliases {
     pub type JStringPath = jstring;
     pub type JStringObjectsArray = jobjectArray;
 }
+
+foreign_typemap!(
+    (r_type) internal_aliases::JObject;
+    (f_type) "Object";
+);
+
+foreign_typemap!(
+    (r_type) internal_aliases::JObjectArray;
+    (f_type) "Object []";
+);
 
 /// Default JNI_VERSION
 const SWIG_JNI_VERSION: jint = JNI_VERSION_1_6 as jint;
@@ -82,18 +87,6 @@ macro_rules! swig_jni_get_static_field_id {
     ($global_id:ident, $class_id:ident, $name:expr, $sig:expr,) => {
         unsafe { $global_id }
     };
-}
-
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = {from_var}.swig_into(env);"]
-trait SwigInto<T> {
-    fn swig_into(self, env: *mut JNIEnv) -> T;
-}
-
-#[allow(dead_code)]
-#[swig_code = "let mut {to_var}: {to_var_type} = <{to_var_type}>::swig_from({from_var}, env);"]
-trait SwigFrom<T> {
-    fn swig_from(_: T, env: *mut JNIEnv) -> Self;
 }
 
 #[allow(unused_macros)]
@@ -1079,33 +1072,32 @@ foreign_typemap!(
 );
 
 #[cfg(target_pointer_width = "32")]
-impl SwigFrom<isize> for jint {
-    fn swig_from(x: isize, _: *mut JNIEnv) -> Self {
-        x as jint
-    }
-}
+foreign_typemap!(
+    ($p:r_type) isize => jint {
+        $out = $p as jint;
+    };
+);
 
 #[cfg(target_pointer_width = "64")]
-impl SwigFrom<isize> for jlong {
-    fn swig_from(x: isize, _: *mut JNIEnv) -> Self {
-        x as jlong
-    }
-}
+foreign_typemap!(
+    ($p:r_type) isize => jlong {
+        $out = $p as jlong;
+    };
+);
 
 #[cfg(target_pointer_width = "32")]
-impl SwigFrom<usize> for jlong {
-    fn swig_from(x: usize, _: *mut JNIEnv) -> Self {
-        x as jlong
-    }
-}
+foreign_typemap!(
+    ($p:r_type) usize => jlong {
+        $out = $p as jlong;
+    };
+);
 
 #[cfg(target_pointer_width = "64")]
-impl SwigFrom<usize> for jlong {
-    fn swig_from(x: usize, _: *mut JNIEnv) -> Self {
-        let x = x as u64;
-        u64_to_jlong_checked(x)
-    }
-}
+foreign_typemap!(
+    ($p:r_type) usize => jlong {
+        $out = u64_to_jlong_checked($p as u64);
+    };
+);
 
 foreign_typemap!(
     ($p:r_type) &str => String {
