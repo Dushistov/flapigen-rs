@@ -728,9 +728,9 @@ May be you need to use `private constructor = empty;` syntax?",
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
 #[unsafe(no_mangle)]
 pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong) {{
-    let this: *mut {this_type} = unsafe {{
-        jlong_to_pointer::<{this_type}>(this).as_mut().unwrap()
-    }};
+    let this: *mut {this_type} = ::std::ptr::NonNull::new(
+        jlong_to_pointer::<{this_type}>(this)
+    ).unwrap().as_ptr();
 {unpack_code}
     drop(this);
 }}

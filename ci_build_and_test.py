@@ -264,9 +264,10 @@ def run_unit_tests(test_cfg: Set[str], test_set: Set[str]):
 
 @show_timing
 def run_miri_tests() -> None:
-    manifest = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "cpp_miri_tests", "Cargo.toml")
-    subprocess.check_call(["cargo", "+nightly", "miri", "test", "--manifest-path", manifest])
+    root = os.path.dirname(os.path.abspath(__file__))
+    for crate in ("cpp_miri_tests", "java_miri_tests"):
+        manifest = os.path.join(root, crate, "Cargo.toml")
+        subprocess.check_call(["cargo", "+nightly", "miri", "test", "--manifest-path", manifest])
 
 @show_timing
 def main():

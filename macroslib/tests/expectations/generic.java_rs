@@ -38,7 +38,8 @@ pub extern "C" fn Java_org_example_Boo_do_1get_1one_1foo(
 
 @@end
 
-@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Boo_do_1delete(env: *mut JNIEnv, _: jclass, this: jlong) {\n    let this: *mut Boo = unsafe { jlong_to_pointer::<Boo>(this).as_mut().unwrap() };\n    let this: Box<Boo> = unsafe { Box::from_raw(th","before":"      )\n            .expect(\"SystemTime: milleseconds u64 to i64 convert error\");\n            ret\n        }\n        Err(msg) => {\n            jni_throw_exception(env, &msg);\n            return <jlong>::jni_invalid_value();\n        }\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"file":"test.rs","kind":"item","name":"Java_org_example_Boo_r_1test_1u8","form":"definition"}
+#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_Boo_r_1test_1u8(
     env: *mut JNIEnv,
@@ -60,7 +61,6 @@ pub extern "C" fn Java_org_example_Boo_r_1test_1u8(
     };
     ret
 }
-
 @@end
 
 @@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_Boo_do_1now2(env: *mut JNIEnv, _: ","before":"jni_throw_exception(env, &msg);\n            return <jlong>::jni_invalid_value();\n        }\n    };\n    ret\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}

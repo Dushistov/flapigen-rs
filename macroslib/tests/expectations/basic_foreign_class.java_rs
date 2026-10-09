@@ -18,7 +18,9 @@ pub extern "C" fn Java_org_example_BasicBox_init(
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_BasicBox_do_1delete(env: *mut JNIEnv, _: jclass, this: jlong) {
-    let this: *mut BasicBox = unsafe { jlong_to_pointer::<BasicBox>(this).as_mut().unwrap() };
+    let this: *mut BasicBox = ::std::ptr::NonNull::new(jlong_to_pointer::<BasicBox>(this))
+        .unwrap()
+        .as_ptr();
     let this: Box<BasicBox> = unsafe { Box::from_raw(this) };
     drop(this);
 }
@@ -55,7 +57,9 @@ pub extern "C" fn Java_org_example_BasicRc_init(env: *mut JNIEnv, _: jclass, val
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_BasicRc_do_1delete(env: *mut JNIEnv, _: jclass, this: jlong) {
     let this: *mut RefCell<BasicRc> =
-        unsafe { jlong_to_pointer::<RefCell<BasicRc>>(this).as_mut().unwrap() };
+        ::std::ptr::NonNull::new(jlong_to_pointer::<RefCell<BasicRc>>(this))
+            .unwrap()
+            .as_ptr();
     let this: Rc<RefCell<BasicRc>> = unsafe { Rc::from_raw(this) };
     drop(this);
 }
@@ -99,7 +103,9 @@ pub extern "C" fn Java_org_example_BasicArc_init(
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_BasicArc_do_1delete(env: *mut JNIEnv, _: jclass, this: jlong) {
     let this: *mut Mutex<BasicArc> =
-        unsafe { jlong_to_pointer::<Mutex<BasicArc>>(this).as_mut().unwrap() };
+        ::std::ptr::NonNull::new(jlong_to_pointer::<Mutex<BasicArc>>(this))
+            .unwrap()
+            .as_ptr();
     let this: Arc<Mutex<BasicArc>> = unsafe { Arc::from_raw(this) };
     drop(this);
 }
