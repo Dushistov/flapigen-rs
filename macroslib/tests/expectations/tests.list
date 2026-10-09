@@ -2,10 +2,12 @@ bool_in_out_interface
 bool_in_out
 basic_foreign_class
 circular_deps
+cpp_class_header_dependencies
 class_with_dummy_constructor
 cpp_code_cache
 cpp_issue_309_option_refs
 cpp_include_custom_rule
+cpp_interface_self_include
 cpp_include_return_only_result_vec
 cpp_qdate_typemap
 cpp_return_option
@@ -66,6 +68,7 @@ reachability_fence_java
 inline_dyn
 fenum_with_comments
 cpp_plain_class
+cpp_plain_circular_deps
 cpp_plain_class_ref_error
 cpp_plain_class_ref_custom
 access

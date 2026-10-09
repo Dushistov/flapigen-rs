@@ -11,6 +11,9 @@ static void c_onStateChanged(struct CRustStrView a0, void *opaque)
 @@end
 
 @@expect {"after":"\n","before":"#pragma once\n\n","file":"c_SomeObserver.h","greedy_match":true,"kind":"between"}
+#include <stdint.h>
+#include "rust_str.h"
+
 struct C_SomeObserver {
     void *opaque;
     //! call by Rust side when callback not need anymore

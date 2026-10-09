@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io::Write};
+use std::{borrow::Cow, collections::BTreeSet, io::Write};
 
 use log::debug;
 use petgraph::Direction;
@@ -60,18 +60,75 @@ May be you need to use `private constructor = empty;` syntax?",
     }
 
     let mut m_sigs = find_suitable_foreign_types_for_methods(ctx, class)?;
+    let c_deps = cpp_code::c_abi_header_dependencies(&m_sigs, true);
+    let deferred_includes = deferred_reference_includes(class, &m_sigs);
     let mut req_includes = cpp_code::cpp_list_required_includes(&mut m_sigs);
     let my_self_cpp = format!("\"{}\"", cpp_code::cpp_header_name(class));
     let my_self_c = format!("\"{}\"", cpp_code::c_header_name(class));
     req_includes.retain(|el| *el != my_self_cpp && *el != my_self_c);
-    do_generate(ctx, class, &req_includes, &m_sigs)?;
+    do_generate(
+        ctx,
+        class,
+        &req_includes,
+        &deferred_includes,
+        &c_deps,
+        &m_sigs,
+    )?;
     Ok(())
+}
+
+// A borrowed Foo argument only needs Foo's forward declaration in a method
+// declaration. Load Foo.hpp after this class, when inline bodies need it.
+fn deferred_reference_includes(
+    class: &ForeignClassInfo,
+    methods: &[CppForeignMethodSignature],
+) -> BTreeSet<String> {
+    if !class.foreign_code.is_empty() {
+        return BTreeSet::new();
+    }
+    let mut candidates = BTreeSet::new();
+    let mut must_include_early = BTreeSet::new();
+    for (method, signature) in class.methods.iter().zip(methods) {
+        for ty in signature
+            .input
+            .iter()
+            .chain(std::iter::once(&signature.output))
+        {
+            for module in &ty.provided_by_module {
+                let Some(name) = module
+                    .strip_prefix('"')
+                    .and_then(|s| s.strip_suffix(".hpp\""))
+                else {
+                    continue;
+                };
+                let is_ref = ty.cpp_converter.as_ref().is_some_and(|converter| {
+                    let typename = converter.typename.display();
+                    typename.strip_prefix(name) == Some("Ref")
+                        || typename
+                            .strip_prefix("const ")
+                            .map(|x| x.strip_prefix(name))
+                            .unwrap_or(None)
+                            == Some(" &")
+                        || typename.strip_prefix(name) == Some(" &")
+                });
+                if is_ref && method.variant != MethodVariant::Constructor {
+                    candidates.insert(module.clone());
+                } else {
+                    must_include_early.insert(module.clone());
+                }
+            }
+        }
+    }
+    candidates.retain(|module| !must_include_early.contains(module));
+    candidates
 }
 
 fn do_generate(
     ctx: &mut CppContext,
     class: &ForeignClassInfo,
     req_includes: &[String],
+    deferred_includes: &BTreeSet<String>,
+    c_deps: &cpp_code::CAbiHeaderDependencies,
     methods_sign: &[CppForeignMethodSignature],
 ) -> Result<()> {
     use std::fmt::Write;
@@ -107,6 +164,7 @@ fn do_generate(
         ctx,
         &class_doc_comments,
         &c_class_type,
+        c_deps,
         &mut c_include_f,
         static_only,
     );
@@ -117,12 +175,21 @@ fn do_generate(
         class.name.to_string()
     };
 
+    let mut early_includes = Vec::with_capacity(req_includes.len());
+    for include in req_includes {
+        if deferred_includes.contains(include) {
+            let name = include.trim_matches('"').trim_end_matches(".hpp");
+            early_includes.push(format!("\"{name}_fwd.hpp\""));
+        } else {
+            early_includes.push(include.clone());
+        }
+    }
     generate_cpp_header_preamble(
         ctx,
         class,
         &class_name,
         &class_doc_comments,
-        req_includes,
+        &early_includes,
         static_only,
         &c_class_type,
         &mut c_include_f,
@@ -679,6 +746,19 @@ private:
         )
         .expect(WRITE_TO_MEM_FAILED_MSG);
     }
+    if !deferred_includes.is_empty() {
+        writeln!(
+            cpp_include_f,
+            "\n}} // namespace {}",
+            ctx.cfg.namespace_name
+        )
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+        for include in deferred_includes {
+            writeln!(cpp_include_f, "#include {include}").expect(WRITE_TO_MEM_FAILED_MSG);
+        }
+        writeln!(cpp_include_f, "\nnamespace {} {{", ctx.cfg.namespace_name)
+            .expect(WRITE_TO_MEM_FAILED_MSG);
+    }
     // Write method implementations.
     if ctx.cfg.separate_impl_headers {
         writeln!(
@@ -1057,6 +1137,7 @@ fn generate_c_header_preamble(
     ctx: &CppContext,
     class_doc_comments: &str,
     c_class_type: &str,
+    c_deps: &cpp_code::CAbiHeaderDependencies,
     c_include_f: &mut FileWriteCache,
     static_only: bool,
 ) {
@@ -1066,15 +1147,41 @@ fn generate_c_header_preamble(
 {doc_comments}
 #pragma once
 
-//for (u)intX_t types
-#include <stdint.h>
-
+//for (u)intX_t types"##,
+        doc_comments = class_doc_comments,
+    )
+    .expect(WRITE_TO_MEM_FAILED_MSG);
+    c_include_f
+        .write_include_once("<stdint.h>")
+        .expect(WRITE_TO_MEM_FAILED_MSG);
+    let self_header = format!(
+        "\"c_{}.h\"",
+        c_class_type.strip_suffix("Opaque").unwrap_or("")
+    );
+    for include in &c_deps.includes {
+        if include != &self_header {
+            c_include_f
+                .write_include_once(include)
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+        }
+    }
+    for opaque in &c_deps.opaque_types {
+        if opaque != c_class_type {
+            writeln!(c_include_f, "typedef struct {opaque} {opaque};")
+                .expect(WRITE_TO_MEM_FAILED_MSG);
+        }
+    }
+    for name in &c_deps.struct_types {
+        writeln!(c_include_f, "struct {name};").expect(WRITE_TO_MEM_FAILED_MSG);
+    }
+    writeln!(
+        c_include_f,
+        r##"
 #ifdef __cplusplus
 static_assert(sizeof(uintptr_t) == sizeof(uint8_t) * {sizeof_usize},
    "our conversion usize <-> uintptr_t is wrong");
 extern "C" {{
 #endif"##,
-        doc_comments = class_doc_comments,
         sizeof_usize = ctx.target_pointer_width / 8,
     )
     .expect(WRITE_TO_MEM_FAILED_MSG);

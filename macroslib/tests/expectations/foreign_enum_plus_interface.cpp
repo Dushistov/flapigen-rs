@@ -10,6 +10,8 @@ GPS_PROVIDER = 1
 @@end
 
 @@expect {"after":"\n","before":"#pragma once\n\n","file":"c_ControlStateObserver.h","greedy_match":true,"kind":"between"}
+#include <stdint.h>
+
 struct C_ControlStateObserver {
     void *opaque;
     //! call by Rust side when callback not need anymore

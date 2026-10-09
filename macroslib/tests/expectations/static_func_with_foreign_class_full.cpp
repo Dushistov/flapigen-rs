@@ -2,11 +2,11 @@
 static void f1(const Boo & a0) noexcept;
 @@end
 
-@@expect {"after":"\n\n};\n\n\n    t","before":"static void f1(const Boo & a0) noexcept;\n\n    ","file":"Foo.hpp","kind":"between"}
+@@expect {"file":"Foo.hpp","kind":"item","name":"f2","form":"declaration"}
 static void f2(Boo & a0) noexcept;
 @@end
 
-@@expect {"after":"\n\n    templa","before":"static void f2(Boo & a0) noexcept;\n\n};\n\n\n    ","file":"Foo.hpp","kind":"between"}
+@@expect {"file":"Foo.hpp","kind":"between","before":"namespace org_examples {\n\n\n    ","after":"\n\n    template<bool OWN_DATA>\n    inline void FooWrapper<OWN_DATA>::f2"}
 template<bool OWN_DATA>
     inline void FooWrapper<OWN_DATA>::f1(const Boo & a0) noexcept
     {

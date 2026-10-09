@@ -24,7 +24,7 @@ void update_foo(FooRef foo) noexcept;
 void update_mut_foo(Foo & foo) noexcept;
 @@end
 
-@@expect {"after":"\n\n    templa","before":"constexpr const uintptr_t &TestReferencesWrapper<OWN_DATA>::rust_elem_size;\n\n\n    ","file":"TestReferences.hpp","kind":"between"}
+@@expect {"file":"TestReferences.hpp","kind":"item","name":"TestReferencesWrapper<OWN_DATA>::get_foo_ref","form":"definition"}
 template<bool OWN_DATA>
     inline FooRef TestReferencesWrapper<OWN_DATA>::get_foo_ref() const noexcept
     {
