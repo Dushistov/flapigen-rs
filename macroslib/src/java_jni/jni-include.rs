@@ -30,6 +30,13 @@ mod internal_aliases {
 /// Default JNI_VERSION
 const SWIG_JNI_VERSION: jint = JNI_VERSION_1_6 as jint;
 
+// Generated callbacks pass promoted arguments to variadic JNI functions.
+// Their integer arguments assume the C ABI uses 32-bit int and unsigned int.
+const _: () = {
+    assert!(::std::mem::size_of::<::std::os::raw::c_uint>() == ::std::mem::size_of::<u32>());
+    assert!(::std::mem::size_of::<::std::os::raw::c_int>() == ::std::mem::size_of::<i32>());
+};
+
 /// Marker for what to cache in JNI_OnLoad
 #[allow(unused_macros)]
 macro_rules! swig_jni_find_class {
@@ -93,13 +100,6 @@ trait SwigFrom<T> {
 macro_rules! swig_c_str {
     ($lit:expr) => {
         concat!($lit, "\0").as_ptr() as *const ::std::os::raw::c_char
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! swig_assert_eq_size {
-    ($x:ty, $($xs:ty),+ $(,)*) => {
-        $(let _ = ::std::mem::transmute::<$x, $xs>;)+
     };
 }
 

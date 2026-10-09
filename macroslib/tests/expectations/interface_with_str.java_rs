@@ -28,8 +28,6 @@ impl SwigFrom<jobject> for Box<dyn SomeTrait> {
 impl SomeTrait for JavaCallback {
     #[allow(unused_mut)]
     fn on_state_changed(&self, a0: &str) {
-        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
-        swig_assert_eq_size!(::std::os::raw::c_int, i32);
         let env = self.get_jni_env();
         if let Some(env) = env.env {
             let mut a0: jstring = from_std_str_jstring(a0, env);

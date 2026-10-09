@@ -270,7 +270,7 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
         );
         assert!(!method.fn_decl.inputs.is_empty());
         let n_args = method.fn_decl.inputs.len() - 1;
-        let (args, type_size_asserts) = convert_args_for_variadic_function_call(f_method);
+        let args = convert_args_for_variadic_function_call(f_method);
 
         let (mut conv_deps, convert_args_code) = rust_to_foreign_convert_method_inputs(
             ctx.conv_map,
@@ -292,7 +292,6 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
             syn::ReturnType::Default => trait_impl_funcs.push(quote! {
                 #[allow(unused_mut)]
                 fn #func_name(#(#args_with_types),*) {
-                    #type_size_asserts
                     let env = self.get_jni_env();
                     if let Some(env) = env.env {
                         #convert_args
@@ -343,7 +342,6 @@ impl SwigFrom<jobject> for Box<dyn {trait_name}> {{
                 trait_impl_funcs.push(quote! {
                     #[allow(unused_mut)]
                     fn #func_name(#(#args_with_types),*) -> #ret_ty {
-                        #type_size_asserts
                         let env = self.get_jni_env();
                         let env = env.env.expect(concat!("Can not get env for ", stringify!(#func_name)));
 
@@ -391,10 +389,10 @@ static JNI_FOR_VARIADIC_C_FUNC_CALL: LazyLock<FxHashMap<&'static str, &'static s
 // we need automatic type conversion, see
 // http://en.cppreference.com/w/c/language/conversion#Default_argument_promotions
 // for more details.
-// return arg with conversion plus asserts
+// Return arguments with their C variadic promotions applied.
 fn convert_args_for_variadic_function_call(
     f_method: &JniForeignMethodSignature,
-) -> (Vec<TokenStream>, TokenStream) {
+) -> Vec<TokenStream> {
     let mut ret = Vec::with_capacity(f_method.input.len());
     for (i, arg) in f_method.input.iter().enumerate() {
         let arg_name = Ident::new(&format!("a{i}"), Span::call_site());
@@ -416,9 +414,5 @@ fn convert_args_for_variadic_function_call(
             ret.push(quote!(#arg_name));
         }
     }
-    let check_sizes = quote! {
-        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
-        swig_assert_eq_size!(::std::os::raw::c_int, i32);
-    };
-    (ret, check_sizes)
+    ret
 }
