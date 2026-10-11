@@ -39,6 +39,8 @@ extern "C" {
 
 //for (u)intX_t types
 #include <stdint.h>
+#include "c_Y.h"
+#include "rust_option.h"
 struct CRustOption4232mut3232c_void;
 
 #ifdef __cplusplus
@@ -73,6 +75,8 @@ extern "C" {
 
 //for (u)intX_t types
 #include <stdint.h>
+#include "RustForeignVecY.h"
+#include "c_Y.h"
 struct CRustForeignVecY;
 
 #ifdef __cplusplus
@@ -107,6 +111,8 @@ extern "C" {
 
 //for (u)intX_t types
 #include <stdint.h>
+#include "CRustSliceForeignY.h"
+#include "c_Y.h"
 struct CRustSliceForeignY;
 
 #ifdef __cplusplus
