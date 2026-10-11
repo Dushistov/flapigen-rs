@@ -63,8 +63,7 @@ using namespace rust;
 
 static_assert(std::is_convertible<const Foo &, FooRef>::value,
               "an owning class must implicitly convert to its borrowed view");
-static_assert(std::is_copy_constructible<FooRef>::value,
-              "a borrowed view must be cheap to copy");
+static_assert(std::is_copy_constructible<FooRef>::value, "a borrowed view must be cheap to copy");
 static_assert(std::is_copy_assignable<FooRef>::value,
               "a borrowed view must support pointer-copy assignment");
 static_assert(!std::is_copy_constructible<Foo>::value,
@@ -75,8 +74,9 @@ static_assert(std::is_copy_constructible<SessionRef>::value,
               "borrowed views of SmartPtrCopy classes must copy without cloning");
 static_assert(sizeof(FooRef) == sizeof(void *) && sizeof(Foo) == sizeof(void *),
               "foreign class wrappers must remain pointer-sized");
-static_assert(std::is_same<decltype(std::declval<TestReferences &>().get_mut_foo_ref()), FooRef>::value,
-              "mutable Rust reference output remains a read-only borrowed view");
+static_assert(
+    std::is_same<decltype(std::declval<TestReferences &>().get_mut_foo_ref()), FooRef>::value,
+    "mutable Rust reference output remains a read-only borrowed view");
 
 static_assert(sizeof(RustSlice<const Foo>) == sizeof(void *) + sizeof(uintptr_t),
               "foreign slice should store only data and length");
@@ -92,22 +92,27 @@ static_assert(std::is_same<decltype(std::declval<CRustSliceu32>().data), const u
               "native descriptor data must have the element pointer type");
 static_assert(std::is_same<decltype(std::declval<CRustSliceMuti32>().data), int32_t *>::value,
               "mutable native descriptor data must have the element pointer type");
-static_assert(std::is_same<decltype(std::declval<CRustSliceForeignFoo>().data), const FooOpaque *>::value,
-              "foreign descriptor data must use its opaque element pointer type");
-static_assert(std::is_same<decltype(std::declval<CRustSliceMutForeignFoo>().data), FooOpaque *>::value,
-              "foreign descriptor data must use its opaque element pointer type");
-static_assert(std::is_same<decltype(std::declval<RustSlice<const Foo>>().as_c<CRustSliceForeignFoo>()),
-                           CRustSliceForeignFoo>::value,
-              "const slices must use the const descriptor");
+static_assert(
+    std::is_same<decltype(std::declval<CRustSliceForeignFoo>().data), const FooOpaque *>::value,
+    "foreign descriptor data must use its opaque element pointer type");
+static_assert(
+    std::is_same<decltype(std::declval<CRustSliceMutForeignFoo>().data), FooOpaque *>::value,
+    "foreign descriptor data must use its opaque element pointer type");
+static_assert(
+    std::is_same<decltype(std::declval<RustSlice<const Foo>>().as_c<CRustSliceForeignFoo>()),
+                 CRustSliceForeignFoo>::value,
+    "const slices must use the const descriptor");
 static_assert(std::is_same<decltype(std::declval<RustSlice<Foo>>().as_c<CRustSliceMutForeignFoo>()),
                            CRustSliceMutForeignFoo>::value,
               "mutable slices must use the mutable descriptor");
-static_assert(std::is_same<decltype(std::declval<RustSlice<const uint32_t>>().as_c<CRustSliceu32>()),
-                           CRustSliceu32>::value,
-              "native slices must use their element descriptor");
-static_assert(std::is_same<decltype(std::declval<RustSlice<const uintptr_t>>().as_c<CRustSliceusize>()),
-                           CRustSliceusize>::value,
-              "usize slices must use their own descriptor even when uintptr_t aliases uint32_t");
+static_assert(
+    std::is_same<decltype(std::declval<RustSlice<const uint32_t>>().as_c<CRustSliceu32>()),
+                 CRustSliceu32>::value,
+    "native slices must use their element descriptor");
+static_assert(
+    std::is_same<decltype(std::declval<RustSlice<const uintptr_t>>().as_c<CRustSliceusize>()),
+                 CRustSliceusize>::value,
+    "usize slices must use their own descriptor even when uintptr_t aliases uint32_t");
 static_assert(std::is_same<decltype(std::declval<RustSlice<const FooArc, FooArcAccess>>()
                                         .as_c<CRustSliceForeignIndirectFooArc>()),
                            CRustSliceForeignIndirectFooArc>::value,
@@ -121,8 +126,9 @@ static_assert(std::is_same<decltype(std::declval<RustForeignVecFooArc &>().as_sl
 static_assert(std::is_same<decltype(std::declval<RustForeignVecFooRc &>().as_slice()),
                            RustSlice<const FooRc, FooRcAccess>>::value,
               "Rc-backed vectors must reuse their slice mapping");
-static_assert(std::is_convertible<decltype(std::declval<RustForeignVecFooArc &>()[0]), FooArc>::value,
-              "Arc-backed vector elements can be cloned into owning classes");
+static_assert(
+    std::is_convertible<decltype(std::declval<RustForeignVecFooArc &>()[0]), FooArc>::value,
+    "Arc-backed vector elements can be cloned into owning classes");
 static_assert(std::is_convertible<decltype(std::declval<RustForeignVecFooRc &>()[0]), FooRc>::value,
               "Rc-backed vector elements can be cloned into owning classes");
 static_assert(!std::is_convertible<FooArcRef, FooArc>::value,
@@ -131,15 +137,16 @@ static_assert(!std::is_convertible<decltype(std::declval<RustForeignVecVecOnlyAr
                                    VecOnlyArc>::value,
               "an indexed value is not an implicit owner when SmartPtrCopy is absent");
 template <typename T>
-static auto has_mutable_slice(int) -> decltype(std::declval<T &>().as_slice_mut(), std::true_type{});
+static auto has_mutable_slice(int)
+    -> decltype(std::declval<T &>().as_slice_mut(), std::true_type{});
 template <typename T> static std::false_type has_mutable_slice(...);
 static_assert(!decltype(has_mutable_slice<RustForeignVecFooArc>(0))::value,
               "Arc-backed vectors cannot expose mutable slices");
 static_assert(!decltype(has_mutable_slice<RustForeignVecFooRc>(0))::value,
               "Rc-backed vectors cannot expose mutable slices");
-static_assert(std::is_same<decltype(std::declval<const RustVecVecFoo &>()[0]),
-                           RustSlice<const Foo>>::value,
-              "nested foreign vectors expose read-only row views");
+static_assert(
+    std::is_same<decltype(std::declval<const RustVecVecFoo &>()[0]), RustSlice<const Foo>>::value,
+    "nested foreign vectors expose read-only row views");
 static_assert(!decltype(has_mutable_slice<RustVecVecFoo>(0))::value,
               "nested foreign vectors cannot expose a slice of Rust Vec objects");
 static_assert(std::is_constructible<RustSlice<const Foo>, CRustSliceForeignFoo>::value,
@@ -1451,15 +1458,15 @@ TEST(TestCancelableCallback, generated_cpp_interface)
 {
     std::atomic<int> destructions{ 0 };
     std::atomic<int32_t> result{ 0 };
-    auto callback
-        = std::unique_ptr<CancelableCallbacki32>(new VirtualCancelableCallback(destructions, result));
+    auto callback = std::unique_ptr<CancelableCallbacki32>(
+        new VirtualCancelableCallback(destructions, result));
     auto c_callback = CancelableCallbacki32::to_c_interface(std::move(callback));
     c_callback.onResultReady(42, c_callback.opaque);
     EXPECT_EQ(42, result.load());
     EXPECT_EQ(1, destructions.load());
 
-    auto cancelled
-        = std::unique_ptr<CancelableCallbacki32>(new VirtualCancelableCallback(destructions, result));
+    auto cancelled = std::unique_ptr<CancelableCallbacki32>(
+        new VirtualCancelableCallback(destructions, result));
     auto c_cancelled = CancelableCallbacki32::to_c_interface(std::move(cancelled));
     c_cancelled.C_CancelableCallbacki32_deref(c_cancelled.opaque);
     EXPECT_EQ(2, destructions.load());
@@ -1783,7 +1790,8 @@ template <typename Slice> static void expect_string_slice(const Slice &slice)
     EXPECT_EQ(3, slice.end() - slice.begin());
     for (size_t i = 0; i < slice.size(); ++i) {
         const auto value = slice.at(i);
-        const std::string actual = value.empty() ? std::string{} : std::string(value.data(), value.size());
+        const std::string actual
+            = value.empty() ? std::string{} : std::string(value.data(), value.size());
         EXPECT_EQ(expected[i], actual);
     }
     size_t count = 0;
@@ -1841,8 +1849,7 @@ TEST(StringVecStore, ownedStrings)
 
     auto returned = store.append(std::move(values));
     EXPECT_EQ(4u, returned.size());
-    EXPECT_EQ(std::string("a\0b", 3),
-              std::string(returned.at(0).data(), returned.at(0).size()));
+    EXPECT_EQ(std::string("a\0b", 3), std::string(returned.at(0).data(), returned.at(0).size()));
     EXPECT_EQ("Привет", std::string(returned.at(1).data(), returned.at(1).size()));
     EXPECT_EQ("tail", std::string(returned.at(2).data(), returned.at(2).size()));
     EXPECT_EQ("from Rust", std::string(returned.at(3).data(), returned.at(3).size()));
