@@ -580,7 +580,7 @@ TEST(TestWorkWithVec, smokeTest)
 TEST(TestWorkWithVec, workWithEmptyVecs)
 {
     RustVecu32 vec_u32;
-    ASSERT_EQ(0, vec_u32.size());
+    ASSERT_EQ(0u, vec_u32.size());
     const auto c_vec_u32 = vec_u32.release();
     CRustVecu32_free(c_vec_u32);
 
