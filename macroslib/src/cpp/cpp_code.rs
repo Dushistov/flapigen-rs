@@ -211,10 +211,12 @@ pub(in crate::cpp) fn c_abi_header_dependencies(
             .filter(|token| !token.is_empty())
             .collect();
         let mut can_forward = false;
+        let mut has_struct = false;
         for pair in tokens.windows(2) {
             if pair[0] == "struct" {
                 struct_types.insert(pair[1].to_owned());
                 can_forward = true;
+                has_struct = true;
             }
         }
         for token in tokens {
@@ -223,7 +225,11 @@ pub(in crate::cpp) fn c_abi_header_dependencies(
                 can_forward = true;
             }
         }
-        if !forward_signature_structs || !can_forward {
+        // Clang requires a complete C struct when it is returned by value from
+        // an extern "C" function (-Wreturn-type-c-linkage). A forward declaration
+        // is sufficient only for pointer arguments and opaque class handles.
+        let needs_complete_struct = has_struct && !name.contains('*');
+        if !forward_signature_structs || !can_forward || needs_complete_struct {
             for module in &ty.provided_by_module {
                 if module.ends_with(".h\"") || module.ends_with(".h>") {
                     includes.insert(module.clone());
