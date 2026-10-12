@@ -28,6 +28,8 @@ namespace internal {
         }
         static void free(Descriptor vec) noexcept { Free(vec); }
         static reference index(Descriptor vec, size_t i) noexcept { return vec.data[i]; }
+        static value_type *data(Descriptor vec) noexcept { return vec.data; }
+        static const value_type *cdata(Descriptor vec) noexcept { return vec.data; }
         static iterator begin(Descriptor vec) noexcept { return vec.data; }
         static const_iterator cbegin(Descriptor vec) noexcept { return vec.data; }
         static iterator end(Descriptor vec) noexcept
@@ -234,6 +236,16 @@ public:
 
     size_t size() const noexcept { return vec_.len; }
     bool empty() const noexcept { return size() == 0; }
+    template <typename P = Policy>
+    auto data() noexcept -> decltype(P::data(std::declval<Descriptor>()))
+    {
+        return P::data(vec_);
+    }
+    template <typename P = Policy>
+    auto data() const noexcept -> decltype(P::cdata(std::declval<Descriptor>()))
+    {
+        return P::cdata(vec_);
+    }
     const_reference operator[](size_t i) const noexcept
     {
         assert(i < size());
