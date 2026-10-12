@@ -563,7 +563,7 @@ fn generate_rust_code(
                     }
                     fn box_object(this: Self) -> jlong {
                         #code_box_this
-                        this as jlong
+                        pointer_to_jlong(this)
                     }
                     fn unbox_object(x: jlong) -> Self {
                         let x: *mut #this_type_for_method_ty = unsafe {
@@ -728,9 +728,9 @@ May be you need to use `private constructor = empty;` syntax?",
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
 #[unsafe(no_mangle)]
 pub extern "C" fn {jni_destructor_name}(env: *mut JNIEnv, _: jclass, this: jlong) {{
-    let this: *mut {this_type} = unsafe {{
-        jlong_to_pointer::<{this_type}>(this).as_mut().unwrap()
-    }};
+    let this: *mut {this_type} = ::std::ptr::NonNull::new(
+        jlong_to_pointer::<{this_type}>(this)
+    ).unwrap().as_ptr();
 {unpack_code}
     drop(this);
 }}
@@ -941,6 +941,11 @@ fn generate_constructor(
             },
         )
     };
+    let return_expr = if return_result {
+        "this"
+    } else {
+        "pointer_to_jlong(this)"
+    };
     let code = format!(
         r#"
 #[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]
@@ -950,7 +955,7 @@ pub extern "C" fn {func_name}(env: *mut JNIEnv, _: jclass, {decl_func_args}) -> 
     let this: {real_output_typename} = {call};
 {convert_this}
 {box_this}
-    this as jlong
+    {return_expr}
 }}
 "#,
         func_name = mc.jni_func_name,

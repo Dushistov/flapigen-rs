@@ -1,0 +1,82 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::rc::Rc;
+
+static BOX_DROPS: AtomicUsize = AtomicUsize::new(0);
+static RC_DROPS: AtomicUsize = AtomicUsize::new(0);
+static ARC_DROPS: AtomicUsize = AtomicUsize::new(0);
+
+struct BoxOwned(i32);
+
+impl BoxOwned {
+    fn new(value: i32) -> Self { Self(value) }
+    fn value(&self) -> i32 { self.0 }
+}
+
+impl Drop for BoxOwned {
+    fn drop(&mut self) { BOX_DROPS.fetch_add(1, Ordering::SeqCst); }
+}
+
+foreign_class!(class BoxOwned {
+    self_type BoxOwned;
+    constructor BoxOwned::new(value: i32) -> BoxOwned;
+    fn BoxOwned::value(&self) -> i32;
+});
+
+struct RcOwned(i32);
+
+impl RcOwned {
+    fn new(value: i32) -> Rc<Self> { Rc::new(Self(value)) }
+    fn value(&self) -> i32 { self.0 }
+}
+
+impl Drop for RcOwned {
+    fn drop(&mut self) { RC_DROPS.fetch_add(1, Ordering::SeqCst); }
+}
+
+foreign_class!(class RcOwned {
+    self_type RcOwned;
+    constructor RcOwned::new(value: i32) -> Rc<RcOwned>;
+    fn RcOwned::value(&self) -> i32;
+});
+
+struct ArcOwned(i32);
+
+impl ArcOwned {
+    fn new(value: i32) -> Arc<Self> { Arc::new(Self(value)) }
+    fn value(&self) -> i32 { self.0 }
+}
+
+impl Drop for ArcOwned {
+    fn drop(&mut self) { ARC_DROPS.fetch_add(1, Ordering::SeqCst); }
+}
+
+foreign_class!(class ArcOwned {
+    self_type ArcOwned;
+    constructor ArcOwned::new(value: i32) -> Arc<ArcOwned>;
+    fn ArcOwned::value(&self) -> i32;
+});
+
+struct Text;
+
+impl Text {
+    fn echo(value: String) -> String { value }
+    fn decorate(value: &str) -> String { format!("<{value}>") }
+}
+
+foreign_class!(class Text {
+    fn Text::echo(value: String) -> String;
+    fn Text::decorate(value: &str) -> String;
+});
+
+struct Numbers;
+
+impl Numbers {
+    fn sum(values: &[i32]) -> i32 { values.iter().sum() }
+    fn make(len: i32) -> Vec<i32> { (0..len).collect() }
+}
+
+foreign_class!(class Numbers {
+    fn Numbers::sum(values: &[i32]) -> i32;
+    fn Numbers::make(len: i32) -> Vec<i32>;
+});

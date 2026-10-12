@@ -175,9 +175,6 @@ impl ForeignTypeName {
             span,
         }
     }
-    pub(crate) fn from_ident(id: &Ident, src_id: SourceId) -> Self {
-        Self::new(id.to_string(), (src_id, id.span()))
-    }
     pub(crate) fn unique_prefix(&self) -> Option<&str> {
         self.typename.unique_prefix()
     }

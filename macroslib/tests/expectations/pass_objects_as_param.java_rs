@@ -1,4 +1,4 @@
-@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_TestPassObjectsAsParams_do_1f2(\n  ","before":"let this: *mut TestPassObjectsAsParams = Box::into_raw(this);\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"after":"#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_TestPassObjectsAsParams_do_1f2(\n  ","before":"let this: *mut TestPassObjectsAsParams = Box::into_raw(this);\n    pointer_to_jlong(this)\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_TestPassObjectsAsParams_do_1f1(
     env: *mut JNIEnv,
@@ -71,7 +71,7 @@ pub extern "C" fn Java_org_example_Foo_init(
     let mut a1: &str = a1.as_str();
     let this: Rc<RefCell<Foo>> = Foo::new(a0, a1);
     let this: *const RefCell<Foo> = Rc::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 
 @@end

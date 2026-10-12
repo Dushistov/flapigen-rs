@@ -14,7 +14,7 @@ use crate::{
     typemap::{
         ast::{parse_ty_with_given_span, ForeignTypeName},
         ty::{ForeignConversionIntermediate, ForeignConversionRule, ForeignTypeS},
-        RustTypeIdx, TypeConvCode, TypeConvEdge, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
+        TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE,
     },
     types::ForeignEnumInfo,
     WRITE_TO_MEM_FAILED_MSG,
@@ -82,7 +82,7 @@ pub(in crate::java_jni) fn generate_enum(
     };
     ctx.conv_map.alloc_foreign_type(enum_ftype)?;
 
-    add_conversion_from_enum_to_jobject_for_callbacks(ctx, fenum, enum_rty.to_idx());
+    add_conversion_from_enum_to_jobject_for_callbacks(ctx, fenum)?;
     let enum_name = fenum.name.to_string();
     ctx.java_type_to_jni_sig_map.insert(
         enum_name.clone(),
@@ -211,8 +211,7 @@ fn generate_rust_code_for_enum(ctx: &mut JavaContext, fenum: &ForeignEnumInfo) -
 fn add_conversion_from_enum_to_jobject_for_callbacks(
     ctx: &mut JavaContext,
     fenum: &ForeignEnumInfo,
-    fenum_rty: RustTypeIdx,
-) {
+) -> Result<()> {
     let java_enum_full_name = java_class_full_name(&ctx.cfg.package_name, &fenum.name.to_string());
     let enum_class_name = java_class_name_to_jni(&java_enum_full_name);
     let enum_type = &fenum.name;
@@ -242,41 +241,20 @@ fn add_conversion_from_enum_to_jobject_for_callbacks(
     }
 
     let conv_code: TokenStream = quote! {
-        #[allow(dead_code)]
-        impl SwigFrom<#enum_type> for jobject {
-            fn swig_from(x: #enum_type, env: *mut JNIEnv) -> jobject {
-                let cls: jclass = swig_jni_find_class!(#enum_id_upper, #enum_class_name);
-                assert!(!cls.is_null());
-                let static_field_id: jfieldID = match x {
-                    #(#arms_match_fields_names),*
-                };
-                assert!(!static_field_id.is_null());
-                let ret: jobject = unsafe {
-                    (**env).GetStaticObjectField.unwrap()(env, cls, static_field_id)
-                };
-                assert!(!ret.is_null(), concat!("Can get value of item in ", #enum_class_name));
-                ret
-            }
-        }
+        ($p:r_type) #enum_type => jobject {
+            let cls: jclass = swig_jni_find_class!(#enum_id_upper, #enum_class_name);
+            assert!(!cls.is_null());
+            let static_field_id: jfieldID = match $p {
+                #(#arms_match_fields_names),*
+            };
+            assert!(!static_field_id.is_null());
+            let ret: jobject = unsafe {
+                (**env).GetStaticObjectField.unwrap()(env, cls, static_field_id)
+            };
+            assert!(!ret.is_null(), concat!("Can get value of item in ", #enum_class_name));
+            $out = ret;
+        };
     };
-    ctx.rust_code.push(conv_code);
-
-    let jobject_ty = ctx
-        .conv_map
-        .find_or_alloc_rust_type_no_src_id(&parse_type! { jobject });
-    ctx.conv_map.add_conversion_rule(
-        fenum_rty,
-        jobject_ty.to_idx(),
-        TypeConvEdge::new(
-            TypeConvCode::new2(
-                format!(
-                    "let mut {to_var}: jobject = <jobject>::swig_from({from_var}, env);",
-                    to_var = TO_VAR_TEMPLATE,
-                    from_var = FROM_VAR_TEMPLATE,
-                ),
-                invalid_src_id_span(),
-            ),
-            None,
-        ),
-    );
+    ctx.conv_map
+        .parse_foreign_typemap_macro(fenum.src_id, conv_code)
 }

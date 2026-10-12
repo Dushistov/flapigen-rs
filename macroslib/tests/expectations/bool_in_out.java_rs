@@ -33,17 +33,17 @@ pub extern "C" fn Java_org_example_Foo_init(env: *mut JNIEnv, _: jclass, a0: jbo
     let this: Foo = Foo::new(a0);
     let this: Box<Foo> = Box::new(this);
     let this: *mut Foo = Box::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 
 @@end
 
 @@expect {"after":"static mut J","before":"drop(this);\n}\n","file":"test.rs","kind":"between"}
+#[allow(dead_code)]
+type SwigJniCallbackSomeObserverObject = jobject;
 impl SomeTrait for JavaCallback {
     #[allow(unused_mut)]
     fn on_state_changed1(&self, a0: i32, a1: bool) {
-        swig_assert_eq_size!(::std::os::raw::c_uint, u32);
-        swig_assert_eq_size!(::std::os::raw::c_int, i32);
         let env = self.get_jni_env();
         if let Some(env) = env.env {
             let mut a0: jint = a0;

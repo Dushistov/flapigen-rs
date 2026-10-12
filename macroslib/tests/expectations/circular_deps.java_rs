@@ -1,4 +1,4 @@
-@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_A_do_1delete(env: *mut JNIEnv, _: ","before":"let this: *mut A = Box::into_raw(this);\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_A_do_1delete(env: *mut JNIEnv, _: ","before":"let this: *mut A = Box::into_raw(this);\n    pointer_to_jlong(this)\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_A_do_1a(env: *mut JNIEnv, _: jclass, b: jlong) -> () {
     let b: &B = unsafe { jlong_to_pointer::<B>(b).as_mut().unwrap() };
@@ -8,7 +8,7 @@ pub extern "C" fn Java_org_example_A_do_1a(env: *mut JNIEnv, _: jclass, b: jlong
 
 @@end
 
-@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_B_do_1delete(env: *mut JNIEnv, _: ","before":"let this: *mut B = Box::into_raw(this);\n    this as jlong\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
+@@expect {"after":"#[allow(unused_variables, unused_mut, non_snake_case, unused_unsafe)]\n#[unsafe(no_mangle)]\npub extern \"C\" fn Java_org_example_B_do_1delete(env: *mut JNIEnv, _: ","before":"let this: *mut B = Box::into_raw(this);\n    pointer_to_jlong(this)\n}\n#[allow(non_snake_case, unused_variables, unused_mut, unused_unsafe)]\n","file":"test.rs","kind":"between"}
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_org_example_B_do_1b(env: *mut JNIEnv, _: jclass, a: jlong) -> () {
     let a: &A = unsafe { jlong_to_pointer::<A>(a).as_mut().unwrap() };

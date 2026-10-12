@@ -730,11 +730,11 @@ foreign_callback!(callback CheckAllTypesInCallbackArgs {
 foreign_class!(
     class TestCheckAllTypesInCallbackArgs {
         fn call_cb(cb: Box<dyn CheckAllTypesInCallbackArgs>) {
-            cb.check_all_types1(u8::max_value(), i8::min_value(),
-                                u16::max_value(), i16::min_value(),
-                                u32::max_value(), i32::min_value(),
-                                u32::min_value(), i32::max_value());
-            cb.check_all_types2(u64::from(u32::max_value()) + 1, i64::max_value(),
+            cb.check_all_types1(u8::MAX, i8::MIN,
+                                u16::MAX, i16::MIN,
+                                u32::MAX, i32::MIN,
+                                u32::MIN, i32::MAX);
+            cb.check_all_types2(u64::from(u32::MAX) + 1, i64::MAX,
                                 ::std::f32::consts::PI, ::std::f64::consts::E,
                                 17, -17);
             cb.check_foo(Foo { data: 17, name: "17".into() });

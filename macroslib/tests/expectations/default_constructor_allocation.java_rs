@@ -4,7 +4,7 @@
 pub extern "C" fn Java_org_example_DefaultOwned_init(env: *mut JNIEnv, _: jclass) -> jlong {
     let this: Box<DefaultOwned> = Box::<DefaultOwned>::default();
     let this: *mut DefaultOwned = Box::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 @@end
 
@@ -14,7 +14,7 @@ pub extern "C" fn Java_org_example_DefaultOwned_init(env: *mut JNIEnv, _: jclass
 pub extern "C" fn Java_org_example_ArcOwned_init(env: *mut JNIEnv, _: jclass) -> jlong {
     let this: Arc<ArcOwned> = Arc::default();
     let this: *const ArcOwned = Arc::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 @@end
 
@@ -24,7 +24,7 @@ pub extern "C" fn Java_org_example_ArcOwned_init(env: *mut JNIEnv, _: jclass) ->
 pub extern "C" fn Java_org_example_RcOwned_init(env: *mut JNIEnv, _: jclass) -> jlong {
     let this: Rc<RcOwned> = Rc::default();
     let this: *const RcOwned = Rc::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 @@end
 
@@ -35,7 +35,7 @@ pub extern "C" fn Java_org_example_CustomOwned_init(env: *mut JNIEnv, _: jclass)
     let this: CustomOwned = CustomOwned::new();
     let this: Box<CustomOwned> = Box::new(this);
     let this: *mut CustomOwned = Box::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 @@end
 
@@ -46,7 +46,7 @@ pub extern "C" fn Java_org_example_FactoryOwned_init(env: *mut JNIEnv, _: jclass
     let this: FactoryOwned = Factory::default();
     let this: Box<FactoryOwned> = Box::new(this);
     let this: *mut FactoryOwned = Box::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 @@end
 
@@ -56,7 +56,7 @@ pub extern "C" fn Java_org_example_FactoryOwned_init(env: *mut JNIEnv, _: jclass
 pub extern "C" fn Java_org_example_ArcShorthand_init(env: *mut JNIEnv, _: jclass) -> jlong {
     let this: Arc<ArcShorthand> = ::std::sync::Arc::<ArcShorthand>::default();
     let this: *const ArcShorthand = Arc::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 @@end
 
@@ -66,6 +66,6 @@ pub extern "C" fn Java_org_example_ArcShorthand_init(env: *mut JNIEnv, _: jclass
 pub extern "C" fn Java_org_example_RcShorthand_init(env: *mut JNIEnv, _: jclass) -> jlong {
     let this: Rc<RcShorthand> = ::std::rc::Rc::<RcShorthand>::default();
     let this: *const RcShorthand = Rc::into_raw(this);
-    this as jlong
+    pointer_to_jlong(this)
 }
 @@end

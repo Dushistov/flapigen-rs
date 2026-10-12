@@ -134,6 +134,9 @@ pub(in crate::typemap) fn parse(
                 ret.utils_code.push(syn::Item::Trait(item_trait));
             }
             Item::Macro(mut item_macro) => {
+                if is_wrong_cfg_pointer_width(&item_macro.attrs, target_pointer_width) {
+                    continue;
+                }
                 if item_macro.mac.path.is_ident(FOREIGN_TYPEMAP) {
                     let tmap_conv_rule: TypeMapConvRuleInfo = syn::parse2(item_macro.mac.tokens)
                         .map_err(|err| DiagnosticError::from_syn_err(name, err))?;
