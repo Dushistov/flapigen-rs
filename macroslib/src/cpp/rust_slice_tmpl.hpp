@@ -219,6 +219,16 @@ public:
 
     size_t size() const noexcept { return slice_.len; }
     bool empty() const noexcept { return slice_.len == 0; }
+    template <bool Native = native>
+    typename std::enable_if<Native && native, Pointer>::type data() noexcept
+    {
+        return slice_.data;
+    }
+    template <bool Native = native>
+    typename std::enable_if<Native && native, const Element *>::type data() const noexcept
+    {
+        return slice_.data;
+    }
     reference operator[](size_t i) noexcept
     {
         assert(i < size());

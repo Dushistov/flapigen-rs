@@ -140,6 +140,20 @@ template <typename T>
 static auto has_mutable_slice(int)
     -> decltype(std::declval<T &>().as_slice_mut(), std::true_type{});
 template <typename T> static std::false_type has_mutable_slice(...);
+template <typename T>
+static auto has_data(int) -> decltype(std::declval<T &>().data(), std::true_type{});
+template <typename T> static std::false_type has_data(...);
+static_assert(std::is_same<decltype(std::declval<RustVecu32 &>().data()), uint32_t *>::value,
+              "native vectors expose their element storage");
+static_assert(
+    std::is_same<decltype(std::declval<const RustVecu32 &>().data()), const uint32_t *>::value,
+    "const native vectors expose const element storage");
+static_assert(!decltype(has_data<RustForeignVecFoo>(0))::value,
+              "foreign vectors do not store C++ wrapper objects contiguously");
+static_assert(!decltype(has_data<RustForeignVecFooArc>(0))::value,
+              "indirect foreign vectors do not expose C++ wrapper storage");
+static_assert(!decltype(has_data<RustVecVecFoo>(0))::value,
+              "nested foreign vectors do not store C++ row objects contiguously");
 static_assert(!decltype(has_mutable_slice<RustForeignVecFooArc>(0))::value,
               "Arc-backed vectors cannot expose mutable slices");
 static_assert(!decltype(has_mutable_slice<RustForeignVecFooRc>(0))::value,
@@ -171,6 +185,18 @@ static_assert(std::is_same<decltype(std::declval<RustSlice<int32_t> &>().at(0)),
 static_assert(std::is_same<decltype(std::declval<const RustSlice<int32_t> &>().at(0)),
                            const int32_t &>::value,
               "const slice at() must match const operator[]");
+static_assert(std::is_same<decltype(std::declval<RustSlice<int32_t> &>().data()), int32_t *>::value,
+              "mutable native slices expose mutable element storage");
+static_assert(std::is_same<decltype(std::declval<const RustSlice<int32_t> &>().data()),
+                           const int32_t *>::value,
+              "const native slices expose const element storage");
+static_assert(std::is_same<decltype(std::declval<RustSlice<const int32_t> &>().data()),
+                           const int32_t *>::value,
+              "read-only native slices expose const element storage");
+static_assert(!decltype(has_data<RustSlice<const Foo>>(0))::value,
+              "foreign slices do not store C++ wrapper objects contiguously");
+static_assert(!decltype(has_data<RustSlice<const FooArc, FooArcAccess>>(0))::value,
+              "indirect foreign slices do not expose C++ wrapper storage");
 
 static std::atomic<uint32_t> c_simple_cb_counter{ 0 };
 static std::atomic<uint32_t> c_simple_cb_counter_without_args{ 0 };
@@ -448,6 +474,8 @@ TEST(TestWorkWithVec, smokeTest)
 
     auto sp = t.get_u32_slice();
     ASSERT_EQ(tag_len + 1, sp.size());
+    EXPECT_EQ(sp.begin(), sp.data());
+    EXPECT_EQ(uint32_t(0), sp.data()[0]);
     for (size_t i = 0; i < tag_len; ++i) {
         EXPECT_EQ(i, sp[i]);
     }
@@ -457,6 +485,8 @@ TEST(TestWorkWithVec, smokeTest)
                   "RustVecu32::value_type should be uint32_t");
     RustVecu32 vec_u32{ t.get_vec_u32() };
     ASSERT_EQ(tag_len + 1, vec_u32.size());
+    EXPECT_EQ(vec_u32.begin(), vec_u32.data());
+    EXPECT_EQ(uint32_t(0), vec_u32.data()[0]);
     for (size_t i = 0; i < tag_len; ++i) {
         EXPECT_EQ(i, vec_u32[i]);
     }
@@ -1561,9 +1591,12 @@ TEST(RustSlice, atChecksBounds)
 {
     int32_t values[] = { 7, 9 };
     RustSlice<int32_t> mutable_native{ values, 2 };
+    EXPECT_EQ(values, mutable_native.data());
+    EXPECT_EQ(values, mutable_native.begin());
     EXPECT_EQ(7, mutable_native.at(0));
     mutable_native.at(1) = 10;
     const auto &const_native = mutable_native;
+    EXPECT_EQ(values, const_native.data());
     EXPECT_EQ(10, const_native.at(1));
     EXPECT_THROW(mutable_native.at(2), std::out_of_range);
     EXPECT_THROW(const_native.at(std::numeric_limits<size_t>::max()), std::out_of_range);
@@ -1574,6 +1607,7 @@ TEST(RustSlice, atChecksBounds)
     EXPECT_THROW(read_only_native.at(2), std::out_of_range);
 
     RustSlice<const int32_t> empty_native;
+    EXPECT_EQ(nullptr, empty_native.data());
     EXPECT_THROW(empty_native.at(0), std::out_of_range);
 
     auto vec = TestWorkWithVec::create_foo_vec(2);
