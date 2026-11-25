@@ -80,12 +80,12 @@ jobs:
             target: x86_64-unknown-linux-gnu
 
           - name: aarch64-apple-darwin (stable)
-            os: macos-14
+            os: macos-15
             rust: stable
             target: aarch64-apple-darwin
 
           - name: aarch64-apple-darwin (beta)
-            os: macos-14
+            os: macos-15
             rust: beta
             target: aarch64-apple-darwin
     steps:
@@ -113,17 +113,17 @@ jobs:
           python-version: '3.8.0'
           architecture: ${{ matrix.platform || 'x64' }}
       - uses: actions/setup-python@v6
-        if: matrix.os == 'macos-14'
+        if: matrix.os == 'macos-15'
         with:
           python-version: '3.13.0'
           architecture: ${{ matrix.platform || 'arm64' }}
       - uses: actions/setup-python@v6
-        if: matrix.os != 'windows-2022' && matrix.os != 'macos-14'
+        if: matrix.os != 'windows-2022' && matrix.os != 'macos-15'
         with:
           python-version: '3.7.13'
           architecture: ${{ matrix.platform || 'x64' }}
       - uses: jwlawson/actions-setup-cmake@v2
-        if: matrix.os != 'windows-2022' && matrix.os != 'macos-14'
+        if: matrix.os != 'windows-2022' && matrix.os != 'macos-15'
         with:
           cmake-version: '3.9.6'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
@@ -135,7 +135,7 @@ jobs:
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
       # supports of macos/arm64 not supported until 3.19.2
       - uses: jwlawson/actions-setup-cmake@v2
-        if: matrix.os == 'macos-14'
+        if: matrix.os == 'macos-15'
         with:
           cmake-version: '3.19.2'
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
