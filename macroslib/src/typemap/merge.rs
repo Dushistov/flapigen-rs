@@ -12,9 +12,10 @@ use crate::{
     typemap::{
         ast::{ForeignTypeName, SpannedString},
         ty::{ForeignConversionIntermediate, ForeignTypeS, ForeignTypesStorage},
-        typemap_macro::{FTypeLeftRightPair, ModuleName, TypeMapConvRuleInfo},
+        typemap_macro::{FTypeLeftRightPair, TypeMapConvRuleInfo},
         TypeConvEdge, TypeMap,
     },
+    types::ModuleName,
 };
 
 use super::TypesConvGraph;

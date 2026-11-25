@@ -34,6 +34,7 @@ pub(in crate::cpp) fn generate_interface(
     let req_includes = cpp_code::cpp_list_required_includes(
         &["<cassert>", "<memory>" /*for std::unique_ptr*/],
         &mut f_methods,
+        &[],
     );
     cpp_code_generate_interface(ctx, interface, &req_includes, &c_deps, &f_methods)
         .map_err(|err| DiagnosticError::new(interface.src_id, interface.span(), err))?;

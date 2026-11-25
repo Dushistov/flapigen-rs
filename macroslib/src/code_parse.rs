@@ -5,12 +5,12 @@ use proc_macro2::{Ident, Span, TokenStream};
 use rustc_hash::FxHashSet;
 use std::convert::{TryFrom, TryInto};
 use syn::{
-    braced, parenthesized,
+    braced, bracketed, parenthesized,
     parse::{Parse, ParseStream},
     parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
-    Token, Type,
+    LitStr, Token, Type,
 };
 
 use crate::{
@@ -23,11 +23,16 @@ use crate::{
     },
     types::{
         FnArg, ForeignClassInfo, ForeignEnumInfo, ForeignEnumItem, ForeignInterface,
-        ForeignInterfaceMethod, ForeignMethod, MethodAccess, MethodVariant, NamedArg, SelfTypeDesc,
-        SelfTypeVariant,
+        ForeignInterfaceMethod, ForeignMethod, MethodAccess, MethodVariant, ModuleName, NamedArg,
+        SelfTypeDesc, SelfTypeVariant,
     },
     LanguageConfig, CAMEL_CASE_ALIASES, COPY_TRAIT, FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE,
 };
+
+pub(crate) mod kw {
+    use syn::custom_keyword;
+    custom_keyword!(req_modules);
+}
 
 pub(crate) fn parse_foreigner_class(
     src_id: SourceId,
@@ -107,7 +112,7 @@ enum Language {
     Python,
 }
 
-mod kw {
+mod pkw {
     use syn::custom_keyword;
 
     custom_keyword!(class);
@@ -200,7 +205,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
 
     debug!("parse_foreigner_class: class comment {class_doc_comments:?}");
 
-    input.parse::<kw::class>()?;
+    input.parse::<pkw::class>()?;
     let class_name: Ident = input.parse()?;
     debug!("class_name {class_name:?}");
     let content;
@@ -208,6 +213,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
 
     let mut rust_self_type = None;
     let mut foreigner_code = String::new();
+    let mut foreign_code_req_modules = Vec::<ModuleName>::new();
     let mut has_dummy_constructor = false;
     let mut constructor_ret_type: Option<Type> = None;
     let mut methods = Vec::with_capacity(10);
@@ -224,15 +230,15 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             unknown_attrs: method_unknown_attrs,
         } = parse_attrs(&content, ParseAttrsFlags::UNKNOWN | ParseAttrsFlags::DOC)?;
         assert!(method_derive_list.is_empty());
-        let mut access = if content.peek(kw::private) {
-            content.parse::<kw::private>()?;
+        let mut access = if content.peek(pkw::private) {
+            content.parse::<pkw::private>()?;
             MethodAccess::Private
         } else {
             MethodAccess::Public
         };
 
-        if content.peek(kw::protected) {
-            content.parse::<kw::protected>()?;
+        if content.peek(pkw::protected) {
+            content.parse::<pkw::protected>()?;
             access = MethodAccess::Protected;
         }
 
@@ -258,6 +264,10 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
                     FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE
                 );
             }
+            if content.peek(crate::code_parse::kw::req_modules) {
+                let mut modules: ModulesList = content.parse()?;
+                foreign_code_req_modules.append(&mut modules.0);
+            }
             let lit: syn::LitStr = content.parse()?;
             debug!("foreigner_code {:?}", lit);
             foreigner_code.push_str(&lit.value());
@@ -272,10 +282,10 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
             ));
         }
 
-        if func_type_name == CONSTRUCTOR && content.peek(Token![=]) && content.peek2(kw::empty) {
+        if func_type_name == CONSTRUCTOR && content.peek(Token![=]) && content.peek2(pkw::empty) {
             debug!("class {} has dummy constructor", class_name);
             content.parse::<Token![=]>()?;
-            content.parse::<kw::empty>()?;
+            content.parse::<pkw::empty>()?;
             if content.peek(Token![->]) {
                 content.parse::<Token![->]>()?;
                 let ret_type: Type = content.parse()?;
@@ -446,8 +456,8 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         };
 
         let mut func_name_alias = None;
-        if content.peek(kw::alias) {
-            content.parse::<kw::alias>()?;
+        if content.peek(pkw::alias) {
+            content.parse::<pkw::alias>()?;
             if inline_block.is_some() {
                 return Err(content.error("alias useless with \"inline\" function"));
             }
@@ -583,6 +593,7 @@ fn do_parse_foreigner_class(lang: Language, input: ParseStream) -> syn::Result<F
         foreign_code: foreigner_code,
         doc_comments: class_doc_comments,
         derive_list,
+        foreign_code_req_modules,
     })
 }
 
@@ -733,10 +744,10 @@ impl Parse for ForeignInterfaceParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let interface_doc_comments = parse_doc_comments(input)?;
         let kw_la = input.lookahead1();
-        if kw_la.peek(kw::interface) {
-            input.parse::<kw::interface>()?;
-        } else if kw_la.peek(kw::callback) {
-            input.parse::<kw::callback>()?;
+        if kw_la.peek(pkw::interface) {
+            input.parse::<pkw::interface>()?;
+        } else if kw_la.peek(pkw::callback) {
+            input.parse::<pkw::callback>()?;
         } else {
             return Err(kw_la.error());
         }
@@ -863,6 +874,33 @@ impl Parse for ForeignInterfaceParser {
             doc_comments: interface_doc_comments,
             items,
         }))
+    }
+}
+
+pub(crate) struct ModulesList(pub Vec<ModuleName>);
+impl Parse for ModulesList {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut ret = vec![];
+        input.parse::<kw::req_modules>()?;
+        input.parse::<Token![=]>()?;
+        let modules;
+        bracketed!(modules in input);
+        while !modules.is_empty() {
+            let mod_name = modules.parse::<LitStr>()?;
+            ret.push(ModuleName {
+                name: mod_name.value(),
+                sp: mod_name.span(),
+            });
+            if modules.peek(Token![,]) {
+                modules.parse::<Token![,]>()?;
+            } else if !modules.is_empty() {
+                return Err(modules.error(format!(
+                    "expect end of {} here",
+                    DisplayToTokens(&kw::req_modules::default())
+                )));
+            }
+        }
+        Ok(Self(ret))
     }
 }
 

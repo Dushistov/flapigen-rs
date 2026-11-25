@@ -16,7 +16,7 @@ use crate::{
         ast::DisplayToTokens, CItem, CItems, TypeConvCodeSubstParam, FROM_VAR_TEMPLATE,
         TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
-    types::{FnArg, ForeignClassInfo, ForeignEnumInfo},
+    types::{FnArg, ForeignClassInfo, ForeignEnumInfo, ModuleName},
     WRITE_TO_MEM_FAILED_MSG,
 };
 
@@ -173,6 +173,7 @@ pub(in crate::cpp) fn c_header_name_for_enum(enum_info: &ForeignEnumInfo) -> Str
 pub(in crate::cpp) fn cpp_list_required_includes(
     implicitly_used_by_inclues: &[&str],
     methods: &mut [CppForeignMethodSignature],
+    foreign_code_reqs: &[ModuleName],
 ) -> Vec<String> {
     let mut includes = Vec::<String>::with_capacity(methods.len());
     includes.extend(implicitly_used_by_inclues.iter().map(ToString::to_string));
@@ -183,6 +184,7 @@ pub(in crate::cpp) fn cpp_list_required_includes(
         }
         includes.extend(mem::take(&mut m.output.provided_by_module));
     }
+    includes.extend(foreign_code_reqs.iter().map(|x| x.name.clone()));
 
     // preserve order of includes
     let mut uniques = FxHashSet::default();

@@ -1,21 +1,22 @@
 use proc_macro2::TokenStream;
 use syn::{
-    braced, bracketed, parenthesized, parse_quote, spanned::Spanned, token, Ident, LitStr, Token,
-    Type,
+    braced, parenthesized, parse_quote, spanned::Spanned, token, Ident, LitStr, Token, Type,
 };
 
 use super::{
     CItem, CItems, FTypeConvRule, FTypeLeftRightPair, FTypeName, ForeignCode, GenericAlias,
-    GenericAliasItem, GenericCItems, ModuleName, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE,
+    GenericAliasItem, GenericCItems, RTypeConvRule, TypeMapConvRuleInfo, DEFINE_C_TYPE,
     GENERIC_ALIAS, SWIG_CONCAT_IDENTS, SWIG_F_TYPE, SWIG_I_TYPE,
 };
 use crate::{
+    code_parse::ModulesList,
     source_registry::SourceId,
     str_replace::replace_first_and_other,
     typemap::{
         ast::{DisplayToTokens, SpannedString},
         TypeConvCode, FROM_VAR_TEMPLATE, TO_VAR_TEMPLATE, TO_VAR_TYPE_TEMPLATE,
     },
+    types::ModuleName,
     FOREIGNER_CODE_DEPRECATED, FOREIGN_CODE, FOREIGN_TYPEMAP,
 };
 
@@ -24,7 +25,6 @@ mod kw {
 
     custom_keyword!(r_type);
     custom_keyword!(f_type);
-    custom_keyword!(req_modules);
     custom_keyword!(module);
     custom_keyword!(option);
     custom_keyword!(input_to_output);
@@ -581,26 +581,9 @@ fn parse_typemap_f_type_arm_param(params: syn::parse::ParseStream) -> syn::Resul
     while !params.is_empty() && params.peek(Token![,]) {
         params.parse::<Token![,]>()?;
         let la = params.lookahead1();
-        if la.peek(kw::req_modules) {
-            params.parse::<kw::req_modules>()?;
-            params.parse::<Token![=]>()?;
-            let modules;
-            bracketed!(modules in params);
-            while !modules.is_empty() {
-                let mod_name = modules.parse::<LitStr>()?;
-                ftype_req_modules.push(ModuleName {
-                    name: mod_name.value(),
-                    sp: mod_name.span(),
-                });
-                if modules.peek(Token![,]) {
-                    modules.parse::<Token![,]>()?;
-                } else if !modules.is_empty() {
-                    return Err(modules.error(format!(
-                        "expect end of {} here",
-                        DisplayToTokens(&kw::req_modules::default())
-                    )));
-                }
-            }
+        if la.peek(crate::code_parse::kw::req_modules) {
+            let mut modules: ModulesList = params.parse()?;
+            ftype_req_modules.append(&mut modules.0);
         } else if la.peek(kw::option) {
             params.parse::<kw::option>()?;
             params.parse::<Token![=]>()?;

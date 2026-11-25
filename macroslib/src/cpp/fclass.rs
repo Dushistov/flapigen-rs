@@ -70,6 +70,7 @@ May be you need to use `private constructor = empty;` syntax?",
             "<type_traits>", /*for std::conditional*/
         ],
         &mut m_sigs,
+        &class.foreign_code_req_modules,
     );
     let my_self_cpp = format!("\"{}\"", cpp_code::cpp_header_name(class));
     let my_self_c = format!("\"{}\"", cpp_code::c_header_name(class));

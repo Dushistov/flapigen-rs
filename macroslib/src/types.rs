@@ -17,6 +17,7 @@ pub(crate) struct ForeignClassInfo {
     pub methods: Vec<ForeignMethod>,
     pub self_desc: Option<SelfTypeDesc>,
     pub foreign_code: String,
+    pub foreign_code_req_modules: Vec<ModuleName>,
     pub doc_comments: Vec<String>,
     pub derive_list: Vec<String>,
 }
@@ -391,4 +392,30 @@ pub(crate) enum ItemToExpand {
     Class(Box<ForeignClassInfo>),
     Interface(ForeignInterface),
     Enum(ForeignEnumInfo),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ModuleName {
+    pub name: String,
+    pub sp: Span,
+}
+
+impl PartialEq for ModuleName {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for ModuleName {}
+
+impl Ord for ModuleName {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(&other.name)
+    }
+}
+
+impl PartialOrd for ModuleName {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.name.cmp(&other.name))
+    }
 }
