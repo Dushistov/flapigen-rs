@@ -1303,6 +1303,7 @@ mod tests {
                 constructor_ret_type: foo_rt.ty.clone(),
             }),
             foreign_code: String::new(),
+            foreign_code_req_modules: vec![],
             doc_comments: vec![],
             derive_list: vec![],
         });
