@@ -171,9 +171,12 @@ pub(in crate::cpp) fn c_header_name_for_enum(enum_info: &ForeignEnumInfo) -> Str
 }
 
 pub(in crate::cpp) fn cpp_list_required_includes(
+    implicitly_used_by_inclues: &[&str],
     methods: &mut [CppForeignMethodSignature],
 ) -> Vec<String> {
     let mut includes = Vec::<String>::with_capacity(methods.len());
+    includes.extend(implicitly_used_by_inclues.iter().map(ToString::to_string));
+
     for m in methods {
         for p in &mut m.input {
             includes.extend(mem::take(&mut p.provided_by_module));

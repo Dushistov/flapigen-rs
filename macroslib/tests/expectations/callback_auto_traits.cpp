@@ -3,8 +3,7 @@
 #pragma once
 
 #include <cassert>
-#include <memory> //for std::unique_ptr
-
+#include <memory>
 
 #include "c_LocalCallback.h"
 
